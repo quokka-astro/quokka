@@ -55,6 +55,7 @@
 #include "eos.H"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
+#include "mhd_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include "radiation_system.hpp"
@@ -72,6 +73,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::TracerPC;
 
 	using AMRSimulation<problem_t>::nghost_cc_;
+	using AMRSimulation<problem_t>::nghost_fc_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::BCs_fc_;
@@ -123,6 +125,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
+	static constexpr int n_mhd_vars_per_dim_ = MHDSystem<problem_t>::nvar_per_dim_; // mhd
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10; // maximum number of radiation subcycles per hydro step
@@ -226,8 +229,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 					    amrex::YAFluxRegister *fr_as_fine);
 
-	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev,
-				 amrex::Real time, amrex::Real dt_lev) -> bool;
+	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
+				 amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
@@ -235,7 +238,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
 	// radiation subcycle
-	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
+	void swapRadiationState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc);
 	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
 	void advanceRadiationSubstepAtLevel(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps,
 					    amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine);
@@ -247,7 +250,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::YAFluxRegister *fr_as_crse,
 				      amrex::YAFluxRegister *fr_as_fine);
 
-	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, amrex::Real time, double dt, int stage,
+	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew_cc, const amrex::Box &indexRange, amrex::Real time, double dt, int stage,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 
@@ -256,7 +259,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
 	auto computeHydroFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
-	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
+			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
 	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
@@ -267,8 +271,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	template <FluxDir DIR>
 	void hydroFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &x1Flux,
-			       amrex::MultiFab &x1FaceVel, amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat,
-			       int ng_reconstruct, int nvars);
+			       amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds, amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat,
+			       amrex::MultiFab const &x3Flat, int ng_reconstruct, int nvars);
 
 	template <FluxDir DIR>
 	void hydroFOFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &x1Flux,
@@ -407,19 +411,19 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeMaxSign
 	// hydro: loop over local grids, compute CFL timestep
 	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateNew = state_new_cc_[level].const_array(iter);
+		auto const &stateNew_cc = state_new_cc_[level].const_array(iter);
 		auto const &maxSignal = max_signal_speed_[level].array(iter);
 
 		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
 			// hydro only
-			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal, indexRange);
+			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, maxSignal, indexRange);
 		} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 			// radiation hydro, or radiation only
-			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal, indexRange);
+			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, maxSignal, indexRange);
 			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
 				auto const &maxSignalHydro = maxSignalHydroFAB.array();
-				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignalHydro, indexRange);
+				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, maxSignalHydro, indexRange);
 				const int maxSubsteps = maxSubsteps_;
 				// ensure that we use the smaller of the two timesteps
 				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -924,9 +928,19 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 #endif
 		}
 
-		// create temporary multifab for old state
+		// create temporary multifab for old cell-cenetered state
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+
+		// create temporary array (different faces) of multifabs for old face-centered state
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				state_old_fc_tmp[idim].define(amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim)), dmap[lev],
+							      Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				amrex::Copy(state_old_fc_tmp[idim], state_old_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+			}
+		}
 
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
@@ -934,9 +948,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				// since we are starting a new substep, we need to copy hydro state from
 				//  the new state vector to old state vector
 				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+						amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc,
+							    nghost_fc_);
+					}
+				}
 			}
 
-			success = advanceHydroAtLevel(state_old_cc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
+			success = advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
 
 			if (!success) {
 				if (Verbose()) {
@@ -1019,8 +1039,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinat
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-							int lev, amrex::Real time, amrex::Real dt_lev) -> bool
+auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
+							amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev, amrex::Real time,
+							amrex::Real dt_lev) -> bool
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
 
@@ -1031,6 +1052,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		fluxScaleFactor = 1.0;
 	}
 
+	auto ba_cc = grids[lev];
+	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
@@ -1044,20 +1067,26 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> state_inter_fc_;
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
+			state_inter_fc_[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, nghost_fc_);
+			state_inter_fc_[idim].setVal(0);
+		}
+	}
 
 	// create temporary multifabs for combined RK2 flux and time-average face velocity
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
 	const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
-	auto ba = grids[lev];
-	auto dm = dmap[lev];
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
+		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
 		// initialize flux MultiFab
-		flux_rk2[idim] = amrex::MultiFab(ba_face, dm, ncompHydro_, 0);
+		flux_rk2[idim] = amrex::MultiFab(ba_fc, dm, ncompHydro_, 0);
 		flux_rk2[idim].setVal(0);
 		// initialize velocity MultiFab
-		avgFaceVel[idim] = amrex::MultiFab(ba_face, dm, 1, nghost_vel);
+		avgFaceVel[idim] = amrex::MultiFab(ba_fc, dm, 1, nghost_vel);
 		avgFaceVel[idim].setVal(0);
 	}
 
@@ -1087,9 +1116,13 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// Stage 1 of RK2-SSP
 	{
 		// advance all grids on local processor (Stage 1 of integrator)
-		auto const &stateOld = state_old_cc_tmp;
-		auto &stateNew = state_inter_cc_;
-		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, ncompHydro_, lev);
+		auto const &stateOld_cc = state_old_cc_tmp;
+		auto &stateNew_cc = state_inter_cc_;
+
+		auto const &stateOld_fc = state_old_fc_tmp;
+		auto &stateNew_fc = state_inter_fc_;
+
+		auto [fluxArrays, faceVel, fspds] = computeHydroFluxes(stateOld_cc, ncompHydro_, lev);
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
@@ -1100,9 +1133,22 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
 
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			std::array<std::array<amrex::MultiFab, 2>, AMREX_SPACEDIM> emf_comps_ec;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				emf_comps_ec[idim][0].define(
+				    amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim) + amrex::IntVect::TheDimensionVector((idim + 1) % 3)), dm, 1,
+				    nghost_fc_);
+				emf_comps_ec[idim][1].define(
+				    amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim) + amrex::IntVect::TheDimensionVector((idim + 2) % 3)), dm, 1,
+				    nghost_fc_);
+				fspds[idim].FillBoundary(geom[lev].periodicity());
+			}
+			MHDSystem<problem_t>::ComputeEMF(emf_comps_ec, stateOld_cc, stateOld_fc, fspds, nghost_fc_);
+		}
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel, redoFlag);
-		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
+		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, ncompHydro_, redoFlag);
 
 		// LOW LEVEL DEBUGGING: output rhs
 		if (lowLevelDebuggingOutput_ == 1) {
@@ -1139,7 +1185,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 				// Calculate the coordinates based on the cell index and cell size
 				printCoordinates(lev, cell_idx);
-				amrex::print_state(stateNew, cell_idx);
+				amrex::print_state(stateNew_cc, cell_idx);
 			}
 
 			// synchronize redoFlag across ranks
@@ -1151,8 +1197,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel, redoFlag);
-			HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
+			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			amrex::Long const ncells_bad = static_cast<int>(redoFlag.sum(0));
@@ -1163,7 +1209,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					// print cell state
 					amrex::Print() << "[FOFC-1] Flux correction failed:\n";
 					printCoordinates(lev, cell_idx);
-					amrex::print_state(stateNew, cell_idx);
+					amrex::print_state(stateNew_cc, cell_idx);
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
 				if (abortOnFofcFailure_ != 0) {
@@ -1173,11 +1219,11 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew_cc);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
-			HydroSystem<problem_t>::SyncDualEnergy(stateNew);
+			HydroSystem<problem_t>::SyncDualEnergy(stateNew_cc);
 		}
 
 		if (do_reflux == 1) {
@@ -1197,10 +1243,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
 		AMREX_ASSERT(!state_inter_cc_.contains_nan()); // check ghost zones
 
-		auto const &stateOld = state_old_cc_tmp;
+		auto const &stateOld_cc = state_old_cc_tmp;
 		auto const &stateInter = state_inter_cc_;
 		auto &stateFinal = state_new_cc_[lev];
-		auto [fluxArrays, faceVel] = computeHydroFluxes(stateInter, ncompHydro_, lev);
+		auto [fluxArrays, faceVel, fspds] = computeHydroFluxes(stateInter, ncompHydro_, lev);
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
@@ -1212,8 +1258,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		redoFlag.setVal(quokka::redoFlag::none);
 
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, avgFaceVel, redoFlag);
-		HydroSystem<problem_t>::PredictStep(stateOld, stateFinal, rhs, dt_lev, ncompHydro_, redoFlag);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, avgFaceVel, redoFlag);
+		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal, rhs, dt_lev, ncompHydro_, redoFlag);
 
 		// do first-order flux correction (FOFC)
 		amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -1235,8 +1281,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, avgFaceVel, redoFlag);
-			HydroSystem<problem_t>::PredictStep(stateOld, stateFinal, rhs, dt_lev, ncompHydro_, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, avgFaceVel, redoFlag);
+			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			amrex::Long ncells_bad = redoFlag.sum(0);
@@ -1388,33 +1434,37 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
-    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
+    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
 	BL_PROFILE("RadhydroSimulation::computeHydroFluxes()");
 
-	auto ba = grids[lev];
+	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
 	const int flatteningGhost = 2;
 	const int reconstructGhost = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
+	amrex::MultiFab primVar(ba_cc, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, 3> flatCoefs;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> fspds;
 
 	for (int idim = 0; idim < 3; ++idim) {
-		flatCoefs[idim] = amrex::MultiFab(ba, dm, 1, flatteningGhost);
+		flatCoefs[idim] = amrex::MultiFab(ba_cc, dm, 1, flatteningGhost);
 	}
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
-		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
-		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
-		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
-		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
+		leftState[idim] = amrex::MultiFab(ba_fc, dm, nvars, reconstructGhost);
+		rightState[idim] = amrex::MultiFab(ba_fc, dm, nvars, reconstructGhost);
+		flux[idim] = amrex::MultiFab(ba_fc, dm, nvars, 0);
+		facevel[idim] = amrex::MultiFab(ba_fc, dm, 1, 0);
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			fspds[idim] = amrex::MultiFab(ba_fc, dm, 2, 1);
+		}
 	}
 
 	// conserved to primitive variables
@@ -1426,12 +1476,12 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
 
 	// compute flux functions
-	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						    reconstructGhost, nvars);
-		     , hydroFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						      reconstructGhost, nvars);
-		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						      reconstructGhost, nvars);)
+	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], fspds[0], flatCoefs[0], flatCoefs[1],
+						    flatCoefs[2], reconstructGhost, nvars);
+		     , hydroFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], fspds[1], flatCoefs[0], flatCoefs[1],
+						      flatCoefs[2], reconstructGhost, nvars);
+		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], fspds[2], flatCoefs[0], flatCoefs[1],
+						      flatCoefs[2], reconstructGhost, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -1472,13 +1522,13 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 	}
 
 	// return flux and face-centered velocities
-	return std::make_pair(std::move(flux), std::move(facevel));
+	return std::make_tuple(std::move(flux), std::move(facevel), std::move(fspds));
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
 void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
-						      amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab const &x1Flat,
+						      amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds, amrex::MultiFab const &x1Flat,
 						      amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
 {
 	if (reconstructionOrder_ == 3) {
@@ -1496,9 +1546,11 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &pri
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_,
+											 &x1FSpds);
 	} else {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_,
+											 nullptr);
 	}
 }
 
@@ -1508,23 +1560,23 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &
 {
 	BL_PROFILE("RadhydroSimulation::computeFOHydroFluxes()");
 
-	auto ba = grids[lev];
+	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
+	amrex::MultiFab primVar(ba_cc, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
-		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
-		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
-		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
-		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
+		leftState[idim] = amrex::MultiFab(ba_fc, dm, nvars, reconstructRange);
+		rightState[idim] = amrex::MultiFab(ba_fc, dm, nvars, reconstructRange);
+		flux[idim] = amrex::MultiFab(ba_fc, dm, nvars, 0);
+		facevel[idim] = amrex::MultiFab(ba_fc, dm, 1, 0);
 	}
 
 	// conserved to primitive variables
@@ -1550,13 +1602,13 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &p
 	// donor-cell reconstruction
 	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	// LLF solver
-	HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+	HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_, nullptr);
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
+template <typename problem_t> void RadhydroSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc)
 {
-	// copy radiation state variables from stateNew to stateOld
-	amrex::MultiFab::Copy(stateOld, stateNew, nstartHyperbolic_, nstartHyperbolic_, ncompHyperbolic_, 0);
+	// copy radiation state variables from stateNew_cc to stateOld_cc
+	amrex::MultiFab::Copy(stateOld_cc, stateNew_cc, nstartHyperbolic_, nstartHyperbolic_, ncompHyperbolic_, 0);
 }
 
 template <typename problem_t>
@@ -1607,13 +1659,13 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 			// matter-radiation exchange source terms of stage 1
 			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 				const amrex::Box &indexRange = iter.validbox();
-				auto const &stateNew = state_new_cc_[lev].array(iter);
+				auto const &stateNew_cc = state_new_cc_[lev].array(iter);
 				auto const &prob_lo = geom[lev].ProbLoArray();
 				auto const &prob_hi = geom[lev].ProbHiArray();
 				// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
 				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
 				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
-				operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi);
+				operatorSplitSourceTerms(stateNew_cc, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi);
 			}
 		}
 
@@ -1626,11 +1678,11 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 		// Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
 		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
-			auto const &stateNew = state_new_cc_[lev].array(iter);
+			auto const &stateNew_cc = state_new_cc_[lev].array(iter);
 			auto const &prob_lo = geom[lev].ProbLoArray();
 			auto const &prob_hi = geom[lev].ProbHiArray();
 			// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
-			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi);
+			operatorSplitSourceTerms(stateNew_cc, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi);
 		}
 
 		// new hydro+radiation state is stored in state_new_cc_
@@ -1665,13 +1717,13 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_cc_[lev].const_array(iter);
-		auto const &stateNew = state_new_cc_[lev].array(iter);
-		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateOld, indexRange, ncompHyperbolic_, dx);
+		auto const &stateOld_cc = state_old_cc_[lev].const_array(iter);
+		auto const &stateNew_cc = state_new_cc_[lev].array(iter);
+		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx);
 
 		// Stage 1 of RK2-SSP
 		RadSystem<problem_t>::PredictStep(
-		    stateOld, stateNew, {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
+		    stateOld_cc, stateNew_cc, {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
 		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
@@ -1690,14 +1742,14 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_cc_[lev].const_array(iter);
+		auto const &stateOld_cc = state_old_cc_[lev].const_array(iter);
 		auto const &stateInter = state_new_cc_[lev].const_array(iter);
-		auto const &stateNew = state_new_cc_[lev].array(iter);
+		auto const &stateNew_cc = state_new_cc_[lev].array(iter);
 		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateInter, indexRange, ncompHyperbolic_, dx);
 
 		// Stage 2 of RK2-SSP
 		RadSystem<problem_t>::AddFluxesRK2(
-		    stateNew, stateOld, stateInter, {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
+		    stateNew_cc, stateOld_cc, stateInter, {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
 		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
@@ -1724,13 +1776,13 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_cc_[lev].const_array(iter);
-		auto const &stateNew = state_new_cc_[lev].array(iter);
-		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateOld, indexRange, ncompHyperbolic_, dx);
+		auto const &stateOld_cc = state_old_cc_[lev].const_array(iter);
+		auto const &stateNew_cc = state_new_cc_[lev].array(iter);
+		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx);
 
 		// Stage 1 of RK2-SSP
 		RadSystem<problem_t>::PredictStep(
-		    stateOld, stateNew, {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
+		    stateOld_cc, stateNew_cc, {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
 		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
@@ -1756,15 +1808,15 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_cc_[lev].const_array(iter);
+		auto const &stateOld_cc = state_old_cc_[lev].const_array(iter);
 		auto const &stateInter = state_new_cc_[lev].const_array(iter);
-		auto const &stateNew = state_new_cc_[lev].array(iter);
-		auto [fluxArraysOld, fluxDiffusiveArraysOld] = computeRadiationFluxes(stateOld, indexRange, ncompHyperbolic_, dx);
+		auto const &stateNew_cc = state_new_cc_[lev].array(iter);
+		auto [fluxArraysOld, fluxDiffusiveArraysOld] = computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx);
 		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateInter, indexRange, ncompHyperbolic_, dx);
 
 		// Stage 2 of RK2-SSP
 		RadSystem<problem_t>::AddFluxesRK2(
-		    stateNew, stateOld, stateInter, {AMREX_D_DECL(fluxArraysOld[0].array(), fluxArraysOld[1].array(), fluxArraysOld[2].array())},
+		    stateNew_cc, stateOld_cc, stateInter, {AMREX_D_DECL(fluxArraysOld[0].array(), fluxArraysOld[1].array(), fluxArraysOld[2].array())},
 		    {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
 		    {AMREX_D_DECL(fluxDiffusiveArraysOld[0].const_array(), fluxDiffusiveArraysOld[1].const_array(), fluxDiffusiveArraysOld[2].const_array())},
 		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
@@ -1780,8 +1832,9 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const amrex::Real time,
-							     const double dt, const int stage, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew_cc, const amrex::Box &indexRange,
+							     const amrex::Real time, const double dt, const int stage,
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
@@ -1794,7 +1847,7 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx, prob_lo, prob_hi, time + dt);
 
 	// cell-centered source terms
-	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), indexRange, dt, stage);
+	RadSystem<problem_t>::AddSourceTerms(stateNew_cc, radEnergySource.const_array(), indexRange, dt, stage);
 }
 
 template <typename problem_t>

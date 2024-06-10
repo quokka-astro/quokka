@@ -138,6 +138,9 @@ add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
 
+add_subdirectory(FCQuantities)
+add_subdirectory(AlfvenWave)
+
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
 add_subdirectory(HydroContact)
@@ -182,7 +185,6 @@ add_subdirectory(RadhydroPulseMGint)
 
 add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(Cooling)
-add_subdirectory(FCQuantities)
 add_subdirectory(NSCBC)
 add_subdirectory(ODEIntegration)
 add_subdirectory(PassiveScalar)
