@@ -60,8 +60,8 @@ template <> struct Physics_Traits<TophatProblem> {
 };
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho,
+											     const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	amrex::Real kappa = 0.;
@@ -77,8 +77,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeP
 }
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho,
+											       const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, 0.);
 }

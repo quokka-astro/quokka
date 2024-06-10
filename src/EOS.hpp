@@ -48,12 +48,12 @@ template <typename problem_t> class EOS
 	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real;
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
-	    -> amrex::Real;
+	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure,
+			    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real;
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
-	    -> amrex::Real;
+	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas,
+				  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real;
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeOtherDerivatives(amrex::Real rho, amrex::Real P, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {});
@@ -62,8 +62,8 @@ template <typename problem_t> class EOS
 	ComputePressure(amrex::Real rho, amrex::Real Eint, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real;
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
-	    -> amrex::Real;
+	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure,
+			  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real;
 
       private:
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
@@ -72,9 +72,9 @@ template <typename problem_t> class EOS
 };
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars)
-    -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint,
+				    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> amrex::Real
 {
 	// return temperature for an ideal gas given density and internal energy
 	amrex::Real Tgas = NAN;
@@ -114,9 +114,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars)
-    -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas,
+				    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> amrex::Real
 {
 	// return internal energy density given density and temperature
 	amrex::Real Eint = NAN;
@@ -157,9 +157,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars)
-    -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+EOS<problem_t>::ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure,
+				    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> amrex::Real
 {
 	// return internal energy density given density and pressure
 	amrex::Real Eint = NAN;
@@ -297,9 +297,8 @@ EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(amrex::Real rho, amrex::Real Eint,
-									      std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars)
-    -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+EOS<problem_t>::ComputePressure(amrex::Real rho, amrex::Real Eint, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> amrex::Real
 {
 	// return pressure for an ideal gas
 	amrex::Real P = NAN;
@@ -342,9 +341,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure,
-										std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars)
-    -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+EOS<problem_t>::ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure,
+				  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> amrex::Real
 {
 	// return sound speed for an ideal gas
 	amrex::Real cs = NAN;
