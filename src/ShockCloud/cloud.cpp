@@ -90,7 +90,6 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quok
 	Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
-	auto tables = cloudyTables_.const_tables();
 	const bool sharp_cloud_edge = ::sharp_cloud_edge;
 
 	const amrex::Box &indexRange = grid.indexRange_;
