@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file cloud.cpp
-/// \brief Implements a shock-cloud problem with radiative cooling.
+/// \file test_grackle_cooling.cpp
+/// \brief Testing the Grackle-like cooling implementation against a 'known good' solution.
 ///
 
 // uncomment this to debug the root-finding code (does NOT work on GPU!)
@@ -16,14 +16,14 @@
 #include "ODEIntegrate.hpp"
 
 using amrex::Real;
-using namespace quokka::GrackleLikeCooling;
 
-struct ShockCloud {
-}; // dummy type to allow compile-type polymorphism via template specialization
+using quokka::GrackleLikeCooling::electron_mass_cgs;
+using quokka::GrackleLikeCooling::mean_metals_A;
+using quokka::GrackleLikeCooling::X;
+using quokka::GrackleLikeCooling::Y;
+using quokka::GrackleLikeCooling::Z;
 
-template <> struct quokka::EOS_Traits<ShockCloud> {
-	static constexpr double gamma = 5. / 3.; // default value
-};
+static constexpr double gamma = 5. / 3.; // default value
 
 auto problem_main() -> int
 {
@@ -33,77 +33,58 @@ auto problem_main() -> int
 	const Real dt = 1.92399749834457487e8;	   // s
 
 	// Read Cloudy tables
-	grackle_tables cloudyTables;
+	quokka::GrackleLikeCooling::grackle_tables cloudyTables;
 	std::string filename;
-	amrex::ParmParse pp("cooling");
+	amrex::ParmParse const pp("cooling");
 	pp.query("grackle_data_file", filename);
-	readGrackleData(filename, cloudyTables);
+	quokka::GrackleLikeCooling::readGrackleData(filename, cloudyTables);
 	auto tables = cloudyTables.const_tables();
 
-	const Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
+	const Real T0 = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
 
-	const Real rhoH = rho * cloudy_H_mass_fraction;
+	const Real rhoH = rho * quokka::GrackleLikeCooling::cloudy_H_mass_fraction;
 	const Real nH = rhoH / (C::m_p + C::m_e);
 	const Real log_nH = std::log10(nH);
 
-	const Real C = (quokka::EOS_Traits<ShockCloud>::gamma - 1.) * Eint / (C::k_B * (rho / (C::m_p + C::m_e)));
-	const Real mu = interpolate2d(log_nH, std::log10(T), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
-	const Real relerr = std::abs((C * mu - T) / T);
+	const Real C = (gamma - 1.) * Eint / (C::k_B * (rho / (C::m_p + C::m_e)));
+	const Real mu = interpolate2d(log_nH, std::log10(T0), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
+	const Real relerr = std::abs((C * mu - T0) / T0);
 
 	const Real n_e = (rho / (C::m_p + C::m_e)) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / (C::m_p + C::m_e)));
 
-	printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho, Eint, mu, T, relerr);
-	printf("n_e = %e, n_e/n_H = %e\n", n_e, n_e / nH);
+	printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho, Eint, mu, T0, relerr); // NOLINT
+	printf("n_e = %e, n_e/n_H = %e\n", n_e, n_e / nH);						     // NOLINT
 
 	const Real reltol_floor = 0.01;
 	const Real rtol = 1.0e-4;	// not recommended to change this
 	constexpr Real T_floor = 100.0; // K
-	const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
 
-	ODEUserData user_data{rho, gamma, tables};
+	quokka::GrackleLikeCooling::ODEUserData user_data{rho, gamma, tables};
 	quokka::valarray<Real, 1> y = {Eint};
-	quokka::valarray<Real, 1> abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
+	quokka::valarray<Real, 1> const abstol = {reltol_floor * quokka::GrackleLikeCooling::ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
 
 	// do integration with RK2 (Heun's method)
 	int nsteps = 0;
-	rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
+	rk_adaptive_integrate(quokka::GrackleLikeCooling::user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
 
 	// check if integration failed
+	int status = -1;
 	if (nsteps >= maxStepsODEIntegrate) {
-		Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
-		Real Edot = cloudy_cooling_function(rho, T, tables);
-		Real t_cool = Eint / Edot;
-		printf("max substeps exceeded! rho = %g, Eint = %g, T = %g, cooling "
+		const Real T_final = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, y[0], gamma, tables);
+		const Real Edot = quokka::GrackleLikeCooling::cloudy_cooling_function(rho, T_final, tables);
+		const Real t_cool = Eint / Edot;
+		printf("max substeps exceeded! rho = %g, Eint = %g, T = %g, cooling " // NOLINT
 		       "time = %g\n",
-		       rho, Eint, T, t_cool);
+		       rho, Eint, T_final, t_cool);
+		status = 1;
 	} else {
-		Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
-		Real Edot = cloudy_cooling_function(rho, T, tables);
-		Real t_cool = Eint / Edot;
-		printf("success! rho = %g, Eint = %g, T = %g, cooling time = %g\n", rho, Eint, T, t_cool);
+		const Real T_final = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, y[0], gamma, tables);
+		const Real Edot = quokka::GrackleLikeCooling::cloudy_cooling_function(rho, T_final, tables);
+		const Real t_cool = Eint / Edot;
+		printf("success! rho = %g, Eint = %g, T = %g, cooling time = %g\n", rho, Eint, T_final, t_cool); // NOLINT
+		status = 0;
 	}
 
-#if 0
-  // compute Field length
-  auto lambda_F = [=] (Real nH0, Real T0) {
-    const Real rho0 = nH0 * hydrogen_mass_cgs_ / cloudy_H_mass_fraction; // g cm^-3
-    const Real Edot = cloudy_cooling_function(rho0, T0, tables);
-    const Real ln_L = 29.7 + std::log(std::pow(nH0, -1./2.) * (T0 / 1.0e6));
-    const Real conductivity = 1.84e-5 * std::pow(T0, 5./2.) / ln_L;
-    const Real l = std::sqrt( conductivity * T0 / std::abs(Edot) );
-    return std::make_pair(Edot, l);
-  };
-
-  auto [Edot0, l0] = lambda_F(1.0, 4.0e5);
-  amrex::Print() << "Edot(nH = 1.0, T = 4e5) = " << Edot0 << "\n";
-  amrex::Print() << "lambda_F = " << (l0 / 3.086e18) << " pc\n\n";
-
-  auto [Edot1, l1] = lambda_F(0.1, 4.0e5);
-  amrex::Print() << "Edot(nH = 0.1, T = 4e5) = " << Edot1 << "\n";
-  amrex::Print() << "lambda_F = " << (l1 / 3.086e18) << " pc\n\n";
-#endif
-
 	// Cleanup and exit
-	int status = 0;
 	return status;
 }
