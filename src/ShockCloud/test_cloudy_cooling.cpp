@@ -79,7 +79,7 @@ auto problem_main() -> int
 			status = 0;
 		} else {
 			printf("failure: integrator obtained the wrong answer!\n"); // NOLINT
-			printf("expected answer: T = %g\n", T_expected); // NOLINT
+			printf("expected answer: T = %g\n", T_expected);	    // NOLINT
 			status = 1;
 		}
 		printf("rho = %g, Eint = %g, T = %g, cooling time = %g\n", rho, y[0], T_final, t_cool); // NOLINT
