@@ -29,7 +29,6 @@
 #include "AMReX_RandomEngine.H"
 #include "AMReX_Random.H"
 
-#include "CloudyCooling.hpp"
 #include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
