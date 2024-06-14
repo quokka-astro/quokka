@@ -135,12 +135,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 	quokka::valarray<Real, N> ydot0{};
 	rhs(t0, y0, ydot0, user_data);
 	const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
-
-	if(dt_guess<=0.0){
-		// printf("y0, ydot0=%.2e,%.2e\n", y0, ydot0);
-	}
-
-	AMREX_ALWAYS_ASSERT(dt_guess > 0.);
+	AMREX_ASSERT(dt_guess > 0.0);
 
 	// adaptive timestep controller
 	const int maxRetries = 7;
@@ -212,9 +207,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 
 		if (!step_success) {
 			success = false;
-			printf("ODE integrator failed to reach accuracy tolerance after "
-			       "maximum step-size re-tries reached! dt = %g\n",
-			       dt);
 			break;
 		}
 
@@ -228,7 +220,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 
 	if (!success) {
 		steps_taken = maxStepsODEIntegrate;
-		printf("ODE integration exceeded maxStepsODEIntegrate! steps_taken = %d\n", steps_taken);
 	}
 }
 

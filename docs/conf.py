@@ -23,7 +23,7 @@ import subprocess, os
 # -- Project information -----------------------------------------------------
 
 project = 'Quokka'
-copyright = '2020-2023, Ben Wibking and Quokka Developers'
+copyright = '2020-2024, Ben Wibking and Quokka Developers'
 author = 'Ben Wibking and Quokka Developers'
 
 # The full version, including alpha/beta/rc tags
@@ -37,7 +37,7 @@ master_doc = 'index'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = [ "sphinxcontrib.bibtex" ]
+extensions = [ "sphinxcontrib.bibtex", "sphinx_copybutton" ]
 
 bibtex_bibfiles = ["references.bib"]
 #bibtex_default_style = "plain"

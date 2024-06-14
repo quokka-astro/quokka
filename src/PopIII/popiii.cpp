@@ -8,27 +8,14 @@
 /// Author: Piyush Sharda (Leiden University, 2023)
 ///
 #include <array>
-#include <limits>
-#include <memory>
-#include <random>
-#include <vector>
 
 #include "AMReX.H"
-#include "AMReX_Arena.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLProfiler.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_FabArray.H"
-#include "AMReX_FabArrayUtility.H"
-#include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelContext.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
-#include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
 #include "RadhydroSimulation.hpp"
@@ -39,7 +26,6 @@
 #include "radiation_system.hpp"
 
 #include "actual_eos_data.H"
-#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
 #include "network.H"
@@ -349,9 +335,6 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 	const amrex::Real G = Gconst_;
 	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 
-	auto const &prob_lo = geom[lev].ProbLoArray();
-	auto const &prob_hi = geom[lev].ProbHiArray();
-
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto state = state_new_cc_[lev].const_array(mfi);
@@ -359,10 +342,6 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 		const int nidx = HydroSystem<PopIII>::density_index;
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx;
-			amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx;
-			amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx;
-
 			Real const rho = state(i, j, k, nidx);
 			Real const pressure = HydroSystem<PopIII>::ComputePressure(state, i, j, k);
 			amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state, i, j, k);

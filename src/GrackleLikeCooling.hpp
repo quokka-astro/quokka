@@ -24,7 +24,7 @@
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
 
-namespace quokka::cooling
+namespace quokka::GrackleLikeCooling
 {
 // From Grackle source code (initialize_chemistry_data.c, line 114):
 //   In fully tabulated mode, set H mass fraction according to
@@ -45,7 +45,7 @@ constexpr double electron_mass_cgs = 9.1093897e-28; // electron mass (g)
 constexpr double T_cmb = 2.725;			    // * (1 + z); // K
 constexpr double E_cmb = radiation_constant_cgs_ * (T_cmb * T_cmb * T_cmb * T_cmb);
 
-struct cloudyGpuConstTables {
+struct grackleGpuConstTables {
 	// these are non-owning, so can make a copy of the whole struct
 	amrex::Table1D<const Real> log_nH;
 	amrex::Table1D<const Real> log_Tgas;
@@ -55,9 +55,17 @@ struct cloudyGpuConstTables {
 	amrex::Table2D<const Real> metalCool;
 	amrex::Table2D<const Real> metalHeat;
 	amrex::Table2D<const Real> meanMolWeight;
+
+	// temperature range
+	amrex::Real T_min;
+	amrex::Real T_max;
+
+	// mean molecular weight range
+	amrex::Real mmw_min;
+	amrex::Real mmw_max;
 };
 
-class cloudy_tables
+class grackle_tables
 {
       public:
 	std::unique_ptr<amrex::TableData<double, 1>> log_nH;
@@ -69,16 +77,21 @@ class cloudy_tables
 	std::unique_ptr<amrex::TableData<double, 2>> metalHeating;
 	std::unique_ptr<amrex::TableData<double, 2>> mean_mol_weight;
 
-	[[nodiscard]] auto const_tables() const -> cloudyGpuConstTables;
+	amrex::Real T_min;
+	amrex::Real T_max;
+	amrex::Real mmw_min;
+	amrex::Real mmw_max;
+
+	[[nodiscard]] auto const_tables() const -> grackleGpuConstTables;
 };
 
 struct ODEUserData {
 	Real rho{};
 	Real gamma{};
-	cloudyGpuConstTables tables;
+	grackleGpuConstTables tables;
 };
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const rho, Real const T, cloudyGpuConstTables const &tables) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const rho, Real const T, grackleGpuConstTables const &tables) -> Real
 {
 	// interpolate cooling rates from Cloudy tables
 	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
@@ -127,7 +140,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	return Edot;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(double rho, double Tgas, double gamma, cloudyGpuConstTables const &tables) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(double rho, double Tgas, double gamma, grackleGpuConstTables const &tables) -> Real
 {
 	// convert Egas (internal gas energy) to temperature
 	const Real rhoH = rho * cloudy_H_mass_fraction;
@@ -141,13 +154,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(double rho, do
 	return Egas;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, double Egas, double gamma, cloudyGpuConstTables const &tables) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, double Egas, double gamma, grackleGpuConstTables const &tables) -> Real
 {
 	// convert Egas (internal gas energy) to temperature
 
 	// check whether temperature is out-of-bounds
-	const Real Tmin_table = 10.;
-	const Real Tmax_table = 1.0e9;
+	const Real Tmin_table = tables.T_min;
+	const Real Tmax_table = tables.T_max;
 	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin_table, gamma, tables);
 	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax_table, gamma, tables);
 
@@ -174,17 +187,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	const int maxIterLimit = 100;
 	int maxIter = maxIterLimit;
 
-	auto f = [log_nH, C, tables](const Real &T) noexcept {
+	const Real log_Tmin = std::log10(Tmin_table);
+	const Real log_Tmax = std::log10(Tmax_table);
+	auto f = [log_nH, C, tables, log_Tmin, log_Tmax](const Real &T) noexcept {
 		// compute new mu from mu(log10 T) table
-		Real log_T = clamp(std::log10(T), 1., 9.);
+		const Real log_T = clamp(std::log10(T), log_Tmin, log_Tmax);
 		Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 		Real fun = C * mu - T;
 		return fun;
 	};
 
 	// compute temperature bounds using physics
-	const Real mu_min = 0.60; // assuming fully ionized (mu ~ 0.6)
-	const Real mu_max = 2.33; // assuming neutral fully molecular (mu ~ 2.33)
+	const Real mu_min = tables.mmw_min;
+	const Real mu_max = tables.mmw_max;
 	const Real T_min = std::clamp(C * mu_min, Tmin_table, Tmax_table);
 	const Real T_max = std::clamp(C * mu_max, Tmin_table, Tmax_table);
 
@@ -213,11 +228,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	auto *udata = static_cast<ODEUserData *>(user_data);
 	const Real rho = udata->rho;
 	const Real gamma = udata->gamma;
-	cloudyGpuConstTables const &tables = udata->tables;
+	grackleGpuConstTables const &tables = udata->tables;
 
 	// check whether temperature is out-of-bounds
-	const Real Tmin = 10.;
-	const Real Tmax = 1.0e9;
+	const Real Tmin = tables.T_min;
+	const Real Tmax = tables.T_max;
 	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
 	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
 
@@ -244,7 +259,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	return 0; // success
 }
 
-template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudyTables, const Real T_floor)
+template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, grackle_tables &cloudyTables, const Real T_floor) -> bool
 {
 	BL_PROFILE("computeCooling()")
 
@@ -299,18 +314,20 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 		});
 	}
 
-	int nmin = nsubstepsMF.min(0);
 	int nmax = nsubstepsMF.max(0);
 	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << fmt::format("\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
+	amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
 
+	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {
-		amrex::Abort("Max steps exceeded in cooling solve!");
+		amrex::Print() << "\t[GrackleLikeCooling] Reaction ODE failure! Retrying hydro update...\n";
+		return false;
 	}
+	return true; // success
 }
 
-void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables);
+void readGrackleData(std::string &grackle_hdf5_file, grackle_tables &cloudyTables);
 
-} // namespace quokka::cooling
+} // namespace quokka::GrackleLikeCooling
 
 #endif // CLOUDYCOOLING_HPP_

@@ -10,21 +10,10 @@
 ///
 
 // external headers
-#include <memory>
-#include <string>
-#include <vector>
-
-#include "AMReX_MultiFab.H"
-#include "AMReX_ParmParse.H"
-#include "AMReX_REAL.H"
-
 #include <fmt/format.h>
 
 // internal headers
-#include "CloudyCooling.hpp"
 #include "ODEIntegrate.hpp"
-#include "hydro_system.hpp"
-#include "radiation_system.hpp"
 #include "valarray.hpp"
 
 // types

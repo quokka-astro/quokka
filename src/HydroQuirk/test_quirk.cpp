@@ -7,19 +7,17 @@
 /// \brief Defines a test problem for the odd-even decoupling instability.
 ///
 
+#include <algorithm>
+#include <vector>
+
 #include "AMReX.H"
-#include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
-#include "AMReX_Config.H"
-#include "AMReX_FArrayBox.H"
 #include "AMReX_FabArrayBase.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_GpuAsyncArray.H"
-#include "AMReX_GpuContainers.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
@@ -27,14 +25,10 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
-#include "AMReX_TagBox.H"
 
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "test_quirk.hpp"
-#include <algorithm>
-#include <vector>
 
 using Real = amrex::Real;
 
@@ -80,7 +74,7 @@ template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(qu
 
 	Real xshock = 0.4;
 	int ishock = 0;
-	for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + Real(0.5))) < xshock; ++ishock) {
+	for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + static_cast<Real>(0.5))) < xshock; ++ishock) {
 	}
 	ishock--;
 	amrex::Print() << "ishock = " << ishock << "\n";
@@ -119,7 +113,6 @@ template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(qu
 		AMREX_ASSERT(!std::isnan(P));
 
 		const auto v_sq = vx * vx + vy * vy + vz * vz;
-		const auto gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
@@ -281,6 +274,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return 0;
 }

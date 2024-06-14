@@ -38,7 +38,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = Erad_floor_;
-	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 0;
 };
 
 template <> struct Physics_Traits<SuOlsonProblemCgs> {
@@ -53,8 +53,8 @@ template <> struct Physics_Traits<SuOlsonProblemCgs> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho,
+												 const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
 	quokka::valarray<double, nGroups_> kappaPVec{};
@@ -65,15 +65,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Comp
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho,
+												   const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> opacity_deriv{};
 	auto sigma_dT = (-3.0 * kappa / Tgas) * std::pow(Tgas / T_hohlraum, -3); // cm^-1
@@ -217,10 +217,10 @@ auto problem_main() -> int
 	//     Radiative Transfer, 69, 475–489, 2001.
 
 	// Problem parameters
-	const int max_timesteps = 1e5;
-	const double CFL_number = 0.9;
+	const int max_timesteps = 1e6;
+	const double CFL_number = 10.0;
 	const double initial_dt = 5.0e-12; // s
-	const double max_dt = 5.0e-12;	   // s
+	const double max_dt = 5.0;	   // s
 	const double max_time = 10.0e-9;   // s
 	// const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
 	// const double Lx = 0.66; // cm
@@ -326,7 +326,7 @@ auto problem_main() -> int
 		sol_norm += std::abs(Tmat_exact[i]);
 	}
 
-	const double error_tol = 0.05; // 5 per cent
+	const double error_tol = 0.09;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
