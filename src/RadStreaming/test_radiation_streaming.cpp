@@ -59,8 +59,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(con
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/,
+									       const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(0.0, 0.0);
 }
