@@ -34,3 +34,5 @@ quokka.slice_z.center = 0.001                # Coordinate in the normal directio
 quokka.slice_z.int    = 10                   # Output cadence (in number of coarse steps)
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy      # List of variables included in output
+
+plotfile_interval  = 20000
