@@ -1272,25 +1272,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							}
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
               for (int g = 0; g < nGroups_ + 1; ++g) {
-                if (g < nGroups_) {
-                  frad[0][g] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g) / radBoundaryWidth_copy[g];
-                  frad[1][g] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g) / radBoundaryWidth_copy[g];
-                  frad[2][g] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g) / radBoundaryWidth_copy[g];
-								  work[g] = 0.0;
-                }
-                if (g == 0) {
-                  delta_term[g] = (x1GasMom0 * frad[0][g] + x2GasMom0 * frad[1][g] + x3GasMom0 * frad[2][g]) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-                } else if (g == nGroups_) {
-                  delta_term[g] = (x1GasMom0 * frad[0][g - 1] + x2GasMom0 * frad[1][g - 1] + x3GasMom0 * frad[2][g - 1]) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-                } else {
-                  delta_term[g] = (x1GasMom0 * (frad[0][g - 1] + frad[0][g]) / 2.0 + x2GasMom0 * (frad[1][g - 1] + frad[1][g]) / 2.0 + x3GasMom0 * (frad[2][g - 1] + frad[2][g]) / 2.0) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-                }
+                delta_term[g] = x1GasMom0 * consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g) + x2GasMom0 * consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g) + x3GasMom0 * consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+                delta_term[g] *= radBoundaries_g_copy[g] * kappa_expo_and_lower_value[1][g] / radBoundaryWidth_copy[g];
+								work[g] = 0.0;
               }
               for (int g = 0; g < nGroups_; ++g) {
-                // work[g] += delta_term[g + 1] - delta_term[g]; // delta term
-                work[g] += kappa_expo_and_lower_value[0][g] * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
+                work[g] += delta_term[g + 1] - delta_term[g];
                 work[g] += -1. * Q_slope * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
-                work[g] *= chat / (c * c) * dt;
+                work[g] *= chat / (c * c);
               }
             }
 					}
@@ -1471,6 +1460,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			dMomentum = {0., 0., 0.};
 
+      if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+			  for (int g = 0; g < nGroups_ + 1; ++g) {
+          if (g == 0 || g == nGroups_) {
+            // TODO(CCH): try setting to 0
+            delta_term[g] = radBoundaries_g_copy[g] * kappa_expo_and_lower_value[1][g] * fourPiBoverC[g] / radBoundaryWidth_copy[g];
+            delta_term_E[g] = radBoundaries_g_copy[g] * kappa_expo_and_lower_value[1][g] * consPrev(i, j, k, radEnergy_index + numRadVars_ * g) / radBoundaryWidth_copy[g];
+          } else {
+            // TODO(CCH): use interception of a linear curve with the boundary
+            delta_term[g] = radBoundaries_g_copy[g] * kappa_expo_and_lower_value[1][g] * (fourPiBoverC[g] / radBoundaryWidth_copy[g] + fourPiBoverC[g + 1] / radBoundaryWidth_copy[g + 1]) / 2.0;
+            delta_term_E[g] = radBoundaries_g_copy[g] * kappa_expo_and_lower_value[1][g] * (consPrev(i, j, k, radEnergy_index + numRadVars_ * g) / radBoundaryWidth_copy[g] + consPrev(i, j, k, radEnergy_index + numRadVars_ * (g + 1)) / radBoundaryWidth_copy[g + 1]) / 2.0;
+          }
+        }
+      }
+
 			for (int g = 0; g < nGroups_; ++g) {
 
 				Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
@@ -1504,7 +1507,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] - alpha_B[g]) / 3.0;
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
-							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] + 1.0) / 3.0;
+							v_term = kappaPVec[g] * fourPiBoverC[g] - 1.0 / 3.0 * (delta_term[g + 1] - delta_term[g]);
             }
 
 						v_term *= chat * dt * gasMtm0[n];
@@ -1519,7 +1522,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 							pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
-							pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
+							pressure_term *= kappaEVec[g] * (- Q_slope);
+              for (int z = 0; z < 3; ++z) {
+                pressure_term += gasMtm0[z] * Tedd[n][z] * (delta_term_E[g + 1] - delta_term_E[g]);
+              }
+							pressure_term *= chat * dt;
 						}
 
 						v_term += pressure_term;
@@ -1666,27 +1673,15 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						work[g] *= chat * dt / (c * c);
 					}
 				} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
-          for (int g = 0; g < nGroups_; ++g) {
-            frad[0][g] = Frad_t1[0][g];
-            frad[1][g] = Frad_t1[1][g];
-            frad[2][g] = Frad_t1[2][g];
-            work[g] = 0.0;
-          }
           for (int g = 0; g < nGroups_ + 1; ++g) {
-            if (g == 0) {
-              delta_term[g] = (x1GasMom0 * frad[0][g] + x2GasMom0 * frad[1][g] + x3GasMom0 * frad[2][g]) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-            } else if (g == nGroups_) {
-              delta_term[g] = (x1GasMom0 * frad[0][g - 1] + x2GasMom0 * frad[1][g - 1] + x3GasMom0 * frad[2][g - 1]) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-            } else {
-              delta_term[g] = (x1GasMom0 * (frad[0][g - 1] + frad[0][g]) / 2.0 + x2GasMom0 * (frad[1][g - 1] + frad[1][g]) / 2.0 + x3GasMom0 * (frad[2][g - 1] + frad[2][g]) / 2.0) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-            }
+            delta_term[g] = x1GasMom0 * Frad_t1[0][g] + x2GasMom0 * Frad_t1[1][g] + x3GasMom0 * Frad_t1[2][g];
+            delta_term[g] *= radBoundaries_g_copy[g] * kappa_expo_and_lower_value[1][g] / radBoundaryWidth_copy[g];
             work[g] = 0.0;
           }
           for (int g = 0; g < nGroups_; ++g) {
-            // work[g] += delta_term[g + 1] - delta_term[g]; // delta term
-            work[g] += kappa_expo_and_lower_value[0][g] * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
+            work[g] += delta_term[g + 1] - delta_term[g];
             work[g] += -1. * Q_slope * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
-            work[g] *= chat / (c * c) * dt;
+            work[g] *= chat / (c * c);
           }
         }
 			}
