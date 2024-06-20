@@ -1287,8 +1287,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
                 }
               }
               for (int g = 0; g < nGroups_; ++g) {
-                // work[g] += delta_term[g + 1] - delta_term[g]; // delta term
-                work[g] += kappa_expo_and_lower_value[0][g] * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
+                work[g] += delta_term[g + 1] - delta_term[g]; // delta term
+                // work[g] += kappa_expo_and_lower_value[0][g] * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
                 work[g] += -1. * Q_slope * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
                 work[g] *= chat / (c * c) * dt;
               }
@@ -1647,49 +1647,50 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			for (int g = 0; g < nGroups_; ++g) {
 				// copy work to work_prev
 				work_prev[g] = work[g];
-				// compute new work term from the updated radiation flux and velocity
-				if constexpr (opacity_model_ == OpacityModel::user) {
-					work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * chat / (c * c) *
-						  lorentz_factor_v * (2.0 * kappaEVec[g] - kappaFVec[g]) * dt;
-				} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
-					for (int n = 0; n < 3; ++n) {
-						work[n] = 0.0;
-					}
-					for (int n = 0; n < 3; ++n) {
-						alpha_F = ComputeRadQuantityExponents(Frad_t1[n], radBoundaries_g_copy);
-						kappaFVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_F);
-						for (int g = 0; g < nGroups_; ++g) {
-							work[g] += (kappa_expo_and_lower_value[0][g] + 1.0) * gasMtm0[n] * kappaFVec[g] * Frad_t1[n][g];
-						}
-					}
-					for (int g = 0; g < nGroups_; ++g) {
-						work[g] *= chat * dt / (c * c);
-					}
-				} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+      }
+      // compute new work term from the updated radiation flux and velocity
+      if constexpr (opacity_model_ == OpacityModel::user) {
+        for (int g = 0; g < nGroups_; ++g) {
+          work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * chat / (c * c) *
+                lorentz_factor_v * (2.0 * kappaEVec[g] - kappaFVec[g]) * dt;
+        }
+      } else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
+        for (int g = 0; g < nGroups_; ++g) {
+          work[g] = 0.0;
+        }
+        for (int n = 0; n < 3; ++n) {
+          alpha_F = ComputeRadQuantityExponents(Frad_t1[n], radBoundaries_g_copy);
+          kappaFVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_F);
           for (int g = 0; g < nGroups_; ++g) {
-            frad[0][g] = Frad_t1[0][g];
-            frad[1][g] = Frad_t1[1][g];
-            frad[2][g] = Frad_t1[2][g];
-            work[g] = 0.0;
-          }
-          for (int g = 0; g < nGroups_ + 1; ++g) {
-            if (g == 0) {
-              delta_term[g] = (x1GasMom0 * frad[0][g] + x2GasMom0 * frad[1][g] + x3GasMom0 * frad[2][g]) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-            } else if (g == nGroups_) {
-              delta_term[g] = (x1GasMom0 * frad[0][g - 1] + x2GasMom0 * frad[1][g - 1] + x3GasMom0 * frad[2][g - 1]) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-            } else {
-              delta_term[g] = (x1GasMom0 * (frad[0][g - 1] + frad[0][g]) / 2.0 + x2GasMom0 * (frad[1][g - 1] + frad[1][g]) / 2.0 + x3GasMom0 * (frad[2][g - 1] + frad[2][g]) / 2.0) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-            }
-            work[g] = 0.0;
-          }
-          for (int g = 0; g < nGroups_; ++g) {
-            // work[g] += delta_term[g + 1] - delta_term[g]; // delta term
-            work[g] += kappa_expo_and_lower_value[0][g] * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
-            work[g] += -1. * Q_slope * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
-            work[g] *= chat / (c * c) * dt;
+            work[g] += (kappa_expo_and_lower_value[0][g] + 1.0) * gasMtm0[n] * kappaFVec[g] * Frad_t1[n][g];
           }
         }
-			}
+        for (int g = 0; g < nGroups_; ++g) {
+          work[g] *= chat * dt / (c * c);
+        }
+      } else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+        for (int g = 0; g < nGroups_ + 1; ++g) {
+          if (g < nGroups_) {
+            frad[0][g] = Frad_t1[0][g] / radBoundaryWidth_copy[g];
+            frad[1][g] = Frad_t1[1][g] / radBoundaryWidth_copy[g];
+            frad[2][g] = Frad_t1[2][g] / radBoundaryWidth_copy[g];
+            work[g] = 0.0;
+          }
+          if (g == 0) {
+            delta_term[g] = (x1GasMom0 * frad[0][g] + x2GasMom0 * frad[1][g] + x3GasMom0 * frad[2][g]) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
+          } else if (g == nGroups_) {
+            delta_term[g] = (x1GasMom0 * frad[0][g - 1] + x2GasMom0 * frad[1][g - 1] + x3GasMom0 * frad[2][g - 1]) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
+          } else {
+            delta_term[g] = (x1GasMom0 * (frad[0][g - 1] + frad[0][g]) / 2.0 + x2GasMom0 * (frad[1][g - 1] + frad[1][g]) / 2.0 + x3GasMom0 * (frad[2][g - 1] + frad[2][g]) / 2.0) * kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
+          }
+        }
+        for (int g = 0; g < nGroups_; ++g) {
+          work[g] += delta_term[g + 1] - delta_term[g]; // delta term
+          // work[g] += kappa_expo_and_lower_value[0][g] * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
+          work[g] += -1. * Q_slope * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
+          work[g] *= chat / (c * c) * dt;
+        }
+      }
 
 			// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 			const double lag_tol = 1.0e-13;

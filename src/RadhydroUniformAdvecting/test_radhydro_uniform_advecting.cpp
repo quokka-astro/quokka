@@ -62,6 +62,9 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = beta_order_;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly;
+	static constexpr double energy_unit = 1.0;
+	static constexpr amrex::GpuArray<double, 2> radBoundaries{1.0e-4, 1.0e4};
 };
 
 template <> struct Physics_Traits<PulseProblem> {
@@ -74,6 +77,19 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1;
 };
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double rho,
+							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+{
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[0][i] = 0.0;
+		exponents_and_values[1][i] = kappa0;
+	}
+	return exponents_and_values;
+}
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
