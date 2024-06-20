@@ -112,6 +112,7 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
+	// static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly;
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;
@@ -164,19 +165,18 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho,
-							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
+							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
-	amrex::GpuArray<double, nGroups_> exponents{};
-	amrex::GpuArray<double, nGroups_> kappa_lower{};
+	amrex::GpuArray<double, nGroups_ + 1> exponents{};
+	amrex::GpuArray<double, nGroups_ + 1> kappa_edges{};
+	for (int g = 0; g < nGroups_ + 1; ++g) {
+		kappa_edges[g] = compute_kappa(rad_boundaries[g], Tgas);
+  }
 	for (int g = 0; g < nGroups_; ++g) {
-		auto kappa_up = compute_kappa(rad_boundaries[g + 1], Tgas);
-		auto kappa_down = compute_kappa(rad_boundaries[g], Tgas);
-		exponents[g] = std::log(kappa_up / kappa_down) / std::log(rad_boundaries[g + 1] / rad_boundaries[g]);
-		kappa_lower[g] = kappa_down / rho;
+		exponents[g] = std::log(kappa_edges[g + 1] / kappa_edges[g]) / std::log(rad_boundaries[g + 1] / rad_boundaries[g]);
 		AMREX_ASSERT(!std::isnan(exponents[g]));
-		AMREX_ASSERT(kappa_lower[g] >= 0.);
 	}
-	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> const exponents_and_values{exponents, kappa_lower};
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const exponents_and_values{exponents, kappa_edges};
 	return exponents_and_values;
 }
 
