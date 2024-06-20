@@ -111,8 +111,8 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
-	// static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly;
+	// static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly;
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;

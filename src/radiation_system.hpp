@@ -986,6 +986,29 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::
 }
 
 template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeGroupMeanOpacityWithMinusOneSlope(amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value,
+									 amrex::GpuArray<double, nGroups_> radBoundaryRatios) -> quokka::valarray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_ + 1> const &alpha_kappa = kappa_expo_and_lower_value[0];
+	amrex::GpuArray<double, nGroups_ + 1> const &kappa_lower = kappa_expo_and_lower_value[1];
+
+	quokka::valarray<double, nGroups_> kappa{};
+	for (int g = 0; g < nGroups_; ++g) {
+		double const part1 = std::log(radBoundaryRatios[g]);
+		double const alpha = alpha_kappa[g];
+		double part2 = NAN;
+		if (std::abs(alpha) < 1e-8) {
+			part2 = std::log(radBoundaryRatios[g]);
+		} else {
+			part2 = (std::pow(radBoundaryRatios[g], alpha) - 1.0) / alpha;
+		}
+		kappa[g] = kappa_lower[g] / part1 * part2;
+		AMREX_ASSERT(!std::isnan(kappa[g]));
+	}
+	return kappa;
+}
+
+template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(const double /* rho */,
 										    const double /* Tgas */) -> quokka::valarray<double, nGroups_>
 {
@@ -1028,10 +1051,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
 	amrex::GpuArray<amrex::Real, nGroups_> radBoundaryRatios{};
+  amrex::GpuArray<amrex::Real, nGroups_> radBoundaryWidths{};
 	if constexpr (nGroups_ > 1) {
-		if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
+		if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw || opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
 			for (int g = 0; g < nGroups_; ++g) {
 				radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
+				radBoundaryWidths[g] = radBoundaries_g[g + 1] - radBoundaries_g[g];
 			}
 		}
 	}
@@ -1110,10 +1135,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// make a copy of radBoundaries_g
 		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
 		amrex::GpuArray<double, nGroups_> radBoundaryRatios_copy{};
+		amrex::GpuArray<double, nGroups_> radBoundaryWidth_copy{};
 		for (int g = 0; g < nGroups_ + 1; ++g) {
 			radBoundaries_g_copy[g] = radBoundaries_g[g];
 			if (g < nGroups_) {
 				radBoundaryRatios_copy[g] = radBoundaryRatios[g];
+				radBoundaryWidth_copy[g] = radBoundaryWidths[g];
 			}
 		}
 
@@ -1121,6 +1148,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		if (stage == 1) {
 			gas_update_factor = IMEX_a32;
 		}
+
+    const double Q_slope = -1.0; // slope of spectra. This number should NOT be changed.
 
 		const int max_ite = 5;
 		int ite = 0;
@@ -1187,7 +1216,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					alpha_E = ComputeRadQuantityExponents(Erad0Vec, radBoundaries_g_copy);
 					kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_B);
 					kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_E);
+				} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+          kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
+          kappaPVec = ComputeGroupMeanOpacityWithMinusOneSlope(kappa_expo_and_lower_value, radBoundaryRatios_copy);
+          kappaEVec = kappaPVec;
+          kappaFVec = kappaPVec;
 				}
+        
 				AMREX_ASSERT(!kappaPVec.hasnan());
 				AMREX_ASSERT(!kappaEVec.hasnan());
 				AMREX_ASSERT(!kappaFVec.hasnan());
@@ -1234,7 +1269,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							for (int g = 0; g < nGroups_; ++g) {
 								work[g] *= chat / (c * c) * dt;
 							}
-						}
+						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+              for (int g = 0; g < nGroups_ + 1; ++g) {
+								work[g] = 0.0;
+              }
+							for (int n = 0; n < 3; ++n) {
+								for (int g = 0; g < nGroups_; ++g) {
+									work[g] +=
+									    (kappa_expo_and_lower_value[0][g] + 1.0) * gasMtm0[n] * kappaFVec[g] * frad[n][g];
+								}
+							}
+							for (int g = 0; g < nGroups_; ++g) {
+								work[g] *= chat / (c * c) * dt;
+							}
+            }
 					}
 				}
 
@@ -1278,7 +1326,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						alpha_E = ComputeRadQuantityExponents(Erad0Vec, radBoundaries_g_copy);
 						kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_B);
 						kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_E);
-					}
+          } else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+            kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
+            kappaPVec = ComputeGroupMeanOpacityWithMinusOneSlope(kappa_expo_and_lower_value, radBoundaryRatios_copy);
+            kappaEVec = kappaPVec;
+            kappaFVec = kappaPVec;
+          }
 					AMREX_ASSERT(!kappaPVec.hasnan());
 					AMREX_ASSERT(!kappaEVec.hasnan());
 
@@ -1396,6 +1449,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 				// Note that alpha_F has not been changed in the Newton iteration
 				kappaFVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_F);
+			} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+        kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
+				if constexpr (gamma_ != 1.0) {
+          kappaPVec = ComputeGroupMeanOpacityWithMinusOneSlope(kappa_expo_and_lower_value, radBoundaryRatios_copy);
+          kappaEVec = kappaPVec;
+          kappaFVec = kappaPVec;
+        }
 			}
 			AMREX_ASSERT(!kappaFVec.hasnan());
 
@@ -1433,7 +1493,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							}
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] - alpha_B[g]) / 3.0;
-						}
+						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] + 1.0) / 3.0;
+            }
 
 						v_term *= chat * dt * gasMtm0[n];
 
@@ -1445,6 +1507,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						if constexpr (opacity_model_ == OpacityModel::user) {
 							pressure_term *= chat * dt * kappaFVec[g] * lorentz_factor_v;
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
+							pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
+						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
 							pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
 						}
 
@@ -1591,7 +1655,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					for (int g = 0; g < nGroups_; ++g) {
 						work[g] *= chat * dt / (c * c);
 					}
-				}
+				} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+					for (int n = 0; n < 3; ++n) {
+						work[n] = 0.0;
+					}
+					for (int n = 0; n < 3; ++n) {
+						kappaFVec = ComputeGroupMeanOpacityWithMinusOneSlope(kappa_expo_and_lower_value, radBoundaryRatios_copy);
+						for (int g = 0; g < nGroups_; ++g) {
+							work[g] += (kappa_expo_and_lower_value[0][g] + 1.0) * gasMtm0[n] * kappaFVec[g] * Frad_t1[n][g];
+						}
+					}
+					for (int g = 0; g < nGroups_; ++g) {
+						work[g] *= chat * dt / (c * c);
+					}
+        }
 			}
 
 			// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
