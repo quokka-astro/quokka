@@ -1,0 +1,19 @@
+# YAML file in the main branch
+
+schedules:
+- cron: '0 0 * * *'
+  displayName: Daily midnight build
+  branches:
+    include:
+    - development
+
+jobs:
+  - job: GPU_Regression
+    pool: avatar
+    timeoutInMinutes: 300
+    steps:
+    - script: ./extern/regression_testing/regtest.py regression/quokka-tests.ini
+      displayName: 'Run regression testing'
+    - publish: /home/bwibking/regression-tests/web
+      artifact: regressionHTMLOutput
+      displayName: 'Upload results'
