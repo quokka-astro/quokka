@@ -7,6 +7,10 @@ schedules:
     include:
     - development
 
+# NOTE: several Python packages are needed for regression_testing to run properly:
+#   https://github.com/AMReX-Codes/regression_testing/blob/main/requirements.txt
+# ALSO NEEDED: bokeh
+
 jobs:
   - job: GPU_Regression
     pool: avatar
