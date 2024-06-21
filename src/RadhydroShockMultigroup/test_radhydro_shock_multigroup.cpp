@@ -63,6 +63,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
 													  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
 	static constexpr int beta_order = 1;
+	// static constexpr OpacityModel opacity_model = OpacityModel::user;
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly;
 };

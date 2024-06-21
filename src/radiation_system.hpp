@@ -1366,6 +1366,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 					F_G = Egas_guess - Egas0;
 					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
+				  if (min(EradVec_guess) < 0.0) {
+            std::cout << "";
+          }
 					double F_D_abs_sum = 0.0;
 					for (int g = 0; g < nGroups_; ++g) {
 						if (tau[g] > 0.0) {
