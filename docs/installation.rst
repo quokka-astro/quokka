@@ -93,7 +93,7 @@ Running on GPUs
 ---------------
 
 By default, Quokka compiles itself to run only on CPUs. Quokka can run
-on either NVIDIA, AMD, or Intel GPUs. Consult the sub-sections below for
+on either NVIDIA or AMD GPUs. Consult the sub-sections below for
 the build instructions for a given GPU vendor.
 
 NVIDIA GPUs
