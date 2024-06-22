@@ -1,5 +1,8 @@
-# YAML file in the main branch
+# don't run on pull request or push
+pr: none
+trigger: none
 
+# run on timed schedule, like a cron job
 schedules:
 - cron: '0 0 * * *'
   displayName: Daily midnight build
