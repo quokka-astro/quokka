@@ -162,7 +162,7 @@ def get_erot_ke_ratio(pertx, perty, pertz, rad=-1.0):
         r2[idx0] = 0.0
     erot_ke_ratio = (np.sum(y*pertz-z*perty)**2 +
                      np.sum(z*pertx-x*pertz)**2 +
-                     np.sum(x*perty-y*pertx)**2)/(np.sum(r2)*np.product(n)) 
+                     np.sum(x*perty-y*pertx)**2)/(np.sum(r2)*np.prod(n)) 
     return erot_ke_ratio
 
 
