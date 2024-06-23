@@ -69,7 +69,7 @@ def init_perturbations(n, kmin, kmax, dtype):
 
 
 def normalize(fx, fy, fz):
-    norm = np.sqrt(np.sum(fx**2 + fy**2 + fz**2)/np.product(n))
+    norm = np.sqrt(np.sum(fx**2 + fy**2 + fz**2)/np.prod(n))
     fx = fx/norm
     fy = fy/norm
     fz = fz/norm
