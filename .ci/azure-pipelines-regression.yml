@@ -1,0 +1,28 @@
+# don't run on pull request or push
+pr: none
+trigger: none
+
+# run on timed schedule, like a cron job
+schedules:
+- cron: '0 0 * * *'
+  displayName: Daily midnight build
+  branches:
+    include:
+    - development
+
+# NOTE: several Python packages are needed for regression_testing to run properly:
+#   https://github.com/AMReX-Codes/regression_testing/blob/main/requirements.txt
+# ALSO NEEDED: bokeh
+
+jobs:
+  - job: GPU_Regression
+    pool: avatar
+    timeoutInMinutes: 300
+    steps:
+    - script: ./extern/regression_testing/regtest.py regression/quokka-tests.ini
+      displayName: 'Run regression testing'
+    - publish: /home/bwibking/regression-tests/web
+      artifact: regressionHTMLOutput
+      displayName: 'Upload results to Azure Pipelines'
+    - script: cd /home/bwibking/regression-tests/web && git add . && git commit -m 'updated results' && git push
+      displayName: 'Upload results to GitHub Pages'

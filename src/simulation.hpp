@@ -579,6 +579,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default checkpoint interval
 	pp.query("checkpoint_interval", checkpointInterval_);
 
+	// Default plotfile prefix
+	pp.query("plotfile_prefix", plot_file);
+
+	// Default checkpoint prefix
+	pp.query("checkpoint_prefix", chk_file);
+
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
 
