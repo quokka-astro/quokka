@@ -321,13 +321,11 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 
 		// write column names for variables
 		for (int n = 0; n < nvars; ++n) {
-			pdfFile << std::setw(widths[n][0]) << m_varNames[n] + "_idx"
-				<< " " << std::setw(widths[n][0]) << m_varNames[n] + "_min"
-				<< " " << std::setw(widths[n][1]) << m_varNames[n] + "_max";
+			pdfFile << std::setw(widths[n][0]) << m_varNames[n] + "_idx" << " " << std::setw(widths[n][0]) << m_varNames[n] + "_min" << " "
+				<< std::setw(widths[n][1]) << m_varNames[n] + "_max";
 		}
 		// write out column name for histogram value: "mass_sum", "volume_sum", or "cell_counts_sum"
-		pdfFile << " " << std::setw(width) << m_weightType + "_sum"
-			<< "\n";
+		pdfFile << " " << std::setw(width) << m_weightType + "_sum" << "\n";
 
 		std::vector<amrex::Real> transformed_range(nvars);
 		std::vector<amrex::Real> transformed_binWidth(nvars);
