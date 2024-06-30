@@ -24,14 +24,17 @@ echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt
 
 sudo apt-get update
 
+# specify version of DPCPP/MKL (in order to workaround bugs)
+VERSION=2024.1
+
 # try apt install up to five times, to avoid connection splits
 status=1
 for itry in {1..5}
 do
     sudo apt-get install -y --no-install-recommends \
         build-essential \
-        intel-oneapi-compiler-dpcpp-cpp \
-        intel-oneapi-mkl-devel \
+        intel-oneapi-compiler-dpcpp-cpp-$VERSION \
+        intel-oneapi-mkl-devel-$VERSION \
         intel-oneapi-mpi-devel \
         python3-dev python3-numpy python3-matplotlib \
         libhdf5-mpi-dev \
