@@ -1688,8 +1688,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
           }
         }
         for (int g = 0; g < nGroups_; ++g) {
-          work[g] += delta_term[g + 1] - delta_term[g]; // delta term
-          // work[g] += kappa_expo_and_lower_value[0][g] * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
+          // work[g] += delta_term[g + 1] - delta_term[g]; // delta term
+          work[g] += kappa_expo_and_lower_value[0][g] * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
           work[g] += -1. * Q_slope * kappaFVec[g] * (frad[0][g] * gasMtm0[0] + frad[1][g] * gasMtm0[1] + frad[2][g] * gasMtm0[2]);
           work[g] *= chat / (c * c) * dt;
         }
