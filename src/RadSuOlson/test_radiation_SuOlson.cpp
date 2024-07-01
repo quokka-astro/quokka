@@ -49,7 +49,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 0;
 };
 
 template <> struct Physics_Traits<MarshakProblem> {
@@ -82,23 +82,25 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(con
 
 static constexpr int nmscalars_ = Physics_Traits<MarshakProblem>::numMassScalars;
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
-									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<MarshakProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
+						 std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
-									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<MarshakProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
+						 std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas * Tgas * Tgas * Tgas);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+						       std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,

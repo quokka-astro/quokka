@@ -60,6 +60,13 @@ if(ENABLE_ASAN)
   add_link_options(-fsanitize=address -fsanitize=undefined)
 endif(ENABLE_ASAN)
 
+if(ENABLE_HWASAN)
+  # enable HWAddressSanitizer for debugging
+  message(STATUS "Compiling with HWAddressSanitizer *enabled*")
+  add_compile_options(-fsanitize=hwaddress)
+  add_link_options(-fsanitize=hwaddress)
+endif(ENABLE_HWASAN)
+
 if(DISABLE_FMAD)
   message(STATUS "Fused multiply-add (FMAD) is disabled for device code.")
   add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)
@@ -114,16 +121,18 @@ link_libraries(yaml-cpp::yaml-cpp)
 
 include(CTest)
 
-#create an object library for files that should be compiled with all test problems
-set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp" "${openPMDSources}"
-                      "${gamma_law_sources}")
-#we don't use it anymore because it gives issues on Cray systems
-#add_library(QuokkaObj OBJECT ${QuokkaObjSources} ${gamma_law_sources})
-#if(AMReX_GPU_BACKEND MATCHES "CUDA")
-#    setup_target_for_cuda_compilation(QuokkaObj)
-#endif()
-#link_libraries(QuokkaObj)
+set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagBase.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagFilter.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagFramePlane.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagPDF.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/GrackleLikeCooling.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/TabulatedCooling.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/CloudyDataReader.cpp" 
+                        "${openPMDSources}")
+
+set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
 
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
@@ -155,6 +164,7 @@ add_subdirectory(RadMatterCouplingRSLA)
 add_subdirectory(RadPulse)
 add_subdirectory(RadShadow)
 add_subdirectory(RadStreaming)
+add_subdirectory(RadStreamingY)
 add_subdirectory(RadSuOlson)
 add_subdirectory(RadTophat)
 add_subdirectory(RadTube)
@@ -165,17 +175,19 @@ add_subdirectory(RadhydroShockCGS)
 add_subdirectory(RadhydroShockMultigroup)
 add_subdirectory(RadhydroUniformAdvecting)
 add_subdirectory(RadhydroPulse)
+add_subdirectory(RadhydroPulseDyn)
+add_subdirectory(RadhydroPulseGrey)
+add_subdirectory(RadhydroPulseMG)
+add_subdirectory(RadhydroPulseMGint)
 
-add_subdirectory(ODEIntegration)
-add_subdirectory(Cooling)
-add_subdirectory(ShockCloud)
-add_subdirectory(PassiveScalar)
-add_subdirectory(FCQuantities)
-add_subdirectory(SphericalCollapse)
-add_subdirectory(NSCBC)
-add_subdirectory(StarCluster)
-add_subdirectory(PrimordialChem)
 add_subdirectory(BinaryOrbitCIC)
-add_subdirectory(MetalAdvectionProblem)
-
-
+add_subdirectory(Cooling)
+add_subdirectory(FCQuantities)
+add_subdirectory(NSCBC)
+add_subdirectory(ODEIntegration)
+add_subdirectory(PassiveScalar)
+add_subdirectory(PrimordialChem)
+add_subdirectory(PopIII)
+add_subdirectory(ShockCloud)
+add_subdirectory(StarCluster)
+add_subdirectory(SphericalCollapse)

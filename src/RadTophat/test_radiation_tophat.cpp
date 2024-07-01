@@ -7,18 +7,15 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
-#include <tuple>
-
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
+#include "RadhydroSimulation.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
-#include "test_radiation_tophat.hpp"
 
 struct TophatProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -48,7 +45,7 @@ template <> struct RadSystem_Traits<TophatProblem> {
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 0;
 };
 
 template <> struct Physics_Traits<TophatProblem> {
@@ -63,8 +60,8 @@ template <> struct Physics_Traits<TophatProblem> {
 };
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho,
+											     const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	amrex::Real kappa = 0.;
@@ -80,8 +77,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeP
 }
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho,
+											       const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, 0.);
 }
@@ -89,16 +86,16 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeF
 static constexpr int nmscalars_ = Physics_Traits<TophatProblem>::numMassScalars;
 template <>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
-    -> double
+quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas,
+						std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
-    -> double
+quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas,
+						std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return rho * c_v * Tgas;
 }
@@ -106,7 +103,7 @@ quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double T
 template <>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<TophatProblem>::ComputeEintTempDerivative(const double rho, const double /*Tgas*/,
-						      std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
+						      std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -178,8 +175,6 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 			Fy_bdry = Fy_0;
 			Fz_bdry = Fz_0;
 		}
-		const amrex::Real Fnorm = std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1 left side boundary (Marshak)
 		consVar(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = E_inc;
@@ -242,10 +237,6 @@ auto problem_main() -> int
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;
 	const double max_time = 5.0e-10; // s
-	// const int nx = 700;
-	// const int ny = 200;
-	// const double Lx = 7.0;	// cm
-	// const double Ly = 2.0;	// cm
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<TophatProblem>::x1RadFlux_index) && (dim == 0)) {
@@ -302,6 +293,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return 0;
 }

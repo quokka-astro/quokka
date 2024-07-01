@@ -7,23 +7,14 @@
 /// \brief Defines a test problem for SUNDIALS cooling.
 ///
 #include <random>
-#include <vector>
 
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_FabArray.H"
 #include "AMReX_GpuDevice.H"
-#include "AMReX_MultiFab.H"
-#include "AMReX_ParallelContext.H"
-#include "AMReX_ParallelDescriptor.H"
-#include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
 #include "RadhydroSimulation.hpp"
-#include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "test_cooling.hpp"
 
 using amrex::Real;
 
@@ -101,14 +92,12 @@ template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(quo
 	const auto &phase_table = userData_.table_data->const_table();
 
 	Real const Lx = (prob_hi[0] - prob_lo[0]);
-	Real const Ly = (prob_hi[1] - prob_lo[1]);
-	Real const Lz = (prob_hi[2] - prob_lo[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-		Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
-		Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
+		Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
+		Real const z = prob_lo[2] + (k + static_cast<Real>(0.5)) * dx[2];
 
 		// compute perturbations
 		Real delta_rho = 0;
@@ -118,9 +107,9 @@ template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(quo
 					if ((ki == 0) && (kj == 0) && (kk == 0)) {
 						continue;
 					}
-					Real const kx = 2.0 * M_PI * Real(ki) / Lx;
-					Real const ky = 2.0 * M_PI * Real(kj) / Lx;
-					Real const kz = 2.0 * M_PI * Real(kk) / Lx;
+					Real const kx = 2.0 * M_PI * static_cast<Real>(ki) / Lx;
+					Real const ky = 2.0 * M_PI * static_cast<Real>(kj) / Lx;
+					Real const kz = 2.0 * M_PI * static_cast<Real>(kk) / Lx;
 					delta_rho += A * std::sin(x * kx + y * ky + z * kz + phase_table(ki, kj, kk));
 				}
 			}
@@ -165,7 +154,6 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(const amrex::IntVect &iv
 #endif
 
 	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
 	if (j >= hi[1]) {

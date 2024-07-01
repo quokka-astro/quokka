@@ -7,19 +7,15 @@
 /// \brief Defines a 2D test problem for radiation in the transport regime.
 ///
 
-#include <limits>
-#include <tuple>
-
-#include "AMReX_Array.H"
+#include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
-#include "AMReX_IntVect.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
+#include "RadhydroSimulation.hpp"
+#include "physics_info.hpp"
 #include "radiation_system.hpp"
-#include "test_radiation_shadow.hpp"
+#include "simulation.hpp"
 
 struct ShadowProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -44,7 +40,16 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 	static constexpr double c_hat = c;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 1;
+};
+
+template <> struct Physics_Traits<ShadowProblem> {
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1;
 };
 
 template <>
@@ -92,9 +97,6 @@ AMRSimulation<ShadowProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 		const double Fx_bdry = c * E_inc; // free-streaming (F/cE == 1)
 		const double Fy_bdry = 0.;
 		const double Fz_bdry = 0.;
-
-		const amrex::Real Fnorm = std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		AMREX_ASSERT((Fnorm / (c * E_inc)) <= 1.0); // flux-limiting condition
 
 		// x1 left side boundary (streaming)
 		consVar(i, j, k, RadSystem<ShadowProblem>::radEnergy_index) = E_inc;
@@ -212,9 +214,8 @@ auto problem_main() -> int
 		return false;
 	};
 
-	constexpr int nvars = 9;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	amrex::Vector<amrex::BCRec> BCs_cc(Physics_Indices<ShadowProblem>::nvarTotal_cc);
+	for (int n = 0; n < Physics_Indices<ShadowProblem>::nvarTotal_cc; ++n) {
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- streaming
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
@@ -253,6 +254,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return 0;
 }
