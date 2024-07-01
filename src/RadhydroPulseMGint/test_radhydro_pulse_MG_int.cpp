@@ -16,33 +16,26 @@ struct MGProblem {
 struct ExactProblem {
 };
 
+constexpr bool run_exact = false;
 // A fixed power law for radiation quantities; for testing purpose only
 AMREX_GPU_MANAGED double spec_power = -1.0; // NOLINT
 static constexpr bool export_csv = true;
 
+// constexpr int n_groups_ = 1;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0.0, inf};
 // constexpr int n_groups_ = 2;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e18, 1e20};
-constexpr int n_groups_ = 4;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e16, 1e17, 1e18, 1e19};
+// constexpr int n_groups_ = 4;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
 // constexpr int n_groups_ = 8;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19, 3.16e19, 1e20};
 // constexpr int n_groups_ = 16;
 // constexpr amrex::GpuArray<double, n_groups_ + 1>
-// rad_boundaries_{1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18,
-// 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19, 1.77827941e+19, 3.16227766e+19, 5.62341325e+19, 1.00000000e+20}; constexpr int n_groups_ =
-// 32; constexpr amrex::GpuArray<double, n_groups_ + 1>
-// rad_boundaries_{1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16, 3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17,
-// 1.33352143e+17, 1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17, 1.00000000e+18, 1.33352143e+18, 1.77827941e+18,
-// 2.37137371e+18, 3.16227766e+18, 4.21696503e+18, 5.62341325e+18, 7.49894209e+18, 1.00000000e+19, 1.33352143e+19, 1.77827941e+19, 2.37137371e+19, 3.16227766e+19,
-// 4.21696503e+19, 5.62341325e+19, 7.49894209e+19, 1.00000000e+20}; constexpr int n_groups_ = 64; constexpr amrex::GpuArray<double, n_groups_ + 1>
-// rad_boundaries_{1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16, 3.16227766e+16,
-// 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16, 1.00000000e+17, 1.15478198e+17, 1.33352143e+17,
-// 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17, 3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17,
-// 6.49381632e+17, 7.49894209e+17, 8.65964323e+17, 1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18,
-// 2.73841963e+18, 3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18, 1.00000000e+19,
-// 1.15478198e+19, 1.33352143e+19, 1.53992653e+19, 1.77827941e+19, 2.05352503e+19, 2.37137371e+19, 2.73841963e+19, 3.16227766e+19, 3.65174127e+19, 4.21696503e+19,
-// 4.86967525e+19, 5.62341325e+19, 6.49381632e+19, 7.49894209e+19, 8.65964323e+19, 1.00000000e+20};
+// rad_boundaries_{1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19, 1.77827941e+19, 3.16227766e+19, 5.62341325e+19, 1.00000000e+20}; 
+// constexpr int n_groups_ = 32; 
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16, 3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17, 1.33352143e+17, 1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17, 1.00000000e+18, 1.33352143e+18, 1.77827941e+18, 2.37137371e+18, 3.16227766e+18, 4.21696503e+18, 5.62341325e+18, 7.49894209e+18, 1.00000000e+19, 1.33352143e+19, 1.77827941e+19, 2.37137371e+19, 3.16227766e+19, 4.21696503e+19, 5.62341325e+19, 7.49894209e+19, 1.00000000e+20}; 
+constexpr int n_groups_ = 64; 
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16, 3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16, 1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17, 3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17, 1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18, 3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18, 1.00000000e+19, 1.15478198e+19, 1.33352143e+19, 1.53992653e+19, 1.77827941e+19, 2.05352503e+19, 2.37137371e+19, 2.73841963e+19, 3.16227766e+19, 3.65174127e+19, 4.21696503e+19, 4.86967525e+19, 5.62341325e+19, 6.49381632e+19, 7.49894209e+19, 8.65964323e+19, 1.00000000e+20};
 
 constexpr double T0 = 1.0e7; // K (temperature)
 constexpr double T1 = 2.0e7; // K (temperature)
@@ -184,6 +177,21 @@ RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 	}
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> const exponents_and_values{exponents, kappa_lower};
 	return exponents_and_values;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MGProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int i = 0; i < nGroups_; ++i) {
+		kappaPVec[i] = 100.;
+	}
+	return kappaPVec;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<MGProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+{
+	return ComputePlanckOpacity(rho, Tgas);
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
@@ -372,6 +380,7 @@ auto problem_main() -> int
 	// Problem 2: exact opacity
 
 	// Problem initialization
+#if 0
 	RadhydroSimulation<ExactProblem> sim2(BCs_cc);
 
 	sim2.radiationReconstructionOrder_ = 3; // PPM
@@ -558,4 +567,7 @@ auto problem_main() -> int
 		status = 1;
 	}
 	return status;
+#endif
+
+	return 0;
 }

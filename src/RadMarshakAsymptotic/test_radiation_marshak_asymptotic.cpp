@@ -16,10 +16,13 @@
 #include "test_radiation_marshak_asymptotic.hpp"
 #include <ios>
 
-constexpr int the_model = 1; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
+constexpr int the_model = 0; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
+
+// constexpr int n_groups_ = 1;
+// constexpr amrex::GpuArray<double, n_groups_> group_opacities_ = {1000.};
 
 constexpr int n_groups_ = 6;
 constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {0.3e12, 0.3e14, 0.6e14, 0.9e14, 1.2e14, 1.5e14, 1.5e16};
@@ -171,7 +174,7 @@ template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGr
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto radBoundaries_g = RadSystem_Traits<SuOlsonProblemCgs>::radBoundaries;
+	const auto radBoundaries_g = RadSystem<SuOlsonProblemCgs>::radBoundaries_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -341,7 +344,12 @@ auto problem_main() -> int
 	fstream << "# x,Tgas,Trad, Trad_1, Trad_2, Trad_3, Trad_4, Trad_5, Trad_6";
 	for (int i = 0; i < nx; ++i) {
 		fstream << std::endl;
-		fstream << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i] << ", " << Trad_g[0][i] << ", " << Trad_g[1][i] << ", " << Trad_g[2][i] << ", " << Trad_g[3][i] << ", " << Trad_g[4][i] << ", " << Trad_g[5][i];
+		if (n_groups_ == 1) {
+			fstream << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i] << ", " << Trad_g[0][i];
+		}
+		else {
+			fstream << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i] << ", " << Trad_g[0][i] << ", " << Trad_g[1][i] << ", " << Trad_g[2][i] << ", " << Trad_g[3][i] << ", " << Trad_g[4][i] << ", " << Trad_g[5][i];
+		}
 	}
 	fstream.close();
 

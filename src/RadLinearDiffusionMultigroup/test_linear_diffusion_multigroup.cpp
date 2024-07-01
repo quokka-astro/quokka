@@ -199,7 +199,7 @@ auto problem_main() -> int
 	// Problem parameters
 
 	const int max_timesteps = max_timesteps_;
-	const double CFL_number = 0.8;
+	// const double CFL_number = 0.8;
 	const double initial_dt = 0.005;
 	// const double max_dt = 0.005;
 	const double max_time = 1.0;
@@ -244,8 +244,8 @@ auto problem_main() -> int
 
 	RadhydroSimulation<TheProblem> sim(BCs_cc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.radiationCflNumber_ = CFL_number;
+	// sim.cflNumber_ = CFL_number;
+	// sim.radiationCflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.initDt_ = initial_dt;
