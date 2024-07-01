@@ -821,11 +821,11 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
 
-		if (auxTemp < tempFloor) {
+		/*if (auxTemp < tempFloor) {
 			state[bx](i, j, k, internalEnergy_index) =
 			    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
-		}		
+		}*/		
 	});
 }
 
@@ -864,15 +864,9 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 						    +(ComputeVelocityX2(consVar[bx], i, j + 1, k) - ComputeVelocityX2(consVar[bx], i, j - 1, k)) / dx[1],
 						    +(ComputeVelocityX3(consVar[bx], i, j, k + 1) - ComputeVelocityX3(consVar[bx], i, j, k - 1)) / dx[2]));
 		}
-		if(i==82 && j==74 && k==505){
-			// printf("Before RHSfrom inside AddInt=%.2e\n",rhs[bx](i, j, k, internalEnergy_index));
-		}
+	
 		// add P dV term to rhs array
 		rhs[bx](i, j, k, internalEnergy_index) += -Pgas * div_v;
-
-		if(i==82 && j==74 && k==505){
-			// printf("After RHSfrom inside AddInt=%.2e\n",rhs[bx](i, j, k, internalEnergy_index));
-		}
 		
 	});
 }
