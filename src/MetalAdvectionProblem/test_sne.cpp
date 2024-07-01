@@ -88,7 +88,7 @@ template <> struct Physics_Traits<NewProblem> {
   static constexpr bool is_chemistry_enabled = false;
   static constexpr bool is_mhd_enabled = false;
   static constexpr int numMassScalars = 0;		     // number of mass scalars
-  static constexpr int numPassiveScalars = 2; // number of passive scalars
+  static constexpr int numPassiveScalars = 1; // number of passive scalars
   static constexpr int nGroups = 1; // number of radiation groups
 };
 
@@ -183,7 +183,7 @@ template <> struct SimulationData<NewProblem> {
 	int SN_counter_cumulative = 0;
 	Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
 	Real E_blast = 1.0e51;	    // ergs
-	Real M_ejecta = 0;	    // 10.0 * Msun; // g
+	Real M_ejecta = 5.0 * Msun; // g
 	Real refine_threshold = 1.0; // gradient refinement threshold
 };
 
@@ -243,11 +243,6 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
         // sigma1 = 37. * kmps;
         // P = rho01 * std::pow(sigma1, 2.0);
      
-      if(std::sqrt(z*z)<0.25*kpc) {
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e2/vol;  //Disk tracer
-       }else {
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e-5/vol;  //Disk tracer
-       }
 
       state_cc(i, j, k, HydroSystem<NewProblem>::density_index)    = rho;
       state_cc(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = 0.0;
@@ -255,7 +250,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
       state_cc(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = 0.0;
       state_cc(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = P / (gamma - 1.);
       state_cc(i, j, k, HydroSystem<NewProblem>::energy_index)         = P / (gamma - 1.);
-      state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e-5/vol;  //Injected tracer
+      state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)    = 1.e-5/vol;  //Injected tracer
 
     });
   }
@@ -283,25 +278,25 @@ void RadhydroSimulation<NewProblem>::ErrorEst(int lev,
         amrex::Real  ZOinit = 8.6e-3;
         amrex::Real rho_oxy_ = ZOinit *  state(i, j, k, HydroSystem<NewProblem>::density_index) ;
          
-         amrex::Real scal_xyz   = ZOinit + ((delMoxy/Znorm) * state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+         amrex::Real scal_xyz   = ZOinit + ((delMoxy/Znorm) * state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)/
                                                     state(i, j, k, HydroSystem<NewProblem>::density_index)) ;
 
-        amrex::Real scal_xplus  = ZOinit + ((delMoxy/Znorm) * state(i+1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+        amrex::Real scal_xplus  = ZOinit + ((delMoxy/Znorm) * state(i+1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)/
                                                               state(i+1, j, k, HydroSystem<NewProblem>::density_index) ) ;
 
-        amrex::Real scal_xminus = ZOinit + ((delMoxy/Znorm) * state(i-1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+        amrex::Real scal_xminus = ZOinit + ((delMoxy/Znorm) * state(i-1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)/
                                                               state(i-1, j, k, HydroSystem<NewProblem>::density_index)) ;
 
-        amrex::Real scal_yplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j+1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/ 
+        amrex::Real scal_yplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j+1, k, Physics_Indices<NewProblem>::pscalarFirstIndex)/ 
                                                                state(i, j+1, k, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_yminus = ZOinit + ((delMoxy/Znorm) *  state(i, j-1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) / 
+        amrex::Real scal_yminus = ZOinit + ((delMoxy/Znorm) *  state(i, j-1, k, Physics_Indices<NewProblem>::pscalarFirstIndex) / 
                                                                state(i, j-1, k, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_zplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j, k+1, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/ 
+        amrex::Real scal_zplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j, k+1, Physics_Indices<NewProblem>::pscalarFirstIndex)/ 
                                                                state(i, j, k+1, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_zminus = ZOinit + ((delMoxy/Znorm) *  state(i, j, k-1, Physics_Indices<NewProblem>::pscalarFirstIndex+2) / 
+        amrex::Real scal_zminus = ZOinit + ((delMoxy/Znorm) *  state(i, j, k-1, Physics_Indices<NewProblem>::pscalarFirstIndex) / 
                                                                state(i, j, k-1, HydroSystem<NewProblem>::density_index));
         
         amrex::Real del_scalx   = std::abs(scal_xplus - scal_xminus)/2;
@@ -332,6 +327,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
+	const Real rho_blast = userData.M_ejecta / cell_vol  ;   // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
 	const Real Lx = prob_hi[0] - prob_lo[0];
@@ -363,10 +359,10 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         z0 = std::abs(zc -pz(n));
 
         if(x0<0.5*dx[0] && y0<0.5*dx[1] && z0< 0.5*dx[2] ) {
-        state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=   rho_eint_blast; 
-        state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=    rho_eint_blast; 
-        // state(i, j, k, HydroSystem<NewProblem>::density_index) = 1.e-2 * Const_mH;
-        state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)+=  1.e3/cell_vol;
+        state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=  rho_eint_blast; 
+        state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=  rho_eint_blast; 
+        state(i, j, k, HydroSystem<NewProblem>::density_index)        +=  rho_blast;
+        state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)+=  1.e3/cell_vol;
         // printf("The location of SN=%d,%d,%d\n",i, j, k);
         // printf("SN added at level=%d\n", level);
         // printf("The total number of SN gone off=%d\n", cum_sn);
