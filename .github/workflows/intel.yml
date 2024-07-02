@@ -51,7 +51,8 @@ jobs:
             -DCMAKE_VERBOSE_MAKEFILE=ON                    \
             -DCMAKE_C_COMPILER=$(which icx)                \
             -DCMAKE_CXX_COMPILER=$(which icpx)             \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache           \
+            -DAMReX_FPE=ON
         cmake --build build --parallel 4
 
         ccache -s
