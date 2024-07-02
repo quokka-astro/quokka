@@ -9,6 +9,7 @@
 
 #include "ArrayUtil.hpp"
 #include "fextract.hpp"
+#include "radiation_system.hpp"
 #include "test_radhydro_shock_multigroup.hpp"
 
 struct ShockProblem {
@@ -62,6 +63,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
 													  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
 	static constexpr int beta_order = 1;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {
@@ -71,8 +73,23 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<ShockProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double rho,
+							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
+{
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_; ++i) {
+		exponents_and_values[0][i] = 0.0;
+	}
+	for (int i = 0; i < nGroups_; ++i) {
+		exponents_and_values[1][i] = kappa / rho;
+	}
+	return exponents_and_values;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho,
+											    const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	for (int i = 0; i < nGroups_ - 1; ++i) {

@@ -35,6 +35,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real w = Q[3];
 	const amrex::Real P = Q[4];
 
+	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	amrex::GpuArray<Real, nmscalars_> massScalars;
+	for (int n = 0; n < nmscalars_; ++n) {
+		// indexing here follows primVars
+		massScalars[n] = Q[HydroSystem<problem_t>::primScalar0_index + n];
+	}
+
 	// normal derivatives
 	const amrex::Real drho_dx = dQ_dx_data[0];
 	const amrex::Real du_dx = dQ_dx_data[1];
@@ -53,7 +60,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real dw_dz = dQ_dz_data[3];
 	const amrex::Real dP_dz = dQ_dz_data[4];
 
-	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 	const amrex::Real M = std::clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 	const amrex::Real beta = M;
 	const amrex::Real K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posedness
@@ -199,8 +206,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::In
 }
 
 template <typename problem_t, FluxDir DIR>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto permute_vel(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q)
-    -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+permute_vel(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
 {
 	// with normal direction DIR, permutes the velocity components so that
 	//  u, v, w are the normal and transverse components, respectively.
@@ -225,8 +232,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto permute_vel(quokka::valarray<amrex::Rea
 }
 
 template <typename problem_t, FluxDir DIR>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto unpermute_vel(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q)
-    -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+unpermute_vel(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
 {
 	// with normal direction DIR, un-permutes the velocity components so that
 	//  u, v, w are the normal and transverse components *prior to calling permute_vel*.
@@ -363,7 +370,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 	const int im1 = (SIDE == BoundarySide::Lower) ? ibr + 1 : ibr - 1;
 	const int im2 = (SIDE == BoundarySide::Lower) ? ibr + 2 : ibr - 2;
 	const int im3 = (SIDE == BoundarySide::Lower) ? ibr + 3 : ibr - 3;
-	const Real dx = geom.CellSize(static_cast<int>(DIR));
 
 	// compute primitive vars
 	quokka::valarray<amrex::Real, N> Q_i{};

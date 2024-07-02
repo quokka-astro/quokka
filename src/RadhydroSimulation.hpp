@@ -218,8 +218,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, int srccomp,
 			   int dstcomp);
 
-	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew, int ncompNew)
-	    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
+	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew,
+			      int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
 
 	void printCoordinates(int lev, const amrex::IntVect &cell_idx);
 
@@ -230,7 +230,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
-	void addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -255,11 +255,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
-	auto computeHydroFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
-	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+	auto computeHydroFluxes(amrex::MultiFab const &consVar, int nvars,
+				int lev) -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
-	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
-	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, int nvars,
+				  int lev) -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
@@ -507,28 +507,34 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
+	// start by assuming cooling integrator is successful.
+	bool cool_success = true;
 	if (enableCooling_ == 1) {
 		// compute cooling
 		if (coolingTableType_ == "grackle") {
-			quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
+			cool_success = quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
 		} else if (coolingTableType_ == "cloudy_cooling_tools") {
-			quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+			cool_success = quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
 		} else {
 			amrex::Abort("Invalid cooling table type!");
 		}
 	}
 
+	// start by assuming chemistry burn is successful.
+	bool burn_success = true; // NOLINT
 #ifdef PRIMORDIAL_CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
-		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+		burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
 	}
 #endif
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
+
+	return (burn_success && cool_success);
 }
 
 template <typename problem_t>
@@ -1028,7 +1034,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+
+	// check if reactions failed for source terms. If it failed, return false.
+	if (!burn_success_first) {
+		return burn_success_first;
+	}
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1290,10 +1301,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 #endif
 
 	// do Strang split source terms (second half-step)
-	addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
-	// check if we have violated the CFL timestep
-	return !isCflViolated(lev, time, dt_lev);
+	// check if we have violated the CFL timestep or reactions failed for source terms
+	return (!isCflViolated(lev, time, dt_lev) && burn_success_second);
 }
 
 template <typename problem_t>
@@ -1356,8 +1367,8 @@ void RadhydroSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AM
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
-    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
+auto RadhydroSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew,
+						     const int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
 {
 	BL_PROFILE("RadhydroSimulation::expandFluxArrays()");
 

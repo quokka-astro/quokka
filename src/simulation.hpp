@@ -579,6 +579,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default checkpoint interval
 	pp.query("checkpoint_interval", checkpointInterval_);
 
+	// Default plotfile prefix
+	pp.query("plotfile_prefix", plot_file);
+
+	// Default checkpoint prefix
+	pp.query("checkpoint_prefix", chk_file);
+
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
 
@@ -1269,7 +1275,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
-		amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[lev] << '\n';
+		amrex::Print() << "ADVANCE with time = " << std::scientific << tNew_[lev] << " dt = " << std::scientific << dt_[lev] << '\n';
 	}
 
 	// Advance a single level for a single time step, and update flux registers

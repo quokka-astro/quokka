@@ -38,7 +38,8 @@ You can start a `Discussion <https://github.com/quokka-astro/quokka/discussions>
     * needed for consistent HTML-PDF-EPUB chapters
     */
    section#user-guide,
-   section#developer-guide {
+   section#developer-guide,
+   section#epilogue {
        display:none;
    }
    </style>
@@ -48,10 +49,10 @@ You can start a `Discussion <https://github.com/quokka-astro/quokka/discussions>
 
    about
    equations
-   bibliography
+   citation
 
 User Guide
-------------
+---------------
 .. toctree::
    :caption: USER GUIDE
    :maxdepth: 1
@@ -66,7 +67,7 @@ User Guide
    instability
 
 Developer Guide
------------
+---------------
 .. toctree::
    :caption: DEVELOPER GUIDE
    :maxdepth: 1
@@ -78,4 +79,12 @@ Developer Guide
    performance
    howto_clang_tidy
    api
-   
+
+Epilogue
+---------------
+.. toctree::
+   :caption: EPILOGUE
+   :maxdepth: 1
+   :hidden:
+
+   bibliography
