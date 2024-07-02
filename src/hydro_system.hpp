@@ -291,8 +291,8 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> quokka::valarray<amrex::Real, nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										 int k) -> quokka::valarray<amrex::Real, nvar_>
 {
 	// convert to primitive vars
 	const auto rho = cons(i, j, k, density_index);
@@ -324,8 +324,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim)
-    -> quokka::valarray<amrex::Real, nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>
 {
 	// convert to conserved vars
 	Real const rho = prim[0];
@@ -347,8 +347,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										 int k) -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
@@ -372,8 +372,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										   int k) -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
@@ -394,8 +394,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										   int k) -> amrex::Real
 {
 	amrex::Real const rho = cons(i, j, k, density_index);
 	amrex::Real const vel_x = cons(i, j, k, x1Momentum_index) / rho;
@@ -403,8 +403,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX2(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX2(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										   int k) -> amrex::Real
 {
 	amrex::Real const rho = cons(i, j, k, density_index);
 	amrex::Real const vel_y = cons(i, j, k, x2Momentum_index) / rho;
@@ -412,8 +412,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX3(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX3(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										   int k) -> amrex::Real
 {
 	amrex::Real const rho = cons(i, j, k, density_index);
 	amrex::Real const vel_z = cons(i, j, k, x3Momentum_index) / rho;
@@ -653,12 +653,18 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		// axis*
 		//  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
 		double chi_ijk = std::min({
-			x1Chi_in[bx](i_in - 1, j_in, k_in), x1Chi_in[bx](i_in, j_in, k_in), x1Chi_in[bx](i_in + 1, j_in, k_in),
+		    x1Chi_in[bx](i_in - 1, j_in, k_in),
+		    x1Chi_in[bx](i_in, j_in, k_in),
+		    x1Chi_in[bx](i_in + 1, j_in, k_in),
 #if (AMREX_SPACEDIM >= 2)
-			    x2Chi_in[bx](i_in, j_in - 1, k_in), x2Chi_in[bx](i_in, j_in, k_in), x2Chi_in[bx](i_in, j_in + 1, k_in),
+		    x2Chi_in[bx](i_in, j_in - 1, k_in),
+		    x2Chi_in[bx](i_in, j_in, k_in),
+		    x2Chi_in[bx](i_in, j_in + 1, k_in),
 #endif
 #if (AMREX_SPACEDIM == 3)
-			    x3Chi_in[bx](i_in, j_in, k_in - 1), x3Chi_in[bx](i_in, j_in, k_in), x3Chi_in[bx](i_in, j_in, k_in + 1),
+		    x3Chi_in[bx](i_in, j_in, k_in - 1),
+		    x3Chi_in[bx](i_in, j_in, k_in),
+		    x3Chi_in[bx](i_in, j_in, k_in + 1),
 #endif
 		});
 
