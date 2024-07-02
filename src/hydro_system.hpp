@@ -731,7 +731,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 				sp_sum += state[bx](i, j, k, scalar0_index + idx);
 			}
 
-			if (sp_sum > 0) {
+			if ((sp_sum > std::numeric_limits<amrex::Real>::min()) && (rho_new > std::numeric_limits<amrex::Real>::min())) {
 				sp_sum /= rho_new; // get mass fractions
 				for (int idx = 0; idx < nmscalars_; ++idx) {
 					// renormalize
@@ -774,8 +774,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 				if (P < pressureFloor) {
 					amrex::Real const P_new = pressureFloor;
-					Etot_new =
-					    quokka::EOS<problem_t>::ComputeEintFromPres(rho_new, P_new, massScalars) + Ekin;
+					Etot_new = quokka::EOS<problem_t>::ComputeEintFromPres(rho_new, P_new, massScalars) + Ekin;
 					state[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot_new;
 				}
 
@@ -783,14 +782,12 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 				amrex::Real const primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, (Etot_new - Ekin), massScalars);
 
 				if (primTemp > tempCeiling) {
-					amrex::Real const prim_eint =
-					    quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempCeiling, massScalars);
+					amrex::Real const prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempCeiling, massScalars);
 					state[bx](i, j, k, energy_index) = Ekin + prim_eint;
 				}
 
 				if (primTemp < tempFloor) {
-					amrex::Real const prim_eint =
-					    quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
+					amrex::Real const prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
 					state[bx](i, j, k, energy_index) = Ekin + prim_eint;
 				}
 
