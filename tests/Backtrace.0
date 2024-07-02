@@ -1,0 +1,27 @@
+ 0: amrex::BLBackTrace::print_backtrace_info(__sFILE*) (in test_radhydro_shock_multigroup) (AMReX_BLBackTrace.cpp:190)
+
+ 1: amrex::BLBackTrace::handler(int) (in test_radhydro_shock_multigroup) (AMReX_BLBackTrace.cpp:98)
+
+ 2: amrex::ParallelDescriptor::Abort(int, bool) (in test_radhydro_shock_multigroup) (AMReX_ParallelDescriptor.cpp:220)
+
+ 3: amrex::Error_host(char const*, char const*) (in test_radhydro_shock_multigroup) (AMReX.cpp:240)
+
+ 4: amrex::FileOpenFailed(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&) (in test_radhydro_shock_multigroup) (AMReX_Utility.cpp:174)
+
+ 5: amrex::ParallelDescriptor::ReadAndBcastFile(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, amrex::Vector<char, std::__1::allocator<char>>&, bool, ompi_communicator_t* const&) (in test_radhydro_shock_multigroup) (AMReX_ParallelDescriptor.cpp:1481)
+
+ 6: amrex::(anonymous namespace)::read_file(char const*, std::__1::list<amrex::ParmParse::PP_entry, std::__1::allocator<amrex::ParmParse::PP_entry>>&) (in test_radhydro_shock_multigroup) (AMReX_ParmParse.cpp:552)
+
+ 7: amrex::(anonymous namespace)::ppinit(int, char**, char const*, std::__1::list<amrex::ParmParse::PP_entry, std::__1::allocator<amrex::ParmParse::PP_entry>>&) (in test_radhydro_shock_multigroup) (AMReX_ParmParse.cpp:1041)
+
+ 8: amrex::ParmParse::Initialize(int, char**, char const*) (in test_radhydro_shock_multigroup) (AMReX_ParmParse.cpp:1260)
+
+ 9: amrex::Initialize(int&, char**&, bool, ompi_communicator_t*, std::__1::function<void ()> const&, std::__1::basic_ostream<char, std::__1::char_traits<char>>&, std::__1::basic_ostream<char, std::__1::char_traits<char>>&, void (*)(char const*)) (in test_radhydro_shock_multigroup) (AMReX.cpp:430)
+
+10: main (in test_radhydro_shock_multigroup) (main.cpp:22)
+
+11: start (in dyld) + 2360
+
+
+===== TinyProfilers ======
+
