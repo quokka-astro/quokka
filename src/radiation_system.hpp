@@ -1123,6 +1123,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
 		amrex::GpuArray<double, nGroups_ + 1> delta_term{};
 		amrex::GpuArray<double, nGroups_ + 1> delta_term_E{};
+		amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 3> delta_term_P_center{};
+		amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 3> delta_term_P{};
 
 		work.fillin(0.0);
 		work_prev.fillin(0.0);
@@ -1480,6 +1482,41 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			dMomentum = {0., 0., 0.};
 
+      if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
+			  for (int g = 0; g < nGroups_; ++g) {
+					Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+					Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+					Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+
+					if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
+						auto erad = EradVec_guess[g];
+						auto fx = Frad_t0[0] / (c_light_ * erad);
+						auto fy = Frad_t0[1] / (c_light_ * erad);
+						auto fz = Frad_t0[2] / (c_light_ * erad);
+						auto Tedd = ComputeEddingtonTensor(fx, fy, fz);
+						for (int n = 0; n < 3; ++n) {
+							double pressure_edge_term = 0.0;
+							for (int z = 0; z < 3; ++z) {
+								pressure_edge_term += gasMtm0[z] * Tedd[n][z] * erad;
+							}
+							delta_term_P_center[n][g] = pressure_edge_term / radBoundaryWidth_copy[g];
+						}
+
+						for (int n = 0; n < 3; ++n) {
+							for (int g = 0; g < nGroups_ + 1; ++g) {
+								if (g == 0 || g == nGroups_) {
+									delta_term_P[n][g] = 0.0;
+									delta_term[g] = 0.0;
+								} else {
+									delta_term_P[n][g] = (delta_term_P_center[n][g - 1] + delta_term_P_center[n][g]) / 2.0 * radBoundaries_g_copy[g] * kappa_expo_and_lower_value[1][g];
+            			delta_term[g] = radBoundaries_g_copy[g] * kappa_expo_and_lower_value[1][g] * (fourPiBoverC[g - 1] / radBoundaryWidth_copy[g - 1] + fourPiBoverC[g] / radBoundaryWidth_copy[g]) / 2.0;
+								}
+							}
+						}
+					}
+				}
+      }
+
 			for (int g = 0; g < nGroups_; ++g) {
 
 				Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
@@ -1491,12 +1528,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					std::array<double, 3> gasVel{};
 					std::array<double, 3> v_terms{};
 
-					auto Fx = Frad_t0[0];
-					auto Fy = Frad_t0[1];
-					auto Fz = Frad_t0[2];
-					auto fx = Fx / (c_light_ * erad);
-					auto fy = Fy / (c_light_ * erad);
-					auto fz = Fz / (c_light_ * erad);
+					auto fx = Frad_t0[0] / (c_light_ * erad);
+					auto fy = Frad_t0[1] / (c_light_ * erad);
+					auto fz = Frad_t0[2] / (c_light_ * erad);
 					double F_coeff = chat * rho * kappaFVec[g] * dt * lorentz_factor;
 					auto Tedd = ComputeEddingtonTensor(fx, fy, fz);
 
@@ -1513,7 +1547,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] - alpha_B[g]) / 3.0;
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
-							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] + 1.0) / 3.0;
+							// v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] + 1.0) / 3.0;
+							v_term = kappaPVec[g] * fourPiBoverC[g] - 1.0 / 3.0 * (delta_term[g + 1] - delta_term[g]);
             }
 
 						v_term *= chat * dt * gasMtm0[n];
@@ -1528,7 +1563,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 							pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
 						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly) {
-							pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
+							// pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
+							pressure_term *= -1.0 * Q_slope * kappaEVec[g];
+							// pressure_term += gasMtm0[n] * (delta_term_E[g + 1] - delta_term_E[g]);
+							pressure_term += delta_term_P[n][g + 1] - delta_term_P[n][g];
+							pressure_term *= chat * dt;
 						}
 
 						v_term += pressure_term;
