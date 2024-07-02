@@ -86,6 +86,13 @@ else()
   message(STATUS "Fused multiply-add (FMAD) is *enabled* for device code. Exact direction symmetry will NOT be preserved.")
 endif(DISABLE_FMAD)
 
+if(ENABLE_TESTS_FPE)
+  set(QuokkaTestParams "amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1")
+else()
+  set(QuokkaTestParams "")
+  message(STATUS "WARNING: Floating-point exceptions are *DISABLED* when running the test suite.")
+endif(ENABLE_TESTS_FPE)
+
 # emit error if warnings are produced
 if(WARNINGS_AS_ERRORS)
   add_compile_options(-Werror -Wall -Wextra -Wno-unused-parameter -Wno-unknown-pragmas -Wno-strict-aliasing)
