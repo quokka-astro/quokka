@@ -699,7 +699,7 @@ template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::
 {
 	auto state = state_mf.arrays();
 
-	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(state_mf, amrex::IntVect{0}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// Enforce density floor (do not adjust energies here!!)
 		amrex::Real rho_new = NAN;
 		{
