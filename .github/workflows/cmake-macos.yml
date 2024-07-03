@@ -54,7 +54,7 @@ jobs:
       # access regardless of the host operating system
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      env: {CXXFLAGS: "-ffp-exception-behavior=maytrap"}
+      env: {CXXFLAGS: "-ffp-exception-behavior=strict"}
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DQUOKKA_PYTHON=OFF
 
     - name: Build
