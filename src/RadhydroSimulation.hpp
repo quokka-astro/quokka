@@ -750,10 +750,10 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 
 	// fix hydro state
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
-	
+
 	// the old state multifab can have NaN cells
-	//HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_old_cc_[lev]);
-	
+	// HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_old_cc_[lev]);
+
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
 }
