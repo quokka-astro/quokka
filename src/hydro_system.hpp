@@ -821,11 +821,11 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
 
-		/*if (auxTemp < tempFloor) {
+		if (auxTemp < tempFloor) {
 			state[bx](i, j, k, internalEnergy_index) =
 			    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
-			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
-		}*/		
+		//	state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
+		}	
 	});
 }
 
