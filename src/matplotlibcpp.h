@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfenv>
 #include <cstdint> // <cstdint> requires c++11 support
 #include <functional>
 #include <iostream>
@@ -10,7 +11,6 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
-#include <cfenv>
 
 #include <Python.h>
 
@@ -124,8 +124,8 @@ struct _interpreter {
 	{
 		fenv_t orig_feenv;
 		feholdexcept(&orig_feenv); // disable FPE for importing numpy
-		import_array(); // initialize C-API
-		fesetenv(&orig_feenv); // restore FPE
+		import_array();		   // initialize C-API
+		fesetenv(&orig_feenv);	   // restore FPE
 
 		return NULL;
 	}
@@ -236,9 +236,7 @@ struct _interpreter {
 		s_python_empty_tuple = PyTuple_New(0);
 	}
 
-	~_interpreter() { 
-		Py_Finalize();
-	}
+	~_interpreter() { Py_Finalize(); }
 };
 
 } // end namespace detail
