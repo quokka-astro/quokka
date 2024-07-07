@@ -112,9 +112,10 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::user;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_transport;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_delta_terms;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope_with_PPL_delta_terms;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope_with_delta_terms;
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;

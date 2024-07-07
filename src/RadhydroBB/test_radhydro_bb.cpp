@@ -175,7 +175,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_transport;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope_with_delta;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope_with_delta_terms;
 };
 
 template <>
