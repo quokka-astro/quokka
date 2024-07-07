@@ -965,6 +965,15 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::
 
 	quokka::valarray<double, nGroups_> kappa{};
 	for (int g = 0; g < nGroups_; ++g) {
+		// Trial: set slopes of the first and last groups to +infinity and -infinity, respectively. Not working very well for the PulseMGint test
+		// if (g == 0) {
+		// 	kappa[g] = kappa_lower[g] * std::pow(radBoundaryRatios[g], alpha_kappa[g]);
+		// 	continue;
+		// } 
+		// if (g == nGroups_ - 1) {
+		// 	kappa[g] = kappa_lower[g];
+		// 	continue;
+		// } 
 		double alpha = alpha_quant[g] + 1.0;
 		double part1 = 0.0;
 		if (std::abs(alpha) < 1e-8) {
