@@ -47,7 +47,7 @@ std::string input_data_file; //="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/Ga
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> phi_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> g_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> z_data;
-double z_star, Sigma_star, rho_dm, R0, ks_sigma_sfr, hscale;
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> z_star, Sigma_star, rho_dm, R0, ks_sigma_sfr, hscale;
 double sigma1, sigma2, rho01, rho02;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto linearInterpolate(amrex::GpuArray<amrex::Real, 4999>& x, amrex::GpuArray<amrex::Real, 4999>& y, double x_interp) {
