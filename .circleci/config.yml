@@ -27,7 +27,7 @@ jobs:
           name: Build
           command: |
             cmake -S . -B build \
-              -DAMReX_SPACEDIM=1 -DCMAKE_BUILD_TYPE=Release 
+              -DAMReX_SPACEDIM=1 -DCMAKE_BUILD_TYPE=Release
             cmake --build build --parallel 4
       - run:
           name: Test
@@ -63,7 +63,7 @@ jobs:
               -DCMAKE_BUILD_TYPE=Release -DENABLE_HWASAN=ON \
               -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
               -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-              -DAMReX_SPACEDIM=1 
+              -DAMReX_SPACEDIM=1
             cmake --build build --parallel 4
       - run:
           name: Test
@@ -97,7 +97,7 @@ jobs:
           name: Build
           command: |
             cmake -S . -B build \
-              -DAMReX_SPACEDIM=1 -DCMAKE_BUILD_TYPE=Debug 
+              -DAMReX_SPACEDIM=1 -DCMAKE_BUILD_TYPE=Debug
             cmake --build build --parallel 4
       - run:
           name: Test
