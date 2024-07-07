@@ -1403,6 +1403,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						// If tau = 0.0, Erad_guess shouldn't change
 						if (tau[g] > 0.0) {
 							EradVec_guess[g] = kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work[g]) / tau[g]);
+							// TODO(CCH): check if this is necessary; try to avoid it in the BB test
 							if (EradVec_guess[g] < 0.0) {
 								EradVec_guess[g] = Erad_floor_;
 							}
