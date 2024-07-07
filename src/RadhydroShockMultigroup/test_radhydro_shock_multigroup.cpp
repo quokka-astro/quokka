@@ -60,10 +60,13 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
-	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
+	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+13, 1.00000000e+16, 1.00000000e+17,
 													  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
+	// static constexpr OpacityModel opacity_model = OpacityModel::user;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_transport;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope;
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {
@@ -75,13 +78,11 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<ShockProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double rho,
-							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
+							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
-	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> exponents_and_values{};
-	for (int i = 0; i < nGroups_; ++i) {
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_ + 1; ++i) {
 		exponents_and_values[0][i] = 0.0;
-	}
-	for (int i = 0; i < nGroups_; ++i) {
 		exponents_and_values[1][i] = kappa / rho;
 	}
 	return exponents_and_values;
