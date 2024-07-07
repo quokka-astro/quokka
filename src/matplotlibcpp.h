@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
+#include <cfenv>
 
 #include <Python.h>
 
@@ -119,27 +120,19 @@ struct _interpreter {
 
       private:
 #ifndef WITHOUT_NUMPY
-#if PY_MAJOR_VERSION >= 3
-
 	void *import_numpy()
 	{
+		fenv_t orig_feenv;
+		feholdexcept(&orig_feenv); // disable FPE for importing numpy
 		import_array(); // initialize C-API
+		fesetenv(&orig_feenv); // restore FPE
+
 		return NULL;
 	}
-
-#else
-
-	void import_numpy()
-	{
-		import_array(); // initialize C-API
-	}
-
-#endif
 #endif
 
 	_interpreter()
 	{
-
 		// optional but recommended
 #if PY_MAJOR_VERSION >= 3
 		wchar_t name[] = L"plotting";
@@ -243,7 +236,9 @@ struct _interpreter {
 		s_python_empty_tuple = PyTuple_New(0);
 	}
 
-	~_interpreter() { Py_Finalize(); }
+	~_interpreter() { 
+		Py_Finalize();
+	}
 };
 
 } // end namespace detail
