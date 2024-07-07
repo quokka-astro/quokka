@@ -1747,7 +1747,12 @@ inline std::vector<std::array<double, 2>> ginput(const int numClicks = 1, const 
 // Actually, is there any reason not to call this automatically for every plot?
 inline void tight_layout()
 {
+	fenv_t orig_feenv;
+	feholdexcept(&orig_feenv); // disable FPE
+
 	PyObject *res = PyObject_CallObject(detail::_interpreter::get().s_python_function_tight_layout, detail::_interpreter::get().s_python_empty_tuple);
+
+	fesetenv(&orig_feenv); // restore FPE
 
 	if (!res)
 		throw std::runtime_error("Call to tight_layout() failed.");
