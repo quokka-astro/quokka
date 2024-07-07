@@ -24,10 +24,7 @@ constexpr double  kmps     = 1.e5;
 constexpr double  Const_mH = 1.67e-24;
 constexpr double  kb       = 1.3807e-16;
 constexpr double  sqrtpi          = 1.772453;
-constexpr double sigma1 = 7. * kmps;
-constexpr double sigma2 = 70. * kmps;
-constexpr double rho01  = 2.85 * Const_mH;
-constexpr double rho02  = 1.e-5 * 2.85 * Const_mH;
+
 
 // internal headers
 #include "hydro_system.hpp"

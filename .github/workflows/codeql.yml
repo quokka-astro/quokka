@@ -55,6 +55,7 @@ jobs:
         if: ${{ matrix.language == 'cpp' }}
         run: |
           cmake -S . -B build                            \
+              -DAMReX_SPACEDIM=3                         \
               -DQUOKKA_PYTHON=OFF                        \
               -DCMAKE_VERBOSE_MAKEFILE=ON                \
               -DCMAKE_CXX_COMPILER="/usr/local/bin/g++"

@@ -29,7 +29,6 @@
 #include "AMReX_RandomEngine.H"
 #include "AMReX_Random.H"
 
-#include "CloudyCooling.hpp"
 #include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
@@ -48,7 +47,8 @@ std::string input_data_file; //="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/Ga
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> phi_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> g_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> z_data;
-double z_star, Sigma_star, Sigma_gas, rho_dm, R0, ks_sigma_sfr, hscale;
+double z_star, Sigma_star, rho_dm, R0, ks_sigma_sfr, hscale;
+double sigma1, sigma2, rho01, rho02;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto linearInterpolate(amrex::GpuArray<amrex::Real, 4999>& x, amrex::GpuArray<amrex::Real, 4999>& y, double x_interp) {
     // Find the two closest data points
@@ -90,16 +90,9 @@ template <> struct Physics_Traits<NewProblem> {
   static constexpr bool is_chemistry_enabled = false;
   static constexpr bool is_mhd_enabled = false;
   static constexpr int numMassScalars = 0;		     // number of mass scalars
-  static constexpr int numPassiveScalars = 2; // number of passive scalars
+  static constexpr int numPassiveScalars = 1; // number of passive scalars
   static constexpr int nGroups = 1; // number of radiation groups
 };
-
-// template <> class RadhydroSimulation<NewProblem> {
-
-//   //add new vars and funcs
-
-
-// };
 
 /************************************************************/
 
@@ -187,17 +180,6 @@ void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
   } 
 		status = H5Dclose(dset_id); 
 
-  parameter_name = "Sigma_gas" ;
-  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
-  auto *siggas = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, siggas);
-		Sigma_gas =  siggas[0];
-		
-  } 
-		status = H5Dclose(dset_id);     
-
   parameter_name = "rho_dm" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
@@ -240,6 +222,53 @@ void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
 		
   } 
 		status = H5Dclose(dset_id);    
+
+  parameter_name = "sigma1" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *sigma_1 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigma_1);
+		sigma1 =  sigma_1[0];
+		
+  } 
+		status = H5Dclose(dset_id);   
+
+
+  parameter_name = "sigma2" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *sigma_2 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigma_2);
+		sigma2 =  sigma_2[0];
+		
+  }
+  status = H5Dclose(dset_id);   
+
+  parameter_name = "rho1" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *rho_1 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rho_1);
+		rho01 =  rho_1[0];
+		
+  } 
+		status = H5Dclose(dset_id); 
+
+  parameter_name = "rho2" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *rho_2 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rho_2);
+		rho02 =  rho_2[0];
+		
+  } 
+		status = H5Dclose(dset_id);   
+	   
+  printf("Gasgravity file read!\n");
   printf("R0, rho_dm=%.2e,%.2e\n", R0, rho_dm);
 }
 
@@ -271,7 +300,7 @@ template <> struct SimulationData<NewProblem> {
 	int SN_counter_cumulative = 0;
 	Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
 	Real E_blast = 1.0e51;	    // ergs
-	Real M_ejecta = 0;	    // 10.0 * Msun; // g
+	Real M_ejecta = 5.0 * Msun; // g
 	Real refine_threshold = 1.0; // gradient refinement threshold
 };
 
@@ -312,7 +341,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
       double Phigas;
       Phigas =FastMath::pow10( linearInterpolate(z_data, phi_data, std::abs(z)));
     
-      double Phitot = Phist + Phidm; 
+      double Phitot = Phist + Phidm + Phigas; 
 
 			double rho, rho_disk, rho_halo;
              rho_disk = rho01 * std::exp(-Phitot/std::pow(sigma1,2.0)) ;
@@ -331,11 +360,6 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
         // sigma1 = 37. * kmps;
         // P = rho01 * std::pow(sigma1, 2.0);
      
-      if(std::sqrt(z*z)<0.25*kpc) {
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e2/vol;  //Disk tracer
-       }else {
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e-5/vol;  //Disk tracer
-       }
 
       state_cc(i, j, k, HydroSystem<NewProblem>::density_index)    = rho;
       state_cc(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = 0.0;
@@ -343,7 +367,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
       state_cc(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = 0.0;
       state_cc(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = P / (gamma - 1.);
       state_cc(i, j, k, HydroSystem<NewProblem>::energy_index)         = P / (gamma - 1.);
-      state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e-5/vol;  //Injected tracer
+      state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)    = 1.e-5/vol;  //Injected tracer
 
     });
   }
@@ -371,25 +395,25 @@ void RadhydroSimulation<NewProblem>::ErrorEst(int lev,
         amrex::Real  ZOinit = 8.6e-3;
         amrex::Real rho_oxy_ = ZOinit *  state(i, j, k, HydroSystem<NewProblem>::density_index) ;
          
-         amrex::Real scal_xyz   = ZOinit + ((delMoxy/Znorm) * state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+         amrex::Real scal_xyz   = ZOinit + ((delMoxy/Znorm) * state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)/
                                                     state(i, j, k, HydroSystem<NewProblem>::density_index)) ;
 
-        amrex::Real scal_xplus  = ZOinit + ((delMoxy/Znorm) * state(i+1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+        amrex::Real scal_xplus  = ZOinit + ((delMoxy/Znorm) * state(i+1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)/
                                                               state(i+1, j, k, HydroSystem<NewProblem>::density_index) ) ;
 
-        amrex::Real scal_xminus = ZOinit + ((delMoxy/Znorm) * state(i-1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+        amrex::Real scal_xminus = ZOinit + ((delMoxy/Znorm) * state(i-1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)/
                                                               state(i-1, j, k, HydroSystem<NewProblem>::density_index)) ;
 
-        amrex::Real scal_yplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j+1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/ 
+        amrex::Real scal_yplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j+1, k, Physics_Indices<NewProblem>::pscalarFirstIndex)/ 
                                                                state(i, j+1, k, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_yminus = ZOinit + ((delMoxy/Znorm) *  state(i, j-1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) / 
+        amrex::Real scal_yminus = ZOinit + ((delMoxy/Znorm) *  state(i, j-1, k, Physics_Indices<NewProblem>::pscalarFirstIndex) / 
                                                                state(i, j-1, k, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_zplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j, k+1, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/ 
+        amrex::Real scal_zplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j, k+1, Physics_Indices<NewProblem>::pscalarFirstIndex)/ 
                                                                state(i, j, k+1, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_zminus = ZOinit + ((delMoxy/Znorm) *  state(i, j, k-1, Physics_Indices<NewProblem>::pscalarFirstIndex+2) / 
+        amrex::Real scal_zminus = ZOinit + ((delMoxy/Znorm) *  state(i, j, k-1, Physics_Indices<NewProblem>::pscalarFirstIndex) / 
                                                                state(i, j, k-1, HydroSystem<NewProblem>::density_index));
         
         amrex::Real del_scalx   = std::abs(scal_xplus - scal_xminus)/2;
@@ -420,6 +444,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
+	const Real rho_blast = userData.M_ejecta / cell_vol  ;   // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
 	const Real Lx = prob_hi[0] - prob_lo[0];
@@ -440,7 +465,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 			const Real yc = prob_lo[1] + static_cast<Real>(j) * dx[1] + 0.5 * dx[1];
 			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2] + 0.5 * dx[2];
 
-			for (int n = 0; n < np; ++n) {
+			for (int n = 0; n < 1; ++n) {
 				Real x0 = NAN;
 				Real y0 = NAN;
 				Real z0 = NAN;
@@ -451,10 +476,10 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         z0 = std::abs(zc -pz(n));
 
         if(x0<0.5*dx[0] && y0<0.5*dx[1] && z0< 0.5*dx[2] ) {
-        state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=   rho_eint_blast; 
-        state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=    rho_eint_blast; 
-        // state(i, j, k, HydroSystem<NewProblem>::density_index) = 1.e-2 * Const_mH;
-        state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)+=  1.e3/cell_vol;
+        state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=  rho_eint_blast; 
+        state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=  rho_eint_blast; 
+        state(i, j, k, HydroSystem<NewProblem>::density_index)        +=  rho_blast;
+        state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)+=  1.e3/cell_vol;
         // printf("The location of SN=%d,%d,%d\n",i, j, k);
         // printf("SN added at level=%d\n", level);
         // printf("The total number of SN gone off=%d\n", cum_sn);
@@ -675,8 +700,8 @@ auto problem_main() -> int {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 				// outflowing boundary conditions
         if(i==2){
-				 BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
-				 BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
+				 BCs_cc[n].setLo(i, amrex::BCType::foextrap);
+				 BCs_cc[n].setHi(i, amrex::BCType::foextrap);
         }
         else{
            BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
