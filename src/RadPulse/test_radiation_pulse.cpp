@@ -81,19 +81,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho,
-										       const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> opacity_deriv{};
-	double opacity_deriv_scalar = 0.;
-	if (Tgas > 1.0) {
-		opacity_deriv_scalar = (kappa0 / rho) * (3.0 / T0) * std::pow(Tgas / T0, 2);
-	}
-	opacity_deriv.fillin(opacity_deriv_scalar);
-	return opacity_deriv;
-}
-
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object

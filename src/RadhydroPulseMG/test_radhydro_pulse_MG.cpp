@@ -191,31 +191,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputeFluxMeanOpacity(co
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho,
-										       const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> opacity_deriv{};
-	const auto nu_rep = compute_repres_nu(rad_boundaries_);
-	const auto T = Tgas / T0;
-	for (int g = 0; g < nGroups_; ++g) {
-		const auto nu = nu_rep[g] / nu_ref;
-		opacity_deriv[g] =
-		    1. / T0 * kappa0 * (-0.5 * std::pow(T, -1.5) * (1. - std::exp(-coeff_ * nu / T)) - coeff_ * std::pow(T, -2.5) * std::exp(-coeff_ * nu / T));
-		opacity_deriv[g] /= rho;
-	}
-	if constexpr (isconst == 1) {
-		opacity_deriv.fillin(0.0);
-	}
-	return opacity_deriv;
-}
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputePlanckOpacityTempDerivative(const double rho,
-											  const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	return RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(rho, Tgas);
-}
-
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation
