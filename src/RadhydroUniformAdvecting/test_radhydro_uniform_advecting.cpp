@@ -62,9 +62,6 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = beta_order_;
-	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLawFixedSlopeNuDepOnly;
-	static constexpr double energy_unit = 1.0;
-	static constexpr amrex::GpuArray<double, 2> radBoundaries{1.0e-4, 1.0e4};
 };
 
 template <> struct Physics_Traits<PulseProblem> {
