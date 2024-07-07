@@ -33,7 +33,7 @@
 // Hyper parameters of the radiation solver
 
 static constexpr bool include_work_term_in_source = true;
-static constexpr bool use_D_as_base = true;
+static constexpr bool use_D_as_base = false;
 
 // Time integration scheme
 // IMEX PD-ARS
