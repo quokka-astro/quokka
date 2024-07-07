@@ -1310,35 +1310,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			}
 		}
 
-// 		for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
-//         const amrex::Box &indexRange = iter.validbox();
-//         auto const stateNew = stateFinal.const_array(iter);
-// amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-// 				   double rho = stateNew(i, j, k, HydroSystem<problem_t>::density_index);
-//                    double eint = stateNew(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-// 				   double egas = stateNew(i, j, k, HydroSystem<problem_t>::energy_index);
-// 				   if(i==82 && j==74 && k==505){
-// 					printf("2. Eint, Egas, rho before RK2 EnforceLimits=%.2e, %.2e, %.2e\n",eint, egas, rho);
-// 					}
-//                 });
-// 			}
-
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
-
-
-// 						for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
-//         const amrex::Box &indexRange = iter.validbox();
-//         auto const stateNew = stateFinal.const_array(iter);
-// amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-// 				   double rho = stateNew(i, j, k, HydroSystem<problem_t>::density_index);
-//                    double eint = stateNew(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-// 				   double egas = stateNew(i, j, k, HydroSystem<problem_t>::energy_index);
-// 				   if(i==82 && j==74 && k==505){
-// 					printf("3. Eint, Egas, rho after RK2 EnforceLimits=%.2e, %.2e, %.2e\n",eint, egas, rho);
-// 					}
-//                 });
-// 			}
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
