@@ -1650,11 +1650,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							if (kappaFVec[g] != kappaEVec[g]) {
 								v_term += (kappaFVec[g] - kappaEVec[g]) * erad * std::pow(lorentz_factor_v, 3);
 							}
-						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope || opacity_model_ == OpacityModel::PPL_fixed_slope) {
+						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope ||
+								     opacity_model_ == OpacityModel::PPL_fixed_slope) {
 							v_term = kappaPVec[g] * fourPiBoverC[g];
 						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope_with_PPL_delta_terms) {
 							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] - alpha_B[g]) / 3.0;
-						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope_with_delta_terms || opacity_model_ == OpacityModel::PPL_fixed_slope_with_delta_terms) {
+						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope_with_delta_terms ||
+								     opacity_model_ == OpacityModel::PPL_fixed_slope_with_delta_terms) {
 							v_term = kappaPVec[g] * fourPiBoverC[g];
 							v_term -= 1.0 / 3.0 * (delta_term[g + 1] - delta_term[g]);
 						}
