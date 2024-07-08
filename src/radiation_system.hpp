@@ -1461,9 +1461,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 					F_G = Egas_guess - Egas0;
 					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
-					if (min(EradVec_guess) < 0.0) {
-						std::cout << "ERROR007 ";
-					}
 					double F_D_abs_sum = 0.0;
 					for (int g = 0; g < nGroups_; ++g) {
 						if (tau[g] > 0.0) {
@@ -1522,9 +1519,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
 				AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
-				if (min(EradVec_guess) < 0.0) {
-					std::cout << "ERROR008 ";
-				}
 				AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
 			} // endif gamma != 1.0
 
