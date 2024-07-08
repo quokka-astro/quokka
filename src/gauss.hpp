@@ -956,7 +956,6 @@ public:
    AMREX_GPU_DEVICE static auto integrate(F f, Real a, Real b, Real* pL1 = nullptr)->decltype(std::declval<F>()(std::declval<Real>()))
    {
       using K = decltype(f(a));
-      static const char* function = "boost::math::quadrature::gauss<%1%>::integrate(f, %1%, %1%)";
       if (!(std::isnan)(a) && !(std::isnan)(b))
       {
          // Infinite limits:

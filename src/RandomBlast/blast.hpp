@@ -1,5 +1,5 @@
-#ifndef CLOUD_HPP_ // NOLINT
-#define CLOUD_HPP_
+#ifndef BLAST_HPP_ // NOLINT
+#define BLAST_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -16,4 +16,4 @@
 
 // function definitions
 
-#endif // CLOUD_HPP_
+#endif // BLAST_HPP_
