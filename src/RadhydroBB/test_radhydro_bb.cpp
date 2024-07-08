@@ -10,6 +10,7 @@
 
 #include "ArrayUtil.hpp"
 #include "fextract.hpp"
+#include "interpolate.hpp"
 #include "radiation_system.hpp"
 
 // #include "AMReX_BC_TYPES.H"
@@ -361,110 +362,110 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 	});
 }
 
-#define LIKELY_IN_CACHE_SIZE 8
-AMREX_GPU_HOST_DEVICE
-int64_t binary_search_with_guess(const double key, const double *arr, int64_t len, int64_t guess)
-{
-	int64_t imin = 0;
-	int64_t imax = len;
+// #define LIKELY_IN_CACHE_SIZE 8
+// AMREX_GPU_HOST_DEVICE
+// int64_t binary_search_with_guess(const double key, const double *arr, int64_t len, int64_t guess)
+// {
+// 	int64_t imin = 0;
+// 	int64_t imax = len;
 
-	/* Handle keys outside of the arr range first */
-	if (key > arr[len - 1]) {
-		return len;
-	} else if (key < arr[0]) {
-		return -1;
-	}
+// 	/* Handle keys outside of the arr range first */
+// 	if (key > arr[len - 1]) {
+// 		return len;
+// 	} else if (key < arr[0]) {
+// 		return -1;
+// 	}
 
-	/*
-	 * If len <= 4 use linear search.
-	 * From above we know key >= arr[0] when we start.
-	 */
-	if (len <= 4) {
-		int64_t i;
+// 	/*
+// 	 * If len <= 4 use linear search.
+// 	 * From above we know key >= arr[0] when we start.
+// 	 */
+// 	if (len <= 4) {
+// 		int64_t i;
 
-		for (i = 1; i < len && key >= arr[i]; ++i)
-			;
-		return i - 1;
-	}
+// 		for (i = 1; i < len && key >= arr[i]; ++i)
+// 			;
+// 		return i - 1;
+// 	}
 
-	if (guess > len - 3) {
-		guess = len - 3;
-	}
-	if (guess < 1) {
-		guess = 1;
-	}
+// 	if (guess > len - 3) {
+// 		guess = len - 3;
+// 	}
+// 	if (guess < 1) {
+// 		guess = 1;
+// 	}
 
-	/* check most likely values: guess - 1, guess, guess + 1 */
-	if (key < arr[guess]) {
-		if (key < arr[guess - 1]) {
-			imax = guess - 1;
-			/* last attempt to restrict search to items in cache */
-			if (guess > LIKELY_IN_CACHE_SIZE && key >= arr[guess - LIKELY_IN_CACHE_SIZE]) {
-				imin = guess - LIKELY_IN_CACHE_SIZE;
-			}
-		} else {
-			/* key >= arr[guess - 1] */
-			return guess - 1;
-		}
-	} else {
-		/* key >= arr[guess] */
-		if (key < arr[guess + 1]) {
-			return guess;
-		} else {
-			/* key >= arr[guess + 1] */
-			if (key < arr[guess + 2]) {
-				return guess + 1;
-			} else {
-				/* key >= arr[guess + 2] */
-				imin = guess + 2;
-				/* last attempt to restrict search to items in
-				 * cache */
-				if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
-					imax = guess + LIKELY_IN_CACHE_SIZE;
-				}
-			}
-		}
-	}
+// 	/* check most likely values: guess - 1, guess, guess + 1 */
+// 	if (key < arr[guess]) {
+// 		if (key < arr[guess - 1]) {
+// 			imax = guess - 1;
+// 			/* last attempt to restrict search to items in cache */
+// 			if (guess > LIKELY_IN_CACHE_SIZE && key >= arr[guess - LIKELY_IN_CACHE_SIZE]) {
+// 				imin = guess - LIKELY_IN_CACHE_SIZE;
+// 			}
+// 		} else {
+// 			/* key >= arr[guess - 1] */
+// 			return guess - 1;
+// 		}
+// 	} else {
+// 		/* key >= arr[guess] */
+// 		if (key < arr[guess + 1]) {
+// 			return guess;
+// 		} else {
+// 			/* key >= arr[guess + 1] */
+// 			if (key < arr[guess + 2]) {
+// 				return guess + 1;
+// 			} else {
+// 				/* key >= arr[guess + 2] */
+// 				imin = guess + 2;
+// 				/* last attempt to restrict search to items in
+// 				 * cache */
+// 				if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
+// 					imax = guess + LIKELY_IN_CACHE_SIZE;
+// 				}
+// 			}
+// 		}
+// 	}
 
-	/* finally, find index by bisection */
-	while (imin < imax) {
-		const int64_t imid = imin + ((imax - imin) >> 1);
-		if (key >= arr[imid]) {
-			imin = imid + 1;
-		} else {
-			imax = imid;
-		}
-	}
-	return imin - 1;
-}
+// 	/* finally, find index by bisection */
+// 	while (imin < imax) {
+// 		const int64_t imid = imin + ((imax - imin) >> 1);
+// 		if (key >= arr[imid]) {
+// 			imin = imid + 1;
+// 		} else {
+// 			imax = imid;
+// 		}
+// 	}
+// 	return imin - 1;
+// }
 
-#undef LIKELY_IN_CACHE_SIZE
+// #undef LIKELY_IN_CACHE_SIZE
 
-AMREX_GPU_HOST_DEVICE
-void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *arr_y, int arr_len)
-{
-	/* Note: arr_x must be sorted in ascending order,
-		and arr_len must be >= 3. */
+// AMREX_GPU_HOST_DEVICE
+// void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *arr_y, int arr_len)
+// {
+// 	/* Note: arr_x must be sorted in ascending order,
+// 		and arr_len must be >= 3. */
 
-	int64_t j = 0;
-	for (int i = 0; i < len; i++) {
-		j = binary_search_with_guess(x[i], arr_x, arr_len, j);
+// 	int64_t j = 0;
+// 	for (int i = 0; i < len; i++) {
+// 		j = binary_search_with_guess(x[i], arr_x, arr_len, j);
 
-		if (j == -1) {
-			y[i] = NAN;
-		} else if (j == arr_len) {
-			y[i] = NAN;
-		} else if (j == arr_len - 1) {
-			y[i] = arr_y[j];
-		} else if (x[i] == arr_x[j]) { // avoid roundoff error
-			y[i] = arr_y[j];
-		} else {
-			const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
-			y[i] = slope * (x[i] - arr_x[j]) + arr_y[j];
-		}
-		// assert(!std::isnan(y[i]));
-	}
-}
+// 		if (j == -1) {
+// 			y[i] = NAN;
+// 		} else if (j == arr_len) {
+// 			y[i] = NAN;
+// 		} else if (j == arr_len - 1) {
+// 			y[i] = arr_y[j];
+// 		} else if (x[i] == arr_x[j]) { // avoid roundoff error
+// 			y[i] = arr_y[j];
+// 		} else {
+// 			const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
+// 			y[i] = slope * (x[i] - arr_x[j]) + arr_y[j];
+// 		}
+// 		// assert(!std::isnan(y[i]));
+// 	}
+// }
 
 auto problem_main() -> int
 {
@@ -580,45 +581,41 @@ auto problem_main() -> int
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	if (fstream.is_open()) {
-		std::string header;
-		std::getline(fstream, header);
+	std::string header;
+	std::getline(fstream, header);
 
-		for (std::string line; std::getline(fstream, line);) {
-			std::istringstream iss(line);
-			std::vector<double> values;
-			std::string value;
+	nu_exact.push_back(0.0);
+	Fnu_exact.push_back(0.0);
+	Enu_exact.push_back(0.0);
+	for (std::string line; std::getline(fstream, line);) {
+		std::istringstream iss(line);
+		std::vector<double> values_line;
+		std::string value;
 
-			while (std::getline(iss, value, ',')) {
-				values.push_back(std::stod(value));
-			}
-			auto nu_val = values.at(0);  // dimensionless
-			auto Fnu_val = values.at(1); // dimensionless
-			nu_exact.push_back(nu_val);
-			Fnu_exact.push_back(Fnu_val);
-			auto const enu = compute_exact_bb(nu_val, T_equilibrium);
-			Enu_exact.push_back(enu);
+		while (std::getline(iss, value, ',')) {
+			values_line.push_back(std::stod(value));
 		}
-
-		// compute error norm
-
-		std::vector<double> F_interp(bin_center.size());
-		interpolate_arrays(bin_center.data(), F_interp.data(), static_cast<int>(bin_center.size()), nu_exact.data(), Fnu_exact.data(),
-				   static_cast<int>(nu_exact.size()));
-
-		for (int g = 0; g < n_groups_; ++g) {
-			double f_int = 0.0;
-			if (!std::isnan(F_interp[g])) {
-				f_int = F_interp[g];
-			}
-			err_norm += std::abs(F_r_spec[g] - f_int);
-			sol_norm += std::abs(f_int);
-		}
+		double const nu_val = values_line.at(0);  // dimensionless
+		double const Fnu_val = values_line.at(1); // dimensionless
+		nu_exact.push_back(nu_val);
+		Fnu_exact.push_back(Fnu_val);
+		double const enu = compute_exact_bb(nu_val, T_equilibrium);
+		Enu_exact.push_back(enu);
 	}
 
-	// std::vector<double> F_interp(nu_exact.size());
-	// interpolate_arrays(nu_exact.data(), F_interp.data(), static_cast<int>(nu_exact.size()), bin_center.data(), F_r_spec.data(),
-	// static_cast<int>(bin_center.size()));
+	// compute error norm
+
+	std::vector<double> F_interp(n_groups_);
+	interpolate_arrays(bin_center.data(), F_interp.data(), n_groups_, nu_exact.data(), Fnu_exact.data(), static_cast<int>(nu_exact.size()));
+
+	for (int g = 0; g < n_groups_; ++g) {
+		double f_int = 0.0;
+		if (!std::isnan(F_interp[g])) {
+			f_int = F_interp[g];
+		}
+		err_norm += std::abs(F_r_spec[g] - f_int);
+		sol_norm += std::abs(f_int);
+	}
 
 	const double error_tol = 0.1;
 	const double rel_error = err_norm / sol_norm;

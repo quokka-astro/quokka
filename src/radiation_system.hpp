@@ -951,7 +951,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRadQuantityExponents(Arr
 			exponents[g] = minmod_func(logslopes[g - 1], logslopes[g]);
 		}
 		AMREX_ASSERT(!std::isnan(exponents[g]));
-		AMREX_ASSERT(std::abs(exponents[g]) < 100);
 	}
 
 	return exponents;
@@ -977,6 +976,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::
 		// 	continue;
 		// }
 		double alpha = alpha_quant[g] + 1.0;
+		if (alpha > 50.0) {
+			kappa[g] = kappa_lower[g] * std::pow(radBoundaryRatios[g], alpha_kappa[g]);
+			continue;
+		}
+		if (alpha < -50.0) {
+			kappa[g] = kappa_lower[g];
+			continue;
+		}
 		double part1 = 0.0;
 		if (std::abs(alpha) < 1e-8) {
 			part1 = std::log(radBoundaryRatios[g]);
@@ -1128,7 +1135,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
 		amrex::GpuArray<double, nGroups_ + 1> delta_term{};
-		amrex::GpuArray<double, nGroups_ + 1> delta_term_E{};
 		amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 3> delta_term_P_center{};
 		amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 3> delta_term_P{};
 
@@ -1644,16 +1650,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							if (kappaFVec[g] != kappaEVec[g]) {
 								v_term += (kappaFVec[g] - kappaEVec[g]) * erad * std::pow(lorentz_factor_v, 3);
 							}
-						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope) {
+						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope || opacity_model_ == OpacityModel::PPL_fixed_slope) {
 							v_term = kappaPVec[g] * fourPiBoverC[g];
 						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope_with_PPL_delta_terms) {
 							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] - alpha_B[g]) / 3.0;
-						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope_with_delta_terms) {
-							v_term = kappaPVec[g] * fourPiBoverC[g];
-							v_term -= 1.0 / 3.0 * (delta_term[g + 1] - delta_term[g]);
-						} else if constexpr (opacity_model_ == OpacityModel::PPL_fixed_slope) {
-							v_term = kappaPVec[g] * fourPiBoverC[g];
-						} else if constexpr (opacity_model_ == OpacityModel::PPL_fixed_slope_with_delta_terms) {
+						} else if constexpr (opacity_model_ == OpacityModel::PPL_free_slope_with_delta_terms || opacity_model_ == OpacityModel::PPL_fixed_slope_with_delta_terms) {
 							v_term = kappaPVec[g] * fourPiBoverC[g];
 							v_term -= 1.0 / 3.0 * (delta_term[g + 1] - delta_term[g]);
 						}
@@ -1885,12 +1886,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						frad[2][g] = Frad_t1[2][g] / radBoundaryWidth_copy[g];
 						work[g] = 0.0;
 					}
-					if (g == 0) {
+					if (g == 0 || g == nGroups_) {
 						// delta_term[g] = (x1GasMom0 * frad[0][g] + x2GasMom0 * frad[1][g] + x3GasMom0 * frad[2][g]) *
-						// kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
-						delta_term[g] = 0.0;
-					} else if (g == nGroups_) {
-						// delta_term[g] = (x1GasMom0 * frad[0][g - 1] + x2GasMom0 * frad[1][g - 1] + x3GasMom0 * frad[2][g - 1]) *
 						// kappa_expo_and_lower_value[1][g] * radBoundaries_g_copy[g];
 						delta_term[g] = 0.0;
 					} else {
