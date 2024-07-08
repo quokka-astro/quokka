@@ -31,7 +31,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 		bfield_index = Physics_Indices<problem_t>::mhdFirstIndex,
 	};
 
-	static void ComputeEMF(std::array<std::array<amrex::MultiFab, 2>, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
+	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds,
 			       int nghost_fc);
 
@@ -40,7 +40,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 };
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF(std::array<std::array<amrex::MultiFab, 2>, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int nghost_fc)
 {
@@ -86,10 +86,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<std::array<amrex::MultiFab, 2>,
 		// compute the magnetic flux through each cell-face
 		for (int wsolve = 0; wsolve < 3; ++wsolve) {
 			const amrex::Box box_fcw = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(wsolve));
-
-			// // electric field on the cell-edge
-			// // indexing: field[2: i-edge on cell-face]
-			// std::array<amrex::FArrayBox, 2> eci_fabs_E;
 
 			// to solve for the magnetic flux through each face we compute the line integral of the EMF around the cell-face.
 			// so let's solve for the EMF along each of the two edges along the edge of the cell-face
@@ -256,9 +252,11 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<std::array<amrex::MultiFab, 2>,
 				const auto &E2_q2 = ec_fabs_E_q[2].const_array();
 				const auto &E2_q3 = ec_fabs_E_q[3].const_array();
 				// compute electric field on the cell-edge
-				const auto &E2_ave = ec_mf_emf_comps[wsolve][iedge_rel2face][mfi].array();
+				const auto &E2_ave = ec_mf_emf_comps[w0_comp+w1_comp-1][mfi].array();
+        const int i_perm = (wsolve == w0_comp) ? 0 : 1;
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					E2_ave(i, j, k) = fspd_x0(i, j, k, 1) * fspd_x1(i, j, k, 1) * E2_q0(i, j, k) +
+					E2_ave(i,j,k,i_perm) = \
+                fspd_x0(i, j, k, 1) * fspd_x1(i, j, k, 1) * E2_q0(i, j, k) +
 							  fspd_x0(i, j, k, 0) * fspd_x1(i, j, k, 1) * E2_q3(i, j, k) +
 							  fspd_x0(i, j, k, 0) * fspd_x1(i, j, k, 0) * E2_q1(i, j, k) +
 							  fspd_x0(i, j, k, 1) * fspd_x1(i, j, k, 0) * E2_q2(i, j, k) -
