@@ -595,7 +595,10 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	}
 
 	amrex::Real const abs_err = (Etot - Etot0);
-	amrex::Real const rel_err = abs_err / Etot0;
+	amrex::Real rel_err = NAN;
+	if (Etot0 != 0) {
+		rel_err = abs_err / Etot0;
+	}
 
 	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
 	amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
