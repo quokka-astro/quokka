@@ -871,6 +871,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
 
+		// do user-specified calculations before the level update
+		computeBeforeTimestep();
+
 		// do particle leapfrog (first kick at time t)
 		kickParticlesAllLevels(dt_[0]);
 

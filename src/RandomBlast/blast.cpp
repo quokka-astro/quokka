@@ -57,7 +57,6 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 
 constexpr Real Tgas0 = 1.0e4; // K
 constexpr Real nH0 = 0.1;     // cm^-3
-constexpr Real T_floor = 100.0;
 constexpr Real rho0 = nH0 * (m_H / quokka::GrackleLikeCooling::cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
@@ -80,15 +79,14 @@ template <> void RadhydroSimulation<RandomBlast>::setInitialConditionsOnGrid(quo
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	auto tables = cloudyTables_.const_tables();
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const rho = rho0;
 		Real const xmom = 0;
 		Real const ymom = 0;
 		Real const zmom = 0;
-		Real const Eint = ComputeEgasFromTgas(rho0, Tgas0, HydroSystem<RandomBlast>::gamma_, tables);
-		Real const Egas = RadSystem<RandomBlast>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromTgas(rho, Tgas0);
+		Real const Egas = Eint;
 		Real const scalar_density = 0;
 
 		state_cc(i, j, k, HydroSystem<RandomBlast>::density_index) = rho;
@@ -101,8 +99,8 @@ template <> void RadhydroSimulation<RandomBlast>::setInitialConditionsOnGrid(quo
 	});
 }
 
-void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
-		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<RandomBlast> const &userData)
+void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi,
+		  amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx, SimulationData<RandomBlast> const &userData)
 {
 	// inject energy into cells with stochastic sampling
 	const BL_PROFILE("RadhydroSimulation::injectEnergy()");
@@ -232,7 +230,7 @@ template <> void RadhydroSimulation<RandomBlast>::ComputeDerivedVar(int lev, std
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
-		auto tables = cloudyTables_.const_tables();
+		auto tables = grackleTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
