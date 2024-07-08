@@ -465,7 +465,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 			const Real yc = prob_lo[1] + static_cast<Real>(j) * dx[1] + 0.5 * dx[1];
 			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2] + 0.5 * dx[2];
 
-			for (int n = 0; n < 1; ++n) {
+			for (int n = 0; n < np; ++n) {
 				Real x0 = NAN;
 				Real y0 = NAN;
 				Real z0 = NAN;
@@ -700,8 +700,8 @@ auto problem_main() -> int {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 				// outflowing boundary conditions
         if(i==2){
-				 BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-				 BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+				 BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
+				 BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
         }
         else{
            BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
