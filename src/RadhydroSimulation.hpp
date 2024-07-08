@@ -608,14 +608,13 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	if (computeReferenceSolution_) {
 		// compute reference solution
 		const int ncomp = state_new_cc_[0].nComp();
-		const int nghost = state_new_cc_[0].nGrow();
-		amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
+		amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
 		computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
 
 		// compute error norm
-		amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
-		amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
-		amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, nghost);
+		amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, 0);
+		amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
+		amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
 
 		amrex::Real sol_norm = 0.;
 		amrex::Real err_norm = 0.;
@@ -753,7 +752,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 
 	// fix hydro state
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev]);
+
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
 }
