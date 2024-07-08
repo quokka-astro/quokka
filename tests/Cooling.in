@@ -20,4 +20,7 @@ amr.max_grid_size   = 128
 
 do_reflux = 0
 do_subcycle = 0
-grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+
+cooling.enabled = 1
+cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+temperature_floor = 10  # K

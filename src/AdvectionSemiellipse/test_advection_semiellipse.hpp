@@ -17,8 +17,8 @@
 
 // internal headers
 
-#include "linear_advection.hpp"
 #include "AdvectionSimulation.hpp"
+#include "linear_advection.hpp"
 
 // function definitions
 

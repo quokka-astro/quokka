@@ -28,63 +28,73 @@ constexpr double kappa = 577.0;		  // g cm^-2 (opacity)
 constexpr double rho0 = 10.0;		  // g cm^-3 (matter density)
 constexpr double T_hohlraum = 3.481334e6; // K
 constexpr double a_rad = 7.5646e-15;	  // erg cm^-3 K^-4
-//constexpr double c = 2.99792458e10;	  // cm s^-1
+// constexpr double c = 2.99792458e10;	  // cm s^-1
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 constexpr double T_initial = 1.0e4; // K
+
+template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
+	static constexpr double gamma = 5. / 3.;
+};
 
 template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 1;
 };
 
 template <> struct Physics_Traits<SuOlsonProblemCgs> {
-  // cell-centred
-  static constexpr bool is_hydro_enabled = false;
-  static constexpr bool is_chemistry_enabled = false;
-  static constexpr int numPassiveScalars = 0; // number of passive scalars
-  static constexpr bool is_radiation_enabled = true;
-  // face-centred
-  static constexpr bool is_mhd_enabled = false;
+	// cell-centred
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = true;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/)
-    -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return kappa;
-}
-
-
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/)
-    -> double
-{
-	return kappa;
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int i = 0; i < nGroups_; ++i) {
+		kappaPVec[i] = kappa;
+	}
+	return kappaPVec;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(const double /*rho*/, const double Egas)
-    -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double /*rho*/,
+										const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+{
+	return ComputePlanckOpacity(0.0, 0.0);
+}
+
+static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblemCgs>::numMassScalars;
+template <>
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
+						    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(const double /*rho*/, const double Tgas)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
+						    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivative(const double /*rho*/,
-							     const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+							  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -100,10 +110,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivati
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/, const amrex::BCRec *bcr,
-    int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+							      int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
+							      const amrex::BCRec *bcr, int /*bcomp*/, int /*orig_comp*/)
 {
 	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
 		return;
@@ -161,39 +170,37 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 	}
 
 	// gas boundary conditions are the same on both sides
-	const double Egas = RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
+	const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
-  consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
+	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
 }
 
-template <>
-void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(
-    quokka::grid grid_elem) {
-  const amrex::Box &indexRange = grid_elem.indexRange_;
-  const amrex::Array4<double>& state_cc = grid_elem.array_;
+template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+{
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-  // loop over the grid and set the initial condition
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    const double Egas =
-        RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
-    const double Erad = a_rad * std::pow(T_initial, 4);
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+		const double Erad = a_rad * std::pow(T_initial, 4);
 
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
-    state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
-  });
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
+	});
 }
 
 auto problem_main() -> int
@@ -206,11 +213,11 @@ auto problem_main() -> int
 	// const double initial_dtau = 1e-9; // dimensionless time
 	// const double max_dtau = 1e-3;	  // dimensionless time
 	constexpr double max_tau = 10.0; // dimensionless time
-	constexpr double Lz = 20.0;	     // dimensionless length
+	constexpr double Lz = 20.0;	 // dimensionless length
 
 	// Su & Olson (1997) parameters
-	constexpr double chi = rho0 * kappa;				   // cm^-1 (total matter opacity)
-	constexpr double Lx = Lz / chi;				   // cm
+	constexpr double chi = rho0 * kappa;					  // cm^-1 (total matter opacity)
+	constexpr double Lx = Lz / chi;						  // cm
 	constexpr double max_time = max_tau / (eps_SuOlson * c_light_cgs_ * chi); // s
 	// const double max_dt = max_dtau / (eps_SuOlson * c * chi);  // s
 	// const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
@@ -218,7 +225,7 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<SuOlsonProblemCgs>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	// custom (Marshak) x1
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // custom (Marshak) x1
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
@@ -228,7 +235,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	RadhydroSimulation<SuOlsonProblemCgs> sim(BCs_cc);
-	
+
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
@@ -243,7 +250,7 @@ auto problem_main() -> int
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
-	
+
 	// Plot results
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -269,7 +276,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(rho, Egas_t);
+			Tgas.at(i) = quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t);
 		}
 
 		// read in exact solution
@@ -304,15 +311,14 @@ auto problem_main() -> int
 		// compute error norm
 
 		std::vector<double> Trad_interp(xs_exact.size());
-		interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(),
-					Trad.data(), static_cast<int>(xs.size()));
+		interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Trad.data(), static_cast<int>(xs.size()));
 
 		double err_norm = 0.;
 		double sol_norm = 0.;
 		const double t = sim.tNew_[0];
 		const double xmax = c_light_cgs_ * t;
 		amrex::Print() << "diffusion length = " << xmax << std::endl;
-		for (int i = 0; i < xs_exact.size(); ++i) {
+		for (size_t i = 0; i < xs_exact.size(); ++i) {
 			if (xs_exact[i] < xmax) {
 				err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
 				sol_norm += std::abs(Trad_exact[i]);
@@ -338,7 +344,7 @@ auto problem_main() -> int
 		std::unordered_map<std::string, std::string> Trad_exact_args;
 		Trad_exact_args["marker"] = "o";
 		Trad_exact_args["color"] = "C1";
-		//Trad_exact_args["edgecolors"] = "k";
+		// Trad_exact_args["edgecolors"] = "k";
 		matplotlibcpp::scatter(xs_exact, Trad_exact, 5.0, Trad_exact_args);
 
 		// gas temperature
@@ -350,7 +356,7 @@ auto problem_main() -> int
 		std::unordered_map<std::string, std::string> Tgas_exact_args;
 		Tgas_exact_args["marker"] = "o";
 		Tgas_exact_args["color"] = "C2";
-		//Tgas_exact_args["edgecolors"] = "k";
+		// Tgas_exact_args["edgecolors"] = "k";
 		matplotlibcpp::scatter(xs_exact, Tmat_exact, 5.0, Tgas_exact_args);
 
 		matplotlibcpp::xlabel("length x (cm)");
@@ -358,13 +364,12 @@ auto problem_main() -> int
 		matplotlibcpp::xlim(0.4 / chi, 100. / chi);	  // cm
 		matplotlibcpp::ylim(0.1 * T_initial, T_hohlraum); // K
 		matplotlibcpp::xscale("log");
-		//matplotlibcpp::yscale("log");
+		// matplotlibcpp::yscale("log");
 		matplotlibcpp::legend();
 		matplotlibcpp::tight_layout();
-		//matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+		// matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 		matplotlibcpp::save("./marshak_wave_cgs_gastemperature.pdf");
 #endif
-
 	}
 
 	return status;

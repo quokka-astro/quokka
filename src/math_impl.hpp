@@ -9,18 +9,12 @@
 /// \brief Implements functions for various math operations on GPU not supported by CUDA C++
 /// standard library.
 
-#include "AMReX_GpuQualifiers.H"
 #include "AMReX_Extension.H"
+#include "AMReX_GpuQualifiers.H"
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double hi) -> double
-{
-	return (v < lo) ? lo : (hi < v) ? hi : v;
-}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double hi) -> double { return (v < lo) ? lo : (hi < v) ? hi : v; }
 
 /// Provide type-safe global sign ('sgn') function.
-template <typename T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sgn(T val) -> int
-{
-	return (T(0) < val) - (val < T(0));
-}
+template <typename T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sgn(T val) -> int { return (T(0) < val) - (val < T(0)); }
 
 #endif // MATH_IMPL_HPP_

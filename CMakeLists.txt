@@ -15,7 +15,7 @@ include(CTest)
 set(AMReX_SPACEDIM 1 CACHE STRING "")
 set(AMReX_MPI ON CACHE BOOL "" FORCE)
 set(AMReX_HDF5 OFF CACHE BOOL "" FORCE) # do not use
-set(AMReX_LINEAR_SOLVERS OFF CACHE BOOL "" FORCE)
+set(AMReX_LINEAR_SOLVERS ON CACHE BOOL "" FORCE)
 set(AMReX_CONDUIT OFF CACHE BOOL "") # optional
 set(AMReX_ASCENT OFF CACHE BOOL "") # optional
 set(AMReX_AMRLEVEL OFF CACHE BOOL "" FORCE)
@@ -30,6 +30,9 @@ set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
 option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
 option(DISABLE_FMAD "Disable fused multiply-add instructions on GPU (on/off)" ON)
 option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
+option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
@@ -57,4 +60,12 @@ endif()
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
+
+#add compiler definitions again because
+#they do not carry forward from Microphysics
+#We use Strang operator-spliting while integrating the network
+#NAUX_NET defines the number of auxiliary variables
+add_definitions(-DNAUX_NET -DSTRANG)
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)

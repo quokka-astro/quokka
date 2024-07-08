@@ -36,7 +36,7 @@ the interface states in the characteristic variables, as done in §4 of :cite:`S
 The reference solution is computed using Athena++ with PPM reconstruction in the characteristic
 variables on a grid of 1600 zones.
 
-.. figure:: hydro_shuosher.png
+.. figure:: attach/hydro_shuosher.png
     :alt: A figure showing the numerical solution to the Shu-Osher test.
 
     The density is shown as the solid blue line. There is no exact solution for this problem.

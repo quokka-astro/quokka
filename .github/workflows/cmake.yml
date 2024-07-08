@@ -1,6 +1,17 @@
 name: CMake
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ development ]
+  merge_group:
+    branches: [ development ]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-linux
+  cancel-in-progress: true
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -8,14 +19,10 @@ env:
 
 jobs:
   build:
-    # The CMake configure and build commands are platform agnostic and should work equally
-    # well on Windows or Mac.  You can convert this to a matrix build if you need
-    # cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
         fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of sonarcloud analysis
@@ -26,7 +33,7 @@ jobs:
       run: cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install gcc-11 g++-11 python3-dev python3-numpy python3-matplotlib python3-pip lcov libopenmpi-dev libhdf5-mpi-dev ccache libboost-dev
+      run: sudo apt-get update && sudo apt-get install gcc-11 g++-11 python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev
 
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
@@ -42,7 +49,7 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: cmake --build . --config $BUILD_TYPE
+      run: cmake --build . --config $BUILD_TYPE --parallel 4
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
@@ -56,7 +63,7 @@ jobs:
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: test-results
         path: ${{github.workspace}}/tests

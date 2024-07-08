@@ -7,16 +7,13 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
-#include <tuple>
-
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
-#include "test_radiation_tophat.hpp"
+#include "RadhydroSimulation.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
 
@@ -37,31 +34,36 @@ constexpr double c_v = (1.0e15 * 1.0e-6 * kelvin_to_eV); // erg g^-1 K^-1
 constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;  // cm s^-1
 
+template <> struct quokka::EOS_Traits<TophatProblem> {
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<TophatProblem> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 0;
 };
 
 template <> struct Physics_Traits<TophatProblem> {
-  // cell-centred
-  static constexpr bool is_hydro_enabled = false;
-  static constexpr bool is_chemistry_enabled = false;
-  static constexpr int numPassiveScalars = 0; // number of passive scalars
-  static constexpr bool is_radiation_enabled = true;
-  // face-centred
-  static constexpr bool is_mhd_enabled = false;
+	// cell-centred
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = true;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho,
-								    const double /*Tgas*/) -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho,
+											     const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
+	quokka::valarray<double, nGroups_> kappaPVec{};
 	amrex::Real kappa = 0.;
 	if (rho == rho_pipe) {
 		kappa = kappa_pipe;
@@ -70,44 +72,38 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const 
 	} else {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(true, "opacity not defined!");
 	}
-	return kappa;
+	kappaPVec.fillin(kappa);
+	return kappaPVec;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeRosselandOpacity(const double rho,
-								    const double /*Tgas*/) -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho,
+											       const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	amrex::Real kappa = 0.;
-	if (rho == rho_pipe) {
-		kappa = kappa_pipe;
-	} else if (rho == rho_wall) {
-		kappa = kappa_wall;
-	} else {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(true, "opacity not defined!");
-	}
-	return kappa;
+	return ComputePlanckOpacity(rho, 0.);
 }
 
+static constexpr int nmscalars_ = Physics_Traits<TophatProblem>::numMassScalars;
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeTgasFromEgas(const double rho,
-									 const double Egas)
-    -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas,
+						std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho,
-									 const double Tgas)
-    -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas,
+						std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return rho * c_v * Tgas;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
-    -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<TophatProblem>::ComputeEintTempDerivative(const double rho, const double /*Tgas*/,
+						      std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -116,9 +112,7 @@ RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const doub
 	return rho * c_v;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(const double f_in)
-    -> double
+template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(const double f_in) -> double
 {
 	// compute Minerbo (1978) closure [piecewise approximation]
 	// (For unknown reasons, this closure tends to work better
@@ -130,10 +124,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(cons
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<TophatProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-    int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<TophatProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+							  amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+							  int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 2)
 	auto [i, j] = iv.toArray();
@@ -162,12 +155,9 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 		const double Egas = consVar(lo[0], j, k, RadSystem<TophatProblem>::gasEnergy_index);
 		const double rho = consVar(lo[0], j, k, RadSystem<TophatProblem>::gasDensity_index);
-		const double px =
-		    consVar(lo[0], j, k, RadSystem<TophatProblem>::x1GasMomentum_index);
-		const double py =
-		    consVar(lo[0], j, k, RadSystem<TophatProblem>::x2GasMomentum_index);
-		const double pz =
-		    consVar(lo[0], j, k, RadSystem<TophatProblem>::x3GasMomentum_index);
+		const double px = consVar(lo[0], j, k, RadSystem<TophatProblem>::x1GasMomentum_index);
+		const double py = consVar(lo[0], j, k, RadSystem<TophatProblem>::x2GasMomentum_index);
+		const double pz = consVar(lo[0], j, k, RadSystem<TophatProblem>::x3GasMomentum_index);
 
 		double Fx_bdry = NAN;
 		double Fy_bdry = NAN;
@@ -185,9 +175,6 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(
 			Fy_bdry = Fy_0;
 			Fz_bdry = Fz_0;
 		}
-		const amrex::Real Fnorm =
-		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1 left side boundary (Marshak)
 		consVar(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = E_inc;
@@ -198,57 +185,50 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(
 		// extrapolated/outflow boundary for gas variables
 		consVar(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
 		consVar(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
-    consVar(i, j, k, RadSystem<TophatProblem>::gasInternalEnergy_index) = Egas - (px*px + py*py + pz*pz)/(2*rho);
+		consVar(i, j, k, RadSystem<TophatProblem>::gasInternalEnergy_index) = Egas - (px * px + py * py + pz * pz) / (2 * rho);
 		consVar(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = px;
 		consVar(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = py;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = pz;
 	}
 }
 
-template <>
-void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(
-    quokka::grid grid_elem) {
-  // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-  const amrex::Box &indexRange = grid_elem.indexRange_;
-  const amrex::Array4<double>& state_cc = grid_elem.array_;
+template <> void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+{
+	// extract variables required from the geom object
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-  // loop over the grid and set the initial condition
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    const double Erad = a_rad * std::pow(T_initial, 4);
-    double rho = rho_wall;
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const double Erad = a_rad * std::pow(T_initial, 4);
+		double rho = rho_wall;
 
-    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
-    bool inside_region1 =
-        ((((x > 0.) && (x <= 2.5)) || ((x > 4.5) && (x < 7.0))) &&
-         (std::abs(y) < 0.5));
-    bool inside_region2 =
-        ((((x > 2.5) && (x < 3.0)) || ((x > 4.) && (x <= 4.5))) &&
-         (std::abs(y) < 1.5));
-    bool inside_region3 = (((x > 3.0) && (x < 4.0)) &&
-                           ((std::abs(y) > 1.0) && (std::abs(y) < 1.5)));
+		bool inside_region1 = ((((x > 0.) && (x <= 2.5)) || ((x > 4.5) && (x < 7.0))) && (std::abs(y) < 0.5));
+		bool inside_region2 = ((((x > 2.5) && (x < 3.0)) || ((x > 4.) && (x <= 4.5))) && (std::abs(y) < 1.5));
+		bool inside_region3 = (((x > 3.0) && (x < 4.0)) && ((std::abs(y) > 1.0) && (std::abs(y) < 1.5)));
 
-    if (inside_region1 || inside_region2 || inside_region3) {
-      rho = rho_pipe;
-    }
+		if (inside_region1 || inside_region2 || inside_region3) {
+			rho = rho_pipe;
+		}
 
-    const double Egas =
-        RadSystem<TophatProblem>::ComputeEgasFromTgas(rho, T_initial);
+		const double Egas = quokka::EOS<TophatProblem>::ComputeEintFromTgas(rho, T_initial);
 
-    state_cc(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
-    state_cc(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
-    state_cc(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
-    state_cc(i, j, k, RadSystem<TophatProblem>::gasInternalEnergy_index) = Egas;
-    state_cc(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = 0.;
-    state_cc(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = 0.;
-    state_cc(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = 0.;
-  });
+		state_cc(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
+		state_cc(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<TophatProblem>::gasInternalEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = 0.;
+	});
 }
 
 auto problem_main() -> int
@@ -257,10 +237,6 @@ auto problem_main() -> int
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;
 	const double max_time = 5.0e-10; // s
-	//const int nx = 700;
-	//const int ny = 200;
-	//const double Lx = 7.0;	// cm
-	//const double Ly = 2.0;	// cm
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<TophatProblem>::x1RadFlux_index) && (dim == 0)) {
@@ -285,10 +261,10 @@ auto problem_main() -> int
 	};
 
 	// boundary conditions
-	constexpr int nvars = RadhydroSimulation<TophatProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- Marshak
+	constexpr int ncomp_cc = Physics_Indices<TophatProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- Marshak
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) { // reflect lower
@@ -303,7 +279,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	RadhydroSimulation<TophatProblem> sim(BCs_cc);
-	
+
 	sim.radiationReconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
@@ -317,6 +293,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return 0;
 }

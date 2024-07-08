@@ -6,7 +6,7 @@
 #SBATCH -t 00:10:00
 #SBATCH -p batch
 #SBATCH --ntasks-per-node=8
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=closest
 #SBATCH -N 1
@@ -27,3 +27,4 @@ export MPICH_GPU_SUPPORT_ENABLED=1
 export MPICH_OFI_NIC_POLICY=NUMA
 
 srun build/src/HydroBlast3D/test_hydro3d_blast tests/benchmark_unigrid_512.in
+

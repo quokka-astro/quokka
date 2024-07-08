@@ -18,15 +18,12 @@
 
 from pathlib import Path
 import subprocess, os
-read_the_docs_build = os.environ.get('READTHEDOCS', None) == 'True'
-if read_the_docs_build:
-    subprocess.call('doxygen', shell=True)
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'Quokka'
-copyright = '2020-2021, Ben Wibking and Quokka Developers'
+copyright = '2020-2024, Ben Wibking and Quokka Developers'
 author = 'Ben Wibking and Quokka Developers'
 
 # The full version, including alpha/beta/rc tags
@@ -40,20 +37,10 @@ master_doc = 'index'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = [ "breathe", "sphinxcontrib.bibtex" ]
+extensions = [ "sphinxcontrib.bibtex", "sphinx_copybutton" ]
 
 bibtex_bibfiles = ["references.bib"]
 #bibtex_default_style = "plain"
-
-breathe_projects = {
-    "Quokka": "./doxyoutput/xml"
-}
-
-#breathe_projects_source = {
-#    "Quokka": ( "../src", Path("../src").glob("*.cpp") )
-#    }
-
-breathe_default_project = "Quokka"
 
 primary_domain = 'cpp'
 

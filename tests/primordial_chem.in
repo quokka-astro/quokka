@@ -1,0 +1,77 @@
+# copy of Cooling.in
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1  1  1
+geometry.is_periodic =  0    0    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 0     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 1 1 1
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 1   # grid size must be divisible by this
+amr.max_grid_size   = 1
+
+do_reflux = 0
+do_subcycle = 0
+
+primordial_chem.enabled = 1
+primordial_chem.temperature = 1e2
+
+primordial_chem.small_temp = 1.e1
+primordial_chem.small_dens = 1.e-60
+primordial_chem.max_density_allowed = 3e-6
+
+primordial_chem.primary_species_1 = 1e-4
+primordial_chem.primary_species_2 = 1e-4
+primordial_chem.primary_species_3 = 1e0
+primordial_chem.primary_species_4 = 1e-40
+primordial_chem.primary_species_5 = 1e-40
+primordial_chem.primary_species_6 = 1e-40
+primordial_chem.primary_species_7 = 1e-40
+primordial_chem.primary_species_8 = 1e-40
+primordial_chem.primary_species_9 = 1e-6
+primordial_chem.primary_species_10 = 1e-40
+primordial_chem.primary_species_11 = 1e-40
+primordial_chem.primary_species_12 = 1e-40
+primordial_chem.primary_species_13 = 1e-40
+primordial_chem.primary_species_14 = 0.0775e0
+
+
+# integrator runtime parameters
+# are we using primordial chemistry? then we use number densities
+integrator.use_number_densities = 1
+# we do not want to subtract the internal energy
+integrator.subtract_internal_energy = 0
+# we do not want to clip species between 0 and 1
+integrator.do_species_clip = 0
+# minimum positive value of number densities
+integrator.SMALL_X_SAFE = 1e-100
+integrator.burner_verbose = 0
+
+# do you want to use the jacobian calculated in a previous step?
+integrator.use_jacobian_caching = 0
+# integration will fail if the number density > X_reject_buffer*atol
+integrator.X_reject_buffer = 1e100
+# Set which jacobian to use
+# 1 = analytic jacobian
+# 2 = numerical jacobian
+integrator.jacobian = 1
+
+# do you want to normalize abundances within VODE? (you don't!)
+integrator.renormalize_abundances = 0
+# tolerances
+integrator.rtol_spec = 1.0e-4
+integrator.atol_spec = 1.0e-4
+
+# amrex runtime parameters
+# these params help debug the code
+#amrex.throw_exception = 1
+#amrex.signal_handling = 0

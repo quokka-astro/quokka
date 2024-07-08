@@ -7,4 +7,3 @@
 /// \brief Implements methods for interpolating 2D table data using bilinear
 /// interpolation.
 ///
-

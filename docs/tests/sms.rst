@@ -35,7 +35,7 @@ We use the RK2 integrator with a fixed timestep of :math:`10^{-3}`
 and a mesh of 100 equally-spaced cells. The contact discontinuity
 is initially placed at :math:`x=0.5`.
 
-.. figure:: hydro_sms.png
+.. figure:: attach/hydro_sms.png
     :alt: A figure showing the numerical solution to the slow-moving shock test.
 
     The density is shown as the solid blue line. The exact solution is the solid orange line.

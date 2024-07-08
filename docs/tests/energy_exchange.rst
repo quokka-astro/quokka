@@ -33,13 +33,13 @@ The exact time-dependent solution for the matter temperature :math:`T` is:
 
 We show the numerical results below:
 
-.. figure:: radcoupling_rsla.png
+.. figure:: attach/radcoupling_rsla.png
     :alt: A figure showing the radiation temperature and material temperature as a function of time.
 
     The radiation temperature and matter temperatures in the reduced speed-of-light approximation, along with the exact solution for the matter temperature.
 
 
-.. figure:: radcoupling.png
+.. figure:: attach/radcoupling.png
     :alt: A figure showing the radiation temperature and material temperature as a function of time.
 
     The radiation temperature and matter temperatures, along with the exact solution for the matter temperature.

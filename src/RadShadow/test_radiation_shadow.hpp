@@ -18,8 +18,8 @@
 
 // internal headers
 
-#include "radiation_system.hpp"
 #include "RadhydroSimulation.hpp"
+#include "radiation_system.hpp"
 
 // function definitions
 

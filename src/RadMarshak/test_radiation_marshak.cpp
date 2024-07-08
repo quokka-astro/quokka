@@ -22,7 +22,7 @@ struct SuOlsonProblem {
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;
 constexpr double kappa = 1.0;
-constexpr double rho0 = 1.0;	       // g cm^-3 (matter density)
+constexpr double rho0 = 1.0;	   // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.0; // dimensionless
 constexpr double a_rad = 1.0;
 constexpr double c = 1.0;
@@ -30,59 +30,68 @@ constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
 constexpr double T_initial = 1.0e-2;
 
+template <> struct quokka::EOS_Traits<SuOlsonProblem> {
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<SuOlsonProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = c;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = 1.0;
-	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 0;
 };
 
 template <> struct Physics_Traits<SuOlsonProblem> {
-  // cell-centred
-  static constexpr bool is_hydro_enabled = false;
-  static constexpr bool is_chemistry_enabled = false;
-  static constexpr int numPassiveScalars = 0;
-  static constexpr bool is_radiation_enabled = true;
-  // face-centred
-  static constexpr bool is_mhd_enabled = false;
+	// cell-centred
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = true;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double  /*rho*/,
-					       const double  /*Tgas*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return kappa;
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int i = 0; i < nGroups_; ++i) {
+		kappaPVec[i] = kappa;
+	}
+	return kappaPVec;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeRosselandOpacity(const double  /*rho*/,
-					       const double  /*Tgas*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return kappa;
+	return ComputePlanckOpacity(0.0, 0.0);
 }
 
+static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblem>::numMassScalars;
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeTgasFromEgas(const double  /*rho*/,
-						    const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<SuOlsonProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
+						 std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(const double  /*rho*/,
-						    const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<SuOlsonProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
+						 std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeEgasTempDerivative(const double  /*rho*/,
-							  const double Tgas)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<SuOlsonProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+						       std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -98,10 +107,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeEgasTempDerivative(
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/, const amrex::BCRec *bcr,
-    int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+							   amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/, const amrex::BCRec *bcr,
+							   int /*bcomp*/, int /*orig_comp*/)
 {
 	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
 		return;
@@ -148,38 +156,36 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(
 	}
 
 	// gas boundary conditions are the same on both sides
-	const double Egas = RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(rho0, T_initial);
+	const double Egas = quokka::EOS<SuOlsonProblem>::ComputeEintFromTgas(rho0, T_initial);
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
-  consVar(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = Egas;
+	consVar(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
 }
 
-template <>
-void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsOnGrid(
-    quokka::grid grid_elem) {
-  const amrex::Box &indexRange = grid_elem.indexRange_;
-  const amrex::Array4<double>& state_cc = grid_elem.array_;
-  
-  // loop over the grid and set the initial condition
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    const double Egas =
-        RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(rho0, T_initial);
-    const double Erad = a_rad * std::pow(T_initial, 4);
+template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+{
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::radEnergy_index) = Erad;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x1RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x2RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x3RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = Egas;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
-    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
-  });
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const double Egas = quokka::EOS<SuOlsonProblem>::ComputeEintFromTgas(rho0, T_initial);
+		const double Erad = a_rad * std::pow(T_initial, 4);
+
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::radEnergy_index) = Erad;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::x1RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::x2RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::x3RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
+	});
 }
 
 auto problem_main() -> int
@@ -192,11 +198,11 @@ auto problem_main() -> int
 	const double initial_dtau = 1e-9; // dimensionless time
 	const double max_dtau = 1e-3;	  // dimensionless time
 	const double max_tau = 10.0;	  // dimensionless time
-	//const double Lz = 20.0;	  // dimensionless length
+	// const double Lz = 20.0;	  // dimensionless length
 
 	// Su & Olson (1997) parameters
 	const double chi = rho0 * kappa; // cm^-1 (total matter opacity)
-	//const double Lx = Lz / chi;	// cm
+	// const double Lx = Lz / chi;	// cm
 	const double max_time = max_tau / (eps_SuOlson * c * chi);	  // s
 	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
 	const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
@@ -204,7 +210,7 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<SuOlsonProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	// custom (Marshak) x1
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // custom (Marshak) x1
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
@@ -214,7 +220,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	RadhydroSimulation<SuOlsonProblem> sim(BCs_cc);
-	
+
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.initDt_ = initial_dt;
@@ -231,10 +237,10 @@ auto problem_main() -> int
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
-	
+
 	// Check result
 	int status = 0;
-	if(amrex::ParallelDescriptor::IOProcessor()) {
+	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::vector<double> xs(nx);
 		std::vector<double> Trad(nx);
 		std::vector<double> Tgas(nx);
@@ -256,7 +262,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = RadSystem<SuOlsonProblem>::ComputeTgasFromEgas(rho, Egas_t);
+			Tgas.at(i) = quokka::EOS<SuOlsonProblem>::ComputeTgasFromEint(rho, Egas_t);
 		}
 
 		// read in exact solution
@@ -291,15 +297,15 @@ auto problem_main() -> int
 		// compute error norm
 
 		std::vector<double> Trad_exact_interp(xs.size());
-		interpolate_arrays(xs.data(), Trad_exact_interp.data(), static_cast<int>(xs.size()),
-				xs_exact.data(), Trad_exact.data(), static_cast<int>(xs_exact.size()));
+		interpolate_arrays(xs.data(), Trad_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), Trad_exact.data(),
+				   static_cast<int>(xs_exact.size()));
 
 		double err_norm = 0.;
 		double sol_norm = 0.;
 		const double t = sim.tNew_[0];
 		const double xmax = c * t;
 		amrex::Print() << "diffusion length = " << xmax << std::endl;
-		for (int i = 0; i < xs.size(); ++i) {
+		for (size_t i = 0; i < xs.size(); ++i) {
 			if (xs[i] < xmax) {
 				err_norm += std::abs(Trad[i] - Trad_exact_interp[i]);
 				sol_norm += std::abs(Trad_exact_interp[i]);
@@ -356,7 +362,6 @@ auto problem_main() -> int
 		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 		matplotlibcpp::save("./marshak_wave_gastemperature.pdf");
 #endif
-
 	}
 
 	return status;
