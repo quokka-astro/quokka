@@ -1122,7 +1122,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		auto const &stateOld_fc = state_old_fc_tmp;
 		auto &stateNew_fc = state_inter_fc_;
 
-		auto [fluxArrays, faceVel, fspds] = computeHydroFluxes(stateOld_cc, ncompHydro_, lev);
+		auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateOld_cc, ncompHydro_, lev);
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
@@ -1134,17 +1134,17 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		redoFlag.setVal(quokka::redoFlag::none);
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			std::array<std::array<amrex::MultiFab, 2>, AMREX_SPACEDIM> emf_comps_ec;
+			std::array<std::array<amrex::MultiFab, 2>, AMREX_SPACEDIM> ec_emf_components;
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				emf_comps_ec[idim][0].define(
+				ec_emf_components[idim][0].define(
 				    amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim) + amrex::IntVect::TheDimensionVector((idim + 1) % 3)), dm, 1,
 				    nghost_fc_);
-				emf_comps_ec[idim][1].define(
+				ec_emf_components[idim][1].define(
 				    amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim) + amrex::IntVect::TheDimensionVector((idim + 2) % 3)), dm, 1,
 				    nghost_fc_);
-				fspds[idim].FillBoundary(geom[lev].periodicity());
+				fast_mhd_wavespeeds[idim].FillBoundary(geom[lev].periodicity());
 			}
-			MHDSystem<problem_t>::ComputeEMF(emf_comps_ec, stateOld_cc, stateOld_fc, fspds, nghost_fc_);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, nghost_fc_);
 		}
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
@@ -1246,7 +1246,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		auto const &stateOld_cc = state_old_cc_tmp;
 		auto const &stateInter = state_inter_cc_;
 		auto &stateFinal = state_new_cc_[lev];
-		auto [fluxArrays, faceVel, fspds] = computeHydroFluxes(stateInter, ncompHydro_, lev);
+		auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateInter, ncompHydro_, lev);
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
@@ -1450,7 +1450,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> fspds;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> fast_mhd_wavespeeds;
 
 	for (int idim = 0; idim < 3; ++idim) {
 		flatCoefs[idim] = amrex::MultiFab(ba_cc, dm, 1, flatteningGhost);
@@ -1463,7 +1463,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 		flux[idim] = amrex::MultiFab(ba_fc, dm, nvars, 0);
 		facevel[idim] = amrex::MultiFab(ba_fc, dm, 1, 0);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			fspds[idim] = amrex::MultiFab(ba_fc, dm, 2, 1);
+			fast_mhd_wavespeeds[idim] = amrex::MultiFab(ba_fc, dm, 2, 1);
 		}
 	}
 
@@ -1476,11 +1476,11 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
 
 	// compute flux functions
-	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], fspds[0], flatCoefs[0], flatCoefs[1],
+	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], flatCoefs[0], flatCoefs[1],
 						    flatCoefs[2], reconstructGhost, nvars);
-		     , hydroFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], fspds[1], flatCoefs[0], flatCoefs[1],
+		     , hydroFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], flatCoefs[0], flatCoefs[1],
 						      flatCoefs[2], reconstructGhost, nvars);
-		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], fspds[2], flatCoefs[0], flatCoefs[1],
+		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], flatCoefs[0], flatCoefs[1],
 						      flatCoefs[2], reconstructGhost, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
@@ -1522,7 +1522,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 	}
 
 	// return flux and face-centered velocities
-	return std::make_tuple(std::move(flux), std::move(facevel), std::move(fspds));
+	return std::make_tuple(std::move(flux), std::move(facevel), std::move(fast_mhd_wavespeeds));
 }
 
 template <typename problem_t>
