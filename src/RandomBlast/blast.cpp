@@ -55,8 +55,8 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-constexpr Real Tgas0 = 1.0e4; // K
-constexpr Real nH0 = 0.1;     // cm^-3
+constexpr Real Tgas0 = 1.0e4;								// K
+constexpr Real nH0 = 0.1;								// cm^-3
 constexpr Real rho0 = nH0 * (m_H / quokka::GrackleLikeCooling::cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
