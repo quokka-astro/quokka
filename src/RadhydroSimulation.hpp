@@ -177,6 +177,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
 	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
+	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;

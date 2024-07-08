@@ -22,10 +22,10 @@
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
 
-#include "CloudyCooling.hpp"
-#include "ODEIntegrate.hpp"
+#include "GrackleLikeCooling.hpp"
 #include "RadhydroSimulation.hpp"
 #include "blast.hpp"
+#include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "quadrature.hpp"
 
@@ -34,32 +34,33 @@ using amrex::Real;
 struct RandomBlast {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double m_H = hydrogen_mass_cgs_;
-constexpr double seconds_in_year = 3.154e7; // s
-constexpr double parsec_in_cm = 3.086e18;   // cm
-constexpr double Msun = 1.99e33;	    // g
-
-template <> struct HydroSystem_Traits<RandomBlast> {
-	static constexpr double gamma = 5. / 3.; // default value
-	// if true, reconstruct e_int instead of pressure
-	static constexpr bool reconstruct_eint = true;
-};
+constexpr double seconds_in_year = 3.1536e7; // s == 1 yr
+constexpr double parsec_in_cm = 3.086e18;    // cm == 1 pc
+constexpr double solarmass_in_g = 1.99e33;   // g == 1 Msun
+constexpr double keV_in_ergs = 1.60218e-9;   // ergs == 1 keV
+constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
 
 template <> struct Physics_Traits<RandomBlast> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numPassiveScalars = 1; // number of passive scalars
+	static constexpr bool is_mhd_enabled = false;
+	static constexpr int numMassScalars = 0;
+	static constexpr int numPassiveScalars = numMassScalars + 1;
+	static constexpr int nGroups = 1; // number of radiation groups
+};
+
+template <> struct quokka::EOS_Traits<RandomBlast> {
+	static constexpr double gamma = 5. / 3.;
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
 };
 
 constexpr Real Tgas0 = 1.0e4; // K
 constexpr Real nH0 = 0.1;     // cm^-3
 constexpr Real T_floor = 100.0;
-constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
+constexpr Real rho0 = nH0 * (m_H / quokka::GrackleLikeCooling::cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
-	cloudy_tables cloudyTables;
-
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_z;
@@ -79,10 +80,10 @@ template <> void RadhydroSimulation<RandomBlast>::setInitialConditionsOnGrid(quo
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	auto tables = userData_.cloudyTables.const_tables();
+	auto tables = cloudyTables_.const_tables();
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real rho = rho0;
+		Real const rho = rho0;
 		Real const xmom = 0;
 		Real const ymom = 0;
 		Real const zmom = 0;
@@ -100,98 +101,11 @@ template <> void RadhydroSimulation<RandomBlast>::setInitialConditionsOnGrid(quo
 	});
 }
 
-struct ODEUserData {
-	Real rho{};
-	cloudyGpuConstTables tables;
-};
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
-{
-	// unpack user_data
-	auto *udata = static_cast<ODEUserData *>(user_data);
-	const Real rho = udata->rho;
-	const Real gamma = HydroSystem<RandomBlast>::gamma_;
-	cloudyGpuConstTables const &tables = udata->tables;
-
-	// check whether temperature is out-of-bounds
-	const Real Tmin = 10.;
-	const Real Tmax = 1.0e9;
-	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
-	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
-
-	// compute temperature and cooling rate
-	const Real Eint = y_data[0];
-
-	if (Eint <= Eint_min) {
-		// set cooling to value at Tmin
-		y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
-	} else if (Eint >= Eint_max) {
-		// set cooling to value at Tmax
-		y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
-	} else {
-		// ok, within tabulated cooling limits
-		const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
-		if (!std::isnan(T)) { // temp iteration succeeded
-			y_rhs[0] = cloudy_cooling_function(rho, T, tables);
-		} else { // temp iteration failed
-			y_rhs[0] = NAN;
-			return 1; // failed
-		}
-	}
-
-	return 0; // success
-}
-
-void computeCooling(amrex::MultiFab &mf, const Real dt, cloudy_tables &cloudyTables)
-{
-	BL_PROFILE("RadhydroSimulation::computeCooling()")
-
-	const Real reltol_floor = 0.01;
-	const Real rtol = 1.0e-4; // not recommended to change this
-
-	auto tables = cloudyTables.const_tables();
-	auto state = mf.arrays();
-
-	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		const Real rho = state[bx](i, j, k, HydroSystem<RandomBlast>::density_index);
-		const Real x1Mom = state[bx](i, j, k, HydroSystem<RandomBlast>::x1Momentum_index);
-		const Real x2Mom = state[bx](i, j, k, HydroSystem<RandomBlast>::x2Momentum_index);
-		const Real x3Mom = state[bx](i, j, k, HydroSystem<RandomBlast>::x3Momentum_index);
-		const Real Egas = state[bx](i, j, k, HydroSystem<RandomBlast>::energy_index);
-		const Real Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-
-		ODEUserData user_data{rho, tables};
-		quokka::valarray<Real, 1> y = {Eint};
-		quokka::valarray<Real, 1> const abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, HydroSystem<RandomBlast>::gamma_, tables)};
-
-		// do integration with RK2 (Heun's method)
-		int nsteps = 0;
-		rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
-
-		// check if integration failed
-		if (nsteps >= maxStepsODEIntegrate) {
-			const Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<RandomBlast>::gamma_, tables);
-			const Real Edot = cloudy_cooling_function(rho, T, tables);
-			const Real t_cool = Eint / Edot;
-			printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %.17e, cooling "
-			       "time = %.17e, dt = %.17e\n",
-			       rho, Eint, T, t_cool, dt);
-			amrex::Abort();
-		}
-		const Real Eint_new = y[0];
-		const Real dEint = Eint_new - Eint;
-
-		state[bx](i, j, k, HydroSystem<RandomBlast>::energy_index) += dEint;
-		state[bx](i, j, k, HydroSystem<RandomBlast>::internalEnergy_index) += dEint;
-	});
-	amrex::Gpu::streamSynchronizeAll();
-}
-
 void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
 		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<RandomBlast> const &userData)
 {
 	// inject energy into cells with stochastic sampling
-	BL_PROFILE("RadhydroSimulation::injectEnergy()")
+	const BL_PROFILE("RadhydroSimulation::injectEnergy()");
 
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
@@ -285,10 +199,9 @@ template <> void RadhydroSimulation<RandomBlast>::computeBeforeTimestep()
 	// TODO(ben): need to force refinement to highest level for cells near particles
 }
 
-template <> void RadhydroSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real dt_lev, int /*ncycle*/)
+template <> void RadhydroSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real /*dt_lev*/, int /*ncycle*/)
 {
 	// compute operator split physics
-	computeCooling(state_new_cc_[lev], dt_lev, userData_.cloudyTables);
 	injectEnergy(state_new_cc_[lev], geom[lev].ProbLoArray(), geom[lev].ProbHiArray(), geom[lev].CellSizeArray(), userData_);
 }
 
@@ -308,7 +221,7 @@ template <> void RadhydroSimulation<RandomBlast>::computeAfterTimestep()
 
 	if (std::abs(cons_err) > 1.0e-10) {
 		// write out FABs with ghost zones
-		//amrex::writeFabs(state_new_cc_[0], "state_new_" + std::to_string(istep[0]));
+		// amrex::writeFabs(state_new_cc_[0], "state_new_" + std::to_string(istep[0]));
 		// abort
 		amrex::Abort("mass nonconservation detected!");
 	}
@@ -319,7 +232,7 @@ template <> void RadhydroSimulation<RandomBlast>::ComputeDerivedVar(int lev, std
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
-		auto tables = userData_.cloudyTables.const_tables();
+		auto tables = cloudyTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
@@ -327,13 +240,13 @@ template <> void RadhydroSimulation<RandomBlast>::ComputeDerivedVar(int lev, std
 			auto const &state = state_new_cc_[lev].const_array(iter);
 
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				Real rho = state(i, j, k, HydroSystem<RandomBlast>::density_index);
-				Real x1Mom = state(i, j, k, HydroSystem<RandomBlast>::x1Momentum_index);
-				Real x2Mom = state(i, j, k, HydroSystem<RandomBlast>::x2Momentum_index);
-				Real x3Mom = state(i, j, k, HydroSystem<RandomBlast>::x3Momentum_index);
-				Real Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
-				Real Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<RandomBlast>::gamma_, tables);
+				Real const rho = state(i, j, k, HydroSystem<RandomBlast>::density_index);
+				Real const x1Mom = state(i, j, k, HydroSystem<RandomBlast>::x1Momentum_index);
+				Real const x2Mom = state(i, j, k, HydroSystem<RandomBlast>::x2Momentum_index);
+				Real const x3Mom = state(i, j, k, HydroSystem<RandomBlast>::x3Momentum_index);
+				Real const Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
+				Real const Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<RandomBlast>::gamma_, tables);
 
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -432,9 +345,6 @@ auto problem_main() -> int
 	sim.userData_.SN_rate_per_vol = SN_rate_per_vol;
 	sim.userData_.refine_threshold = refine_threshold;
 	sim.userData_.use_periodic_bc = use_periodic_bc;
-
-	// Read Cloudy tables
-	readCloudyData(sim.userData_.cloudyTables);
 
 	// Set initial conditions
 	sim.setInitialConditions();
