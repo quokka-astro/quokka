@@ -608,7 +608,7 @@ template <class Real, unsigned N> class gauss : public detail::gauss_detail<Real
 	using base = detail::gauss_detail<Real, N, detail::gauss_constant_category<Real>::value>;
 
       public:
-	template <class F> AMREX_GPU_DEVICE static auto integrate(F f, Real *pL1 = nullptr) -> decltype(std::declval<F>()(std::declval<Real>()))
+	template <class F> AMREX_GPU_DEVICE static auto integrate(F f, Real *pL1 = nullptr) -> decltype(f(Real(0.0)))
 	{
 		// In many math texts, K represents the field of real or complex numbers.
 		// Too bad we can't put blackboard bold into C++ source!
