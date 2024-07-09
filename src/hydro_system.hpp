@@ -14,12 +14,10 @@
 
 // library headers
 #include "AMReX.H"
-#include "AMReX_Arena.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_Loop.H"
 #include "AMReX_REAL.H"
+#include "AMReX_iMultiFab.H"
 
 // internal headers
 #include "ArrayView.hpp"
@@ -108,8 +106,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling,
-				  amrex::Real const tempFloor, amrex::MultiFab &state_mf);
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling, amrex::Real tempFloor,
+				  amrex::MultiFab &state_mf);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
@@ -294,8 +292,8 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> quokka::valarray<amrex::Real, nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										 int k) -> quokka::valarray<amrex::Real, nvar_>
 {
 	// convert to primitive vars
 	const auto rho = cons(i, j, k, density_index);
@@ -327,8 +325,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim)
-    -> quokka::valarray<amrex::Real, nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>
 {
 	// convert to conserved vars
 	Real const rho = prim[0];
@@ -350,8 +348,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										 int k) -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
@@ -375,8 +373,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										   int k) -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
@@ -397,8 +395,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										   int k) -> amrex::Real
 {
 	amrex::Real const rho = cons(i, j, k, density_index);
 	amrex::Real const vel_x = cons(i, j, k, x1Momentum_index) / rho;
@@ -406,8 +404,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX2(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX2(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										   int k) -> amrex::Real
 {
 	amrex::Real const rho = cons(i, j, k, density_index);
 	amrex::Real const vel_y = cons(i, j, k, x2Momentum_index) / rho;
@@ -415,8 +413,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX3(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX3(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+										   int k) -> amrex::Real
 {
 	amrex::Real const rho = cons(i, j, k, density_index);
 	amrex::Real const vel_z = cons(i, j, k, x3Momentum_index) / rho;
@@ -444,16 +442,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 	// when the dual energy method is used, we *cannot* reset on pressure
 	// failures. on the other hand, we don't need to -- the auxiliary internal
 	// energy is used instead!
-#if 0
-  bool isPressurePositive = false;
-  if constexpr (!is_eos_isothermal()) {
-    const amrex::Real P = ComputePressure(cons, i, j, k);
-    isPressurePositive = (P > 0.);
-  } else {
-    isPressurePositive = true;
-  }
-#endif
-	// return (isDensityPositive && isPressurePositive);
 
 	return isDensityPositive && isMassScalarPositive;
 }
@@ -612,8 +600,12 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 
 		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
 		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
-		const double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(primVar(i, j, k, primDensity_index), P, massScalars), 2) *
-				   primVar(i, j, k, primDensity_index);
+		double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(primVar(i, j, k, primDensity_index), P, massScalars), 2) *
+			     primVar(i, j, k, primDensity_index);
+		if constexpr (is_eos_isothermal()) {
+			K_S = primVar(i, j, k, primDensity_index) * cs_iso_ * cs_iso_;
+		}
+
 		const double Z = std::abs(Pplus1 - Pminus1) / K_S;
 
 		// check for converging flow along the normal direction DIR (Eq. 77)
@@ -662,12 +654,18 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		// axis*
 		//  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
 		double chi_ijk = std::min({
-			x1Chi_in[bx](i_in - 1, j_in, k_in), x1Chi_in[bx](i_in, j_in, k_in), x1Chi_in[bx](i_in + 1, j_in, k_in),
+		    x1Chi_in[bx](i_in - 1, j_in, k_in),
+		    x1Chi_in[bx](i_in, j_in, k_in),
+		    x1Chi_in[bx](i_in + 1, j_in, k_in),
 #if (AMREX_SPACEDIM >= 2)
-			    x2Chi_in[bx](i_in, j_in - 1, k_in), x2Chi_in[bx](i_in, j_in, k_in), x2Chi_in[bx](i_in, j_in + 1, k_in),
+		    x2Chi_in[bx](i_in, j_in - 1, k_in),
+		    x2Chi_in[bx](i_in, j_in, k_in),
+		    x2Chi_in[bx](i_in, j_in + 1, k_in),
 #endif
 #if (AMREX_SPACEDIM == 3)
-			    x3Chi_in[bx](i_in, j_in, k_in - 1), x3Chi_in[bx](i_in, j_in, k_in), x3Chi_in[bx](i_in, j_in, k_in + 1),
+		    x3Chi_in[bx](i_in, j_in, k_in - 1),
+		    x3Chi_in[bx](i_in, j_in, k_in),
+		    x3Chi_in[bx](i_in, j_in, k_in + 1),
 #endif
 		});
 
@@ -746,7 +744,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real sp_sum = 0.0;
 			for (int idx = 0; idx < nmscalars_; ++idx) {
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-					state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
+					state[bx](i, j, k, scalar0_index + idx) = network_rp::small_x * rho;
 				}
 
 				// get sum to renormalize

@@ -1,9 +1,6 @@
-#include <fstream>
-#include <iterator>
 #include <limits>
 #include <tuple>
 
-#include "AMReX_Config.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_SPACE.H"
@@ -15,8 +12,8 @@
 
 using namespace amrex; // NOLINT
 
-auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coord, const bool center = false)
-    -> std::tuple<Vector<Real>, Vector<Gpu::HostVector<Real>>>
+auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coord,
+	      const bool center = false) -> std::tuple<Vector<Real>, Vector<Gpu::HostVector<Real>>>
 {
 	AMREX_D_TERM(Real xcoord = slice_coord;, Real ycoord = slice_coord;, Real zcoord = slice_coord;)
 
@@ -115,7 +112,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 				ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					GpuArray<int, 3> idx_vec({i - lo0.x, j - lo0.y, k - lo0.z});
 					int idx = idx_vec[idir];
-					dataptr[idx] = fab(i, j, k, ivar);
+					dataptr[idx] = fab(i, j, k, ivar); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				});
 			}
 		}

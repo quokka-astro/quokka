@@ -13,7 +13,6 @@
 #include <cmath>
 #include <cstddef>
 #include <iterator>
-#include <limits>
 
 // library headers
 #include "AMReX_Extension.H"
@@ -172,6 +171,16 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto opera
 	quokka::valarray<T, d> scalardiv;
 	for (size_t i = 0; i < v.size(); ++i) {
 		scalardiv[i] = v[i] / scalar;
+	}
+	return scalardiv;
+}
+
+// scalar / array
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(T const &scalar, quokka::valarray<T, d> const &v) -> quokka::valarray<T, d>
+{
+	quokka::valarray<T, d> scalardiv;
+	for (size_t i = 0; i < v.size(); ++i) {
+		scalardiv[i] = scalar / v[i];
 	}
 	return scalardiv;
 }

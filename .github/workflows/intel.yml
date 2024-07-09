@@ -1,0 +1,87 @@
+name: intel
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ development ]
+  merge_group:
+    branches: [ development ]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-intel
+  cancel-in-progress: true
+
+jobs:
+  tests-oneapi-sycl:
+    name: oneAPI CPU [tests]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+        
+    - name: Dependencies
+      run: |
+        .github/workflows/dependencies/dependencies_dpcpp.sh
+        .github/workflows/dependencies/dependencies_ccache.sh
+        
+    - name: Set Up Cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ccache
+        key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
+        restore-keys: |
+             ccache-${{ github.workflow }}-${{ github.job }}-git-
+             
+    - name: Build & Install
+      env: {CXXFLAGS: "-ffp-model=precise -fno-operator-names"}
+      run: |
+        export CCACHE_COMPRESS=1
+        export CCACHE_COMPRESSLEVEL=10
+        export CCACHE_MAXSIZE=45M
+        export CCACHE_DEPEND=1
+        ccache -z
+
+        set +e
+        source /opt/intel/oneapi/setvars.sh
+        set -e
+        cmake -S . -B build                                \
+            -DCMAKE_VERBOSE_MAKEFILE=ON                    \
+            -DCMAKE_C_COMPILER=$(which icx)                \
+            -DCMAKE_CXX_COMPILER=$(which icpx)             \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        cmake --build build --parallel 4
+
+        ccache -s
+        du -hs ~/.cache/ccache
+        
+    - name: Create output directory
+      run: cmake -E make_directory $GITHUB_WORKSPACE/tests
+      
+    - name: Run tests
+      working-directory: ${{runner.workspace}}/quokka/build
+      run: ctest --output-on-failure -C $BUILD_TYPE
+      
+    - name: Upload test output
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: ${{github.workspace}}/tests
+        
+  save_pr_number:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Save PR number
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+          echo $PR_NUMBER > pr_number.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr_number
+          path: pr_number.txt
+          retention-days: 1

@@ -11,10 +11,8 @@
 
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "hydro_system.hpp"
-#include "physics_numVars.hpp"
 #include "valarray.hpp"
 
 namespace NSCBC
@@ -37,6 +35,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real w = Q[3];
 	const amrex::Real P = Q[4];
 
+	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	amrex::GpuArray<Real, nmscalars_> massScalars;
+	for (int n = 0; n < nmscalars_; ++n) {
+		// indexing here follows primVars
+		massScalars[n] = Q[HydroSystem<problem_t>::primScalar0_index + n];
+	}
+
 	// normal derivatives
 	const amrex::Real drho_dx = dQ_dx_data[0];
 	const amrex::Real du_dx = dQ_dx_data[1];
@@ -55,7 +60,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real dw_dz = dQ_dz_data[3];
 	const amrex::Real dP_dz = dQ_dz_data[4];
 
-	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 	const amrex::Real M = std::clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 	const amrex::Real beta = M;
 	const amrex::Real K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posedness
@@ -201,8 +206,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::In
 }
 
 template <typename problem_t, FluxDir DIR>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto permute_vel(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q)
-    -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+permute_vel(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
 {
 	// with normal direction DIR, permutes the velocity components so that
 	//  u, v, w are the normal and transverse components, respectively.
@@ -227,8 +232,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto permute_vel(quokka::valarray<amrex::Rea
 }
 
 template <typename problem_t, FluxDir DIR>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto unpermute_vel(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q)
-    -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+unpermute_vel(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
 {
 	// with normal direction DIR, un-permutes the velocity components so that
 	//  u, v, w are the normal and transverse components *prior to calling permute_vel*.
@@ -250,15 +255,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto unpermute_vel(quokka::valarray<amrex::R
 		newPrim[6 + i] = Q[6 + i];
 	}
 	return newPrim;
-}
-
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto isStateValid(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> bool
-{
-	const amrex::Real rho = Q[0];
-	const amrex::Real P = Q[4];
-	// check whether density and pressure are positive
-	return ((rho > 0.) && (P > 0.));
 }
 } // namespace detail
 
@@ -336,14 +332,112 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
 	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
 
-	// reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
-	if (!(detail::isStateValid<problem_t>(Q_ip1) && detail::isStateValid<problem_t>(Q_ip2) && detail::isStateValid<problem_t>(Q_ip3) &&
-	      detail::isStateValid<problem_t>(Q_ip4))) {
+	quokka::valarray<amrex::Real, N> consCell{};
+	if (idx[static_cast<int>(DIR)] == ip1) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip1);
+	} else if (idx[static_cast<int>(DIR)] == ip2) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip2);
+	} else if (idx[static_cast<int>(DIR)] == ip3) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip3);
+	} else if (idx[static_cast<int>(DIR)] == ip4) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip4);
+	}
+
+	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];
+	consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consCell[1];
+	consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = consCell[2];
+	consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = consCell[3];
+	consVar(i, j, k, HydroSystem<problem_t>::energy_index) = consCell[4];
+	consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = consCell[5];
+	for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+		consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) = consCell[6 + n];
+	}
+}
+
+template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+								    amrex::GeometryData const &geom, const amrex::Real P_outflow)
+{
+	// subsonic outflow on the DIR SIDE boundary
+
+	auto [i, j, k] = iv.dim3();
+	std::array<int, 3> idx{i, j, k};
+	amrex::Box const &box = geom.Domain();
+	constexpr int N = HydroSystem<problem_t>::nvar_;
+
+	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
+	const int ibr = boundary_idx[static_cast<int>(DIR)];
+	const int im1 = (SIDE == BoundarySide::Lower) ? ibr + 1 : ibr - 1;
+	const int im2 = (SIDE == BoundarySide::Lower) ? ibr + 2 : ibr - 2;
+	const int im3 = (SIDE == BoundarySide::Lower) ? ibr + 3 : ibr - 3;
+
+	// compute primitive vars
+	quokka::valarray<amrex::Real, N> Q_i{};
+	if constexpr (DIR == FluxDir::X1) {
+		Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k);
+	} else if constexpr (DIR == FluxDir::X2) {
+		Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, i, ibr, k);
+	} else if constexpr (DIR == FluxDir::X3) {
+		Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, ibr);
+	}
+
+	quokka::valarray<amrex::Real, N> Q_ip1{};
+	quokka::valarray<amrex::Real, N> Q_ip2{};
+	quokka::valarray<amrex::Real, N> Q_ip3{};
+	quokka::valarray<amrex::Real, N> Q_ip4{};
+
+	// if gas is inflowing, change to reflecting B.C.
+	quokka::valarray<amrex::Real, N> Qr_im0 = detail::permute_vel<problem_t, DIR>(Q_i);
+	amrex::Real const v_normal = Qr_im0[1]; // normal velocity component
+
+	if (((SIDE == BoundarySide::Lower) && (v_normal > 0.)) || ((SIDE == BoundarySide::Upper) && (v_normal < 0.))) {
+		// compute primitive vars
+		quokka::valarray<amrex::Real, N> Q_im1{};
+		quokka::valarray<amrex::Real, N> Q_im2{};
+		quokka::valarray<amrex::Real, N> Q_im3{};
+
+		if constexpr (DIR == FluxDir::X1) {
+			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, im1, j, k);
+			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, im2, j, k);
+			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, im3, j, k);
+		} else if constexpr (DIR == FluxDir::X2) {
+			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im1, k);
+			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im2, k);
+			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im3, k);
+		} else if constexpr (DIR == FluxDir::X3) {
+			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im1);
+			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im2);
+			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im3);
+		}
+
+		// reflect velocities
+		quokka::valarray<amrex::Real, N> Qr_im1 = detail::permute_vel<problem_t, DIR>(Q_im1);
+		quokka::valarray<amrex::Real, N> Qr_im2 = detail::permute_vel<problem_t, DIR>(Q_im2);
+		quokka::valarray<amrex::Real, N> Qr_im3 = detail::permute_vel<problem_t, DIR>(Q_im3);
+
+		Qr_im0[1] *= -1.0;
+		Qr_im1[1] *= -1.0;
+		Qr_im2[1] *= -1.0;
+		Qr_im3[1] *= -1.0;
+
+		Q_ip1 = detail::unpermute_vel<problem_t, DIR>(Qr_im0);
+		Q_ip2 = detail::unpermute_vel<problem_t, DIR>(Qr_im1);
+		Q_ip3 = detail::unpermute_vel<problem_t, DIR>(Qr_im2);
+		Q_ip4 = detail::unpermute_vel<problem_t, DIR>(Qr_im3);
+	} else {
+		// specify pressure at boundary
+		Q_i[4] = P_outflow;
 		Q_ip1 = Q_i;
 		Q_ip2 = Q_i;
 		Q_ip3 = Q_i;
 		Q_ip4 = Q_i;
 	}
+
+	// set cell values
+	const int ip1 = (SIDE == BoundarySide::Lower) ? ibr - 1 : ibr + 1;
+	const int ip2 = (SIDE == BoundarySide::Lower) ? ibr - 2 : ibr + 2;
+	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
+	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
 
 	quokka::valarray<amrex::Real, N> consCell{};
 	if (idx[static_cast<int>(DIR)] == ip1) {

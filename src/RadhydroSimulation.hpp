@@ -10,48 +10,37 @@
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
 #include <array>
-#include <climits>
 #include <filesystem>
 #include <limits>
-#include <memory>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 
 #include "AMReX.H"
-#include "AMReX_Algorithm.H"
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BCRec.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArray.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_FabFactory.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuControl.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_GpuQualifiers.H"
-#include "AMReX_IArrayBox.H"
-#include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
-#include "AMReX_Periodicity.H"
-#include "AMReX_PhysBCFunct.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
-#include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
-#include "physics_numVars.hpp"
 
 #ifdef AMREX_USE_ASCENT
 #include "AMReX_Conduit_Blueprint.H"
@@ -60,16 +49,16 @@
 #endif
 
 #include "Chemistry.hpp"
-#include "CloudyCooling.hpp"
-#include "HLLC.hpp"
+#include "GrackleLikeCooling.hpp"
 #include "SimulationData.hpp"
+#include "TabulatedCooling.hpp"
+#include "eos.H"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
+#include "physics_numVars.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
-
-#include "eos.H"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
@@ -123,7 +112,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
-	quokka::cooling::cloudy_tables cloudyTables_;
+	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
+
+	quokka::GrackleLikeCooling::grackle_tables grackleTables_;
+	quokka::TabulatedCooling::cloudy_tables cloudyTables_;
+	std::string coolingTableType_{};
 	std::string coolingTableFilename_{};
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -222,22 +215,22 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// add gravitational acceleration to hydro state
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
-	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, const int srccomp,
-			   const int dstcomp);
+	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, int srccomp,
+			   int dstcomp);
 
-	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew, int ncompNew)
-	    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
+	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew,
+			      int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
 
 	void printCoordinates(int lev, const amrex::IntVect &cell_idx);
 
 	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 					    amrex::YAFluxRegister *fr_as_fine);
 
-	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev,
+	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev,
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
-	void addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -262,11 +255,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
-	auto computeHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
-	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+	auto computeHydroFluxes(amrex::MultiFab const &consVar, int nvars,
+				int lev) -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
-	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
-	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, int nvars,
+				  int lev) -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
@@ -359,13 +352,22 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		amrex::ParmParse hpp("cooling");
 		int alwaysReadTables = 0;
 		hpp.query("enabled", enableCooling_);
+		hpp.query("cooling_table_type", coolingTableType_);
 		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
-		hpp.query("grackle_data_file", coolingTableFilename_);
+		hpp.query("hdf5_data_file", coolingTableFilename_);
 
 		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
-			// read Cloudy tables
-			amrex::Print() << "Reading Cloudy tables...\n";
-			quokka::cooling::readCloudyData(coolingTableFilename_, cloudyTables_);
+			if (coolingTableType_ == "grackle") {
+				// read Grackle tables
+				amrex::Print() << "Reading Grackle tables...\n";
+				quokka::GrackleLikeCooling::readGrackleData(coolingTableFilename_, grackleTables_);
+			} else if (coolingTableType_ == "cloudy_cooling_tools") {
+				// read cloudy_cooling_tools tables
+				amrex::Print() << "Reading cloudy-cooling-tools tables...\n";
+				quokka::TabulatedCooling::readCloudyData(coolingTableFilename_, cloudyTables_);
+			} else {
+				amrex::Abort("Invalid cooling table type!");
+			}
 		}
 	}
 
@@ -374,7 +376,8 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 	{
 		amrex::ParmParse hpp("primordial_chem");
 		hpp.query("enabled", enableChemistry_);
-		hpp.query("max_density_allowed", max_density_allowed);
+		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
+		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
 	}
 #endif
 
@@ -432,7 +435,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeMaxSign
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const level) -> amrex::Real
+template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
 {
 	BL_PROFILE("RadhydroSimulation::computeExtraPhysicsTimestep()");
 	// users can override this to enforce additional timestep constraints
@@ -455,7 +458,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::checkHydroStat
 	if (!validStates) {
 		amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
 		amrex::Print() << "Writing checkpoint for debugging...\n";
-		amrex::MFIter::allowMultipleMFIters(true);
+		amrex::MFIter::allowMultipleMFIters(1);
 		WriteCheckpointFile();
 		amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 	}
@@ -504,22 +507,34 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
+	// start by assuming cooling integrator is successful.
+	bool cool_success = true;
 	if (enableCooling_ == 1) {
 		// compute cooling
-		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		if (coolingTableType_ == "grackle") {
+			cool_success = quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			cool_success = quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		} else {
+			amrex::Abort("Invalid cooling table type!");
+		}
 	}
 
+	// start by assuming chemistry burn is successful.
+	bool burn_success = true; // NOLINT
 #ifdef PRIMORDIAL_CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
-		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed);
+		burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
 	}
 #endif
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
+
+	return (burn_success && cool_success);
 }
 
 template <typename problem_t>
@@ -584,23 +599,22 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	amrex::Real const abs_err = (Etot - Etot0);
 	amrex::Real const rel_err = abs_err / Etot0;
 
-	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << std::endl;
-	amrex::Print() << "Final gas+radiation energy = " << Etot << std::endl;
-	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
-	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
-	amrex::Print() << std::endl;
+	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
+	amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
+	amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
+	amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
+	amrex::Print() << '\n';
 
 	if (computeReferenceSolution_) {
 		// compute reference solution
 		const int ncomp = state_new_cc_[0].nComp();
-		const int nghost = state_new_cc_[0].nGrow();
-		amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
+		amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
 		computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
 
 		// compute error norm
-		amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
-		amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
-		amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, nghost);
+		amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, 0);
+		amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
+		amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
 
 		amrex::Real sol_norm = 0.;
 		amrex::Real err_norm = 0.;
@@ -614,14 +628,14 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 
 		const double rel_error = err_norm / sol_norm;
 		errorNorm_ = rel_error;
-		amrex::Print() << "Relative rms L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
 	}
-	amrex::Print() << std::endl;
+	amrex::Print() << '\n';
 
 	// compute average number of radiation subcycles per timestep
 	double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
-	amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << std::endl;
-	amrex::Print() << std::endl;
+	amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << '\n';
+	amrex::Print() << '\n';
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
@@ -738,7 +752,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 
 	// fix hydro state
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev]);
+
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
 }
@@ -775,7 +789,7 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::
 	}
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
+template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
 	BL_PROFILE("RadhydroSimulation::PreInterpState()");
 
@@ -794,7 +808,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState
 	});
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
+template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
 	BL_PROFILE("RadhydroSimulation::PostInterpState()");
 
@@ -877,13 +891,14 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	amrex::AmrTracerParticleContainer::ContainerLike<amrex::DefaultAllocator> originalTracerPC;
 	if (do_tracers != 0) {
 		// save the pre-advance tracer particles
-		originalTracerPC = TracerPC->make_alike();
+		originalTracerPC = TracerPC->make_alike();	 // create empty particle container
+		originalTracerPC.copyParticles(*TracerPC, true); // do local copy of particles
 	}
 #endif
 
 	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
-		const int nsubsteps = std::pow(2, retry_count);
+		const int nsubsteps = static_cast<int>(std::pow(2, retry_count));
 		const amrex::Real dt_step = dt_lev / nsubsteps;
 
 		if (retry_count > 0 && Verbose()) {
@@ -940,7 +955,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		// crash, we have exceeded max_retries
 		amrex::Print() << "\nQUOKKA FATAL ERROR\n"
 			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
-			       << std::endl;
+			       << std::endl; // NOLINT(performance-avoid-endl)
 
 		// write plotfile or Ascent Blueprint file
 		amrex::ParallelDescriptor::Barrier();
@@ -962,7 +977,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool
+template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real /*time*/, amrex::Real dt_actual) -> bool
 {
 	// check whether dt_actual would violate CFL condition using the post-update hydro state
 
@@ -1018,7 +1033,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+
+	// check if reactions failed for source terms. If it failed, return false.
+	if (!burn_success_first) {
+		return burn_success_first;
+	}
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1053,7 +1073,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 #else
 		// write AMReX plotfile
 		// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
-		//	state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
+		//    state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
 #endif
 	}
 
@@ -1280,10 +1300,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 #endif
 
 	// do Strang split source terms (second half-step)
-	addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
-	// check if we have violated the CFL timestep
-	return !isCflViolated(lev, time, dt_lev);
+	// check if we have violated the CFL timestep or reactions failed for source terms
+	return (!isCflViolated(lev, time, dt_lev) && burn_success_second);
 }
 
 template <typename problem_t>
@@ -1346,8 +1366,8 @@ void RadhydroSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AM
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
-    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
+auto RadhydroSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew,
+						     const int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
 {
 	BL_PROFILE("RadhydroSimulation::expandFluxArrays()");
 
@@ -1461,11 +1481,11 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &pri
 						      amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
 {
 	if (reconstructionOrder_ == 3) {
-		HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 2) {
-		HydroSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 1) {
-		HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
@@ -1568,7 +1588,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 	for (int i = 0; i < nsubSteps; ++i) {
 		if (i > 0) {
 			// since we are starting a new substep, we need to copy radiation state from
-			// 	new state vector to old state vector
+			//     new state vector to old state vector
 			// (this is not necessary for the i=0 substep because we have already swapped
 			//  the full hydro+radiation state vectors at the beginning of the level advance)
 			swapRadiationState(state_old_cc_[lev], state_new_cc_[lev]);
@@ -1628,7 +1648,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 								   amrex::YAFluxRegister *fr_as_fine)
 {
 	if (Verbose()) {
-		amrex::Print() << "\tsubstep " << iter_count << " t = " << time << std::endl;
+		amrex::Print() << "\tsubstep " << iter_count << " t = " << time << '\n';
 	}
 
 	// get cell sizes
@@ -1836,14 +1856,15 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 
 	if (radiationReconstructionOrder_ == 3) {
 		// mixed interface/cell-centered kernel
-		RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-									 x1ReconstructRange, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+										x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 2) {
 		// PLM and donor cell are interface-centered kernels
-		RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::MC>(primVar.array(), x1LeftState.array(), x1RightState.array(),
+												  x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 1) {
-		RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-									      nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(),
+										     x1ReconstructRange, nvars);
 	} else {
 		amrex::Abort("Invalid reconstruction order for radiation variables! Aborting...");
 	}

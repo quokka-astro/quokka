@@ -11,18 +11,10 @@
 // c++ headers
 
 // library headers
-#include "AMReX_Arena.H"
-#include "AMReX_Array4.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_Loop.H"
-#include "AMReX_REAL.H"
-#include "AMReX_TagBox.H"
 
 // internal headers
-#include "ArrayView.hpp"
-#include "simulation.hpp"
-#include "valarray.hpp"
+#include "physics_info.hpp"
+#include "physics_numVars.hpp"
 
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem

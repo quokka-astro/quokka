@@ -45,7 +45,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = 1.0;
 	static constexpr double Erad_floor = initial_Erad;
-	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 0;
 };
 
 template <>
@@ -59,8 +59,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(con
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/,
+									       const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(0.0, 0.0);
 }

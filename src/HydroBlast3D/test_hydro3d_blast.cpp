@@ -10,19 +10,14 @@
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
-
 #include "AMReX_SPACE.H"
+
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "test_hydro3d_blast.hpp"
-#include <limits>
 
 struct SedovProblem {
 };
@@ -54,9 +49,8 @@ template <> struct Physics_Traits<SedovProblem> {
 };
 
 // declare global variables
-double rho = 1.0;	   // g cm^-3
+const double rho = 1.0;	   // g cm^-3
 double E_blast = 0.851072; // ergs
-double R0 = 0.025;	   // cm
 
 template <> void RadhydroSimulation<SedovProblem>::preCalculateInitialConditions()
 {
@@ -81,7 +75,6 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(qu
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 	double rho_copy = rho;
 	double E_blast_copy = E_blast;
-	double R0_copy = R0;
 
 	amrex::Real x0 = NAN;
 	amrex::Real y0 = NAN;
@@ -98,22 +91,9 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(qu
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		double rho_e = NAN;
-#if 0
-    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
-    amrex::Real const r = std::sqrt(
-        std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
-
-    if (r < R0_copy) {
-      rho_e = 1.0;
-    } else {
-      rho_e = 1.0e-10;
-    }
-#endif
 		static_assert(!simulate_full_box, "single-cell initialization is only "
 						  "implemented for octant symmetry!");
+		double rho_e = NAN;
 		if ((i == 0) && (j == 0) && (k == 0)) {
 			rho_e = E_blast_copy / cell_vol;
 		} else {
@@ -126,7 +106,6 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(qu
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
-		const auto gamma = quokka::EOS_Traits<SedovProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<SedovProblem>::density_index) = rho_copy;
 		state_cc(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = 0;
@@ -206,13 +185,13 @@ template <> void RadhydroSimulation<SedovProblem>::computeAfterEvolve(amrex::Vec
 
 	amrex::Real const rel_err_Ekin = frac_Ekin - frac_Ekin_exact;
 
-	amrex::Print() << "\nInitial energy = " << Egas0 << std::endl;
-	amrex::Print() << "Final energy = " << Egas << std::endl;
-	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
-	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
-	amrex::Print() << "\tkinetic energy = " << Ekin << std::endl;
-	amrex::Print() << "\trelative K.E. error = " << rel_err_Ekin << std::endl;
-	amrex::Print() << std::endl;
+	amrex::Print() << "\nInitial energy = " << Egas0 << '\n';
+	amrex::Print() << "Final energy = " << Egas << '\n';
+	amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
+	amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
+	amrex::Print() << "\tkinetic energy = " << Ekin << '\n';
+	amrex::Print() << "\trelative K.E. error = " << rel_err_Ekin << '\n';
+	amrex::Print() << '\n';
 
 	bool E_test_passes = false;  // does total energy test pass?
 	bool KE_test_passes = false; // does kinetic energy test pass?
@@ -236,12 +215,7 @@ template <> void RadhydroSimulation<SedovProblem>::computeAfterEvolve(amrex::Vec
 	}
 
 	// if both tests pass, then overall pass
-	if (E_test_passes && KE_test_passes) {
-		test_passes = true;
-	} else {
-		test_passes = false;
-	}
-
+	test_passes = E_test_passes && KE_test_passes;
 	amrex::Print() << "\n";
 }
 

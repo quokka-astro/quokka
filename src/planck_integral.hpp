@@ -7,17 +7,14 @@
 #ifndef PLANCKINTEGRAL_HPP_ // NOLINT
 #define PLANCKINTEGRAL_HPP_
 
-#include <algorithm>
+#include <cassert>
 #include <cmath>
 
-#include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-
-#include "valarray.hpp"
 
 using Real = amrex::Real;
 
@@ -256,7 +253,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	} else {
 		y = interpolate_planck_integral(logx);
 	}
-	assert(!isnan(y));
+	assert(!std::isnan(y));
 	assert(y <= 1.);
 	return y;
 }

@@ -24,10 +24,14 @@
 #include "AMReX_Print.H"
 #include "AMReX_TableData.H"
 #include "FastMath.hpp"
+#include "fmt/core.h"
+
+namespace quokka::GrackleLikeCooling
+{
 
 static const bool grackle_verbose = true;
 
-void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std::string &grackle_data_file, code_units &my_units)
+void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std::string &grackle_data_file, code_units &my_units)
 {
 	// Initialize vectors
 	my_cloudy.grid_parameters.resize(CLOUDY_MAX_DIMENSION);
@@ -37,8 +41,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 	}
 
 	if (grackle_verbose) {
-		amrex::Print() << fmt::format("Initializing Cloudy cooling: {}.\n", group_name);
-		amrex::Print() << fmt::format("cloudy_table_file: {}.\n", grackle_data_file);
+		amrex::Print() << fmt::format("Initializing Grackle-like cooling: {}.\n", group_name);
+		amrex::Print() << fmt::format("grackle_data_file: {}.\n", grackle_data_file);
 	}
 
 	// Get unit conversion factors (assuming z=0)
@@ -109,7 +113,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 			parameter_name = "Temperature";
 		}
 
-		double *temp_data = new double[my_cloudy.grid_dimension[q]];
+		auto *temp_data = new double[my_cloudy.grid_dimension[q]]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		attr_id = H5Aopen_name(dset_id, parameter_name.c_str());
 
@@ -117,18 +121,23 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 		my_cloudy.grid_parameters[q] = amrex::Table1D<double>(temp_data, 0, static_cast<int>(my_cloudy.grid_dimension[q]));
 
-		for (int64_t w = 0; w < my_cloudy.grid_dimension[q]; w++) {
+		for (int w = 0; w < my_cloudy.grid_dimension[q]; w++) {
 			if (q < my_cloudy.grid_rank - 1) {
 				my_cloudy.grid_parameters[q](w) = temp_data[w];
 			} else {
+				double const T = temp_data[w]; // NOLINT
 				// convert temperature to log
-				my_cloudy.grid_parameters[q](w) = log10(temp_data[w]);
+				my_cloudy.grid_parameters[q](w) = log10(T);
+				// compute min/max
+				my_cloudy.T_min = std::min(T, my_cloudy.T_min);
+				my_cloudy.T_max = std::max(T, my_cloudy.T_max);
 			}
 		}
 
 		if (grackle_verbose) {
 			amrex::Print() << fmt::format("\t{}: {} to {} ({} steps).\n", parameter_name, my_cloudy.grid_parameters[q](0),
-						      my_cloudy.grid_parameters[q](my_cloudy.grid_dimension[q] - 1), my_cloudy.grid_dimension[q]);
+						      my_cloudy.grid_parameters[q](static_cast<int>(my_cloudy.grid_dimension[q]) - 1),
+						      my_cloudy.grid_dimension[q]);
 		}
 
 		status = H5Aclose(attr_id);
@@ -142,7 +151,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 	{
 		// Read Cooling data
-		double *temp_data = new double[my_cloudy.data_size];
+		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 
@@ -168,7 +177,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 	{
 		// Read Heating data
-		double *temp_data = new double[my_cloudy.data_size];
+		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		parameter_name = fmt::format("/CoolingRates/{}/Heating", group_name);
 
@@ -199,7 +208,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 	if (std::string(group_name) == "Primordial") {
 		// Read mean molecular weight table
-		double *temp_data = new double[my_cloudy.data_size];
+		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		amrex::GpuArray<int, 3> lo{0, 0, 0};
 		amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]), static_cast<int>(my_cloudy.grid_dimension[1]),
@@ -219,6 +228,13 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read MMW dataset!");
 
 		status = H5Dclose(dset_id);
+
+		// compute min/max
+		for (int64_t i = 0; i < my_cloudy.data_size; ++i) {
+			amrex::Real const mmw = temp_data[i]; // NOLINT
+			my_cloudy.mmw_min = std::min(mmw, my_cloudy.mmw_min);
+			my_cloudy.mmw_max = std::max(mmw, my_cloudy.mmw_max);
+		}
 	}
 
 	status = H5Fclose(file_id);
@@ -268,3 +284,5 @@ auto copy_1d_table(amrex::Table1D<double> const &table1D) -> amrex::TableData<do
 	}
 	return tableData;
 }
+
+} // namespace quokka::GrackleLikeCooling
