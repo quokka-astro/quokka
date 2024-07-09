@@ -636,7 +636,7 @@ template <class Real, unsigned N> class gauss : public detail::gauss_detail<Real
 		return result;
 	}
 
-	template <class F> AMREX_GPU_DEVICE static auto integrate(F f, Real a, Real b, Real *pL1 = nullptr) -> decltype(std::declval<F>()(std::declval<Real>()))
+	template <class F> AMREX_GPU_DEVICE static auto integrate(F f, Real a, Real b, Real *pL1 = nullptr) -> decltype(f(Real(0.0)))
 	{
 		using K = decltype(f(a));
 		if (!(std::isnan)(a) && !(std::isnan)(b)) {
