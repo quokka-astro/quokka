@@ -482,9 +482,9 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)+=  1.e3/cell_vol;
         // printf("The location of SN=%d,%d,%d\n",i, j, k);
         // printf("SN added at level=%d\n", level);
-        // printf("The total number of SN gone off=%d\n", cum_sn);
+        printf("The total number of SN gone off=%d\n", cum_sn);
         Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index)/Const_mH, -3./7.);
-        // printf("Rpds = %.2e pc\n", Rpds);
+        printf("Rpds = %.2e pc\n", Rpds);
         }
 			}
 		});
@@ -716,7 +716,7 @@ auto problem_main() -> int {
 	pp.query("name", input_data_file); 
   
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-  sim.cflNumber_ = 0.25;         // *must* be less than 1/3 in 3D!
+  sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
   
   read_potential(z_data, phi_data, g_data);
   
