@@ -68,11 +68,11 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
 
-    add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_SOURCE_DIR}/src/perturbation.py --kmin=2 --kmax=${result} --size=${first_digits} --alpha=1.8 --f_solenoidal=0.66667 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    add_test(NAME PopIII COMMAND popiii PopIII.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_SOURCE_DIR}/src/perturbation.py --kmin=2 --kmax=${result} --size=${first_digits} --alpha=1.8 --f_solenoidal=0.66667 ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME PopIII COMMAND popiii PopIII.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(ComputePerturbations PROPERTIES FIXTURES_SETUP PopIII_fixture)
     set_tests_properties(PopIII PROPERTIES FIXTURES_REQUIRED PopIII_fixture)
 
     # AMR test only works on Setonix because Gadi and avatar do not have enough memory per GPU
-    # add_test(NAME PopIIIAMR COMMAND popiii popiii_AMR.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    # add_test(NAME PopIIIAMR COMMAND popiii popiii_AMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

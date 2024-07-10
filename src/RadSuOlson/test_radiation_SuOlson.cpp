@@ -52,6 +52,12 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr int beta_order = 0;
 };
 
+template <> struct quokka::EOS_Traits<MarshakProblem> {
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct Physics_Traits<MarshakProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
