@@ -1142,7 +1142,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
       }
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, nghost_fc_);
       for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-        ec_emf_components[idim].WeightedSync(geom.periodicity());
+        auto mask = ec_emf_components[idim].OverlapMask(geom[lev].periodicity());
+        ec_emf_components[idim].WeightedSync(*mask, geom[lev].periodicity());
       }
 		}
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
