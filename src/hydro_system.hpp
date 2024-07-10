@@ -766,7 +766,7 @@ template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::
 			if (auxTemp < tempFloor) {
 				amrex::Real const new_Eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
 				state[bx](i, j, k, internalEnergy_index) = new_Eint;
-				state[bx](i, j, k, energy_index) = Ekin + new_Eint;
+				// total energy should NOT be updated here
 			}
 		}
 	});
