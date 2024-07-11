@@ -67,6 +67,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
 	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
+	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -156,6 +157,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 	// note: an implementation is only required if particles are used
 }
 
+template <typename problem_t> void AdvectionSimulation<problem_t>::computeBeforeTimestep()
+{
+	// do nothing -- user should implement using problem-specific template specialization
+}
+
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()
 {
 	// do nothing -- user should implement using problem-specific template specialization
@@ -201,14 +207,13 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterE
 {
 	// compute reference solution
 	const int ncomp = state_new_cc_[0].nComp();
-	const int nghost = state_new_cc_[0].nGrow();
-	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
+	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
 	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), geom[0].ProbHiArray());
 
 	// compute error norm
-	amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
-	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
-	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, nghost);
+	amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, 0);
+	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
+	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
 
 	amrex::Real sol_norm = 0.;
 	amrex::Real err_norm = 0.;

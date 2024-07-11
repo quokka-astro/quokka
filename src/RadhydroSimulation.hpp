@@ -104,8 +104,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
-	using AMRSimulation<problem_t>::tempCeiling_;
-	using AMRSimulation<problem_t>::speedCeiling_;
 
 	SimulationData<problem_t> userData_;
 
@@ -177,6 +175,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
 	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
+	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
@@ -490,6 +489,11 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::createInitialP
 	// note: an implementation is only required if particles are used
 }
 
+template <typename problem_t> void RadhydroSimulation<problem_t>::computeBeforeTimestep()
+{
+	// do nothing -- user should implement if desired
+}
+
 template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()
 {
 	// do nothing -- user should implement if desired
@@ -597,7 +601,10 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	}
 
 	amrex::Real const abs_err = (Etot - Etot0);
-	amrex::Real const rel_err = abs_err / Etot0;
+	amrex::Real rel_err = NAN;
+	if (Etot0 != 0) {
+		rel_err = abs_err / Etot0;
+	}
 
 	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
 	amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
@@ -751,7 +758,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 	BL_PROFILE("RadhydroSimulation::FixupState()");
 
 	// fix hydro state
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
 
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
@@ -876,7 +883,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 {
 	BL_PROFILE_REGION("HydroSolver");
 	// timestep retries
-	const int max_retries = 4;
+	const int max_retries = 6;
 	bool success = false;
 
 	// save the pre-advance fine flux register state in originalFineData
@@ -1172,7 +1179,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -1195,6 +1202,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		// check intermediate state validity
 		AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
 		AMREX_ASSERT(!state_inter_cc_.contains_nan()); // check ghost zones
+
+		// write out FABs with ghost zones
+		// amrex::writeFabs(state_inter_cc_, "state_inter_cc_" + std::to_string(istep[lev]));
 
 		auto const &stateOld = state_old_cc_tmp;
 		auto const &stateInter = state_inter_cc_;
@@ -1256,7 +1266,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)

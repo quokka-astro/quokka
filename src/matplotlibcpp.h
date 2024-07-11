@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfenv>
 #include <cstdint> // <cstdint> requires c++11 support
 #include <functional>
 #include <iostream>
@@ -119,27 +120,19 @@ struct _interpreter {
 
       private:
 #ifndef WITHOUT_NUMPY
-#if PY_MAJOR_VERSION >= 3
-
 	void *import_numpy()
 	{
-		import_array(); // initialize C-API
+		fenv_t orig_feenv;
+		feholdexcept(&orig_feenv); // disable FPE for importing numpy
+		import_array();		   // initialize C-API
+		fesetenv(&orig_feenv);	   // restore FPE
+
 		return NULL;
 	}
-
-#else
-
-	void import_numpy()
-	{
-		import_array(); // initialize C-API
-	}
-
-#endif
 #endif
 
 	_interpreter()
 	{
-
 		// optional but recommended
 #if PY_MAJOR_VERSION >= 3
 		wchar_t name[] = L"plotting";
@@ -1682,7 +1675,13 @@ inline void save(const std::string &filename)
 	PyObject *args = PyTuple_New(1);
 	PyTuple_SetItem(args, 0, pyfilename);
 
+	fenv_t orig_feenv;
+	feholdexcept(&orig_feenv); // disable FPE
+
 	PyObject *res = PyObject_CallObject(detail::_interpreter::get().s_python_function_save, args);
+
+	fesetenv(&orig_feenv); // restore FPE
+
 	if (!res)
 		throw std::runtime_error("Call to save() failed.");
 
@@ -1746,7 +1745,12 @@ inline std::vector<std::array<double, 2>> ginput(const int numClicks = 1, const 
 // Actually, is there any reason not to call this automatically for every plot?
 inline void tight_layout()
 {
+	fenv_t orig_feenv;
+	feholdexcept(&orig_feenv); // disable FPE
+
 	PyObject *res = PyObject_CallObject(detail::_interpreter::get().s_python_function_tight_layout, detail::_interpreter::get().s_python_empty_tuple);
+
+	fesetenv(&orig_feenv); // restore FPE
 
 	if (!res)
 		throw std::runtime_error("Call to tight_layout() failed.");
