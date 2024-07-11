@@ -62,7 +62,7 @@ jobs:
       
     - name: Run tests
       working-directory: ${{runner.workspace}}/quokka/build
-      run: ctest --output-on-failure -C $BUILD_TYPE
+      run: ctest --output-on-failure
       
     - name: Upload test output
       if: always()
