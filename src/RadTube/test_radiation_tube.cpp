@@ -4,7 +4,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_radiation_tube.cpp
-/// \brief Defines a test problem for radiation pressure terms.
+/// \brief Defines a test problem for radiation pressure terms. This is also a trivial test for the PPL_fixed_slope opacity model.
 ///
 
 #include <string>
@@ -63,10 +63,25 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::k_B;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0., 3.3 * T0, inf}; // Kelvin
+	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 3.3 * T0, 1000. * T0}; // Kelvin
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::user;
+	// static constexpr OpacityModel opacity_model = OpacityModel::user;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_transport;
 };
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<TubeProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+							     const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+{
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[0][i] = 0.0;
+		exponents_and_values[1][i] = kappa0;
+	}
+	return exponents_and_values;
+}
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
@@ -152,7 +167,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 
 		amrex::Real const rho = interpolate_value(x, x_ptr, rho_ptr, x_size);
 		amrex::Real const Pgas = interpolate_value(x, x_ptr, Pgas_ptr, x_size);
@@ -328,21 +343,21 @@ auto problem_main() -> int
 		Trad_exact_arr[i] = Trad_exact;
 		Trad_err[i] = (Trad - Trad_exact) / Trad_exact;
 
-		double Egas_exact = values0.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
-		double x1GasMom_exact = values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
-		double x2GasMom_exact = values0.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
-		double x3GasMom_exact = values0.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
+		double const Egas_exact = values0.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
+		double const x1GasMom_exact = values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+		double const x2GasMom_exact = values0.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
+		double const x3GasMom_exact = values0.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
 
-		double Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
-		double x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
-		double x2GasMom = values.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
-		double x3GasMom = values.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
+		double const Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
+		double const x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+		double const x2GasMom = values.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
+		double const x3GasMom = values.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
 
-		double Eint_exact = RadSystem<TubeProblem>::ComputeEintFromEgas(rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact);
-		double Tgas_exact = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho_exact, Eint_exact);
+		double const Eint_exact = RadSystem<TubeProblem>::ComputeEintFromEgas(rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact);
+		double const Tgas_exact = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho_exact, Eint_exact);
 
-		double Eint = RadSystem<TubeProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Egas);
-		double Tgas = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho, Eint);
+		double const Eint = RadSystem<TubeProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Egas);
+		double const Tgas = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho, Eint);
 
 		Tgas_arr[i] = Tgas;
 		Tgas_err[i] = (Tgas - Tgas_exact) / Tgas_exact;
@@ -358,18 +373,18 @@ auto problem_main() -> int
 					7.55000000000000e+01, 8.05000000000000e+01, 8.55000000000000e+01, 9.05000000000000e+01, 9.55000000000000e+01,
 					1.00500000000000e+02, 1.05500000000000e+02, 1.10500000000000e+02, 1.15500000000000e+02, 1.20500000000000e+02,
 					1.25500000000000e+02};
-	std::vector<double> E1_exact = {1.97806231974620e+15, 1.96003267738932e+15, 1.94139375399209e+15, 1.92211477326756e+15, 1.90216201239978e+15,
-					1.88149879792274e+15, 1.86008566953792e+15, 1.83786164032564e+15, 1.81475431543605e+15, 1.79075351115540e+15,
-					1.76583321387339e+15, 1.73994821924481e+15, 1.71303490596213e+15, 1.68501210246915e+15, 1.65578211109368e+15,
-					1.62523187429012e+15, 1.59323434543658e+15, 1.55965009717319e+15, 1.52432919817267e+15, 1.48711344303233e+15,
-					1.44783897852076e+15, 1.40633941779824e+15, 1.36244954047942e+15, 1.31590909579761e+15, 1.26631043035030e+15,
-					1.21323876205627e+15};
-	std::vector<double> E2_exact = {2.34197994225380e+15, 2.29654950261068e+15, 2.25010503500791e+15, 2.20262123173244e+15, 2.15407068960022e+15,
-					2.10442459607726e+15, 2.05365387846208e+15, 2.00168645967436e+15, 1.94843446056395e+15, 1.89396262984460e+15,
-					1.83830481312661e+15, 1.78145970875519e+15, 1.72339649303787e+15, 1.66406088653085e+15, 1.60338168190632e+15,
-					1.54127777970988e+15, 1.47766576756342e+15, 1.41246806782681e+15, 1.34562168082733e+15, 1.27708749196767e+15,
-					1.20686010247924e+15, 1.13497806420176e+15, 1.06153434252058e+15, 9.86527809202386e+14, 9.09819537649705e+14,
-					8.31394523943729e+14};
+	std::vector<double> const E1_exact = {1.97806231974620e+15, 1.96003267738932e+15, 1.94139375399209e+15, 1.92211477326756e+15, 1.90216201239978e+15,
+					      1.88149879792274e+15, 1.86008566953792e+15, 1.83786164032564e+15, 1.81475431543605e+15, 1.79075351115540e+15,
+					      1.76583321387339e+15, 1.73994821924481e+15, 1.71303490596213e+15, 1.68501210246915e+15, 1.65578211109368e+15,
+					      1.62523187429012e+15, 1.59323434543658e+15, 1.55965009717319e+15, 1.52432919817267e+15, 1.48711344303233e+15,
+					      1.44783897852076e+15, 1.40633941779824e+15, 1.36244954047942e+15, 1.31590909579761e+15, 1.26631043035030e+15,
+					      1.21323876205627e+15};
+	std::vector<double> const E2_exact = {2.34197994225380e+15, 2.29654950261068e+15, 2.25010503500791e+15, 2.20262123173244e+15, 2.15407068960022e+15,
+					      2.10442459607726e+15, 2.05365387846208e+15, 2.00168645967436e+15, 1.94843446056395e+15, 1.89396262984460e+15,
+					      1.83830481312661e+15, 1.78145970875519e+15, 1.72339649303787e+15, 1.66406088653085e+15, 1.60338168190632e+15,
+					      1.54127777970988e+15, 1.47766576756342e+15, 1.41246806782681e+15, 1.34562168082733e+15, 1.27708749196767e+15,
+					      1.20686010247924e+15, 1.13497806420176e+15, 1.06153434252058e+15, 9.86527809202386e+14, 9.09819537649705e+14,
+					      8.31394523943729e+14};
 
 	// interpolate numerical solution onto exact solution tabulated points
 	std::vector<double> Erad_arr_numerical_interp_at_group_1(xs_exact.size());
