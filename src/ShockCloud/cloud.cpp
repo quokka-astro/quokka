@@ -77,7 +77,6 @@ AMREX_GPU_MANAGED Real v_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-
 AMREX_GPU_MANAGED Real P_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real delta_vx = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-
 template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid grid)
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> const dx = grid.dx_;
