@@ -166,8 +166,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::I
 	amrex::Box const &box = geom.Domain();
 	const auto &domain_lo = box.loVect3d();
 	const int ilo = domain_lo[0];
-	const Real dx = geom.CellSize(0);
-	const Real Lx = geom.prob_domain.length(0);
 	constexpr int N = HydroSystem<problem_t>::nvar_;
 
 	/// x1 lower boundary -- subsonic inflow

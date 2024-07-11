@@ -370,7 +370,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 	const int im1 = (SIDE == BoundarySide::Lower) ? ibr + 1 : ibr - 1;
 	const int im2 = (SIDE == BoundarySide::Lower) ? ibr + 2 : ibr - 2;
 	const int im3 = (SIDE == BoundarySide::Lower) ? ibr + 3 : ibr - 3;
-	const Real dx = geom.CellSize(static_cast<int>(DIR));
 
 	// compute primitive vars
 	quokka::valarray<amrex::Real, N> Q_i{};

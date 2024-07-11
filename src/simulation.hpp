@@ -227,6 +227,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) = 0;
 	virtual void createInitialParticles() = 0;
+	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
@@ -580,6 +581,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default checkpoint interval
 	pp.query("checkpoint_interval", checkpointInterval_);
 
+	// Default plotfile prefix
+	pp.query("plotfile_prefix", plot_file);
+
+	// Default checkpoint prefix
+	pp.query("checkpoint_prefix", chk_file);
+
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
 
@@ -867,6 +874,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
 		// computeBeforeTimestep(); 
+
+		// do user-specified calculations before the level update
+		computeBeforeTimestep();
 
 		// do particle leapfrog (first kick at time t)
 		kickParticlesAllLevels(dt_[0]);
