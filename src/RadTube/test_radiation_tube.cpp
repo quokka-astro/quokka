@@ -65,9 +65,8 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double energy_unit = C::k_B;
 	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 3.3 * T0, 1000. * T0}; // Kelvin
 	static constexpr int beta_order = 1;
-	// static constexpr OpacityModel opacity_model = OpacityModel::user;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_transport;
+	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 };
 
 template <>
@@ -81,6 +80,19 @@ RadSystem<TubeProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<dou
 		exponents_and_values[1][i] = kappa0;
 	}
 	return exponents_and_values;
+}
+
+template <>
+template <typename ArrayType>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<TubeProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
+						  amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/) -> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> exponents{};
+	for (int g = 0; g < nGroups_; ++g) {
+		exponents[g] = -1;
+	}
+	return exponents;
 }
 
 template <>

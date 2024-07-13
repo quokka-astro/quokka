@@ -13,8 +13,7 @@
 #include "fextract.hpp"
 #include "matplotlibcpp.h"
 #include "radiation_system.hpp"
-#include "test_radiation_marshak_vaytet.hpp"
-#include <ios>
+#include "test_radiation_marshak_Vaytet.hpp"
 
 // constexpr int the_model = 0; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
 // constexpr int n_groups_ = 6;
@@ -24,9 +23,68 @@
 // const std::string modelname = "PPL_free_slope_with_PPL_delta_terms";
 const std::string modelname = "PPL_fixed_slope_with_PPL_delta_terms";
 
-constexpr double nu_rep = 0.6e14;
+// constexpr double nu_pivot = 0.6e14;
 constexpr int the_model = 10; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
 // 10: bin-centered method with opacities propto nu^-2
+
+constexpr double nu_pivot = 4.0e13;
+constexpr int n_coll = 4; // number of collections = 6, to align with Vaytet
+
+// constexpr int n_groups_ = 3;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {1.0e+10, 6.0e+13, 1.2e+14, 1.0e+16};
+// constexpr int n_groups_ = 6;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {1.0e+10, 3.0e+13, 6.0e+13, 9.0e+13, 1.2e+14, 1.5e+14, 1.0e+16};
+
+// constexpr int n_groups_ = 2;
+constexpr int n_groups_ = 4;
+// constexpr int n_groups_ = 8;
+// constexpr int n_groups_ = 16;
+// constexpr int n_groups_ = 128;
+// constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
+// constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_full_spectrum;
+
+constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
+	if constexpr (n_groups_ == 2) {
+		return amrex::GpuArray<double, 3>{1.0e+11, 8.0e+13, 1.0e+16};
+	} else if constexpr (n_groups_ == 4) {
+		return amrex::GpuArray<double, 5>{1.0e+11, 4.0e+13, 8.0e+13, 1.2e+14, 1.0e+16};
+	} else if constexpr (n_groups_ == 8) {
+		return amrex::GpuArray<double, 9>{1.0e+11, 2.0e+13, 4.0e+13, 6.0e+13, 8.0e+13, 1.0e+14, 1.2e+14, 1.4e+14, 1.0e+16};
+	} else if constexpr (n_groups_ == 16) {
+		return amrex::GpuArray<double, 17>{1.0e+11, 1.0e+13, 2.0e+13, 3.0e+13, 4.0e+13, 5.0e+13, 6.0e+13,
+       7.0e+13, 8.0e+13, 9.0e+13, 1.0e+14, 1.1e+14, 1.2e+14, 1.3e+14,
+       1.4e+14, 1.5e+14, 1.0e+16};
+	} else if constexpr (n_groups_ == 128) {
+		return amrex::GpuArray<double, 129>{
+			 1.0000e+11, 1.2500e+12, 2.5000e+12, 3.7500e+12, 5.0000e+12,
+       6.2500e+12, 7.5000e+12, 8.7500e+12, 1.0000e+13, 1.1250e+13,
+       1.2500e+13, 1.3750e+13, 1.5000e+13, 1.6250e+13, 1.7500e+13,
+       1.8750e+13, 2.0000e+13, 2.1250e+13, 2.2500e+13, 2.3750e+13,
+       2.5000e+13, 2.6250e+13, 2.7500e+13, 2.8750e+13, 3.0000e+13,
+       3.1250e+13, 3.2500e+13, 3.3750e+13, 3.5000e+13, 3.6250e+13,
+       3.7500e+13, 3.8750e+13, 4.0000e+13, 4.1250e+13, 4.2500e+13,
+       4.3750e+13, 4.5000e+13, 4.6250e+13, 4.7500e+13, 4.8750e+13,
+       5.0000e+13, 5.1250e+13, 5.2500e+13, 5.3750e+13, 5.5000e+13,
+       5.6250e+13, 5.7500e+13, 5.8750e+13, 6.0000e+13, 6.1250e+13,
+       6.2500e+13, 6.3750e+13, 6.5000e+13, 6.6250e+13, 6.7500e+13,
+       6.8750e+13, 7.0000e+13, 7.1250e+13, 7.2500e+13, 7.3750e+13,
+       7.5000e+13, 7.6250e+13, 7.7500e+13, 7.8750e+13, 8.0000e+13,
+       8.1250e+13, 8.2500e+13, 8.3750e+13, 8.5000e+13, 8.6250e+13,
+       8.7500e+13, 8.8750e+13, 9.0000e+13, 9.1250e+13, 9.2500e+13,
+       9.3750e+13, 9.5000e+13, 9.6250e+13, 9.7500e+13, 9.8750e+13,
+       1.0000e+14, 1.0125e+14, 1.0250e+14, 1.0375e+14, 1.0500e+14,
+       1.0625e+14, 1.0750e+14, 1.0875e+14, 1.1000e+14, 1.1125e+14,
+       1.1250e+14, 1.1375e+14, 1.1500e+14, 1.1625e+14, 1.1750e+14,
+       1.1875e+14, 1.2000e+14, 1.2125e+14, 1.2250e+14, 1.2375e+14,
+       1.2500e+14, 1.2625e+14, 1.2750e+14, 1.2875e+14, 1.3000e+14,
+       1.3125e+14, 1.3250e+14, 1.3375e+14, 1.3500e+14, 1.3625e+14,
+       1.3750e+14, 1.3875e+14, 1.4000e+14, 1.4125e+14, 1.4250e+14,
+       1.4375e+14, 1.4500e+14, 1.4625e+14, 1.4750e+14, 1.4875e+14,
+       1.5000e+14, 1.5125e+14, 1.5250e+14, 1.5375e+14, 1.5500e+14,
+       1.5625e+14, 1.5750e+14, 1.5875e+14, 1.0000e+16};
+	}
+}();
 
 // constexpr int n_groups_ = 6 * 8;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {1e+10, 3.7500e+12, 7.5000e+12, 1.1250e+13, 1.5000e+13,
@@ -62,19 +120,13 @@ constexpr int the_model = 10; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 
 //        1.68750e+14, 1.70625e+14, 1.72500e+14, 1.74375e+14, 1.76250e+14,
 //        1.78125e+14, 1.00000e+16};
 
-constexpr int n_groups_ = 6;
-constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {1.0e+10, 3.0e+13, 6.0e+13, 9.0e+13, 1.2e+14, 1.5e+14, 1.0e+16};
-
-// constexpr int n_groups_ = 3;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {1.0e+10, 6.0e+13, 1.2e+14, 1.0e+16};
-
 constexpr amrex::GpuArray<double, n_groups_> group_opacities_{};
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int max_step_ = 1e6;
-constexpr double kappa = 1000.0; // cm^2 g^-1 (opacity)
+constexpr double kappa = 2000.0; // cm^2 g^-1 (opacity)
 constexpr double rho0 = 1.0e-3; // g cm^-3
 constexpr double T_initial = 300.0; // K
 constexpr double T_L = 1000.0; // K
@@ -111,29 +163,25 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = group_edges_;
-	// static constexpr OpacityModel opacityModel = OpacityModel::user;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_delta_terms;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope_with_PPL_delta_terms;
+	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 
-// template <>
-// template <typename ArrayType>
-// AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeRadQuantityExponents(ArrayType const &/*quant*/, amrex::GpuArray<double, nGroups_ + 1> const &/*boundaries*/)
-//     -> amrex::GpuArray<double, nGroups_>
-// {
-// 	amrex::GpuArray<double, nGroups_> exponents{};
-// 	// for (int i = 0; i < nGroups_; ++i) {
-// 	// 	exponents[i] = -1.0;
-// 	// }
-// 	exponents[0] = 2.0;
-// 	exponents[nGroups_ - 1] = -4.0;
-// 	for (int i = 1; i < nGroups_ - 1; ++i) {
-// 		exponents[i] = -1.0;
-// 	}
-// 	return exponents;
-// }
+template <>
+template <typename ArrayType>
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeRadQuantityExponents(ArrayType const &/*quant*/, amrex::GpuArray<double, nGroups_ + 1> const &/*boundaries*/)
+    -> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> exponents{};
+	// for (int i = 0; i < nGroups_; ++i) {
+	// 	exponents[i] = -1.0;
+	// }
+	exponents[0] = 2.0;
+	exponents[nGroups_ - 1] = -4.0;
+	for (int i = 1; i < nGroups_ - 1; ++i) {
+		exponents[i] = -1.0;
+	}
+	return exponents;
+}
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/, const double Tgas)
@@ -147,47 +195,59 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Defi
 			exponents_and_values[0][i] = -2.0;
 		}
 	}
-	for (int i = 0; i < nGroups_; ++i) {
 		if constexpr (the_model == 0) {
-			exponents_and_values[1][i] = kappa;
+			for (int i = 0; i < nGroups_; ++i) {
+				exponents_and_values[1][i] = kappa;
+			}
 		} else if constexpr (the_model == 1) {
-			exponents_and_values[1][i] = group_opacities_[i];
+			for (int i = 0; i < nGroups_; ++i) {
+				exponents_and_values[1][i] = group_opacities_[i];
+			}
 		} else if constexpr (the_model == 2) {
-			exponents_and_values[1][i] = group_opacities_[i] * std::pow(Tgas / T_initial, 3./2.);
+			for (int i = 0; i < nGroups_; ++i) {
+				exponents_and_values[1][i] = group_opacities_[i] * std::pow(Tgas / T_initial, 3./2.);
+			}
 		} else if constexpr (the_model == 10) {
-			// auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
-			exponents_and_values[1][i] = kappa * std::pow(group_edges_[i] / nu_rep, -2.);
+			if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+				for (int i = 0; i < nGroups_; ++i) {
+					auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
+					exponents_and_values[1][i] = kappa * std::pow(bin_center / nu_pivot, -2.);
+				}
+			} else {
+				for (int i = 0; i < nGroups_ + 1; ++i) {
+					exponents_and_values[1][i] = kappa * std::pow(group_edges_[i] / nu_pivot, -2.);
+				}
+			}
 		}	
-	}
 	return exponents_and_values;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		if constexpr (the_model == 0) {
-			kappaPVec[i] = kappa;
-		} else if constexpr (the_model == 10) {
-			auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
-			kappaPVec[i] = kappa * std::pow(bin_center / nu_rep, -2.);
-		} else if constexpr (the_model == 1) {
-			kappaPVec[i] = group_opacities_[i];
-		} else {
-			kappaPVec[i] = group_opacities_[i] * std::pow(Tgas / T_initial, 3./2.);
-		}
-	}
-	return kappaPVec;
-}
+// template <>
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double Tgas)
+//     -> quokka::valarray<double, nGroups_>
+// {
+// 	quokka::valarray<double, nGroups_> kappaPVec{};
+// 	for (int i = 0; i < nGroups_; ++i) {
+// 		if constexpr (the_model == 0) {
+// 			kappaPVec[i] = kappa;
+// 		} else if constexpr (the_model == 10) {
+// 			auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
+// 			kappaPVec[i] = kappa * std::pow(bin_center / nu_pivot, -2.);
+// 		} else if constexpr (the_model == 1) {
+// 			kappaPVec[i] = group_opacities_[i];
+// 		} else {
+// 			kappaPVec[i] = group_opacities_[i] * std::pow(Tgas / T_initial, 3./2.);
+// 		}
+// 	}
+// 	return kappaPVec;
+// }
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
-{
-	return ComputePlanckOpacity(rho, Tgas);
-}
+// template <>
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
+//     -> quokka::valarray<double, nGroups_>
+// {
+// 	return ComputePlanckOpacity(rho, Tgas);
+// }
 
 // template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double
 // {
@@ -358,11 +418,6 @@ auto problem_main() -> int
 		// define a vector of n_groups_ vectors
 		std::vector<std::vector<double>> Trad_g(n_groups_);
 
-		// static_assert(n_groups_ >= 6);
-		int const n_coll = 6; // number of collections = 6, to align with Vaytet
-
-		// int const n_coll = 3; // number of collections = 6, to align with Vaytet
-
 		int const n_item = n_groups_ / n_coll;
 		std::vector<std::vector<double>> Trad_coll(n_coll);
 
@@ -450,15 +505,15 @@ auto problem_main() -> int
 		// save data to file
 		std::ofstream fstream;
 		fstream.open("marshak_wave_Vaytet.csv");
-		fstream << "# x,Tgas,Trad, ";
+		fstream << "# x, Tgas, Trad";
 		for (int i = 0; i < n_groups_; ++i) {
-			fstream << "Trad_" << i << ", ";
+			fstream << ", " << "Trad_" << i;
 		}
 		for (int i = 0; i < nx; ++i) {
 			fstream << std::endl;
-			fstream << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i] << ", ";
+			fstream << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i];
 			for (int j = 0; j < n_groups_; ++j) {
-				fstream << Trad_g[j][i] << ", ";
+				fstream << ", " << Trad_g[j][i];
 			}
 		}
 		fstream.close();
@@ -466,15 +521,15 @@ auto problem_main() -> int
 		// save Trad_coll to file
 		std::ofstream fstream_coll;
 		fstream_coll.open("marshak_wave_Vaytet_coll.csv");
-		fstream_coll << "# x, Tgas, Trad, ";
+		fstream_coll << "# x, Tgas, Trad";
 		for (int i = 0; i < n_coll; ++i) {
-			fstream_coll << "Trad_" << i << ", ";
+			fstream_coll << ", " << "Trad_" << i;
 		}
 		for (int i = 0; i < nx; ++i) {
 			fstream_coll << std::endl;
-			fstream_coll << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i] << ", ";
+			fstream_coll << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i];
 			for (int j = 0; j < n_coll; ++j) {
-				fstream_coll << Trad_coll[j][i] << ", ";
+				fstream_coll << ", " << Trad_coll[j][i];
 			}
 		}
 		fstream_coll.close();

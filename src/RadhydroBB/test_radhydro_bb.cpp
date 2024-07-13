@@ -8,6 +8,7 @@
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 
+#include "AMReX_BLassert.H"
 #include "ArrayUtil.hpp"
 #include "fextract.hpp"
 #include "interpolate.hpp"
@@ -27,24 +28,42 @@ static constexpr bool export_csv = true;
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr int n_groups_ = 50;
+// constexpr int n_groups_ = 4;
+// constexpr int n_groups_ = 8;
+constexpr int n_groups_ = 16;
+// constexpr int n_groups_ = 64;
 
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexpr {
 	if constexpr (n_groups_ == 1) {
 		return amrex::GpuArray<double, 2>{0.0, inf};
-	} else if constexpr (n_groups_ == 4) { // from 1e-3 to 1e2
-		return amrex::GpuArray<double, 5>{1.0e-4, 1.0e-3, 3.0, 1.0e2, 1.0e3};
-	} else if constexpr (n_groups_ == 7) {
-		return amrex::GpuArray<double, 8>{1.0e-4, 1.0e-3, 1.0e-2, 1.e-1, 1.e0, 1.e1, 1.e2, 1.0e3};
-	} else if constexpr (n_groups_ == 50) {
-		return amrex::GpuArray<double, 51>{
-		    1.00000000e-03, 1.25892541e-03, 1.58489319e-03, 1.99526231e-03, 2.51188643e-03, 3.16227766e-03, 3.98107171e-03, 5.01187234e-03,
-		    6.30957344e-03, 7.94328235e-03, 1.00000000e-02, 1.25892541e-02, 1.58489319e-02, 1.99526231e-02, 2.51188643e-02, 3.16227766e-02,
-		    3.98107171e-02, 5.01187234e-02, 6.30957344e-02, 7.94328235e-02, 1.00000000e-01, 1.25892541e-01, 1.58489319e-01, 1.99526231e-01,
-		    2.51188643e-01, 3.16227766e-01, 3.98107171e-01, 5.01187234e-01, 6.30957344e-01, 7.94328235e-01, 1.00000000e+00, 1.25892541e+00,
-		    1.58489319e+00, 1.99526231e+00, 2.51188643e+00, 3.16227766e+00, 3.98107171e+00, 5.01187234e+00, 6.30957344e+00, 7.94328235e+00,
-		    1.00000000e+01, 1.25892541e+01, 1.58489319e+01, 1.99526231e+01, 2.51188643e+01, 3.16227766e+01, 3.98107171e+01, 5.01187234e+01,
-		    6.30957344e+01, 7.94328235e+01, 1.00000000e+02};
+	} else if constexpr (n_groups_ == 4) {
+		return amrex::GpuArray<double, 5>{1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
+	} else if constexpr (n_groups_ == 8) {
+		return amrex::GpuArray<double, 9>{1.00000000e-03, 4.21696503e-03, 1.77827941e-02, 7.49894209e-02, 3.16227766e-01, 1.33352143e+00, 5.62341325e+00, 2.37137371e+01, 1.00000000e+02};
+	} else if constexpr (n_groups_ == 16) {
+		return amrex::GpuArray<double, 17>{1.00000000e-03, 2.05352503e-03, 4.21696503e-03, 8.65964323e-03,
+       1.77827941e-02, 3.65174127e-02, 7.49894209e-02, 1.53992653e-01,
+       3.16227766e-01, 6.49381632e-01, 1.33352143e+00, 2.73841963e+00,
+       5.62341325e+00, 1.15478198e+01, 2.37137371e+01, 4.86967525e+01,
+       1.00000000e+02};	
+	} else if constexpr (n_groups_ == 64) {
+		return amrex::GpuArray<double, 65>{1.00000000e-03, 1.19708503e-03, 1.43301257e-03, 1.71543790e-03,
+       2.05352503e-03, 2.45824407e-03, 2.94272718e-03, 3.52269465e-03,
+       4.21696503e-03, 5.04806572e-03, 6.04296390e-03, 7.23394163e-03,
+       8.65964323e-03, 1.03663293e-02, 1.24093776e-02, 1.48550802e-02,
+       1.77827941e-02, 2.12875166e-02, 2.54829675e-02, 3.05052789e-02,
+       3.65174127e-02, 4.37144481e-02, 5.23299115e-02, 6.26433537e-02,
+       7.49894209e-02, 8.97687132e-02, 1.07460783e-01, 1.28639694e-01,
+       1.53992653e-01, 1.84342299e-01, 2.20673407e-01, 2.64164832e-01,
+       3.16227766e-01, 3.78551525e-01, 4.53158364e-01, 5.42469094e-01,
+       6.49381632e-01, 7.77365030e-01, 9.30572041e-01, 1.11397386e+00,
+       1.33352143e+00, 1.59633854e+00, 1.91095297e+00, 2.28757320e+00,
+       2.73841963e+00, 3.27812115e+00, 3.92418976e+00, 4.69758882e+00,
+       5.62341325e+00, 6.73170382e+00, 8.05842188e+00, 9.64661620e+00,
+       1.15478198e+01, 1.38237223e+01, 1.65481710e+01, 1.98095678e+01,
+       2.37137371e+01, 2.83873596e+01, 3.39820833e+01, 4.06794432e+01,
+       4.86967525e+01, 5.82941535e+01, 6.97830585e+01, 8.35362547e+01,
+       1.00000000e+02};
 	}
 }();
 
@@ -121,10 +140,10 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double energy_unit = nu_unit;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	// static constexpr OpacityModel opacity_model = OpacityModel::user;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_transport;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope_with_delta_terms;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope_with_delta_terms;
 };
 
 template <>
@@ -221,111 +240,6 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 	});
 }
 
-// #define LIKELY_IN_CACHE_SIZE 8
-// AMREX_GPU_HOST_DEVICE
-// int64_t binary_search_with_guess(const double key, const double *arr, int64_t len, int64_t guess)
-// {
-// 	int64_t imin = 0;
-// 	int64_t imax = len;
-
-// 	/* Handle keys outside of the arr range first */
-// 	if (key > arr[len - 1]) {
-// 		return len;
-// 	} else if (key < arr[0]) {
-// 		return -1;
-// 	}
-
-// 	/*
-// 	 * If len <= 4 use linear search.
-// 	 * From above we know key >= arr[0] when we start.
-// 	 */
-// 	if (len <= 4) {
-// 		int64_t i;
-
-// 		for (i = 1; i < len && key >= arr[i]; ++i)
-// 			;
-// 		return i - 1;
-// 	}
-
-// 	if (guess > len - 3) {
-// 		guess = len - 3;
-// 	}
-// 	if (guess < 1) {
-// 		guess = 1;
-// 	}
-
-// 	/* check most likely values: guess - 1, guess, guess + 1 */
-// 	if (key < arr[guess]) {
-// 		if (key < arr[guess - 1]) {
-// 			imax = guess - 1;
-// 			/* last attempt to restrict search to items in cache */
-// 			if (guess > LIKELY_IN_CACHE_SIZE && key >= arr[guess - LIKELY_IN_CACHE_SIZE]) {
-// 				imin = guess - LIKELY_IN_CACHE_SIZE;
-// 			}
-// 		} else {
-// 			/* key >= arr[guess - 1] */
-// 			return guess - 1;
-// 		}
-// 	} else {
-// 		/* key >= arr[guess] */
-// 		if (key < arr[guess + 1]) {
-// 			return guess;
-// 		} else {
-// 			/* key >= arr[guess + 1] */
-// 			if (key < arr[guess + 2]) {
-// 				return guess + 1;
-// 			} else {
-// 				/* key >= arr[guess + 2] */
-// 				imin = guess + 2;
-// 				/* last attempt to restrict search to items in
-// 				 * cache */
-// 				if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
-// 					imax = guess + LIKELY_IN_CACHE_SIZE;
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	/* finally, find index by bisection */
-// 	while (imin < imax) {
-// 		const int64_t imid = imin + ((imax - imin) >> 1);
-// 		if (key >= arr[imid]) {
-// 			imin = imid + 1;
-// 		} else {
-// 			imax = imid;
-// 		}
-// 	}
-// 	return imin - 1;
-// }
-
-// #undef LIKELY_IN_CACHE_SIZE
-
-// AMREX_GPU_HOST_DEVICE
-// void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *arr_y, int arr_len)
-// {
-// 	/* Note: arr_x must be sorted in ascending order,
-// 		and arr_len must be >= 3. */
-
-// 	int64_t j = 0;
-// 	for (int i = 0; i < len; i++) {
-// 		j = binary_search_with_guess(x[i], arr_x, arr_len, j);
-
-// 		if (j == -1) {
-// 			y[i] = NAN;
-// 		} else if (j == arr_len) {
-// 			y[i] = NAN;
-// 		} else if (j == arr_len - 1) {
-// 			y[i] = arr_y[j];
-// 		} else if (x[i] == arr_x[j]) { // avoid roundoff error
-// 			y[i] = arr_y[j];
-// 		} else {
-// 			const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
-// 			y[i] = slope * (x[i] - arr_x[j]) + arr_y[j];
-// 		}
-// 		// assert(!std::isnan(y[i]));
-// 	}
-// }
-
 auto problem_main() -> int
 {
 	// This problem is a *linear* radiation diffusion problem, i.e.
@@ -414,37 +328,37 @@ auto problem_main() -> int
 	}
 
 	// compute spectrum
-	std::vector<double> spec{};	// spectrum density at the end, Erad / bin_width
-	std::vector<double> E_r{};	// spectrum density at the end, Erad
-	std::vector<double> F_r_spec{}; // flux at the end, Frad
+	std::vector<double> E_r{};	// radiation energy density
+	std::vector<double> F_r{};	// flux density
+	std::vector<double> E_r_spec{};	// specific radiation energy density
+	std::vector<double> F_r_spec{}; // specific flux density
 	std::vector<double> bin_center{};
 	int const ii = 3; // a random grid
 	for (int g = 0; g < n_groups_; ++g) {
-		bin_center.push_back(std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]));
+		// bin_center.push_back(std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]));
+		bin_center.push_back(rad_boundaries_[g]);
 		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[ii];
 		const auto Frad_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g)[ii];
 		const double bin_width = rad_boundaries_[g + 1] - rad_boundaries_[g];
 		E_r.push_back(Erad_t);
+		F_r.push_back(Frad_t);
 		F_r_spec.push_back(Frad_t / bin_width);
-		spec.push_back(Erad_t / bin_width);
+		E_r_spec.push_back(Erad_t / bin_width);
 	}
 
 	// Read in exact solution
 	std::vector<double> nu_exact;
-	std::vector<double> Fnu_exact;
-	std::vector<double> Enu_exact;
+	std::vector<double> F_read;
+	std::vector<double> E_read;
 
-	std::string const filename = "../extern/BB_doppler.csv";
+	std::string const filename = "../extern/exact_flux_density.csv";
+	int const nbins = 1024;
+	int const bins_per_group = nbins / n_groups_;
 	std::ifstream fstream(filename, std::ios::in);
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	std::string header;
-	std::getline(fstream, header);
 
-	nu_exact.push_back(0.0);
-	Fnu_exact.push_back(0.0);
-	Enu_exact.push_back(0.0);
 	for (std::string line; std::getline(fstream, line);) {
 		std::istringstream iss(line);
 		std::vector<double> values_line;
@@ -456,23 +370,37 @@ auto problem_main() -> int
 		double const nu_val = values_line.at(0);  // dimensionless
 		double const Fnu_val = values_line.at(1); // dimensionless
 		nu_exact.push_back(nu_val);
-		Fnu_exact.push_back(Fnu_val);
+		F_read.push_back(Fnu_val);
 		double const enu = compute_exact_bb(nu_val, T_equilibrium);
-		Enu_exact.push_back(enu);
+		E_read.push_back(enu);
+	}
+	// assert nu_exact[0] = 0.001 and nu_exact[-1] = 100
+	AMREX_ASSERT(nu_exact.size() == nbins + 1);
+	AMREX_ASSERT(nu_exact[0] == 0.001);
+	AMREX_ASSERT(nu_exact.back() == 100.0);
+	// compute group-integrated exact solution
+	std::vector<double> Fnu_exact(n_groups_);
+	std::vector<double> Enu_exact(n_groups_);
+	int count = 0;
+	double sum_F = 0.0;
+	double sum_E = 0.0;
+	for (int i = 0; i < nbins; ++i) {
+		sum_F += F_read[i] * (nu_exact[i + 1] - nu_exact[i]);
+		sum_E += E_read[i] * (nu_exact[i + 1] - nu_exact[i]);
+		if ((i + 1) % bins_per_group == 0) {
+			Fnu_exact[count] = sum_F / (rad_boundaries_[count + 1] - rad_boundaries_[count]);
+			Enu_exact[count] = sum_E / (rad_boundaries_[count + 1] - rad_boundaries_[count]);
+			sum_F = 0.0;
+			sum_E =	0.0;
+			count++;
+		}
 	}
 
 	// compute error norm
 
-	std::vector<double> F_interp(n_groups_);
-	interpolate_arrays(bin_center.data(), F_interp.data(), n_groups_, nu_exact.data(), Fnu_exact.data(), static_cast<int>(nu_exact.size()));
-
 	for (int g = 0; g < n_groups_; ++g) {
-		double f_int = 0.0;
-		if (!std::isnan(F_interp[g])) {
-			f_int = F_interp[g];
-		}
-		err_norm += std::abs(F_r_spec[g] - f_int);
-		sol_norm += std::abs(f_int);
+		err_norm += std::abs(Fnu_exact[g] - F_r_spec[g]);
+		sol_norm += std::abs(Fnu_exact[g]);
 	}
 
 	const double error_tol = 0.1;
@@ -497,24 +425,27 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
+	matplotlibcpp::ylim(0.0, 1.0);
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	// if constexpr (beta_order_ == 1) {
 	// 	matplotlibcpp::ylim(1.0 - 1.0e-7, 1.0 + 1.0e-7);
 	// }
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./adv_temp.pdf");
+	// matplotlibcpp::save("./adv_temp.pdf");
+	// save to adv_temp_{n_groups_}bins.pdf
+	matplotlibcpp::save(fmt::format("./adv_temp_{}_bins.pdf", n_groups_));
 
 	// plot spectrum
 	matplotlibcpp::clf();
 	std::unordered_map<std::string, std::string> spec_args;
 	spec_args["label"] = "spectrum";
 	spec_args["color"] = "C0";
-	matplotlibcpp::scatter(bin_center, spec, 10.0, spec_args);
+	matplotlibcpp::scatter(bin_center, E_r_spec, 10.0, spec_args);
 	std::map<std::string, std::string> spec_exact_args;
 	spec_exact_args["label"] = "spectrum (exact)";
 	spec_exact_args["linestyle"] = "-";
 	spec_exact_args["color"] = "C1";
-	matplotlibcpp::plot(nu_exact, Enu_exact, spec_exact_args);
+	matplotlibcpp::plot(bin_center, Enu_exact, spec_exact_args);
 	// log-log
 	matplotlibcpp::xscale("log");
 	matplotlibcpp::yscale("log");
@@ -524,19 +455,21 @@ auto problem_main() -> int
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./adv_spectrum.pdf");
+	// matplotlibcpp::save("./adv_spectrum.pdf");
+	// save to adv_spectrum_{n_groups_}bins.pdf
+	matplotlibcpp::save(fmt::format("./adv_spectrum_{}_bins.pdf", n_groups_));
 
 	// plot flux spectrum
 	matplotlibcpp::clf();
 	std::unordered_map<std::string, std::string> Frad_args;
-	Frad_args["label"] = "flux";
+	Frad_args["label"] = "flux (exact)";
 	Frad_args["color"] = "C0";
-	matplotlibcpp::scatter(bin_center, F_r_spec, 10.0, Frad_args);
+	matplotlibcpp::scatter(bin_center, Fnu_exact, 10.0, Frad_args);
 	std::map<std::string, std::string> Frad_exact_args;
-	Frad_exact_args["label"] = "flux (exact)";
+	Frad_exact_args["label"] = "flux (numerical)";
 	Frad_exact_args["linestyle"] = "-";
 	Frad_exact_args["color"] = "C1";
-	matplotlibcpp::plot(nu_exact, Fnu_exact, Frad_exact_args);
+	matplotlibcpp::plot(bin_center, F_r_spec, Frad_exact_args);
 	// log-log
 	matplotlibcpp::xscale("log");
 	matplotlibcpp::yscale("log");
@@ -546,7 +479,9 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./adv_flux_spectrum.pdf");
+	// matplotlibcpp::save("./adv_flux_spectrum.pdf");
+	// save to adv_flux_spectrum_{n_groups_}bins.pdf
+	matplotlibcpp::save(fmt::format("./adv_flux_spectrum_{}_bins.pdf", n_groups_));
 #endif
 
 	if (export_csv) {
@@ -554,7 +489,7 @@ auto problem_main() -> int
 		file.open("adv_spectrum.csv");
 		file << "nu_Left, E_r (erg/cm^3/Hz)\n";
 		for (int g = 0; g < n_groups_; ++g) {
-			file << std::scientific << std::setprecision(12) << rad_boundaries_[g] << "," << spec[g] << "\n";
+			file << std::scientific << std::setprecision(12) << rad_boundaries_[g] << "," << E_r_spec[g] << "\n";
 		}
 		file.close();
 
