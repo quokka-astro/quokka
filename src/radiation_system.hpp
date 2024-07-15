@@ -35,7 +35,10 @@
 
 static constexpr bool include_work_term_in_source = true;
 static constexpr bool use_D_as_base = true;
-static constexpr bool force_rad_floor_in_iteration = true;
+static constexpr bool force_rad_floor_in_iteration = false;
+static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g
+static constexpr bool special_edge_bin_slopes = false;
+static constexpr bool include_delta_B = false;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -61,9 +64,6 @@ enum class OpacityModel {
 	PPL_opacity_full_spectrum // piecewise power-law opacity model with piecewise power-law fitting to a user-defined opacity function and on-the-fly piecewise
 			  // power-law fitting to radiation energy density and flux.
 };
-
-static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g
-static constexpr bool special_edge_bin_slopes = true;
 
 // this struct is specialized by the user application code
 //
@@ -1590,7 +1590,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 								Planck_term += (kappaFVec[n][g] - kappaEVec[g]) * erad * std::pow(lorentz_factor_v, 3);
 							}
 						} else {
-							Planck_term = kappaPVec[g] * fourPiBoverC[g] - 1.0 / 3.0 * delta_nu_kappa_B_at_edge[g];
+							if constexpr (include_delta_B) {
+								Planck_term = kappaPVec[g] * fourPiBoverC[g] - 1.0 / 3.0 * delta_nu_kappa_B_at_edge[g];
+							} else {
+								Planck_term = kappaPVec[g] * fourPiBoverC[g];
+							}
 						}
 						Planck_term *= chat * dt * gasMtm0[n];
 
@@ -1600,7 +1604,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							pressure_term += gasMtm0[z] * Tedd[n][z] * erad;
 						}
 						if constexpr (opacity_model_ == OpacityModel::user) {
-							pressure_term *= chat * dt * kappaEVec[g] * lorentz_factor_v;
+							pressure_term *= chat * dt * kappaFVec[0][g] * lorentz_factor_v;
 						} else {
 							// Simplification: assuming Eddington tensors are the same for all groups, we have kappaP = kappaE
 							pressure_term *= chat * dt * (1.0 + kappa_expo_and_lower_value[0][g]) * kappaEVec[g];

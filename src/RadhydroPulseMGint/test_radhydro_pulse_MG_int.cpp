@@ -18,30 +18,27 @@ struct ExactProblem {
 
 // A fixed power law for radiation quantities; for testing purpose only
 AMREX_GPU_MANAGED double spec_power = -1.0; // NOLINT
+AMREX_GPU_MANAGED int opacity_model_ = 1;
+
 static constexpr bool export_csv = true;
 
 // constexpr int n_groups_ = 2;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e18, 1e20};
+
 constexpr int n_groups_ = 4;
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
+
 // constexpr int n_groups_ = 8;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19, 3.16e19, 1e20};
+
 // constexpr int n_groups_ = 16;
-// constexpr amrex::GpuArray<double, n_groups_ + 1>
-// rad_boundaries_{1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18,
-// 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19, 1.77827941e+19, 3.16227766e+19, 5.62341325e+19, 1.00000000e+20}; constexpr int n_groups_ =
-// 32; constexpr amrex::GpuArray<double, n_groups_ + 1>
-// rad_boundaries_{1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16, 3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17,
-// 1.33352143e+17, 1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17, 1.00000000e+18, 1.33352143e+18, 1.77827941e+18,
-// 2.37137371e+18, 3.16227766e+18, 4.21696503e+18, 5.62341325e+18, 7.49894209e+18, 1.00000000e+19, 1.33352143e+19, 1.77827941e+19, 2.37137371e+19, 3.16227766e+19,
-// 4.21696503e+19, 5.62341325e+19, 7.49894209e+19, 1.00000000e+20}; constexpr int n_groups_ = 64; constexpr amrex::GpuArray<double, n_groups_ + 1>
-// rad_boundaries_{1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16, 3.16227766e+16,
-// 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16, 1.00000000e+17, 1.15478198e+17, 1.33352143e+17,
-// 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17, 3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17,
-// 6.49381632e+17, 7.49894209e+17, 8.65964323e+17, 1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18,
-// 2.73841963e+18, 3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18, 1.00000000e+19,
-// 1.15478198e+19, 1.33352143e+19, 1.53992653e+19, 1.77827941e+19, 2.05352503e+19, 2.37137371e+19, 2.73841963e+19, 3.16227766e+19, 3.65174127e+19, 4.21696503e+19,
-// 4.86967525e+19, 5.62341325e+19, 6.49381632e+19, 7.49894209e+19, 8.65964323e+19, 1.00000000e+20};
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19, 1.77827941e+19, 3.16227766e+19, 5.62341325e+19, 1.00000000e+20}; 
+
+// constexpr int n_groups_ = 32; 
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16, 3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17, 1.33352143e+17, 1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17, 1.00000000e+18, 1.33352143e+18, 1.77827941e+18, 2.37137371e+18, 3.16227766e+18, 4.21696503e+18, 5.62341325e+18, 7.49894209e+18, 1.00000000e+19, 1.33352143e+19, 1.77827941e+19, 2.37137371e+19, 3.16227766e+19, 4.21696503e+19, 5.62341325e+19, 7.49894209e+19, 1.00000000e+20}; 
+
+// constexpr int n_groups_ = 64; 
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16, 3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16, 1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17, 3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17, 1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18, 3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18, 1.00000000e+19, 1.15478198e+19, 1.33352143e+19, 1.53992653e+19, 1.77827941e+19, 2.05352503e+19, 2.37137371e+19, 2.73841963e+19, 3.16227766e+19, 3.65174127e+19, 4.21696503e+19, 4.86967525e+19, 5.62341325e+19, 6.49381632e+19, 7.49894209e+19, 8.65964323e+19, 1.00000000e+20};
 
 constexpr double T0 = 1.0e7; // K (temperature)
 constexpr double T1 = 2.0e7; // K (temperature)
@@ -59,8 +56,8 @@ constexpr double k_B = C::k_B;
 constexpr double kappa0 = 180.;	      // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;      // advecting pulse
 constexpr double max_time = 4.8e-5;   // max_time = 2 * width / v1;
-constexpr int64_t max_timesteps = 3e3; // to make 3D test run fast on GPUs
-// constexpr int64_t max_timesteps = 3e6; // to make 3D test run fast on GPUs
+// constexpr int64_t max_timesteps = 3e3; // to make 3D test run fast on GPUs
+constexpr int64_t max_timesteps = 3e8; // to make 3D test run fast on GPUs
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -112,9 +109,10 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
+	// static constexpr OpacityModel opacity_model = static_cast<OpacityModel>(opacity_model_);
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;
@@ -270,6 +268,7 @@ auto problem_main() -> int
 
 	amrex::ParmParse const pp("rad");
 	pp.query("spec_power", spec_power);
+	pp.query("opacity_model", opacity_model_);
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<MGProblem>::nvar_;
