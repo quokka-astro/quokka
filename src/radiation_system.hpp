@@ -1028,11 +1028,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::
 			part2 = (std::pow(radBoundaryRatios[g], alpha) - 1.0) / alpha;
 		}
 		kappa[g] = kappa_lower[g] / part1 * part2;
-		// AMREX_ASSERT(!std::isnan(kappa[g]));
-		if (std::isnan(kappa[g])) {
-			// automatica adding a breakpoint when debugging
-			int a = 0;
-		}
+		AMREX_ASSERT(!std::isnan(kappa[g]));
 	}
 	return kappa;
 }
@@ -1625,7 +1621,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
 						}
 					} else {
-						if (kappaFVec[g] == kappaEVec[g]) {
+						if (kappaFVec[0][g] == kappaEVec[g]) {
 							for (int n = 0; n < 3; ++n) {
 								// Compute flux update
 								Frad_t1[n][g] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
@@ -1635,7 +1631,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							}
 						} else {
 							const double K0 =
-							    2.0 * rho * chat * dt * (kappaFVec[g] - kappaEVec[g]) / c / c * std::pow(lorentz_factor_v_v, 3);
+							    2.0 * rho * chat * dt * (kappaFVec[0][g] - kappaEVec[g]) / c / c * std::pow(lorentz_factor_v_v, 3);
 
 							// A test to see if this routine reduces to the correct result when ignoring the beta^2 terms
 							// const double X0 = 1.0 + rho * chat * dt * (kappaFVec[g]);
