@@ -157,7 +157,7 @@ RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 	amrex::GpuArray<double, nGroups_ + 1> exponents{};
 	amrex::GpuArray<double, nGroups_ + 1> kappa_edges{};
 	for (int g = 0; g < nGroups_ + 1; ++g) {
-		kappa_edges[g] = compute_kappa(rad_boundaries[g], Tgas);
+		kappa_edges[g] = compute_kappa(rad_boundaries[g], Tgas) / rho;
 	}
 	for (int g = 0; g < nGroups_; ++g) {
 		exponents[g] = std::log(kappa_edges[g + 1] / kappa_edges[g]) / std::log(rad_boundaries[g + 1] / rad_boundaries[g]);
