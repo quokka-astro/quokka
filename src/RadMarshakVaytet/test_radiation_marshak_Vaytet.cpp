@@ -329,7 +329,7 @@ constexpr double rho0 = 1.0e-3; // g cm^-3
 constexpr double T_initial = 300.0; // K
 constexpr double T_L = 1000.0; // K
 constexpr double T_R = 300.0; // K
-constexpr double rho_C_V = 1.0e-3; // erg g^-1 cm^-3 K^-1
+constexpr double rho_C_V = 1.0e-3; // erg cm^-3 K^-1
 constexpr double c_v = rho_C_V / rho0;
 constexpr double mu = 1.0 / (5. / 3. - 1.) * C::k_B / c_v;
 
