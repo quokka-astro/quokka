@@ -59,7 +59,8 @@ constexpr double k_B = C::k_B;
 constexpr double kappa0 = 180.;	      // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;      // advecting pulse
 constexpr double max_time = 4.8e-5;   // max_time = 2 * width / v1;
-constexpr int64_t max_timesteps = 30; // to make 3D test run fast on GPUs
+constexpr int64_t max_timesteps = 3e3; // to make 3D test run fast on GPUs
+// constexpr int64_t max_timesteps = 3e6; // to make 3D test run fast on GPUs
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -111,7 +112,9 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;
@@ -122,19 +125,6 @@ template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::user;
 };
-
-template <>
-template <typename ArrayType>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<MGProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
-						  amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/) -> amrex::GpuArray<double, nGroups_>
-{
-	amrex::GpuArray<double, nGroups_> exponents{};
-	for (int g = 0; g < nGroups_; ++g) {
-		exponents[g] = spec_power;
-	}
-	return exponents;
-}
 
 AMREX_GPU_HOST_DEVICE
 auto compute_initial_Tgas(const double x) -> double
@@ -164,19 +154,18 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho,
-							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
+							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
-	amrex::GpuArray<double, nGroups_> exponents{};
-	amrex::GpuArray<double, nGroups_> kappa_lower{};
-	for (int g = 0; g < nGroups_; ++g) {
-		auto kappa_up = compute_kappa(rad_boundaries[g + 1], Tgas);
-		auto kappa_down = compute_kappa(rad_boundaries[g], Tgas);
-		exponents[g] = std::log(kappa_up / kappa_down) / std::log(rad_boundaries[g + 1] / rad_boundaries[g]);
-		kappa_lower[g] = kappa_down / rho;
-		AMREX_ASSERT(!std::isnan(exponents[g]));
-		AMREX_ASSERT(kappa_lower[g] >= 0.);
+	amrex::GpuArray<double, nGroups_ + 1> exponents{};
+	amrex::GpuArray<double, nGroups_ + 1> kappa_edges{};
+	for (int g = 0; g < nGroups_ + 1; ++g) {
+		kappa_edges[g] = compute_kappa(rad_boundaries[g], Tgas);
 	}
-	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> const exponents_and_values{exponents, kappa_lower};
+	for (int g = 0; g < nGroups_; ++g) {
+		exponents[g] = std::log(kappa_edges[g + 1] / kappa_edges[g]) / std::log(rad_boundaries[g + 1] / rad_boundaries[g]);
+		AMREX_ASSERT(!std::isnan(exponents[g]));
+	}
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const exponents_and_values{exponents, kappa_edges};
 	return exponents_and_values;
 }
 
