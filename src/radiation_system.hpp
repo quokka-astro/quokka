@@ -36,9 +36,10 @@
 static constexpr bool include_work_term_in_source = true;
 static constexpr bool use_D_as_base = true;
 static constexpr bool force_rad_floor_in_iteration = false;
-static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g
-static constexpr bool special_edge_bin_slopes = false;
-static constexpr bool include_delta_B = false;
+static constexpr bool special_edge_bin_slopes = true;
+static constexpr bool include_delta_B = true;
+static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working well -- Newton iteration convergence issue.
+static const bool use_wavespeed_correction = false; // Optional: include a wavespeed correction term in the radiation flux to suppress instability
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -52,9 +53,6 @@ static constexpr double IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
 static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double inf = std::numeric_limits<double>::max();
-
-// Optional: include a wavespeed correction term in the radiation flux to suppress instability
-static const bool use_wavespeed_correction = false;
 
 // enum for opacity_model
 enum class OpacityModel {

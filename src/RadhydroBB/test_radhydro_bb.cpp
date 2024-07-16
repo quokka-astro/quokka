@@ -28,9 +28,9 @@ static constexpr bool export_csv = true;
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-// constexpr int n_groups_ = 4;
+constexpr int n_groups_ = 4;
 // constexpr int n_groups_ = 8;
-constexpr int n_groups_ = 16;
+// constexpr int n_groups_ = 16;
 // constexpr int n_groups_ = 64;
 
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexpr {
@@ -351,7 +351,7 @@ auto problem_main() -> int
 	std::vector<double> F_read;
 	std::vector<double> E_read;
 
-	std::string const filename = "../extern/exact_flux_density.csv";
+	std::string const filename = "../extern/extern/Doppler-spectrum/exact_flux_density.csv";
 	int const nbins = 1024;
 	int const bins_per_group = nbins / n_groups_;
 	std::ifstream fstream(filename, std::ios::in);
@@ -397,6 +397,16 @@ auto problem_main() -> int
 	}
 
 	// compute error norm
+
+	// compare temperature with T_equilibrium
+	double err_norm_T = 0.;
+	double sol_norm_T = 0.;
+	for (int i = 0; i < nx; ++i) {
+		err_norm_T += std::abs(Trad[i] - Trad_exact[i]);
+		sol_norm_T += std::abs(Trad_exact[i]);
+	}
+	const double rel_error_T = err_norm_T / sol_norm_T;
+	amrex::Print() << "Relative L1 error norm for T_gas = " << rel_error_T << std::endl;
 
 	for (int g = 0; g < n_groups_; ++g) {
 		err_norm += std::abs(Fnu_exact[g] - F_r_spec[g]);
@@ -510,7 +520,7 @@ auto problem_main() -> int
 
 	// Cleanup and exit
 	int status = 0;
-	if ((rel_error > error_tol) || std::isnan(rel_error)) {
+	if ((rel_error > error_tol) || std::isnan(rel_error) || (rel_error_T > error_tol) || std::isnan(rel_error_T)) {
 		status = 1;
 	}
 	return status;
