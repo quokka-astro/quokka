@@ -3,6 +3,7 @@
 ///
 
 #include "test_radhydro_pulse_MG_int.hpp"
+#include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
@@ -109,9 +110,9 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
-	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
 	// static constexpr OpacityModel opacity_model = static_cast<OpacityModel>(opacity_model_);
 };
 template <> struct RadSystem_Traits<ExactProblem> {
@@ -124,18 +125,18 @@ template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr OpacityModel opacity_model = OpacityModel::user;
 };
 
-template <>
-template <typename ArrayType>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MGProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
-									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
-    -> amrex::GpuArray<double, nGroups_>
-{
-	amrex::GpuArray<double, nGroups_> exponents{};
-	for (int g = 0; g < nGroups_; ++g) {
-		exponents[g] = spec_power;
-	}
-	return exponents;
-}
+// template <>
+// template <typename ArrayType>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<MGProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
+// 									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
+//     -> amrex::GpuArray<double, nGroups_>
+// {
+// 	amrex::GpuArray<double, nGroups_> exponents{};
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 		exponents[g] = spec_power;
+// 	}
+// 	return exponents;
+// }
 
 AMREX_GPU_HOST_DEVICE
 auto compute_initial_Tgas(const double x) -> double
@@ -198,6 +199,45 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const
 	return kappaPVec;
 }
 
+// // declare global variables
+// // initial conditions read from file
+// amrex::Gpu::HostVector<double> x_arr;
+// amrex::Gpu::HostVector<double> Fnu_arr;
+// amrex::Gpu::DeviceVector<double> x_arr_g;
+// amrex::Gpu::DeviceVector<double> Fnu_arr_g;
+
+// template <> void RadhydroSimulation<MGProblem>::preCalculateInitialConditions()
+// {
+// 	// map initial conditions to the global variables
+// 	std::string const filename = "../extern/Doppler-spectrum/exact_flux_dimensionless.csv";
+// 	std::ifstream fstream(filename, std::ios::in);
+// 	AMREX_ALWAYS_ASSERT(fstream.is_open());
+// 	std::string header;
+// 	std::getline(fstream, header);
+
+// 	for (std::string line; std::getline(fstream, line);) {
+// 		std::istringstream iss(line);
+// 		std::vector<double> values;
+// 		for (double value = NAN; iss >> value;) {
+// 			values.push_back(value);
+// 		}
+// 		auto x = values.at(0);	  // x = h nu / k T
+// 		auto Fnu = values.at(1);  // = F_nu / B_0
+
+// 		x_arr.push_back(x);
+// 		Fnu_arr.push_back(Fnu);
+// 	}
+
+// 	x_arr_g.resize(x_arr.size());
+// 	Fnu_arr_g.resize(Fnu_arr.size());
+
+// 	// copy to device
+// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
+// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Fnu_arr.begin(), Fnu_arr.end(), Fnu_arr_g.begin());
+// 	amrex::Gpu::streamSynchronizeAll();
+// }
+
+
 template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
@@ -206,6 +246,10 @@ template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokk
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	// auto const &x_ptr = x_arr_g.dataPtr(); // x = h nu / k T
+	// auto const &Fnu_ptr = Fnu_arr_g.dataPtr(); // = F_nu / B_0
+	// int const x_size = static_cast<int>(x_arr_g.size());
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
@@ -220,10 +264,12 @@ template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokk
 		const double v0 = v0_adv;
 
 		auto Erad_g = RadSystem<MGProblem>::ComputeThermalRadiation(Trad, radBoundaries_g);
+		auto Frad_g = RadSystem<MGProblem>::ComputeFluxInDiffusionLimit(radBoundaries_g, Trad, v0);
 
 		for (int g = 0; g < Physics_Traits<MGProblem>::nGroups; ++g) {
+			auto ttt = 4. / 3. * v0 * Erad_g[g];
 			state_cc(i, j, k, RadSystem<MGProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
-			state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad_g[g];
+			state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad_g[g];
 			state_cc(i, j, k, RadSystem<MGProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<MGProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}

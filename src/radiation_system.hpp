@@ -210,6 +210,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
 	AMREX_GPU_HOST_DEVICE static auto PlanckFunction(double nu, double T) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeFluxInDiffusionLimit(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double T, double vel) -> amrex::GpuArray<double, nGroups_>;
 
 	template <typename ArrayType>
 	AMREX_GPU_HOST_DEVICE static auto
@@ -1060,6 +1061,24 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::PlanckFunction(const double nu,
 	double const x = coeff * nu;
 	double const planck_integral = std::pow(x, 3) / (std::exp(x) - 1.0);
 	return coeff / (std::pow(PI, 4) / 15.0) * (radiation_constant_ * std::pow(T, 4)) * planck_integral;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(const amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, const double T, const double vel) -> amrex::GpuArray<double, nGroups_>
+{
+	double const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
+	amrex::GpuArray<double, nGroups_ + 1> edge_values{};
+	amrex::GpuArray<double, nGroups_> flux{};
+	for (int g = 0; g < nGroups_ + 1; ++g) {
+		auto x = coeff * rad_boundaries[g];
+		edge_values[g] = 4. / 3. * integrate_planck_from_0_to_x(x) - 1./ 3. * x * (std::pow(x, 3) / (std::exp(x) - 1.0)) / gInf;
+		// test: reproduce the Planck function
+		// edge_values[g] = 4. / 3. * integrate_planck_from_0_to_x(x);
+	}
+	for (int g = 0; g < nGroups_; ++g) {
+		flux[g] = vel * radiation_constant_ * std::pow(T, 4) * (edge_values[g + 1] - edge_values[g]);
+	}
+	return flux;
 }
 
 template <typename problem_t>
