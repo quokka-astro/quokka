@@ -39,6 +39,7 @@ static constexpr bool include_delta_B = true;
 static constexpr bool special_edge_bin_slopes = false;
 static constexpr bool force_rad_floor_in_iteration = false;
 // static constexpr bool force_rad_floor_in_iteration = true;
+static constexpr bool use_diffuse_flux_mean_opacity = true;
 
 static constexpr bool include_work_term_in_source = true;
 static constexpr bool use_D_as_base = true;
@@ -214,6 +215,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
 	AMREX_GPU_HOST_DEVICE static auto PlanckFunction(double nu, double T) -> double;
+	AMREX_GPU_HOST_DEVICE static void ComputeDiffusionFluxMeanOpacity(quokka::valarray<double, nGroups_>& kappaF, quokka::valarray<double, nGroups_> kappaPVec, 
+										 quokka::valarray<double, nGroups_> fourPiBoverC, amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge, 
+										 amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge, 
+										 amrex::GpuArray<double, nGroups_ + 1> kappa_slope);
 	AMREX_GPU_HOST_DEVICE static auto ComputeFluxInDiffusionLimit(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double T, double vel) -> amrex::GpuArray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeFluxInDiffusionLimitWithKappa(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, 
 							 amrex::GpuArray<double, nGroups_> kappa_center, amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_slope_and_lower_value, 
@@ -1078,6 +1083,19 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::PlanckFunction(const double nu,
 }
 
 template <typename problem_t>
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::ComputeDiffusionFluxMeanOpacity(quokka::valarray<double, nGroups_>& kappaF, const quokka::valarray<double, nGroups_> kappaPVec, 
+										 const quokka::valarray<double, nGroups_> fourPiBoverC, const amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge, 
+										 const amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge, const amrex::GpuArray<double, nGroups_ + 1> kappa_slope)
+{
+	// quokka::valarray<double, nGroups_> kappaF{};
+	for (int g = 0; g < nGroups_; ++g) {
+		kappaF[g] = 4. / 3. * kappaPVec[g] * fourPiBoverC[g] + 1. / 3. * kappa_slope[g] * kappaPVec[g] * fourPiBoverC[g] - 1. / 3. * delta_nu_kappa_B_at_edge[g];
+		kappaF[g] /= 4. / 3. * fourPiBoverC[g] - 1. / 3. * delta_nu_B_at_edge[g];
+	}
+	// return kappaF;
+}
+
+template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(const amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, const double T, const double vel) -> amrex::GpuArray<double, nGroups_>
 {
 	double const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
@@ -1200,6 +1218,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
 		amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge{};
+		amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
 
 		work.fillin(0.0);
 		work_prev.fillin(0.0);
@@ -1242,7 +1261,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			gas_update_factor = IMEX_a32;
 		}
 
-		const int max_ite = 5;
+		const int max_ite = 50;
 		int ite = 0;
 
 		if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
@@ -1608,7 +1627,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							auto const kappa_L = kappa_expo_and_lower_value[1][g];
 							auto const kappa_R = kappa_L * std::pow(nu_R / nu_L, kappa_expo_and_lower_value[0][g]);
 							delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
+							delta_nu_B_at_edge[g] = nu_R * B_R - nu_L * B_L;
 						}
+					}
+				}
+				if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
+					if constexpr (use_diffuse_flux_mean_opacity) {
+						// kappaFVec[0] = ComputeDiffusionFluxMeanOpacity(kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
+						ComputeDiffusionFluxMeanOpacity(kappaFVec[0], kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
 					}
 				}
 			}
@@ -1659,7 +1685,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							// Simplification: assuming Eddington tensors are the same for all groups, we have kappaP = kappaE
 							if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 								pressure_term *= chat * dt * kappaEVec[g];
-							} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
+							} else {
 								pressure_term *= chat * dt * (1.0 + kappa_expo_and_lower_value[0][g]) * kappaEVec[g];
 							}
 						}
