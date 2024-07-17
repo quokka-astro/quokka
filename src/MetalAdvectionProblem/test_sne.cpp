@@ -47,8 +47,8 @@ std::string input_data_file; //="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/Ga
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> phi_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> g_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> z_data;
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> z_star, Sigma_star, rho_dm, R0, ks_sigma_sfr, hscale;
-double sigma1, sigma2, rho01, rho02;
+AMREX_GPU_MANAGED amrex::Real z_star, Sigma_star, rho_dm, R0, ks_sigma_sfr, hscale;
+AMREX_GPU_MANAGED amrex::Real sigma1, sigma2, rho01, rho02;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto linearInterpolate(amrex::GpuArray<amrex::Real, 4999>& x, amrex::GpuArray<amrex::Real, 4999>& y, double x_interp) {
     // Find the two closest data points
@@ -79,9 +79,9 @@ template <> struct HydroSystem_Traits<NewProblem> {
 };
 
 template <> struct quokka::EOS_Traits<NewProblem> {
-	static constexpr double gamma = 5./3.;
-	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
+  static constexpr double gamma = 5./3.;
+  static constexpr double mean_molecular_weight = C::m_u;
+  static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct Physics_Traits<NewProblem> {
@@ -89,7 +89,7 @@ template <> struct Physics_Traits<NewProblem> {
   static constexpr bool is_radiation_enabled = false;
   static constexpr bool is_chemistry_enabled = false;
   static constexpr bool is_mhd_enabled = false;
-  static constexpr int numMassScalars = 0;		     // number of mass scalars
+  static constexpr int numMassScalars = 0;         // number of mass scalars
   static constexpr int numPassiveScalars = 1; // number of passive scalars
   static constexpr int nGroups = 1; // number of radiation groups
 };
@@ -103,173 +103,172 @@ void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
 {
   const double small_fastlog_value = FastMath::log10(1.0e-99);
   
-	
+  
  
-	// Read cooling data from hdf5 file
-	hid_t file_id = 0;
-	hid_t dset_id = 0;
-	hid_t attr_id = 0;
-	herr_t status = 0;
-	herr_t h5_error = -1;
+  // Read cooling data from hdf5 file
+  hid_t file_id = 0;
+  hid_t dset_id = 0;
+  hid_t attr_id = 0;
+  herr_t status = 0;
+  herr_t h5_error = -1;
 
-	file_id = H5Fopen(input_data_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+  file_id = H5Fopen(input_data_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
   
-	// Open cooling dataset and get grid dimensions
+  // Open cooling dataset and get grid dimensions
   
-	std::string parameter_name;
-	parameter_name = "PhiGas" ;
-	dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  std::string parameter_name;
+  parameter_name = "PhiGas" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *phidata = new double[4999]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, phidata);
-   	for (int64_t q = 0; q < 4999; q++) {
-			double value = phidata[q];
-			phi_data[q] =  FastMath::log10(value) ;
-		}
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, phidata);
+    for (int64_t q = 0; q < 4999; q++) {
+      double value = phidata[q];
+      phi_data[q] =  FastMath::log10(value) ;
+    }
   }
-	status = H5Dclose(dset_id);
+  status = H5Dclose(dset_id);
 
   parameter_name = "ZVal" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *zdata = new double[4999]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, zdata);
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, zdata);
     for (int64_t q = 0; q < 4999; q++) {
-			double value = zdata[q];
-			z_data[q] =  value;
-		}
+      double value = zdata[q];
+      z_data[q] =  value;
+    }
   }
-		status = H5Dclose(dset_id);
+    status = H5Dclose(dset_id);
 
  parameter_name = "gGas" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *gdata = new double[4999]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, gdata);
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, gdata);
     for (int64_t q = 0; q < 4999; q++) {
-			double value = gdata[q];
-			g_data[q] =  FastMath::log10(value);
-		}
+      double value = gdata[q];
+      g_data[q] =  FastMath::log10(value);
+    }
   }
   status = H5Dclose(dset_id);   
 
   parameter_name = "zStar" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *zstar = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, zstar);
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, zstar);
     for (int64_t q = 0; q < 1; q++) {
-			double value = zstar[q];
-			z_star =  value;
-		}
+      double value = zstar[q];
+      z_star =  value;
+    }
   } 
   status = H5Dclose(dset_id);   
 
   parameter_name = "Sigma_star" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *sigstar = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigstar);
-		Sigma_star =  sigstar[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigstar);
+    Sigma_star =  sigstar[0];
+    
   } 
-		status = H5Dclose(dset_id); 
+    status = H5Dclose(dset_id); 
 
   parameter_name = "rho_dm" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *rhodm = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rhodm);
-		rho_dm =  rhodm[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rhodm);
+    rho_dm =  rhodm[0];
+    
   } 
-		status = H5Dclose(dset_id);   
+    status = H5Dclose(dset_id);   
 
   parameter_name = "R0" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *rnought = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rnought);
-		R0 =  rnought[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rnought);
+    R0 =  rnought[0];
+    
   } 
-		status = H5Dclose(dset_id);   
+    status = H5Dclose(dset_id);   
 
   parameter_name = "ks_sigma_sfr" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *kssigma = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, kssigma);
-		ks_sigma_sfr =  kssigma[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, kssigma);
+    ks_sigma_sfr =  kssigma[0];
+    
   } 
-		status = H5Dclose(dset_id);  
+    status = H5Dclose(dset_id);  
   parameter_name = "hscale" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *h_scale = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, h_scale);
-		hscale =  h_scale[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, h_scale);
+    hscale =  h_scale[0];
+    
   } 
-		status = H5Dclose(dset_id);    
+    status = H5Dclose(dset_id);    
 
   parameter_name = "sigma1" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *sigma_1 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigma_1);
-		sigma1 =  sigma_1[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigma_1);
+    sigma1 =  sigma_1[0];
+    
   } 
-		status = H5Dclose(dset_id);   
+    status = H5Dclose(dset_id);   
 
 
   parameter_name = "sigma2" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *sigma_2 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigma_2);
-		sigma2 =  sigma_2[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigma_2);
+    sigma2 =  sigma_2[0];
+    
   }
   status = H5Dclose(dset_id);   
 
   parameter_name = "rho1" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *rho_1 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rho_1);
-		rho01 =  rho_1[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rho_1);
+    rho01 =  rho_1[0];
+    
   } 
-		status = H5Dclose(dset_id); 
+    status = H5Dclose(dset_id); 
 
   parameter_name = "rho2" ;
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+         H5P_DEFAULT); // new API in HDF5 1.8.0+  
   auto *rho_2 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-	{
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rho_2);
-		rho02 =  rho_2[0];
-		
+  {
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rho_2);
+    rho02 =  rho_2[0];
+    
   } 
-		status = H5Dclose(dset_id);   
-	   
+    status = H5Dclose(dset_id);   
+     
   printf("Gasgravity file read!\n");
-  printf("R0, rho_dm=%.2e,%.2e\n", R0, rho_dm);
 }
 
 /************************************************************/
@@ -292,16 +291,16 @@ template <> struct SimulationData<NewProblem> {
   // cloudy_tables cloudyTables;
   std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_z;
+  std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
+  std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
+  std::unique_ptr<amrex::TableData<Real, 1>> blast_z;
 
-	int nblast = 0;
-	int SN_counter_cumulative = 0;
-	Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
-	Real E_blast = 1.0e51;	    // ergs
-	Real M_ejecta = 5.0 * Msun; // g
-	Real refine_threshold = 1.0; // gradient refinement threshold
+  int nblast = 0;
+  int SN_counter_cumulative = 0;
+  Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
+  Real E_blast = 1.0e51;      // ergs
+  Real M_ejecta = 5.0 * Msun ;      // 5.0 * Msun; // g
+  Real refine_threshold = 1.0; // gradient refinement threshold
 };
 
 
@@ -322,7 +321,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
 
     
       amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-			amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+      amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
       amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
 
 
@@ -343,7 +342,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
     
       double Phitot = Phist + Phidm + Phigas; 
 
-			double rho, rho_disk, rho_halo;
+      double rho, rho_disk, rho_halo;
              rho_disk = rho01 * std::exp(-Phitot/std::pow(sigma1,2.0)) ;
              rho_halo = rho02 * std::exp(-Phitot/std::pow(sigma2,2.0));         //in g/cc
              rho = (rho_disk + rho_halo);
@@ -352,7 +351,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
 
       AMREX_ASSERT(!std::isnan(rho));
       
-			const auto gamma = HydroSystem<NewProblem>::gamma_;
+      const auto gamma = HydroSystem<NewProblem>::gamma_;
 
       //For a uniform box
         // rho01  = 1.e-2 * Const_mH;
@@ -437,98 +436,93 @@ void RadhydroSimulation<NewProblem>::ErrorEst(int lev,
 
 
 void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
-		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<NewProblem> const &userData, int level)
+      amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<NewProblem> const &userData, int level)
 {
-	// inject energy into cells with stochastic sampling
-	BL_PROFILE("RadhydroSimulation::Addsupernova()")
+  // inject energy into cells with stochastic sampling
+  BL_PROFILE("RadhydroSimulation::Addsupernova()")
 
-	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
-	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
-	const Real rho_blast = userData.M_ejecta / cell_vol  ;   // g cm^-3
-	const int cum_sn = userData.SN_counter_cumulative;
+  const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
+  const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
+  const Real rho_blast = userData.M_ejecta / cell_vol  ;   // g cm^-3
+  const int cum_sn = userData.SN_counter_cumulative;
 
-	const Real Lx = prob_hi[0] - prob_lo[0];
-	const Real Ly = prob_hi[1] - prob_lo[1];
-	const Real Lz = prob_hi[2] - prob_lo[2];
+  const Real Lx = prob_hi[0] - prob_lo[0];
+  const Real Ly = prob_hi[1] - prob_lo[1];
+  const Real Lz = prob_hi[2] - prob_lo[2];
 
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &box = iter.validbox();
-		auto const &state = mf.array(iter);
-		auto const &px = userData.blast_x->table();
-		auto const &py = userData.blast_y->table();
-		auto const &pz = userData.blast_z->table();
-		const int np = userData.nblast;
-		
+  for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+    const amrex::Box &box = iter.validbox();
+    auto const &state = mf.array(iter);
+    auto const &px = userData.blast_x->table();
+    auto const &py = userData.blast_y->table();
+    auto const &pz = userData.blast_z->table();
+    const int np = userData.nblast;
+    
    
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const Real xc = prob_lo[0] + static_cast<Real>(i) * dx[0] + 0.5 * dx[0];
-			const Real yc = prob_lo[1] + static_cast<Real>(j) * dx[1] + 0.5 * dx[1];
-			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2] + 0.5 * dx[2];
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      const Real xc = prob_lo[0] + static_cast<Real>(i) * dx[0] + 0.5 * dx[0];
+      const Real yc = prob_lo[1] + static_cast<Real>(j) * dx[1] + 0.5 * dx[1];
+      const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2] + 0.5 * dx[2];
 
-			for (int n = 0; n < 1; ++n) {
-				Real x0 = NAN;
-				Real y0 = NAN;
-				Real z0 = NAN;
+      for (int n = 0; n < np; ++n) {
+        Real x0 = NAN;
+        Real y0 = NAN;
+        Real z0 = NAN;
         Real Rpds = 0.0;
         
         x0 = std::abs(xc -px(n));
         y0 = std::abs(yc -py(n));
         z0 = std::abs(zc -pz(n));
 
-        if(x0<0.5*dx[0] && y0<0.5*dx[1] && z0< 0.5*dx[2] ) {
-        state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=  rho_eint_blast; 
-        state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=  rho_eint_blast; 
-        state(i, j, k, HydroSystem<NewProblem>::density_index)        +=  rho_blast;
+        if(x0<0.5 *dx[0] && y0<0.5 *dx[1] && z0< 0.5 *dx[2] ) {
+        state(i, j, k, HydroSystem<NewProblem>::density_index)        +=   rho_blast; 
+        state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=   rho_eint_blast; 
+        state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=    rho_eint_blast; 
         state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)+=  1.e3/cell_vol;
-        // printf("The location of SN=%d,%d,%d\n",i, j, k);
-        // printf("SN added at level=%d\n", level);
-        // printf("The total number of SN gone off=%d\n", cum_sn);
+  
+        printf("The total number of SN gone off=%d\n", cum_sn);
         Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index)/Const_mH, -3./7.);
-        // printf("Rpds = %.2e pc\n", Rpds);
+        printf("Rpds = %.2e pc\n", Rpds);
         }
-			}
-		});
-	}
+      }
+    });
+  }
 }
 
 
 template <> void RadhydroSimulation<NewProblem>::computeBeforeTimestep()
 {
-	// compute how many (and where) SNe will go off on the this coarse timestep
-	// sample from Poisson distribution
+  // compute how many (and where) SNe will go off on the this coarse timestep
+  // sample from Poisson distribution
   
-	const Real dt_coarse = dt_[0];
-	const Real domain_vol = geom[0].ProbSize();
+  const Real dt_coarse = dt_[0];
+  const Real domain_vol = geom[0].ProbSize();
   const Real domain_area = geom[0].ProbLength(0) * geom[0].ProbLength(1); 
   const Real mean = 0.0;
   const Real stddev = hscale/geom[0].ProbLength(2)/2.;
   
-	const Real expectation_value = ks_sigma_sfr * domain_area * dt_coarse;
+  const Real expectation_value = ks_sigma_sfr * domain_area * dt_coarse;
   
-	const int count = static_cast<int>(amrex::RandomPoisson(expectation_value));
+  const int count = static_cast<int>(amrex::RandomPoisson(expectation_value));
   
-	if (count > 0) {
-		amrex::Print() << "\t" << count << " SNe to be exploded.\n";
-    // amrex::Print() << "\t" << ks_sigma_sfr << " Expectation value.\n";
-  }
-	// resize particle arrays
-	amrex::Array<int, 1> const lo{0};
-	amrex::Array<int, 1> const hi{count};
-	userData_.blast_x = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_y = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_z = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.nblast = count;
-	userData_.SN_counter_cumulative += count;
+  // resize particle arrays
+  amrex::Array<int, 1> const lo{0};
+  amrex::Array<int, 1> const hi{count};
+  userData_.blast_x = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
+  userData_.blast_y = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
+  userData_.blast_z = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
+  userData_.nblast = count;
+  userData_.SN_counter_cumulative += count;
 
-	// for each, sample location at random
-	auto const &px = userData_.blast_x->table();
-	auto const &py = userData_.blast_y->table();
-	auto const &pz = userData_.blast_z->table();
-	for (int i = 0; i < count; ++i) {
-		px(i) = geom[0].ProbLength(0) * amrex::Random();
-		py(i) = geom[0].ProbLength(1) * amrex::Random();
-		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
-	}
+  // for each, sample location at random
+  auto const &px = userData_.blast_x->table();
+  auto const &py = userData_.blast_y->table();
+  auto const &pz = userData_.blast_z->table();
+  for (int i = 0; i < count; ++i) {
+    px(i) = geom[0].ProbLength(0) * amrex::Random();
+    py(i) = geom[0].ProbLength(1) * amrex::Random();
+    pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
+  }
 } 
 
 /*******************************************************************/
@@ -537,7 +531,7 @@ template <> void RadhydroSimulation<NewProblem>::computeBeforeTimestep()
 
 template <>
 void RadhydroSimulation<NewProblem>::computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int ncycle)
+                 amrex::Real dt_lev, int ncycle)
 {
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo   = geom[lev].ProbLoArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi   = geom[lev].ProbHiArray();
@@ -545,7 +539,6 @@ void RadhydroSimulation<NewProblem>::computeAfterLevelAdvance(int lev, amrex::Re
   
   AddSupernova(state_new_cc_[lev], prob_lo, prob_hi, dx, userData_, lev);
   
-  // computeCooling(state_new_cc_[lev], dt_lev, userData_.cloudyTables);
 }
 
 template <> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
@@ -553,8 +546,7 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
                                   -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> {
  
      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential;
-// auto const &dummy = userData_.blast_x;
-    
+
       double x = posvec[0];
      
      grad_potential[0] =  0.0;
@@ -576,7 +568,7 @@ return grad_potential;
 /* Add Strang Split Source Term for External Fixed Potential Here */
 template <>
 void RadhydroSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time,
-				 amrex::Real dt_lev)
+         amrex::Real dt_lev)
 {
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo   = geom[lev].ProbLoArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
@@ -601,10 +593,10 @@ void RadhydroSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, 
           state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index);
       const Real Egas = state(i, j, k, HydroSystem<NewProblem>::energy_index);
 
-					const auto vx = x1mom / rho;
-					const auto vy = x2mom / rho;
-					const auto vz = x3mom / rho;
-					const double vel_mag = std::sqrt(vx * vx + vy * vy + vz * vz);
+          const auto vx = x1mom / rho;
+          const auto vy = x2mom / rho;
+          const auto vz = x3mom / rho;
+          const double vel_mag = std::sqrt(vx * vx + vy * vy + vz * vz);
       
       Real Eint = RadSystem<NewProblem>::ComputeEintFromEgas(rho, x1mom, x2mom,
                                                               x3mom, Egas);
@@ -621,9 +613,7 @@ void RadhydroSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, 
         #endif
 
       GradPhi = HydroSystem<NewProblem>::GetGradFixedPotential(posvec);   
-      // GradPhi[1] = 0.0;
-      // GradPhi[2] = 0.0;
-
+      
       x1mom_new = state(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) + dt * (-rho * GradPhi[0]);
       x2mom_new = state(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) + dt * (-rho * GradPhi[1]);
       x3mom_new = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) + dt * (-rho * GradPhi[2]);
@@ -640,6 +630,129 @@ void RadhydroSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, 
 
 /**************************End Adding Strang Split Source Term *****************/
 
+
+/*********---Projection----******/
+template <> auto RadhydroSimulation<NewProblem>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+{
+  // compute density projection
+  std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
+
+  proj["mass_outflow"] = computePlaneProjection<amrex::ReduceOpSum>(
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+        // int nmscalars = Physics_Traits<NewProblem>::numMassScalars;
+        Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
+        Real const vz = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index)/rho;
+        
+        amrex::Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
+        amrex::Real Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
+  
+        amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
+        Real const primTemp = quokka::EOS<NewProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+        return (rho * vz) ;
+      },
+      dir);
+
+   proj["hot_mass_outflow"] = computePlaneProjection<amrex::ReduceOpSum>(
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+        
+        double flux;
+        Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
+        Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
+        Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
+        Real const Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
+        amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
+        Real const primTemp = quokka::EOS<NewProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+        if(primTemp>1.e6) {
+          flux = rho * vx3;
+        } else {
+          flux = 0.0;
+        }
+        return flux ;
+      },
+      dir);
+
+  proj["warm_mass_outflow"] = computePlaneProjection<amrex::ReduceOpSum>(
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+        
+        double flux;
+        Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
+        Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
+        Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
+        Real const Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
+        amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
+        Real const primTemp = quokka::EOS<NewProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+        if(primTemp<2.e4) {
+          flux = rho * vx3;
+        } else {
+          flux = 0.0;
+        }
+        return flux ;
+      },
+      dir);   
+
+  proj["scalar_outflow"] = computePlaneProjection<amrex::ReduceOpSum>(
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+        Real const rho  = state(i, j, k, HydroSystem<NewProblem>::density_index);
+        Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
+        Real const vz   = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index)/rho;
+        return (rhoZ * vz) ;
+      },
+      dir);
+
+  proj["warm_scalar_outflow"] = computePlaneProjection<amrex::ReduceOpSum>(
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+        
+        double flux;
+        Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
+        Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
+        Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
+        Real const Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
+        amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
+        Real const primTemp = quokka::EOS<NewProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+        if(primTemp<2.e4) {
+          flux = rhoZ * vx3;
+        } else {
+          flux = 0.0;
+        }
+        return flux ;
+      },
+      dir); 
+
+  proj["hot_scalar_outflow"] = computePlaneProjection<amrex::ReduceOpSum>(
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+        
+        double flux;
+        Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
+        Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
+        Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
+        Real const Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
+        amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
+        Real const primTemp = quokka::EOS<NewProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+        if(primTemp>1.e6) {
+          flux = rhoZ * vx3;
+        } else {
+          flux = 0.0;
+        }
+        return flux ;
+      },
+      dir);      
+
+  proj["rho"] = computePlaneProjection<amrex::ReduceOpSum>(
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+        Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
+        return (rho) ;
+      },
+      dir);
+
+  proj["scalar"] = computePlaneProjection<amrex::ReduceOpSum>(
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+        Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
+        return (rhoZ) ;
+      },
+      dir);    
+  return proj;
+}
+
 /**************************Begin Diode BC *****************/
 
 template <>
@@ -655,7 +768,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
   const int klo = domain_lo[2];
   const int khi = domain_hi[2];
   int kedge, normal;
- 
+
 
    if (k < klo) {
       kedge = klo;
@@ -667,13 +780,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
    }
 
     const double rho_edge   = consVar(i, j, kedge, HydroSystem<NewProblem>::density_index);
-		const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x1Momentum_index);
+    const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x1Momentum_index);
     const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x2Momentum_index);
           double x3Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
     const double etot_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::energy_index);
     const double eint_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::internalEnergy_index);
 
-    
+
     if((x3Mom_edge*normal)<0){//gas is inflowing
       x3Mom_edge = -1. *consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
     }
@@ -692,16 +805,16 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
 auto problem_main() -> int {
 
   const int ncomp_cc = Physics_Indices<NewProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+  amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 
   /*Implementing Outflowing Boundary Conditions in the Z-direction*/
 
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				// outflowing boundary conditions
+  for (int n = 0; n < ncomp_cc; ++n) {
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+        // outflowing boundary conditions
         if(i==2){
-				 BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-				 BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+         BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
+         BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
         }
         else{
            BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
@@ -713,15 +826,13 @@ auto problem_main() -> int {
   RadhydroSimulation<NewProblem> sim(BCs_cc);
   
   amrex::ParmParse const pp("phi_file");
-	pp.query("name", input_data_file); 
+  pp.query("name", input_data_file); 
   
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-  sim.cflNumber_ = 0.25;         // *must* be less than 1/3 in 3D!
+  sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
   
   read_potential(z_data, phi_data, g_data);
   
-  // readCloudyData(sim.userData_.cloudyTables);
-  // initialize
   sim.setInitialConditions();
 
   // evolve
