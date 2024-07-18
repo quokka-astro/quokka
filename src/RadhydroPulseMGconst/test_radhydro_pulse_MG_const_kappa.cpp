@@ -1,9 +1,9 @@
-/// \file test_radhydro_pulse_MG.cpp
+/// \file test_radhydro_pulse_MG_const_kappa.cpp
 /// \brief Defines a test problem for multigroup radiation in the diffusion regime with advection by gas, running
 /// with PPL_opacity_fixed_slope_spectrum opacity model. 
 ///
 
-#include "test_radhydro_pulse_MG.hpp"
+#include "test_radhydro_pulse_MG_const_kappa.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
