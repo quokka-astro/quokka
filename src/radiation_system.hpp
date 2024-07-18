@@ -162,6 +162,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		}
 	}();
 
+	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), "PPL_opacity_full_spectrum requires at least 3 photon groups."); // NOLINT
+
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
@@ -1784,8 +1786,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 			const double lag_tol = 1.0e-13;
-			if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) / Etot0 < lag_tol) ||
-			    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec))) {
+			if ((sum(abs(work)) == 0.0) || 
+					((c / chat) * sum(abs(work - work_prev)) / Etot0 < lag_tol) ||
+			    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) ||
+			    (sum(abs(work)) > 0.0 && sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))
+					) {
 				break;
 			}
 		} // end full-step iteration
