@@ -215,10 +215,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
 	AMREX_GPU_HOST_DEVICE static auto PlanckFunction(double nu, double T) -> double;
-	AMREX_GPU_HOST_DEVICE static void ComputeDiffusionFluxMeanOpacity(quokka::valarray<double, nGroups_>& kappaF, quokka::valarray<double, nGroups_> kappaPVec, 
+	AMREX_GPU_HOST_DEVICE static auto ComputeDiffusionFluxMeanOpacity(quokka::valarray<double, nGroups_> kappaPVec, 
 										 quokka::valarray<double, nGroups_> fourPiBoverC, amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge, 
 										 amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge, 
-										 amrex::GpuArray<double, nGroups_ + 1> kappa_slope);
+										 amrex::GpuArray<double, nGroups_ + 1> kappa_slope) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeFluxInDiffusionLimit(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double T, double vel) -> amrex::GpuArray<double, nGroups_>;
 
 	template <typename ArrayType>
@@ -1079,16 +1079,19 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::PlanckFunction(const double nu,
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::ComputeDiffusionFluxMeanOpacity(quokka::valarray<double, nGroups_>& kappaF, const quokka::valarray<double, nGroups_> kappaPVec, 
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDiffusionFluxMeanOpacity(const quokka::valarray<double, nGroups_> kappaPVec, 
 										 const quokka::valarray<double, nGroups_> fourPiBoverC, const amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge, 
-										 const amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge, const amrex::GpuArray<double, nGroups_ + 1> kappa_slope)
+										 const amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge, const amrex::GpuArray<double, nGroups_ + 1> kappa_slope) -> quokka::valarray<double, nGroups_>
 {
-	// quokka::valarray<double, nGroups_> kappaF{};
+	quokka::valarray<double, nGroups_> kappaF{};
 	for (int g = 0; g < nGroups_; ++g) {
 		kappaF[g] = 4. / 3. * kappaPVec[g] * fourPiBoverC[g] + 1. / 3. * kappa_slope[g] * kappaPVec[g] * fourPiBoverC[g] - 1. / 3. * delta_nu_kappa_B_at_edge[g];
-		kappaF[g] /= 4. / 3. * fourPiBoverC[g] - 1. / 3. * delta_nu_B_at_edge[g];
+		AMREX_ASSERT(kappaF[g] > 0.0);
+		auto const denom = 4. / 3. * fourPiBoverC[g] - 1. / 3. * delta_nu_B_at_edge[g];
+		AMREX_ASSERT(denom > 0.0);
+		kappaF[g] /= denom;
 	}
-	// return kappaF;
+	return kappaF;
 }
 
 template <typename problem_t>
@@ -1320,7 +1323,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_B);
 						kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_E);
 					}
-					ComputeDiffusionFluxMeanOpacity(kappaFVec, kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
+					kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
 				}
 				AMREX_ASSERT(!kappaPVec.hasnan());
 				AMREX_ASSERT(!kappaEVec.hasnan());
@@ -1562,7 +1565,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						if constexpr (gamma_ != 1.0) {
 							kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
 							kappaEVec = kappaPVec;
-							ComputeDiffusionFluxMeanOpacity(kappaFVec, kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
+							kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
 						}
 					} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 						// Note that alpha_F has not been changed in the Newton iteration
@@ -1573,7 +1576,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_E);
 							AMREX_ASSERT(!kappaPVec.hasnan());
 							AMREX_ASSERT(!kappaEVec.hasnan());
-							ComputeDiffusionFluxMeanOpacity(kappaFVec, kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
+							kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
 						}
 					}
 				}
