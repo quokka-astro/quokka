@@ -1419,9 +1419,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 						kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
 						alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
-						alpha_E = ComputeRadQuantityExponents(Erad0Vec, radBoundaries_g_copy); // TODO(cch): check here, Erad0Vec?
+						alpha_E = ComputeRadQuantityExponents(EradVec_guess, radBoundaries_g_copy);
 						kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_B);
 						kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_E);
+						// TODO: need the updated EradVec_guess?
 					}
 					AMREX_ASSERT(!kappaPVec.hasnan());
 					AMREX_ASSERT(!kappaEVec.hasnan());
