@@ -253,18 +253,14 @@ template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokk
 
 		auto Erad_g = RadSystem<MGProblem>::ComputeThermalRadiation(Trad, radBoundaries_g);
 		auto Frad_g = RadSystem<MGProblem>::ComputeFluxInDiffusionLimit(radBoundaries_g, Trad, v0);
-		const amrex::GpuArray<double, n_groups_> kappa_center{76083903.864764899, 4449.0947835226234};
-		auto kappa_exp_and_lower_values = RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, Trad);
-		auto Frad_g_new2 = RadSystem<MGProblem>::ComputeFluxInDiffusionLimitWithKappa(radBoundaries_g, kappa_center, kappa_exp_and_lower_values, Trad, v0);
 
 		for (int g = 0; g < Physics_Traits<MGProblem>::nGroups; ++g) {
-			auto frad_old = 4. / 3. * v0 * Erad_g[g];
 			state_cc(i, j, k, RadSystem<MGProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
+			// old: incorrect group-integrated flux
+			// auto frad_old = 4. / 3. * v0 * Erad_g[g];
 			// state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = frad_old;
-			// new 1
+			// new: correct flux
 			state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad_g[g];
-			// new 2
-			// state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad_g_new2[g];
 			state_cc(i, j, k, RadSystem<MGProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<MGProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}

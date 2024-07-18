@@ -220,10 +220,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 										 amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge, 
 										 amrex::GpuArray<double, nGroups_ + 1> kappa_slope);
 	AMREX_GPU_HOST_DEVICE static auto ComputeFluxInDiffusionLimit(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double T, double vel) -> amrex::GpuArray<double, nGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto ComputeFluxInDiffusionLimitWithKappa(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, 
-							 amrex::GpuArray<double, nGroups_> kappa_center, amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_slope_and_lower_value, 
-							 double T, double vel) 
-							 -> amrex::GpuArray<double, nGroups_>;
 
 	template <typename ArrayType>
 	AMREX_GPU_HOST_DEVICE static auto
@@ -1109,29 +1105,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 	}
 	for (int g = 0; g < nGroups_; ++g) {
 		flux[g] = vel * radiation_constant_ * std::pow(T, 4) * (edge_values[g + 1] - edge_values[g]);
-	}
-	return flux;
-}
-
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimitWithKappa(const amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, const amrex::GpuArray<double, nGroups_> kappa_center, amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_slope_and_lower_value, const double T, const double vel) -> amrex::GpuArray<double, nGroups_>
-{
-	double const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
-	amrex::GpuArray<double, nGroups_ + 1> edge_values{};
-	amrex::GpuArray<double, nGroups_> flux{};
-	for (int g = 0; g < nGroups_; ++g) {
-		auto xL = coeff * rad_boundaries[g];
-		auto xR = coeff * rad_boundaries[g + 1];
-		// edge_values[g] = 4. / 3. * integrate_planck_from_0_to_x(x) - 1./ 3. * x * (std::pow(x, 3) / (std::exp(x) - 1.0)) / gInf;
-		// test: reproduce the Planck function
-		// edge_values[g] = 4. / 3. * integrate_planck_from_0_to_x(x);
-		// group by group
-		auto delta_L = xL * kappa_slope_and_lower_value[1][g] * (std::pow(xL, 3) / (std::exp(xL) - 1.0)) / gInf;
-		auto delta_R = xR * kappa_slope_and_lower_value[1][g + 1] * (std::pow(xR, 3) / (std::exp(xR) - 1.0)) / gInf;
-		flux[g] = (4. / 3. + 1. / 3. * kappa_slope_and_lower_value[0][g]) * (integrate_planck_from_0_to_x(xR) - integrate_planck_from_0_to_x(xL)) - 1./ 3. * ((delta_R - delta_L) / kappa_center[g]);
-	}
-	for (int g = 0; g < nGroups_; ++g) {
-		flux[g] *= vel * radiation_constant_ * std::pow(T, 4);
 	}
 	return flux;
 }
