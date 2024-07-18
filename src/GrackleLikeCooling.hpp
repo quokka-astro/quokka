@@ -127,7 +127,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	constexpr double G_0 = 1.7; // ISRF from Wolfire et al. (2003)
 	const double epsilon = 4.9e-2 / (1. + 4.0e-3 * std::pow(G_0 * Tsqrt / (n_e * phi), 0.73)) +
 			       3.7e-2 * std::pow(T / 1.0e4, 0.7) / (1. + 2.0e-4 * (G_0 * Tsqrt / (n_e * phi)));
-	const double Gamma_pe = 1.3e-24 * nH * epsilon * G_0;
+	const double Gamma_pe = Zbg * 1.3e-24 * nH * epsilon * G_0;
 	Edot += Gamma_pe;
 
 	// Compton term (CMB photons)
