@@ -1396,6 +1396,58 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				const int maxIter = 400;
 				int n = 0;
 				for (; n < maxIter; ++n) {
+					// F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
+					F_G = Egas_guess - Egas0;
+					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
+					double F_D_abs_sum = 0.0;
+					for (int g = 0; g < nGroups_; ++g) {
+						if (tau[g] > 0.0) {
+							F_D_abs_sum += std::abs(F_D[g]);
+							F_G += (c / chat) * Rvec[g];
+						}
+					}
+
+					// check relative convergence of the residuals
+					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * F_D_abs_sum / Etot0 < resid_tol)) {
+						break;
+					}
+
+					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+
+					const auto dfourPiB_dTgas = chat * ComputeThermalRadiationTempDerivative(T_gas, radBoundaries_g_copy);
+					AMREX_ASSERT(!dfourPiB_dTgas.hasnan());
+
+					// compute Jacobian elements
+					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
+					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
+					dFG_dEgas = 1.0;
+					for (int g = 0; g < nGroups_; ++g) {
+						if (tau[g] <= 0.0) {
+							dFR_i_dD_i[g] = -std::numeric_limits<double>::infinity();
+						} else {
+							dFR_i_dD_i[g] = -1.0 * (1.0 / tau[g] * kappaPoverE[g] + 1.0);
+						}
+					}
+					if constexpr (use_D_as_base) {
+						dFG_dD = (c / chat) * tau0;
+						dFR_i_dD_i = dFR_i_dD_i * tau0;
+					} else {
+						dFG_dD.fillin(c / chat);
+					}
+					dFR_dEgas = 1.0 / c_v * kappaPoverE * (dfourPiB_dTgas / chat);
+
+					// update variables
+					RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dD, dFR_dEgas, dFR_i_dD_i, -F_G, -1. * F_D, deltaEgas, deltaD);
+					AMREX_ASSERT(!std::isnan(deltaEgas));
+					AMREX_ASSERT(!deltaD.hasnan());
+
+					Egas_guess += deltaEgas;
+					if constexpr (use_D_as_base) {
+						D += deltaD;
+					} else {
+						Rvec += deltaD;
+					}
+
 					// compute material temperature
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
@@ -1451,57 +1503,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							}
 						}
 					}
-					// F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
-					F_G = Egas_guess - Egas0;
-					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
-					double F_D_abs_sum = 0.0;
-					for (int g = 0; g < nGroups_; ++g) {
-						if (tau[g] > 0.0) {
-							F_D_abs_sum += std::abs(F_D[g]);
-							F_G += (c / chat) * Rvec[g];
-						}
-					}
 
-					// check relative convergence of the residuals
-					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * F_D_abs_sum / Etot0 < resid_tol)) {
-						break;
-					}
-
-					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
-
-					const auto dfourPiB_dTgas = chat * ComputeThermalRadiationTempDerivative(T_gas, radBoundaries_g_copy);
-					AMREX_ASSERT(!dfourPiB_dTgas.hasnan());
-
-					// compute Jacobian elements
-					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
-					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
-					dFG_dEgas = 1.0;
-					for (int g = 0; g < nGroups_; ++g) {
-						if (tau[g] <= 0.0) {
-							dFR_i_dD_i[g] = -std::numeric_limits<double>::infinity();
-						} else {
-							dFR_i_dD_i[g] = -1.0 * (1.0 / tau[g] * kappaPoverE[g] + 1.0);
-						}
-					}
-					if constexpr (use_D_as_base) {
-						dFG_dD = (c / chat) * tau0;
-						dFR_i_dD_i = dFR_i_dD_i * tau0;
-					} else {
-						dFG_dD.fillin(c / chat);
-					}
-					dFR_dEgas = 1.0 / c_v * kappaPoverE * (dfourPiB_dTgas / chat);
-
-					// update variables
-					RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dD, dFR_dEgas, dFR_i_dD_i, -F_G, -1. * F_D, deltaEgas, deltaD);
-					AMREX_ASSERT(!std::isnan(deltaEgas));
-					AMREX_ASSERT(!deltaD.hasnan());
-
-					Egas_guess += deltaEgas;
-					if constexpr (use_D_as_base) {
-						D += deltaD;
-					} else {
-						Rvec += deltaD;
-					}
+					// TODO: move EradVec_guess = Erad0Vec to inside outer loop
 
 					// check relative and absolute convergence of E_r
 					// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
