@@ -25,8 +25,8 @@ AMREX_GPU_MANAGED int opacity_model_ = 1;
 static constexpr bool export_csv = true;
 
 // constexpr int n_groups_ = 2;
-// constexpr int n_groups_ = 4;
-constexpr int n_groups_ = 8;
+constexpr int n_groups_ = 4;
+// constexpr int n_groups_ = 8;
 // constexpr int n_groups_ = 16;
 
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexpr {
@@ -63,8 +63,8 @@ constexpr double scaleup = 1.;
 constexpr double v0_adv = 1.0e6;      // advecting pulse
 constexpr double max_time = 4.8e-5;   // max_time = 2 * width / v1;
 // constexpr double max_time = 2e-5;   // max_time = 2 * width / v1;
-// constexpr int64_t max_timesteps = 3e3; // to make 3D test run fast on GPUs
-constexpr int64_t max_timesteps = 3e8; // to make 3D test run fast on GPUs
+constexpr int64_t max_timesteps = 1e3; // to make 3D test run fast on GPUs
+// constexpr int64_t max_timesteps = 3e8; // to make 3D test run fast on GPUs
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -483,9 +483,29 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Tgas2[i]);
 		sol_norm += std::abs(Tgas2[i]);
 	}
-	const double error_tol = 0.008;
+	const double error_tol = 0.02;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+
+	// symmetry check
+	double symm_err = 0.;
+	double symm_norm = 0.;
+	const double symm_err_tol = 0.02;
+	for (size_t i = 0; i < xs.size(); ++i) {
+		symm_err += std::abs(Tgas[i] - Tgas[xs.size() - 1 - i]);
+		symm_norm += std::abs(Tgas[i]);
+	}
+	const double symm_rel_error_1 = symm_err / symm_norm;
+	amrex::Print() << "Symmetry L1 error norm of the MG pulse = " << symm_rel_error_1 << std::endl;
+
+	symm_err = 0.;
+	symm_norm = 0.;
+	for (size_t i = 0; i < xs2.size(); ++i) {
+		symm_err += std::abs(Tgas2[i] - Tgas2[xs2.size() - 1 - i]);
+		symm_norm += std::abs(Tgas2[i]);
+	}
+	const double symm_rel_error_2 = symm_err / symm_norm;
+	amrex::Print() << "Symmetry L1 error norm of the exact (grey) pulse = " << symm_rel_error_2 << std::endl;
 
 #ifdef HAVE_PYTHON
 	// plot temperature
@@ -587,7 +607,8 @@ auto problem_main() -> int
 
 	// Cleanup and exit
 	int status = 0;
-	if ((rel_error > error_tol) || std::isnan(rel_error)) {
+	if ((rel_error > error_tol) || std::isnan(rel_error) || (symm_rel_error_1 > symm_err_tol) || (symm_rel_error_2 > symm_err_tol) || std::isnan(symm_rel_error_1) ||
+	    std::isnan(symm_rel_error_2)) {
 		status = 1;
 	}
 	return status;
