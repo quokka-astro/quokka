@@ -1631,8 +1631,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					}
 				}
-				if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
-					if constexpr (use_diffuse_flux_mean_opacity) {
+				if constexpr (use_diffuse_flux_mean_opacity) {
+					if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum || opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 						// kappaFVec[0] = ComputeDiffusionFluxMeanOpacity(kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
 						ComputeDiffusionFluxMeanOpacity(kappaFVec[0], kappaPVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
 					}
@@ -1696,9 +1696,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					if constexpr (beta_order_ == 1) {
 						for (int n = 0; n < 3; ++n) {
 							// Compute flux update
-							if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-								F_coeff = chat * rho * kappaFVec[n][g] * dt;
-							}
+							// if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
+							// 	F_coeff = chat * rho * kappaFVec[n][g] * dt;
+							// }
 							Frad_t1[n][g] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
 
 							// Compute conservative gas momentum update

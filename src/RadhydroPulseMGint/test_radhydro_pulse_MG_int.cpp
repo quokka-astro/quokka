@@ -24,23 +24,26 @@ AMREX_GPU_MANAGED int opacity_model_ = 1;
 
 static constexpr bool export_csv = true;
 
-constexpr int n_groups_ = 2;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
-
+// constexpr int n_groups_ = 2;
 // constexpr int n_groups_ = 4;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e16, 1e17, 1e18, 1e19};
-
-// constexpr int n_groups_ = 8;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
-
+constexpr int n_groups_ = 8;
 // constexpr int n_groups_ = 16;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15, 1.77827941e+15, 3.16227766e+15, 5.62341325e+15, 1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19};
 
-// constexpr int n_groups_ = 32; 
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15, 1.33352143e+15, 1.77827941e+15, 2.37137371e+15, 3.16227766e+15, 4.21696503e+15, 5.62341325e+15, 7.49894209e+15, 1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16, 3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17, 1.33352143e+17, 1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17, 1.00000000e+18, 1.33352143e+18, 1.77827941e+18, 2.37137371e+18, 3.16227766e+18, 4.21696503e+18, 5.62341325e+18, 7.49894209e+18, 1.00000000e+19};
-
-// constexpr int n_groups_ = 64; 
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15, 1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15, 3.16227766e+15, 3.65174127e+15, 4.21696503e+15, 4.86967525e+15, 5.62341325e+15, 6.49381632e+15, 7.49894209e+15, 8.65964323e+15, 1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16, 3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16, 1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17, 3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17, 1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18, 3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18, 1.00000000e+19};
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexpr {
+	if constexpr (n_groups_ == 2) {
+		return amrex::GpuArray<double, 3>{1e15, 1e17, 1e19};
+	} else if constexpr (n_groups_ == 4) {
+		return amrex::GpuArray<double, 5>{1e15, 1e16, 1e17, 1e18, 1e19};
+	} else if constexpr (n_groups_ == 8) {
+		return amrex::GpuArray<double, 9>{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
+	} else if constexpr (n_groups_ == 16) {
+		return amrex::GpuArray<double, 17>{1.00000000e+15, 1.77827941e+15, 3.16227766e+15, 5.62341325e+15, 1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19};
+	} else if constexpr (n_groups_ == 32) {
+		return amrex::GpuArray<double, 33>{1.00000000e+15, 1.33352143e+15, 1.77827941e+15, 2.37137371e+15, 3.16227766e+15, 4.21696503e+15, 5.62341325e+15, 7.49894209e+15, 1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16, 3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17, 1.33352143e+17, 1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17, 1.00000000e+18, 1.33352143e+18, 1.77827941e+18, 2.37137371e+18, 3.16227766e+18, 4.21696503e+18, 5.62341325e+18, 7.49894209e+18, 1.00000000e+19};
+	} else if constexpr (n_groups_ == 64) {
+		return amrex::GpuArray<double, 65>{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15, 1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15, 3.16227766e+15, 3.65174127e+15, 4.21696503e+15, 4.86967525e+15, 5.62341325e+15, 6.49381632e+15, 7.49894209e+15, 8.65964323e+15, 1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16, 3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16, 1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17, 3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17, 1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18, 3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18, 1.00000000e+19};
+	}
+}();
 
 constexpr double T0 = 1.0e7; // K (temperature)
 constexpr double T1 = 2.0e7; // K (temperature)
@@ -56,9 +59,10 @@ constexpr double k_B = C::k_B;
 
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 180.;	      // cm^2 g^-1
+constexpr double scaleup = 1.;
 constexpr double v0_adv = 1.0e6;      // advecting pulse
-// constexpr double max_time = 4.8e-5;   // max_time = 2 * width / v1;
-constexpr double max_time = 2e-5;   // max_time = 2 * width / v1;
+constexpr double max_time = 4.8e-5;   // max_time = 2 * width / v1;
+// constexpr double max_time = 2e-5;   // max_time = 2 * width / v1;
 // constexpr int64_t max_timesteps = 3e3; // to make 3D test run fast on GPUs
 constexpr int64_t max_timesteps = 3e8; // to make 3D test run fast on GPUs
 
@@ -113,8 +117,8 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;
@@ -161,7 +165,7 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 	// cm^-1
 	auto T_ = Tgas / T_ref;
 	auto nu_ = nu / nu_ref;
-	return kappa0 * std::pow(T_, -0.5) * std::pow(nu_, -3) * (1.0 - std::exp(-coeff_ * nu_ / T_));
+	return scaleup * kappa0 * std::pow(T_, -0.5) * std::pow(nu_, -3) * (1.0 - std::exp(-coeff_ * nu_ / T_));
 }
 
 template <>
@@ -207,7 +211,7 @@ RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
+	const double sigma = scaleup * 3063.96 * std::pow(Tgas / T0, -3.5);
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	kappaPVec.fillin(sigma / rho);
 	return kappaPVec;
@@ -216,50 +220,11 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpa
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+	const double sigma = scaleup * 101.248 * std::pow(Tgas / T0, -3.5);
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	kappaPVec.fillin(sigma / rho);
 	return kappaPVec;
 }
-
-// // declare global variables
-// // initial conditions read from file
-// amrex::Gpu::HostVector<double> x_arr;
-// amrex::Gpu::HostVector<double> Fnu_arr;
-// amrex::Gpu::DeviceVector<double> x_arr_g;
-// amrex::Gpu::DeviceVector<double> Fnu_arr_g;
-
-// template <> void RadhydroSimulation<MGProblem>::preCalculateInitialConditions()
-// {
-// 	// map initial conditions to the global variables
-// 	std::string const filename = "../extern/Doppler-spectrum/exact_flux_dimensionless.csv";
-// 	std::ifstream fstream(filename, std::ios::in);
-// 	AMREX_ALWAYS_ASSERT(fstream.is_open());
-// 	std::string header;
-// 	std::getline(fstream, header);
-
-// 	for (std::string line; std::getline(fstream, line);) {
-// 		std::istringstream iss(line);
-// 		std::vector<double> values;
-// 		for (double value = NAN; iss >> value;) {
-// 			values.push_back(value);
-// 		}
-// 		auto x = values.at(0);	  // x = h nu / k T
-// 		auto Fnu = values.at(1);  // = F_nu / B_0
-
-// 		x_arr.push_back(x);
-// 		Fnu_arr.push_back(Fnu);
-// 	}
-
-// 	x_arr_g.resize(x_arr.size());
-// 	Fnu_arr_g.resize(Fnu_arr.size());
-
-// 	// copy to device
-// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
-// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Fnu_arr.begin(), Fnu_arr.end(), Fnu_arr_g.begin());
-// 	amrex::Gpu::streamSynchronizeAll();
-// }
-
 
 template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -288,9 +253,9 @@ template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokk
 
 		auto Erad_g = RadSystem<MGProblem>::ComputeThermalRadiation(Trad, radBoundaries_g);
 		auto Frad_g = RadSystem<MGProblem>::ComputeFluxInDiffusionLimit(radBoundaries_g, Trad, v0);
-		// const amrex::GpuArray<double, n_groups_> kappa_center{76083903.864764899, 4449.0947835226234};
-		// auto kappa_exp_and_lower_values = RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, Trad);
-		// auto Frad_g_new2 = RadSystem<MGProblem>::ComputeFluxInDiffusionLimitWithKappa(radBoundaries_g, kappa_center, kappa_exp_and_lower_values, Trad, v0);
+		const amrex::GpuArray<double, n_groups_> kappa_center{76083903.864764899, 4449.0947835226234};
+		auto kappa_exp_and_lower_values = RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, Trad);
+		auto Frad_g_new2 = RadSystem<MGProblem>::ComputeFluxInDiffusionLimitWithKappa(radBoundaries_g, kappa_center, kappa_exp_and_lower_values, Trad, v0);
 
 		for (int g = 0; g < Physics_Traits<MGProblem>::nGroups; ++g) {
 			auto frad_old = 4. / 3. * v0 * Erad_g[g];
