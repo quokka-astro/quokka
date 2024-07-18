@@ -207,22 +207,6 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 
 	const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, T0);
 
-	double erad = NAN;
-	double frad = NAN;
-	if constexpr (beta_order_ == 0) {
-		erad = Erad0;
-		frad = 0.0;
-	} else if constexpr (beta_order_ == 1) {
-		erad = Erad0;
-		frad = 4. / 3. * v0 * Erad0;
-	} else if constexpr (beta_order_ == 2) {
-		erad = Erad_beta2;
-		frad = 4. / 3. * v0 * Erad0;
-	} else { // beta_order_ == 3
-		erad = Erad_beta2;
-		frad = 4. / 3. * v0 * Erad0 * (1. + (v0 * v0) / (c * c));
-	}
-
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < n_groups_; ++g) {
@@ -351,10 +335,11 @@ auto problem_main() -> int
 	std::vector<double> F_read;
 	std::vector<double> E_read;
 
-	std::string const filename = "../extern/extern/Doppler-spectrum/exact_flux_density.csv";
+	std::string const filename = "../extern/Doppler-spectrum/exact_flux_density.csv";
 	int const nbins = 1024;
 	int const bins_per_group = nbins / n_groups_;
 	std::ifstream fstream(filename, std::ios::in);
+	AMREX_ASSERT(fstream.is_open());
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
@@ -374,10 +359,15 @@ auto problem_main() -> int
 		double const enu = compute_exact_bb(nu_val, T_equilibrium);
 		E_read.push_back(enu);
 	}
+	// insert a dummy breakpoint
+	int aa = 0;
+	aa += 1;
+	std::cout << aa << std::endl;
+
 	// assert nu_exact[0] = 0.001 and nu_exact[-1] = 100
-	AMREX_ASSERT(nu_exact.size() == nbins + 1);
 	AMREX_ASSERT(nu_exact[0] == 0.001);
 	AMREX_ASSERT(nu_exact.back() == 100.0);
+	AMREX_ASSERT(nu_exact.size() == nbins + 1);
 	// compute group-integrated exact solution
 	std::vector<double> Fnu_exact(n_groups_);
 	std::vector<double> Enu_exact(n_groups_);
