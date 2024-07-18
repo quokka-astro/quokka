@@ -1242,6 +1242,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			quokka::valarray<double, nGroups_> Rvec{};
 
 			if constexpr (gamma_ != 1.0) {
+				Egas_guess = Egas0;
 				Ekin0 = Egastot0 - Egas0;
 
 				AMREX_ASSERT(min(Src) >= 0.0);
@@ -1286,8 +1287,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// dF_{D,i} / dE_g = 1 / (chat * C_v) * (kappa_{P,i} / kappa_{E,i}) * d/dT (4 \pi B_i)
 				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
 
-				Egas_guess = Egas0;
-				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
 				fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 
@@ -1392,6 +1392,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> deltaD{};
 				quokka::valarray<double, nGroups_> F_D{};
 
+				tau = tau0;
 				const double resid_tol = 1.0e-11; // 1.0e-15;
 				const int maxIter = 400;
 				int n = 0;
