@@ -55,7 +55,7 @@ template <> struct Physics_Traits<TubeProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	// number of radiation groups
-	static constexpr int nGroups = 1;
+	static constexpr int nGroups = 2;
 };
 
 template <> struct RadSystem_Traits<TubeProblem> {
@@ -64,11 +64,11 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::k_B;
-	// static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 3.3 * T0, 1000. * T0}; // Kelvin
-	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 1000. * T0}; // Kelvin
+	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 3.3 * T0, 1000. * T0}; // Kelvin
+	// static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 1000. * T0}; // Kelvin
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
-	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	// static constexpr OpacityModel opacity_model = OpacityModel::single_group;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 };
 
@@ -85,20 +85,20 @@ RadSystem<TubeProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<dou
 	return exponents_and_values;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int g = 0; g < nGroups_; ++g) {
-		kappaPVec[g] = kappa0;
-	}
-	return kappaPVec;
-}
+// template <>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+// {
+// 	quokka::valarray<double, nGroups_> kappaPVec{};
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 		kappaPVec[g] = kappa0;
+// 	}
+// 	return kappaPVec;
+// }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	return ComputePlanckOpacity(rho, Tgas);
-}
+// template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+// {
+// 	return ComputePlanckOpacity(rho, Tgas);
+// }
 
 // declare global variables
 // initial conditions read from file
