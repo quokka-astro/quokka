@@ -129,7 +129,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, const double /*rho*/,
 								   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
@@ -155,12 +155,12 @@ RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArr
 	} else if constexpr (the_model == 10) {
 		if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 			for (int i = 0; i < nGroups_; ++i) {
-				auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
+				auto const bin_center = std::sqrt(rad_boundaries[i] * rad_boundaries[i + 1]);
 				exponents_and_values[1][i] = kappa0 * std::pow(bin_center / nu_pivot, -2.);
 			}
 		} else {
 			for (int i = 0; i < nGroups_ + 1; ++i) {
-				exponents_and_values[1][i] = kappa0 * std::pow(group_edges_[i] / nu_pivot, -2.);
+				exponents_and_values[1][i] = kappa0 * std::pow(rad_boundaries[i] / nu_pivot, -2.);
 			}
 		}
 	}
