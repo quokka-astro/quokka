@@ -139,11 +139,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr int beta_order = beta_order_;
 	static constexpr double energy_unit = nu_unit;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
-	// static constexpr OpacityModel opacity_model = OpacityModel::user;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_fixed_slope_with_transport;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_free_slope_with_delta_terms;
 };
 
 template <>

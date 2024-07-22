@@ -124,7 +124,7 @@ template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::user;
+	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 };
 
 AMREX_GPU_HOST_DEVICE

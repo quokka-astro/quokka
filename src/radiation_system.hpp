@@ -62,7 +62,7 @@ static constexpr double inf = std::numeric_limits<double>::max();
 
 // enum for opacity_model
 enum class OpacityModel {
-	user = 0,	  // user-defined opacity for each group, given as a function of density and temperature.
+	single_group = 0,	  // user-defined opacity for each group, given as a function of density and temperature.
 	piecewise_constant_opacity,
 	PPL_opacity_fixed_slope_spectrum,
 	PPL_opacity_full_spectrum // piecewise power-law opacity model with piecewise power-law fitting to a user-defined opacity function and on-the-fly piecewise
@@ -79,7 +79,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double energy_unit = C::ev2erg;
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::user;
+	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -159,7 +159,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		if constexpr (RadSystem_Has_Opacity_Model<problem_t>::value) {
 			return RadSystem_Traits<problem_t>::opacity_model;
 		} else {
-			return OpacityModel::user;
+			return OpacityModel::single_group;
 		}
 	}();
 
@@ -1309,7 +1309,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(T_gas >= 0.);
 				fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 
-				if constexpr (opacity_model_ == OpacityModel::user) {
+				if constexpr (opacity_model_ == OpacityModel::single_group) {
 					kappaPVec = ComputePlanckOpacity(rho, T_gas);
 					kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 					kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
@@ -1368,7 +1368,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// compute the work term at the old state
 					// const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
 					if (ite == 0) {
-						if constexpr (opacity_model_ == OpacityModel::user) {
+						if constexpr (opacity_model_ == OpacityModel::single_group) {
 							for (int g = 0; g < nGroups_; ++g) {
 								const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
 								const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
@@ -1489,7 +1489,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// compute opacity, emissivity
 					fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 
-					if constexpr (opacity_model_ == OpacityModel::user) {
+					if constexpr (opacity_model_ == OpacityModel::single_group) {
 						kappaPVec = ComputePlanckOpacity(rho, T_gas);
 						kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 					} else if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
@@ -1566,7 +1566,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 			}
 
-			if constexpr (opacity_model_ == OpacityModel::user) {
+			if constexpr (opacity_model_ == OpacityModel::single_group) {
 				kappaFVec = ComputeFluxMeanOpacity(rho, T_gas); // note that kappaFVec is used no matter what the value of gamma is
 				if constexpr (gamma_ != 1.0) {
 					kappaPVec = ComputePlanckOpacity(rho, T_gas);
@@ -1653,7 +1653,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					for (int n = 0; n < 3; ++n) {
 						// compute thermal radiation term
 						double Planck_term = NAN;
-						if constexpr (opacity_model_ == OpacityModel::user) {
+						if constexpr (opacity_model_ == OpacityModel::single_group) {
 							Planck_term = kappaPVec[g] * fourPiBoverC[g] * lorentz_factor_v;
 							// compute (kappa_F - kappa_E) term
 							if (kappaFVec[g] != kappaEVec[g]) {
@@ -1673,7 +1673,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						for (int z = 0; z < 3; ++z) {
 							pressure_term += gasMtm0[z] * Tedd[n][z] * erad;
 						}
-						if constexpr (opacity_model_ == OpacityModel::user) {
+						if constexpr (opacity_model_ == OpacityModel::single_group) {
 							pressure_term *= chat * dt * kappaFVec[g] * lorentz_factor_v;
 						} else {
 							// Simplification: assuming Eddington tensors are the same for all groups, we have kappaP = kappaE
@@ -1811,7 +1811,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				work_prev[g] = work[g];
 				// compute new work term from the updated radiation flux and velocity
 				// work = v * F * chi
-				if constexpr (opacity_model_ == OpacityModel::user) {
+				if constexpr (opacity_model_ == OpacityModel::single_group) {
 					work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * chat / (c * c) *
 						  lorentz_factor_v * (2.0 * kappaEVec[g] - kappaFVec[g]) * dt;
 				} else if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
