@@ -1218,7 +1218,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> D{};	   // D = S / tau0
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
-		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> F_t0{};
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
 		amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge{};
@@ -1827,7 +1826,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			// If you are here, then you are using the new scheme. Step 3 is skipped. The work term is included in the source term, but it is
 			// lagged. The work term is updated in the next step.
-			const std::array<double, 3> gasMtm1 = {x1GasMom1, x2GasMom1, x3GasMom1};
 			for (int g = 0; g < nGroups_; ++g) {
 				// copy work to work_prev
 				work_prev[g] = work[g];
