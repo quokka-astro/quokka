@@ -65,7 +65,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(c
 	return ComputePlanckOpacity(0.0, 0.0);
 }
 
-template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;

@@ -81,7 +81,7 @@ AMREX_GPU_MANAGED amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScala
 };											 // namespace
 #endif
 
-template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;

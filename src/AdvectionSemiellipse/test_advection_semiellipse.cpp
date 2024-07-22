@@ -46,7 +46,7 @@ AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Ar
 	exact_arr(i, j, k, n) = dens;
 }
 
-template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

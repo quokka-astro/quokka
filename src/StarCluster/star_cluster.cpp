@@ -115,7 +115,7 @@ template <> void RadhydroSimulation<StarCluster>::preCalculateInitialConditions(
 	}
 }
 
-template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;

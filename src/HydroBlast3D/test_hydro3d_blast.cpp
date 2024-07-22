@@ -59,7 +59,7 @@ template <> void RadhydroSimulation<SedovProblem>::preCalculateInitialConditions
 	}
 }
 
-template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// initialize a Sedov test problem using parameters from
 	// Richard Klein and J. Bolstad

@@ -38,7 +38,7 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

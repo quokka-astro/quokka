@@ -108,7 +108,7 @@ constexpr double Erad0 = 1.0e12; // erg cm^-3
 constexpr double Egas0 = 1.0e2;	 // erg cm^-3
 constexpr double rho0 = 1.0e-7;	 // g cm^-3
 
-template <> void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;

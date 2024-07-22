@@ -7,6 +7,7 @@
 ///
 
 #include <cassert>
+#include <cmath>
 #include <ostream>
 #include <stdexcept>
 #include <valarray>
@@ -39,104 +40,125 @@ template <> struct Physics_Traits<AlfvenWave> {
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1; // number of radiation groups
+	static constexpr int nGroups = 1; // number of radiation groups // TODO(Neco): shold this be zero?
 };
 
-constexpr double rho0 = 1.0;					   // background density
-constexpr double P0 = 1.0 / quokka::EOS_Traits<AlfvenWave>::gamma; // background pressure
-constexpr double v0 = 0.;					   // background velocity
-constexpr double amp = 1.0e-6;					   // perturbation amplitude
+// constants
+constexpr double sound_speed = 1.0;
+constexpr double gamma = 5. / 3.;
 
-AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+// we have set up the problem so that:
+// the direction of wave propogation, vec(k), is aligned with the x1-direction
+// the background magnetic field sits in the x1-x2 plane
+
+// background states
+constexpr double bg_density = 1.0;
+constexpr double bg_pressure = 1.0;
+constexpr double bg_mag_amplitude = 1.0;
+
+// alignment of magnetic field with the direction of wave propogation (in the x1-x2 plane). recall that hat(k) = (1, 0, 0) and hat(delta_u) = (0, 1, 0)
+constexpr double theta = 90.0; // degrees
+
+// wave amplitude: box length = 1, so |k| in [0, 1]
+constexpr double k_amplitude = 0.5;
+
+// input perturbation: choose to do this via the relative denisty field in [0, 1]. remember, the linear regime is valid when this perturbation is small
+constexpr double delta_b = 1e-8;
+
+AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, double t)
 {
-	const amrex::Real x_L = prob_lo[0] + (i + amrex::Real(0.0)) * dx[0];
-	const amrex::Real x_R = prob_lo[0] + (i + amrex::Real(1.0)) * dx[0];
-	const amrex::Real A = amp;
+	const amrex::Real x1_L = prob_lo[0];
+  const amrex::Real x1_C = x1_L + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
-	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<AlfvenWave>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
-	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
+  const double cos_theta = std::cos(theta * 2.0 * M_PI);
+  const double sin_theta = std::sin(theta * 2.0 * M_PI);
 
-	double rho = U_0[0] + dU[0];
-	double xmom = U_0[1] + dU[1];
-	double Etot = U_0[2] + dU[2];
-	double Eint = Etot - 0.5 * (xmom * xmom) / rho;
+  const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
+  const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
+  const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
+  const double bg_mag_x3 = 0.0;
 
-	state(i, j, k, HydroSystem<AlfvenWave>::density_index) = rho;
-	state(i, j, k, HydroSystem<AlfvenWave>::x1Momentum_index) = xmom;
-	state(i, j, k, HydroSystem<AlfvenWave>::x2Momentum_index) = 0;
-	state(i, j, k, HydroSystem<AlfvenWave>::x3Momentum_index) = 0;
-	state(i, j, k, HydroSystem<AlfvenWave>::energy_index) = Etot;
-	state(i, j, k, HydroSystem<AlfvenWave>::internalEnergy_index) = Eint;
+  const double omega = std::sqrt(std::pow(alfven_speed,2) * std::pow(k_amplitude,2) * std::pow(cos_theta,2));
+
+  if (cen == quokka::centering::cc) {
+    const double cos_wave_C = std::cos(omega * t - k_amplitude * x1_C);
+
+    const double density = bg_density;
+    const double pressure = bg_pressure;
+    const double x1vel = 0;
+    const double x2vel = 0;
+    const double x3vel = -omega * delta_b / (sound_speed * k_amplitude * cos_theta) * cos_wave_C;
+    const double x1mag = bg_mag_x1 * cos_theta;
+    const double x2mag = bg_mag_x2 * sin_theta;
+    const double x3mag = bg_mag_x3 * delta_b * cos_wave_C;
+  
+    const double Eint = pressure / (gamma - 1);
+    const double mom_tot = 0.5 * density * (std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
+    const double Ekin = 0.5 * std::pow(mom_tot,2) / density;
+    const double Emag = 0.5 * (std::pow(x1mag, 2) + std::pow(x2mag, 2) + std::pow(x3mag, 2));
+    const double Etot = Ekin + Emag + Eint;
+
+    state(i, j, k, HydroSystem<AlfvenWave>::density_index) = density;
+    state(i, j, k, HydroSystem<AlfvenWave>::x1Momentum_index) = x1vel * density;
+    state(i, j, k, HydroSystem<AlfvenWave>::x2Momentum_index) = x2vel * density;
+    state(i, j, k, HydroSystem<AlfvenWave>::x3Momentum_index) = x3vel * density;
+    state(i, j, k, HydroSystem<AlfvenWave>::energy_index) = Etot;
+    state(i, j, k, HydroSystem<AlfvenWave>::internalEnergy_index) = Eint;
+  } else if (cen == quokka::centering::fc) {
+    const double cos_wave_L = std::cos(omega * t - k_amplitude * x1_L);
+
+    const double x1mag = bg_mag_x1 * cos_theta;
+    const double x2mag = bg_mag_x2 * sin_theta;
+    const double x3mag = bg_mag_x3 * delta_b * cos_wave_L;
+
+    if      (dir == quokka::direction::x) {state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x1mag;}
+    else if (dir == quokka::direction::y) {state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x2mag;}
+    else if (dir == quokka::direction::z) {state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x3mag;}
+  }
 }
 
-template <> void RadhydroSimulation<AlfvenWave>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<AlfvenWave>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract grid information
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	const amrex::Array4<double> &state = grid_elem.array_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
+  const quokka::centering cen = grid_elem.cen_;
+  const quokka::direction dir = grid_elem.dir_;
 
 	const int ncomp_cc = Physics_Indices<AlfvenWave>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
-			state(i, j, k, n) = 0; // fill unused quantities with zeros
+			state_cc(i, j, k, n) = 0; // fill unused quantities with zeros
 		}
-		computeWaveSolution(i, j, k, state, dx, prob_lo);
+		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, cen, dir, 0);
 	});
 }
 
-template <> void RadhydroSimulation<AlfvenWave>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+template <> void RadhydroSimulation<AlfvenWave>::setInitialConditionsOnGrid_fc(quokka::grid grid_elem)
 {
 	// extract grid information
-	const amrex::Array4<double> &state = grid_elem.array_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const quokka::direction dir = grid_elem.dir_;
+  const quokka::centering cen = grid_elem.cen_;
+  const quokka::direction dir = grid_elem.dir_;
 
-	if (dir == quokka::direction::x) {
-		amrex::ParallelFor(indexRange,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 1.0 + (i % 2); });
-	} else if (dir == quokka::direction::y) {
-		amrex::ParallelFor(indexRange,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 2.0 + (j % 2); });
-	} else if (dir == quokka::direction::z) {
-		amrex::ParallelFor(indexRange,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 3.0 + (k % 2); });
-	}
-}
-
-void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state1,
-	      amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state2)
-{
-	double err = 0.0;
-	for (int level = 0; level < state1.size(); ++level) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			// initialise MF
-			const amrex::BoxArray &ba = state1[level][idim].boxArray();
-			const amrex::DistributionMapping &dm = state1[level][idim].DistributionMap();
-			int ncomp = state1[level][idim].nComp();
-			int ngrow = state1[level][idim].nGrow();
-			amrex::MultiFab mf_diff(ba, dm, ncomp, ngrow);
-			// compute difference between two MFs (at level)
-			amrex::MultiFab::Copy(mf_diff, state1[level][idim], 0, 0, ncomp, ngrow);
-			amrex::MultiFab::Subtract(mf_diff, state2[level][idim], 0, 0, ncomp, ngrow);
-			// compute error (summed over each component)
-			for (int icomp = 0; icomp < Physics_Indices<AlfvenWave>::nvarPerDim_fc; ++icomp) {
-				err += mf_diff.norm1(icomp);
-			}
+	const int ncomp_fc = Physics_Indices<AlfvenWave>::nvarPerDim_fc;
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		for (int n = 0; n < ncomp_fc; ++n) {
+			state_fc(i, j, k, n) = 0; // fill unused quantities with zeros
 		}
-	}
-	amrex::Print() << "Accumulated error in MFs read from chk-file: " << err << "\n";
-	amrex::Print() << "\n";
-	AMREX_ALWAYS_ASSERT(std::abs(err) == 0.0);
+		computeWaveSolution(i, j, k, state_fc, dx, prob_lo, cen, dir, 0);
+	});
 }
 
 auto problem_main() -> int
 {
-	// Problem initialization
 	const int ncomp_cc = Physics_Indices<AlfvenWave>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
@@ -158,17 +180,6 @@ auto problem_main() -> int
 	RadhydroSimulation<AlfvenWave> sim_write(BCs_cc, BCs_fc);
 	sim_write.setInitialConditions();
 	sim_write.evolve();
-	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_write = sim_write.getNewMF_fc();
-	amrex::Print() << "\n";
-
-	RadhydroSimulation<AlfvenWave> sim_restart(BCs_cc, BCs_fc);
-	sim_restart.setChkFile("chk00000");
-	sim_restart.setInitialConditions();
-	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_restart = sim_restart.getNewMF_fc();
-	amrex::Print() << "\n";
-
-	amrex::Print() << "Checking new FC MFs...\n";
-	checkMFs(state_new_fc_write, state_new_fc_restart);
 
 	return 0;
 }

@@ -91,7 +91,7 @@ template <> void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions()
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;

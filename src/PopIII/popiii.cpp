@@ -170,7 +170,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 	}
 }
 
-template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;

@@ -223,8 +223,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
 	virtual void preCalculateInitialConditions() = 0;
-	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
-	virtual void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) = 0;
+	virtual void setInitialConditionsOnGrid_cc(quokka::grid grid_elem) = 0;
+	virtual void setInitialConditionsOnGrid_fc(quokka::grid grid_elem) = 0;
 	virtual void createInitialParticles() = 0;
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
@@ -361,6 +361,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Nghost = number of ghost cells for each array
+  // TODO(Neco): 5 for MHD and 4 for hydro. so should cc = fc = 5 if MHD?
 	int nghost_cc_ = 4;						    // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
@@ -1612,7 +1613,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 				       geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
 		// set initial conditions defined by the user
-		setInitialConditionsOnGrid(grid_elem);
+		setInitialConditionsOnGrid_cc(grid_elem);
 	}
 	// check that the valid state_new_cc_[level] is properly filled
 	AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
@@ -1636,7 +1637,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 			quokka::grid grid_elem(state_new_fc_[level][idim].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 					       geom[level].ProbHiArray(), quokka::centering::fc, static_cast<quokka::direction>(idim));
 			// set initial conditions defined by the user
-			setInitialConditionsOnGridFaceVars(grid_elem);
+			setInitialConditionsOnGrid_fc(grid_elem);
 		}
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));

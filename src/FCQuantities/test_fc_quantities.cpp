@@ -71,7 +71,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	state(i, j, k, HydroSystem<FCQuantities>::internalEnergy_index) = Eint;
 }
 
-template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract grid information
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -89,7 +89,7 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(qu
 	});
 }
 
-template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid_fc(quokka::grid grid_elem)
 {
 	// extract grid information
 	const amrex::Array4<double> &state = grid_elem.array_;

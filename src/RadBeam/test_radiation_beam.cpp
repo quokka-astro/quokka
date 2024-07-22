@@ -213,7 +213,7 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	}
 }
 
-template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	const amrex::Box &indexRange = grid_elem.indexRange_;

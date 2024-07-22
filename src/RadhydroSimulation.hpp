@@ -176,8 +176,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void computeMaxSignalLocal(int level) override;
 	auto computeExtraPhysicsTimestep(int lev) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
-	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
-	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
+	void setInitialConditionsOnGrid_cc(quokka::grid grid_elem) override;
+	void setInitialConditionsOnGrid_fc(quokka::grid grid_elem) override;
 	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeAfterTimestep() override;
@@ -474,13 +474,13 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::preCalculateIn
 	// user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid_fc(quokka::grid grid_elem)
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization

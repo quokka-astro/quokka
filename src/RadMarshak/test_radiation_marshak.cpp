@@ -163,7 +163,7 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
 }
 
-template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;

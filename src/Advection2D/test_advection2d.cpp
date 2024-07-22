@@ -57,7 +57,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto exactSolutionAtIndex(int i, int j, amre
 	return rho;
 }
 
-template <> void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

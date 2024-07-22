@@ -42,7 +42,7 @@ template <> struct Physics_Traits<ScalarProblem> {
 
 constexpr double v_contact = 2.0; // contact wave velocity
 
-template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

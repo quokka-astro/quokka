@@ -223,7 +223,7 @@ template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<AdvPulseProb
 	return (1. / 3.); // Eddington approximation
 }
 
-template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -262,7 +262,7 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
 	});
 }
-template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;

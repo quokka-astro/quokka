@@ -81,7 +81,7 @@ template <> void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions(
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

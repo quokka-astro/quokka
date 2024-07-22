@@ -184,7 +184,7 @@ template <> void RadhydroSimulation<ShellProblem>::preCalculateInitialConditions
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

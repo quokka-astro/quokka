@@ -121,7 +121,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialCond
 	network_init();
 }
 
-template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnGrid_cc(quokka::grid grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
