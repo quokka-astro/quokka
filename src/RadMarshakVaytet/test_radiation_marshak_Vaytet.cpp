@@ -1,5 +1,5 @@
 /// \file test_radiation_marshak_vaytet.cpp
-/// \brief Defines a Marshak wave problem with variable opacity. 
+/// \brief Defines a Marshak wave problem with variable opacity.
 ///
 
 #include "AMReX_BLassert.H"
@@ -21,17 +21,17 @@ constexpr int n_groups_ = 4;
 // constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_full_spectrum;
 
-constexpr double kappa0 = 2000.0; // cm^2 g^-1 (opacity). 
+constexpr double kappa0 = 2000.0;   // cm^2 g^-1 (opacity).
 constexpr double nu_pivot = 4.0e13; // Powerlaw, kappa = kappa0 (nu/nu_pivot)^{-2}
-constexpr int n_coll = 4; // number of collections = 6, to align with Vaytet
-constexpr int the_model = 10; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
+constexpr int n_coll = 4;	    // number of collections = 6, to align with Vaytet
+constexpr int the_model = 10; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity
+			      // (Vaytet et al. Sec 3.2.3)
 // 10: bin-centered method with opacities propto nu^-2
 
 // OLD
-// constexpr int the_model = 0; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
-// constexpr int n_groups_ = 6;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {0.3e12, 0.3e14, 0.6e14, 0.9e14, 1.2e14, 1.5e14, 1.5e16};
-// constexpr amrex::GpuArray<double, n_groups_> group_opacities_ = {1000., 750., 500., 250., 10., 10.};
+// constexpr int the_model = 0; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent
+// opacity (Vaytet et al. Sec 3.2.3) constexpr int n_groups_ = 6; constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {0.3e12, 0.3e14, 0.6e14,
+// 0.9e14, 1.2e14, 1.5e14, 1.5e16}; constexpr amrex::GpuArray<double, n_groups_> group_opacities_ = {1000., 750., 500., 250., 10., 10.};
 
 // NEW
 constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
@@ -43,69 +43,43 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
 	} else if constexpr (n_groups_ == 4) {
 		return amrex::GpuArray<double, 5>{6.0e10, 6.0e11, 6.0e12, 6.0e13, 6.0e14};
 	} else if constexpr (n_groups_ == 8) {
-		return amrex::GpuArray<double, 9>{6.0000000e+10, 1.8973666e+11, 6.0000000e+11, 1.8973666e+12,
-       6.0000000e+12, 1.8973666e+13, 6.0000000e+13, 1.8973666e+14,
-       6.0000000e+14};
+		return amrex::GpuArray<double, 9>{6.0000000e+10, 1.8973666e+11, 6.0000000e+11, 1.8973666e+12, 6.0000000e+12,
+						  1.8973666e+13, 6.0000000e+13, 1.8973666e+14, 6.0000000e+14};
 	} else if constexpr (n_groups_ == 16) {
-		return amrex::GpuArray<double, 17>{6.00000000e+10, 1.06696765e+11, 1.89736660e+11, 3.37404795e+11,
-       6.00000000e+11, 1.06696765e+12, 1.89736660e+12, 3.37404795e+12,
-       6.00000000e+12, 1.06696765e+13, 1.89736660e+13, 3.37404795e+13,
-       6.00000000e+13, 1.06696765e+14, 1.89736660e+14, 3.37404795e+14,
-       6.00000000e+14};
+		return amrex::GpuArray<double, 17>{6.00000000e+10, 1.06696765e+11, 1.89736660e+11, 3.37404795e+11, 6.00000000e+11, 1.06696765e+12,
+						   1.89736660e+12, 3.37404795e+12, 6.00000000e+12, 1.06696765e+13, 1.89736660e+13, 3.37404795e+13,
+						   6.00000000e+13, 1.06696765e+14, 1.89736660e+14, 3.37404795e+14, 6.00000000e+14};
 	} else if constexpr (n_groups_ == 64) {
 		return amrex::GpuArray<double, 65>{
-			 6.00000000e+10, 6.92869191e+10, 8.00112859e+10, 9.23955916e+10,
-       1.06696765e+11, 1.23211502e+11, 1.42282422e+11, 1.64305178e+11,
-       1.89736660e+11, 2.19104476e+11, 2.53017902e+11, 2.92180515e+11,
-       3.37404795e+11, 3.89628979e+11, 4.49936526e+11, 5.19578594e+11,
-       6.00000000e+11, 6.92869191e+11, 8.00112859e+11, 9.23955916e+11,
-       1.06696765e+12, 1.23211502e+12, 1.42282422e+12, 1.64305178e+12,
-       1.89736660e+12, 2.19104476e+12, 2.53017902e+12, 2.92180515e+12,
-       3.37404795e+12, 3.89628979e+12, 4.49936526e+12, 5.19578594e+12,
-       6.00000000e+12, 6.92869191e+12, 8.00112859e+12, 9.23955916e+12,
-       1.06696765e+13, 1.23211502e+13, 1.42282422e+13, 1.64305178e+13,
-       1.89736660e+13, 2.19104476e+13, 2.53017902e+13, 2.92180515e+13,
-       3.37404795e+13, 3.89628979e+13, 4.49936526e+13, 5.19578594e+13,
-       6.00000000e+13, 6.92869191e+13, 8.00112859e+13, 9.23955916e+13,
-       1.06696765e+14, 1.23211502e+14, 1.42282422e+14, 1.64305178e+14,
-       1.89736660e+14, 2.19104476e+14, 2.53017902e+14, 2.92180515e+14,
-       3.37404795e+14, 3.89628979e+14, 4.49936526e+14, 5.19578594e+14,
-       6.00000000e+14};
+		    6.00000000e+10, 6.92869191e+10, 8.00112859e+10, 9.23955916e+10, 1.06696765e+11, 1.23211502e+11, 1.42282422e+11, 1.64305178e+11,
+		    1.89736660e+11, 2.19104476e+11, 2.53017902e+11, 2.92180515e+11, 3.37404795e+11, 3.89628979e+11, 4.49936526e+11, 5.19578594e+11,
+		    6.00000000e+11, 6.92869191e+11, 8.00112859e+11, 9.23955916e+11, 1.06696765e+12, 1.23211502e+12, 1.42282422e+12, 1.64305178e+12,
+		    1.89736660e+12, 2.19104476e+12, 2.53017902e+12, 2.92180515e+12, 3.37404795e+12, 3.89628979e+12, 4.49936526e+12, 5.19578594e+12,
+		    6.00000000e+12, 6.92869191e+12, 8.00112859e+12, 9.23955916e+12, 1.06696765e+13, 1.23211502e+13, 1.42282422e+13, 1.64305178e+13,
+		    1.89736660e+13, 2.19104476e+13, 2.53017902e+13, 2.92180515e+13, 3.37404795e+13, 3.89628979e+13, 4.49936526e+13, 5.19578594e+13,
+		    6.00000000e+13, 6.92869191e+13, 8.00112859e+13, 9.23955916e+13, 1.06696765e+14, 1.23211502e+14, 1.42282422e+14, 1.64305178e+14,
+		    1.89736660e+14, 2.19104476e+14, 2.53017902e+14, 2.92180515e+14, 3.37404795e+14, 3.89628979e+14, 4.49936526e+14, 5.19578594e+14,
+		    6.00000000e+14};
 	} else if constexpr (n_groups_ == 128) {
-		return amrex::GpuArray<double, 129>{6.00000000e+10, 6.44764697e+10, 6.92869191e+10, 7.44562656e+10,
-       8.00112859e+10, 8.59807542e+10, 9.23955916e+10, 9.92890260e+10,
-       1.06696765e+11, 1.14657178e+11, 1.23211502e+11, 1.32404044e+11,
-       1.42282422e+11, 1.52897805e+11, 1.64305178e+11, 1.76563631e+11,
-       1.89736660e+11, 2.03892500e+11, 2.19104476e+11, 2.35451386e+11,
-       2.53017902e+11, 2.71895018e+11, 2.92180515e+11, 3.13979469e+11,
-       3.37404795e+11, 3.62577834e+11, 3.89628979e+11, 4.18698351e+11,
-       4.49936526e+11, 4.83505313e+11, 5.19578594e+11, 5.58343225e+11,
-       6.00000000e+11, 6.44764697e+11, 6.92869191e+11, 7.44562656e+11,
-       8.00112859e+11, 8.59807542e+11, 9.23955916e+11, 9.92890260e+11,
-       1.06696765e+12, 1.14657178e+12, 1.23211502e+12, 1.32404044e+12,
-       1.42282422e+12, 1.52897805e+12, 1.64305178e+12, 1.76563631e+12,
-       1.89736660e+12, 2.03892500e+12, 2.19104476e+12, 2.35451386e+12,
-       2.53017902e+12, 2.71895018e+12, 2.92180515e+12, 3.13979469e+12,
-       3.37404795e+12, 3.62577834e+12, 3.89628979e+12, 4.18698351e+12,
-       4.49936526e+12, 4.83505313e+12, 5.19578594e+12, 5.58343225e+12,
-       6.00000000e+12, 6.44764697e+12, 6.92869191e+12, 7.44562656e+12,
-       8.00112859e+12, 8.59807542e+12, 9.23955916e+12, 9.92890260e+12,
-       1.06696765e+13, 1.14657178e+13, 1.23211502e+13, 1.32404044e+13,
-       1.42282422e+13, 1.52897805e+13, 1.64305178e+13, 1.76563631e+13,
-       1.89736660e+13, 2.03892500e+13, 2.19104476e+13, 2.35451386e+13,
-       2.53017902e+13, 2.71895018e+13, 2.92180515e+13, 3.13979469e+13,
-       3.37404795e+13, 3.62577834e+13, 3.89628979e+13, 4.18698351e+13,
-       4.49936526e+13, 4.83505313e+13, 5.19578594e+13, 5.58343225e+13,
-       6.00000000e+13, 6.44764697e+13, 6.92869191e+13, 7.44562656e+13,
-       8.00112859e+13, 8.59807542e+13, 9.23955916e+13, 9.92890260e+13,
-       1.06696765e+14, 1.14657178e+14, 1.23211502e+14, 1.32404044e+14,
-       1.42282422e+14, 1.52897805e+14, 1.64305178e+14, 1.76563631e+14,
-       1.89736660e+14, 2.03892500e+14, 2.19104476e+14, 2.35451386e+14,
-       2.53017902e+14, 2.71895018e+14, 2.92180515e+14, 3.13979469e+14,
-       3.37404795e+14, 3.62577834e+14, 3.89628979e+14, 4.18698351e+14,
-       4.49936526e+14, 4.83505313e+14, 5.19578594e+14, 5.58343225e+14,
-       6.00000000e+14};
-	} 
+		return amrex::GpuArray<double, 129>{
+		    6.00000000e+10, 6.44764697e+10, 6.92869191e+10, 7.44562656e+10, 8.00112859e+10, 8.59807542e+10, 9.23955916e+10, 9.92890260e+10,
+		    1.06696765e+11, 1.14657178e+11, 1.23211502e+11, 1.32404044e+11, 1.42282422e+11, 1.52897805e+11, 1.64305178e+11, 1.76563631e+11,
+		    1.89736660e+11, 2.03892500e+11, 2.19104476e+11, 2.35451386e+11, 2.53017902e+11, 2.71895018e+11, 2.92180515e+11, 3.13979469e+11,
+		    3.37404795e+11, 3.62577834e+11, 3.89628979e+11, 4.18698351e+11, 4.49936526e+11, 4.83505313e+11, 5.19578594e+11, 5.58343225e+11,
+		    6.00000000e+11, 6.44764697e+11, 6.92869191e+11, 7.44562656e+11, 8.00112859e+11, 8.59807542e+11, 9.23955916e+11, 9.92890260e+11,
+		    1.06696765e+12, 1.14657178e+12, 1.23211502e+12, 1.32404044e+12, 1.42282422e+12, 1.52897805e+12, 1.64305178e+12, 1.76563631e+12,
+		    1.89736660e+12, 2.03892500e+12, 2.19104476e+12, 2.35451386e+12, 2.53017902e+12, 2.71895018e+12, 2.92180515e+12, 3.13979469e+12,
+		    3.37404795e+12, 3.62577834e+12, 3.89628979e+12, 4.18698351e+12, 4.49936526e+12, 4.83505313e+12, 5.19578594e+12, 5.58343225e+12,
+		    6.00000000e+12, 6.44764697e+12, 6.92869191e+12, 7.44562656e+12, 8.00112859e+12, 8.59807542e+12, 9.23955916e+12, 9.92890260e+12,
+		    1.06696765e+13, 1.14657178e+13, 1.23211502e+13, 1.32404044e+13, 1.42282422e+13, 1.52897805e+13, 1.64305178e+13, 1.76563631e+13,
+		    1.89736660e+13, 2.03892500e+13, 2.19104476e+13, 2.35451386e+13, 2.53017902e+13, 2.71895018e+13, 2.92180515e+13, 3.13979469e+13,
+		    3.37404795e+13, 3.62577834e+13, 3.89628979e+13, 4.18698351e+13, 4.49936526e+13, 4.83505313e+13, 5.19578594e+13, 5.58343225e+13,
+		    6.00000000e+13, 6.44764697e+13, 6.92869191e+13, 7.44562656e+13, 8.00112859e+13, 8.59807542e+13, 9.23955916e+13, 9.92890260e+13,
+		    1.06696765e+14, 1.14657178e+14, 1.23211502e+14, 1.32404044e+14, 1.42282422e+14, 1.52897805e+14, 1.64305178e+14, 1.76563631e+14,
+		    1.89736660e+14, 2.03892500e+14, 2.19104476e+14, 2.35451386e+14, 2.53017902e+14, 2.71895018e+14, 2.92180515e+14, 3.13979469e+14,
+		    3.37404795e+14, 3.62577834e+14, 3.89628979e+14, 4.18698351e+14, 4.49936526e+14, 4.83505313e+14, 5.19578594e+14, 5.58343225e+14,
+		    6.00000000e+14};
+	}
 }();
 
 constexpr amrex::GpuArray<double, n_groups_> group_opacities_{};
@@ -114,11 +88,11 @@ struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int max_step_ = 1e6;
-constexpr double rho0 = 1.0e-3; // g cm^-3
+constexpr double rho0 = 1.0e-3;	    // g cm^-3
 constexpr double T_initial = 300.0; // K
-constexpr double T_L = 1000.0; // K
-constexpr double T_R = 300.0; // K
-constexpr double rho_C_V = 1.0e-3; // erg cm^-3 K^-1
+constexpr double T_L = 1000.0;	    // K
+constexpr double T_R = 300.0;	    // K
+constexpr double rho_C_V = 1.0e-3;  // erg cm^-3 K^-1
 constexpr double c_v = rho_C_V / rho0;
 constexpr double mu = 1.0 / (5. / 3. - 1.) * C::k_B / c_v;
 
@@ -154,8 +128,9 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/, const double Tgas)
-    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+								   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -165,37 +140,37 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Defi
 			exponents_and_values[0][i] = -2.0;
 		}
 	}
-		if constexpr (the_model == 0) {
+	if constexpr (the_model == 0) {
+		for (int i = 0; i < nGroups_; ++i) {
+			exponents_and_values[1][i] = kappa0;
+		}
+	} else if constexpr (the_model == 1) {
+		for (int i = 0; i < nGroups_; ++i) {
+			exponents_and_values[1][i] = group_opacities_[i];
+		}
+	} else if constexpr (the_model == 2) {
+		for (int i = 0; i < nGroups_; ++i) {
+			exponents_and_values[1][i] = group_opacities_[i] * std::pow(Tgas / T_initial, 3. / 2.);
+		}
+	} else if constexpr (the_model == 10) {
+		if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 			for (int i = 0; i < nGroups_; ++i) {
-				exponents_and_values[1][i] = kappa0;
+				auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
+				exponents_and_values[1][i] = kappa0 * std::pow(bin_center / nu_pivot, -2.);
 			}
-		} else if constexpr (the_model == 1) {
-			for (int i = 0; i < nGroups_; ++i) {
-				exponents_and_values[1][i] = group_opacities_[i];
+		} else {
+			for (int i = 0; i < nGroups_ + 1; ++i) {
+				exponents_and_values[1][i] = kappa0 * std::pow(group_edges_[i] / nu_pivot, -2.);
 			}
-		} else if constexpr (the_model == 2) {
-			for (int i = 0; i < nGroups_; ++i) {
-				exponents_and_values[1][i] = group_opacities_[i] * std::pow(Tgas / T_initial, 3./2.);
-			}
-		} else if constexpr (the_model == 10) {
-			if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-				for (int i = 0; i < nGroups_; ++i) {
-					auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
-					exponents_and_values[1][i] = kappa0 * std::pow(bin_center / nu_pivot, -2.);
-				}
-			} else {
-				for (int i = 0; i < nGroups_ + 1; ++i) {
-					exponents_and_values[1][i] = kappa0 * std::pow(group_edges_[i] / nu_pivot, -2.);
-				}
-			}
-		}	
+		}
+	}
 	return exponents_and_values;
 }
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							      int /*numcomp*/, amrex::GeometryData const & geom, const amrex::Real /*time*/,
+							      int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 							      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 1)
@@ -282,7 +257,7 @@ auto problem_main() -> int
 	const int max_timesteps = max_step_;
 	const double CFL_number = 0.8;
 	// const double initial_dt = 5.0e-12; // s
-	const double max_dt = 1.0;	   // s
+	const double max_dt = 1.0; // s
 	const double max_time = 1.36e-7;
 
 	constexpr int nvars = RadSystem<SuOlsonProblemCgs>::nvar_;
@@ -399,7 +374,8 @@ auto problem_main() -> int
 
 		// // interpolate numerical solution onto exact tabulated solution
 		// std::vector<double> Tmat_interp(xs_exact.size());
-		// interpolate_arrays(xs_exact.data(), Tmat_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Tgas.data(), static_cast<int>(xs.size()));
+		// interpolate_arrays(xs_exact.data(), Tmat_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Tgas.data(),
+		// static_cast<int>(xs.size()));
 
 		// double err_norm = 0.;
 		// double sol_norm = 0.;
@@ -427,7 +403,7 @@ auto problem_main() -> int
 			}
 		}
 		fstream.close();
-		
+
 		// save Trad_coll to file
 		std::ofstream fstream_coll;
 		fstream_coll.open("marshak_wave_Vaytet_coll.csv");
@@ -483,8 +459,8 @@ auto problem_main() -> int
 		// // Tgas_exact_args["marker"] = "x";
 		// matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 
-		matplotlibcpp::xlim(0.0, 12.0); // cm
-		matplotlibcpp::ylim(0.0, 1000.0);	// K
+		matplotlibcpp::xlim(0.0, 12.0);	  // cm
+		matplotlibcpp::ylim(0.0, 1000.0); // K
 		matplotlibcpp::xlabel("length x (cm)");
 		matplotlibcpp::ylabel("temperature (K)");
 		matplotlibcpp::legend();

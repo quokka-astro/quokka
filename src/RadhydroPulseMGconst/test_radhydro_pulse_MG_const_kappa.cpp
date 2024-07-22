@@ -1,6 +1,6 @@
 /// \file test_radhydro_pulse_MG_const_kappa.cpp
 /// \brief Defines a test problem for multigroup radiation in the diffusion regime with advection by gas, running
-/// with PPL_opacity_fixed_slope_spectrum opacity model. 
+/// with PPL_opacity_fixed_slope_spectrum opacity model.
 ///
 
 #include "test_radhydro_pulse_MG_const_kappa.hpp"
@@ -41,10 +41,10 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e16, 1e1
 //        5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18,
 //        1.00000000e+19};
 
-constexpr double kappa0 = 100.;	     // cm^2 g^-1
-constexpr double T0 = 1.0e7;	     // K (temperature)
-constexpr double T1 = 2.0e7;	     // K (temperature)
-constexpr double rho0 = 1.2;	     // g cm^-3 (matter density)
+constexpr double kappa0 = 100.; // cm^2 g^-1
+constexpr double T0 = 1.0e7;	// K (temperature)
+constexpr double T1 = 2.0e7;	// K (temperature)
+constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
@@ -57,8 +57,8 @@ constexpr double k_B = C::k_B;
 
 // testing parameters:
 // dynamic diffusion limit: tau = 2e3, beta = 7e-3, beta tau = 14
-constexpr double v0 = 2.0e8;    // advecting speed
-constexpr double max_time = 4.8e-5; // diffusion distance is about a few pulse width
+constexpr double v0 = 2.0e8;	       // advecting speed
+constexpr double max_time = 4.8e-5;    // diffusion distance is about a few pulse width
 constexpr int64_t max_timesteps = 1e2; // for fast testing
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
@@ -85,7 +85,6 @@ auto compute_exact_rho(const double x) -> double
 	auto T = compute_initial_Tgas(x);
 	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
 }
-
 
 template <> struct quokka::EOS_Traits<GreyProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -121,8 +120,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyProblem>::ComputePlanckOpac
 	return kappaPVec;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<GreyProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
@@ -165,7 +163,6 @@ template <> void RadhydroSimulation<GreyProblem>::setInitialConditionsOnGrid(quo
 	});
 }
 
-
 template <> struct quokka::EOS_Traits<MGproblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = k_B;
@@ -198,8 +195,8 @@ template <> struct RadSystem_Traits<MGproblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<MGproblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho, const double Tgas)
-    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+RadSystem<MGproblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho,
+							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<double, nGroups_ + 1> exponents{};
 	amrex::GpuArray<double, nGroups_ + 1> kappa_lower{};
@@ -220,8 +217,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MGproblem>::ComputePlanckOpacit
 	return kappaPVec;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MGproblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MGproblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
@@ -280,7 +276,6 @@ auto problem_main() -> int
 	// const int nx = 32;
 
 	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
-
 
 #if 1
 	// Problem 1: pulse with grey radiation
@@ -344,8 +339,6 @@ auto problem_main() -> int
 	}
 	// END OF PROBLEM 1
 #endif
-
-
 
 	// Problem 2: advecting pulse
 
@@ -433,7 +426,6 @@ auto problem_main() -> int
 	}
 	// END OF PROBLEM 2
 #endif
-
 
 #ifdef HAVE_PYTHON
 	// plot temperature

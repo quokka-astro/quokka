@@ -34,11 +34,27 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexp
 	} else if constexpr (n_groups_ == 8) {
 		return amrex::GpuArray<double, 9>{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
 	} else if constexpr (n_groups_ == 16) {
-		return amrex::GpuArray<double, 17>{1.00000000e+15, 1.77827941e+15, 3.16227766e+15, 5.62341325e+15, 1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19};
+		return amrex::GpuArray<double, 17>{1.00000000e+15, 1.77827941e+15, 3.16227766e+15, 5.62341325e+15, 1.00000000e+16, 1.77827941e+16,
+						   3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17,
+						   1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19};
 	} else if constexpr (n_groups_ == 32) {
-		return amrex::GpuArray<double, 33>{1.00000000e+15, 1.33352143e+15, 1.77827941e+15, 2.37137371e+15, 3.16227766e+15, 4.21696503e+15, 5.62341325e+15, 7.49894209e+15, 1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16, 3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17, 1.33352143e+17, 1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17, 1.00000000e+18, 1.33352143e+18, 1.77827941e+18, 2.37137371e+18, 3.16227766e+18, 4.21696503e+18, 5.62341325e+18, 7.49894209e+18, 1.00000000e+19};
+		return amrex::GpuArray<double, 33>{1.00000000e+15, 1.33352143e+15, 1.77827941e+15, 2.37137371e+15, 3.16227766e+15, 4.21696503e+15,
+						   5.62341325e+15, 7.49894209e+15, 1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16,
+						   3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17, 1.33352143e+17,
+						   1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17,
+						   1.00000000e+18, 1.33352143e+18, 1.77827941e+18, 2.37137371e+18, 3.16227766e+18, 4.21696503e+18,
+						   5.62341325e+18, 7.49894209e+18, 1.00000000e+19};
 	} else if constexpr (n_groups_ == 64) {
-		return amrex::GpuArray<double, 65>{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15, 1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15, 3.16227766e+15, 3.65174127e+15, 4.21696503e+15, 4.86967525e+15, 5.62341325e+15, 6.49381632e+15, 7.49894209e+15, 8.65964323e+15, 1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16, 3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16, 1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17, 3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17, 1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18, 3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18, 1.00000000e+19};
+		return amrex::GpuArray<double, 65>{
+		    1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15, 1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15,
+		    3.16227766e+15, 3.65174127e+15, 4.21696503e+15, 4.86967525e+15, 5.62341325e+15, 6.49381632e+15, 7.49894209e+15, 8.65964323e+15,
+		    1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16,
+		    3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16,
+		    1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17,
+		    3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17,
+		    1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18,
+		    3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18,
+		    1.00000000e+19};
 	}
 }();
 
@@ -57,10 +73,10 @@ constexpr double h_planck = C::hplanck;
 constexpr double k_B = C::k_B;
 
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
-constexpr double kappa0 = 180.;	      // cm^2 g^-1
+constexpr double kappa0 = 180.; // cm^2 g^-1
 constexpr double scaleup = 1.;
-constexpr double v0_adv = 1.0e6;      // advecting pulse
-constexpr double max_time = 4.8e-5;   // max_time = 2 * width / v1;
+constexpr double v0_adv = 1.0e6;    // advecting pulse
+constexpr double max_time = 4.8e-5; // max_time = 2 * width / v1;
 // constexpr double max_time = 2e-5;   // max_time = 2 * width / v1;
 constexpr int64_t max_timesteps = 1e2; // to make 3D test run fast on GPUs
 // constexpr int64_t max_timesteps = 1e8; // full run
@@ -154,8 +170,8 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho, const double Tgas)
-    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho,
+							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<double, nGroups_ + 1> exponents{};
 	amrex::GpuArray<double, nGroups_ + 1> kappa_lower{};
@@ -590,8 +606,8 @@ auto problem_main() -> int
 
 	// Cleanup and exit
 	int status = 0;
-	if ((rel_error > error_tol) || std::isnan(rel_error) || (symm_rel_error_1 > symm_err_tol) || (symm_rel_error_2 > symm_err_tol) || std::isnan(symm_rel_error_1) ||
-	    std::isnan(symm_rel_error_2)) {
+	if ((rel_error > error_tol) || std::isnan(rel_error) || (symm_rel_error_1 > symm_err_tol) || (symm_rel_error_2 > symm_err_tol) ||
+	    std::isnan(symm_rel_error_1) || std::isnan(symm_rel_error_2)) {
 		status = 1;
 	}
 	return status;

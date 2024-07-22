@@ -87,7 +87,7 @@ template <>
 template <typename ArrayType>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<TubeProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
-						  amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/) -> amrex::GpuArray<double, nGroups_>
+						    amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/) -> amrex::GpuArray<double, nGroups_>
 {
 	amrex::GpuArray<double, nGroups_> exponents{};
 	for (int g = 0; g < nGroups_; ++g) {
