@@ -178,7 +178,7 @@ add_subdirectory(RadhydroUniformAdvecting)
 add_subdirectory(RadhydroPulse)
 add_subdirectory(RadhydroPulseDyn)
 add_subdirectory(RadhydroPulseGrey)
-add_subdirectory(RadhydroPulseMGconst)
+add_subdirectory(RadhydroPulseMG)
 add_subdirectory(RadhydroPulseMGint)
 add_subdirectory(RadhydroBB)
 
