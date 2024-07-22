@@ -1558,8 +1558,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					}
 
-					// TODO: move EradVec_guess = Erad0Vec to inside outer loop
-
 					// check relative and absolute convergence of E_r
 					// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
 					// 	break;

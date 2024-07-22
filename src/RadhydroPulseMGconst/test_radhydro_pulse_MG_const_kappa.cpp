@@ -10,7 +10,7 @@
 #include "fextract.hpp"
 #include "physics_info.hpp"
 
-struct GreyProblem {
+struct SGProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 struct MGproblem {
 };
@@ -86,13 +86,13 @@ auto compute_exact_rho(const double x) -> double
 	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
 }
 
-template <> struct quokka::EOS_Traits<GreyProblem> {
+template <> struct quokka::EOS_Traits<SGProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<GreyProblem> {
+template <> struct Physics_Traits<SGProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -103,7 +103,7 @@ template <> struct Physics_Traits<GreyProblem> {
 	static constexpr int nGroups = 1;
 };
 
-template <> struct RadSystem_Traits<GreyProblem> {
+template <> struct RadSystem_Traits<SGProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
@@ -111,7 +111,7 @@ template <> struct RadSystem_Traits<GreyProblem> {
 	static constexpr int beta_order = 1;
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SGProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	for (int g = 0; g < nGroups_; ++g) {
@@ -120,17 +120,12 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyProblem>::ComputePlanckOpac
 	return kappaPVec;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<GreyProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SGProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<GreyProblem>::ComputeEddingtonFactor(double /*f*/) -> double
-{
-	return (1. / 3.); // Eddington approximation
-}
-
-template <> void RadhydroSimulation<GreyProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void RadhydroSimulation<SGProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -146,20 +141,20 @@ template <> void RadhydroSimulation<GreyProblem>::setInitialConditionsOnGrid(quo
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		const double Trad = compute_initial_Tgas(x - x0);
 		const double rho = compute_exact_rho(x - x0);
-		const double Egas = quokka::EOS<GreyProblem>::ComputeEintFromTgas(rho, Trad);
+		const double Egas = quokka::EOS<SGProblem>::ComputeEintFromTgas(rho, Trad);
 		const double Erad = a_rad * Trad * Trad * Trad * Trad;
 
-		state_cc(i, j, k, RadSystem<GreyProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<GreyProblem>::x1RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<GreyProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<GreyProblem>::x3RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SGProblem>::radEnergy_index) = Erad;
+		state_cc(i, j, k, RadSystem<SGProblem>::x1RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SGProblem>::x2RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<SGProblem>::x3RadFlux_index) = 0;
 
-		state_cc(i, j, k, RadSystem<GreyProblem>::gasEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<GreyProblem>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<GreyProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<GreyProblem>::x1GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<GreyProblem>::x2GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<GreyProblem>::x3GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<SGProblem>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<SGProblem>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<SGProblem>::gasInternalEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<SGProblem>::x1GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<SGProblem>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<SGProblem>::x3GasMomentum_index) = 0.;
 	});
 }
 
@@ -195,8 +190,8 @@ template <> struct RadSystem_Traits<MGproblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<MGproblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho,
-							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+RadSystem<MGproblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const /* rad_boundaries */, const double /* rho */,
+							   const double /* Tgas */) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<double, nGroups_ + 1> exponents{};
 	amrex::GpuArray<double, nGroups_ + 1> kappa_lower{};
@@ -206,25 +201,6 @@ RadSystem<MGproblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 	}
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const exponents_and_values{exponents, kappa_lower};
 	return exponents_and_values;
-}
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MGproblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int g = 0; g < nGroups_; ++g) {
-		kappaPVec[g] = kappa0;
-	}
-	return kappaPVec;
-}
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MGproblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	return ComputePlanckOpacity(rho, Tgas);
-}
-
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<MGproblem>::ComputeEddingtonFactor(double /*f*/) -> double
-{
-	return (1. / 3.); // Eddington approximation
 }
 
 template <> void RadhydroSimulation<MGproblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -281,7 +257,7 @@ auto problem_main() -> int
 	// Problem 1: pulse with grey radiation
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<GreyProblem>::nvar_;
+	constexpr int nvars = RadSystem<SGProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		// periodic boundary condition in the x-direction will not work
@@ -294,7 +270,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<GreyProblem> sim(BCs_cc);
+	RadhydroSimulation<SGProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
@@ -323,18 +299,18 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		// const auto Erad_t = values.at(RadSystem<GreyProblem>::radEnergy_index)[i];
+		// const auto Erad_t = values.at(RadSystem<SGProblem>::radEnergy_index)[i];
 		double Erad_t = 0.0;
-		for (int g = 0; g < Physics_Traits<GreyProblem>::nGroups; ++g) {
-			Erad_t += values.at(RadSystem<GreyProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+		for (int g = 0; g < Physics_Traits<SGProblem>::nGroups; ++g) {
+			Erad_t += values.at(RadSystem<SGProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
 		}
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
-		const auto rho_t = values.at(RadSystem<GreyProblem>::gasDensity_index)[i];
-		const auto v_t = values.at(RadSystem<GreyProblem>::x1GasMomentum_index)[i] / rho_t;
-		const auto Egas = values.at(RadSystem<GreyProblem>::gasInternalEnergy_index)[i];
+		const auto rho_t = values.at(RadSystem<SGProblem>::gasDensity_index)[i];
+		const auto v_t = values.at(RadSystem<SGProblem>::x1GasMomentum_index)[i] / rho_t;
+		const auto Egas = values.at(RadSystem<SGProblem>::gasInternalEnergy_index)[i];
 		rhogas.at(i) = rho_t;
 		Trad.at(i) = Trad_t;
-		Tgas.at(i) = quokka::EOS<GreyProblem>::ComputeTgasFromEint(rho_t, Egas);
+		Tgas.at(i) = quokka::EOS<SGProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas.at(i) = 1e-5 * v_t;
 	}
 	// END OF PROBLEM 1
@@ -425,6 +401,19 @@ auto problem_main() -> int
 		Vgas2.at(index_) = 1e-5 * (v_t - v0);
 	}
 	// END OF PROBLEM 2
+
+	// compute error norm
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	for (size_t i = 0; i < xs2.size(); ++i) {
+		err_norm += std::abs(Tgas[i] - Trad[i]);
+		err_norm += std::abs(Trad2[i] - Trad[i]);
+		err_norm += std::abs(Tgas2[i] - Trad[i]);
+		sol_norm += std::abs(Trad[i]) * 3.0;
+	}
+	const double error_tol = 0.006;
+	const double rel_error = err_norm / sol_norm;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 #endif
 
 #ifdef HAVE_PYTHON
@@ -483,8 +472,8 @@ auto problem_main() -> int
 
 	// Cleanup and exit
 	int status = 0;
-	// if ((rel_error > error_tol) || std::isnan(rel_error)) {
-	// 	status = 1;
-	// }
+	if ((rel_error > error_tol) || std::isnan(rel_error)) {
+		status = 1;
+	}
 	return status;
 }
