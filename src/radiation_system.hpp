@@ -272,7 +272,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
-		// TODO(CCH): allow the total radEnergyFraction to be smaller than 1. One usage case is to allow, say, a single group from 13.6 eV to 24.6 eV.
+		// TODO(CCH): allow the total radEnergyFraction to be smaller than 1. One usage case is to allow, say, a single group representing IR radiation.
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {
@@ -1803,10 +1803,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				break;
 			}
 			
-			// TODO(CCH): mistake here. Note that the temperature has changed since last calculation of the kappa's. Need to calculate them again.
-
-			// TODO(CCH): IDEA: simplify this work check by checking if dEkin_work == 0.0
-
 			// If you are here, then you are using the new scheme. Step 3 is skipped. The work term is included in the source term, but it is
 			// lagged. The work term is updated in the next step.
 			const std::array<double, 3> gasMtm1 = {x1GasMom1, x2GasMom1, x3GasMom1};
