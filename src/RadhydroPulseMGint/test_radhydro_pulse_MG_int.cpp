@@ -18,16 +18,13 @@ struct MGProblem {
 struct ExactProblem {
 };
 
-// A fixed power law for radiation quantities; for testing purpose only
-AMREX_GPU_MANAGED double spec_power = -1.0; // NOLINT
-AMREX_GPU_MANAGED int opacity_model_ = 1;
-
-static constexpr bool export_csv = true;
-
 // constexpr int n_groups_ = 2;
 constexpr int n_groups_ = 4;
 // constexpr int n_groups_ = 8;
 // constexpr int n_groups_ = 16;
+// constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
+constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+// constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_full_spectrum;
 
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexpr {
 	if constexpr (n_groups_ == 2) {
@@ -44,6 +41,8 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexp
 		return amrex::GpuArray<double, 65>{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15, 1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15, 3.16227766e+15, 3.65174127e+15, 4.21696503e+15, 4.86967525e+15, 5.62341325e+15, 6.49381632e+15, 7.49894209e+15, 8.65964323e+15, 1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16, 1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16, 3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16, 5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16, 1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17, 1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17, 3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17, 5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17, 1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18, 1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18, 3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18, 5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18, 1.00000000e+19};
 	}
 }();
+
+static constexpr bool export_csv = true;
 
 constexpr double T0 = 1.0e7; // K (temperature)
 constexpr double T1 = 2.0e7; // K (temperature)
@@ -63,8 +62,8 @@ constexpr double scaleup = 1.;
 constexpr double v0_adv = 1.0e6;      // advecting pulse
 constexpr double max_time = 4.8e-5;   // max_time = 2 * width / v1;
 // constexpr double max_time = 2e-5;   // max_time = 2 * width / v1;
-constexpr int64_t max_timesteps = 1e3; // to make 3D test run fast on GPUs
-// constexpr int64_t max_timesteps = 3e8; // to make 3D test run fast on GPUs
+constexpr int64_t max_timesteps = 1e2; // to make 3D test run fast on GPUs
+// constexpr int64_t max_timesteps = 1e8; // full run
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -116,9 +115,7 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
-	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
+	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;
@@ -129,19 +126,6 @@ template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::user;
 };
-
-// template <>
-// template <typename ArrayType>
-// AMREX_GPU_HOST_DEVICE auto RadSystem<MGProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
-// 									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
-//     -> amrex::GpuArray<double, nGroups_>
-// {
-// 	amrex::GpuArray<double, nGroups_> exponents{};
-// 	for (int g = 0; g < nGroups_; ++g) {
-// 		exponents[g] = spec_power;
-// 	}
-// 	return exponents;
-// }
 
 AMREX_GPU_HOST_DEVICE
 auto compute_initial_Tgas(const double x) -> double
@@ -318,8 +302,7 @@ auto problem_main() -> int
 	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
 
 	amrex::ParmParse const pp("rad");
-	pp.query("spec_power", spec_power);
-	pp.query("opacity_model", opacity_model_);
+	// pp.query("opacity_model", opacity_model_);
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<MGProblem>::nvar_;

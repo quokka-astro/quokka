@@ -15,26 +15,6 @@
 #include "radiation_system.hpp"
 #include "test_radiation_marshak_Vaytet.hpp"
 
-// constexpr int the_model = 0; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
-// constexpr int n_groups_ = 6;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {0.3e12, 0.3e14, 0.6e14, 0.9e14, 1.2e14, 1.5e14, 1.5e16};
-// constexpr amrex::GpuArray<double, n_groups_> group_opacities_ = {1000., 750., 500., 250., 10., 10.};
-
-// const std::string modelname = "PPL_free_slope_with_PPL_delta_terms";
-const std::string modelname = "PPL_fixed_slope_with_PPL_delta_terms";
-
-// constexpr double nu_pivot = 0.6e14;
-constexpr int the_model = 10; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
-// 10: bin-centered method with opacities propto nu^-2
-
-constexpr double nu_pivot = 4.0e13;
-constexpr int n_coll = 4; // number of collections = 6, to align with Vaytet
-
-// constexpr int n_groups_ = 3;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {1.0e+10, 6.0e+13, 1.2e+14, 1.0e+16};
-// constexpr int n_groups_ = 6;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {1.0e+10, 3.0e+13, 6.0e+13, 9.0e+13, 1.2e+14, 1.5e+14, 1.0e+16};
-
 // constexpr int n_groups_ = 2; // Be careful
 constexpr int n_groups_ = 4;
 // constexpr int n_groups_ = 8;
@@ -43,8 +23,20 @@ constexpr int n_groups_ = 4;
 // constexpr int n_groups_ = 128;
 // constexpr int n_groups_ = 256;
 // constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
-constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_fixed_slope_spectrum;
-// constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_full_spectrum;
+// constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+constexpr OpacityModel opacity_model_ = OpacityModel::PPL_opacity_full_spectrum;
+
+constexpr double kappa0 = 2000.0; // cm^2 g^-1 (opacity). 
+constexpr double nu_pivot = 4.0e13; // Powerlaw, kappa = kappa0 (nu/nu_pivot)^{-2}
+constexpr int n_coll = 4; // number of collections = 6, to align with Vaytet
+constexpr int the_model = 10; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
+// 10: bin-centered method with opacities propto nu^-2
+
+// OLD
+// constexpr int the_model = 0; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
+// constexpr int n_groups_ = 6;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {0.3e12, 0.3e14, 0.6e14, 0.9e14, 1.2e14, 1.5e14, 1.5e16};
+// constexpr amrex::GpuArray<double, n_groups_> group_opacities_ = {1000., 750., 500., 250., 10., 10.};
 
 // NEW
 constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
@@ -188,7 +180,6 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
 	} 
 }();
 
-
 // constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = []() constexpr {
 // 	if constexpr (n_groups_ == 2) {
 // 		return amrex::GpuArray<double, 3>{1.0e+11, 8.0e+13, 1.0e+16};
@@ -324,7 +315,6 @@ struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int max_step_ = 1e6;
-constexpr double kappa = 2000.0; // cm^2 g^-1 (opacity)
 constexpr double rho0 = 1.0e-3; // g cm^-3
 constexpr double T_initial = 300.0; // K
 constexpr double T_L = 1000.0; // K
@@ -395,7 +385,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Defi
 	}
 		if constexpr (the_model == 0) {
 			for (int i = 0; i < nGroups_; ++i) {
-				exponents_and_values[1][i] = kappa;
+				exponents_and_values[1][i] = kappa0;
 			}
 		} else if constexpr (the_model == 1) {
 			for (int i = 0; i < nGroups_; ++i) {
@@ -409,48 +399,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Defi
 			if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 				for (int i = 0; i < nGroups_; ++i) {
 					auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
-					exponents_and_values[1][i] = kappa * std::pow(bin_center / nu_pivot, -2.);
+					exponents_and_values[1][i] = kappa0 * std::pow(bin_center / nu_pivot, -2.);
 				}
 			} else {
 				for (int i = 0; i < nGroups_ + 1; ++i) {
-					exponents_and_values[1][i] = kappa * std::pow(group_edges_[i] / nu_pivot, -2.);
+					exponents_and_values[1][i] = kappa0 * std::pow(group_edges_[i] / nu_pivot, -2.);
 				}
 			}
 		}	
 	return exponents_and_values;
 }
-
-// template <>
-// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double Tgas)
-//     -> quokka::valarray<double, nGroups_>
-// {
-// 	quokka::valarray<double, nGroups_> kappaPVec{};
-// 	for (int i = 0; i < nGroups_; ++i) {
-// 		if constexpr (the_model == 0) {
-// 			kappaPVec[i] = kappa;
-// 		} else if constexpr (the_model == 10) {
-// 			auto const bin_center = std::sqrt(group_edges_[i] * group_edges_[i + 1]);
-// 			kappaPVec[i] = kappa * std::pow(bin_center / nu_pivot, -2.);
-// 		} else if constexpr (the_model == 1) {
-// 			kappaPVec[i] = group_opacities_[i];
-// 		} else {
-// 			kappaPVec[i] = group_opacities_[i] * std::pow(Tgas / T_initial, 3./2.);
-// 		}
-// 	}
-// 	return kappaPVec;
-// }
-
-// template <>
-// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
-//     -> quokka::valarray<double, nGroups_>
-// {
-// 	return ComputePlanckOpacity(rho, Tgas);
-// }
-
-// template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double
-// {
-// 	return (1. / 3.); // Eddington approximation
-// }
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
@@ -777,7 +735,13 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel("temperature (K)");
 		matplotlibcpp::legend();
 		// matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
-		matplotlibcpp::title(modelname);
+		if (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+			matplotlibcpp::title("PC");
+		} else if (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
+			matplotlibcpp::title("PPL-fixed");
+		} else if (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
+			matplotlibcpp::title("PPL-free");
+		}
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./marshak_wave_Vaytet.pdf");
 #endif // HAVE_PYTHON
