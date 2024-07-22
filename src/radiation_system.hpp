@@ -1216,8 +1216,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		work.fillin(0.0);
 		work_prev.fillin(0.0);
 
-		EradVec_guess = Erad0Vec;
-
 		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 			Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
@@ -1258,6 +1256,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		int ite = 0;
 		for (; ite < max_ite; ++ite) {
 			quokka::valarray<double, nGroups_> Rvec{};
+
+			EradVec_guess = Erad0Vec;
 
 			if constexpr (gamma_ != 1.0) {
 				Egas_guess = Egas0;
