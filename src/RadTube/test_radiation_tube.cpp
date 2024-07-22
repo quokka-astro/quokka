@@ -186,6 +186,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 		amrex::Real const Pgas = interpolate_value(x, x_ptr, Pgas_ptr, x_size);
 		amrex::Real const Erad = interpolate_value(x, x_ptr, Erad_ptr, x_size);
 		amrex::Real const Tgas = Pgas / C::k_B * mu / rho;
+		AMREX_ASSERT(!std::isnan(rho));
 
 		// calculate radEnergyFractions based on the boundary conditions
 		auto radEnergyFractions = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, Tgas);

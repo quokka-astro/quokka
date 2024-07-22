@@ -58,9 +58,7 @@ template <> struct quokka::EOS_Traits<ShockCloud> {
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-// global variables
-namespace
-{
+/// global variables
 // Problem properties (set inside problem_main())
 bool sharp_cloud_edge = false; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 bool do_frame_shift = true;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -78,7 +76,6 @@ AMREX_GPU_MANAGED Real rho_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-cons
 AMREX_GPU_MANAGED Real v_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real P_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real delta_vx = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-} // namespace
 
 template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid grid)
 {
