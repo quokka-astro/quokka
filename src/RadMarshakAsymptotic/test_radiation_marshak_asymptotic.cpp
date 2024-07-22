@@ -71,18 +71,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Comp
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> opacity_deriv{};
-	auto sigma_dT = (-3.0 * kappa / Tgas) * std::pow(Tgas / T_hohlraum, -3); // cm^-1
-	for (int i = 0; i < nGroups_; ++i) {
-		opacity_deriv[i] = sigma_dT / rho;
-	}
-	return opacity_deriv;
-}
-
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation
