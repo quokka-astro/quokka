@@ -1243,7 +1243,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 		// define a list of alpha_quant for the model PPL_opacity_fixed_slope_spectrum
 		amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
-		if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
+		if constexpr ((opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) ||
+			      (gamma_ == 1.0 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum)) {
 			if constexpr (!special_edge_bin_slopes) {
 				for (int g = 0; g < nGroups_; ++g) {
 					alpha_quant_minus_one[g] = -1.0;
@@ -1629,6 +1630,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							} else {
 								kappaFVec = kappaPVec;
 							}
+						} else {
+							kappaFVec =
+							    ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
 						}
 					} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 						// Note that alpha_F has not been changed in the Newton iteration
@@ -1646,11 +1650,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							} else { // fall back to bin-center opacity
 								kappaFVec = ComputeBinCenterOpacity(radBoundaries_g_copy, kappa_expo_and_lower_value);
 							}
+						} else {
+							kappaFVec =
+							    ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
 						}
 					}
 				}
 			}
-			// TODO(CCH): define kappaFVec when gamma_ == 1.0
 
 			dMomentum = {0., 0., 0.};
 
