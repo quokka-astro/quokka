@@ -104,8 +104,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
-	using AMRSimulation<problem_t>::tempCeiling_;
-	using AMRSimulation<problem_t>::speedCeiling_;
 
 	SimulationData<problem_t> userData_;
 
@@ -603,7 +601,10 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	}
 
 	amrex::Real const abs_err = (Etot - Etot0);
-	amrex::Real const rel_err = abs_err / Etot0;
+	amrex::Real rel_err = NAN;
+	if (Etot0 != 0) {
+		rel_err = abs_err / Etot0;
+	}
 
 	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
 	amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
@@ -760,7 +761,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 	BL_PROFILE("RadhydroSimulation::FixupState()");
 
 	// fix hydro state
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
 
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
@@ -1194,7 +1195,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew);
 
 
 				for (amrex::MFIter iter(stateNew); iter.isValid(); ++iter) {
@@ -1331,7 +1332,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 // 			}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal);
 
 
 // 						for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
