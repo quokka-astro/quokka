@@ -6,7 +6,6 @@
 
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
-#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_radiation_marshak_Vaytet.hpp"
 

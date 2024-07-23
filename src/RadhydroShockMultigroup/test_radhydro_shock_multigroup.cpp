@@ -64,8 +64,8 @@ template <> struct RadSystem_Traits<ShockProblem> {
 													  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
-	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
-	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {
