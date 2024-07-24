@@ -4,7 +4,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_radiation_tube.cpp
-/// \brief Defines a test problem for radiation pressure terms.
+/// \brief Defines a test problem for radiation pressure terms. This is also a trivial test for the PPL_fixed_slope opacity model.
 ///
 
 #include <string>
@@ -36,6 +36,7 @@ constexpr double rho0 = 1.0;		    // g cm^-3
 constexpr double T0 = 2.75e7;		    // K
 constexpr double rho1 = 2.1940476649492044; // g cm^-3
 constexpr double T1 = 2.2609633884436745e7; // K
+constexpr double a_rad = C::a_rad;
 
 constexpr double a0 = 4.0295519855200705e7; // cm s^-1
 
@@ -60,28 +61,45 @@ template <> struct Physics_Traits<TubeProblem> {
 template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = 10.0 * a0;
-	static constexpr double radiation_constant = radiation_constant_cgs_;
+	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::k_B;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0., 3.3 * T0, inf}; // Kelvin
+	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 3.3 * T0, 1000. * T0}; // Kelvin
+	// static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 1000. * T0}; // Kelvin
 	static constexpr int beta_order = 1;
-	static constexpr OpacityModel opacity_model = OpacityModel::user;
+	// static constexpr OpacityModel opacity_model = OpacityModel::single_group;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<TubeProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+							     const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int g = 0; g < nGroups_; ++g) {
-		kappaPVec[g] = kappa0;
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[0][i] = 0.0;
+		exponents_and_values[1][i] = kappa0;
 	}
-	return kappaPVec;
+	return exponents_and_values;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	return ComputePlanckOpacity(rho, Tgas);
-}
+// template <>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+// {
+// 	quokka::valarray<double, nGroups_> kappaPVec{};
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 		kappaPVec[g] = kappa0;
+// 	}
+// 	return kappaPVec;
+// }
+
+// template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double,
+// nGroups_>
+// {
+// 	return ComputePlanckOpacity(rho, Tgas);
+// }
 
 // declare global variables
 // initial conditions read from file
@@ -276,8 +294,8 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<TubeProblem> sim(BCs_cc);
 
-	sim.radiationReconstructionOrder_ = 2; // PLM
-	sim.reconstructionOrder_ = 2;	       // PLM
+	sim.radiationReconstructionOrder_ = 3; // PPM
+	sim.reconstructionOrder_ = 3;	       // PPM
 	sim.stopTime_ = tmax;
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
@@ -323,27 +341,27 @@ auto problem_main() -> int
 		}
 		Erad_exact_arr[i] = Erad_0;
 		Erad_arr[i] = Erad_t;
-		const double Trad_exact = std::pow(Erad_0 / radiation_constant_cgs_, 1. / 4.);
-		const double Trad = std::pow(Erad_t / radiation_constant_cgs_, 1. / 4.);
+		const double Trad_exact = std::pow(Erad_0 / a_rad, 1. / 4.);
+		const double Trad = std::pow(Erad_t / a_rad, 1. / 4.);
 		Trad_arr[i] = Trad;
 		Trad_exact_arr[i] = Trad_exact;
 		Trad_err[i] = (Trad - Trad_exact) / Trad_exact;
 
-		double Egas_exact = values0.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
-		double x1GasMom_exact = values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
-		double x2GasMom_exact = values0.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
-		double x3GasMom_exact = values0.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
+		double const Egas_exact = values0.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
+		double const x1GasMom_exact = values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+		double const x2GasMom_exact = values0.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
+		double const x3GasMom_exact = values0.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
 
-		double Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
-		double x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
-		double x2GasMom = values.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
-		double x3GasMom = values.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
+		double const Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
+		double const x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+		double const x2GasMom = values.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
+		double const x3GasMom = values.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
 
-		double Eint_exact = RadSystem<TubeProblem>::ComputeEintFromEgas(rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact);
-		double Tgas_exact = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho_exact, Eint_exact);
+		double const Eint_exact = RadSystem<TubeProblem>::ComputeEintFromEgas(rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact);
+		double const Tgas_exact = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho_exact, Eint_exact);
 
-		double Eint = RadSystem<TubeProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Egas);
-		double Tgas = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho, Eint);
+		double const Eint = RadSystem<TubeProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Egas);
+		double const Tgas = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho, Eint);
 
 		Tgas_arr[i] = Tgas;
 		Tgas_err[i] = (Tgas - Tgas_exact) / Tgas_exact;
