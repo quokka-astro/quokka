@@ -174,19 +174,6 @@ auto compute_exact_bb(const double nu, const double T) -> double
 	return coeff * planck_integral / (std::pow(PI, 4) / 15.0) * (a_rad * std::pow(T, 4));
 }
 
-// template <>
-// template <typename ArrayType>
-// AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
-// 									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
-//     -> amrex::GpuArray<double, nGroups_>
-// {
-// 	amrex::GpuArray<double, nGroups_> exponents{};
-// 	for (int g = 0; g < nGroups_; ++g) {
-// 		exponents[g] = -1.0;
-// 	}
-// 	return exponents;
-// }
-
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object

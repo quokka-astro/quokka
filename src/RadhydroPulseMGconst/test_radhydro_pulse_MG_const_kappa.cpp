@@ -10,8 +10,10 @@
 #include "fextract.hpp"
 #include "physics_info.hpp"
 
+// Single-group problem
 struct SGProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
+// Multi-group problem
 struct MGproblem {
 };
 
@@ -254,7 +256,6 @@ auto problem_main() -> int
 
 	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
 
-#if 1
 	// Problem 1: pulse with grey radiation
 
 	// Boundary conditions
@@ -315,11 +316,9 @@ auto problem_main() -> int
 		Vgas.at(i) = 1e-5 * v_t;
 	}
 	// END OF PROBLEM 1
-#endif
 
 	// Problem 2: advecting pulse
 
-#if 1
 	// Boundary conditions
 	constexpr int nvars2 = RadSystem<MGproblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc2(nvars2);
@@ -415,7 +414,6 @@ auto problem_main() -> int
 	const double error_tol = 0.006;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
-#endif
 
 #ifdef HAVE_PYTHON
 	// plot temperature

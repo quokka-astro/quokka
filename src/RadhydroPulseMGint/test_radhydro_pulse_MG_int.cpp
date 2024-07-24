@@ -177,7 +177,7 @@ RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 	amrex::GpuArray<double, nGroups_ + 1> kappa_lower{};
 
 	for (int g = 0; g < nGroups_ + 1; ++g) {
-		if (RadSystem_Traits<MGProblem>::opacity_model == OpacityModel::piecewise_constant_opacity) {
+		if constexpr (RadSystem_Traits<MGProblem>::opacity_model == OpacityModel::piecewise_constant_opacity) {
 			exponents[g] = 0.0;
 			if (g < n_groups_) {
 				auto nu_center = std::sqrt(rad_boundaries[g] * rad_boundaries[g + 1]);
@@ -198,12 +198,6 @@ RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 		AMREX_ASSERT(!std::isnan(exponents[g]));
 		AMREX_ASSERT(kappa_lower[g] >= 0.);
 	}
-
-	// dummy test
-	// for (int g = 0; g < nGroups_ + 1; ++g) {
-	// 	exponents[g] = 0.0;
-	// 	kappa_lower[g] = kappa0;
-	// }
 
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const exponents_and_values{exponents, kappa_lower};
 	return exponents_and_values;
@@ -235,10 +229,6 @@ template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	// auto const &x_ptr = x_arr_g.dataPtr(); // x = h nu / k T
-	// auto const &Fnu_ptr = Fnu_arr_g.dataPtr(); // = F_nu / B_0
-	// int const x_size = static_cast<int>(x_arr_g.size());
-
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
 	const auto radBoundaries_g = RadSystem_Traits<MGProblem>::radBoundaries;
@@ -256,10 +246,8 @@ template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokk
 
 		for (int g = 0; g < Physics_Traits<MGProblem>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<MGProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
-			// old: incorrect group-integrated flux
-			// auto frad_old = 4. / 3. * v0 * Erad_g[g];
-			// state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = frad_old;
-			// new: correct flux
+			// OLD, correct if you ignore the (delta nu B) term
+			// state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad_g[g];
 			state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad_g[g];
 			state_cc(i, j, k, RadSystem<MGProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<MGProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
@@ -318,7 +306,6 @@ auto problem_main() -> int
 	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
 
 	amrex::ParmParse const pp("rad");
-	// pp.query("opacity_model", opacity_model_);
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<MGProblem>::nvar_;
