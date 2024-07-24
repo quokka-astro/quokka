@@ -198,9 +198,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
-	static void ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t &radEnergySource, array_t &src, amrex::Box const &indexRange,
-					       amrex::Real dt);
-
 	// Use an additionalr template for ComputeMassScalars as the Array type is not always the same
 	template <typename ArrayType>
 	AMREX_GPU_DEVICE static auto ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>;
@@ -1895,45 +1892,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1][g];
 			consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2][g];
 		}
-	});
-}
-
-// CCH: this function ComputeSourceTermsExplicit is never used.
-template <typename problem_t>
-void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t & /*radEnergySource*/, array_t &src, amrex::Box const &indexRange,
-						      amrex::Real dt)
-{
-	const double chat = c_hat_;
-	const double a_rad = radiation_constant_;
-
-	// cell-centered kernel
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// load gas energy
-		const auto rho = consPrev(i, j, k, gasDensity_index);
-		const auto Egastot0 = consPrev(i, j, k, gasEnergy_index);
-		const auto x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
-		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
-		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
-		const auto Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
-		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
-
-		// load radiation energy, momentum
-		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
-		const auto Frad0_x = consPrev(i, j, k, x1RadFlux_index);
-
-		// compute material temperature
-		const auto T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
-
-		// compute opacity, emissivity
-		const auto kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
-		const auto fourPiB = chat * a_rad * std::pow(T_gas, 4);
-
-		// compute reaction term
-		const auto rhs = dt * (rho * kappa) * (fourPiB - chat * Erad0);
-		const auto Fx_rhs = -dt * chat * (rho * kappa) * Frad0_x;
-
-		src(radEnergy_index, i) = rhs;
-		src(x1RadFlux_index, i) = Fx_rhs;
 	});
 }
 
