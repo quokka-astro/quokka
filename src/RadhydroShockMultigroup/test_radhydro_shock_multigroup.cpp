@@ -260,6 +260,8 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<ShockProblem> sim(BCs_cc);
 
+	sim.radiationReconstructionOrder_ = 3; // PPM
+	sim.reconstructionOrder_ = 3;	       // PPM
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;

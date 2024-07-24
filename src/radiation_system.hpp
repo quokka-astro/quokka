@@ -1085,7 +1085,16 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::P
 	// returns 4 pi B(nu) / c
 	double const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
 	double const x = coeff * nu;
-	double const planck_integral = std::pow(x, 3) / (std::exp(x) - 1.0);
+	if (x > 100.) {
+		return 0.0;
+	}
+	double planck_integral = NAN;
+	if (x <= 1.0e-10) {
+		// Taylor series
+		planck_integral = x * x - x * x * x / 2.;
+	} else {
+		planck_integral = std::pow(x, 3) / (std::exp(x) - 1.0);
+	}
 	return coeff / (std::pow(PI, 4) / 15.0) * (radiation_constant_ * std::pow(T, 4)) * planck_integral;
 }
 

@@ -294,8 +294,8 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<TubeProblem> sim(BCs_cc);
 
-	sim.radiationReconstructionOrder_ = 2; // PLM
-	sim.reconstructionOrder_ = 2;	       // PLM
+	sim.radiationReconstructionOrder_ = 3; // PLM
+	sim.reconstructionOrder_ = 3;	       // PLM
 	sim.stopTime_ = tmax;
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
