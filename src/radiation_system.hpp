@@ -257,10 +257,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	ComputeThermalRadiationTempDerivative(amrex::Real temperature,
 					      amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
 
-	// template <FluxDir DIR>
-	// AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-	// 						     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j,
-	// 						     int k) -> quokka::valarray<double, nGroups_>;
+	template <FluxDir DIR>
+	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j,
+							     int k, const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries) -> quokka::valarray<double, nGroups_>;
 
 	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
 
@@ -585,84 +585,74 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &
 	return massScalars;
 }
 
-// template <typename problem_t>
-// template <FluxDir DIR>
-// AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-// 								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j,
-// 								    int k) -> quokka::valarray<double, nGroups_>
-// {
-// 	// compute interface-averaged cell optical depth
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
+								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j,
+								    int k, const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries) -> quokka::valarray<double, nGroups_>
+{
+	// compute interface-averaged cell optical depth
 
-// 	// [By convention, the interfaces are defined on the left edge of each
-// 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
-// 	// the left edge of zone i, and xright_(i) is the "right"-side of the
-// 	// interface at the *left* edge of zone i.]
+	// [By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xleft_(i) is the "left"-side of the interface at
+	// the left edge of zone i, and xright_(i) is the "right"-side of the
+	// interface at the *left* edge of zone i.]
 
-// 	// piecewise-constant reconstruction
-// 	const double rho_L = consVar(i - 1, j, k, gasDensity_index);
-// 	const double rho_R = consVar(i, j, k, gasDensity_index);
+	// piecewise-constant reconstruction
+	const double rho_L = consVar(i - 1, j, k, gasDensity_index);
+	const double rho_R = consVar(i, j, k, gasDensity_index);
 
-// 	const double x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
-// 	const double x1GasMom_R = consVar(i, j, k, x1GasMomentum_index);
+	const double x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
+	const double x1GasMom_R = consVar(i, j, k, x1GasMomentum_index);
 
-// 	const double x2GasMom_L = consVar(i - 1, j, k, x2GasMomentum_index);
-// 	const double x2GasMom_R = consVar(i, j, k, x2GasMomentum_index);
+	const double x2GasMom_L = consVar(i - 1, j, k, x2GasMomentum_index);
+	const double x2GasMom_R = consVar(i, j, k, x2GasMomentum_index);
 
-// 	const double x3GasMom_L = consVar(i - 1, j, k, x3GasMomentum_index);
-// 	const double x3GasMom_R = consVar(i, j, k, x3GasMomentum_index);
+	const double x3GasMom_L = consVar(i - 1, j, k, x3GasMomentum_index);
+	const double x3GasMom_R = consVar(i, j, k, x3GasMomentum_index);
 
-// 	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
-// 	const double Egas_R = consVar(i, j, k, gasEnergy_index);
+	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
+	const double Egas_R = consVar(i, j, k, gasEnergy_index);
 
-// 	auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(consVar, i - 1, j, k);
-// 	auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(consVar, i, j, k);
+	auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(consVar, i - 1, j, k);
+	auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(consVar, i, j, k);
 
-// 	double Eint_L = NAN;
-// 	double Eint_R = NAN;
-// 	double Tgas_L = NAN;
-// 	double Tgas_R = NAN;
+	double Eint_L = NAN;
+	double Eint_R = NAN;
+	double Tgas_L = NAN;
+	double Tgas_R = NAN;
 
-// 	if constexpr (gamma_ != 1.0) {
-// 		Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
-// 		Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
-// 		Tgas_L = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L, massScalars_L);
-// 		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R, massScalars_R);
-// 	}
+	if constexpr (gamma_ != 1.0) {
+		Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
+		Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
+		Tgas_L = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L, massScalars_L);
+		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R, massScalars_R);
+	}
 
-// 	double dl = NAN;
-// 	if constexpr (DIR == FluxDir::X1) {
-// 		dl = dx[0];
-// 	} else if constexpr (DIR == FluxDir::X2) {
-// 		dl = dx[1];
-// 	} else if constexpr (DIR == FluxDir::X3) {
-// 		dl = dx[2];
-// 	}
+	double dl = NAN;
+	if constexpr (DIR == FluxDir::X1) {
+		dl = dx[0];
+	} else if constexpr (DIR == FluxDir::X2) {
+		dl = dx[1];
+	} else if constexpr (DIR == FluxDir::X3) {
+		dl = dx[2];
+	}
 
+	quokka::valarray<double, nGroups_> optical_depths{};
+	if constexpr (nGroups_ == 1) {
+		const double tau_L = dl * rho_L * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_L, Tgas_L);
+		const double tau_R = dl * rho_R * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_R, Tgas_R);
+		optical_depths[0] = (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean. Alternative: 0.5*(tau_L + tau_R)
+	} else {
+		const auto opacity_L = DefineOpacityExponentsAndLowerValues(group_boundaries, rho_L, Tgas_L);
+		const auto opacity_R = DefineOpacityExponentsAndLowerValues(group_boundaries, rho_R, Tgas_R);
+		const auto tau_L = dl * rho_L * ComputeBinCenterOpacity(group_boundaries, opacity_L);
+		const auto tau_R = dl * rho_R * ComputeBinCenterOpacity(group_boundaries, opacity_R);
+		optical_depths = (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean. Alternative: 0.5*(tau_L + tau_R)
+	}
 
-// 	// return (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean
-// 	// 					       // return 0.5*(tau_L + tau_R); // arithmetic mean
-
-// 	quokka::valarray<double, nGroups_> optical_depths{};
-// 	if constexpr (nGroups_ == 1) {
-// 		const double tau_L = dl * rho_L * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_L, Tgas_L);
-// 		const double tau_R = dl * rho_R * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_R, Tgas_R);
-// 		optical_depths[0] = (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean
-// 	} else {
-// 		const auto tau_L = dl * rho_L * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_L, Tgas_L);
-// 		const auto tau_R = dl * rho_R * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_R, Tgas_R);
-// 		for (int g = 0; g < nGroups_; ++g) {
-// 			const auto kappa_L = RadSystem<problem_t>::ComputeKappa(rho_L, Tgas_L, massScalars_L, g);
-// 			const auto kappa_R = RadSystem<problem_t>::ComputeKappa(rho_R, Tgas_R, massScalars_R, g);
-
-// 			const auto tau_L = dl * rho_L * kappa_L;
-// 			const auto tau_R = dl * rho_R * kappa_R;
-
-// 			optical_depths[g] = (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean
-// 		}
-// 	}
-
-// 	return optical_depths;
-// }
+	return optical_depths;
+}
 
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double fx, const double fy, const double fz) -> std::array<std::array<double, 3>, 3>
@@ -788,6 +778,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
 	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
 
+	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
+
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
 	// the left edge of zone i.
@@ -798,15 +790,20 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
+		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
+		for (int g = 0; g < nGroups_ + 1; ++g) {
+			radBoundaries_g_copy[g] = radBoundaries_g[g];
+		}
+
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
 		// calculate cell optical depth for each photon group
 		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
 		quokka::valarray<double, nGroups_> tau_cell{};
-		// if (use_wavespeed_correction) {
-		// 	tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
-		// }
+		if (use_wavespeed_correction) {
+			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, radBoundaries_g_copy);
+		}
 
 		// gather left- and right- state variables
 		for (int g = 0; g < nGroups_; ++g) {
