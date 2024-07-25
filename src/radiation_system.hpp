@@ -946,6 +946,10 @@ RadSystem<problem_t>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 							   const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	for (int g = 0; g < nGroups_ + 1; ++g) {
+		exponents_and_values[0][g] = NAN;
+		exponents_and_values[1][g] = NAN;
+	}
 	return exponents_and_values;
 }
 
