@@ -59,9 +59,7 @@ template <> struct Physics_Traits<TophatProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho,
-											     const double /*Tgas*/) -> amrex::Real
+template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> amrex::Real
 {
 	amrex::Real kappa = 0.;
 	if (rho == rho_pipe) {
@@ -75,8 +73,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeP
 }
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho,
-											       const double /*Tgas*/) -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> amrex::Real
 {
 	return ComputePlanckOpacity(rho, 0.);
 }

@@ -52,17 +52,14 @@ template <> struct Physics_Traits<SuOlsonProblemCgs> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho,
-												 const double Tgas) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
-	return sigma / rho; // cm^2 g^-1
+	return sigma / rho;				      // cm^2 g^-1
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho,
-												   const double Tgas) -> amrex::Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }

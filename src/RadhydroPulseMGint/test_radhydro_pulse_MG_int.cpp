@@ -209,8 +209,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpa
 	return sigma / rho;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	const double sigma = scaleup * 101.248 * std::pow(Tgas / T0, -3.5);
 	return sigma / rho;

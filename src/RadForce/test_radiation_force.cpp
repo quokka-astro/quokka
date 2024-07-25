@@ -31,7 +31,7 @@
 struct TubeProblem {
 };
 
-constexpr amrex::Real kappa0 = 5.0;	     // cm^2 g^-1
+constexpr amrex::Real kappa0 = 5.0;  // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g
 constexpr double gamma_gas = 1.0;    // isothermal gas EOS
 constexpr double a0 = 0.2e5;	     // cm s^-1
@@ -73,15 +73,9 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr int beta_order = 1;
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return 0.;
-}
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real { return 0.; }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return kappa0;
 }

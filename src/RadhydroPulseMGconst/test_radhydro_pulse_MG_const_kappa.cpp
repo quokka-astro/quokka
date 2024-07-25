@@ -113,11 +113,7 @@ template <> struct RadSystem_Traits<SGProblem> {
 	static constexpr int beta_order = 1;
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SGProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return kappa0;
-}
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SGProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real { return kappa0; }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SGProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
