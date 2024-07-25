@@ -28,7 +28,7 @@ constexpr double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
 					 // dimensionless speed of light
 constexpr double k_B = (c_s0 * c_s0);	 // required to make temperature and sound speed consistent
 
-const double kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
+const amrex::Real kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
 constexpr double gamma_gas = (5. / 3.);
 constexpr double mu = gamma_gas;		       // mean molecular weight (required s.t. c_s0 == 1)
 constexpr double c_v = k_B / (mu * (gamma_gas - 1.0)); // specific heat
@@ -80,17 +80,13 @@ template <> struct Physics_Traits<ShockProblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho,
-											    const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+											    const double /*Tgas*/) -> amrex::Real
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = kappa / rho;
-	}
-	return kappaPVec;
+	return kappa / rho;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ShockProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<ShockProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> amrex::Real
 {
 	return ComputePlanckOpacity(rho, 0.0);
 }

@@ -56,19 +56,15 @@ template <> struct Physics_Traits<SuOlsonProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = kappa;
-	}
-	return kappaPVec;
+	return kappa;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
-	return ComputePlanckOpacity(0.0, 0.0);
+	return kappa;
 }
 
 static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblem>::numMassScalars;

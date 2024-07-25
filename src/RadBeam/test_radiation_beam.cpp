@@ -52,19 +52,15 @@ template <> struct Physics_Traits<BeamProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int g = 0; g < nGroups_; ++g) {
-		kappaPVec[g] = kappa0;
-	}
-	return kappaPVec;
+	return kappa0;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
-	return ComputePlanckOpacity(0., 0.);
+	return kappa0;
 }
 
 template <>

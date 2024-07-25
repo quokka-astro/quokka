@@ -87,24 +87,6 @@ RadSystem<ShockProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<do
 	return exponents_and_values;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho,
-											    const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_ - 1; ++i) {
-		kappaPVec[i] = kappa / rho;
-	}
-	kappaPVec[nGroups_ - 1] = 0.0;
-	return kappaPVec;
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ShockProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
-{
-	return ComputePlanckOpacity(rho, 0.0);
-}
-
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputeEddingtonFactor(double /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation

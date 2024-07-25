@@ -203,21 +203,17 @@ RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 	return exponents_and_values;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	const double sigma = scaleup * 3063.96 * std::pow(Tgas / T0, -3.5);
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	kappaPVec.fillin(sigma / rho);
-	return kappaPVec;
+	return sigma / rho;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	const double sigma = scaleup * 101.248 * std::pow(Tgas / T0, -3.5);
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	kappaPVec.fillin(sigma / rho);
-	return kappaPVec;
+	return sigma / rho;
 }
 
 template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)

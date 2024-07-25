@@ -71,19 +71,15 @@ template <> struct Physics_Traits<MarshakProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> amrex::Real
 {
-	quokka::valarray<double, nGroups_> kappaVec{};
-	for (int g = 0; g < nGroups_; ++g) {
-		kappaVec[g] = kappa / rho;
-	}
-	return kappaVec;
+	return kappa / rho;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	return ComputePlanckOpacity(rho, Tgas);
+	return kappa / rho;
 }
 
 static constexpr int nmscalars_ = Physics_Traits<MarshakProblem>::numMassScalars;
