@@ -1,23 +1,23 @@
 // devcontainer.json
-{
-  "name": "quokka-dev",
-  "image": "ghcr.io/benwibking/quokka-container:main",
-  "customizations": {
-    "vscode": {
-      "settings": {},
-      "extensions": [
-        "-ms-vscode.cpptools",
-        "llvm-vs-code-extensions.vscode-clangd",
-        "github.vscode-github-actions",
-        "github.vscode-pull-request-github",
-        "ms-python.python",
-        "ms-toolsai.jupyter",
-        "ms-vscode.live-server",
-        "lextudio.restructuredtext",
-        "trond-snekvik.simple-rst",
-        "swyddfa.esbonio"
-      ]
+    {
+      "name": "quokka-dev",
+      "image": "ghcr.io/benwibking/quokka-container:main",
+      "customizations": {
+        "vscode": {
+          "settings": {},
+          "extensions": [
+            "-ms-vscode.cpptools",
+            "llvm-vs-code-extensions.vscode-clangd",
+            "github.vscode-github-actions",
+            "github.vscode-pull-request-github",
+            "ms-python.python",
+            "ms-toolsai.jupyter",
+            "ms-vscode.live-server",
+            "lextudio.restructuredtext",
+            "trond-snekvik.simple-rst",
+            "swyddfa.esbonio"
+          ]
+        }
+      },
+      "remoteUser": "ubuntu"
     }
-  },
-  "remoteUser": "ubuntu"
-}
