@@ -6,14 +6,16 @@
     "vscode": {
       "settings": {},
       "extensions": [
-        "-ms-vscode.cpptools", // conflicts with vscode-clangd
+        "-ms-vscode.cpptools",
         "llvm-vs-code-extensions.vscode-clangd",
         "github.vscode-github-actions",
         "github.vscode-pull-request-github",
         "ms-python.python",
         "ms-toolsai.jupyter",
         "ms-vscode.live-server",
-        "lextudio.restructuredtext"
+        "lextudio.restructuredtext",
+        "trond-snekvik.simple-rst",
+        "swyddfa.esbonio"
       ]
     }
   },
