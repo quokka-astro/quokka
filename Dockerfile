@@ -14,7 +14,7 @@ WORKDIR /home/ubuntu
 USER ubuntu
 
 # install esbonio for Sphinx VSCode support
-RUN pipx install esbonio && pipx ensurepath
+RUN pip install esbonio --break-system-packages
 
 # workaround Python babel bug
 ENV TZ=UTC
