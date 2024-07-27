@@ -1,7 +1,7 @@
 // devcontainer.json
     {
       "name": "quokka-dev",
-      "image": "ghcr.io/benwibking/quokka-container:main",
+      "image": "ghcr.io/quokka-astro/quokka:development",
       "customizations": {
         "vscode": {
           "settings": {},
