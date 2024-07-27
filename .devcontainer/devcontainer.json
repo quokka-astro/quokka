@@ -19,12 +19,14 @@
             "ms-python.python",
             "ms-toolsai.jupyter",
             "ms-vscode.live-server",
-            //"trond-snekvik.simple-rst",
             "swyddfa.esbonio",
-            "tomoki1207.pdf" // this does not work on codespaces
+            "tomoki1207.pdf" // this extension does not work on codespaces
           ]
         }
       },
       "remoteUser": "ubuntu",
+      // we need to manually checkout the submodules,
+      // but VSCode may try to configure CMake before they are fully checked-out.
+      // workaround TBD
       "postCreateCommand": "git submodule update --init"
     }
