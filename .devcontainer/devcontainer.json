@@ -11,8 +11,10 @@
         "vscode": {
           "settings": {},
           "extensions": [
-            "-ms-vscode.cpptools", // disabled, since it interferes with clangd
-            "-ms-azuretools.vscode-docker", // disabled, since this is confusing for codespace users
+            "-ms-vscode.cpptools",
+            // disabled, since it interferes with clangd
+            "-ms-azuretools.vscode-docker",
+            // disabled, since this is confusing for codespace users
             "llvm-vs-code-extensions.vscode-clangd",
             "github.vscode-github-actions",
             "github.vscode-pull-request-github",
@@ -21,9 +23,10 @@
             "ms-vscode.live-server",
             "lextudio.restructuredtext",
             "trond-snekvik.simple-rst",
-            "swyddfa.esbonio", // this does not work
+            "swyddfa.esbonio",
+            // this does not work
             "tomoki1207.pdf" // this does not work on codespaces
-        ]
+          ]
         }
       },
       "remoteUser": "ubuntu"
