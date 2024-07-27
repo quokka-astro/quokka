@@ -19,7 +19,6 @@
             "ms-python.python",
             "ms-toolsai.jupyter",
             "ms-vscode.live-server",
-            "lextudio.restructuredtext",
             "trond-snekvik.simple-rst",
             "swyddfa.esbonio",
             "tomoki1207.pdf" // this does not work on codespaces
