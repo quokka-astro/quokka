@@ -7,6 +7,10 @@
         // Path is relative to the devcontainer.json file.
         "dockerfile": "Dockerfile"
       },
+      "hostRequirements": {
+        "cpus": 4,
+        "memory": "8gb"
+      },
       "customizations": {
         "vscode": {
           "settings": {},
