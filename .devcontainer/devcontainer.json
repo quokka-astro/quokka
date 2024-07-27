@@ -15,7 +15,8 @@
         "ms-vscode.live-server",
         "lextudio.restructuredtext",
         "trond-snekvik.simple-rst",
-        "swyddfa.esbonio"
+        "swyddfa.esbonio",
+        "tomoki1207.pdf"
       ]
     }
   },
