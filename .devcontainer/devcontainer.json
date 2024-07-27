@@ -32,8 +32,5 @@
       // we need to manually checkout the submodules,
       // but VSCode may try to configure CMake before they are fully checked-out.
       // workaround TBD
-      "postCreateCommand": [
-        "git config --global --add safe.directory /workspaces/quokka",
-        "git submodule update --init"
-      ]
+      "postCreateCommand": "git submodule update --init"
     }
