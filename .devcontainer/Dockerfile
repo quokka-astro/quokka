@@ -5,7 +5,7 @@ RUN apt-get --yes -qq update \
  && apt-get --yes -qq install build-essential \
                       git cmake clangd gcc g++ \
                       python3-dev python3-numpy python3-matplotlib python3-pip \
-                      sphinx-doc python3-sphinxcontrib.bibtex python3-sphinx-copybutton \
+                      sphinx-doc python3-sphinx-rtd-theme python3-sphinxcontrib.bibtex python3-sphinx-copybutton \
                       libopenmpi-dev \
                       libhdf5-mpi-dev \
  && apt-get --yes -qq clean \
