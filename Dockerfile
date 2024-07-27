@@ -12,5 +12,11 @@ RUN apt-get --yes -qq update \
 
 WORKDIR /home/ubuntu
 USER ubuntu
+
+# install esbonio for Sphinx VSCode support
 RUN pipx install esbonio && pipx ensurepath
+
+# workaround Python babel bug
+ENV TZ=UTC
+
 CMD [ "/bin/bash" ]
