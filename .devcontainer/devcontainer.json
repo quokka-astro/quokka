@@ -8,8 +8,7 @@
         "dockerfile": "Dockerfile"
       },
       "hostRequirements": {
-        "cpus": 4,
-        "memory": "16gb"
+        "cpus": 4
       },
       "customizations": {
         "vscode": {
