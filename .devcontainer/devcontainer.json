@@ -25,7 +25,7 @@
             "ms-azuretools.vscode-docker",
             "swyddfa.esbonio",
             "tomoki1207.pdf" // this extension does not work on codespaces
-        ]
+          ]
         }
       },
       "remoteUser": "ubuntu",
