@@ -1,7 +1,12 @@
 // devcontainer.json
     {
       "name": "quokka-dev",
-      "image": "ghcr.io/quokka-astro/quokka:development",
+      // (NOTE: using the cloud image is temporarily disabled, since it doesn't exist yet)
+      // "image": "ghcr.io/quokka-astro/quokka:development",
+      "build": {
+        // Path is relative to the devcontainer.json file. We want the Dockerfile in the repo root.
+        "dockerfile": "../Dockerfile"
+      },
       "customizations": {
         "vscode": {
           "settings": {},
