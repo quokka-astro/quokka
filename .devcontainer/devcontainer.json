@@ -9,7 +9,7 @@
       },
       "hostRequirements": {
         "cpus": 4,
-        "memory": "8gb"
+        "memory": "16gb"
       },
       "customizations": {
         "vscode": {
