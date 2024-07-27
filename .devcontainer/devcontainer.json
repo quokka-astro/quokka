@@ -29,7 +29,10 @@
         }
       },
       "remoteUser": "ubuntu",
-      "forwardPorts": [35817], // sphinx preview server
+      "forwardPorts": [
+        35817
+      ],
+      // sphinx preview server
       // we need to manually checkout the submodules,
       // but VSCode may try to configure CMake before they are fully checked-out.
       // workaround TBD
