@@ -48,7 +48,6 @@ static constexpr bool include_work_term_in_source = true;
 static constexpr bool use_D_as_base = true;
 static const bool PPL_free_slope_st_total = false;  // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						    // well -- Newton iteration convergence issue.
-static const bool use_wavespeed_correction = false; // Optional: include a wavespeed correction term in the radiation flux to suppress instability
 
 // Time integration scheme
 // IMEX PD-ARS
