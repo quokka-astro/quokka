@@ -1,7 +1,7 @@
 .. Advecting radiation pulse test
 
 Advecting radiation pulse test
-=========================
+==============================
 
 This test demonstrates the code’s ability to deal with the relativistic
 correction source terms that arise from the mixed frame formulation of
