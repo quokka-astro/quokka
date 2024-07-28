@@ -22,12 +22,12 @@
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
 
-#include "NSCBC_inflow.hpp"
-#include "NSCBC_outflow.hpp"
 #include "RadhydroSimulation.hpp"
 #include "cooling/TabulatedCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
+#include "hydro/NSCBC_inflow.hpp"
+#include "hydro/NSCBC_outflow.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -235,8 +235,7 @@ template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 		::delta_vx = delta_vx;
 
 		const Real v_wind = ::v_wind;
-		amrex::Print() << "[Cloud Tracking] Delta x = " << (delta_x / parsec_in_cm) << " pc,"
-			       << " Delta vx = " << (delta_vx / 1.0e5) << " km/s,"
+		amrex::Print() << "[Cloud Tracking] Delta x = " << (delta_x / parsec_in_cm) << " pc," << " Delta vx = " << (delta_vx / 1.0e5) << " km/s,"
 			       << " Inflow velocity = " << ((v_wind - delta_vx) / 1.0e5) << " km/s\n";
 
 		// If we are moving faster than the wind, we should abort the simulation.
