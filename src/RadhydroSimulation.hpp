@@ -1884,8 +1884,7 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange,
-							  consState,
-							  dx, use_wavespeed_correction_); // watch out for argument order!!
+							  consState, dx, use_wavespeed_correction_); // watch out for argument order!!
 }
 
 #endif // RADIATION_SIMULATION_HPP_
