@@ -24,7 +24,7 @@
 #include "AMReX_TableData.H"
 
 #include "RadhydroSimulation.hpp"
-#include "TurbDataReader.hpp"
+#include "turbulence/TurbDataReader.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "star_cluster.hpp"
