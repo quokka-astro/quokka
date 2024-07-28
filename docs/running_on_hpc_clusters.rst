@@ -1,7 +1,7 @@
 .. Running on HPC clusters
 
 Running on HPC clusters
-=====
+=======================
 
 Instructions for running on various HPC clusters are given below.
 
@@ -35,7 +35,7 @@ Then a single-node test job can be run with: ::
   sbatch scripts/setonix-1node.submit
 
 Workaround for interconnect issues
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If interconnect issues are observed, it is recommended to add the line ::
 

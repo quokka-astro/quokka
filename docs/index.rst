@@ -78,7 +78,6 @@ Developer Guide
    error_checking
    performance
    howto_clang_tidy
-   api
 
 Epilogue
 ---------------
