@@ -12,7 +12,7 @@ if (AMReX_SPACEDIM EQUAL 3)
         OUTPUT_QUIET
     )
 
-    add_test(NAME ComputeStarClusterPerturbations COMMAND python3 ${CMAKE_SOURCE_DIR}/src/perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0 ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ComputeStarClusterPerturbations COMMAND python3 ${CMAKE_SOURCE_DIR}/src/turbulence/perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0 ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME StarCluster COMMAND star_cluster StarCluster.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(ComputeStarClusterPerturbations PROPERTIES FIXTURES_SETUP    StarCluster_fixture)
     set_tests_properties(StarCluster PROPERTIES FIXTURES_REQUIRED StarCluster_fixture)
