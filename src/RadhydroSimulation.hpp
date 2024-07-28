@@ -48,9 +48,9 @@
 #include <conduit_node.hpp>
 #endif
 
+#include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
-#include "SimulationData.hpp"
 #include "cooling/TabulatedCooling.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"

@@ -22,9 +22,9 @@
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
 
-#include "cooling/GrackleLikeCooling.hpp"
 #include "RadhydroSimulation.hpp"
 #include "blast.hpp"
+#include "cooling/GrackleLikeCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "quadrature.hpp"

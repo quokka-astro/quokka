@@ -23,9 +23,9 @@
 #include "AMReX_YAFluxRegister.H"
 #include <AMReX_FluxRegister.H>
 
-#include "util/ArrayView.hpp"
 #include "linear_advection/linear_advection.hpp"
 #include "simulation.hpp"
+#include "util/ArrayView.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class AdvectionSimulation : public AMRSimulation<problem_t>

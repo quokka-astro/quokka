@@ -13,8 +13,8 @@
 #include "AMReX_ParmParse.H"
 
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "hydro/hydro_system.hpp"
+#include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

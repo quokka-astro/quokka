@@ -16,11 +16,11 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 
-#include "linear_advection/AdvectionSimulation.hpp"
-#include "util/fextract.hpp"
 #include "hyperbolic_system.hpp"
+#include "linear_advection/AdvectionSimulation.hpp"
 #include "linear_advection/linear_advection.hpp"
 #include "test_advection_semiellipse.hpp"
+#include "util/fextract.hpp"
 
 struct SemiellipseProblem {
 };

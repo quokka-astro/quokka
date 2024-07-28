@@ -7,8 +7,8 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "physics_info.hpp"
+#include "util/fextract.hpp"
 
 // Single-group problem
 struct SGProblem {

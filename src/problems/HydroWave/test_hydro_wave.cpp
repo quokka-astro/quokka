@@ -14,9 +14,9 @@
 #include "AMReX_REAL.H"
 
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "hydro/hydro_system.hpp"
 #include "test_hydro_wave.hpp"
+#include "util/fextract.hpp"
 
 struct WaveProblem {
 };

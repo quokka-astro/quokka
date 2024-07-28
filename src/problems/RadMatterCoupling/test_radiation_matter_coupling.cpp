@@ -12,9 +12,9 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_radiation_matter_coupling.hpp"
+#include "util/fextract.hpp"
 
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

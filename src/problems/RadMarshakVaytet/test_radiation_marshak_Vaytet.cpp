@@ -5,9 +5,9 @@
 #include "AMReX_BLassert.H"
 
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_radiation_marshak_Vaytet.hpp"
+#include "util/fextract.hpp"
 
 // constexpr int n_groups_ = 2; // Be careful
 constexpr int n_groups_ = 4;

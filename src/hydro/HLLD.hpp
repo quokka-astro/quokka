@@ -6,8 +6,8 @@
 #include <AMReX.H>
 #include <AMReX_REAL.H>
 
-#include "util/ArrayView.hpp"
 #include "hydro/HydroState.hpp"
+#include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
 namespace quokka::Riemann

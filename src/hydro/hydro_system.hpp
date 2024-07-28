@@ -20,14 +20,14 @@
 #include "AMReX_iMultiFab.H"
 
 // internal headers
-#include "util/ArrayView.hpp"
-#include "hydro/EOS.hpp"
 #include "HLLC.hpp"
 #include "HLLD.hpp"
 #include "LLF.hpp"
+#include "hydro/EOS.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
 // Microphysics headers

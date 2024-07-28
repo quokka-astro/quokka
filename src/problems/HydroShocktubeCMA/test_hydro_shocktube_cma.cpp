@@ -14,12 +14,12 @@
 
 #include "AMReX_BC_TYPES.H"
 
-#include "util/ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_hydro_shocktube_cma.hpp"
+#include "util/ArrayUtil.hpp"
+#include "util/fextract.hpp"
 
 struct ShocktubeProblem {
 };

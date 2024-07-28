@@ -8,10 +8,10 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fextract.hpp"
 
 struct MGProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

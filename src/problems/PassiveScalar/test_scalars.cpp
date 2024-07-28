@@ -13,10 +13,10 @@
 #include "AMReX_ParmParse.H"
 
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_scalars.hpp"
+#include "util/fextract.hpp"
 
 using amrex::Real;
 

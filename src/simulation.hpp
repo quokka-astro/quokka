@@ -82,9 +82,9 @@ namespace filesystem = experimental::filesystem;
 #endif
 
 // internal headers
-#include "io/DiagBase.H"
 #include "fundamental_constants.H"
 #include "grid.hpp"
+#include "io/DiagBase.H"
 #include "physics_info.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD

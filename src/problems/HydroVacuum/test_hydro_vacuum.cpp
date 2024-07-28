@@ -12,12 +12,12 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 
-#include "util/ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_hydro_vacuum.hpp"
+#include "util/ArrayUtil.hpp"
+#include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

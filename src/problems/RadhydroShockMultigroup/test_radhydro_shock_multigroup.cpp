@@ -7,10 +7,10 @@
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 
-#include "util/ArrayUtil.hpp"
-#include "util/fextract.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_radhydro_shock_multigroup.hpp"
+#include "util/ArrayUtil.hpp"
+#include "util/fextract.hpp"
 
 struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
