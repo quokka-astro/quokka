@@ -11,10 +11,10 @@
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 
-#include "util/fextract.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 #include "test_radiation_marshak_cgs.hpp"
+#include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

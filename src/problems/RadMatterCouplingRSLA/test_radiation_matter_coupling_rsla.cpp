@@ -9,8 +9,8 @@
 
 #include "test_radiation_matter_coupling_rsla.hpp"
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

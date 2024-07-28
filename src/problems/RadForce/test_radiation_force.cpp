@@ -15,14 +15,14 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_REAL.H"
 
-#include "util/ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_radiation_force.hpp"
+#include "util/ArrayUtil.hpp"
+#include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

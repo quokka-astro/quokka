@@ -13,8 +13,8 @@
 #include "AMReX_ParallelDescriptor.H"
 
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "test_radiation_marshak.hpp"
+#include "util/fextract.hpp"
 
 struct SuOlsonProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

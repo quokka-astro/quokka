@@ -17,10 +17,10 @@
 #include "AMReX_REAL.H"
 
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "test_fc_quantities.hpp"
+#include "util/fextract.hpp"
 
 struct FCQuantities {
 };

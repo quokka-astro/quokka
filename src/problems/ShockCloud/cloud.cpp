@@ -22,12 +22,12 @@
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
 
-#include "hydro/EOS.hpp"
 #include "NSCBC_inflow.hpp"
 #include "NSCBC_outflow.hpp"
 #include "RadhydroSimulation.hpp"
 #include "cooling/TabulatedCooling.hpp"
 #include "fundamental_constants.H"
+#include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"

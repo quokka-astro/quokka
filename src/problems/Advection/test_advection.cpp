@@ -20,8 +20,8 @@
 #include "AMReX_REAL.H"
 
 #include "linear_advection/AdvectionSimulation.hpp"
-#include "util/fextract.hpp"
 #include "test_advection.hpp"
+#include "util/fextract.hpp"
 
 struct SawtoothProblem {
 };

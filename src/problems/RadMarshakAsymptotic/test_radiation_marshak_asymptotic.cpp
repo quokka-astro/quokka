@@ -10,8 +10,8 @@
 #include "AMReX_BLassert.H"
 
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "test_radiation_marshak_asymptotic.hpp"
+#include "util/fextract.hpp"
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization

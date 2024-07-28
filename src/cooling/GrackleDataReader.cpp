@@ -23,8 +23,8 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_Print.H"
 #include "AMReX_TableData.H"
-#include "math/FastMath.hpp"
 #include "fmt/core.h"
+#include "math/FastMath.hpp"
 
 namespace quokka::GrackleLikeCooling
 {

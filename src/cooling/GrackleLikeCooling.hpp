@@ -14,15 +14,15 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_iMultiFab.H"
 
-#include "math/FastMath.hpp"
 #include "GrackleDataReader.hpp"
-#include "math/Interpolate2D.hpp"
-#include "math/ODEIntegrate.hpp"
 #include "fmt/core.h"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
-#include "radiation/radiation_system.hpp"
+#include "math/FastMath.hpp"
+#include "math/Interpolate2D.hpp"
+#include "math/ODEIntegrate.hpp"
 #include "math/root_finding.hpp"
+#include "radiation/radiation_system.hpp"
 
 namespace quokka::GrackleLikeCooling
 {

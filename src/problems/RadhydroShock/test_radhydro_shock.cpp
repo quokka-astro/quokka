@@ -12,9 +12,9 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "hydro/hydro_system.hpp"
 #include "test_radhydro_shock.hpp"
+#include "util/fextract.hpp"
 
 struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

@@ -14,13 +14,13 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "AMReX_ValLocPair.H"
-#include "util/ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
-#include "util/fextract.hpp"
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_radiation_tube.hpp"
+#include "util/ArrayUtil.hpp"
+#include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
