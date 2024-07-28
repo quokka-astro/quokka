@@ -67,7 +67,7 @@ namespace filesystem = experimental::filesystem;
 #include <yaml-cpp/yaml.h>
 
 #ifdef AMREX_PARTICLES
-#include "CICParticles.hpp"
+#include "particles/CICParticles.hpp"
 #include <AMReX_AmrParticles.H>
 #include <AMReX_Particles.H>
 #endif
@@ -82,7 +82,7 @@ namespace filesystem = experimental::filesystem;
 #endif
 
 // internal headers
-#include "DiagBase.H"
+#include "io/DiagBase.H"
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "physics_info.hpp"

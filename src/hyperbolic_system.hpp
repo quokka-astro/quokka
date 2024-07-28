@@ -24,8 +24,8 @@
 #include "AMReX_SPACE.H"
 
 // internal headers
-#include "ArrayView.hpp"
-#include "math_impl.hpp"
+#include "util/ArrayView.hpp"
+#include "math/math_impl.hpp"
 
 // #define MULTIDIM_EXTREMA_CHECK
 
