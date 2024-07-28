@@ -27,7 +27,7 @@
 #include "cooling/GrackleLikeCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
-#include "quadrature.hpp"
+#include "math/quadrature.hpp"
 
 using amrex::Real;
 
