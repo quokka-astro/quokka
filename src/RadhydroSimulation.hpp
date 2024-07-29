@@ -48,16 +48,16 @@
 #include <conduit_node.hpp>
 #endif
 
-#include "Chemistry.hpp"
-#include "GrackleLikeCooling.hpp"
 #include "SimulationData.hpp"
-#include "TabulatedCooling.hpp"
+#include "chemistry/Chemistry.hpp"
+#include "cooling/GrackleLikeCooling.hpp"
+#include "cooling/TabulatedCooling.hpp"
 #include "eos.H"
-#include "hydro_system.hpp"
+#include "hydro/hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
-#include "radiation_system.hpp"
+#include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
