@@ -1,7 +1,7 @@
 .. Assertions and error checking
 
 Assertions and error checking
-==========================
+=============================
 
 AMReX assert macros
 -----------------------

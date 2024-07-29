@@ -46,8 +46,8 @@ static const int max_ite_to_update_alpha_E = 5; // Apply to the PPL_opacity_full
 
 static constexpr bool include_work_term_in_source = true;
 static constexpr bool use_D_as_base = true;
-static const bool PPL_free_slope_st_total = false;  // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
-						    // well -- Newton iteration convergence issue.
+static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
+						   // well -- Newton iteration convergence issue.
 
 // Time integration scheme
 // IMEX PD-ARS
