@@ -31,9 +31,9 @@ Additional methods papers
 If you use any of the following numerical methods or physical modules,
 please also cite the publications corresponding to the methods used in your research.
 
-- Radiation-hydrodynamics: :cite:ts:`He_2024`
+- Radiation-hydrodynamics: :cite:`He_2024`
 
-- Multigroup Radiation-hydrodynamics: :cite:ts:`He_2024b`
+- Multigroup Radiation-hydrodynamics: :cite:`He_2024b`
 
 .. bibliography::
    :filter: False
@@ -44,7 +44,7 @@ please also cite the publications corresponding to the methods used in your rese
 Scientific applications with Quokka
 -----------------------------------
 
-- Galactic outflows: :cite:ts:`Vijayan_2024`
+- Galactic outflows: :cite:`Vijayan_2024`
 
 .. bibliography::
    :filter: False
