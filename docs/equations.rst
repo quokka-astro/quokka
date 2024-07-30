@@ -51,8 +51,8 @@ along with the non-conservative auxiliary internal energy equation:
 
 .. math::
 
-    \frac{\partial \rho e_{\text{aux}}}{\partial t} =
-    - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) + p \nabla \cdot \vec{v}
+    \frac{\partial (\rho e_{\text{aux}})}{\partial t} =
+    - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) - p \nabla \cdot \vec{v}
     + S_{\text{rad}} + \mathcal{H} - \mathcal{C},
 
 ..
