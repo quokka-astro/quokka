@@ -237,7 +237,7 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
-  bool use_wavespeed_correction = false;
+	bool use_wavespeed_correction = false;
 
 	amrex::ParmParse pp("marshak");
 	pp.query("use_wavespeed_correction", use_wavespeed_correction);
