@@ -52,7 +52,8 @@ along with the non-conservative auxiliary internal energy equation:
 .. math::
 
     \frac{\partial \rho e_{\text{aux}}}{\partial t} =
-    - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) + p \nabla \cdot \vec{v},
+    - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) + p \nabla \cdot \vec{v}
+    + S_{\text{rad}} + \mathcal{H} - \mathcal{C},
 
 ..
 
@@ -73,16 +74,21 @@ where
 * :math:`\rho e_{\text{aux}}` is the auxiliary gas internal energy,
 * :math:`X_n` is the fractional concentration of species :math:`n`,
 * :math:`\dot{X}_n` is the chemical reaction term for species :math:`n`,
-* :math:`\mathcal{H}` is the optically-thin volumetric heating term,
-* :math:`\mathcal{C}` is the optically-thin volumetric cooling term,
+* :math:`\mathcal{H}` is the optically-thin volumetric heating term (radiative and chemical),
+* :math:`\mathcal{C}` is the optically-thin volumetric cooling term (radiative and chemical),
 * :math:`p(\rho, e)` is the gas pressure derived from a general convex equation of state,
 * :math:`E_g` is the radiation energy density for group :math:`g`,
 * :math:`F_g` is the radiation flux for group :math:`g`,
 * :math:`\boldsymbol{P}_g` is the radiation pressure tensor for group :math:`g`,
-* :math:`G_g` is the radiation four-force due to group :math:`g`,
+* :math:`G_g` is the radiation four-force :math:`[G^0_g, \vec{G}_g]` due to group :math:`g`,
+* :math:`S_{\text{rad}}` is the time derivative of gas internal energy due to radiation,
 * :math:`\phi` is the Newtonian gravitational potential,
 * :math:`\vec{g}` is the gravitational acceleration,
 * :math:`\rho_i` is the mass density due to particle :math:`i`.
+
+Note that since work done by radiation on the gas is included in the
+:math:`c \sum_g G^0_g` term, :math:`S_{\text{rad}}` is not the same as
+:math:`c \sum_g G^0_g`.
 
 Collisionless particles
 -----------------------
@@ -91,7 +97,7 @@ Quokka solves the following equation of motion for collisionless particles:
 
 .. math::
 
-    \frac{\partial^2 \vec{x}_i}{\partial t^2} = \vec{g} ,
+    \frac{d^2 \vec{x}_i}{d t^2} = \vec{g} ,
 
 ..
 
