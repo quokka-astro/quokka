@@ -52,18 +52,14 @@ template <> struct Physics_Traits<ShadowProblem> {
 	static constexpr int nGroups = 1;
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> amrex::Real
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
 	const amrex::Real sigma = sigma0 * std::pow(rho / rho_bg, 2);
 	const amrex::Real kappa = sigma / rho; // specific opacity [cm^2 g^-1]
-	kappaPVec.fillin(kappa);
-	return kappaPVec;
+	return kappa;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }

@@ -149,22 +149,6 @@ RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<do
 	return exponents_and_values;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = kappa0;
-	}
-	return kappaPVec;
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
-{
-	return ComputePlanckOpacity(rho, Tgas);
-}
-
 AMREX_GPU_HOST_DEVICE
 auto compute_exact_bb(const double nu, const double T) -> double
 {

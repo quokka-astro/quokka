@@ -85,22 +85,6 @@ RadSystem<TubeProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<dou
 	return exponents_and_values;
 }
 
-// template <>
-// AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
-// {
-// 	quokka::valarray<double, nGroups_> kappaPVec{};
-// 	for (int g = 0; g < nGroups_; ++g) {
-// 		kappaPVec[g] = kappa0;
-// 	}
-// 	return kappaPVec;
-// }
-
-// template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double,
-// nGroups_>
-// {
-// 	return ComputePlanckOpacity(rho, Tgas);
-// }
-
 // declare global variables
 // initial conditions read from file
 amrex::Gpu::HostVector<double> x_arr;

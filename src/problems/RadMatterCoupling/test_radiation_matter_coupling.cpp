@@ -55,20 +55,14 @@ template <> struct Physics_Traits<CouplingProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = 1.0;
-	}
-	return kappaPVec;
+	return 1.0;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
-	return ComputePlanckOpacity(0.0, 0.0);
+	return 1.0;
 }
 
 static constexpr int nmscalars_ = Physics_Traits<CouplingProblem>::numMassScalars;
@@ -194,7 +188,7 @@ auto problem_main() -> int
 		std::vector<double> t_exact(nmax);
 		std::vector<double> Tgas_exact(nmax);
 		const double initial_Tgas = quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);
-		const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas)[0];
+		const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
 
 		for (int n = 0; n < nmax; ++n) {
 			const double time_t = sim.userData_.t_vec_.at(n);

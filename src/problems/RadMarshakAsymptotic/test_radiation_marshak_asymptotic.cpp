@@ -52,21 +52,14 @@ template <> struct Physics_Traits<SuOlsonProblemCgs> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho,
-												 const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = sigma / rho; // cm^2 g^-1
-	}
-	return kappaPVec;
+	return sigma / rho;				      // cm^2 g^-1
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho,
-												   const double Tgas) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
@@ -244,6 +237,12 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
+	bool use_wavespeed_correction = false;
+
+	amrex::ParmParse pp("marshak");
+	pp.query("use_wavespeed_correction", use_wavespeed_correction);
+	sim.use_wavespeed_correction_ = use_wavespeed_correction;
+
 	// initialize
 	sim.setInitialConditions();
 
@@ -338,7 +337,11 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("temperature (keV)");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
-	matplotlibcpp::save("./marshak_wave_asymptotic_gastemperature.pdf");
+	if (use_wavespeed_correction) {
+		matplotlibcpp::save("./marshak_wave_asymptotic_correction_gastemperature.pdf");
+	} else {
+		matplotlibcpp::save("./marshak_wave_asymptotic_gastemperature.pdf");
+	}
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit

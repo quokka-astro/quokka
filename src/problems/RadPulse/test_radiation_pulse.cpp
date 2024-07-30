@@ -65,18 +65,13 @@ auto compute_exact_Trad(const double x, const double t) -> double
 	return 0.5 * normfac * std::exp(-(x * x) / (4.0 * width_sq));
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
 	auto kappa = (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = kappa;
-	}
-	return kappaPVec;
+	return kappa;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
