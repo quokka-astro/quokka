@@ -237,8 +237,11 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
+  bool use_wavespeed_correction = false;
+
 	amrex::ParmParse pp("marshak");
-	pp.query("use_wavespeed_correction", sim.use_wavespeed_correction_);
+	pp.query("use_wavespeed_correction", use_wavespeed_correction);
+	sim.use_wavespeed_correction_ = use_wavespeed_correction;
 
 	// initialize
 	sim.setInitialConditions();
@@ -334,7 +337,11 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("temperature (keV)");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
-	matplotlibcpp::save("./marshak_wave_asymptotic_gastemperature.pdf");
+	if (use_wavespeed_correction) {
+		matplotlibcpp::save("./marshak_wave_asymptotic_correction_gastemperature.pdf");
+	} else {
+		matplotlibcpp::save("./marshak_wave_asymptotic_gastemperature.pdf");
+	}
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
