@@ -35,6 +35,7 @@ please also cite the publications corresponding to the methods used in your rese
    :filter: False
 
    He_2024
+   He_2024b
 
 Scientific applications with Quokka
 -----------------------------------
