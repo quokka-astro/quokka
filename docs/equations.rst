@@ -54,7 +54,7 @@ along with the non-conservative auxiliary internal energy equation:
     \frac{\partial (\rho e_{\text{aux}})}{\partial t} =
     - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) - p \nabla \cdot \vec{v}
     + S_{\text{rad}} + \mathcal{H} - \mathcal{C}, \\
-    \Delta S_{\text{rad}} = \int \sum c G^0_g \ dt - \frac{1}{2} \Delta \left(\rho v^2 \right),
+    \Delta S_{\text{rad}} = \int \sum_g c G^0_g \ dt - \frac{1}{2} \Delta \left(\rho v^2 \right),
 ..
 
 and the gravitational Poisson equation:
@@ -62,7 +62,7 @@ and the gravitational Poisson equation:
 .. math::
 
     \nabla^2 \phi = -4 \pi G \left( \rho + \sum_i \rho_i \right), \\
-    \vec{g} = -\nabla \phi,
+    \vec{g} \equiv -\nabla \phi,
 
 ..
 
