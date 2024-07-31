@@ -53,8 +53,8 @@ along with the non-conservative auxiliary internal energy equation:
 
     \frac{\partial (\rho e_{\text{aux}})}{\partial t} =
     - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) - p \nabla \cdot \vec{v}
-    + S_{\text{rad}} + \mathcal{H} - \mathcal{C},
-
+    + S_{\text{rad}} + \mathcal{H} - \mathcal{C}, \\
+    \Delta S_{\text{rad}} = \int \sum c G^0_g \ dt - \frac{1}{2} \Delta \left(\rho v^2 \right),
 ..
 
 and the gravitational Poisson equation:
@@ -81,7 +81,7 @@ where
 * :math:`F_g` is the radiation flux for group :math:`g`,
 * :math:`\boldsymbol{P}_g` is the radiation pressure tensor for group :math:`g`,
 * :math:`G_g` is the radiation four-force :math:`[G^0_g, \vec{G}_g]` due to group :math:`g`,
-* :math:`S_{\text{rad}}` is the time derivative of gas internal energy due to radiation,
+* :math:`\Delta S_{\text{rad}}` is the change in gas internal energy due to radiation over a timestep,
 * :math:`\phi` is the Newtonian gravitational potential,
 * :math:`\vec{g}` is the gravitational acceleration,
 * :math:`\rho_i` is the mass density due to particle :math:`i`.
