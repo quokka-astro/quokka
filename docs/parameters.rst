@@ -67,12 +67,9 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
    * - density_floor
      - Float
      - The minimum density value allowed in the simulation. Enforced through EnforceLimits.
-   * - temperature_ceiling
+   * - temperature_floor
      - Float
-     - The ceiling on temperature values in the simulation. Enforced through EnforceLimits.
-   * - speed_ceiling
-     - Float
-     - The ceiling on the absolute value of the fluid velocity in the simulation. Enforced through EnforceLimits.
+     - The minimum temperature value allowed in the simulation. Enforced through EnforceLimits.
    * - max_walltime
      - String
      - The maximum walltime for the simulation in the format DD:HH:SS (days/hours/seconds). After 90% of this walltime elapses, the simulation will automatically stop and exit.
