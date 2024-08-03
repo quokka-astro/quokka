@@ -8,6 +8,7 @@ RUN apt-get --yes -qq update \
                       sphinx-doc python3-sphinx-rtd-theme python3-sphinxcontrib.bibtex python3-sphinx-copybutton \
                       libopenmpi-dev \
                       libhdf5-mpi-dev \
+                      paraview \
  && apt-get --yes -qq clean \
  && rm -rf /var/lib/apt/lists/*
 
