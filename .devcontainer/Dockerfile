@@ -8,7 +8,7 @@ RUN apt-get --yes -qq update \
                       sphinx-doc python3-sphinx-rtd-theme python3-sphinxcontrib.bibtex python3-sphinx-copybutton \
                       libopenmpi-dev \
                       libhdf5-mpi-dev \
-                      mesa-libGL-devel \
+                      libglew-dev \
  && apt-get --yes -qq clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -37,7 +37,7 @@ RUN git clone https://gitlab.kitware.com/paraview/catalyst.git \
 # build Paraview
 RUN git clone --recursive https://gitlab.kitware.com/paraview/paraview.git \
  && cd paraview \
- && cmake -B build -S . -GNinja -DPARAVIEW_USE_QT=OFF -DPARAVIEW_USE_FORTRAN=OFF -DPARAVIEW_USE_PYTHON=ON -DPARAVIEW_USE_MPI=ON -DPARAVIEW_ENABLE_CATALYST=ON -DCMAKE_BUILD_TYPE=Release \
+ && cmake -B build -S . -GNinja -DPARAVIEW_BUILD_EDITION=CATALYST_RENDERING -DPARAVIEW_USE_PYTHON=ON -DPARAVIEW_USE_MPI=ON -DCMAKE_BUILD_TYPE=Release \
  && cmake --build build --parallel 4 \
  && cmake --install build \
  && cmake --build build --target clean
