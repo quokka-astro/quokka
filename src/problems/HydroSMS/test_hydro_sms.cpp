@@ -131,7 +131,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
 template <>
 void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 
 	auto const box = geom[0].Domain();
