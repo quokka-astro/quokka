@@ -24,3 +24,8 @@ do_reflux = 0
 do_subcycle = 0
 
 plotfile_interval  = 1000
+
+ascent_interval = 100
+catalyst.script_paths = sample_catalyst_pipeline.py
+catalyst.implementation = paraview
+catalyst.implementation_search_paths =  <PARAVIEW_ROOT>/lib64/catalyst

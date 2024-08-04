@@ -76,14 +76,10 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_OpenBC.H"
 #endif
 
-#ifdef AMREX_USE_ASCENT
-#include <AMReX_Conduit_Blueprint.H>
-#include <ascent.hpp>
-#endif
-
 // internal headers
 #include "fundamental_constants.H"
 #include "grid.hpp"
+#include "io/Catalyst.H"
 #include "io/DiagBase.H"
 #include "physics_info.hpp"
 
@@ -92,13 +88,6 @@ namespace filesystem = experimental::filesystem;
 #endif
 
 #define USE_YAFLUXREGISTER
-
-#ifdef AMREX_USE_ASCENT
-using namespace conduit;
-using namespace ascent;
-#endif
-
-enum class ParticleStep { BeforePoissonSolve, AfterPoissonSolve };
 
 using variant_t = std::variant<amrex::Real, std::string>;
 
@@ -335,10 +324,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void kickParticlesAllLevels(amrex::Real dt);
 	void driftParticlesAllLevels(amrex::Real dt);
 
-#ifdef AMREX_USE_ASCENT
-	void AscentCustomActions(conduit::Node const &blueprintMesh);
 	void RenderAscent();
-#endif
+
       protected:
 	amrex::Vector<amrex::BCRec> BCs_cc_; // on level 0
 	amrex::Vector<amrex::BCRec> BCs_fc_; // on level 0
@@ -402,9 +389,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #endif
 
 	// external objects
-#ifdef AMREX_USE_ASCENT
-	Ascent ascent_;
-#endif
+	std::unique_ptr<FlushFormatCatalyst> catalyst_;
 };
 
 template <typename problem_t> void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number) { restart_chkfile = chkfile_number; }
@@ -475,12 +460,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 		}
 	}
 
-#ifdef AMREX_USE_ASCENT
-	// initialize Ascent
-	conduit::Node ascent_options;
-	ascent_options["mpi_comm"] = MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
-	ascent_.open(ascent_options);
-#endif
+	// initialize Catalyst
+	if (ascentInterval_ > 0) {
+		catalyst_ = std::make_unique<FlushFormatCatalyst>();
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
@@ -490,9 +473,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 		const amrex::Long nboxes = boxArray(ilev).size();
 		if (amrex::ParallelDescriptor::NProcs() > nboxes) {
 			amrex::Print() << "\n[Warning] [Performance] Too many resources / too little work!\n"
-				       << "  It looks like you requested more compute resources than "
-				       << "  the number of boxes of cells available on level " << ilev << " (" << nboxes << "). "
-				       << "You started with (" << amrex::ParallelDescriptor::NProcs() << ") MPI ranks, so ("
+				       << "  It looks like you requested more compute resources than " << "  the number of boxes of cells available on level "
+				       << ilev << " (" << nboxes << "). " << "You started with (" << amrex::ParallelDescriptor::NProcs() << ") MPI ranks, so ("
 				       << amrex::ParallelDescriptor::NProcs() - nboxes << ") rank(s) will have no work on this level.\n"
 #ifdef AMREX_USE_GPU
 				       << "  On GPUs, consider using 1-8 boxes per GPU per level that "
@@ -673,11 +655,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		amrex::Abort();
 	}
 
-#ifdef AMREX_USE_ASCENT
 	if (ascentInterval_ > 0) {
 		RenderAscent();
 	}
-#endif
 
 	if (plotfileInterval_ > 0) {
 		WritePlotFile();
@@ -831,9 +811,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
 
 	amrex::Real cur_time = tNew_[0];
-#ifdef AMREX_USE_ASCENT
 	int last_ascent_step = 0;
-#endif
 	int last_projection_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
@@ -895,12 +873,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			tNew_[lev] = cur_time;
 		}
 
-#ifdef AMREX_USE_ASCENT
 		if (ascentInterval_ > 0 && (step + 1) % ascentInterval_ == 0) {
 			last_ascent_step = step + 1;
 			RenderAscent();
 		}
-#endif
 
 		if (statisticsInterval_ > 0 && (step + 1) % statisticsInterval_ == 0) {
 			last_statistics_step = step + 1;
@@ -1001,11 +977,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	if (checkpointInterval_ > 0 && istep[0] > last_chk_file_step) {
 		WriteCheckpointFile();
 	}
-
-#ifdef AMREX_USE_ASCENT
-	// close Ascent
-	ascent_.close();
-#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
@@ -2204,37 +2175,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	}
 }
 
-// do in-situ rendering with Ascent
-#ifdef AMREX_USE_ASCENT
-template <typename problem_t> void AMRSimulation<problem_t>::AscentCustomActions(conduit::Node const &blueprintMesh)
-{
-	BL_PROFILE("AMRSimulation::AscentCustomActions()");
-
-	// add a scene with a pseudocolor plot
-	Node scenes;
-	scenes["s1/plots/p1/type"] = "pseudocolor";
-	scenes["s1/plots/p1/field"] = "gasDensity";
-
-	// set the output file name (ascent will add ".png")
-	scenes["s1/renders/r1/image_prefix"] = "render_density%05d";
-
-	// set camera position
-	amrex::Array<double, 3> position = {-0.6, -0.6, -0.8};
-	scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
-
-	// setup actions
-	Node actions;
-	Node &add_plots = actions.append();
-	add_plots["action"] = "add_scenes";
-	add_plots["scenes"] = scenes;
-	actions.append()["action"] = "execute";
-	actions.append()["action"] = "reset";
-
-	// send AMR mesh to ascent, do render
-	ascent_.publish(blueprintMesh);
-	ascent_.execute(actions); // will be replaced by ascent_actions.yml if present
-}
-
 // do Ascent render
 template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 {
@@ -2242,7 +2182,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 
 	// combine multifabs
 	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(nghost_cc_);
-	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
 	amrex::Vector<std::string> varnames;
 	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
@@ -2264,18 +2203,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 		rescaledGeom[i].ProbDomain(rescaledRealBox);
 	}
 
-	// wrap MultiFabs into a Blueprint mesh
-	conduit::Node blueprintMesh;
-	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
-
-	// copy to host mem (needed for DataBinning)
-	conduit::Node bpMeshHost;
-	bpMeshHost.set(blueprintMesh);
-
-	// pass Blueprint mesh to Ascent, run actions
-	AscentCustomActions(bpMeshHost);
+	catalyst_->WriteToFile(varnames, mf, rescaledGeom, refRatio(), istep, tNew_[0], finestLevel());
 }
-#endif // AMREX_USE_ASCENT
 
 template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames() const -> amrex::Vector<std::string>
 {
