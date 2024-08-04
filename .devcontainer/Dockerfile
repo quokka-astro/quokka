@@ -21,7 +21,7 @@ RUN git clone --recursive https://github.com/llnl/conduit.git \
  && cd conduit \
  && mkdir -p /opt/conduit \
  && cmake -S src -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_MPI=ON -DCMAKE_INSTALL_PREFIX=/opt/conduit \
- && cmake --build build --parallel 4 \
+ && cmake --build build --parallel 8 \
  && cmake --install build \
  && cmake --build build --target clean
 
@@ -30,15 +30,15 @@ RUN git clone https://gitlab.kitware.com/paraview/catalyst.git \
  && cd catalyst \
  && mkdir -p /opt/catalyst \
  && cmake -B build -S . -DCATALYST_WITH_EXTERNAL_CONDUIT=ON -DCMAKE_INSTALL_PREFIX=/opt/catalyst \
- && cmake --build build --parallel 4 \
+ && cmake --build build --parallel 8 \
  && cmake --install build \
  && cmake --build build --target clean
 
 # build Paraview
 RUN git clone --recursive https://gitlab.kitware.com/paraview/paraview.git \
  && cd paraview \
- && cmake -B build -S . -GNinja -DPARAVIEW_BUILD_EDITION=CATALYST_RENDERING -DPARAVIEW_USE_PYTHON=ON -DPARAVIEW_USE_MPI=ON -DCMAKE_BUILD_TYPE=Release \
- && cmake --build build --parallel 4 \
+ && cmake -B build -S . -GNinja -DPARAVIEW_BUILD_EDITION=CATALYST_RENDERING -DPARAVIEW_ENABLE_CATALYST=ON -DPARAVIEW_USE_FORTRAN=OFF -DPARAVIEW_USE_PYTHON=ON -DPARAVIEW_USE_MPI=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/paraview \
+ && cmake --build build --parallel 8 \
  && cmake --install build \
  && cmake --build build --target clean
 
