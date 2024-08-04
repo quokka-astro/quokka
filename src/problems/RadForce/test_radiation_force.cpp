@@ -16,7 +16,7 @@
 #include "AMReX_Box.H"
 #include "AMReX_REAL.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
@@ -80,7 +80,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOp
 	return kappa0;
 }
 
-template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -195,7 +195,7 @@ auto problem_main() -> int
 	pp.query("max_dt", max_dt);
 
 	// Problem initialization
-	RadhydroSimulation<TubeProblem> sim(BCs_cc);
+	QuokkaSimulation<TubeProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.reconstructionOrder_ = 3;	       // PPM

@@ -23,7 +23,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "star_cluster.hpp"
@@ -71,7 +71,7 @@ template <> struct SimulationData<StarCluster> {
 	Real alpha_vir{};
 };
 
-template <> void RadhydroSimulation<StarCluster>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<StarCluster>::preCalculateInitialConditions()
 {
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {
@@ -115,7 +115,7 @@ template <> void RadhydroSimulation<StarCluster>::preCalculateInitialConditions(
 	}
 }
 
-template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<StarCluster>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -165,7 +165,7 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 	});
 }
 
-template <> void RadhydroSimulation<StarCluster>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<StarCluster>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// refine on Jeans length
 	const int N_cells = 4; // inverse of the 'Jeans number' [Truelove et al. (1997)]
@@ -186,7 +186,7 @@ template <> void RadhydroSimulation<StarCluster>::ErrorEst(int lev, amrex::TagBo
 	});
 }
 
-template <> void RadhydroSimulation<StarCluster>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <> void QuokkaSimulation<StarCluster>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "log_density") {
@@ -229,7 +229,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<StarCluster> sim(BCs_cc);
+	QuokkaSimulation<StarCluster> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.densityFloor_ = 0.01;
 

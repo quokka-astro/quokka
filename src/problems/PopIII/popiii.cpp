@@ -18,7 +18,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_TableData.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
 #include "popiii.hpp"
@@ -83,7 +83,7 @@ template <> struct SimulationData<PopIII> {
 	amrex::Real primary_species_14{};
 };
 
-template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 {
 
 	// initialize microphysics routines
@@ -170,7 +170,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 	}
 }
 
-template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -322,7 +322,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 	});
 }
 
-template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 
 	// read-in jeans length refinement runtime params
@@ -358,7 +358,7 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 	}
 }
 
-template <> void RadhydroSimulation<PopIII>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
@@ -446,7 +446,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<PopIII> sim(BCs_cc);
+	QuokkaSimulation<PopIII> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 
 	sim.tempFloor_ = 2.73 * (30.0 + 1.0);

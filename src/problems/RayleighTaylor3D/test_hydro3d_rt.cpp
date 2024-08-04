@@ -13,7 +13,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 
 struct RTProblem {
@@ -44,7 +44,7 @@ amrex::Real constexpr g_x = 0;
 amrex::Real constexpr g_y = 0;
 amrex::Real constexpr g_z = -0.1;
 
-template <> void RadhydroSimulation<RTProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -96,7 +96,7 @@ template <> void RadhydroSimulation<RTProblem>::setInitialConditionsOnGrid(quokk
 }
 
 template <>
-void RadhydroSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state_mf, const int /*lev*/, const amrex::Real /*time*/, const amrex::Real dt)
+void QuokkaSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state_mf, const int /*lev*/, const amrex::Real /*time*/, const amrex::Real dt)
 {
 	// add gravitational source terms
 	const auto state = state_mf.arrays();
@@ -127,7 +127,7 @@ void RadhydroSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void RadhydroSimulation<RTProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<RTProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -160,7 +160,7 @@ template <> void RadhydroSimulation<RTProblem>::ErrorEst(int lev, amrex::TagBoxA
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void RadhydroSimulation<RTProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<RTProblem>::computeAfterTimestep()
 {
 	// compute 1D mixing profile, save to text file
 	static amrex::Long cycle = 0;
@@ -224,7 +224,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<RTProblem> sim(BCs_cc);
+	QuokkaSimulation<RTProblem> sim(BCs_cc);
 
 	// initialize
 	sim.setInitialConditions();

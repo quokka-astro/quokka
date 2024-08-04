@@ -10,7 +10,7 @@
 #include "test_radiation_streaming_y.hpp"
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
 
@@ -61,7 +61,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxM
 	return kappa0;
 }
 
-template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -186,7 +186,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<StreamingProblem> sim(BCs_cc);
+	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
 
 	// read tmax from inputs file
 	amrex::ParmParse pp; // NOLINT

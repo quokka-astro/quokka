@@ -11,7 +11,7 @@
 
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "test_radhydro_shock.hpp"
 #include "util/fextract.hpp"
@@ -159,7 +159,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	}
 }
 
-template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -239,7 +239,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<ShockProblem> sim(BCs_cc);
+	QuokkaSimulation<ShockProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

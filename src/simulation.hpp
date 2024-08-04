@@ -1576,7 +1576,7 @@ AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVec
 // Compute a new multifab 'mf' by copying in state from valid region and filling
 // ghost cells
 // NOTE: This implementation is only used by AdvectionSimulation.
-//  RadhydroSimulation provides its own implementation.
+//  QuokkaSimulation provides its own implementation.
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
 					 FillPatchType fptype)

@@ -6,7 +6,7 @@
 #include "test_radhydro_pulse_MG_const_kappa.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"
 #include "util/fextract.hpp"
 
@@ -120,7 +120,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SGProblem>::ComputeFluxMeanOpac
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <> void RadhydroSimulation<SGProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<SGProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -198,7 +198,7 @@ RadSystem<MGproblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 	return exponents_and_values;
 }
 
-template <> void RadhydroSimulation<MGproblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<MGproblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -264,7 +264,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<SGProblem> sim(BCs_cc);
+	QuokkaSimulation<SGProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
@@ -325,7 +325,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<MGproblem> sim2(BCs_cc2);
+	QuokkaSimulation<MGproblem> sim2(BCs_cc2);
 
 	sim2.radiationReconstructionOrder_ = 3; // PPM
 	sim2.stopTime_ = max_time;

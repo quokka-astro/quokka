@@ -5,7 +5,7 @@
 #include "test_radhydro_uniform_advecting.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"
 #include "util/fextract.hpp"
 
@@ -85,7 +85,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanO
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -154,7 +154,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<PulseProblem> sim(BCs_cc);
+	QuokkaSimulation<PulseProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

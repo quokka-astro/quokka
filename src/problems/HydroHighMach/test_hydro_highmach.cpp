@@ -12,7 +12,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
@@ -45,7 +45,7 @@ template <> struct Physics_Traits<HighMachProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<HighMachProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -81,7 +81,7 @@ template <> void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid
 }
 
 template <>
-void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
 								   amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo)
 {
 
@@ -258,7 +258,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<HighMachProblem> sim(BCs_cc);
+	QuokkaSimulation<HighMachProblem> sim(BCs_cc);
 
 	sim.computeReferenceSolution_ = true;
 

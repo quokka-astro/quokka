@@ -144,7 +144,7 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 	});
 }
 
-template <> void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<MarshakProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -217,7 +217,7 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<MarshakProblem> sim(BCs_cc);
+	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

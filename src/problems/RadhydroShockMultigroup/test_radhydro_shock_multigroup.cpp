@@ -164,7 +164,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	}
 }
 
-template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -240,7 +240,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<ShockProblem> sim(BCs_cc);
+	QuokkaSimulation<ShockProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.reconstructionOrder_ = 3;	       // PPM

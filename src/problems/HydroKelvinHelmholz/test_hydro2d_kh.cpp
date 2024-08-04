@@ -15,7 +15,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "test_hydro2d_kh.hpp"
 
@@ -43,7 +43,7 @@ template <> struct Physics_Traits<KelvinHelmholzProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<KelvinHelmholzProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -87,7 +87,7 @@ template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditions
 	});
 }
 
-template <> void RadhydroSimulation<KelvinHelmholzProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<KelvinHelmholzProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -132,7 +132,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<KelvinHelmholzProblem> sim(BCs_cc);
+	QuokkaSimulation<KelvinHelmholzProblem> sim(BCs_cc);
 
 	sim.stopTime_ = 1.5;
 	sim.cflNumber_ = 0.4;

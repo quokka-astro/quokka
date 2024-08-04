@@ -14,7 +14,7 @@
 
 #include "AMReX_BC_TYPES.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_hydro_shocktube_cma.hpp"
@@ -54,7 +54,7 @@ constexpr amrex::Real P_L = 1.0;
 constexpr amrex::Real rho_R = 0.125;
 constexpr amrex::Real P_R = 0.1;
 
-template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -176,7 +176,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	}
 }
 
-template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -202,7 +202,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::
 	}
 }
 
-template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<ShocktubeProblem>::computeAfterTimestep()
 {
 	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
 	const int nx = static_cast<int>(position.size()); // number of cells along the x direction
@@ -253,7 +253,7 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<ShocktubeProblem> sim(BCs_cc);
+	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
 
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;

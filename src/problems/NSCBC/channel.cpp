@@ -27,7 +27,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "channel.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
@@ -81,7 +81,7 @@ AMREX_GPU_MANAGED amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScala
 };											 // namespace
 #endif
 
-template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -144,7 +144,7 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<Channel> sim(BCs_cc);
+	QuokkaSimulation<Channel> sim(BCs_cc);
 
 	amrex::ParmParse const pp("channel");
 	// initial condition parameters

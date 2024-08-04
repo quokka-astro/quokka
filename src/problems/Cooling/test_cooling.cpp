@@ -13,7 +13,7 @@
 #include "AMReX_GpuDevice.H"
 #include "AMReX_TableData.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 
 using amrex::Real;
@@ -53,7 +53,7 @@ const int kmin = 0;
 const int kmax = 16;
 Real const A = 0.05 / kmax;
 
-template <> void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<CoolingTest>::preCalculateInitialConditions()
 {
 	// generate random phases
 	amrex::Array<int, 3> tlo{kmin, kmin, kmin}; // lower bounds
@@ -81,7 +81,7 @@ template <> void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions(
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<CoolingTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -195,7 +195,7 @@ auto problem_main() -> int
 #endif
 	}
 
-	RadhydroSimulation<CoolingTest> sim(BCs_cc);
+	QuokkaSimulation<CoolingTest> sim(BCs_cc);
 
 	// Standard PPM gives unphysically enormous temperatures when used for
 	// this problem (e.g., ~1e14 K or higher), but can be fixed by

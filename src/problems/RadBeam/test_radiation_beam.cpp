@@ -12,7 +12,7 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 
 struct BeamProblem {
@@ -207,7 +207,7 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	}
 }
 
-template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<BeamProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -232,7 +232,7 @@ template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(quo
 	});
 }
 
-template <> void RadhydroSimulation<BeamProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<BeamProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -286,7 +286,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<BeamProblem> sim(BCs_cc);
+	QuokkaSimulation<BeamProblem> sim(BCs_cc);
 
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;

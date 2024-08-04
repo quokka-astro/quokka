@@ -12,7 +12,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
@@ -110,7 +110,7 @@ AMRSimulation<ShadowProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 	}
 }
 
-template <> void RadhydroSimulation<ShadowProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ShadowProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -146,7 +146,7 @@ template <> void RadhydroSimulation<ShadowProblem>::setInitialConditionsOnGrid(q
 	});
 }
 
-template <> void RadhydroSimulation<ShadowProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShadowProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -237,7 +237,7 @@ auto problem_main() -> int
 	// const double resid_tol = 1.0e-15;
 
 	// Problem initialization
-	RadhydroSimulation<ShadowProblem> sim(BCs_cc);
+	QuokkaSimulation<ShadowProblem> sim(BCs_cc);
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;

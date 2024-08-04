@@ -12,7 +12,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "test_radiation_marshak.hpp"
 #include "util/fextract.hpp"
 
@@ -159,7 +159,7 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
 }
 
-template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<SuOlsonProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -213,7 +213,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<SuOlsonProblem> sim(BCs_cc);
+	QuokkaSimulation<SuOlsonProblem> sim(BCs_cc);
 
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;

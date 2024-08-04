@@ -16,7 +16,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "test_fc_quantities.hpp"
@@ -71,7 +71,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	state(i, j, k, HydroSystem<FCQuantities>::internalEnergy_index) = Eint;
 }
 
-template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract grid information
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -89,7 +89,7 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(qu
 	});
 }
 
-template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
 {
 	// extract grid information
 	const amrex::Array4<double> &state = grid_elem.array_;
@@ -155,12 +155,12 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<FCQuantities> sim_write(BCs_cc, BCs_fc);
+	QuokkaSimulation<FCQuantities> sim_write(BCs_cc, BCs_fc);
 	sim_write.setInitialConditions();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_write = sim_write.getNewMF_fc();
 	amrex::Print() << "\n";
 
-	RadhydroSimulation<FCQuantities> sim_restart(BCs_cc, BCs_fc);
+	QuokkaSimulation<FCQuantities> sim_restart(BCs_cc, BCs_fc);
 	sim_restart.setChkFile("chk00000");
 	sim_restart.setInitialConditions();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_restart = sim_restart.getNewMF_fc();

@@ -172,7 +172,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
 }
 
-template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -227,7 +227,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<SuOlsonProblemCgs> sim(BCs_cc);
+	QuokkaSimulation<SuOlsonProblemCgs> sim(BCs_cc);
 
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;

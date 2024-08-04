@@ -5,7 +5,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file RadhydroSimulation.hpp
+/// \file QuokkaSimulation.hpp
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
@@ -61,7 +61,7 @@
 #include "simulation.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
-template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
+template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
 {
       public:
 	using AMRSimulation<problem_t>::state_old_cc_;
@@ -142,12 +142,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
+	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
 		initialize();
 	}
 
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { initialize(); }
+	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { initialize(); }
 
 	inline void initialize()
 	{
@@ -279,7 +279,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 			   amrex::iMultiFab &redoFlag);
 };
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponentNames()
+template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentNames()
 {
 
 	// cell-centred
@@ -319,7 +319,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponen
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::getScalarVariableNames() -> std::vector<std::string>
+template <typename problem_t> auto QuokkaSimulation<problem_t>::getScalarVariableNames() -> std::vector<std::string>
 {
 	// return vector of names for the passive scalars
 	// this can be specialized by the user to provide more descriptive names
@@ -335,7 +335,7 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::getScalarVaria
 	return names;
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse()
+template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 {
 	// set hydro runtime parameters
 	{
@@ -390,7 +390,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int
 {
 	// compute radiation timestep
 	auto const &dx = geom[lev].CellSizeArray();
@@ -401,9 +401,9 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::computeNumberO
 	return nsubSteps;
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
+template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignalLocal(int const level)
 {
-	BL_PROFILE("RadhydroSimulation::computeMaxSignalLocal()");
+	BL_PROFILE("QuokkaSimulation::computeMaxSignalLocal()");
 
 	// hydro: loop over local grids, compute CFL timestep
 	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
@@ -436,9 +436,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeMaxSign
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
 {
-	BL_PROFILE("RadhydroSimulation::computeExtraPhysicsTimestep()");
+	BL_PROFILE("QuokkaSimulation::computeExtraPhysicsTimestep()");
 	// users can override this to enforce additional timestep constraints
 	return std::numeric_limits<amrex::Real>::max();
 }
@@ -449,9 +449,9 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPh
 #define CHECK_HYDRO_STATES(mf)
 #endif
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
+template <typename problem_t> void QuokkaSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
 {
-	BL_PROFILE("RadhydroSimulation::checkHydroStates()");
+	BL_PROFILE("QuokkaSimulation::checkHydroStates()");
 
 	bool validStates = HydroSystem<problem_t>::CheckStatesValid(mf);
 	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
@@ -465,55 +465,55 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::checkHydroStat
 	}
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::preCalculateInitialConditions()
+template <typename problem_t> void QuokkaSimulation<problem_t>::preCalculateInitialConditions()
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if face-centered vars are used
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::createInitialParticles()
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialParticles()
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if particles are used
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::computeBeforeTimestep()
+template <typename problem_t> void QuokkaSimulation<problem_t>::computeBeforeTimestep()
 {
 	// do nothing -- user should implement if desired
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()
+template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterTimestep()
 {
 	// do nothing -- user should implement if desired
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
+template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
 {
 	// user should implement if desired
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
 {
 	// user should implement
 	// (when Strang splitting is enabled, dt is actually 0.5*dt_lev)
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
+auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
@@ -544,38 +544,38 @@ auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::ComputeProjections(int /*dir*/) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+auto QuokkaSimulation<problem_t>::ComputeProjections(int /*dir*/) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute projections and return as unordered_map -- user should implement
 	return std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>{};
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
+template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
 	// compute statistics and return a std::map<std::string, amrex::Real> -- user should implement
 	// IMPORTANT: the user is responsible for performing any necessary MPI reductions before returning
 	return std::map<std::string, amrex::Real>{};
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement -- user should implement
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	// user should implement
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
+template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
@@ -647,9 +647,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	amrex::Print() << '\n';
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
+template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
 {
-	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
+	BL_PROFILE("QuokkaSimulation::advanceSingleTimestepAtLevel()");
 
 	// get flux registers
 	amrex::YAFluxRegister *fr_as_crse = nullptr;
@@ -703,7 +703,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev)
+template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev)
 {
 	// add hydro density to Poisson rhs
 	auto const &state = state_new_cc_[lev].const_arrays();
@@ -718,7 +718,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::fillPoissonRhs
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)
+template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)
 {
 	if constexpr (AMREX_SPACEDIM == 3) {
 		// apply Poisson gravity operator on level 'lev'
@@ -755,9 +755,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::applyPoissonGr
 
 // fix-up any unphysical states created by AMR operations
 // (e.g., caused by the flux register or from interpolation)
-template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int lev)
+template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
 {
-	BL_PROFILE("RadhydroSimulation::FixupState()");
+	BL_PROFILE("QuokkaSimulation::FixupState()");
 
 	// fix hydro state
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
@@ -771,7 +771,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 // NOTE: This has to be implemented here because PreInterpState and PostInterpState
 // are implemented in this class (and must be *static* functions).
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen,
+void QuokkaSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen,
 					      quokka::direction dir, FillPatchType fptype)
 {
 	BL_PROFILE("AMRSimulation::FillPatch()");
@@ -798,9 +798,9 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::
 	}
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
+template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
-	BL_PROFILE("RadhydroSimulation::PreInterpState()");
+	BL_PROFILE("QuokkaSimulation::PreInterpState()");
 
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -817,9 +817,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState
 	});
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
+template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
-	BL_PROFILE("RadhydroSimulation::PostInterpState()");
+	BL_PROFILE("QuokkaSimulation::PostInterpState()");
 
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -839,10 +839,10 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpStat
 
 template <typename problem_t>
 template <typename F>
-auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F const &user_f) -> amrex::Gpu::HostVector<amrex::Real>
+auto QuokkaSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F const &user_f) -> amrex::Gpu::HostVector<amrex::Real>
 {
 	// compute a 1D profile of user_f(i, j, k, state) along the given axis.
-	BL_PROFILE("RadhydroSimulation::computeAxisAlignedProfile()");
+	BL_PROFILE("QuokkaSimulation::computeAxisAlignedProfile()");
 
 	// allocate temporary multifabs
 	amrex::Vector<amrex::MultiFab> q;
@@ -880,7 +880,7 @@ auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F 
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
+void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 								   amrex::YAFluxRegister *fr_as_fine)
 {
 	BL_PROFILE_REGION("HydroSolver");
@@ -986,7 +986,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real /*time*/, amrex::Real dt_actual) -> bool
+template <typename problem_t> auto QuokkaSimulation<problem_t>::isCflViolated(int lev, amrex::Real /*time*/, amrex::Real dt_actual) -> bool
 {
 	// check whether dt_actual would violate CFL condition using the post-update hydro state
 
@@ -1009,7 +1009,7 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(
 	return cflViolation;
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinates(int lev, const amrex::IntVect &cell_idx)
+template <typename problem_t> void QuokkaSimulation<problem_t>::printCoordinates(int lev, const amrex::IntVect &cell_idx)
 {
 
 	amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
@@ -1027,10 +1027,10 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinat
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
+auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
 							int lev, amrex::Real time, amrex::Real dt_lev) -> bool
 {
-	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
+	BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
 
 	amrex::Real fluxScaleFactor = NAN;
 	if (integratorOrder_ == 2) {
@@ -1319,10 +1319,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
+void QuokkaSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
 						  amrex::iMultiFab &redoFlag)
 {
-	BL_PROFILE("RadhydroSimulation::replaceFluxes()");
+	BL_PROFILE("QuokkaSimulation::replaceFluxes()");
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) { // loop over dimension
 		// ensure that flux arrays have the same number of components
@@ -1365,10 +1365,10 @@ void RadhydroSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AM
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes,
+void QuokkaSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, const int srccomp, const int dstcomp)
 {
-	BL_PROFILE("RadhydroSimulation::addFluxArrays()");
+	BL_PROFILE("QuokkaSimulation::addFluxArrays()");
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto const &srcflux = srcfluxes[idim];
@@ -1378,10 +1378,10 @@ void RadhydroSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AM
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew,
+auto QuokkaSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew,
 						     const int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
 {
-	BL_PROFILE("RadhydroSimulation::expandFluxArrays()");
+	BL_PROFILE("QuokkaSimulation::expandFluxArrays()");
 
 	// This is needed because reflux arrays must have the same number of components as
 	// state_new_cc_[lev]
@@ -1398,10 +1398,10 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
+auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
     -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
-	BL_PROFILE("RadhydroSimulation::computeHydroFluxes()");
+	BL_PROFILE("QuokkaSimulation::computeHydroFluxes()");
 
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
@@ -1488,7 +1488,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
+void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
 						      amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab const &x1Flat,
 						      amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
 {
@@ -1514,10 +1514,10 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &pri
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
+auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
     -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
-	BL_PROFILE("RadhydroSimulation::computeFOHydroFluxes()");
+	BL_PROFILE("QuokkaSimulation::computeFOHydroFluxes()");
 
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
@@ -1555,7 +1555,7 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadhydroSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
+void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
 							amrex::MultiFab &flux, amrex::MultiFab &faceVel, const int ng_reconstruct, const int nvars)
 {
 	// donor-cell reconstruction
@@ -1564,14 +1564,14 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &p
 	HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
+template <typename problem_t> void QuokkaSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
 {
 	// copy radiation state variables from stateNew to stateOld
 	amrex::MultiFab::Copy(stateOld, stateNew, nstartHyperbolic_, nstartHyperbolic_, ncompHyperbolic_, 0);
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::YAFluxRegister *fr_as_crse,
+void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::YAFluxRegister *fr_as_crse,
 							     amrex::YAFluxRegister *fr_as_fine)
 {
 	// compute radiation timestep
@@ -1655,7 +1655,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex::Real time, amrex::Real dt_radiation, int const iter_count,
+void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex::Real time, amrex::Real dt_radiation, int const iter_count,
 								   int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse,
 								   amrex::YAFluxRegister *fr_as_fine)
 {
@@ -1722,7 +1722,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
+void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
 								 int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	// get cell sizes
@@ -1755,7 +1755,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
+void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
 								int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	auto const &dx = geom[lev].CellSizeArray();
@@ -1791,7 +1791,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const amrex::Real time,
+void QuokkaSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const amrex::Real time,
 							     const double dt, const int stage, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
@@ -1809,7 +1809,7 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, const int nvars,
+auto QuokkaSimulation<problem_t>::computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, const int nvars,
 							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
     -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>
 {
@@ -1840,7 +1840,7 @@ auto RadhydroSimulation<problem_t>::computeRadiationFluxes(amrex::Array4<const a
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
+void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
 						 const amrex::Box &indexRange, const int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
 	int dir = 0;
