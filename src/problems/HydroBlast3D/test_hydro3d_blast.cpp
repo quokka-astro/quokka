@@ -59,7 +59,7 @@ template <> void QuokkaSimulation<SedovProblem>::preCalculateInitialConditions()
 	}
 }
 
-template <> void QuokkaSimulation<SedovProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<SedovProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// initialize a Sedov test problem using parameters from
 	// Richard Klein and J. Bolstad

@@ -99,7 +99,7 @@ template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::computeAfterTimeste
 	}
 }
 
-template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

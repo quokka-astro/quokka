@@ -121,7 +121,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	network_init();
 }
 
-template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;

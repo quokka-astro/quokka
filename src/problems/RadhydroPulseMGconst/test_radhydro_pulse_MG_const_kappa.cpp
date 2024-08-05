@@ -120,7 +120,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SGProblem>::ComputeFluxMeanOpac
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <> void QuokkaSimulation<SGProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<SGProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -198,7 +198,7 @@ RadSystem<MGproblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 	return exponents_and_values;
 }
 
-template <> void QuokkaSimulation<MGproblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<MGproblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;

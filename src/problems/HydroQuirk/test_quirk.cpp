@@ -64,7 +64,7 @@ constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
 int ishock_g = 0;
 
-template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

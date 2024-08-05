@@ -158,7 +158,7 @@ auto compute_exact_bb(const double nu, const double T) -> double
 	return coeff * planck_integral / (std::pow(PI, 4) / 15.0) * (a_rad * std::pow(T, 4));
 }
 
-template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	const amrex::Box &indexRange = grid_elem.indexRange_;

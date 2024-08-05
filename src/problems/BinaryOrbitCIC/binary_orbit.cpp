@@ -56,7 +56,7 @@ template <> struct SimulationData<BinaryOrbit> {
 	std::vector<amrex::ParticleReal> dist{};
 };
 
-template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;

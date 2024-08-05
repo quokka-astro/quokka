@@ -187,7 +187,7 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 	}
 }
 
-template <> void QuokkaSimulation<TophatProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<TophatProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

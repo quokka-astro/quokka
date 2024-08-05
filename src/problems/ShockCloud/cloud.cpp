@@ -77,7 +77,7 @@ AMREX_GPU_MANAGED Real v_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-
 AMREX_GPU_MANAGED Real P_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real delta_vx = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid grid)
+template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid const &grid)
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> const dx = grid.dx_;
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = grid.prob_lo_;
