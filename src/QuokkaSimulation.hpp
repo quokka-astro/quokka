@@ -173,8 +173,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeMaxSignalLocal(int level) override;
 	auto computeExtraPhysicsTimestep(int lev) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
-	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
-	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
+	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
+	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
 	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeBeforeTimestep() override;

@@ -74,7 +74,7 @@ template <> struct SimulationData<RandomBlast> {
 	int use_periodic_bc = 1;     // default is periodic
 };
 
-template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;

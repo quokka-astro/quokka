@@ -81,7 +81,7 @@ template <> void QuokkaSimulation<CoolingTest>::preCalculateInitialConditions()
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<CoolingTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<CoolingTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

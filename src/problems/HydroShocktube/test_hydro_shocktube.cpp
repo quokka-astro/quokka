@@ -49,7 +49,7 @@ constexpr amrex::Real P_L = 100.0;
 constexpr amrex::Real rho_R = 1.0;
 constexpr amrex::Real P_R = 1.0;
 
-template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;

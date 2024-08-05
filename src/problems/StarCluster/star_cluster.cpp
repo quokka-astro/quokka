@@ -115,7 +115,7 @@ template <> void QuokkaSimulation<StarCluster>::preCalculateInitialConditions()
 	}
 }
 
-template <> void QuokkaSimulation<StarCluster>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<StarCluster>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;

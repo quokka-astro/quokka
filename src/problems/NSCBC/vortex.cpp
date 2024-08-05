@@ -73,7 +73,7 @@ AMREX_GPU_MANAGED amrex::Real w0 = NAN;					      // NOLINT(cppcoreguidelines-av
 AMREX_GPU_MANAGED amrex::GpuArray<Real, HydroSystem<Vortex>::nscalars_> s0{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 }; // namespace
 
-template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;

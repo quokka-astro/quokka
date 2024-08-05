@@ -81,7 +81,7 @@ AMREX_GPU_MANAGED amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScala
 };											 // namespace
 #endif
 
-template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;

@@ -43,7 +43,7 @@ amrex::Real constexpr g_x = 0;
 amrex::Real constexpr g_y = -0.1;
 amrex::Real constexpr g_z = 0;
 
-template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
