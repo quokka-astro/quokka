@@ -471,13 +471,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::preCalculateInit
 	// user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
