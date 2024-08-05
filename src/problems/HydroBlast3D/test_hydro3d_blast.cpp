@@ -15,7 +15,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
@@ -52,14 +52,14 @@ template <> struct Physics_Traits<SedovProblem> {
 const double rho = 1.0;	   // g cm^-3
 double E_blast = 0.851072; // ergs
 
-template <> void RadhydroSimulation<SedovProblem>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<SedovProblem>::preCalculateInitialConditions()
 {
 	if constexpr (!simulate_full_box) {
 		E_blast /= 8.0; // only one octant, so 1/8 of the total energy
 	}
 }
 
-template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<SedovProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// initialize a Sedov test problem using parameters from
 	// Richard Klein and J. Bolstad
@@ -115,7 +115,7 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(qu
 	});
 }
 
-template <> void RadhydroSimulation<SedovProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<SedovProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -150,7 +150,7 @@ template <> void RadhydroSimulation<SedovProblem>::ErrorEst(int lev, amrex::TagB
 	}
 }
 
-template <> void RadhydroSimulation<SedovProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
+template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
@@ -254,7 +254,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<SedovProblem> sim(BCs_cc);
+	QuokkaSimulation<SedovProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.stopTime_ = 1.0;	      // seconds

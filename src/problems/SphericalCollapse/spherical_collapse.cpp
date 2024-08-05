@@ -19,7 +19,7 @@
 #include "AMReX_Print.H"
 
 #include "AMReX_SPACE.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "spherical_collapse.hpp"
 
@@ -47,7 +47,7 @@ template <> struct Physics_Traits<CollapseProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<CollapseProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -85,7 +85,7 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 	});
 }
 
-template <> void RadhydroSimulation<CollapseProblem>::createInitialParticles()
+template <> void QuokkaSimulation<CollapseProblem>::createInitialParticles()
 {
 	// add particles at random positions in the box
 	const bool generate_on_root_rank = true;
@@ -98,7 +98,7 @@ template <> void RadhydroSimulation<CollapseProblem>::createInitialParticles()
 	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
 }
 
-template <> void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<CollapseProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 	const Real q_min = 5.0; // minimum density for refinement
@@ -118,7 +118,7 @@ template <> void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev, amrex::T
 	}
 }
 
-template <> void RadhydroSimulation<CollapseProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <> void QuokkaSimulation<CollapseProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
@@ -159,7 +159,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<CollapseProblem> sim(BCs_cc);
+	QuokkaSimulation<CollapseProblem> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 
 	// initialize

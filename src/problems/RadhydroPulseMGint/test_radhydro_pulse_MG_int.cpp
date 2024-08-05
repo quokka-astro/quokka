@@ -7,7 +7,7 @@
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
 #include "radiation/radiation_system.hpp"
@@ -215,7 +215,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanO
 	return sigma / rho;
 }
 
-template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<MGProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -256,7 +256,7 @@ template <> void RadhydroSimulation<MGProblem>::setInitialConditionsOnGrid(quokk
 		state_cc(i, j, k, RadSystem<MGProblem>::x3GasMomentum_index) = 0.;
 	});
 }
-template <> void RadhydroSimulation<ExactProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ExactProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -315,7 +315,7 @@ auto problem_main() -> int
 	// Problem 1: advecting pulse with multigroup integration
 
 	// Problem initialization
-	RadhydroSimulation<MGProblem> sim(BCs_cc);
+	QuokkaSimulation<MGProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
@@ -385,7 +385,7 @@ auto problem_main() -> int
 	// Problem 2: exact opacity
 
 	// Problem initialization
-	RadhydroSimulation<ExactProblem> sim2(BCs_cc);
+	QuokkaSimulation<ExactProblem> sim2(BCs_cc);
 
 	sim2.radiationReconstructionOrder_ = 3; // PPM
 	sim2.stopTime_ = max_time;

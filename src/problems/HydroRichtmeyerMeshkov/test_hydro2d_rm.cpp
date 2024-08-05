@@ -13,7 +13,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 
 struct RichtmeyerMeshkovProblem {
@@ -40,7 +40,7 @@ template <> struct Physics_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
 {
 	const int ncomp_cc = Physics_Indices<RichtmeyerMeshkovProblem>::nvarTotal_cc;
 
@@ -99,7 +99,7 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 	}
 }
 
-template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -173,7 +173,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<RichtmeyerMeshkovProblem> sim(BCs_cc);
+	QuokkaSimulation<RichtmeyerMeshkovProblem> sim(BCs_cc);
 
 	sim.stopTime_ = 2.5;
 	sim.cflNumber_ = 0.4;

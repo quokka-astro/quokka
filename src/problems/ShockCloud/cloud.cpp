@@ -22,7 +22,7 @@
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "cooling/TabulatedCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
@@ -77,7 +77,7 @@ AMREX_GPU_MANAGED Real v_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-
 AMREX_GPU_MANAGED Real P_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real delta_vx = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid grid)
+template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid const &grid)
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> const dx = grid.dx_;
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = grid.prob_lo_;
@@ -198,7 +198,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	}
 }
 
-template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
+template <> void QuokkaSimulation<ShockCloud>::computeAfterTimestep()
 {
 	const amrex::Real dt_coarse = dt_[0];
 	const amrex::Real time = tNew_[0];
@@ -266,7 +266,7 @@ template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 	}
 }
 
-template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const
+template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const
 {
 	// compute derived variables and save in 'mf'
 
@@ -450,7 +450,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 	return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
 }
 
-template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
+template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
 	// compute scalar statistics
 	std::map<std::string, amrex::Real> stats;
@@ -600,7 +600,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	return stats;
 }
 
-template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+template <> auto QuokkaSimulation<ShockCloud>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
 
@@ -633,7 +633,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int di
 	return proj;
 }
 
-template <> void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 	const int Ncells_per_lcool = 10;
@@ -665,7 +665,7 @@ template <> void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBox
 auto problem_main() -> int
 {
 	// Problem initialization
-	constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_cc_;
+	constexpr int nvars = QuokkaSimulation<ShockCloud>::nvarTotal_cc_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet
@@ -677,7 +677,7 @@ auto problem_main() -> int
 		boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
 		boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
 	}
-	RadhydroSimulation<ShockCloud> sim(boundaryConditions);
+	QuokkaSimulation<ShockCloud> sim(boundaryConditions);
 
 	// Read problem parameters
 	amrex::ParmParse const pp;
