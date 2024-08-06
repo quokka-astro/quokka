@@ -23,7 +23,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
@@ -71,7 +71,7 @@ template <> struct SimulationData<PrimordialChemTest> {
 	amrex::Real primary_species_14;
 };
 
-template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
 	init_extern_parameters();
@@ -121,7 +121,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialCond
 	network_init();
 }
 
-template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -261,7 +261,7 @@ auto problem_main() -> int
 #endif
 	}
 
-	RadhydroSimulation<PrimordialChemTest> sim(BCs_cc);
+	QuokkaSimulation<PrimordialChemTest> sim(BCs_cc);
 
 	// Standard PPM gives unphysically enormous temperatures when used for
 	// this problem (e.g., ~1e14 K or higher), but can be fixed by

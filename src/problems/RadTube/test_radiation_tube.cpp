@@ -14,7 +14,7 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "AMReX_ValLocPair.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -97,7 +97,7 @@ amrex::Gpu::DeviceVector<double> rho_arr_g;
 amrex::Gpu::DeviceVector<double> Pgas_arr_g;
 amrex::Gpu::DeviceVector<double> Erad_arr_g;
 
-template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<TubeProblem>::preCalculateInitialConditions()
 {
 	// map initial conditions to the global variables
 	std::string filename = "../extern/pressure_tube/initial_conditions.txt";
@@ -136,7 +136,7 @@ template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions(
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -276,7 +276,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<TubeProblem> sim(BCs_cc);
+	QuokkaSimulation<TubeProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.reconstructionOrder_ = 3;	       // PPM

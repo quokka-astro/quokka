@@ -5,7 +5,7 @@
 #include "test_radhydro_pulse_dyn.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"
 #include "util/fextract.hpp"
 
@@ -114,7 +114,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputeFluxMe
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -145,7 +145,7 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
 	});
 }
-template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<AdvPulseProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -215,7 +215,7 @@ auto problem_main() -> int
 	// Problem 1: non-advecting pulse
 
 	// Problem initialization
-	RadhydroSimulation<PulseProblem> sim(BCs_cc);
+	QuokkaSimulation<PulseProblem> sim(BCs_cc);
 
 	double max_time = 4.8e-6;
 	amrex::ParmParse pp; // NOLINT
@@ -268,7 +268,7 @@ auto problem_main() -> int
 	// Problem 2: advecting pulse
 
 	// Problem initialization
-	RadhydroSimulation<AdvPulseProblem> sim2(BCs_cc);
+	QuokkaSimulation<AdvPulseProblem> sim2(BCs_cc);
 
 	sim2.radiationReconstructionOrder_ = 3; // PPM
 	sim2.stopTime_ = max_time;

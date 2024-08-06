@@ -4,7 +4,7 @@
 
 #include "AMReX_BLassert.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_radiation_marshak_Vaytet.hpp"
 #include "util/fextract.hpp"
@@ -219,7 +219,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 	}
 }
 
-template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -272,7 +272,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<SuOlsonProblemCgs> sim(BCs_cc);
+	QuokkaSimulation<SuOlsonProblemCgs> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

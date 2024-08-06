@@ -12,7 +12,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_scalars.hpp"
@@ -42,7 +42,7 @@ template <> struct Physics_Traits<ScalarProblem> {
 
 constexpr double v_contact = 2.0; // contact wave velocity
 
-template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ScalarProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -84,8 +84,8 @@ template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid(q
 }
 
 template <>
-void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
-								 amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+							       amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -210,7 +210,7 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 #endif
 }
 
-template <> void RadhydroSimulation<ScalarProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ScalarProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -252,7 +252,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<ScalarProblem> sim(BCs_cc);
+	QuokkaSimulation<ScalarProblem> sim(BCs_cc);
 
 	sim.computeReferenceSolution_ = true;
 

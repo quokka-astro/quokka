@@ -9,7 +9,7 @@
 
 #include "AMReX_BC_TYPES.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "test_hydro_sms.hpp"
 #include "util/ArrayUtil.hpp"
@@ -38,7 +38,7 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -130,8 +130,8 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 }
 
 template <>
-void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 
 	auto const box = geom[0].Domain();
@@ -274,7 +274,7 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<ShocktubeProblem> sim(BCs_cc);
+	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.constantDt_ = fixed_dt;

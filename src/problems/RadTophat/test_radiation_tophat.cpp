@@ -13,7 +13,7 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 
@@ -187,7 +187,7 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 	}
 }
 
-template <> void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<TophatProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -273,7 +273,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<TophatProblem> sim(BCs_cc);
+	QuokkaSimulation<TophatProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = max_time;

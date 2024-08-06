@@ -23,7 +23,7 @@
 
 #include "AMReX_REAL.H"
 #include "AMReX_ccse-mpi.H"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "binary_orbit.hpp"
 #include "hydro/hydro_system.hpp"
 #include <algorithm>
@@ -56,7 +56,7 @@ template <> struct SimulationData<BinaryOrbit> {
 	std::vector<amrex::ParticleReal> dist{};
 };
 
-template <> void RadhydroSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -72,7 +72,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quo
 	});
 }
 
-template <> void RadhydroSimulation<BinaryOrbit>::createInitialParticles()
+template <> void QuokkaSimulation<BinaryOrbit>::createInitialParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
@@ -80,7 +80,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::createInitialParticles()
 	CICParticles->InitFromAsciiFile("BinaryOrbit_particles.txt", nreal_extra, nullptr);
 }
 
-template <> void RadhydroSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <> void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
@@ -91,7 +91,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std
 	}
 }
 
-template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
+template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 {
 	// every N cycles, save particle statistics
 	static int cycle = 1;
@@ -167,7 +167,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<BinaryOrbit> sim(BCs_cc);
+	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.initDt_ = 1.0e3;	 // s
 

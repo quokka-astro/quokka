@@ -17,7 +17,7 @@
 // #include "AMReX_BC_TYPES.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_Print.H"
-// #include "RadhydroSimulation.hpp"
+// #include "QuokkaSimulation.hpp"
 // #include "util/fextract.hpp"
 #include "physics_info.hpp"
 // #include "radiation/radiation_system.hpp"
@@ -158,7 +158,7 @@ auto compute_exact_bb(const double nu, const double T) -> double
 	return coeff * planck_integral / (std::pow(PI, 4) / 15.0) * (a_rad * std::pow(T, 4));
 }
 
-template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -213,7 +213,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<PulseProblem> sim(BCs_cc);
+	QuokkaSimulation<PulseProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
