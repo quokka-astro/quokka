@@ -45,7 +45,7 @@ namespace
 Real rho0 = NAN;			// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real Tgas0 = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real P_outflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-std::string input_data_file;		//="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/GasGravity/PhiGas_R8.h5";
+std::string input_data_file;		//
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 64> logphi_data{
     0.83638381, 4.50705067, 5.10271383, 5.45268878, 5.70140736, 5.89447928, 6.05229308, 6.1857468,  6.30135334, 6.40331919, 6.49451684, 6.57699822, 6.65227803,
     6.72150811, 6.78558362, 6.84521466, 6.90097381, 6.95332936, 7.00266958, 7.04931937, 7.09355406, 7.1356083,	7.17568429, 7.21395706, 7.25057937, 7.28568514,
@@ -113,181 +113,6 @@ template <> struct Physics_Traits<NewProblem> {
 	static constexpr int numPassiveScalars = 1; // number of passive scalars
 	static constexpr int nGroups = 1;	    // number of radiation groups
 };
-
-/************************************************************/
-
-// template <>
-// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
-//                     amrex::GpuArray<amrex::Real, 4999> &phi_data,
-//                     amrex::GpuArray<amrex::Real, 4999> &g_data)
-// {
-//   const double small_fastlog_value = FastMath::log10(1.0e-99);
-
-// 	// Read cooling data from hdf5 file
-// 	hid_t file_id = 0;
-// 	hid_t dset_id = 0;
-// 	hid_t attr_id = 0;
-// 	herr_t status = 0;
-// 	herr_t h5_error = -1;
-
-// 	file_id = H5Fopen(input_data_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-
-// 	// Open cooling dataset and get grid dimensions
-
-// 	std::string parameter_name;
-// 	parameter_name = "PhiGas" ;
-// 	dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *phidata = new double[4999]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, phidata);
-//    	for (int64_t q = 0; q < 4999; q++) {
-// 			double value = phidata[q];
-// 			phi_data[q] =  FastMath::log10(value) ;
-// 		}
-//   }
-// 	status = H5Dclose(dset_id);
-
-//   parameter_name = "ZVal" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *zdata = new double[4999]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, zdata);
-//     for (int64_t q = 0; q < 4999; q++) {
-// 			double value = zdata[q];
-// 			z_data[q] =  value;
-// 		}
-//   }
-// 		status = H5Dclose(dset_id);
-
-//  parameter_name = "gGas" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *gdata = new double[4999]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, gdata);
-//     for (int64_t q = 0; q < 4999; q++) {
-// 			double value = gdata[q];
-// 			g_data[q] =  FastMath::log10(value);
-// 		}
-//   }
-//   status = H5Dclose(dset_id);
-
-//   parameter_name = "zStar" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *zstar = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, zstar);
-//     for (int64_t q = 0; q < 1; q++) {
-// 			double value = zstar[q];
-// 			z_star =  value;
-// 		}
-//   }
-//   status = H5Dclose(dset_id);
-
-//   parameter_name = "Sigma_star" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *sigstar = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigstar);
-// 		Sigma_star =  sigstar[0];
-
-//   }
-// 		status = H5Dclose(dset_id);
-
-//   parameter_name = "rho_dm" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *rhodm = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rhodm);
-// 		rho_dm =  rhodm[0];
-
-//   }
-// 		status = H5Dclose(dset_id);
-
-//   parameter_name = "R0" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *rnought = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rnought);
-// 		R0 =  rnought[0];
-
-//   }
-// 		status = H5Dclose(dset_id);
-
-//   parameter_name = "ks_sigma_sfr" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *kssigma = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, kssigma);
-// 		ks_sigma_sfr =  kssigma[0];
-
-//   }
-// 		status = H5Dclose(dset_id);
-//   parameter_name = "hscale" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *h_scale = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, h_scale);
-// 		hscale =  h_scale[0];
-
-//   }
-// 		status = H5Dclose(dset_id);
-
-//   parameter_name = "sigma1" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *sigma_1 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigma_1);
-// 		sigma1 =  sigma_1[0];
-
-//   }
-// 		status = H5Dclose(dset_id);
-
-//   parameter_name = "sigma2" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *sigma_2 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigma_2);
-// 		sigma2 =  sigma_2[0];
-
-//   }
-//   status = H5Dclose(dset_id);
-
-//   parameter_name = "rho1" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *rho_1 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rho_1);
-// 		rho01 =  rho_1[0];
-
-//   }
-// 		status = H5Dclose(dset_id);
-
-//   parameter_name = "rho2" ;
-//   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-// 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-//   auto *rho_2 = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
-// 	{
-// 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rho_2);
-// 		rho02 =  rho_2[0];
-
-//   }
-// 		status = H5Dclose(dset_id);
-
-//   printf("Gasgravity file read!\n");
-//   printf("R0, rho_dm=%.2e,%.2e\n", R0, rho_dm);
-// }
 
 /************************************************************/
 
@@ -366,12 +191,6 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 		AMREX_ASSERT(!std::isnan(rho));
 
 		const auto gamma = HydroSystem<NewProblem>::gamma_;
-
-		// For a uniform box
-		//  rho01  = 1.e-2 * Const_mH;
-		//  rho = rho01;
-		//  sigma1 = 37. * kmps;
-		//  P = rho01 * std::pow(sigma1, 2.0);
 
 		state_cc(i, j, k, HydroSystem<NewProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = 0.0;
@@ -769,13 +588,8 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<NewProblem> sim(BCs_cc);
 
-	// amrex::ParmParse const pp("phi_file");
-	// pp.query("name", input_data_file);
-
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-
-	// read_potential(z_data, phi_data, g_data);
 
 	sim.setInitialConditions();
 
