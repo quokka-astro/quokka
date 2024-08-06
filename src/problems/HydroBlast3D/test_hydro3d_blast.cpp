@@ -218,8 +218,7 @@ template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vecto
 	test_passes = E_test_passes && KE_test_passes;
 	amrex::Print() << "\n";
 }
-template <> void QuokkaSimulation<SedovProblem>::computeBeforeTimestep()
-{}
+
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {

@@ -34,7 +34,7 @@
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_sne.hpp"
-#include "quadrature.hpp"
+#include "math/quadrature.hpp"
 #include "AMReX_TableData.H"
 #include "math/FastMath.hpp"
 
