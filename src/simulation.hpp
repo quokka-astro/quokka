@@ -220,7 +220,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeMaxSignalLocal(int level) = 0;
 	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
-	virtual void computeBeforeTimestep() = 0;
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) = 0;
