@@ -106,7 +106,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	const double netLambda_prim = FastMath::pow10(logPrimHeat) - FastMath::pow10(logPrimCool);
 	const double netLambda_metals = FastMath::pow10(logMetalHeat) -  FastMath::pow10(logMetalCool);
 	const double netLambda = netLambda_prim +  netLambda_metals;
-	// const double netLambda = netLambda_metals;
 
 	// multiply by the square of H mass density (**NOT number density**)
 	double Edot = (rhoH * rhoH) * netLambda;
