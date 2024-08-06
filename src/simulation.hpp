@@ -802,18 +802,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 			nsubsteps[lev] = 1;
 		}
 	}
-// amrex::Print() << "\t>> 1. Post loop dt_0 ==" << dt_0 <<"\n";
+
 	// Limit dt to avoid overshooting stop_time
 	const amrex::Real eps = 1.e-3 * dt_0;
 
 	if (tNew_[0] + dt_0 > stopTime_ - eps) {
 		dt_0 = stopTime_ - tNew_[0];
 	}
-// amrex::Print() << "\t>> 2. Post loop dt_0 ==" << dt_0 <<"\n" ;
 	// assign timesteps on each level
 	dt_[0] = dt_0;
 	
-// amrex::Print() << "\t>> 3. dt_ ==" << dt_[0] <<"\n";
 	for (int level = 1; level <= finest_level; ++level) {
 		dt_[level] = dt_[level - 1] / nsubsteps[level];
 	}
@@ -864,8 +862,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
-		computeBeforeTimestep(); 
-
+		
 		// do user-specified calculations before the level update
 		computeBeforeTimestep();
 
