@@ -104,7 +104,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	const double logMetalHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalHeat);
 
 	const double netLambda_prim = FastMath::pow10(logPrimHeat) - FastMath::pow10(logPrimCool);
-	const double netLambda_metals = FastMath::pow10(logMetalHeat) -  Zbg*FastMath::pow10(logMetalCool);
+	const double netLambda_metals = FastMath::pow10(logMetalHeat) -  FastMath::pow10(logMetalCool);
 	const double netLambda = netLambda_prim +  netLambda_metals;
 	// const double netLambda = netLambda_metals;
 
