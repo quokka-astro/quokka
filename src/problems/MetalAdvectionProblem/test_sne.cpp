@@ -114,8 +114,6 @@ template <> struct Physics_Traits<NewProblem> {
 	static constexpr int nGroups = 1;	    // number of radiation groups
 };
 
-/************************************************************/
-
 template <> struct SimulationData<NewProblem> {
 
 	// cloudy_tables cloudyTables;
@@ -145,21 +143,19 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 	double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 		amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
 
-		/*Calculate DM Potential*/
+		//Calculate DM Potential
 		double prefac;
 		prefac = 2. * 3.1415 * Const_G * rho_dm * std::pow(R0, 2);
 		double Phidm = (prefac * std::log(1. + std::pow(z / R0, 2)));
 
-		/*Calculate Stellar Disk Potential*/
+		//Calculate Stellar Disk Potential
 		double prefac2;
 		prefac2 = 2. * 3.1415 * Const_G * Sigma_star * z_star;
 		double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
 
-		/*Calculate Gas Disk Potential*/
+		//Calculate Gas Disk Potential
 
 		double Phigas;
 		// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
@@ -213,10 +209,6 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 	const Real rho_blast = userData.M_ejecta / cell_vol;	   // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
-	const Real Lx = prob_hi[0] - prob_lo[0];
-	const Real Ly = prob_hi[1] - prob_lo[1];
-	const Real Lz = prob_hi[2] - prob_lo[2];
-
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &box = iter.validbox();
 		auto const &state = mf.array(iter);
@@ -246,9 +238,9 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 					state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) += rho_eint_blast;
 					state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex) += 1.e3 / cell_vol;
 
-					// printf("The total number of SN gone off=%d\n", cum_sn);
+					printf("The total number of SN gone off=%d\n", cum_sn);
 					Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index) / Const_mH, -3. / 7.);
-					// printf("Rpds = %.2e pc\n", Rpds);
+					printf("Rpds = %.2e pc\n", Rpds);
 				}
 			}
 		});
@@ -261,7 +253,6 @@ template <> void QuokkaSimulation<NewProblem>::computeBeforeTimestep()
 	// sample from Poisson distribution
 
 	const Real dt_coarse = dt_[0];
-	const Real domain_vol = geom[0].ProbSize();
 	const Real domain_area = geom[0].ProbLength(0) * geom[0].ProbLength(1);
 	const Real mean = 0.0;
 	const Real stddev = hscale / geom[0].ProbLength(2) / 2.;
@@ -289,8 +280,6 @@ template <> void QuokkaSimulation<NewProblem>::computeBeforeTimestep()
 		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
 	}
 }
-
-/*******************************************************************/
 
 template <> void QuokkaSimulation<NewProblem>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
 {
@@ -345,7 +334,7 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
 	return grad_potential;
 }
 
-/* Add Strang Split Source Term for External Fixed Potential Here */
+// Add Strang Split Source Term for External Fixed Potential Here 
 template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
@@ -369,7 +358,6 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 			const auto vx = x1mom / rho;
 			const auto vy = x2mom / rho;
 			const auto vz = x3mom / rho;
-			const double vel_mag = std::sqrt(vx * vx + vy * vy + vz * vz);
 
 			Real Eint = RadSystem<NewProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
 
@@ -399,9 +387,9 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 	}
 }
 
-/**************************End Adding Strang Split Source Term *****************/
 
-/*********---Projection----******/
+
+//Code for producing inistu Projection plots
 template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute density projection
@@ -411,14 +399,11 @@ template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir)
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // int nmscalars = Physics_Traits<NewProblem>::numMassScalars;
 		    Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
-		    Real const vz = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
+		    Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
 
-		    amrex::Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
 		    amrex::Real Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
-
 		    amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
-		    Real const primTemp = quokka::EOS<NewProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
-		    return (rho * vz);
+		    return (rho * vx3);
 	    },
 	    dir);
 
@@ -426,7 +411,6 @@ template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir)
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    double flux;
 		    Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
-		    Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
 		    Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
 		    Real const Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
 		    amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
@@ -444,7 +428,6 @@ template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir)
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    double flux;
 		    Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
-		    Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
 		    Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
 		    Real const Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
 		    amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
@@ -519,8 +502,7 @@ template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir)
 	return proj;
 }
 
-/**************************Begin Diode BC *****************/
-
+//Implement User-defined diode BC 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
 												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
@@ -533,7 +515,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
 	const auto &domain_hi = box.hiVect3d();
 	const int klo = domain_lo[2];
 	const int khi = domain_hi[2];
-	int kedge, normal;
+	int kedge = 0;
+	int normal =0;
 
 	if (k < klo) {
 		kedge = klo;
@@ -562,19 +545,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
 	consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_edge;
 }
 
-/**************************End NSCBC *****************/
-
 auto problem_main() -> int
 {
 
 	const int ncomp_cc = Physics_Indices<NewProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 
-	/*Implementing Outflowing Boundary Conditions in the Z-direction*/
-
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// outflowing boundary conditions
+			// diode boundary conditions
 			if (i == 2) {
 				BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
 				BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
