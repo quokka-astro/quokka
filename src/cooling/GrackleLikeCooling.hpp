@@ -104,8 +104,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	const double logMetalHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalHeat);
 
 	const double netLambda_prim = FastMath::pow10(logPrimHeat) - FastMath::pow10(logPrimCool);
-	const double netLambda_metals = FastMath::pow10(logMetalHeat) -  FastMath::pow10(logMetalCool);
-	const double netLambda = netLambda_prim +  netLambda_metals;
+	const double netLambda_metals = FastMath::pow10(logMetalHeat) - FastMath::pow10(logMetalCool);
+	const double netLambda = netLambda_prim + netLambda_metals;
 
 	// multiply by the square of H mass density (**NOT number density**)
 	double Edot = (rhoH * rhoH) * netLambda;
@@ -214,6 +214,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 		       rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
 		T_sol = NAN;
 	}
+
 	return T_sol;
 }
 
@@ -283,7 +284,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 			ODEUserData user_data{rho, gamma, tables};
-			quokka::valarray<Real, 1> y = {Eint};			
+			quokka::valarray<Real, 1> y = {Eint};
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
 
 			// do integration with RK2 (Heun's method)
