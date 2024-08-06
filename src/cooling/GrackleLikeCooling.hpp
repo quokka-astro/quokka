@@ -215,9 +215,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 		       rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
 		T_sol = NAN;
 	}
-    if(T_sol>1.e10) {
-		printf("T_sol>1.e10==%.2e", T_sol);
-	}
 	return T_sol;
 }
 
