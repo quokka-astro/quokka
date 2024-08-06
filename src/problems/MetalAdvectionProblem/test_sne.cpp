@@ -144,17 +144,17 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
 
-		//Calculate DM Potential
+		// Calculate DM Potential
 		double prefac;
 		prefac = 2. * 3.1415 * Const_G * rho_dm * std::pow(R0, 2);
 		double Phidm = (prefac * std::log(1. + std::pow(z / R0, 2)));
 
-		//Calculate Stellar Disk Potential
+		// Calculate Stellar Disk Potential
 		double prefac2;
 		prefac2 = 2. * 3.1415 * Const_G * Sigma_star * z_star;
 		double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
 
-		//Calculate Gas Disk Potential
+		// Calculate Gas Disk Potential
 
 		double Phigas;
 		// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
@@ -324,7 +324,7 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
 	return grad_potential;
 }
 
-// Add Strang Split Source Term for External Fixed Potential Here 
+// Add Strang Split Source Term for External Fixed Potential Here
 template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
@@ -373,9 +373,7 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 	}
 }
 
-
-
-//Code for producing inistu Projection plots
+// Code for producing inistu Projection plots
 template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute density projection
@@ -486,7 +484,7 @@ template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir)
 	return proj;
 }
 
-//Implement User-defined diode BC 
+// Implement User-defined diode BC
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
 												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
@@ -500,7 +498,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
 	const int klo = domain_lo[2];
 	const int khi = domain_hi[2];
 	int kedge = 0;
-	int normal =0;
+	int normal = 0;
 
 	if (k < klo) {
 		kedge = klo;
