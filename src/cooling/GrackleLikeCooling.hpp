@@ -214,7 +214,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 		       rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
 		T_sol = NAN;
 	}
-	
+
 	return T_sol;
 }
 
