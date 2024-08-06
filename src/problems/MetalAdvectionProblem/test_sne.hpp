@@ -10,21 +10,20 @@
 ///
 
 // external headers
-#include <fstream>
 #include <fmt/format.h>
+#include <fstream>
 
-constexpr double  Msun     = 2.e33;
-constexpr double  Const_G  = 6.67e-8;
-constexpr double  yr_to_s  = 3.154e7;
-constexpr double  Myr      = 1.e6*yr_to_s;
-constexpr double  pc       = 3.018e18;
-constexpr double  kpc      = 1.e3 * pc;
-constexpr double  Mu       = 0.6;
-constexpr double  kmps     = 1.e5; 
-constexpr double  Const_mH = 1.67e-24;
-constexpr double  kb       = 1.3807e-16;
-constexpr double  sqrtpi          = 1.772453;
-
+constexpr double Msun = 2.e33;
+constexpr double Const_G = 6.67e-8;
+constexpr double yr_to_s = 3.154e7;
+constexpr double Myr = 1.e6 * yr_to_s;
+constexpr double pc = 3.018e18;
+constexpr double kpc = 1.e3 * pc;
+constexpr double Mu = 0.6;
+constexpr double kmps = 1.e5;
+constexpr double Const_mH = 1.67e-24;
+constexpr double kb = 1.3807e-16;
+constexpr double sqrtpi = 1.772453;
 
 // internal headers
 #include "hydro/hydro_system.hpp"
