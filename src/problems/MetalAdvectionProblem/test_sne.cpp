@@ -136,7 +136,6 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -296,15 +295,6 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
 {
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential;
-
-	double x = posvec[0];
-
-	grad_potential[0] = 0.0;
-
-#if (AMREX_SPACEDIM >= 2)
-	double y = posvec[1];
-	grad_potential[1] = 0.0;
-#endif
 #if (AMREX_SPACEDIM >= 3)
 	double z = posvec[2];
 
@@ -355,10 +345,6 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 			const Real x3mom = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index);
 			const Real Egas = state(i, j, k, HydroSystem<NewProblem>::energy_index);
 
-			const auto vx = x1mom / rho;
-			const auto vy = x2mom / rho;
-			const auto vz = x3mom / rho;
-
 			Real Eint = RadSystem<NewProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
 
 			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
@@ -400,9 +386,7 @@ template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir)
 		    // int nmscalars = Physics_Traits<NewProblem>::numMassScalars;
 		    Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
 		    Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
-
 		    amrex::Real Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
-		    amrex::GpuArray<Real, 0> massScalars = RadSystem<NewProblem>::ComputeMassScalars(state, i, j, k);
 		    return (rho * vx3);
 	    },
 	    dir);
