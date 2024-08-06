@@ -31,6 +31,7 @@ option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
 option(DISABLE_FMAD "Disable fused multiply-add instructions on GPU (on/off)" ON)
 option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
+option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" ON)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 
