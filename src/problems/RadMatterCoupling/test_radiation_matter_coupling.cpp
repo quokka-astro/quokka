@@ -11,7 +11,7 @@
 
 #include "AMReX_BC_TYPES.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_radiation_matter_coupling.hpp"
 #include "util/fextract.hpp"
@@ -102,7 +102,7 @@ constexpr double Erad0 = 1.0e12; // erg cm^-3
 constexpr double Egas0 = 1.0e2;	 // erg cm^-3
 constexpr double rho0 = 1.0e-7;	 // g cm^-3
 
-template <> void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<CouplingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -122,7 +122,7 @@ template <> void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid
 	});
 }
 
-template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<CouplingProblem>::computeAfterTimestep()
 {
 	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
 
@@ -164,7 +164,7 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<CouplingProblem> sim(BCs_cc);
+	QuokkaSimulation<CouplingProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

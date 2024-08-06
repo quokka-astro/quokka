@@ -18,7 +18,7 @@
 
 // internal headers
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"

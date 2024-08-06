@@ -13,7 +13,7 @@
 #include "AMReX_Array4.H"
 #include "AMReX_REAL.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "test_hydro_wave.hpp"
 #include "util/fextract.hpp"
@@ -67,7 +67,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	state(i, j, k, HydroSystem<WaveProblem>::internalEnergy_index) = Eint;
 }
 
-template <> void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -106,7 +106,7 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<WaveProblem> sim(BCs_cc);
+	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
@@ -126,7 +126,7 @@ auto problem_main() -> int
 
 	// compute error norm
 	amrex::Real err_sq = 0.;
-	for (int n = 0; n < RadhydroSimulation<WaveProblem>::ncompHydro_; ++n) {
+	for (int n = 0; n < QuokkaSimulation<WaveProblem>::ncompHydro_; ++n) {
 		if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
 			continue;
 		}

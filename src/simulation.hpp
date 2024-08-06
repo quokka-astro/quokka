@@ -210,8 +210,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
 	virtual void preCalculateInitialConditions() = 0;
-	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
-	virtual void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) = 0;
+	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
+	virtual void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) = 0;
 	virtual void createInitialParticles() = 0;
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
@@ -1547,7 +1547,7 @@ AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVec
 // Compute a new multifab 'mf' by copying in state from valid region and filling
 // ghost cells
 // NOTE: This implementation is only used by AdvectionSimulation.
-//  RadhydroSimulation provides its own implementation.
+//  QuokkaSimulation provides its own implementation.
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
 					 FillPatchType fptype)

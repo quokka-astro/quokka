@@ -22,7 +22,7 @@
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "blast.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "fundamental_constants.H"
@@ -74,7 +74,7 @@ template <> struct SimulationData<RandomBlast> {
 	int use_periodic_bc = 1;     // default is periodic
 };
 
-template <> void RadhydroSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -103,7 +103,7 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> con
 		  amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx, SimulationData<RandomBlast> const &userData)
 {
 	// inject energy into cells with stochastic sampling
-	const BL_PROFILE("RadhydroSimulation::injectEnergy()");
+	const BL_PROFILE("QuokkaSimulation::injectEnergy()");
 
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
@@ -162,7 +162,7 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> con
 	}
 }
 
-template <> void RadhydroSimulation<RandomBlast>::computeBeforeTimestep()
+template <> void QuokkaSimulation<RandomBlast>::computeBeforeTimestep()
 {
 	// compute how many (and where) SNe will go off on the this coarse timestep
 	// sample from Poisson distribution
@@ -197,13 +197,13 @@ template <> void RadhydroSimulation<RandomBlast>::computeBeforeTimestep()
 	// TODO(ben): need to force refinement to highest level for cells near particles
 }
 
-template <> void RadhydroSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real /*dt_lev*/, int /*ncycle*/)
+template <> void QuokkaSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real /*dt_lev*/, int /*ncycle*/)
 {
 	// compute operator split physics
 	injectEnergy(state_new_cc_[lev], geom[lev].ProbLoArray(), geom[lev].ProbHiArray(), geom[lev].CellSizeArray(), userData_);
 }
 
-template <> void RadhydroSimulation<RandomBlast>::computeAfterTimestep()
+template <> void QuokkaSimulation<RandomBlast>::computeAfterTimestep()
 {
 	// check conservation of mass
 	static auto const &dx = geom[0].CellSizeArray();
@@ -225,7 +225,7 @@ template <> void RadhydroSimulation<RandomBlast>::computeAfterTimestep()
 	}
 }
 
-template <> void RadhydroSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
@@ -252,7 +252,7 @@ template <> void RadhydroSimulation<RandomBlast>::ComputeDerivedVar(int lev, std
 	}
 }
 
-template <> void RadhydroSimulation<RandomBlast>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<RandomBlast>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 	const Real q_min = 1e-5 * rho0; // minimum density for refinement
@@ -338,7 +338,7 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<RandomBlast> sim(BCs_cc);
+	QuokkaSimulation<RandomBlast> sim(BCs_cc);
 	sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)
 	sim.userData_.SN_rate_per_vol = SN_rate_per_vol;
 	sim.userData_.refine_threshold = refine_threshold;

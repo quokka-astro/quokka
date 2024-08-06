@@ -26,7 +26,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
@@ -64,7 +64,7 @@ constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
 int ishock_g = 0;
 
-template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -129,7 +129,7 @@ auto getDeltaEntropyVector() -> std::vector<Real> &
 	return delta_s_vec;
 }
 
-template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
 {
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// it should be sufficient examine a single box on level 0
@@ -182,7 +182,7 @@ template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep()
 	}
 }
 
-template <> void RadhydroSimulation<QuirkProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
+template <> void QuokkaSimulation<QuirkProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
 {
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		auto const &deltas_vec = getDeltaEntropyVector();
@@ -259,7 +259,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<QuirkProblem> sim(BCs_cc);
+	QuokkaSimulation<QuirkProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = 0.4;

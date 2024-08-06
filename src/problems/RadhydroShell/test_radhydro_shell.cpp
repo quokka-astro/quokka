@@ -25,7 +25,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
@@ -145,7 +145,7 @@ amrex::Gpu::DeviceVector<double> r_arr_g;
 amrex::Gpu::DeviceVector<double> Erad_arr_g;
 amrex::Gpu::DeviceVector<double> Frad_arr_g;
 
-template <> void RadhydroSimulation<ShellProblem>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<ShellProblem>::preCalculateInitialConditions()
 {
 	std::string filename = "./initial_conditions.txt";
 	std::ifstream fstream(filename, std::ios::in);
@@ -179,7 +179,7 @@ template <> void RadhydroSimulation<ShellProblem>::preCalculateInitialConditions
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<ShellProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -264,7 +264,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto vec_dot_r(amrex::GpuArray<amrex::Real, 
 }
 
 #if 0
-template <> void RadhydroSimulation<ShellProblem>::computeAfterTimestep() {
+template <> void QuokkaSimulation<ShellProblem>::computeAfterTimestep() {
   // compute radial momentum for gas, radiation on level 0
   // (assuming octant symmetry)
 
@@ -318,7 +318,7 @@ template <> void RadhydroSimulation<ShellProblem>::computeAfterTimestep() {
 }
 #endif
 
-template <> void RadhydroSimulation<ShellProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShellProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -406,7 +406,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<ShellProblem> sim(BCs_cc);
+	QuokkaSimulation<ShellProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = 0.3;
 	sim.densityFloor_ = 1.0e-8 * rho_0;

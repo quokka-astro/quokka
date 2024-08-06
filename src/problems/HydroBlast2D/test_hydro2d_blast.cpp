@@ -18,7 +18,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_TagBox.H"
 
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "test_hydro2d_blast.hpp"
 
@@ -42,7 +42,7 @@ template <> struct Physics_Traits<BlastProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<BlastProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -94,7 +94,7 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(qu
 	});
 }
 
-template <> void RadhydroSimulation<BlastProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<BlastProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -143,7 +143,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	const int ncomp_cc = RadhydroSimulation<BlastProblem>::nvarTotal_cc_;
+	const int ncomp_cc = QuokkaSimulation<BlastProblem>::nvarTotal_cc_;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -164,7 +164,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<BlastProblem> sim(BCs_cc);
+	QuokkaSimulation<BlastProblem> sim(BCs_cc);
 
 	sim.stopTime_ = 0.1; // 1.5;
 	sim.cflNumber_ = 0.3;

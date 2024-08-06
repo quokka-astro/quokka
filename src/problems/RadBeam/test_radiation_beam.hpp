@@ -14,7 +14,7 @@
 #include <fstream>
 
 // internal headers
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 
 // function definitions
