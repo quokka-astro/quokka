@@ -281,7 +281,6 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
 
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-
 			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 			ODEUserData user_data{rho, gamma, tables};
 			quokka::valarray<Real, 1> y = {Eint};			
