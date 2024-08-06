@@ -808,6 +808,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	if (tNew_[0] + dt_0 > stopTime_ - eps) {
 		dt_0 = stopTime_ - tNew_[0];
 	}
+
 	// assign timesteps on each level
 	dt_[0] = dt_0;
 
