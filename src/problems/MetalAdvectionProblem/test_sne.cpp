@@ -384,7 +384,6 @@ template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir)
 		    // int nmscalars = Physics_Traits<NewProblem>::numMassScalars;
 		    Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
 		    Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
-		    amrex::Real Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
 		    return (rho * vx3);
 	    },
 	    dir);
