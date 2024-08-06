@@ -1,0 +1,49 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  2.4688e+21  6.172e+20  6.172e+20  # 800 x 200 x 200 pc
+geometry.is_periodic =  0    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 1     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 256 64 64
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 32  	# grid size must be divisible by this
+amr.max_grid_size   = 128
+
+# *****************************************************************
+# Quokka options
+# *****************************************************************
+cfl = 0.3
+do_reflux = 1
+do_subcycle = 1
+max_timesteps = 20000
+max_t_cc = 20.0
+
+checkpoint_interval = -1
+plotfile_interval = 20000
+derived_vars = pressure entropy nH temperature cooling_length \
+	       cloud_fraction lab_velocity_x mass velocity_mag c_s
+
+cooling.enabled = 1
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = cloudy_cooling_tools
+cooling.hdf5_data_file = "/home/bwibking/regression-tests/quokka/extern/cooling/isrf_1000Go_grains.h5"
+temperature_floor = 100
+
+sharp_cloud_edge = 1
+do_frame_shift = 1
+nH_bg    = 3.356403e-03 # cm^-3
+nH_cloud = 1.006921e+00 # cm^-3
+P_over_k = 1.304005e+04   # K cm^-3
+R_cloud_pc = 16.09084149928867 # pc
+Mach_shock = 1.888892847795999
+
+do_tracers = 1		# enable tracer particles

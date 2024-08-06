@@ -1,0 +1,39 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0       0.0       -1.2072e+22
+geometry.prob_hi     =  3.018e21  3.018e21   1.2072e+22
+geometry.is_periodic =  1    1    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1      # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128  128 1024
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.max_grid_size   = 128   # at least 128 for GPUs
+amr.blocking_factor = 32   # grid size must be divisible by this
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+amrex.use_gpu_aware_mpi=0
+amrex.fpe_trap_invalid=1
+
+do_reflux     = 0
+do_subcycle   = 1
+max_timesteps = 200000
+plotfile_interval = 5000
+checkpoint_interval = 5000
+restartfile = last_chk
+stop_time     = 6.308e+15
+density_floor = 1.67e-30 #in g cm^-3
+temperature_floor = 10.  #in K
+temperature_ceiling = 1.e9 #in K
+speed_ceiling = 1.5e9  #in cm/s
+cooling.enabled = 1
+cooling.grackle_data_file = "/g/data/jh2/av5889/quokka_myrepo/quokka/extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+
+metprob.pressure0 = 5.68338666869196e-16 #cgs, from intial conditions on the edge of the box

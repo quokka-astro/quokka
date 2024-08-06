@@ -93,7 +93,7 @@ Running on GPUs
 ---------------
 
 By default, Quokka compiles itself to run only on CPUs. Quokka can run
-on either NVIDIA, AMD, or Intel GPUs. Consult the sub-sections below for
+on either NVIDIA or AMD GPUs. Consult the sub-sections below for
 the build instructions for a given GPU vendor.
 
 NVIDIA GPUs
@@ -143,13 +143,12 @@ issues that affect the correctness of simulation results (see
 https://github.com/quokka-astro/quokka/issues/394 and
 https://github.com/quokka-astro/quokka/issues/447).
 
-Intel GPUs *(experimental, use at your own risk)*
+Intel GPUs *(does not compile)*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Not tested. You can attempt this by compiling with
-``-DAMReX_GPU_BACKEND=SYCL``. Please start a Discussion if you encounter
-issues on Intel GPUs. Your MPI library **must** support GPU-aware MPI
-for Intel GPUs.
+Due to limitations in the Intel GPU programming model, Quokka currently
+cannot be compiled for Intel GPUs. (See https://github.com/quokka-astro/quokka/issues/619
+for the technical details.)
 
 Building a specific test problem
 --------------------------------
