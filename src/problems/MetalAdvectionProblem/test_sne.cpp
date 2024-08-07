@@ -8,9 +8,9 @@
 /// \brief Defines a test problem for a 3D explosion.
 ///
 
+#include <cmath>
 #include <iostream>
 #include <limits>
-#include <cmath>
 #include <random>
 
 #include "AMReX.H"
@@ -198,7 +198,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
 	const Real rho_blast = userData.M_ejecta / cell_vol;	   // g cm^-3
-	const Real scalar_blast = 1.e3 / cell_vol;	   // g cm^-3
+	const Real scalar_blast = 1.e3 / cell_vol;		   // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -218,7 +218,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 				Real x0 = std::abs(xc - px(n));
 				Real y0 = std::abs(yc - py(n));
 				Real z0 = std::abs(zc - pz(n));
-				
+
 				if (x0 < 0.5 * dx[0] && y0 < 0.5 * dx[1] && z0 < 0.5 * dx[2]) {
 					state(i, j, k, HydroSystem<NewProblem>::density_index) += rho_blast;
 					state(i, j, k, HydroSystem<NewProblem>::energy_index) += rho_eint_blast;
