@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>About - Quokka</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "About";
+        var mkdocs_page_input_path = "about.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Quokka
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">About</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#development-methodology">Development methodology</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#numerical-methods">Numerical methods</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#hydrodynamics">Hydrodynamics</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#radiation">Radiation</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../equations/">Equations</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../citation/">Citation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User guide</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../installation/">Installation</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../running_on_hpc_clusters/">Running on HPC clusters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/">Test problems</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../parameters/">Runtime parameters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../insitu_analysis/">In-situ analysis</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../postprocessing/">Postprocessing</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../instability/">Debugging simulation instability</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Test problems</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/radshock/">Radiative shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/shu_osher/">Shu-Osher shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/sms/">Slow-moving shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/energy_exchange/">Matter-radiation temperature equilibrium test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/radhydro_uniform_adv/">Uniform advecting radiation in diffusive limit</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">DEVELOPER GUIDE</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../flowchart/">Flowchart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../debugging/">Debugging</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../error_checking/">Assertions and error checking</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../performance/">Performance tips</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../howto_clang_tidy/">How to use clang-tidy</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Quokka</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">About</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="about">About</h1>
+<p>Quokka is a high-resolution shock capturing AMR radiation hydrodynamics code using the AMReX library (Zhang et al., 2019)<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> to provide patch-based adaptive mesh functionality. We take advantage of the C++ loop abstractions in AMReX in order to run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.</p>
+<h2 id="development-methodology">Development methodology</h2>
+<p>The code is written in modern C++17, using MPI for distributed-memory parallelism, with the AMReX GPU abstraction compiling as either native CUDA code or native HIP code when GPU support is enabled.</p>
+<p>We use a modern C++ development methodology, using CMake, CTest, and Doxygen. We use <code>clang-format</code> for automated code formatting, and <code>clang-tidy</code> and SonarCloud for static analysis, in order to audit code adherence to the ISO C++ Core Guidelines and the MISRA C/C++ guidelines. We additionally ensure the code is free of memory corruption bugs using Clang's <code>AddressSanitizer</code>.</p>
+<p>There is an automated suite of test problems that can be run using CTest. Each test problem has a validated solution against which it is compared (usually in L1 norm) in order to pass.</p>
+<p>Code development is managed using pull requests (PRs) on GitHub. In an effort to ensure long-term code maintainability, all code must be written in C++17 following the Coding Guidelines, it must compile using Clang without warnings, all tests must pass, and the static analyzers must show zero new bugs before a pull request is merged with the main branch.</p>
+<p>User assistance and bug reports are managed via Discussions and Issues in the GitHub repository.</p>
+<h2 id="numerical-methods">Numerical methods</h2>
+<h3 id="hydrodynamics">Hydrodynamics</h3>
+<p>The hydrodynamics solver is an unsplit method, using the piecewise parabolic method (Colella &amp; Woodward, 1984)<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup> for reconstruction in the primitive variables, the HLLC Riemann solver (Toro, 2013)<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> for flux computations, and a method-of-lines formulation for the time integration.</p>
+<p>We use the method of (Miller &amp; Colella, 2002)<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> to reduce the order of reconstruction in zones where shocks are detected in order to suppress spurious oscillations in strong shocks.</p>
+<h3 id="radiation">Radiation</h3>
+<p>The radiation hydrodynamics formulation is based on the mixed-frame moment equations (e.g., (Mihalas &amp; Mihalas, 1984)<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup>). The radiation subsystem is coupled to the hydrodynamic subsystem via operator splitting, with the hydrodynamic update computed first, followed by the radiation update, with the latter update including the source terms corresponding to the radiation four-force applied to both the radiation and hydrodynamic variables. A method-of-lines formulation is also used for the time integration, with the time integration done by the same integrator chosen for the hydrodynamic subsystem.</p>
+<p>The hyperbolic radiation subsystem is solved using an unsplit method, using PPM for reconstruction of the moment variables, with fluxes computed via the HLL Riemann solver, with the wavespeeds computed using the 'frozen Eddington factor' approximation (Balsara, 1999)<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">6</a></sup>, which is more robust than using the eigenvalues of the M1 system (Skinner &amp; Ostriker, 2013)<sup id="fnref:7"><a class="footnote-ref" href="#fn:7">7</a></sup> itself.</p>
+<p>We reconstruct the energy density and the <em>reduced flux</em> <span class="arithmatex">\(f = F/cE\)</span>, in order to maintain the flux-limiting condition <span class="arithmatex">\(F \le cE\)</span> in discontinuous and near-discontinuous radiation flows.</p>
+<p>To ensure the correct behavior of the advection terms in the asymptotic diffusion limit (Lowrie &amp; Morel, 2001)<sup id="fnref:8"><a class="footnote-ref" href="#fn:8">8</a></sup>, we modify the Riemann solver according to (Skinner, Dolence, Burrows, Radice, &amp; Vartanyan, 2019)<sup id="fnref:9"><a class="footnote-ref" href="#fn:9">9</a></sup>. We use the Lorentz-factor local closure of (Levermore, 1984)<sup id="fnref:10"><a class="footnote-ref" href="#fn:10">10</a></sup> to compute the variable Eddington tensor.</p>
+<p>The source terms corresponding to matter-radiation energy exchange are solved implicitly with the method of (Howell &amp; Greenough, 2003)<sup id="fnref:11"><a class="footnote-ref" href="#fn:11">11</a></sup> following the hyperbolic subsystem update. The matter-radiation momentum update is likewise computed implicitly in order to maintain the correct behavior in the asymptotic diffusion limit (Skinner, Dolence, Burrows, Radice, &amp; Vartanyan, 2019)<sup id="fnref2:9"><a class="footnote-ref" href="#fn:9">9</a></sup>.</p>
+<!-- [^1]: Zhang, W., Almgren, A., Beckner, V., Bell, J., Blaschke, J., Chan, C., … Zingale, M. (2019). AMReX: A framework for block-structured adaptive mesh refinement. *Journal of Open Source Software*, *4*(37), 1370. <https://doi.org/10.21105/joss.01370>
+[^2]: Colella, P., & Woodward, P. R. (1984). <span class="nocase">The Piecewise Parabolic Method (PPM) for Gas-Dynamical Simulations</span>. *Journal of Computational Physics*, *54*, 174–201. <https://doi.org/10.1016/0021-9991(84)90143-8>
+[^3]: Toro, E. F. (2013). *Riemann solvers and numerical methods for fluid dynamics: A practical introduction*. Springer Berlin Heidelberg. Retrieved from <https://books.google.com.au/books?id=zkLtCAAAQBAJ>
+[^4]: Miller, G. H., & Colella, P. (2002). <span class="nocase">A Conservative Three-Dimensional Eulerian Method for Coupled Solid-Fluid Shock Capturing</span>. *183*(1), 26–82. <https://doi.org/10.1006/jcph.2002.7158>
+[^5]: Mihalas, D., & Mihalas, B. W. (1984). *<span class="nocase">Foundations of radiation hydrodynamics</span>*. Oxford University Press.
+[^6]: Balsara, D. S. (1999). <span class="nocase">An analysis of the hyperbolic nature of the equations of radiation hydrodynamics.</span> *61*(5), 617–627. <https://doi.org/10.1016/S0022-4073(98)00049-1>
+[^7]: Skinner, M. A., & Ostriker, E. C. (2013). <span class="nocase">A Two-moment Radiation Hydrodynamics Module in Athena Using a Time-explicit Godunov Method</span>. *206*(2), 21. <https://doi.org/10.1088/0067-0049/206/2/21>
+[^8]: Lowrie, R. B., & Morel, J. E. (2001). <span class="nocase">Issues with high-resolution Godunov methods for radiation hydrodynamics</span>. *69*, 475–489. <https://doi.org/10.1016/S0022-4073(00)00097-2>
+[^9]: Skinner, M. A., Dolence, J. C., Burrows, A., Radice, D., & Vartanyan, D. (2019). <span class="nocase">FORNAX: A Flexible Code for Multiphysics Astrophysical Simulations</span>. *241*(1), 7. <https://doi.org/10.3847/1538-4365/ab007f>
+[^10]: Levermore, C. D. (1984). <span class="nocase">Relating Eddington factors to flux limiters.</span> *31*(2), 149–160. <https://doi.org/10.1016/0022-4073(84)90112-2>
+[^11]: Howell, L. H., & Greenough, J. A. (2003). <span class="nocase">Radiation diffusion for multi-fluid Eulerian hydrodynamics with adaptive mesh refinement</span>. *Journal of Computational Physics*, *184*(1), 53–78. <https://doi.org/10.1016/S0021-9991(02)00015-3>  -->
+
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p>Zhang, W., Almgren, A., Beckner, V., Bell, J., Blaschke, J., Chan, C., … Zingale, M. (2019). AMReX: A framework for block-structured adaptive mesh refinement. <em>Journal of Open Source Software</em>, <em>4</em>(37), 1370. <a href="https://doi.org/10.21105/joss.01370">https://doi.org/10.21105/joss.01370</a>&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p>Colella, P., &amp; Woodward, P. R. (1984). <span class="nocase">The Piecewise Parabolic Method (PPM) for Gas-Dynamical Simulations</span>. <em>Journal of Computational Physics</em>, <em>54</em>, 174–201. <a href="https://doi.org/10.1016/0021-9991(84)90143-8">https://doi.org/10.1016/0021-9991(84)90143-8</a>&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p>Toro, E. F. (2013). <em>Riemann solvers and numerical methods for fluid dynamics: A practical introduction</em>. Springer Berlin Heidelberg. Retrieved from <a href="https://books.google.com.au/books?id=zkLtCAAAQBAJ">https://books.google.com.au/books?id=zkLtCAAAQBAJ</a>&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p>Miller, G. H., &amp; Colella, P. (2002). <span class="nocase">A Conservative Three-Dimensional Eulerian Method for Coupled Solid-Fluid Shock Capturing</span>. <em>183</em>(1), 26–82. <a href="https://doi.org/10.1006/jcph.2002.7158">https://doi.org/10.1006/jcph.2002.7158</a>&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p>Mihalas, D., &amp; Mihalas, B. W. (1984). <em><span class="nocase">Foundations of radiation hydrodynamics</span></em>. Oxford University Press.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p>Balsara, D. S. (1999). <span class="nocase">An analysis of the hyperbolic nature of the equations of radiation hydrodynamics.</span> <em>61</em>(5), 617–627. <a href="https://doi.org/10.1016/S0022-4073(98)00049-1">https://doi.org/10.1016/S0022-4073(98)00049-1</a>&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+<li id="fn:7">
+<p>Skinner, M. A., &amp; Ostriker, E. C. (2013). <span class="nocase">A Two-moment Radiation Hydrodynamics Module in Athena Using a Time-explicit Godunov Method</span>. <em>206</em>(2), 21. <a href="https://doi.org/10.1088/0067-0049/206/2/21">https://doi.org/10.1088/0067-0049/206/2/21</a>&#160;<a class="footnote-backref" href="#fnref:7" title="Jump back to footnote 7 in the text">&#8617;</a></p>
+</li>
+<li id="fn:8">
+<p>Lowrie, R. B., &amp; Morel, J. E. (2001). <span class="nocase">Issues with high-resolution Godunov methods for radiation hydrodynamics</span>. <em>69</em>, 475–489. <a href="https://doi.org/10.1016/S0022-4073(00)00097-2">https://doi.org/10.1016/S0022-4073(00)00097-2</a>&#160;<a class="footnote-backref" href="#fnref:8" title="Jump back to footnote 8 in the text">&#8617;</a></p>
+</li>
+<li id="fn:9">
+<p>Skinner, M. A., Dolence, J. C., Burrows, A., Radice, D., &amp; Vartanyan, D. (2019). <span class="nocase">FORNAX: A Flexible Code for Multiphysics Astrophysical Simulations</span>. <em>241</em>(1), 7. <a href="https://doi.org/10.3847/1538-4365/ab007f">https://doi.org/10.3847/1538-4365/ab007f</a>&#160;<a class="footnote-backref" href="#fnref:9" title="Jump back to footnote 9 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:9" title="Jump back to footnote 9 in the text">&#8617;</a></p>
+</li>
+<li id="fn:10">
+<p>Levermore, C. D. (1984). <span class="nocase">Relating Eddington factors to flux limiters.</span> <em>31</em>(2), 149–160. <a href="https://doi.org/10.1016/0022-4073(84)90112-2">https://doi.org/10.1016/0022-4073(84)90112-2</a>&#160;<a class="footnote-backref" href="#fnref:10" title="Jump back to footnote 10 in the text">&#8617;</a></p>
+</li>
+<li id="fn:11">
+<p>Howell, L. H., &amp; Greenough, J. A. (2003). <span class="nocase">Radiation diffusion for multi-fluid Eulerian hydrodynamics with adaptive mesh refinement</span>. <em>Journal of Computational Physics</em>, <em>184</em>(1), 53–78. <a href="https://doi.org/10.1016/S0021-9991(02)00015-3">https://doi.org/10.1016/S0021-9991(02)00015-3</a>&#160;<a class="footnote-backref" href="#fnref:11" title="Jump back to footnote 11 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../equations/" class="btn btn-neutral float-right" title="Equations">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>© Copyright 2020-2024, Ben Wibking and Quokka Developers.</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+    
+      <span><a href="../equations/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../javascripts/mathjax.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

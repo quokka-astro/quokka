@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Runtime parameters - Quokka</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Runtime parameters";
+        var mkdocs_page_input_path = "parameters.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Quokka
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../about/">About</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../equations/">Equations</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../citation/">Citation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../installation/">Installation</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../running_on_hpc_clusters/">Running on HPC clusters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/">Test problems</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Runtime parameters</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#general">General</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#hydrodynamics">Hydrodynamics</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#radiation">Radiation</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#optically-thin-radiative-cooling">Optically-thin radiative cooling</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../insitu_analysis/">In-situ analysis</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../postprocessing/">Postprocessing</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../instability/">Debugging simulation instability</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Test problems</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/radshock/">Radiative shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/shu_osher/">Shu-Osher shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/sms/">Slow-moving shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/energy_exchange/">Matter-radiation temperature equilibrium test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/radhydro_uniform_adv/">Uniform advecting radiation in diffusive limit</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">DEVELOPER GUIDE</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../flowchart/">Flowchart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../debugging/">Debugging</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../error_checking/">Assertions and error checking</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../performance/">Performance tips</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../howto_clang_tidy/">How to use clang-tidy</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Quokka</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User guide</li>
+      <li class="breadcrumb-item active">Runtime parameters</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="runtime-parameters">Runtime parameters</h1>
+<p>This document lists all of the runtime parameters in Quokka that are set using the AMReX ParmParse object. Users can set these via the input file or by using command-line arguments.</p>
+<h2 id="general">General</h2>
+<p>These parameters are read in the <code>AMRSimulation&lt;problem_t&gt;::readParameters()</code> function in <code>src/simulation.hpp</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>max_timesteps</td>
+<td>Integer</td>
+<td>The maximum number of time steps for the simulation.</td>
+</tr>
+<tr>
+<td>cfl</td>
+<td>Float</td>
+<td>Sets the CFL number for the simulation.</td>
+</tr>
+<tr>
+<td>amr_interpolation_method</td>
+<td>Integer</td>
+<td>Selects the method (piecewise constant or piecewise linear with limiters) used to interpolate from coarse to fine AMR levels. Except for debugging, this should not be changed.</td>
+</tr>
+<tr>
+<td>stop_time</td>
+<td>Float</td>
+<td>The simulation time at which to stop evolving the simulation.</td>
+</tr>
+<tr>
+<td>ascent_interval</td>
+<td>Integer</td>
+<td>The number of coarse timesteps between Ascent outputs.</td>
+</tr>
+<tr>
+<td>plotfile_interval</td>
+<td>Integer</td>
+<td>The number of coarse timesteps between plotfile outputs.</td>
+</tr>
+<tr>
+<td>plottime_interval</td>
+<td>Float</td>
+<td>The time interval (in simulated time) between plotfile outputs.</td>
+</tr>
+<tr>
+<td>projection_interval</td>
+<td>Integer</td>
+<td>The number of coarse timesteps between 2D projection outputs.</td>
+</tr>
+<tr>
+<td>statistics_interval</td>
+<td>Integer</td>
+<td>The number of coarse timesteps between statistics outputs.</td>
+</tr>
+<tr>
+<td>checkpoint_interval</td>
+<td>Float</td>
+<td>The number of coarse timesteps between checkpoint outputs.</td>
+</tr>
+<tr>
+<td>checkpointtime_interval</td>
+<td>Float</td>
+<td>The time interval (in simulated time) between checkpoint outputs.</td>
+</tr>
+<tr>
+<td>do_reflux</td>
+<td>Integer</td>
+<td>This turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on when AMR is used.</td>
+</tr>
+<tr>
+<td>do_tracers</td>
+<td>Integer</td>
+<td>This turns on tracer particles. They are initialized one-per-cell and they follow the fluid velocity. Default: 0 (off).</td>
+</tr>
+<tr>
+<td>suppress_output</td>
+<td>Integer</td>
+<td>If set to 1, this disables output to stdout while the simulation is running.</td>
+</tr>
+<tr>
+<td>derived_vars</td>
+<td>String</td>
+<td>A list of the names of derived variables that should be included in the plotfile and Ascent outputs.</td>
+</tr>
+<tr>
+<td>regrid_interval</td>
+<td>Integer</td>
+<td>The number of timesteps between AMR regridding.</td>
+</tr>
+<tr>
+<td>density_floor</td>
+<td>Float</td>
+<td>The minimum density value allowed in the simulation. Enforced through EnforceLimits.</td>
+</tr>
+<tr>
+<td>temperature_floor</td>
+<td>Float</td>
+<td>The minimum temperature value allowed in the simulation. Enforced through EnforceLimits.</td>
+</tr>
+<tr>
+<td>max_walltime</td>
+<td>String</td>
+<td>The maximum walltime for the simulation in the format DD:HH:SS (days/hours/seconds). After 90% of this walltime elapses, the simulation will automatically stop and exit.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="hydrodynamics">Hydrodynamics</h2>
+<p>These parameters are read in the <code>RadhydroSimulation&lt;problem_t&gt;::readParmParse()</code> function in <code>src/RadhydroSimulation.hpp</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>hydro.low_level_debugging_output</td>
+<td>Integer</td>
+<td>If set to 1, turns on low-level debugging output for each RK stage. Warning: this writes an enormous volume of data to disk! This should only be used for debugging. Default: 0.</td>
+</tr>
+<tr>
+<td>hydro.rk_integrator_order</td>
+<td>Integer</td>
+<td>Determines the order of the RK integrator used. Can be set to 1 (Forward Euler) or 2 (RK2-SSP, also known as Heun's method). Default: 2. This should only be changed for debugging.</td>
+</tr>
+<tr>
+<td>hydro.reconstruction_order</td>
+<td>Integer</td>
+<td>Determines the order of spatial reconstruction algorithm used. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), or 3 (piecewise parabolic; PPM). Default: 3 (PPM).</td>
+</tr>
+<tr>
+<td>hydro.use_dual_energy</td>
+<td>Integer</td>
+<td>If set to 1, the code evolves an auxiliary internal energy variable in order to correctly evolve high-mach flows. This should only be disabled (0) for debugging. Default: 1.</td>
+</tr>
+<tr>
+<td>hydro.abort_on_fofc_failure</td>
+<td>Integer</td>
+<td>If set to 1, the code aborts when first-order flux correction fails to yield a physical state (positive density and pressure). This should only be disabled (0) for debugging.</td>
+</tr>
+<tr>
+<td>hydro.artificial_viscosity_coefficient</td>
+<td>Float</td>
+<td>This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper. Default: 0.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="radiation">Radiation</h2>
+<p>These parameters are read in the <code>RadhydroSimulation&lt;problem_t&gt;::readParmParse()</code> function in <code>src/RadhydroSimulation.hpp</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>radiation.reconstruction_order</td>
+<td>Integer</td>
+<td>Determines the order of spatial reconstruction algorithm used. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), or 3 (piecewise parabolic; PPM). Default: 3 (PPM).</td>
+</tr>
+<tr>
+<td>radiation.cfl</td>
+<td>Float</td>
+<td>Sets the CFL number for the radiation advance. This is independent of the hydro CFL number.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="optically-thin-radiative-cooling">Optically-thin radiative cooling</h2>
+<p>These parameters are read in the <code>RadhydroSimulation&lt;problem_t&gt;::readParmParse()</code> function in <code>src/RadhydroSimulation.hpp</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>cooling.enabled</td>
+<td>Integer</td>
+<td>If set to 1, turns on optically-thin radiative cooling as a Strang-split source term. Default: 0 (disabled).</td>
+</tr>
+<tr>
+<td>cooling.read_tables_even_if_disabled</td>
+<td>Integer</td>
+<td>If set to 1, reads the cooling tables even if the cooling module is disabled.</td>
+</tr>
+<tr>
+<td>cooling.grackle_data_file</td>
+<td>String</td>
+<td>The path to the cooling tables in Grackle-compatible HDF5 format.</td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../tests/" class="btn btn-neutral float-left" title="Test problems"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../insitu_analysis/" class="btn btn-neutral float-right" title="In-situ analysis">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>© Copyright 2020-2024, Ben Wibking and Quokka Developers.</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../tests/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../insitu_analysis/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../javascripts/mathjax.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

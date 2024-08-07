@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Slow-moving shock test - Quokka</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Slow-moving shock test";
+        var mkdocs_page_input_path = "tests/sms.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> Quokka
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../about/">About</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../equations/">Equations</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../citation/">Citation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User guide</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../running_on_hpc_clusters/">Running on HPC clusters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../">Test problems</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../parameters/">Runtime parameters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../insitu_analysis/">In-situ analysis</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../postprocessing/">Postprocessing</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../instability/">Debugging simulation instability</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Test problems</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../radshock/">Radiative shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../shu_osher/">Shu-Osher shock test</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Slow-moving shock test</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#parameters">Parameters</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#solution">Solution</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../energy_exchange/">Matter-radiation temperature equilibrium test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../radhydro_uniform_adv/">Uniform advecting radiation in diffusive limit</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">DEVELOPER GUIDE</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../flowchart/">Flowchart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../debugging/">Debugging</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../error_checking/">Assertions and error checking</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../performance/">Performance tips</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../howto_clang_tidy/">How to use clang-tidy</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">Quokka</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Test problems</li>
+      <li class="breadcrumb-item active">Slow-moving shock test</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="slow-moving-shock-test">Slow-moving shock test</h1>
+<p>This test problem demonstrates the extent to which post-shock oscillations are controlled in slowly-moving shocks. This effect can be exhibited in all Godunov codes, even with first-order methods, for sufficiently slow-moving shocks across the computational grid (Jin &amp; Liu, 1996)<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup>.</p>
+<p>The shock flattening method of (Colella &amp; Woodward, 1984)<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup> (implemented in our code in modified form) reduces the oscillations, but does not completely suppress them. Adding artificial viscosity according to the method of (Colella &amp; Woodward, 1984)<sup id="fnref2:2"><a class="footnote-ref" href="#fn:2">2</a></sup>, even to the level of smoothing the contact discontinuity by 5-10 cells, does <code>not</code> cure the problem.</p>
+<h2 id="parameters">Parameters</h2>
+<p>The left- and right-side initial conditions are (Quirk, 1994)<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup>:</p>
+<div class="arithmatex">\[\begin{aligned}
+\rho_0 = 3.86 \\
+v_{x,0} = -0.81 \\
+P_0 = 10.3334 \\
+\rho_0 = 1.0 \\
+v_{x,0} = -3.44 \\
+P_0 = 1.0
+\end{aligned}\]</div>
+<p>The shock moves to the right with speed <span class="arithmatex">\(s = 0.1096\)</span>.</p>
+<h2 id="solution">Solution</h2>
+<p>We use the RK2 integrator with a fixed timestep of <span class="arithmatex">\(10^{-3}\)</span> and a mesh of 100 equally-spaced cells. The contact discontinuity is initially placed at <span class="arithmatex">\(x=0.5\)</span>.</p>
+<p><img alt="" src="../attach/hydro_sms.png" />
+<em>The density is shown as the solid blue line. The exact solution is the solid orange line.</em></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p>Jin, S., &amp; Liu, J.-G. (1996). <span class="nocase">The Effects of Numerical Viscosities. I. Slowly Moving Shocks</span>. <em>Journal of Computational Physics</em>, <em>126</em>(2), 373–389. <a href="https://doi.org/10.1006/jcph.1996.0144">https://doi.org/10.1006/jcph.1996.0144</a>&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p>Colella, P., &amp; Woodward, P. R. (1984). <span class="nocase">The Piecewise Parabolic Method (PPM) for Gas-Dynamical Simulations</span>. <em>Journal of Computational Physics</em>, <em>54</em>, 174–201. <a href="https://doi.org/10.1016/0021-9991(84)90143-8">https://doi.org/10.1016/0021-9991(84)90143-8</a>&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p>Quirk, J. J. (1994). <span class="nocase">A contribution to the great Riemann solver debate</span>. <em>International Journal for Numerical Methods in Fluids</em>, <em>18</em>(6), 555–574. <a href="https://doi.org/10.1002/fld.1650180603">https://doi.org/10.1002/fld.1650180603</a>&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../shu_osher/" class="btn btn-neutral float-left" title="Shu-Osher shock test"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../energy_exchange/" class="btn btn-neutral float-right" title="Matter-radiation temperature equilibrium test">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>© Copyright 2020-2024, Ben Wibking and Quokka Developers.</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../shu_osher/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../energy_exchange/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="../../javascripts/mathjax.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

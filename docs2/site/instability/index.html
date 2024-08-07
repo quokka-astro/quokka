@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Debugging simulation instability - Quokka</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Debugging simulation instability";
+        var mkdocs_page_input_path = "instability.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Quokka
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../about/">About</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../equations/">Equations</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../citation/">Citation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../installation/">Installation</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../running_on_hpc_clusters/">Running on HPC clusters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/">Test problems</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../parameters/">Runtime parameters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../insitu_analysis/">In-situ analysis</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../postprocessing/">Postprocessing</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Debugging simulation instability</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#ways-to-improve-stability">Ways to improve stability</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#floors">Floors</a>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Test problems</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/radshock/">Radiative shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/shu_osher/">Shu-Osher shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/sms/">Slow-moving shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/energy_exchange/">Matter-radiation temperature equilibrium test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/radhydro_uniform_adv/">Uniform advecting radiation in diffusive limit</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">DEVELOPER GUIDE</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../flowchart/">Flowchart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../debugging/">Debugging</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../error_checking/">Assertions and error checking</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../performance/">Performance tips</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../howto_clang_tidy/">How to use clang-tidy</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Quokka</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User guide</li>
+      <li class="breadcrumb-item active">Debugging simulation instability</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="debugging-simulation-instability">Debugging simulation instability</h1>
+<p>Nonlinear stability of systems of PDEs is an unsolved problem. There is no complete, rigorous mathematical theory. There are two concepts, however, that are closely associated with nonlinear stability:</p>
+<ul>
+<li><em>positivity preservation:</em> This is the property that, given a positive initial density and pressure at timestep <span class="arithmatex">\(n\)</span>, the density and pressure are positive at timestep <span class="arithmatex">\(n+1\)</span>. For theoretical background, see <a href="https://deepblue.lib.umich.edu/bitstream/handle/2027.42/77032/AIAA-1997-2098-398.pdf?sequence=1">Linde &amp; Roe (1997)</a>. and <a href="https://link.springer.com/article/10.1007/s002110050187">Perthame &amp; Shu (1996)</a>.</li>
+<li><em>entropy stability:</em> This is the property that the <em>discretized</em> system of equations obeys the second law of thermodynamics, i.e. the discrete entropy of the simulation must be non-decreasing. There is also a stronger local form, where the entropy variable everywhere obeys an entropy inequality. For theoretical background, see <a href="https://www.sciencedirect.com/science/article/pii/0021999183901183">Harten (1983)</a> and <a href="https://doi.org/10.1016/0168-9274(86)90029-2">Tadmor (1986)</a>. (This assumes a convex equation of state.)</li>
+</ul>
+<p>If a simulation goes unstable, it is likely due to one of the above properties being violated. It is important to note that standard finite volume reconstruction methods do <em>not</em> guarantee entropy stability (see <a href="https://epubs.siam.org/doi/10.1137/110836961">Fjordholm et al. 2012</a>).</p>
+<p>It is also possible that the entropy is nondecreasing, but insufficient entropy is produced for a given shock compared to the amount that should be produced physically. This will cause an unphysical oscillatory solution.</p>
+<h2 id="ways-to-improve-stability">Ways to improve stability</h2>
+<p>The solution is either to reduce the timestep or add additional dissipation:</p>
+<ul>
+<li>set the initial timestep to be 0.1 or 0.01 of the CFL timestep by setting <code>sim.initDt_</code> appropriately</li>
+<li>lower the CFL number<ul>
+<li>It should be in the range 0.1-0.3. If it's above 0.3, it's linearly unstable, so it will never work.</li>
+<li>If it's below 0.1, it's sufficiently low that the simulation will be very inefficient. If it still doesn't work, experience indicates that reducing it further usually does not help.</li>
+</ul>
+</li>
+<li>reduce the order of the spatial reconstruction<ul>
+<li>By default PPM reconstruction is used, but PLM (with minmod limiter) can be used instead. It is much more dissipative, and therefore, stable.</li>
+</ul>
+</li>
+<li>re-try the hydro update with a smaller timestep<ul>
+<li>This is necessary because the positivity-preserving timestep may be much smaller than the CFL-limited timestep near the boundary of realizable states (<a href="https://deepblue.lib.umich.edu/bitstream/handle/2027.42/77032/AIAA-1997-2098-398.pdf?sequence=1">Linde &amp; Roe 1997</a>).</li>
+<li>Quokka will do this automatically, but only up to a maximum hard-coded number of retries.</li>
+<li>If the simulation still fails, this usually indicates a stability problem that will probably not be fixed by further timestep reductions.</li>
+</ul>
+</li>
+<li>revert to a first-order update in problem cells<ul>
+<li>For a sufficiently small timestep, this is provably entropy stable and positivity-preserving (as long as the Riemann solver itself is, which requires robust wavespeeds)</li>
+<li>Quokka reduces to first-order in space and time automatically when the density is negative in a given cell.</li>
+<li>In the future, Quokka could be extended to also revert to first-order based on entropy.</li>
+</ul>
+</li>
+<li>use wavespeed estimates that are robust for strong shocks<ul>
+<li>The eigenvalues of the Roe-average state do not provide correct bounds for very strong shocks.</li>
+<li>If the shocks at the interface travel faster than the wavespeed estimates, there will be insufficient entropy production.</li>
+<li>Doing this requires additional assumptions about the EOS (<a href="https://www.sciencedirect.com/science/article/pii/S0021999196902004">Miller &amp; Puckett 1996</a>).</li>
+<li>Quokka attempts to do this for ideal gases and as well as materials that can be approximated with a Mie-Gruniesen EOS (see <a href="https://ui.adsabs.harvard.edu/abs/1985JCoPh..61..119D/abstract">Dukowicz 1985</a> and <a href="https://www.osti.gov/biblio/760447">Rider 1999</a>).</li>
+<li>No code changes should be required unless you are simulating an exotic material or a condensed matter phase transition (gaseous phase transitions do not cause any issues; see <a href="https://link.springer.com/chapter/10.1007/978-1-4612-2218-7_11">Bethe 1942</a>).</li>
+</ul>
+</li>
+<li>add artificial viscosity<ul>
+<li>This can be helpful because it adds dissipation when shocks are propagating transverse to the interface.</li>
+<li>For sufficient entropy production, it is important that the velocity divergence estimator is based on the cell-average velocities surrounding the interface, <em>not</em> the reconstructed velocities.</li>
+<li>This can be enabled in Quokka with the runtime parameter <code>hydro.artificial_viscosity_coefficient</code>. A value of <code>0.1</code> is recommended.</li>
+<li>This parameter is identical to the artificial viscosity coefficient described in <a href="https://ui.adsabs.harvard.edu/abs/1984JCoPh..54..174C/abstract">Colella and Woodward 1984</a>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="floors">Floors</h2>
+<p>As an absolute last resort, one can enable density and/or temperature floors for a simulation using Quokka's <code>EnforceLimits</code> function.</p>
+<p>This may be necessary if the positivity-preserving timestep for a state near vacuum is too small to be feasible. A temperature floor may also be necessary in order to prevent the auxiliary internal energy from becoming negative when there is strong cooling.</p>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../postprocessing/" class="btn btn-neutral float-left" title="Postprocessing"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../tests/radshock/" class="btn btn-neutral float-right" title="Radiative shock test">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>© Copyright 2020-2024, Ben Wibking and Quokka Developers.</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../postprocessing/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../tests/radshock/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../javascripts/mathjax.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

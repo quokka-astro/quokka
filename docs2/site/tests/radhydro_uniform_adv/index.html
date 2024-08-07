@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Uniform advecting radiation in diffusive limit - Quokka</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Uniform advecting radiation in diffusive limit";
+        var mkdocs_page_input_path = "tests/radhydro_uniform_adv.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> Quokka
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../about/">About</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../equations/">Equations</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../citation/">Citation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User guide</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../installation/">Installation</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../running_on_hpc_clusters/">Running on HPC clusters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../">Test problems</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../parameters/">Runtime parameters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../insitu_analysis/">In-situ analysis</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../postprocessing/">Postprocessing</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../instability/">Debugging simulation instability</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Test problems</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../radshock/">Radiative shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../shu_osher/">Shu-Osher shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../sms/">Slow-moving shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../energy_exchange/">Matter-radiation temperature equilibrium test</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Uniform advecting radiation in diffusive limit</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#parameters">Parameters</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#results">Results</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#physics">Physics</a>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">DEVELOPER GUIDE</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../flowchart/">Flowchart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../debugging/">Debugging</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../error_checking/">Assertions and error checking</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../performance/">Performance tips</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../howto_clang_tidy/">How to use clang-tidy</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">Quokka</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Test problems</li>
+      <li class="breadcrumb-item active">Uniform advecting radiation in diffusive limit</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="uniform-advecting-radiation-in-diffusive-limit">Uniform advecting radiation in diffusive limit</h1>
+<p>In this test, we simulation an advecting uniform gas where radiation and matter are in thermal equilibrium in the co-moving frame. Following the Lorentz tranform, the initial radiation energy and flux in the lab frame to first order in <span class="arithmatex">\(v/c\)</span> are <span class="arithmatex">\(E_r = a_r T^4\)</span> and <span class="arithmatex">\(F_r = \frac{4}{3} v E_r\)</span>.</p>
+<h2 id="parameters">Parameters</h2>
+<div class="arithmatex">\[\begin{aligned}
+\begin{align}
+T_0 = 10^7~{\rm K} \\
+\rho_0 = 1.2 ~{\rm g~cm^{-3}}, \mu = 2.33 ~m_{\rm H} \\
+\kappa_P=\kappa_R=100 \mathrm{~cm}^2 \mathrm{~g}^{-1} \\
+v_{x,0} = 10 ~{\rm km~s^{-1}} \\
+E_{r,0} = a_r T_0^4 \\
+F_{x,0} = \frac{4}{3} v_{x,0} E_{r,0} \\
+t_{\rm end} = 4.8 \times 10^{-5} ~{\rm s}
+\end{align}
+\end{aligned}\]</div>
+<h2 id="results">Results</h2>
+<p>With <span class="arithmatex">\(O(\beta \tau)\)</span> terms:</p>
+<p><img alt="" src="../attach/radhydro_uniform_advecting_temperature.png" />
+<em>The radiation temperature and matter temperatures, along with the exact solution.</em></p>
+<p><img alt="" src="../attach/radhydro_uniform_advecting_velocity.png" />
+<em>The matter velocity, along with the exact solution.</em></p>
+<p>Without <span class="arithmatex">\(O(\beta \tau)\)</span> terms:</p>
+<p><img alt="" src="../attach/radhydro_uniform_advecting_temperature-nobeta.png" />
+<em>The radiation temperature and matter temperatures, along with the exact solution.</em></p>
+<p><img alt="" src="../attach/radhydro_uniform_advecting_velocity-nobeta.png" />
+<em>The matter velocity, along with the exact solution.</em></p>
+<h2 id="physics">Physics</h2>
+<p>In the transport equation, both the radiation energy and flux are unchanged because the radiation flux and pressure are uniform. In the matter-radiation exchange step, the source term is zero since the radiation and matter are in equilibrium. Finally, the flux is updated following</p>
+<div class="arithmatex">\[\mathbf{F}_{r}^{(t+1)} = \frac{\mathbf{F}_{r}^{(t)} + \Delta t \left[ \rho \kappa_P \left(\frac{4 \pi B}{c}\right) \mathbf{v}c + \rho \kappa_F (\mathbf{v} :\mathsf{P}_r) c \right] }{1+\rho \kappa_{F} {c} \Delta t}.\]</div>
+<p>With <span class="arithmatex">\(F_{r}^{(t)} = 4 v E_{r}^{(t)} / 3\)</span>, and <span class="arithmatex">\(\kappa_P=\kappa_R=\kappa\)</span>, we have</p>
+<div class="arithmatex">\[\mathbf{F}_{r}^{(t+1)} = \frac{\frac{4}{3} v E_r^{(t)} + \Delta t \left[ \rho \kappa E_r^{(t)} \mathbf{v}c + \rho \kappa \mathbf{v} (\frac{1}{3}E_r^{(t)}) c \right] }{1+\rho \kappa {c} \Delta t} = \frac{4}{3} v E_r^{(t)} = F_{r}^{(t)}\]</div>
+<p>Therefore, <span class="arithmatex">\(F_r\)</span> remains constant. This demonstrates that the code is invariant under Lorentz transformation.</p>
+<p>We can also show that, with the <span class="arithmatex">\(O(\beta \tau)\)</span> terms in the matter-radiation exchange step, the space-like component of the radiation four-force vanishes:</p>
+<div class="arithmatex">\[\begin{aligned}
+\begin{align}
+-G &amp;= -\rho \kappa_F \frac{\mathbf{F}_r}{c} + \rho \kappa_P\left(\frac{4 \pi B}{c}\right) \frac{\mathbf{v}}{c}+\rho \kappa_F \frac{\mathbf{v} :\mathsf{P}_r}{c} \\
+&amp;= -\rho \kappa \frac{4}{3} E_r v / c + \rho \kappa E_r v / c+ \rho \kappa \frac{1}{3} E_r v / c \\
+&amp;= 0
+\end{align}
+\end{aligned}\]</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../energy_exchange/" class="btn btn-neutral float-left" title="Matter-radiation temperature equilibrium test"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../../flowchart/" class="btn btn-neutral float-right" title="Flowchart">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>© Copyright 2020-2024, Ben Wibking and Quokka Developers.</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../energy_exchange/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../../flowchart/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="../../javascripts/mathjax.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

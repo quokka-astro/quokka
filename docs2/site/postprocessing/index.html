@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Postprocessing - Quokka</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Postprocessing";
+        var mkdocs_page_input_path = "postprocessing.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Quokka
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../about/">About</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../equations/">Equations</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../citation/">Citation</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">User guide</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../installation/">Installation</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../running_on_hpc_clusters/">Running on HPC clusters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/">Test problems</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../parameters/">Runtime parameters</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../insitu_analysis/">In-situ analysis</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Postprocessing</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#amrex-plotfiletools">AMReX PlotfileTools</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#yt">yt</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#visit">VisIt</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../instability/">Debugging simulation instability</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Test problems</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/radshock/">Radiative shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/shu_osher/">Shu-Osher shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/sms/">Slow-moving shock test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/energy_exchange/">Matter-radiation temperature equilibrium test</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../tests/radhydro_uniform_adv/">Uniform advecting radiation in diffusive limit</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">DEVELOPER GUIDE</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../flowchart/">Flowchart</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../debugging/">Debugging</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../error_checking/">Assertions and error checking</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../performance/">Performance tips</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../howto_clang_tidy/">How to use clang-tidy</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Quokka</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">User guide</li>
+      <li class="breadcrumb-item active">Postprocessing</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="postprocessing">Postprocessing</h1>
+<p>There are several ways to post-process the output of Quokka simulations. AMReX PlotfileTools, yt, and VisIt all allow you to analyze the outputs after they are written to disk.</p>
+<h2 id="amrex-plotfiletools">AMReX PlotfileTools</h2>
+<p>These are self-contained C++ programs (included with AMReX in the <code>Tools/Plotfile</code> subdirectory) that will output a 2D slice (axis-aligned), a 1D slice (axis-aligned), or compute a volume integral given an AMReX plotfile. For these tasks, it is almost always easier to use the Plotfile tools rather than, e.g., yt or VisIt.</p>
+<ul>
+<li>To compute a volume integral, use <a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fvolumesum.cpp">fvolumesum</a>.</li>
+<li>To compute a 2D slice plot (axis-aligned planes only), use <a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fsnapshot.cpp">fsnapshot</a>.</li>
+<li>To compute a 1D slice (axis-aligned directions only, with output as ASCII), use <a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fextract.cpp">fextract</a>.</li>
+</ul>
+<p>Other tools:</p>
+<ul>
+<li><a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fboxinfo.cpp">fboxinfo</a> prints out the indices of all the Boxes in a plotfile</li>
+<li><a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fcompare.cpp">fcompare</a> calculates the absolute and relative errors between plotfiles in L-inf norm</li>
+<li><a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fextrema.cpp">fextrema</a> calculates the minimum and maximum values of all variables in a plotfile</li>
+<li><a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fnan.cpp">fnan</a> determines whether there are any NaNs in a plotfile</li>
+<li><a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/ftime.cpp">ftime</a> prints the simulation time of each plotfile</li>
+<li><a href="https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fvarnames.cpp">fvarnames</a> prints the names of all the variables in a given plotfile</li>
+</ul>
+<h2 id="yt">yt</h2>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>There are <a href="https://github.com/yt-project/yt/issues/3889">known bugs</a> that affect Quokka outputs. PlotfileTools (see above) can be used instead for axis-aligned slice plots.</p>
+</div>
+<p>The plotfile directory can be loaded with <code>yt.load</code> as usual. However, the standard fields such as <code>('gas', 'density')</code> are not defined. Instead, you have to use non-standard fields. Examine <code>ds.field_list</code> to see the fields that exist in the plotfiles. These should be:</p>
+<div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;gasDensity&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;gasEnergy&#39;</span><span class="p">),</span>
+<span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;radEnergy&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;scalar&#39;</span><span class="p">),</span>
+<span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;temperature&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;x-GasMomentum&#39;</span><span class="p">),</span>
+<span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;x-RadFlux&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;y-GasMomentum&#39;</span><span class="p">),</span>
+<span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;y-RadFlux&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;z-GasMomentum&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;boxlib&#39;</span><span class="p">,</span> <span class="s1">&#39;z-RadFlux&#39;</span><span class="p">)]</span>
+</code></pre></div>
+<p>For details, see the <a href="https://yt-project.org/doc/examining/loading_data.html#amrex-boxlib-data">yt documentation on reading AMReX data</a>.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the <a href="https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array">covering_grid</a> function.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>This <a href="https://warpx.readthedocs.io/en/latest/dataanalysis/plot_parallel.html">WarpX script</a> may be useful as a starting point for visualizing a time series of outputs. This script will require some modification to work with Quokka outputs.</p>
+</div>
+<h2 id="visit">VisIt</h2>
+<p>VisIt can read cell-centered output variables from AMReX plotfiles. Currently, there is no support for reading either face-centered variables or particles. (However, by default, cell-centered averages of face-centered variables are included in Quokka plotfiles.)</p>
+<p>In order to read an individual plotfile, you can select the <code>plt00000/Header</code> file in VisIt's Open dialog box.</p>
+<p>If you want to read a timeseries of plotfiles, you can create a file with a <code>.visit</code> extension that lists the <code>plt*/Header</code> files, one per line, with the following command: :</p>
+<pre><code>ls -1 plt*/Header | tee plotfiles.visit
+</code></pre>
+<p>Then select <code>plotfiles.visit</code> in VisIt's Open dialog box.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>There are rendering bugs with unscaled box dimensions. Slices generally work. However, do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.</p>
+</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../insitu_analysis/" class="btn btn-neutral float-left" title="In-situ analysis"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../instability/" class="btn btn-neutral float-right" title="Debugging simulation instability">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>© Copyright 2020-2024, Ben Wibking and Quokka Developers.</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../insitu_analysis/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../instability/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../javascripts/mathjax.js"></script>
+      <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
