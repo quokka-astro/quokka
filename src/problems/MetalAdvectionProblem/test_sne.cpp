@@ -144,7 +144,7 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 
 		double Phigas;
 		// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
-		//TODO - AV to find out why linterp doesn't work
+		// TODO - AV to find out why linterp doesn't work
 		size_t ii = 0;
 		double x_interp = std::abs(z);
 		amrex::GpuArray<amrex::Real, 64> xx = z_data;
