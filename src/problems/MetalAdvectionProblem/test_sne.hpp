@@ -13,6 +13,8 @@
 #include <fmt/format.h>
 #include <fstream>
 
+// TODO: replace with Microphysics constant
+
 constexpr double Msun = 2.e33;
 constexpr double Const_G = 6.67e-8;
 constexpr double yr_to_s = 3.154e7;

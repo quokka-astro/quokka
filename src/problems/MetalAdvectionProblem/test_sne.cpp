@@ -8,9 +8,9 @@
 /// \brief Defines a test problem for a 3D explosion.
 ///
 
+#include <cmath>
 #include <iostream>
 #include <limits>
-#include <math.h>
 #include <random>
 
 #include "AMReX.H"
@@ -32,20 +32,15 @@
 #include "AMReX_TableData.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "math/FastMath.hpp"
 #include "math/quadrature.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_sne.hpp"
 
 // global variables needed for Dirichlet boundary condition and initial conditions
-#if 0 // workaround AMDGPU compiler bug
+#if 0  // workaround AMDGPU compiler bug
 namespace
 {
-#endif
-Real rho0 = NAN;			// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real Tgas0 = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_outflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-std::string input_data_file;		//
+#endif //
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 64> logphi_data{
     0.83638381, 4.50705067, 5.10271383, 5.45268878, 5.70140736, 5.89447928, 6.05229308, 6.1857468,  6.30135334, 6.40331919, 6.49451684, 6.57699822, 6.65227803,
     6.72150811, 6.78558362, 6.84521466, 6.90097381, 6.95332936, 7.00266958, 7.04931937, 7.09355406, 7.1356083,	7.17568429, 7.21395706, 7.25057937, 7.28568514,
@@ -84,13 +79,7 @@ AMREX_GPU_MANAGED Real rho02 = 1.e-5 * 0.0268988 * Const_mH;
 };                       // namespace
 #endif
 
-using amrex::Real;
-using namespace amrex;
-
-#define MAX 100
-
 struct NewProblem {
-	amrex::Real dummy;
 };
 
 template <> struct HydroSystem_Traits<NewProblem> {
@@ -115,9 +104,6 @@ template <> struct Physics_Traits<NewProblem> {
 };
 
 template <> struct SimulationData<NewProblem> {
-
-	// cloudy_tables cloudyTables;
-	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
@@ -146,12 +132,12 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 
 		// Calculate DM Potential
 		double prefac;
-		prefac = 2. * 3.1415 * Const_G * rho_dm * std::pow(R0, 2);
+		prefac = 2. * M_PI * Const_G * rho_dm * std::pow(R0, 2);
 		double Phidm = (prefac * std::log(1. + std::pow(z / R0, 2)));
 
 		// Calculate Stellar Disk Potential
 		double prefac2;
-		prefac2 = 2. * 3.1415 * Const_G * Sigma_star * z_star;
+		prefac2 = 2. * M_PI * Const_G * Sigma_star * z_star;
 		double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
 
 		// Calculate Gas Disk Potential
@@ -172,7 +158,7 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 		const Real y1 = yy[ii];
 		const Real y2 = yy[ii + 1];
 		amrex::Real phi_interp = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
-		Phigas = FastMath::pow10(phi_interp);
+		Phigas = std::pow(10., phi_interp);
 
 		double Phitot = Phist + Phidm + Phigas;
 
@@ -200,12 +186,14 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
 		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<NewProblem> const &userData, int level)
 {
-	// inject energy into cells with stochastic sampling
+	// TODO for AV - ave (and restore) the RNG state in the metadata.yaml file
+	//  inject energy into cells with stochastic sampling
 	BL_PROFILE("QuokkaSimulation::Addsupernova()")
 
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
 	const Real rho_blast = userData.M_ejecta / cell_vol;	   // g cm^-3
+	const Real scalar_blast = 1.e3 / cell_vol;		   // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -222,23 +210,18 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2] + 0.5 * dx[2];
 
 			for (int n = 0; n < np; ++n) {
-				Real x0 = NAN;
-				Real y0 = NAN;
-				Real z0 = NAN;
-				Real Rpds = 0.0;
-
-				x0 = std::abs(xc - px(n));
-				y0 = std::abs(yc - py(n));
-				z0 = std::abs(zc - pz(n));
+				Real x0 = std::abs(xc - px(n));
+				Real y0 = std::abs(yc - py(n));
+				Real z0 = std::abs(zc - pz(n));
 
 				if (x0 < 0.5 * dx[0] && y0 < 0.5 * dx[1] && z0 < 0.5 * dx[2]) {
 					state(i, j, k, HydroSystem<NewProblem>::density_index) += rho_blast;
 					state(i, j, k, HydroSystem<NewProblem>::energy_index) += rho_eint_blast;
 					state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) += rho_eint_blast;
-					state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex) += 1.e3 / cell_vol;
+					state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex) += scalar_blast;
 
 					printf("The total number of SN gone off=%d\n", cum_sn);
-					Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index) / Const_mH, -3. / 7.);
+					Real Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index) / Const_mH, -3. / 7.);
 					printf("Rpds = %.2e pc\n", Rpds);
 				}
 			}
@@ -315,9 +298,9 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
 
 	amrex::Real ginterp = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
 
-	grad_potential[2] = 2. * 3.1415 * Const_G * rho_dm * std::pow(R0, 2) * (2. * z / std::pow(R0, 2)) / (1. + std::pow(z, 2) / std::pow(R0, 2));
-	grad_potential[2] += 2. * 3.1415 * Const_G * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
-	grad_potential[2] += (z / std::abs(z)) * FastMath::pow10(ginterp);
+	grad_potential[2] = 2. * M_PI * Const_G * rho_dm * std::pow(R0, 2) * (2. * z / std::pow(R0, 2)) / (1. + std::pow(z, 2) / std::pow(R0, 2));
+	grad_potential[2] += 2. * M_PI * Const_G * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
+	grad_potential[2] += (z / std::abs(z)) * std::pow(10., ginterp);
 
 #endif
 
@@ -359,13 +342,13 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 
 			GradPhi = HydroSystem<NewProblem>::GetGradFixedPotential(posvec);
 
-			x1mom_new = state(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) + dt * (-rho * GradPhi[0]);
-			x2mom_new = state(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) + dt * (-rho * GradPhi[1]);
-			x3mom_new = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) + dt * (-rho * GradPhi[2]);
+			x1mom_new = state(i, j, k, x1mom) + dt * (-rho * GradPhi[0]);
+			x2mom_new = state(i, j, k, x2mom) + dt * (-rho * GradPhi[1]);
+			x3mom_new = state(i, j, k, x3mom) + dt * (-rho * GradPhi[2]);
 
-			state(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1mom_new;
-			state(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2mom_new;
-			state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = x3mom_new;
+			state(i, j, k, x1mom) = x1mom_new;
+			state(i, j, k, x2mom) = x2mom_new;
+			state(i, j, k, x3mom) = x3mom_new;
 
 			state(i, j, k, HydroSystem<NewProblem>::energy_index) =
 			    RadSystem<NewProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
@@ -373,7 +356,7 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 	}
 }
 
-// Code for producing inistu Projection plots
+// Code for producing in-situ Projection plots
 template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute density projection
