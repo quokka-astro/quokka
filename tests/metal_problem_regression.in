@@ -23,16 +23,16 @@ amr.grid_eff        = 0.7   # default
 do_reflux     = 1
 do_subcycle   = 1
 stop_time     = 9.462e+15
-max_timesteps = 100
-plotfile_interval = 10
-checkpoint_interval = 10
+max_timesteps = 1000
+plotfile_interval = 500
+checkpoint_interval = 500
 
 density_floor = 1.67e-30 #in g cm^-3
 temperature_floor = 10.0 #K
 
 cooling.enabled = 1
 cooling.cooling_table_type = "grackle"
-cooling.hdf5_data_file = "/software/projects/pawsey0807/aditi/quokka_myrepo/quokka/extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+cooling.hdf5_data_file = "CloudyData_UVB=HM2012.h5""
 
-projection_interval = 10
+projection_interval = 500
 projection.dirs = y
