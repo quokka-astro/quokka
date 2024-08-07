@@ -138,7 +138,7 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 
 		// Calculate Stellar Disk Potential
 		double prefac2;
-		prefac2 = 2. * 3.1415 * Const_G * Sigma_star * z_star;
+		prefac2 = 2. * M_PI * Const_G * Sigma_star * z_star;
 		double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
 
 		// Calculate Gas Disk Potential
@@ -299,8 +299,8 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
 
 	amrex::Real ginterp = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
 
-	grad_potential[2] = 2. * 3.1415 * Const_G * rho_dm * std::pow(R0, 2) * (2. * z / std::pow(R0, 2)) / (1. + std::pow(z, 2) / std::pow(R0, 2));
-	grad_potential[2] += 2. * 3.1415 * Const_G * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
+	grad_potential[2] = 2. * M_PI * Const_G * rho_dm * std::pow(R0, 2) * (2. * z / std::pow(R0, 2)) / (1. + std::pow(z, 2) / std::pow(R0, 2));
+	grad_potential[2] += 2. * M_PI * Const_G * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
 	grad_potential[2] += (z / std::abs(z)) * FastMath::pow10(ginterp);
 
 #endif
