@@ -532,7 +532,7 @@ auto problem_main() -> int
 	// set random state
 	const int seed = 42;
 	amrex::InitRandom(seed, 1); // all ranks should produce the same values
-		
+
 	// Problem initialization
 	QuokkaSimulation<NewProblem> sim(BCs_cc);
 
