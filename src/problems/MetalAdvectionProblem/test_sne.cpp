@@ -158,7 +158,7 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 		const Real y1 = yy[ii];
 		const Real y2 = yy[ii + 1];
 		amrex::Real phi_interp = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
-		Phigas = std::pow(10.,phi_interp);
+		Phigas = std::pow(10., phi_interp);
 
 		double Phitot = Phist + Phidm + Phigas;
 
@@ -300,7 +300,7 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
 
 	grad_potential[2] = 2. * M_PI * Const_G * rho_dm * std::pow(R0, 2) * (2. * z / std::pow(R0, 2)) / (1. + std::pow(z, 2) / std::pow(R0, 2));
 	grad_potential[2] += 2. * M_PI * Const_G * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
-	grad_potential[2] += (z / std::abs(z)) * std::pow(10.,ginterp);
+	grad_potential[2] += (z / std::abs(z)) * std::pow(10., ginterp);
 
 #endif
 
