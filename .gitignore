@@ -18,6 +18,8 @@ __pycache__
 *.code-workspace
 *.sarif
 
+docs2/site/
+
 *.aux
 *.dbl
 *.bbl
