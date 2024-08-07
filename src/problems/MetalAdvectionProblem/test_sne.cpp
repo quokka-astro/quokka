@@ -14,7 +14,7 @@
 #include <random>
 
 #include "AMReX.H"
-#include "AMReX_BC_TYPES.H" 
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_FabArrayUtility.H"
