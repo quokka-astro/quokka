@@ -14,7 +14,7 @@
 #include <random>
 
 #include "AMReX.H"
-#include "AMReX_BC_TYPES.H"
+#include "AMReX_BC_TYPES.H"d
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_FabArrayUtility.H"
@@ -41,11 +41,7 @@
 #if 0 // workaround AMDGPU compiler bug
 namespace
 {
-#endif
-Real rho0 = NAN;			// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real Tgas0 = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_outflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-std::string input_data_file;		//
+#endif	//
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 64> logphi_data{
     0.83638381, 4.50705067, 5.10271383, 5.45268878, 5.70140736, 5.89447928, 6.05229308, 6.1857468,  6.30135334, 6.40331919, 6.49451684, 6.57699822, 6.65227803,
     6.72150811, 6.78558362, 6.84521466, 6.90097381, 6.95332936, 7.00266958, 7.04931937, 7.09355406, 7.1356083,	7.17568429, 7.21395706, 7.25057937, 7.28568514,
@@ -84,9 +80,7 @@ AMREX_GPU_MANAGED Real rho02 = 1.e-5 * 0.0268988 * Const_mH;
 };                       // namespace
 #endif
 
-struct NewProblem {
-	amrex::Real dummy;
-};
+struct NewProblem {};
 
 template <> struct HydroSystem_Traits<NewProblem> {
 	static constexpr double gamma = 5. / 3.;
