@@ -187,6 +187,7 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
 		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<NewProblem> const &userData, int level)
 {
+	//TODO for AV - ave (and restore) the RNG state in the metadata.yaml file
 	// inject energy into cells with stochastic sampling
 	BL_PROFILE("QuokkaSimulation::Addsupernova()")
 
