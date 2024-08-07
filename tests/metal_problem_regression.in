@@ -32,7 +32,7 @@ temperature_floor = 10.0 #K
 
 cooling.enabled = 1
 cooling.cooling_table_type = "grackle"
-cooling.hdf5_data_file = "/software/projects/pawsey0807/aditi/quokka_myrepo/quokka/extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+cooling.hdf5_data_file = "CloudyData_UVB=HM2012.h5""
 
 projection_interval = 500
 projection.dirs = y
