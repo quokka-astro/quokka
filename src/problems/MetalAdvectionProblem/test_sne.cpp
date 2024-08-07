@@ -10,7 +10,7 @@
 
 #include <iostream>
 #include <limits>
-#include <math.h>
+#include <cmath>
 #include <random>
 
 #include "AMReX.H"
@@ -84,11 +84,6 @@ AMREX_GPU_MANAGED Real rho02 = 1.e-5 * 0.0268988 * Const_mH;
 };                       // namespace
 #endif
 
-using amrex::Real;
-using namespace amrex;
-
-#define MAX 100
-
 struct NewProblem {
 	amrex::Real dummy;
 };
@@ -115,9 +110,6 @@ template <> struct Physics_Traits<NewProblem> {
 };
 
 template <> struct SimulationData<NewProblem> {
-
-	// cloudy_tables cloudyTables;
-	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
@@ -146,7 +138,7 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 
 		// Calculate DM Potential
 		double prefac;
-		prefac = 2. * 3.1415 * Const_G * rho_dm * std::pow(R0, 2);
+		prefac = 2. * M_PI * Const_G * rho_dm * std::pow(R0, 2);
 		double Phidm = (prefac * std::log(1. + std::pow(z / R0, 2)));
 
 		// Calculate Stellar Disk Potential
@@ -206,6 +198,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
 	const Real rho_blast = userData.M_ejecta / cell_vol;	   // g cm^-3
+	const Real scalar_blast = 1.e3 / cell_vol;	   // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -222,23 +215,18 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2] + 0.5 * dx[2];
 
 			for (int n = 0; n < np; ++n) {
-				Real x0 = NAN;
-				Real y0 = NAN;
-				Real z0 = NAN;
-				Real Rpds = 0.0;
-
-				x0 = std::abs(xc - px(n));
-				y0 = std::abs(yc - py(n));
-				z0 = std::abs(zc - pz(n));
-
+				Real x0 = std::abs(xc - px(n));
+				Real y0 = std::abs(yc - py(n));
+				Real z0 = std::abs(zc - pz(n));
+				
 				if (x0 < 0.5 * dx[0] && y0 < 0.5 * dx[1] && z0 < 0.5 * dx[2]) {
 					state(i, j, k, HydroSystem<NewProblem>::density_index) += rho_blast;
 					state(i, j, k, HydroSystem<NewProblem>::energy_index) += rho_eint_blast;
 					state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) += rho_eint_blast;
-					state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex) += 1.e3 / cell_vol;
+					state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex) += scalar_blast;
 
 					printf("The total number of SN gone off=%d\n", cum_sn);
-					Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index) / Const_mH, -3. / 7.);
+					Real Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index) / Const_mH, -3. / 7.);
 					printf("Rpds = %.2e pc\n", Rpds);
 				}
 			}
@@ -359,13 +347,13 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 
 			GradPhi = HydroSystem<NewProblem>::GetGradFixedPotential(posvec);
 
-			x1mom_new = state(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) + dt * (-rho * GradPhi[0]);
-			x2mom_new = state(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) + dt * (-rho * GradPhi[1]);
-			x3mom_new = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) + dt * (-rho * GradPhi[2]);
+			x1mom_new = state(i, j, k, x1mom) + dt * (-rho * GradPhi[0]);
+			x2mom_new = state(i, j, k, x2mom) + dt * (-rho * GradPhi[1]);
+			x3mom_new = state(i, j, k, x3mom) + dt * (-rho * GradPhi[2]);
 
-			state(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1mom_new;
-			state(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2mom_new;
-			state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = x3mom_new;
+			state(i, j, k, x1mom) = x1mom_new;
+			state(i, j, k, x2mom) = x2mom_new;
+			state(i, j, k, x3mom) = x3mom_new;
 
 			state(i, j, k, HydroSystem<NewProblem>::energy_index) =
 			    RadSystem<NewProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
@@ -373,7 +361,7 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 	}
 }
 
-// Code for producing inistu Projection plots
+// Code for producing in-situ Projection plots
 template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute density projection
