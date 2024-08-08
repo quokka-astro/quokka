@@ -18,8 +18,6 @@ __pycache__
 *.code-workspace
 *.sarif
 
-docs/site/
-
 *.aux
 *.dbl
 *.bbl
@@ -40,10 +38,16 @@ docs/site/
 # image files
 *.png
 
+/docs/site/*
+
 # Documentation build directory
 docs/api/
 docs/doxyoutput/
 _build/
+
+# Include image and pdf files inside docs
+!/docs/docs/flowchart-v2.pdf
+!/docs/docs/tests/attach/*.png
 
 # Kokkos build files
 KokkosCore_config.h
