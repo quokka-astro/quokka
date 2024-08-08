@@ -1,8 +1,0 @@
-.. Bibliography
-
-Bibliography
-============
-
-.. bibliography::
-   :cited:
-   
