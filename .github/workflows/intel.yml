@@ -36,7 +36,7 @@ jobs:
              ccache-${{ github.workflow }}-${{ github.job }}-git-
              
     - name: Build & Install
-      env: {CXXFLAGS: "-ffp-model=precise -fno-operator-names"}
+      env: {CXXFLAGS: "-ffp-model=precise -ffp-exception-behavior=strict -fno-operator-names"}
       run: |
         export CCACHE_COMPRESS=1
         export CCACHE_COMPRESSLEVEL=10
@@ -62,7 +62,7 @@ jobs:
       
     - name: Run tests
       working-directory: ${{runner.workspace}}/quokka/build
-      run: ctest --output-on-failure -C $BUILD_TYPE
+      run: ctest --output-on-failure
       
     - name: Upload test output
       if: always()

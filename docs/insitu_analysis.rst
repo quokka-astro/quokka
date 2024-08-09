@@ -1,7 +1,7 @@
 .. insitu_analysis
 
 In-situ analysis
-=====
+================
 
 *In-situ analysis* refers to analyzing the simulations as they are running.
 There are two options: using the *runtime diagnostics* that are built-in to Quokka, and using *Ascent*, a third-party library.
@@ -27,7 +27,9 @@ Currently, using this diagnostic requires implementing a custom function in the 
 The problem generator must call `computePlaneProjection(F const &user_f, const int dir)`
 where `user_f` is a lambda function that returns the value to project and `dir` is the axis along which the projection is taken.
 
-*Example problem generator implementation:* ::
+*Example problem generator implementation:*
+
+.. code-block:: cpp
 
   template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
   {
@@ -42,7 +44,9 @@ where `user_f` is a lambda function that returns the value to project and `dir` 
     return proj;
   }
 
-*Example input file configuration:* ::
+*Example input file configuration:*
+
+.. code-block:: ini
 
   projection_interval = 200
   projection.dirs = x z
@@ -55,7 +59,9 @@ where `user_f` is a lambda function that returns the value to project and `dir` 
 
 This outputs 2D slices of the simulation as AMReX plotfiles that can be further examined using, e.g., VisIt or yt.
 
-*Example input file configuration:* ::
+*Example input file configuration:*
+
+.. code-block:: ini
 
   quokka.diagnostics = slice_z           # Space-separated name(s) of diagnostics (arbitrary)
   quokka.slice_z.type = DiagFramePlane   # Diagnostic type (others may be added in the future)
@@ -83,7 +89,9 @@ By default, the bins extend over the full range of the data at a given timestep.
 
 Normalization of the output is left up to the user.
 
-*Example input file configuration:* ::
+*Example input file configuration:*
+
+.. code-block:: ini
 
   quokka.hist_temp.type = DiagPDF                         # Diagnostic type
   quokka.hist_temp.file = PDFTempDens                     # Output file prefix
@@ -100,7 +108,9 @@ Normalization of the output is left up to the user.
   quokka.hist_temp.gasDensity.range = 1e-29 1e-23         # gasDensity: (Optional, default: data range) Specify min/max of bins
 
 
-*Filters (based on any variables, not necessary those used for the histogram) can be optionally added:* ::
+*Filters (based on any variables, not necessary those used for the histogram) can be optionally added:*
+
+.. code-block:: ini
 
   quokka.hist_temp.filters = dense                       # (Optional) List of filters
   quokka.hist_temp.dense.field_name = gasDensity         # Filter field
@@ -117,7 +127,7 @@ Ascent allows you to generate visualizations (as PNG images) while the simulatio
   ``export Ascent_DIR=/software/projects/pawsey0807/bwibking/ascent_06082023/install/ascent-develop/lib/cmake/ascent``.
 
 Compiling Ascent via Spack
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 1. Run ``spack external find``.
 2. Make sure there are entries listed for ``hdf5``, ``cuda``, and ``openmpi`` in your ``~/.spack/packages.yaml`` file.
 3. Add `buildable: False <https://spack.readthedocs.io/en/latest/build_settings.html#external-packages>`_ to each entry.
@@ -128,13 +138,13 @@ For A100 GPUs, change the above lines to `cuda_arch=80`.
 Currently, it's not possible to `build for both GPU models at the same time <https://github.com/Alpine-DAV/ascent/issues/950#issuecomment-1153243232>`_.
 
 Compiling Quokka with Ascent support
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 1. Load Ascent: ``spack load ascent``
 2. Add ``-DAMReX_ASCENT=ON -DAMReX_CONDUIT=ON`` to your CMake options.
 3. Compile your problem, e.g.: ``ninja -j4 test_hydro3d_blast``
 
 Customizing the visualization
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Add an `ascent_actions.yaml file <https://ascent.readthedocs.io/en/latest/Actions/Actions.html>`_ to the simulation working directory.
 This file can even be edited while the simulation is running!
 

@@ -1,7 +1,7 @@
 .. Performance
 
 Performance tips
-=====
+================
 
 Prerequisites
 -----------------------
@@ -15,7 +15,7 @@ You should:
 * Know that calling `amrex::ParallelFor` launches a GPU kernel (when GPU support is enabled at compile time).
 
 GPU hardware characteristics
------------------------
+----------------------------
 
 GPUs have hardware design features that make their performance characteristics significantly different from CPUs. In practice, two factors dominate GPU performance behavior:
 
@@ -26,7 +26,7 @@ GPUs have hardware design features that make their performance characteristics s
   * For more details, see these `AMD website notes <https://gpuopen.com/learn/amd-lab-notes/amd-lab-notes-register-pressure-readme/>`_ and OLCF `training materials <https://www.olcf.ornl.gov/wp-content/uploads/Intro_Register_pressure_ORNL_20220812_2083.pdf>`_.
 
 MPI communication latency vs. bandwidth
------------------------
+---------------------------------------
 
 A traditional rule of thumb for CPU-based MPI codes is that communication latency often limits performance when scaling to large number of CPU cores (or, equivalently, MPI ranks). We have found that this is *not* the case for Quokka when running on GPU nodes (by, e.g., adding additional dummy variables to the state arrays).
 

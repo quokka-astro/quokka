@@ -17,3 +17,6 @@
 [submodule "extern/openPMD-api"]
 	path = extern/openPMD-api
 	url = https://github.com/openPMD/openPMD-api.git
+[submodule "extern/regression_testing"]
+	path = extern/regression_testing
+	url = https://github.com/AMReX-Codes/regression_testing.git

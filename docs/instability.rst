@@ -1,7 +1,7 @@
 .. Debugging simulation instability
 
 Debugging simulation instability
-=====
+================================
 
 Nonlinear stability of systems of PDEs is an unsolved problem. There is no complete, rigorous mathematical theory.
 There are two concepts, however, that are closely associated with nonlinear stability:
@@ -24,7 +24,7 @@ It is also possible that the entropy is nondecreasing, but insufficient entropy 
 compared to the amount that should be produced physically. This will cause an unphysical oscillatory solution.
 
 Ways to improve stability
------------------------
+-------------------------
 The solution is either to reduce the timestep or add additional dissipation:
 
 * set the initial timestep to be 0.1 or 0.01 of the CFL timestep by setting ``sim.initDt_`` appropriately

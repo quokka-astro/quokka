@@ -1,7 +1,7 @@
 .. Postprocessing
 
 Postprocessing
-=====
+==============
 
 There are several ways to post-process the output of Quokka simulations.
 AMReX PlotfileTools, yt, and VisIt all allow you to analyze the outputs after they are written to disk.
@@ -30,7 +30,9 @@ yt
   PlotfileTools (see above) can be used instead for axis-aligned slice plots.
 
 The plotfile directory can be loaded with ``yt.load`` as usual. However, the standard fields such as ``('gas', 'density')`` are not defined.
-Instead, you have to use non-standard fields. Examine ``ds.field_list`` to see the fields that exist in the plotfiles. These should be: ::
+Instead, you have to use non-standard fields. Examine ``ds.field_list`` to see the fields that exist in the plotfiles. These should be:
+
+.. code-block:: python
 
   [('boxlib', 'gasDensity'), ('boxlib', 'gasEnergy'),
   ('boxlib', 'radEnergy'), ('boxlib', 'scalar'),
