@@ -98,8 +98,6 @@ using namespace conduit;
 using namespace ascent;
 #endif
 
-enum class ParticleStep { BeforePoissonSolve, AfterPoissonSolve };
-
 using variant_t = std::variant<amrex::Real, std::string>;
 
 namespace YAML
@@ -137,6 +135,8 @@ template <> struct as_if<std::string, std::optional<std::string>> {
 
 enum class FillPatchType { fillpatch_class, fillpatch_function };
 
+enum class GravityBCType { periodic, open };
+
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
@@ -154,19 +154,20 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Long cycleCount_ = 0;
-	amrex::Long maxTimesteps_ = 1e4;	    // default
-	amrex::Long maxWalltime_ = 0;		    // default: no limit
-	int ascentInterval_ = -1;		    // -1 == no in-situ renders with Ascent
-	int plotfileInterval_ = -1;		    // -1 == no output
-	int projectionInterval_ = -1;		    // -1 == no output
-	int statisticsInterval_ = -1;		    // -1 == no output
-	amrex::Real plotTimeInterval_ = -1.0;	    // time interval for plt file
-	amrex::Real checkpointTimeInterval_ = -1.0; // time interval for checkpoints
-	int checkpointInterval_ = -1;		    // -1 == no output
-	int amrInterpMethod_ = 1;		    // 0 == piecewise constant, 1 == lincc_interp
-	amrex::Real reltolPoisson_ = 1.0e-5;	    // default
-	amrex::Real abstolPoisson_ = 1.0e-5;	    // default (scaled by minimum RHS value)
-	int doPoissonSolve_ = 0;		    // 1 == self-gravity enabled, 0 == disabled
+	amrex::Long maxTimesteps_ = 1e4;		// default
+	amrex::Long maxWalltime_ = 0;			// default: no limit
+	int ascentInterval_ = -1;			// -1 == no in-situ renders with Ascent
+	int plotfileInterval_ = -1;			// -1 == no output
+	int projectionInterval_ = -1;			// -1 == no output
+	int statisticsInterval_ = -1;			// -1 == no output
+	amrex::Real plotTimeInterval_ = -1.0;		// time interval for plt file
+	amrex::Real checkpointTimeInterval_ = -1.0;	// time interval for checkpoints
+	int checkpointInterval_ = -1;			// -1 == no output
+	int amrInterpMethod_ = 1;			// 0 == piecewise constant, 1 == lincc_interp
+	amrex::Real reltolPoisson_ = 1.0e-5;		// default
+	amrex::Real abstolPoisson_ = 1.0e-5;		// default (scaled by minimum RHS value)
+	GravityBCType gravityBC_ = GravityBCType::open; // default BC
+	int doPoissonSolve_ = 0;			// 1 == self-gravity enabled, 0 == disabled
 	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -490,9 +491,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 		const amrex::Long nboxes = boxArray(ilev).size();
 		if (amrex::ParallelDescriptor::NProcs() > nboxes) {
 			amrex::Print() << "\n[Warning] [Performance] Too many resources / too little work!\n"
-				       << "  It looks like you requested more compute resources than "
-				       << "  the number of boxes of cells available on level " << ilev << " (" << nboxes << "). "
-				       << "You started with (" << amrex::ParallelDescriptor::NProcs() << ") MPI ranks, so ("
+				       << "  It looks like you requested more compute resources than " << "  the number of boxes of cells available on level "
+				       << ilev << " (" << nboxes << "). " << "You started with (" << amrex::ParallelDescriptor::NProcs() << ") MPI ranks, so ("
 				       << amrex::ParallelDescriptor::NProcs() - nboxes << ") rank(s) will have no work on this level.\n"
 #ifdef AMREX_USE_GPU
 				       << "  On GPUs, consider using 1-8 boxes per GPU per level that "
@@ -1018,16 +1018,34 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		BL_PROFILE_REGION("GravitySolver");
 
-		// set up elliptic solve object
-		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
-		if (verbose) {
-			poissonSolver.setVerbose(true);
-			poissonSolver.setBottomVerbose(false);
-			amrex::Print() << "Doing Poisson solve...\n\n";
+		// set up Poisson solver
+		std::unique_ptr<amrex::OpenBCSolver> poissonSolverOpenBC;
+		std::unique_ptr<amrex::MLPoisson> poissonSolverPeriodic;
+
+		if (gravityBC_ == GravityBCType::periodic) {
+			// periodic boundary conditions
+
+			poissonSolverPeriodic =
+			    std::make_unique<amrex::MLPoisson>(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+
+			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo{amrex::LinOpBCType::Periodic};
+			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi{amrex::LinOpBCType::Periodic};
+			poissonSolverPeriodic->setDomainBC(bc_lo, bc_hi);
+		} else {
+			// open boundary conditions
+			// solve Poisson equation with open b.c. using the method of James (1977)
+
+			poissonSolverOpenBC =
+			    std::make_unique<amrex::OpenBCSolver>(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+
+			if (verbose) {
+				poissonSolverOpenBC->setVerbose(true);
+				poissonSolverOpenBC->setBottomVerbose(false);
+				amrex::Print() << "Doing Poisson solve...\n\n";
+			}
 		}
 
 		phi.resize(finest_level + 1);
-		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
@@ -1055,7 +1073,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		}
 
 		amrex::Real abstol = abstolPoisson_ * rhs_min;
-		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+
+		if (gravityBC_ == GravityBCType::periodic) {
+			amrex::MLMG mlmg(*poissonSolverPeriodic);
+			if (verbose) {
+				mlmg.setVerbose(true);
+			}
+			mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		} else {
+			poissonSolverOpenBC->solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		}
+
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
@@ -1087,9 +1115,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 {
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_) {
-
 		calculateGpotAllLevels();
-
 		gravAccelAllLevels(dt);
 	}
 #endif
