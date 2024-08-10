@@ -158,17 +158,15 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 		// TODO - AV to find out why linterp doesn't work
 		size_t ii = 0;
 		double x_interp = std::abs(z);
-		amrex::GpuArray<amrex::Real, 100> xx = z_data;
-		amrex::GpuArray<amrex::Real, 100> yy = logphi_data;
-		while (ii < xx.size() - 1 && x_interp > xx[ii + 1]) {
+		while (ii < z_data.size() - 1 && x_interp > z_data[ii + 1]) {
 			ii++;
 		}
 
 		// Perform linear interpolation
-		const Real x1 = xx[ii];
-		const Real x2 = xx[ii + 1];
-		const Real y1 = yy[ii];
-		const Real y2 = yy[ii + 1];
+		const Real x1 = z_data[ii];
+		const Real x2 = z_data[ii + 1];
+		const Real y1 = logphi_data[ii];
+		const Real y2 = logphi_data[ii + 1];
 		amrex::Real phi_interp = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
 		Phigas = std::pow(10., phi_interp);
 
@@ -298,17 +296,15 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
 	// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
 	size_t i = 0;
 	double x_interp = std::abs(z);
-	amrex::GpuArray<amrex::Real, 100> xx = z_data;
-	amrex::GpuArray<amrex::Real, 100> yy = logg_data;
-	while (i < xx.size() - 1 && x_interp > xx[i + 1]) {
+	while (i < z_data.size() - 1 && x_interp > z_data[i + 1]) {
 		i++;
 	}
 
 	// Perform linear interpolation
-	const Real x1 = xx[i];
-	const Real x2 = xx[i + 1];
-	const Real y1 = yy[i];
-	const Real y2 = yy[i + 1];
+	const Real x1 = z_data[i];
+	const Real x2 = z_data[i + 1];
+	const Real y1 = logg_data[i];
+	const Real y2 = logg_data[i + 1];
 
 	amrex::Real ginterp = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
 
