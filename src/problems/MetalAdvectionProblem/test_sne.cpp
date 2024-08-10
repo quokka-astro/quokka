@@ -350,9 +350,9 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 
 			GradPhi = HydroSystem<NewProblem>::GetGradFixedPotential(posvec);
 
-			x1mom_new = state(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) + dt * (-rho * GradPhi[0]);
-			x2mom_new = state(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) + dt * (-rho * GradPhi[1]);
-			x3mom_new = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) + dt * (-rho * GradPhi[2]);
+			x1mom_new = x1mom + dt * (-rho * GradPhi[0]);
+			x2mom_new = x2mom + dt * (-rho * GradPhi[1]);
+			x3mom_new = x3mom + dt * (-rho * GradPhi[2]);
 
 			// State momentum values need to be updated this way.
 			state(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1mom_new;
