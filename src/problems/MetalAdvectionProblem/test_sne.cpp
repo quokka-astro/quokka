@@ -72,7 +72,6 @@ AMREX_GPU_MANAGED Real sigma2 = 7000000.0;
 AMREX_GPU_MANAGED Real rho01 = 2.78556e-24;
 AMREX_GPU_MANAGED Real rho02 = 2.7855600000000006e-29;
 
-
 struct NewProblem {
 };
 
