@@ -488,6 +488,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
 	double x3Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
 	const double etot_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::energy_index);
 	const double eint_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::internalEnergy_index);
+	const double pscalar_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::scalar0_index);
 
 	if ((x3Mom_edge * normal) < 0) { // gas is inflowing
 		x3Mom_edge = -1. * consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
@@ -499,6 +500,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
 	consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = x3Mom_edge;
 	consVar(i, j, k, HydroSystem<NewProblem>::energy_index) = etot_edge;
 	consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_edge;
+	consVar(i, j, k, HydroSystem<NewProblem>::scalar0_index) = pscalar_edge;
 }
 
 auto problem_main() -> int
