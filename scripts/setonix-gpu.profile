@@ -1,11 +1,14 @@
 #!/bin/bash
 
+# NOTE: CCE and ROCm versions must match according to this table:
+#  https://docs.olcf.ornl.gov/systems/frontier_user_guide.html#compatible-compiler-rocm-toolchain-versions
+
 #source /opt/cray/pe/cpe/23.09/restore_lmod_system_defaults.sh
 module load PrgEnv-cray
 module load craype-accel-amd-gfx90a
 module load cray-mpich
 module load cce/16.0.1
-module load rocm/5.7.3
+module load rocm/5.5.3 # matches cce/16 clang version
 
 module load cray-hdf5
 module load cray-python/3.9.13.1

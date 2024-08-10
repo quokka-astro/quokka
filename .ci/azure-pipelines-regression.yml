@@ -22,7 +22,9 @@ jobs:
     - script: ./extern/regression_testing/regtest.py regression/quokka-tests.ini
       displayName: 'Run regression testing'
     - publish: /home/bwibking/regression-tests/web
+      condition: succeededOrFailed()
       artifact: regressionHTMLOutput
       displayName: 'Upload results to Azure Pipelines'
     - script: cd /home/bwibking/regression-tests/web && git add . && git commit -m 'updated results' && git push
+      condition: succeededOrFailed()
       displayName: 'Upload results to GitHub Pages'
