@@ -4,8 +4,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro3d_blast.cpp
-/// \brief Defines a test problem for a 3D explosion.
+/// \file test_sne.cpp
+/// \brief Defines a problem for disk galaxy ISM.
 ///
 
 #include <cmath>
@@ -27,10 +27,7 @@
 #include "test_sne.hpp"
 
 // global variables needed for Dirichlet boundary condition and initial conditions
-#if 0  // workaround AMDGPU compiler bug
-namespace
-{
-#endif //
+
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> logphi_data{
     5.23749982, 5.83925514, 6.19098487, 6.44028658, 6.63341552, 6.79097415, 6.92395454, 7.03892608, 7.1401333,	7.23047697, 7.31202697, 7.38631194, 7.45449324,
     7.5174744,	7.57597231, 7.63056519, 7.68172614, 7.72984716, 7.77525663, 7.81823237, 7.85901159, 7.89779849, 7.93477008, 7.9700808,	8.00386622, 8.03624594,
@@ -74,11 +71,7 @@ AMREX_GPU_MANAGED Real sigma1 = 700000.0;
 AMREX_GPU_MANAGED Real sigma2 = 7000000.0;
 AMREX_GPU_MANAGED Real rho01 = 2.78556e-24;
 AMREX_GPU_MANAGED Real rho02 = 2.7855600000000006e-29;
-;
-;
-#if 0 // workaround AMDGPU compiler bug
-};                       // namespace
-#endif
+
 
 struct NewProblem {
 };
