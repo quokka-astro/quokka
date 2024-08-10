@@ -1,0 +1,56 @@
+site_name: Quokka
+copyright: © Copyright 2020-2024, Ben Wibking and Quokka Developers.
+theme:
+  name: readthedocs
+  font:
+    text: Source Sans Pro
+  features:
+    - navigation.expand
+nav:
+  - About: about.md
+  - Equations: equations.md
+  - Citation: citation.md
+  - User guide:
+    - Installation: installation.md
+    - Running on HPC clusters: running_on_hpc_clusters.md
+    - Test problems: tests/index.md
+    - Runtime parameters: parameters.md
+    - In-situ analysis: insitu_analysis.md
+    - Postprocessing: postprocessing.md
+    - Debugging simulation instability: instability.md
+  - Test problems: 
+    - Radiative shock test: tests/radshock.md
+    - Shu-Osher shock test: tests/shu_osher.md
+    - Slow-moving shock test: tests/sms.md
+    - Matter-radiation temperature equilibrium test: tests/energy_exchange.md
+    - Uniform advecting radiation in diffusive limit: tests/radhydro_uniform_adv.md
+    - Advecting radiation pulse test: tests/radhydro_pulse.md
+  - DEVELOPER GUIDE:
+    - Flowchart: flowchart.md
+    - Debugging: debugging.md
+    - Assertions and error checking: error_checking.md
+    - Performance tips: performance.md
+    - How to use clang-tidy: howto_clang_tidy.md
+
+plugins:
+  - search
+  - awesome-pages
+  - include-markdown
+  - bibtex:
+      bib_file: docs/references.bib
+      bib_by_default: true
+      csl_file: apa-6th-edition.csl
+      # csl_file: https://raw.githubusercontent.com/citation-style-language/styles/master/apa-5th-edition.csl
+      cite_inline: true
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - footnotes
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
