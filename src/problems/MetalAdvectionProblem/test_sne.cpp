@@ -21,7 +21,6 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
-#include "AMReX_TableData.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
