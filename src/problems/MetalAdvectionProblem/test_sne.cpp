@@ -10,29 +10,20 @@
 
 #include <cmath>
 #include <iostream>
-#include <limits>
-#include <random>
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
-#include "AMReX_FabArrayUtility.H"
-#include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelContext.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_Random.H"
-#include "AMReX_RandomEngine.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
 #include "AMReX_TableData.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "math/quadrature.hpp"
 #include "radiation/radiation_system.hpp"
 #include "test_sne.hpp"
 

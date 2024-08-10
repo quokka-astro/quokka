@@ -11,7 +11,6 @@
 
 // external headers
 #include <fmt/format.h>
-#include <fstream>
 
 // TODO: replace with Microphysics constant
 
@@ -28,7 +27,5 @@ constexpr double kb = 1.3807e-16;
 constexpr double sqrtpi = 1.772453;
 
 // internal headers
-#include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 
 #endif // TEST_HYDRO3D_BLAST_HPP_
