@@ -1201,6 +1201,9 @@ RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_
 		chiEVec[0] = ComputeEnergyMeanOpacity(rho, T_d) * rho;
 
 		fourPiBoverC = ComputeThermalRadiation(T_d, rad_boundaries);
+
+
+
 		const double LHS = c_light_ * (chiEVec[0] * Erad[0] - chiPVec[0] * fourPiBoverC[0]) + Lambda_gd_0 * num_density * num_density * std::sqrt(T_gas) * (T_gas - T_d);
 
 		if (std::abs(LHS) < lambda_rel_tol * std::abs(Lambda_compare)) {
@@ -1422,9 +1425,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						T_d = T_gas;
 					} else {
 						if (n == 0) {
-							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, radBoundaries_g_copy);
+							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, radBoundaries_g_copy); // TODO
 						} else {
-							const auto Lambda_gd = Rvec[0] / (dt * chat / c);
+							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
 							T_d = T_gas - Lambda_gd / (Lambda_gd_0 * num_den * num_den * std::sqrt(T_gas));
 						}
 					}
