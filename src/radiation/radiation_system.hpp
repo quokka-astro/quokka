@@ -1382,7 +1382,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 								kappaEVec[g] = kappa_expo_and_lower_value[1][g];
 							}
 						} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
-							kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
+							kappaPVec =
+							    ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
 							kappaEVec = kappaPVec;
 						} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 							if (n < max_ite_to_update_alpha_E) {
@@ -1422,12 +1423,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 								kappaFVec = kappaPVec;
 							} else {
 								if constexpr (use_diffuse_flux_mean_opacity) {
-									kappaFVec =
-											ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge,
-															delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
+									kappaFVec = ComputeDiffusionFluxMeanOpacity(
+									    kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
+									    kappa_expo_and_lower_value[0]);
 								} else {
-									// for simplicity, I assume kappaF = kappaE when opacity_model_ == OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity.
-									// We won't use this option anyway. 
+									// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
+									// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't
+									// use this option anyway.
 									kappaFVec = kappaEVec;
 								}
 							}
@@ -1444,25 +1446,26 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 									const double frad2 = consPrev(i, j, k, x3RadFlux_index);
 									// work = v * F * chi
 									work[0] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) *
-											(2.0 * kappaEVec[0] - kappaFVec[0]) * chat / (c * c) * lorentz_factor_v * dt;
+										  (2.0 * kappaEVec[0] - kappaFVec[0]) * chat / (c * c) * lorentz_factor_v * dt;
 								} else if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 									for (int g = 0; g < nGroups_; ++g) {
 										const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
 										const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
 										const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 										// work = v * F * chi
-										work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * kappaFVec[g] * chat /
-												(c * c) * dt;
+										work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) *
+											  kappaFVec[g] * chat / (c * c) * dt;
 									}
 								} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum ||
-												opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
+										     opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 									for (int g = 0; g < nGroups_; ++g) {
 										const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
 										const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
 										const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 										// work = v * F * chi
 										work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) *
-												(1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat / (c * c) * dt;
+											  (1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat /
+											  (c * c) * dt;
 									}
 								}
 							}
@@ -1587,11 +1590,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							kappaFVec = kappaPVec;
 						} else {
 							if constexpr (use_diffuse_flux_mean_opacity) {
-								kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge,
-														delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
+								kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC,
+													    delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
+													    kappa_expo_and_lower_value[0]);
 							} else {
-								// for simplicity, I assume kappaF = kappaE when opacity_model_ == OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity.
-								// We won't use this option anyway. 
+								// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
+								// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't use this
+								// option anyway.
 								kappaFVec = kappaEVec;
 							}
 						}
@@ -1787,8 +1792,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			if constexpr ((beta_order_ == 0) || (gamma_ == 1.0) || (!include_work_term_in_source)) {
 				break;
 			} else {
-				// If you are here, then you are using the new scheme. Step 3 is skipped. The work term is included in the source term, but it is
-				// lagged. The work term is updated in the next step.
+				// If you are here, then you are using the new scheme. Step 3 is skipped. The work term is included in the source term, but it
+				// is lagged. The work term is updated in the next step.
 				for (int g = 0; g < nGroups_; ++g) {
 					// copy work to work_prev
 					work_prev[g] = work[g];
@@ -1796,22 +1801,22 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// work = v * F * chi
 					if constexpr (opacity_model_ == OpacityModel::single_group) {
 						work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * chat / (c * c) *
-								lorentz_factor_v * (2.0 * kappaEVec[g] - kappaFVec[g]) * dt;
+							  lorentz_factor_v * (2.0 * kappaEVec[g] - kappaFVec[g]) * dt;
 					} else if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-						work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * kappaFVec[g] * chat /
-								(c * c) * dt;
+						work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * kappaFVec[g] *
+							  chat / (c * c) * dt;
 					} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum ||
-									opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
+							     opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 						work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) *
-								(1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat / (c * c) * dt;
+							  (1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat / (c * c) * dt;
 					}
 				}
 
 				// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 				const double lag_tol = 1.0e-13;
 				if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) / Etot0 < lag_tol) ||
-						(sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) ||
-						(sum(abs(work)) > 0.0 && sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
+				    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) ||
+				    (sum(abs(work)) > 0.0 && sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
 					break;
 				}
 			}
