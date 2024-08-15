@@ -1,6 +1,6 @@
-#ifndef TEST_RAD_DUST_HPP_ // NOLINT
-#define TEST_RAD_DUST_HPP_
-/// \file test_rad_dust.hpp
+#ifndef TEST_RAD_DUST_MG_HPP_ // NOLINT
+#define TEST_RAD_DUST_MG_HPP_
+/// \file test_rad_dust_MG.hpp
 /// \brief Defines a test problem for radiation in the static diffusion regime.
 ///
 
@@ -18,4 +18,4 @@
 
 // function definitions
 
-#endif // TEST_RAD_DUST_HPP_
+#endif // TEST_RAD_DUST_MG_HPP_
