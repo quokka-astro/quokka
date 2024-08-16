@@ -1,5 +1,5 @@
 /// \file test_rad_dust.cpp
-/// \brief Defines a test problem for radiation advection in a uniform medium with grey radiation.
+/// \brief Defines a single-group test problem for gas-dust-radiation coupling in uniform medium. 
 ///
 
 #include "test_rad_dust.hpp"
@@ -13,8 +13,6 @@
 
 struct DustProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
-
-// CGS
 
 constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 constexpr double c = 1.0e8;
@@ -104,19 +102,10 @@ template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokk
 
 	const double Egas = quokka::EOS<DustProblem>::ComputeEintFromTgas(rho0, T0);
 
-	double erad = NAN;
-	double frad = NAN;
-	erad = Erad0;
-	frad = 0.0;
-
-	// test
-	erad = erad_floor;
-	frad = 0.0;
-
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, RadSystem<DustProblem>::radEnergy_index) = erad;
-		state_cc(i, j, k, RadSystem<DustProblem>::x1RadFlux_index) = frad;
+		state_cc(i, j, k, RadSystem<DustProblem>::radEnergy_index) = erad_floor;
+		state_cc(i, j, k, RadSystem<DustProblem>::x1RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<DustProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<DustProblem>::x3RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<DustProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;

@@ -1,5 +1,5 @@
 /// \file test_rad_dust_MG.cpp
-/// \brief Defines a test problem for radiation advection in a uniform medium with grey radiation.
+/// \brief Defines a multigroup test problem for gas-dust-radiation coupling in uniform medium. 
 ///
 
 #include "test_rad_dust_MG.hpp"
@@ -13,8 +13,6 @@
 
 struct DustProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
-
-// CGS
 
 constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 constexpr double c = 1.0e8;
@@ -55,7 +53,7 @@ template <> struct Physics_Traits<DustProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 2;
+	static constexpr int nGroups = 4;
 };
 
 template <> struct RadSystem_Traits<DustProblem> {
@@ -65,7 +63,7 @@ template <> struct RadSystem_Traits<DustProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = beta_order_;
 	static constexpr double energy_unit = 1.;
-	static constexpr amrex::GpuArray<double, Physics_Traits<DustProblem>::nGroups + 1> radBoundaries{1.0e-3, 1.0, 1.0e3};
+	static constexpr amrex::GpuArray<double, Physics_Traits<DustProblem>::nGroups + 1> radBoundaries{1.0e-3, 0.1, 1.0, 10.0, 1.0e3};
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 };
