@@ -66,6 +66,7 @@ template <> struct RadSystem_Traits<DustProblem> {
 	static constexpr amrex::GpuArray<double, Physics_Traits<DustProblem>::nGroups + 1> radBoundaries{1.0e-3, 0.1, 1.0, 10.0, 1.0e3};
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+	static constexpr bool enable_dust = true;
 };
 
 template <>

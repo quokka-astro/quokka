@@ -51,6 +51,7 @@ template <> struct RadSystem_Traits<DustProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = beta_order_;
+	static constexpr bool enable_dust = true;
 };
 
 template <> struct Physics_Traits<DustProblem> {

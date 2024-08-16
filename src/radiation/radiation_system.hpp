@@ -62,7 +62,6 @@ static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double inf = std::numeric_limits<double>::max();
 
-static constexpr bool use_dust = true;
 static const double Lambda_gd_0 = 1e6;
 // static const double Lambda_gd_0 = 2.5e-34; // erg cm^3 s^−1 K^−3/2
 
@@ -150,6 +149,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr int beta_order_ = RadSystem_Traits<problem_t>::beta_order;
 
+	static constexpr bool enable_dust_ = RadSystem_Traits<problem_t>::enable_dust;
+
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
@@ -159,6 +160,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 			return boundaries;
 		}
 	}();
+
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
 
 	static constexpr OpacityModel opacity_model_ = []() constexpr {
@@ -1448,7 +1450,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					AMREX_ASSERT(T_gas >= 0.);
 
 					// dust temperature
-					if constexpr (!use_dust) {
+					if constexpr (!enable_dust_) {
 						T_d = T_gas;
 					} else {
 						if (n == 0) {
@@ -1635,7 +1637,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// M_0g
 					dF0_dXg.fillin(cscale);
 					// M_g0
-					if constexpr (!use_dust) {
+					if constexpr (!enable_dust_) {
 						dFg_dX0 = 1.0 / c_v * dEg_dT;
 					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
@@ -1679,7 +1681,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				} // END NEWTON-RAPHSON LOOP
 
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
-				std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
+				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
 				AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
 				AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
 

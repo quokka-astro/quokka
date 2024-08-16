@@ -124,6 +124,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = group_edges_;
 	static constexpr OpacityModel opacity_model = opacity_model_;
+	static constexpr bool enable_dust = false;
 };
 
 template <>

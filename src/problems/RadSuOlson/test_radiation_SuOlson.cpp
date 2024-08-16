@@ -50,6 +50,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr int beta_order = 0;
+	static constexpr bool enable_dust = false;
 };
 
 template <> struct quokka::EOS_Traits<MarshakProblem> {
