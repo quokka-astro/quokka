@@ -1266,6 +1266,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
 	auto dt = dt_radiation;
+	const double dustGasCoeff_local = dustGasCoeff;
 	if (stage == 2) {
 		dt = (1.0 - IMEX_a32) * dt_radiation;
 	}
@@ -1453,11 +1454,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						T_d = T_gas;
 					} else {
 						if (n == 0) {
-							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, dustGasCoeff, radBoundaries_g_copy,
+							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, dustGasCoeff_local, radBoundaries_g_copy,
 										     radBoundaryRatios_copy);
 						} else {
 							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
-							T_d = T_gas - Lambda_gd / (dustGasCoeff * num_den * num_den * std::sqrt(T_gas));
+							T_d = T_gas - Lambda_gd / (dustGasCoeff_local * num_den * num_den * std::sqrt(T_gas));
 						}
 					}
 					AMREX_ASSERT(T_d >= 0.);
@@ -1641,7 +1642,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						dFg_dX0 = 1.0 / c_v * dEg_dT;
 					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
-						const double coeff_n = dt * dustGasCoeff * num_den * num_den / cscale;
+						const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 						dEg_dT *= d_Td_d_T;
 						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 						const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
