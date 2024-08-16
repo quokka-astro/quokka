@@ -1,5 +1,5 @@
 /// \file test_rad_dust_MG.cpp
-/// \brief Defines a multigroup test problem for gas-dust-radiation coupling in uniform medium. 
+/// \brief Defines a multigroup test problem for gas-dust-radiation coupling in uniform medium.
 ///
 
 #include "test_rad_dust_MG.hpp"
@@ -72,7 +72,7 @@ template <> struct RadSystem_Traits<DustProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<DustProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double rho,
-							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+							     const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -93,9 +93,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiation(amrex
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<DustProblem>::ComputeThermalRadiationTempDerivative(amrex::Real temperature,
-							    amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivative(
+    amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
 {
 	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	const double d_power_dt = radiation_constant_;
