@@ -1448,11 +1448,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
 
 				double F_G = NAN;
-				double dFG_dEgas = NAN;
 				double deltaEgas = NAN;
-				quokka::valarray<double, nGroups_> dFG_dD{};
-				quokka::valarray<double, nGroups_> dFR_dEgas{};
-				quokka::valarray<double, nGroups_> dFR_i_dD_i{};
 				quokka::valarray<double, nGroups_> deltaD{};
 				quokka::valarray<double, nGroups_> F_D{};
 
@@ -1636,42 +1632,59 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivative(T_d, radBoundaries_g_copy);
 					AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
 
-					const auto d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
-
 					// compute Jacobian elements
 					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
-					dFG_dEgas = 1.0;
-					const double coeff_n = (chat / c) * dt * Lambda_gd_0 * num_den * num_den;
+
+					const double cscale = c / chat;
+					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
+
+					const double y0 = -F_G;
+					auto yg = -1. * F_D;
+
+					quokka::valarray<double, nGroups_> dF0_dXg{};
+					quokka::valarray<double, nGroups_> dFg_dX0{};
+					quokka::valarray<double, nGroups_> dFg_dXg{};
+
+					// M_00
+					const double dF0_dX0 = 1.0;
+					// M_0g
+					dF0_dXg.fillin(cscale);
+					// M_g0
+					if constexpr (!use_dust) {
+						dFg_dX0 = 1.0 / c_v * dEg_dT;
+					} else {
+						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
+						const double coeff_n = dt * Lambda_gd_0 * num_den * num_den / cscale;
+						dEg_dT *= d_Td_d_T;
+						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
+						const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
+						dFg_dX0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * dF0_dX0;
+						yg = yg - 1.0 / cscale * rg * y0;
+					}
+					// M_gg, same for dust and dust-free cases
 					for (int g = 0; g < nGroups_; ++g) {
 						if (tau[g] <= 0.0) {
-							dFR_i_dD_i[g] = -std::numeric_limits<double>::infinity();
+							dFg_dXg[g] = -std::numeric_limits<double>::infinity();
 						} else {
-							double dBg_dRg = NAN;
-							if (use_dust) {
-								dBg_dRg = d_fourpiboverc_d_t[g] * (-1.0 / (coeff_n * std::sqrt(T_gas)));
-							} else {
-								dBg_dRg = 0.0;
-							}
-							dFR_i_dD_i[g] = kappaPoverE[g] * (dBg_dRg - 1.0 / tau[g]) - 1.0;
+							dFg_dXg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
 						}
 					}
+
 					if constexpr (use_D_as_base) {
-						dFG_dD = (c / chat) * tau0;
-						dFR_i_dD_i = dFR_i_dD_i * tau0;
-					} else {
-						dFG_dD.fillin(c / chat);
+						dF0_dXg = dF0_dXg * tau0;
+						dFg_dXg = dFg_dXg * tau0;
 					}
-					dFR_dEgas = 1.0 / c_v * kappaPoverE * d_fourpiboverc_d_t * d_Td_d_T;
 
 					// update variables
-					RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dD, dFR_dEgas, dFR_i_dD_i, -F_G, -1. * F_D, deltaEgas, deltaD);
+					RadSystem<problem_t>::SolveLinearEqs(dF0_dX0, dF0_dXg, dFg_dX0, dFg_dXg, y0, yg, deltaEgas, deltaD);
 					AMREX_ASSERT(!std::isnan(deltaEgas));
 					AMREX_ASSERT(!deltaD.hasnan());
 
 					Egas_guess += deltaEgas;
 					if constexpr (use_D_as_base) {
-						D += deltaD;
+						D += deltaD; // TODO: remove D and replace with Rvec += deltaD * tau0
+						// Rvec = tau0 * D;
 					} else {
 						Rvec += deltaD;
 					}
