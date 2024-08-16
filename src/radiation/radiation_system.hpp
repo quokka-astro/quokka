@@ -298,18 +298,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		return radEnergyFractions;
 	} else {
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		// amrex::Real x = boundaries[0] * energy_unit_over_kT;
-		// amrex::Real previous = NAN;
-		// if (x >= 100.) {
-		// 	previous = 1.0;
-		// } else {
-		// 	previous = integrate_planck_from_0_to_x(x);
-		// }
 		amrex::Real y = NAN;
 		amrex::Real previous = 0.0;
 		for (int g = 0; g < nGroups_ - 1; ++g) {
 			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-			if (x >= 100.) {
+			if (x >= 100.) { // 100. is the upper limit of x in the table
 				y = 1.0;
 			} else {
 				y = integrate_planck_from_0_to_x(x);
@@ -317,15 +310,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		// last group
+		// last group, enforcing the total fraction to be 1.0
 		y = 1.0;
 		radEnergyFractions[nGroups_ - 1] = y - previous;
+		AMREX_ASSERT(std::abs(sum(radEnergyFractions) - 1.0) < 1.0e-10);
 
-		const auto tote = sum(radEnergyFractions);
-		AMREX_ALWAYS_ASSERT(std::abs(tote - 1.0) < 1.0e-10);
-		// AMREX_ALWAYS_ASSERT(tote <= 1.0);
-		// AMREX_ALWAYS_ASSERT(tote > 0.9999);
-		// radEnergyFractions /= tote;
 		return radEnergyFractions;
 	}
 }
