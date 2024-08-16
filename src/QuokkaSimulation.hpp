@@ -123,7 +123,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 
 	amrex::Real radiationCflNumber_ = 0.3;
-	int maxSubsteps_ = 10; // maximum number of radiation subcycles per hydro step
+	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
 	amrex::Real dustGasInteractionCoeff_ = 2.5e-34; // erg cm^3 s^−1 K^−3/2
 
 	bool computeReferenceSolution_ = false;
