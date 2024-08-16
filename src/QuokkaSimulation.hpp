@@ -123,7 +123,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 
 	amrex::Real radiationCflNumber_ = 0.3;
-	int maxSubsteps_ = 10; // maximum number of radiation subcycles per hydro step
+	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
+	amrex::Real dustGasInteractionCoeff_ = 2.5e-34; // erg cm^3 s^−1 K^−3/2
 
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
@@ -387,6 +388,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse rpp("radiation");
 		rpp.query("reconstruction_order", radiationReconstructionOrder_);
 		rpp.query("cfl", radiationCflNumber_);
+		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
 	}
 }
 
@@ -1803,7 +1805,7 @@ void QuokkaSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx, prob_lo, prob_hi, time + dt);
 
 	// cell-centered source terms
-	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), indexRange, dt, stage);
+	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_);
 }
 
 template <typename problem_t>

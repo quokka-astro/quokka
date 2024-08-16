@@ -33,6 +33,8 @@ add_subdirectory(RadStreamingY)
 add_subdirectory(RadSuOlson)
 add_subdirectory(RadTophat)
 add_subdirectory(RadTube)
+add_subdirectory(RadDust)
+add_subdirectory(RadDustMG)
 
 add_subdirectory(RadhydroShell)
 add_subdirectory(RadhydroShock)

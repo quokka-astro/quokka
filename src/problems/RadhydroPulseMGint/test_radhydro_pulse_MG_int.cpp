@@ -132,6 +132,7 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = opacity_model_;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;
@@ -141,6 +142,7 @@ template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 AMREX_GPU_HOST_DEVICE

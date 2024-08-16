@@ -111,6 +111,7 @@ template <> struct RadSystem_Traits<SGProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 1;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SGProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real { return kappa0; }
@@ -181,6 +182,7 @@ template <> struct RadSystem_Traits<MGproblem> {
 	// static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <>
