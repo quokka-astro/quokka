@@ -142,7 +142,6 @@ auto problem_main() -> int
 	// Problem parameters
 	const int max_timesteps = 1e6;
 	const double CFL_number_gas = 0.8;
-	const double CFL_number_rad = 8.0;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<DustProblem>::nvar_;
@@ -159,7 +158,6 @@ auto problem_main() -> int
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
-	sim.radiationCflNumber_ = CFL_number_rad;
 	sim.cflNumber_ = CFL_number_gas;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;

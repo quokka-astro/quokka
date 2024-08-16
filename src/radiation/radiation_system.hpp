@@ -62,9 +62,6 @@ static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double inf = std::numeric_limits<double>::max();
 
-static const double Lambda_gd_0 = 1e6;
-// static const double Lambda_gd_0 = 2.5e-34; // erg cm^3 s^−1 K^−3/2
-
 // enum for opacity_model
 enum class OpacityModel {
 	single_group = 0, // user-defined opacity for each group, given as a function of density and temperature.
@@ -207,7 +204,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
 
-	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage);
+	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage, double dustGasCoeff);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -269,7 +266,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					      amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad,
-								 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+								 double dustGasCoeff, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
 								 amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double;
 
 	template <FluxDir DIR>
@@ -1192,7 +1189,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_d_init, double const rho,
-									quokka::valarray<double, nGroups_> const &Erad,
+									quokka::valarray<double, nGroups_> const &Erad, double dustGasCoeff,
 									amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
 									amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double
 {
@@ -1200,7 +1197,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 	quokka::valarray<double, nGroups_> kappaEVec{};
 
 	const double num_density = rho / mean_molecular_mass_;
-	const double Lambda_compare = Lambda_gd_0 * num_density * num_density * std::sqrt(T_gas) * T_gas;
+	const double Lambda_compare = dustGasCoeff * num_density * num_density * std::sqrt(T_gas) * T_gas;
 
 	amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
 	for (int g = 0; g < nGroups_; ++g) {
@@ -1239,14 +1236,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 		AMREX_ASSERT(!kappaEVec.hasnan());
 
 		const double LHS = c_light_ * rho * sum(kappaEVec * Erad - kappaPVec * fourPiBoverC) +
-				   Lambda_gd_0 * num_density * num_density * std::sqrt(T_gas) * (T_gas - T_d);
+				   dustGasCoeff * num_density * num_density * std::sqrt(T_gas) * (T_gas - T_d);
 
 		if (std::abs(LHS) < lambda_rel_tol * std::abs(Lambda_compare)) {
 			break;
 		}
 
 		const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivative(T_d, rad_boundaries);
-		const double dLHS_dTd = -c_light_ * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - Lambda_gd_0 * num_density * num_density * std::sqrt(T_gas);
+		const double dLHS_dTd = -c_light_ * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - dustGasCoeff * num_density * num_density * std::sqrt(T_gas);
 		const double delta_T_d = LHS / dLHS_dTd;
 		T_d -= delta_T_d;
 
@@ -1263,7 +1260,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-					  const int stage)
+					  const int stage, double dustGasCoeff)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -1455,11 +1452,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						T_d = T_gas;
 					} else {
 						if (n == 0) {
-							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, radBoundaries_g_copy,
+							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, dustGasCoeff, radBoundaries_g_copy,
 										     radBoundaryRatios_copy);
 						} else {
 							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
-							T_d = T_gas - Lambda_gd / (Lambda_gd_0 * num_den * num_den * std::sqrt(T_gas));
+							T_d = T_gas - Lambda_gd / (dustGasCoeff * num_den * num_den * std::sqrt(T_gas));
 						}
 					}
 					AMREX_ASSERT(T_d >= 0.);
@@ -1643,7 +1640,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						dFg_dX0 = 1.0 / c_v * dEg_dT;
 					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
-						const double coeff_n = dt * Lambda_gd_0 * num_den * num_den / cscale;
+						const double coeff_n = dt * dustGasCoeff * num_den * num_den / cscale;
 						dEg_dT *= d_Td_d_T;
 						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 						const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
