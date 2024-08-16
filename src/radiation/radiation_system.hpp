@@ -1344,7 +1344,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> kappaPoverE{};
 		quokka::valarray<double, nGroups_> tau0{}; // optical depth across c * dt at old state
 		quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt at new state
-		quokka::valarray<double, nGroups_> D{};	   // D = S / tau0
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
@@ -1584,13 +1583,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 									tau0[g] = 1.0;
 								}
 							}
-							D = Rvec / tau0;
 						}
 					} else { // in the second and later loops, calculate tau and E (given R)
 						tau = dt * rho * kappaPVec * chat * lorentz_factor;
-						if constexpr (use_D_as_base) {
-							Rvec = tau0 * D;
-						}
 						for (int g = 0; g < nGroups_; ++g) {
 							// If tau = 0.0, Erad_guess shouldn't change
 							if (tau[g] > 0.0) {
@@ -1683,8 +1678,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 					Egas_guess += deltaEgas;
 					if constexpr (use_D_as_base) {
-						D += deltaD; // TODO: remove D and replace with Rvec += deltaD * tau0
-						// Rvec = tau0 * D;
+						Rvec += tau0 * deltaD;
 					} else {
 						Rvec += deltaD;
 					}
