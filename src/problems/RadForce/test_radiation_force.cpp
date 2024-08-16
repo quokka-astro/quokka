@@ -71,7 +71,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::ev2erg;
 	static constexpr int beta_order = 1;
-	static constexpr bool enable_dust = false;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real { return 0.; }

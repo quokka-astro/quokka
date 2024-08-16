@@ -146,7 +146,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr int beta_order_ = RadSystem_Traits<problem_t>::beta_order;
 
-	static constexpr bool enable_dust_ = RadSystem_Traits<problem_t>::enable_dust;
+	static constexpr bool enable_dust_gas_thermal_coupling_model_ = RadSystem_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
@@ -1448,7 +1448,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					AMREX_ASSERT(T_gas >= 0.);
 
 					// dust temperature
-					if constexpr (!enable_dust_) {
+					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 						T_d = T_gas;
 					} else {
 						if (n == 0) {
@@ -1636,7 +1636,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// M_0g
 					dF0_dXg.fillin(cscale);
 					// M_g0
-					if constexpr (!enable_dust_) {
+					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 						dFg_dX0 = 1.0 / c_v * dEg_dT;
 					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);

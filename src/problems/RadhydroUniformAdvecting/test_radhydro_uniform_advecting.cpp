@@ -62,7 +62,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = beta_order_;
-	static constexpr bool enable_dust = false;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <> struct Physics_Traits<PulseProblem> {

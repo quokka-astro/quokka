@@ -70,7 +70,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	// static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
-	static constexpr bool enable_dust = false;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <>

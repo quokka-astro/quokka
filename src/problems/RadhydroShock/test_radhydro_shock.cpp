@@ -59,7 +59,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
 	static constexpr int beta_order = 1;
-	static constexpr bool enable_dust = false;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {
