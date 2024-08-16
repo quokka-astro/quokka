@@ -119,7 +119,7 @@ template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokk
 
 template <> void QuokkaSimulation<DustProblem>::computeAfterTimestep()
 {
-	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
+	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); // NOLINT
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		userData_.t_vec_.push_back(tNew_[0]);
