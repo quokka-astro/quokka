@@ -21,7 +21,6 @@ constexpr double v0 = 0.0;
 constexpr double chi0 = 10000.0;
 
 constexpr double T0 = 1.0;
-constexpr double T_equi = 0.7680325;
 constexpr double rho0 = 1.0;
 constexpr double a_rad = 1.0;
 constexpr double mu = 1.0;

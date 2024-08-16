@@ -1266,20 +1266,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
 	auto dt = dt_radiation;
-	const double dustGasCoeff_local = dustGasCoeff;
 	if (stage == 2) {
 		dt = (1.0 - IMEX_a32) * dt_radiation;
 	}
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
-	amrex::GpuArray<amrex::Real, nGroups_> radBoundaryRatios{};
-	if constexpr (nGroups_ > 1) {
-		if constexpr (static_cast<int>(opacity_model_) > 0) {
-			for (int g = 0; g < nGroups_; ++g) {
-				radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
-			}
-		}
-	}
 
 	// Add source terms
 
@@ -1290,6 +1281,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double c = c_light_;
 		const double chat = c_hat_;
+		const double dustGasCoeff_local = dustGasCoeff;
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -1355,8 +1347,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<double, nGroups_> radBoundaryRatios_copy{};
 		for (int g = 0; g < nGroups_ + 1; ++g) {
 			radBoundaries_g_copy[g] = radBoundaries_g[g];
-			if (g < nGroups_) {
-				radBoundaryRatios_copy[g] = radBoundaryRatios[g];
+		}
+		if constexpr (nGroups_ > 1) {
+			if constexpr (static_cast<int>(opacity_model_) > 0) {
+				for (int g = 0; g < nGroups_; ++g) {
+					radBoundaryRatios_copy[g] = radBoundaries_g_copy[g + 1] / radBoundaries_g_copy[g];
+				}
 			}
 		}
 
