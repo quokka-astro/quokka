@@ -266,9 +266,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	ComputeThermalRadiationTempDerivative(amrex::Real temperature,
 					      amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto
-	ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad,
-				amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad,
+								 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+								 amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
@@ -1189,9 +1189,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_d_init, double const rho, quokka::valarray<double, nGroups_> const &Erad, 
-				amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_d_init, double const rho,
+									quokka::valarray<double, nGroups_> const &Erad,
+									amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+									amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	quokka::valarray<double, nGroups_> kappaEVec{};
@@ -1223,8 +1224,7 @@ RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_
 					kappaEVec[g] = kappa_expo_and_lower_value[1][g];
 				}
 			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
-				kappaPVec =
-						ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
+				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
 				kappaEVec = kappaPVec;
 			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 				const auto alpha_B = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
@@ -1236,14 +1236,15 @@ RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_
 		AMREX_ASSERT(!kappaPVec.hasnan());
 		AMREX_ASSERT(!kappaEVec.hasnan());
 
-		const double LHS = c_light_ * rho * sum(kappaEVec * Erad - kappaPVec * fourPiBoverC) + Lambda_gd_0 * num_density * num_density * std::sqrt(T_gas) * (T_gas - T_d);
+		const double LHS = c_light_ * rho * sum(kappaEVec * Erad - kappaPVec * fourPiBoverC) +
+				   Lambda_gd_0 * num_density * num_density * std::sqrt(T_gas) * (T_gas - T_d);
 
 		if (std::abs(LHS) < lambda_rel_tol * std::abs(Lambda_compare)) {
 			break;
 		}
 
 		const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivative(T_d, rad_boundaries);
-		const double dLHS_dTd = - c_light_ * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - Lambda_gd_0 * num_density * num_density * std::sqrt(T_gas);
+		const double dLHS_dTd = -c_light_ * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - Lambda_gd_0 * num_density * num_density * std::sqrt(T_gas);
 		const double delta_T_d = LHS / dLHS_dTd;
 		T_d -= delta_T_d;
 
@@ -1452,7 +1453,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						T_d = T_gas;
 					} else {
 						if (n == 0) {
-							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, radBoundaries_g_copy, radBoundaryRatios_copy);
+							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, radBoundaries_g_copy,
+										     radBoundaryRatios_copy);
 						} else {
 							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
 							T_d = T_gas - Lambda_gd / (Lambda_gd_0 * num_den * num_den * std::sqrt(T_gas));

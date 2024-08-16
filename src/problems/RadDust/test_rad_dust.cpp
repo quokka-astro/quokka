@@ -1,5 +1,5 @@
 /// \file test_rad_dust.cpp
-/// \brief Defines a single-group test problem for gas-dust-radiation coupling in uniform medium. 
+/// \brief Defines a single-group test problem for gas-dust-radiation coupling in uniform medium.
 ///
 
 #include "test_rad_dust.hpp"
@@ -85,9 +85,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiation(amrex
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<DustProblem>::ComputeThermalRadiationTempDerivative(amrex::Real temperature,
-							    amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivative(
+    amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
 {
 	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	const double d_power_dt = radiation_constant_;
