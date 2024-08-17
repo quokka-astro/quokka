@@ -1256,6 +1256,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 	}
 
 	AMREX_ASSERT_WITH_MESSAGE(ite_td < max_ite_td, "Newton iteration for dust temperature did not converge.");
+	if (ite_td >= max_ite_td) {
+		T_d = -1.0;
+	}
 	return T_d;
 }
 
@@ -1272,8 +1275,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
 
-	amrex::Gpu::Buffer<int> d_num_failed({0});
-	auto *p_num_failed = d_num_failed.data();
+	amrex::Gpu::Buffer<int> num_failed_coupling({0});
+	amrex::Gpu::Buffer<int> num_failed_dust({0});
+	int* p_num_failed_coupling = num_failed_coupling.data();
+	int* p_num_failed_dust = num_failed_dust.data();
 
 	// Add source terms
 
@@ -1282,6 +1287,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// make a local reference of p_num_failed 
+		auto p_num_failed_coupling_local = p_num_failed_coupling;
+		auto p_num_failed_dust_local = p_num_failed_dust;
+
 		const double c = c_light_;
 		const double chat = c_hat_;
 		const double dustGasCoeff_local = dustGasCoeff;
@@ -1442,7 +1451,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 1;
+				const int maxIter = 50;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
@@ -1459,8 +1468,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
 							T_d = T_gas - Lambda_gd / (dustGasCoeff_local * num_den * num_den * std::sqrt(T_gas));
 						}
+						AMREX_ASSERT(T_d >= 0.);
+						if (T_d < 0.0) {
+							amrex::Gpu::Atomic::Add(p_num_failed_dust_local, 1);
+						}
 					}
-					AMREX_ASSERT(T_d >= 0.);
 
 					fourPiBoverC = ComputeThermalRadiation(T_d, radBoundaries_g_copy);
 
@@ -1682,7 +1694,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 				if (n >= maxIter) {
-					amrex::Gpu::Atomic::Add(p_num_failed, 1);
+					amrex::Gpu::Atomic::Add(p_num_failed_coupling_local, 1);
 				}
 
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
@@ -1970,9 +1982,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		}
 	});
 
-	const int num_failed = *(d_num_failed.copyToHost());
-	if (num_failed > 0) {
+	const int nf_coupling = *(num_failed_coupling.copyToHost());
+	const int nf_dust = *(num_failed_dust.copyToHost());
+	if (nf_coupling > 0) {
 		amrex::Abort("Newton-Raphson iteration failed to converge on GPU!");
+	}
+	if (nf_dust > 0) {
+		amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge on GPU!");
 	}
 }
 
