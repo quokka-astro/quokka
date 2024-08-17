@@ -1272,6 +1272,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
 
+	amrex::Gpu::Buffer<int> d_num_failed({0});
+	auto *p_num_failed = d_num_failed.data();
+
 	// Add source terms
 
 	// 1. Compute gas energy and radiation energy update following Howell &
@@ -1439,7 +1442,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 400;
+				const int maxIter = 1;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
@@ -1678,6 +1681,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				} // END NEWTON-RAPHSON LOOP
 
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
+				if (n >= maxIter) {
+					amrex::Gpu::Atomic::Add(p_num_failed, 1);
+				}
+
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
 				AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
 				AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
@@ -1962,6 +1969,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2][g];
 		}
 	});
+
+	const int num_failed = *(d_num_failed.copyToHost());
+	if (num_failed > 0) {
+		amrex::Abort("Newton-Raphson iteration failed to converge on GPU!");
+	}
 }
 
 #endif // RADIATION_SYSTEM_HPP_
