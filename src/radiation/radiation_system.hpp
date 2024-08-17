@@ -1468,7 +1468,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
 							T_d = T_gas - Lambda_gd / (dustGasCoeff_local * num_den * num_den * std::sqrt(T_gas));
 						}
-						AMREX_ASSERT(T_d >= 0.);
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(T_d >= 0., "Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative!");
 						if (T_d < 0.0) {
 							amrex::Gpu::Atomic::Add(p_num_failed_dust_local, 1);
 						}
@@ -1988,7 +1988,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::Abort("Newton-Raphson iteration failed to converge on GPU!");
 	}
 	if (nf_dust > 0) {
-		amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge on GPU!");
+		amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative on GPU!");
 	}
 }
 
