@@ -1277,8 +1277,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 	amrex::Gpu::Buffer<int> num_failed_coupling({0});
 	amrex::Gpu::Buffer<int> num_failed_dust({0});
-	int* p_num_failed_coupling = num_failed_coupling.data();
-	int* p_num_failed_dust = num_failed_dust.data();
+	int *p_num_failed_coupling = num_failed_coupling.data();
+	int *p_num_failed_dust = num_failed_dust.data();
 
 	// Add source terms
 
@@ -1287,7 +1287,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// make a local reference of p_num_failed 
+		// make a local reference of p_num_failed
 		auto p_num_failed_coupling_local = p_num_failed_coupling;
 		auto p_num_failed_dust_local = p_num_failed_dust;
 
