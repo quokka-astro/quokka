@@ -1622,9 +1622,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		int *p_num_failed_coupling = num_failed_coupling.data();
 		int *p_num_failed_dust = num_failed_dust.data();
 		int *p_num_failed_outer = num_failed_outer.data();
-		int nf_coupling = 0;
-		int nf_dust = 0;
-		int nf_outer = 0;
 
 		if constexpr (IMEX_a22 > 0.0) {
 			// matter-radiation exchange source terms of stage 1
@@ -1640,23 +1637,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi, p_num_failed_coupling,
 								p_num_failed_dust, p_num_failed_outer);
 			}
-
-			nf_coupling = *(num_failed_coupling.copyToHost());
-			nf_dust = *(num_failed_dust.copyToHost());
-			nf_outer = *(num_failed_outer.copyToHost());
-			if (nf_dust > 0) {
-				amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative!");
-			}
-			if (nf_coupling > 0) {
-				amrex::Abort("Newton-Raphson iteration for matter-radiation coupling failed to converge!");
-			}
-			if (nf_outer > 0) {
-				amrex::Abort("Outer iteration for matter-radiation coupling failed to converge!");
-			}
 		}
-
-		*p_num_failed_coupling = 0;
-		*p_num_failed_dust = 0;
 
 		// Stage 2: advance hyperbolic radiation subsystem using midpoint RK2 method, starting from state_old_cc_ to state_new_cc_
 		advanceRadiationMidpointRK2(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine);
@@ -1675,9 +1656,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 							p_num_failed_dust, p_num_failed_outer);
 		}
 
-		nf_coupling = *(num_failed_coupling.copyToHost());
-		nf_dust = *(num_failed_dust.copyToHost());
-		nf_outer = *(num_failed_outer.copyToHost());
+		const int nf_coupling = *(num_failed_coupling.copyToHost());
+		const int nf_dust = *(num_failed_dust.copyToHost());
+		const int nf_outer = *(num_failed_outer.copyToHost());
+		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if dust temperature
+		// is negative, the matter-radiation coupling will fail to converge.
 		if (nf_dust > 0) {
 			amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative!");
 		}
