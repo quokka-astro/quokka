@@ -1659,8 +1659,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		const int nf_coupling = *(num_failed_coupling.copyToHost());
 		const int nf_dust = *(num_failed_dust.copyToHost());
 		const int nf_outer = *(num_failed_outer.copyToHost());
-		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if dust temperature
-		// is negative, the matter-radiation coupling will fail to converge.
+		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if dust
+		// temperature is negative, the matter-radiation coupling will fail to converge.
 		if (nf_dust > 0) {
 			amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative!");
 		}
