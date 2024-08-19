@@ -205,7 +205,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::Real time);
 
 	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-				   double dustGasCoeff);
+				   double dustGasCoeff, int *num_failed_coupling, int *num_failed_dust, int *p_num_failed_outer_ite);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -1255,7 +1255,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 		}
 	}
 
-	AMREX_ASSERT_WITH_MESSAGE(ite_td < max_ite_td, "Newton iteration for dust temperature did not converge.");
+	AMREX_ASSERT_WITH_MESSAGE(ite_td < max_ite_td, "Newton iteration for dust temperature failed to converge.");
 	if (ite_td >= max_ite_td) {
 		T_d = -1.0;
 	}
@@ -1264,7 +1264,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-					  const int stage, double dustGasCoeff)
+					  const int stage, double dustGasCoeff, int *p_num_failed_coupling, int *p_num_failed_dust, int *p_num_failed_outer_ite)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -1274,11 +1274,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	}
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
-
-	amrex::Gpu::Buffer<int> num_failed_coupling({0});
-	amrex::Gpu::Buffer<int> num_failed_dust({0});
-	int *p_num_failed_coupling = num_failed_coupling.data();
-	int *p_num_failed_dust = num_failed_dust.data();
 
 	// Add source terms
 
@@ -1290,6 +1285,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// make a local reference of p_num_failed
 		auto p_num_failed_coupling_local = p_num_failed_coupling;
 		auto p_num_failed_dust_local = p_num_failed_dust;
+		auto p_num_failed_outer_local = p_num_failed_outer_ite;
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -1468,9 +1464,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
 							T_d = T_gas - Lambda_gd / (dustGasCoeff_local * num_den * num_den * std::sqrt(T_gas));
 						}
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    T_d >= 0.,
-						    "Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative!");
+						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 						if (T_d < 0.0) {
 							amrex::Gpu::Atomic::Add(p_num_failed_dust_local, 1);
 						}
@@ -1694,14 +1688,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// }
 				} // END NEWTON-RAPHSON LOOP
 
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
+				AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 				if (n >= maxIter) {
 					amrex::Gpu::Atomic::Add(p_num_failed_coupling_local, 1);
 				}
 
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
-				AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
-				AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
+				AMREX_ASSERT(Egas_guess > 0.0);
+				AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 
 				if (n > 0) {
 					// calculate kappaF since the temperature has changed
@@ -1955,7 +1949,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			}
 		} // end full-step iteration
 
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms iteration failed to converge!");
+		AMREX_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms iteration failed to converge!");
+		if (ite >= max_ite) {
+			amrex::Gpu::Atomic::Add(p_num_failed_outer_local, 1);
+		}
 
 		// 4b. Store new radiation energy, gas energy
 		// In the first stage of the IMEX scheme, the hydro quantities are updated by a fraction (defined by
@@ -1983,15 +1980,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2][g];
 		}
 	});
-
-	const int nf_coupling = *(num_failed_coupling.copyToHost());
-	const int nf_dust = *(num_failed_dust.copyToHost());
-	if (nf_coupling > 0) {
-		amrex::Abort("Newton-Raphson iteration failed to converge on GPU!");
-	}
-	if (nf_dust > 0) {
-		amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative on GPU!");
-	}
 }
 
 #endif // RADIATION_SYSTEM_HPP_
