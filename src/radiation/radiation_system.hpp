@@ -1683,13 +1683,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					} else {
 						Egas_guess += deltaEgas;
 						if constexpr (use_D_as_base) {
-							Rvec += tau0 * deltaD;
-						} else {
-							Rvec += deltaD;
+							deltaD = tau0 * deltaD;
 						}
+						Rvec += deltaD;
 					}
 					CUSTOM_ASSERT_WITH_MESSAGE(Egas_guess > 0.0, "Egas_guess <= 0 after step ", n);
-
 
 					// check relative and absolute convergence of E_r
 					// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
