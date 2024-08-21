@@ -1766,7 +1766,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					}
 					// M_0g
 					dF0_dXg.fillin(cscale);
-					// M_gg, same for dust and dust-free cases
+					double photoheating = NAN;
+					if constexpr (enable_photoelectric_heating_) {
+						photoheating = dt * DefinePhotoelectricHeatingE1Derivative(T_gas, num_den);
+						if (tau[nGroups_ - 1] <= 0.0) {
+							// dF0_dXg[nGroups_ - 1] = std::numeric_limits<double>::infinity();
+							dF0_dXg[nGroups_ - 1] = LARGE;
+						} else {
+							dF0_dXg[nGroups_ - 1] += photoheating * kappaPoverE[nGroups_ - 1] / tau[nGroups_ - 1];
+						}
+					}
+					// M_gg, same for dust and dust-free cases; same with or without cooling
 					for (int g = 0; g < nGroups_; ++g) {
 						if (tau[g] <= 0.0) {
 							// dFg_dXg[g] = -std::numeric_limits<double>::infinity();
@@ -1776,16 +1786,34 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					}
 					// M_g0
+					dFg_dX0 = 1.0 / c_v * dEg_dT;
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
-						dFg_dX0 = 1.0 / c_v * dEg_dT;
+						if constexpr (enable_line_cooling_) {
+							// add d Lambda_g / d T
+							// dFg_dX0 = dFg_dX0 - 1.0 / (c_v * cscale) * dt * dLambda_g_dT;
+						}
 					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 						const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
-						dEg_dT *= d_Td_d_T;
 						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 						const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-						dFg_dX0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * dF0_dX0;
+						dFg_dX0 = 1.0 / c_v * dEg_dT * d_Td_d_T;
+						if constexpr (enable_line_cooling_) {
+							// add d Lambda_g / d T
+							// dFg_dX0 = dFg_dX0 - 1.0 / (c_v * cscale) * dt * dLambda_g_dT;
+						}
+						dFg_dX0 = dFg_dX0 - 1.0 / cscale * rg * dF0_dX0;
 						yg = yg - 1.0 / cscale * rg * y0;
+						if constexpr (enable_photoelectric_heating_) {
+							dFg_dX1 = rg - 1.0 / cscale * rg * dF0_dXg[nGroups_ - 1]; // note that this is the (nGroups_ - 1)th column, but with a wrong value for for the (nGroups_ - 1)th row
+							// this is the (nGroups_ - 1)th row of the (nGroups_ - 1)th column
+							if (tau[nGroups_ - 1] <= 0.0) {
+								// dFg_dXg[nGroups_ - 1] = -std::numeric_limits<double>::infinity();
+								dFg_dXg[nGroups_ - 1] = - LARGE;
+							} else {
+								dFg_dXg[nGroups_ - 1] -= rg[nGroups_ - 1] / cscale * photoheating * kappaPoverE[nGroups_ - 1] / tau[nGroups_ - 1];
+							}
+						}
 					}
 
 					if constexpr (use_D_as_base) {
@@ -1794,7 +1822,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					}
 
 					// update variables
-					RadSystem<problem_t>::SolveLinearEqs(dF0_dX0, dF0_dXg, dFg_dX0, dFg_dXg, y0, yg, deltaEgas, deltaD);
+					if constexpr (enable_photoelectric_heating_ && enable_dust_gas_thermal_coupling_model_) {
+						RadSystem<problem_t>::SolveLinearEqsWithLastColumn(dF0_dX0, dF0_dXg, dFg_dX0, dFg_dXg, dFg_dX1, y0, yg, deltaEgas, deltaD);
+					} else {
+						RadSystem<problem_t>::SolveLinearEqs(dF0_dX0, dF0_dXg, dFg_dX0, dFg_dXg, y0, yg, deltaEgas, deltaD);
+					}
+
 					AMREX_ASSERT(!std::isnan(deltaEgas));
 					AMREX_ASSERT(!deltaD.hasnan());
 
