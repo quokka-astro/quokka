@@ -23,7 +23,7 @@ constexpr bool enable_pe_ = 0;
 constexpr int n_group_ = 2;
 constexpr amrex::GpuArray<double, n_group_ + 1> rad_boundary_ = []() constexpr {
 	if constexpr (n_group_ == 2) {
-		return amrex::GpuArray<double, 3>{1.0e-3, 30.0, 100.};
+		return amrex::GpuArray<double, 3>{1.0e-3, 3.0, 100.};
 	} else if constexpr (n_group_ == 1) {
 		return amrex::GpuArray<double, 2>{0.0, inf};
 	}

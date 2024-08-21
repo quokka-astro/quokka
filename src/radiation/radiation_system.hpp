@@ -1453,7 +1453,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				const double resid_tol = 1.0e-11; // 1.0e-15;
 				const int maxIter = 400;
 				int n = 0;
-				bool good_iteration = true;
+				// bool good_iteration = true;
 				double F_sq = NAN;
 				double F_sq_previous = 0.0;
 				for (; n < maxIter; ++n) {
@@ -1597,6 +1597,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					} else { // in the second and later loops, calculate tau and E (given R)
 						tau = dt * rho * kappaPVec * chat * lorentz_factor;
+
+						// NOTE: The commented out code below is an attempt to solve the netagive radiation energy problem by 
+						// reverting Rvec to the previous state and updating Egas only. This is replaced by the `if (Egas_guess + deltaEgas <= 0.0)`
+						// clause below. I keep this code here for future reference.
+
+						// const bool good_iteration_previous = good_iteration;
+						// good_iteration = true;
 						for (int g = 0; g < nGroups_; ++g) {
 							// If tau = 0.0, Erad_guess shouldn't change
 							if (tau[g] > 0.0) {
@@ -1607,8 +1614,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 										EradVec_guess[g] = Erad_floor_;
 									}
 								}
+								// if (EradVec_guess[g] < 0.0) {
+								// 	good_iteration = false;
+								// 	Rvec[g] -= deltaD[g];
+								// }
 							}
 						}
+						// if (!good_iteration) {
+						// 	AMREX_ASSERT_WITH_MESSAGE(good_iteration_previous, "Two consecutive bad iterations. Aborting.");
+						// 	continue;
+						// }
 					}
 
 					F_G = Egas_guess - Egas0;
