@@ -33,6 +33,11 @@
 
 using Real = amrex::Real;
 
+#define CUSTOM_ASSERT_WITH_MESSAGE(cond, msg, value) \
+    if (!(cond)) { \
+        amrex::Abort(msg + std::to_string(value)); \
+    }
+
 // Hyper parameters of the radiation solver
 
 static constexpr bool include_delta_B = true;
@@ -1246,7 +1251,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 		const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivative(T_d, rad_boundaries);
 		const double dLHS_dTd = -c_light_ * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - dustGasCoeff * num_density * num_density * std::sqrt(T_gas);
 		const double delta_T_d = LHS / dLHS_dTd;
-		T_d -= delta_T_d;
+		if (-delta_T_d > 2.0 * std::max(T_d, T_gas)) {
+			// If this happens, it means the initial guess for T_d, which is T_gas, is close to zero and the slope is zero, so the Newton step is too large.
+			// Therefore, we take a better guess: T_d = T_rad, where a_rad * T_rad^4 = sum(Erad)
+			T_d = std::pow(sum(Erad) / radiation_constant_, 0.25);
+		} else {
+			T_d -= delta_T_d;
+		}
 
 		if (ite_td > 0) {
 			if (std::abs(delta_T_d) < lambda_rel_tol * std::abs(T_d)) {
@@ -1664,12 +1675,21 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					AMREX_ASSERT(!std::isnan(deltaEgas));
 					AMREX_ASSERT(!deltaD.hasnan());
 
-					Egas_guess += deltaEgas;
-					if constexpr (use_D_as_base) {
-						Rvec += tau0 * deltaD;
+					if (Egas_guess + deltaEgas <= 0.0) {
+						// Egas_guess + deltaEgas < 0 usually happens when Egas_guess = 0, and yg is horizontal at R = R0.
+						// If this happens, take a better guess at the intersection of R = R0 and Egas - Egas0 + R0 = 0, which gives 
+						// Egas_guess = Egas0 - sum(R0).
+						Egas_guess -= sum(Rvec);
 					} else {
-						Rvec += deltaD;
+						Egas_guess += deltaEgas;
+						if constexpr (use_D_as_base) {
+							Rvec += tau0 * deltaD;
+						} else {
+							Rvec += deltaD;
+						}
 					}
+					CUSTOM_ASSERT_WITH_MESSAGE(Egas_guess > 0.0, "Egas_guess <= 0 after step ", n);
+
 
 					// check relative and absolute convergence of E_r
 					// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
