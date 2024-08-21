@@ -48,6 +48,7 @@ static constexpr bool force_rad_floor_in_iteration = false; // force radiation e
 static constexpr bool use_diffuse_flux_mean_opacity_incl_kappaE = true;
 static const int max_ite_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_ite_to_update_alpha_E
 // iterations of the Newton iteration
+static constexpr bool use_backward_line_search = false;
 
 static constexpr bool include_work_term_in_source = true;
 static constexpr bool use_D_as_base = false;
@@ -1452,6 +1453,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				const double resid_tol = 1.0e-11; // 1.0e-15;
 				const int maxIter = 400;
 				int n = 0;
+				bool good_iteration = true;
+				double F_sq = NAN;
+				double F_sq_previous = 0.0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
@@ -1609,12 +1613,27 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 					F_G = Egas_guess - Egas0;
 					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
+					F_sq = F_G * F_G;
 					double F_D_abs_sum = 0.0;
 					for (int g = 0; g < nGroups_; ++g) {
 						if (tau[g] > 0.0) {
-							F_D_abs_sum += std::abs(F_D[g]);
 							F_G += (c / chat) * Rvec[g];
+							F_D_abs_sum += std::abs(F_D[g]);
+							F_sq += (c / chat) * Rvec[g] * (c / chat) * Rvec[g];
+							F_sq += F_D[g] * F_D[g];
 						}
+					}
+
+					if constexpr (use_backward_line_search) {
+						if (n > 0 && F_sq >= F_sq_previous) {
+							deltaEgas *= 0.5;
+							Egas_guess -= deltaEgas;
+							deltaD = 0.5 * deltaD;
+							Rvec = Rvec - deltaD;
+							continue;
+						}
+
+						F_sq_previous = F_sq;
 					}
 
 					if (n > 200) {
@@ -1687,7 +1706,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						// Egas_guess + deltaEgas < 0 usually happens when Egas_guess = 0, and yg is horizontal at R = R0.
 						// If this happens, take a better guess at the intersection of R = R0 and Egas - Egas0 + R0 = 0, which gives 
 						// Egas_guess = Egas0 - sum(R0).
-						Egas_guess -= sum(Rvec);
+						deltaEgas = - sum(Rvec);
+						deltaD.fillin(0.0);
+						Egas_guess += deltaEgas;
 					} else {
 						Egas_guess += deltaEgas;
 						if constexpr (use_D_as_base) {
