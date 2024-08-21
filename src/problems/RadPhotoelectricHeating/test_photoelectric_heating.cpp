@@ -18,8 +18,8 @@ struct Problem {
 };
 
 const bool with_opacity = 1;
-constexpr bool enable_dust_ = 1;
-constexpr bool enable_pe_ = 1;
+constexpr bool enable_dust_ = 0;
+constexpr bool enable_pe_ = 0;
 constexpr int n_group_ = 2;
 constexpr amrex::GpuArray<double, n_group_ + 1> rad_boundary_ = []() constexpr {
 	if constexpr (n_group_ == 2) {
