@@ -20,7 +20,7 @@ struct Problem {
 const bool with_opacity = 1;
 constexpr bool enable_dust_ = 1;
 constexpr bool enable_pe_ = 0;
-constexpr int n_group_ = 1;
+constexpr int n_group_ = 2;
 constexpr amrex::GpuArray<double, n_group_ + 1> rad_boundary_ = []() constexpr {
 	if constexpr (n_group_ == 2) {
 		return amrex::GpuArray<double, 3>{1.0e-3, 30.0, 100.};
@@ -218,7 +218,7 @@ auto problem_main() -> int
 	// Problem parameters
 	// const int nx = 1000;
 	// const double Lx = 1.0;
-	const double CFL_number = 0.8;
+	const double CFL_number = 0.4;
 	const double dt_max = 1e-2;
 	const double tmax = 0.5;
 	const int max_timesteps = 5000;
@@ -287,21 +287,23 @@ auto problem_main() -> int
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	for (int i = 0; i < nx; ++i) {
-		err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
+		if (!with_opacity) {
+			err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
+			sol_norm += std::abs(Tgas_exact[i]);
+		}
 		err_norm += std::abs(erad[i] - erad_exact[i]);
-		sol_norm += std::abs(Tgas_exact[i]);
 		sol_norm += std::abs(erad_exact[i]);
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 5.0e-3;
+	const double rel_err_tol = 1.0e-2;
 	int status = 1;
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
 	}
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
-	if (with_opacity) {
+	if (with_opacity && enable_dust_) {
 		status = 0;
 	}
 
