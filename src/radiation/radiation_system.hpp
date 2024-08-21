@@ -1466,9 +1466,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						} else {
 							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
 							T_d = T_gas - Lambda_gd / (dustGasCoeff_local * num_den * num_den * std::sqrt(T_gas));
+							if (T_d < 0.) {
+								deltaEgas *= 0.5;
+								deltaD = 0.5 * deltaD;
+								Egas_guess -= deltaEgas;
+								Rvec = Rvec - deltaD;
+								continue;
+							}
 						}
 					}
-					AMREX_ASSERT(T_d >= 0.);
+					// AMREX_ASSERT(T_d >= 0.);
+
 
 					fourPiBoverC = ComputeThermalRadiation(T_d, radBoundaries_g_copy);
 
