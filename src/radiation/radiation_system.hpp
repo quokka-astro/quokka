@@ -32,6 +32,8 @@
 #include "util/valarray.hpp"
 
 using Real = amrex::Real;
+// define LARGE as a very large number
+static constexpr double LARGE = 1.0e100;
 
 #define CUSTOM_ASSERT_WITH_MESSAGE(cond, msg, value) \
     if (!(cond)) { \
@@ -88,6 +90,12 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
+};
+
+// this struct is specialized by the user application code
+template <typename problem_t> struct ISM_Traits {
+	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr bool enable_line_cooling = false;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -153,6 +161,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr int beta_order_ = RadSystem_Traits<problem_t>::beta_order;
 
 	static constexpr bool enable_dust_gas_thermal_coupling_model_ = RadSystem_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
+	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
+	static constexpr bool enable_line_cooling_ = ISM_Traits<problem_t>::enable_line_cooling;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
@@ -259,6 +269,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 							 const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
 							 quokka::valarray<double, nGroups_> &xi);
 
+	AMREX_GPU_HOST_DEVICE static void SolveLinearEqsWithLastColumn(double a00, const quokka::valarray<double, nGroups_> &a0i,
+							 const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii,
+							 const quokka::valarray<double, nGroups_> &ai1, const double &y0, const quokka::valarray<double, 
+							 nGroups_> &yi, double &x0, quokka::valarray<double, nGroups_> &xi);
+
 	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21,
 							 double C22, double Y0, double Y1, double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
 
@@ -275,6 +290,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad,
 								 double dustGasCoeff, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
 								 amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double;
+
+	AMREX_GPU_HOST_DEVICE static auto
+	DefinePhotoelectricHeatingE1Derivative(amrex::Real temperature, amrex::Real num_density) -> amrex::Real;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
@@ -353,6 +371,16 @@ RadSystem<problem_t>::ComputeThermalRadiationTempDerivative(amrex::Real temperat
 	return d_power_dt * radEnergyFractions;
 }
 
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density) -> amrex::Real
+{
+	const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
+	const double coeff = 1.33e-24;
+	return coeff * epsilon * num_density / ref_J_ISR; // s^-1
+}
+
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
 // solve the linear system
 //   [a00 a0i] [x0] = [y0]
@@ -364,9 +392,44 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(const double a00
 								const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
 								quokka::valarray<double, nGroups_> &xi)
 {
-	auto ratios = a0i / aii;
+	const auto ratios = a0i / aii;
 	x0 = (-sum(ratios * yi) + y0) / (-sum(ratios * ai0) + a00);
 	xi = (yi - ai0 * x0) / aii;
+}
+
+// Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
+// solve the linear system
+//   [a00 a0i] [x0] = [y0]
+//   [ai0 aii] [xi]   [yi]
+// for x0 and xi, where a0i = (a01, a02, a03, ...); ai0 = (a10, a20, a30, ...); aii = (a11, a22, a33, ...), xi = (x1, x2, x3, ...), yi = (y1, y2, y3, ...)
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqsWithLastColumn(const double a00, const quokka::valarray<double, nGroups_> &a0i,
+								const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii,
+								const quokka::valarray<double, nGroups_> &ai1, const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
+								quokka::valarray<double, nGroups_> &xi)
+{
+	// Note that the following routine only works when the FUV group is the last group, i.e., pe_index = nGroups_ - 1
+
+	// note that aii[pe_index] is the right value for a[pe_index][pe_index], while ai1[pe_index] is NOT.
+	const int pe_index = nGroups_ - 1;
+	const auto ratios = a0i / aii;
+
+	const auto a00_new = a00 - sum(ratios * ai0);
+	const auto y0_new = y0 - sum(ratios * yi);
+	auto a01_new = a0i[pe_index] - sum(ratios * ai1);
+	// re-accounting for the pe_index'th element of ai1
+	a01_new = a01_new + ratios[pe_index] * ai1[pe_index] - ratios[pe_index] * aii[pe_index];
+	const auto a10 = ai0[pe_index];
+	const auto a11 = aii[pe_index];
+	const auto y1 = yi[pe_index];
+	// solve linear equations [[a00_new, a01_new], [a10, a11]] [[x0], [xi[pe_index]]] = [y0_new, y1]
+	x0 = (y0_new - a01_new / a11 * y1) / (a00_new - a01_new / a11 * a10);
+	const auto x1 = (y1 - a10 * x0) / a11;
+	xi[pe_index] = x1;
+	// xi = (yi - ai0 * x0) / aii;
+	for (int g = 0; g < pe_index; ++g) {
+		xi[g] = (yi[g] - ai0[g] * x0 - ai1[g] * x1) / aii[g];
+	}
 }
 
 template <typename problem_t>
@@ -1626,8 +1689,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						// }
 					}
 
+					const double cscale = c / chat;
 					F_G = Egas_guess - Egas0;
 					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
+					if constexpr (enable_line_cooling_) {
+						// F_G += cscale * dt * sum(ComputeLineCooling(rho, T_gas));
+						// F_D -= dt * ComputeLineCooling(rho, T_gas);
+					}
+					if constexpr (enable_photoelectric_heating_) {
+						F_G -= dt * DefinePhotoelectricHeatingE1Derivative(T_gas, num_den) * EradVec_guess[nGroups_ - 1];
+					}
 					F_sq = F_G * F_G;
 					double F_D_abs_sum = 0.0;
 					for (int g = 0; g < nGroups_; ++g) {
@@ -1672,7 +1743,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 
-					const double cscale = c / chat;
 					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
 
 					const double y0 = -F_G;
@@ -1681,11 +1751,28 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					quokka::valarray<double, nGroups_> dF0_dXg{};
 					quokka::valarray<double, nGroups_> dFg_dX0{};
 					quokka::valarray<double, nGroups_> dFg_dXg{};
+					quokka::valarray<double, nGroups_> dFg_dX1{};
+
+					// Photoelectric heating from the p'th group. Rearrange it to the last (N_g'th) group in the Jacobian matrix.
+					// TODO(CCH): do the reordering to make FUV the last group
 
 					// M_00
 					const double dF0_dX0 = 1.0;
+					if constexpr (enable_line_cooling_) {
+						// add d Lambda_g / d T
+						// dF0_dX0 = dF0_dX0 + cscale / c_v * sum(dLambda_g_dT);
+					}
 					// M_0g
 					dF0_dXg.fillin(cscale);
+					// M_gg, same for dust and dust-free cases
+					for (int g = 0; g < nGroups_; ++g) {
+						if (tau[g] <= 0.0) {
+							// dFg_dXg[g] = -std::numeric_limits<double>::infinity();
+							dFg_dXg[g] = - LARGE;
+						} else {
+							dFg_dXg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
+						}
+					}
 					// M_g0
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 						dFg_dX0 = 1.0 / c_v * dEg_dT;
@@ -1697,14 +1784,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
 						dFg_dX0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * dF0_dX0;
 						yg = yg - 1.0 / cscale * rg * y0;
-					}
-					// M_gg, same for dust and dust-free cases
-					for (int g = 0; g < nGroups_; ++g) {
-						if (tau[g] <= 0.0) {
-							dFg_dXg[g] = -std::numeric_limits<double>::infinity();
-						} else {
-							dFg_dXg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
-						}
 					}
 
 					if constexpr (use_D_as_base) {
