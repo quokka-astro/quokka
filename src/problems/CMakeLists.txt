@@ -35,6 +35,7 @@ add_subdirectory(RadTophat)
 add_subdirectory(RadTube)
 add_subdirectory(RadDust)
 add_subdirectory(RadDustMG)
+add_subdirectory(RadPhotoelectricHeating)
 
 add_subdirectory(RadhydroShell)
 add_subdirectory(RadhydroShock)
