@@ -1519,6 +1519,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// bool good_iteration = true;
 				double F_sq = NAN;
 				double F_sq_previous = 0.0;
+				const double line_search_scale_factor = 0.9;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
@@ -1534,10 +1535,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
 							T_d = T_gas - Lambda_gd / (dustGasCoeff_local * num_den * num_den * std::sqrt(T_gas));
 							if (T_d < 0.) {
-								deltaEgas *= 0.5;
-								deltaD = 0.5 * deltaD;
-								Egas_guess -= deltaEgas;
-								Rvec = Rvec - deltaD;
+								Egas_guess = Egas_guess - (1. - line_search_scale_factor) * deltaEgas;
+								Rvec = Rvec - (1. - line_search_scale_factor) * deltaD;
+								deltaEgas *= line_search_scale_factor;
+								deltaD = deltaD * line_search_scale_factor;
 								continue;
 							}
 						}
@@ -1664,6 +1665,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						// NOTE: The commented out code below is an attempt to solve the netagive radiation energy problem by 
 						// reverting Rvec to the previous state and updating Egas only. This is replaced by the `if (Egas_guess + deltaEgas <= 0.0)`
 						// clause below. I keep this code here for future reference.
+						// Given it some thought, I think EradVec_guess should be allowed to be negative in the Newton-Raphson iteration.
 
 						// const bool good_iteration_previous = good_iteration;
 						// good_iteration = true;
@@ -1712,10 +1714,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 					if constexpr (use_backward_line_search) {
 						if (n > 0 && F_sq >= F_sq_previous) {
-							deltaEgas *= 0.5;
-							Egas_guess -= deltaEgas;
-							deltaD = 0.5 * deltaD;
-							Rvec = Rvec - deltaD;
+							Egas_guess = Egas_guess - (1. - line_search_scale_factor) * deltaEgas;
+							Rvec = Rvec - (1. - line_search_scale_factor) * deltaD;
+							deltaEgas *= line_search_scale_factor;
+							deltaD = deltaD * line_search_scale_factor;
 							continue;
 						}
 
