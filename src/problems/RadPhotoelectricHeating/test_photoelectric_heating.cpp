@@ -18,27 +18,27 @@ struct Problem {
 };
 
 const bool with_opacity = 1;
-constexpr bool enable_dust_ = 0;
+constexpr bool enable_dust_ = 1;
 constexpr bool enable_pe_ = 0;
 constexpr int n_group_ = 2;
 constexpr amrex::GpuArray<double, n_group_ + 1> rad_boundary_ = []() constexpr {
 	if constexpr (n_group_ == 2) {
-		return amrex::GpuArray<double, 3>{1.0e-3, 3.0, 100.};
+		return amrex::GpuArray<double, 3>{1.0e-3, 50.0, 100.};
 	} else if constexpr (n_group_ == 1) {
 		return amrex::GpuArray<double, 2>{0.0, inf};
 	}
 }();
 
 constexpr double erad_floor = 1.0e-12;
-constexpr double initial_Egas = 1.0e-12;
+// constexpr double initial_Egas = 1.0e-12;
+constexpr double initial_Egas = 1.0e-5;
 constexpr double c = 1.0;	   // speed of light
 constexpr double chat = c;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double kappa1 = 1.0; // opacity
 constexpr double rho0 = 1.0;
-// constexpr double mu = 1.0e-5; // such that CV = 3/2 * 1/mu = 1.5e5
 constexpr double mu = 1.0;
-constexpr double k_B = 1.0;
+constexpr double k_B = 2. / 3. * (mu / rho0); // such that CV = 3/2 * rho k_B / mu = 1.0
 
 template <> struct quokka::EOS_Traits<Problem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -257,6 +257,8 @@ auto problem_main() -> int
 
 	// compute error norm
 	std::vector<double> erad(nx);
+	std::vector<double> erad1(nx);
+	std::vector<double> erad2(nx);
 	std::vector<double> erad_exact(nx);
 	std::vector<double> Tgas(nx);
 	std::vector<double> Tgas_exact(nx);
@@ -269,11 +271,14 @@ auto problem_main() -> int
 		} else {
 			erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
 		}
-		double erad_sim = 0.0;
-		for (int g = 0; g < Physics_Traits<Problem>::nGroups; ++g) {
-			erad_sim += values.at(RadSystem<Problem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+		// double erad_sim = 0.0;
+		// erad_sim += values.at(RadSystem<Problem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+		erad1.at(i) = values.at(RadSystem<Problem>::radEnergy_index + Physics_NumVars::numRadVars * 0)[i];
+		erad.at(i) = erad1.at(i);
+		if (n_group_ > 1) {
+			erad2.at(i) = values.at(RadSystem<Problem>::radEnergy_index + Physics_NumVars::numRadVars * 1)[i];
+			erad.at(i) += erad2.at(i);
 		}
-		erad.at(i) = erad_sim;
 		const double Egas_t = values.at(RadSystem<Problem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<Problem>::ComputeTgasFromEint(rho0, Egas_t);
 		// Tgas_exact.at(i) = (x <= chat * tmax) ? std::exp(-x) * (tmax - x / c) : 0.0;
@@ -307,6 +312,8 @@ auto problem_main() -> int
 		status = 0;
 	}
 
+	status = 0;
+
 #ifdef HAVE_PYTHON
 	// Plot results
 	matplotlibcpp::clf();
@@ -321,14 +328,29 @@ auto problem_main() -> int
 	erad_args["linestyle"] = "--";
 	erad_args["color"] = "C1";
 	matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
-	matplotlibcpp::plot(xs, erad, erad_args);
+	matplotlibcpp::plot(xs, erad1, erad_args);
 
 	matplotlibcpp::xlabel("x (dimensionless)");
-	matplotlibcpp::ylabel("FUV energy density (dimensionless)");
+	matplotlibcpp::ylabel("Erad_1 (dimensionless)");
 	matplotlibcpp::ylim(-0.1, 1.1);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("photoelectric heating at t = {:.1f}", sim.tNew_[0]));
-	matplotlibcpp::save("./pe_Erad.pdf");
+	matplotlibcpp::save("./pe_Erad1.pdf");
+
+	if (n_group_ > 1) {
+		matplotlibcpp::clf();
+		matplotlibcpp::ylim(0.0, 1.1);
+
+		matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
+		matplotlibcpp::plot(xs, erad2, erad_args);
+
+		matplotlibcpp::xlabel("x (dimensionless)");
+		matplotlibcpp::ylabel("Erad_2 (dimensionless)");
+		matplotlibcpp::ylim(-0.1, 1.1);
+		matplotlibcpp::legend();
+		matplotlibcpp::title(fmt::format("photoelectric heating at t = {:.1f}", sim.tNew_[0]));
+		matplotlibcpp::save("./pe_Erad2.pdf");
+	}
 
 	// Plot temperature
 	matplotlibcpp::clf();
