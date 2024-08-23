@@ -42,6 +42,7 @@ template <> struct RadSystem_Traits<SuOlsonProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
 	static constexpr int beta_order = 0;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <> struct Physics_Traits<SuOlsonProblem> {

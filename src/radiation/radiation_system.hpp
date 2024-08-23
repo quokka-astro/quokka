@@ -45,7 +45,7 @@ static const int max_ite_to_update_alpha_E = 5; // Apply to the PPL_opacity_full
 // iterations of the Newton iteration
 
 static constexpr bool include_work_term_in_source = true;
-static constexpr bool use_D_as_base = true;
+static constexpr bool use_D_as_base = false;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
 
@@ -146,6 +146,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr int beta_order_ = RadSystem_Traits<problem_t>::beta_order;
 
+	static constexpr bool enable_dust_gas_thermal_coupling_model_ = RadSystem_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
+
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
@@ -155,6 +157,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 			return boundaries;
 		}
 	}();
+
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
 
 	static constexpr OpacityModel opacity_model_ = []() constexpr {
@@ -174,7 +177,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum),
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups."); // NOLINT
 
-	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
+	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
 
@@ -201,7 +204,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
 
-	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage);
+	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
+				   double dustGasCoeff, int *num_failed_coupling, int *num_failed_dust, int *p_num_failed_outer_ite);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -262,6 +266,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	ComputeThermalRadiationTempDerivative(amrex::Real temperature,
 					      amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
 
+	AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad,
+								 double dustGasCoeff, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+								 amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double;
+
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
 	ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
@@ -279,27 +287,34 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
+// This function enforces that the total fraction is 1.0, no matter what are the group boundaries
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
 									      amrex::Real temperature) -> quokka::valarray<amrex::Real, nGroups_>
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
-		// TODO(CCH): allow the total radEnergyFraction to be smaller than 1. One usage case is to allow, say, a single group representing IR radiation.
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {
 		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real previous = integrate_planck_from_0_to_x(boundaries[0] * energy_unit_over_kT);
-		for (int g = 0; g < nGroups_; ++g) {
-			amrex::Real y = integrate_planck_from_0_to_x(boundaries[g + 1] * energy_unit_over_kT);
+		amrex::Real y = NAN;
+		amrex::Real previous = 0.0;
+		for (int g = 0; g < nGroups_ - 1; ++g) {
+			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+			if (x >= 100.) { // 100. is the upper limit of x in the table
+				y = 1.0;
+			} else {
+				y = integrate_planck_from_0_to_x(x);
+			}
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		auto tote = sum(radEnergyFractions);
-		// AMREX_ALWAYS_ASSERT(tote <= 1.0);
-		// AMREX_ALWAYS_ASSERT(tote > 0.9999);
-		radEnergyFractions /= tote;
+		// last group, enforcing the total fraction to be 1.0
+		y = 1.0;
+		radEnergyFractions[nGroups_ - 1] = y - previous;
+		AMREX_ASSERT(std::abs(sum(radEnergyFractions) - 1.0) < 1.0e-10);
+
 		return radEnergyFractions;
 	}
 }
@@ -309,8 +324,8 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
-	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	double power = radiation_constant_ * std::pow(temperature, 4);
+	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
+	const double power = radiation_constant_ * std::pow(temperature, 4);
 	auto Erad_g = power * radEnergyFractions;
 	// set floor
 	for (int g = 0; g < nGroups_; ++g) {
@@ -327,8 +342,9 @@ RadSystem<problem_t>::ComputeThermalRadiationTempDerivative(amrex::Real temperat
 							    amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
 {
 	// by default, d emission/dT = 4 emission / T
-	auto erad = ComputeThermalRadiation(temperature, boundaries);
-	return 4. * erad / temperature;
+	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
+	double d_power_dt = 4. * radiation_constant_ * std::pow(temperature, 3);
+	return d_power_dt * radEnergyFractions;
 }
 
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
@@ -1129,10 +1145,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDiffusionFluxMeanOpacity
 		// delta_nu_kappa_B_at_edge[g];
 		kappaF[g] = (kappaPVec[g] + 1. / 3. * kappaEVec[g]) * fourPiBoverC[g] +
 			    1. / 3. * (kappa_slope[g] * kappaEVec[g] * fourPiBoverC[g] - delta_nu_kappa_B_at_edge[g]);
-		AMREX_ASSERT(kappaF[g] > 0.0);
 		auto const denom = 4. / 3. * fourPiBoverC[g] - 1. / 3. * delta_nu_B_at_edge[g];
-		AMREX_ASSERT(denom > 0.0);
-		kappaF[g] /= denom;
+		if (denom <= 0.0) {
+			AMREX_ASSERT(kappaF[g] == 0.0);
+			kappaF[g] = 0.0;
+		} else {
+			kappaF[g] /= denom;
+		}
 	}
 	return kappaF;
 }
@@ -1170,8 +1189,82 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 }
 
 template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_d_init, double const rho,
+									quokka::valarray<double, nGroups_> const &Erad, double dustGasCoeff,
+									amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+									amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double
+{
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	quokka::valarray<double, nGroups_> kappaEVec{};
+
+	const double num_density = rho / mean_molecular_mass_;
+	const double Lambda_compare = dustGasCoeff * num_density * num_density * std::sqrt(T_gas) * T_gas;
+
+	amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
+	for (int g = 0; g < nGroups_; ++g) {
+		alpha_quant_minus_one[g] = -1.0;
+	}
+
+	// solve for dust temperature T_d using Newton iteration
+	double T_d = T_d_init;
+	const double lambda_rel_tol = 1.0e-8;
+	const int max_ite_td = 100;
+	int ite_td = 0;
+	for (; ite_td < max_ite_td; ++ite_td) {
+		const auto fourPiBoverC = ComputeThermalRadiation(T_d, rad_boundaries);
+
+		if constexpr (opacity_model_ == OpacityModel::single_group) {
+			kappaPVec[0] = ComputePlanckOpacity(rho, T_d);
+			kappaEVec[0] = ComputeEnergyMeanOpacity(rho, T_d);
+		} else {
+			const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
+			if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+				for (int g = 0; g < nGroups_; ++g) {
+					kappaPVec[g] = kappa_expo_and_lower_value[1][g];
+					kappaEVec[g] = kappa_expo_and_lower_value[1][g];
+				}
+			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
+				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
+				kappaEVec = kappaPVec;
+			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
+				const auto alpha_B = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
+				const auto alpha_E = ComputeRadQuantityExponents(Erad, rad_boundaries);
+				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_B);
+				kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
+			}
+		}
+		AMREX_ASSERT(!kappaPVec.hasnan());
+		AMREX_ASSERT(!kappaEVec.hasnan());
+
+		const double LHS = c_light_ * rho * sum(kappaEVec * Erad - kappaPVec * fourPiBoverC) +
+				   dustGasCoeff * num_density * num_density * std::sqrt(T_gas) * (T_gas - T_d);
+
+		if (std::abs(LHS) < lambda_rel_tol * std::abs(Lambda_compare)) {
+			break;
+		}
+
+		const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivative(T_d, rad_boundaries);
+		const double dLHS_dTd = -c_light_ * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - dustGasCoeff * num_density * num_density * std::sqrt(T_gas);
+		const double delta_T_d = LHS / dLHS_dTd;
+		T_d -= delta_T_d;
+
+		if (ite_td > 0) {
+			if (std::abs(delta_T_d) < lambda_rel_tol * std::abs(T_d)) {
+				break;
+			}
+		}
+	}
+
+	AMREX_ASSERT_WITH_MESSAGE(ite_td < max_ite_td, "Newton iteration for dust temperature failed to converge.");
+	if (ite_td >= max_ite_td) {
+		T_d = -1.0;
+	}
+	return T_d;
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-					  const int stage)
+					  const int stage, double dustGasCoeff, int *p_num_failed_coupling, int *p_num_failed_dust, int *p_num_failed_outer_ite)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -1181,14 +1274,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	}
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
-	amrex::GpuArray<amrex::Real, nGroups_> radBoundaryRatios{};
-	if constexpr (nGroups_ > 1) {
-		if constexpr (static_cast<int>(opacity_model_) > 0) {
-			for (int g = 0; g < nGroups_; ++g) {
-				radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
-			}
-		}
-	}
 
 	// Add source terms
 
@@ -1197,8 +1282,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// make a local reference of p_num_failed
+		auto p_num_failed_coupling_local = p_num_failed_coupling;
+		auto p_num_failed_dust_local = p_num_failed_dust;
+		auto p_num_failed_outer_local = p_num_failed_outer_ite;
+
 		const double c = c_light_;
 		const double chat = c_hat_;
+		const double dustGasCoeff_local = dustGasCoeff;
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -1229,6 +1320,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		double Etot0 = NAN;
 		double Egas_guess = NAN;
 		double T_gas = NAN;
+		double T_d = NAN;
 		double lorentz_factor = NAN;
 		double lorentz_factor_v = NAN;
 		double lorentz_factor_v_v = NAN;
@@ -1243,7 +1335,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> kappaPoverE{};
 		quokka::valarray<double, nGroups_> tau0{}; // optical depth across c * dt at old state
 		quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt at new state
-		quokka::valarray<double, nGroups_> D{};	   // D = S / tau0
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
@@ -1264,8 +1355,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<double, nGroups_> radBoundaryRatios_copy{};
 		for (int g = 0; g < nGroups_ + 1; ++g) {
 			radBoundaries_g_copy[g] = radBoundaries_g[g];
-			if (g < nGroups_) {
-				radBoundaryRatios_copy[g] = radBoundaryRatios[g];
+		}
+		if constexpr (nGroups_ > 1) {
+			if constexpr (static_cast<int>(opacity_model_) > 0) {
+				for (int g = 0; g < nGroups_; ++g) {
+					radBoundaryRatios_copy[g] = radBoundaries_g_copy[g + 1] / radBoundaries_g_copy[g];
+				}
 			}
 		}
 
@@ -1290,6 +1385,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		if (stage == 1) {
 			gas_update_factor = IMEX_a32;
 		}
+
+		const double num_den = rho / mean_molecular_mass_;
 
 		const int max_ite = 5;
 		int ite = 0;
@@ -1345,37 +1442,41 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
 
 				double F_G = NAN;
-				double dFG_dEgas = NAN;
 				double deltaEgas = NAN;
-				quokka::valarray<double, nGroups_> dFG_dD{};
-				quokka::valarray<double, nGroups_> dFR_dEgas{};
-				quokka::valarray<double, nGroups_> dFR_i_dD_i{};
 				quokka::valarray<double, nGroups_> deltaD{};
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 400;
+				const int maxIter = 50;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
-					fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+
+					// dust temperature
+					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+						T_d = T_gas;
+					} else {
+						if (n == 0) {
+							T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, dustGasCoeff_local, radBoundaries_g_copy,
+										     radBoundaryRatios_copy);
+						} else {
+							const auto Lambda_gd = sum(Rvec) / (dt * chat / c);
+							T_d = T_gas - Lambda_gd / (dustGasCoeff_local * num_den * num_den * std::sqrt(T_gas));
+						}
+						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+						if (T_d < 0.0) {
+							amrex::Gpu::Atomic::Add(p_num_failed_dust_local, 1);
+						}
+					}
+
+					fourPiBoverC = ComputeThermalRadiation(T_d, radBoundaries_g_copy);
 
 					if constexpr (opacity_model_ == OpacityModel::single_group) {
-						kappaPVec[0] = ComputePlanckOpacity(rho, T_gas);
-						kappaEVec[0] = ComputeEnergyMeanOpacity(rho, T_gas);
+						kappaPVec[0] = ComputePlanckOpacity(rho, T_d);
+						kappaEVec[0] = ComputeEnergyMeanOpacity(rho, T_d);
 					} else {
-						kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
-						for (int g = 0; g < nGroups_; ++g) {
-							auto const nu_L = radBoundaries_g_copy[g];
-							auto const nu_R = radBoundaries_g_copy[g + 1];
-							auto const B_L = PlanckFunction(nu_L, T_gas); // 4 pi B(nu) / c
-							auto const B_R = PlanckFunction(nu_R, T_gas); // 4 pi B(nu) / c
-							auto const kappa_L = kappa_expo_and_lower_value[1][g];
-							auto const kappa_R = kappa_L * std::pow(nu_R / nu_L, kappa_expo_and_lower_value[0][g]);
-							delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
-							delta_nu_B_at_edge[g] = nu_R * B_R - nu_L * B_L;
-						}
+						kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
 						if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 							for (int g = 0; g < nGroups_; ++g) {
 								kappaPVec[g] = kappa_expo_and_lower_value[1][g];
@@ -1407,13 +1508,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// In the first loop, calculate kappaF, work, tau0, R
 					if (n == 0) {
 						if constexpr (opacity_model_ == OpacityModel::single_group) {
-							kappaFVec[0] = ComputeFluxMeanOpacity(rho, T_gas);
+							kappaFVec[0] = ComputeFluxMeanOpacity(rho, T_d);
 						} else {
 							for (int g = 0; g < nGroups_; ++g) {
 								auto const nu_L = radBoundaries_g_copy[g];
 								auto const nu_R = radBoundaries_g_copy[g + 1];
-								auto const B_L = PlanckFunction(nu_L, T_gas); // 4 pi B(nu) / c
-								auto const B_R = PlanckFunction(nu_R, T_gas); // 4 pi B(nu) / c
+								auto const B_L = PlanckFunction(nu_L, T_d); // 4 pi B(nu) / c
+								auto const B_R = PlanckFunction(nu_R, T_d); // 4 pi B(nu) / c
 								auto const kappa_L = kappa_expo_and_lower_value[1][g];
 								auto const kappa_R = kappa_L * std::pow(nu_R / nu_L, kappa_expo_and_lower_value[0][g]);
 								delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
@@ -1481,13 +1582,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 									tau0[g] = 1.0;
 								}
 							}
-							D = Rvec / tau0;
 						}
 					} else { // in the second and later loops, calculate tau and E (given R)
 						tau = dt * rho * kappaPVec * chat * lorentz_factor;
-						if constexpr (use_D_as_base) {
-							Rvec = tau0 * D;
-						}
 						for (int g = 0; g < nGroups_; ++g) {
 							// If tau = 0.0, Erad_guess shouldn't change
 							if (tau[g] > 0.0) {
@@ -1526,36 +1623,61 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
-					const auto dfourPiB_dTgas = chat * ComputeThermalRadiationTempDerivative(T_gas, radBoundaries_g_copy);
-					AMREX_ASSERT(!dfourPiB_dTgas.hasnan());
+					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivative(T_d, radBoundaries_g_copy);
+					AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
 
 					// compute Jacobian elements
 					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
-					dFG_dEgas = 1.0;
+
+					const double cscale = c / chat;
+					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
+
+					const double y0 = -F_G;
+					auto yg = -1. * F_D;
+
+					quokka::valarray<double, nGroups_> dF0_dXg{};
+					quokka::valarray<double, nGroups_> dFg_dX0{};
+					quokka::valarray<double, nGroups_> dFg_dXg{};
+
+					// M_00
+					const double dF0_dX0 = 1.0;
+					// M_0g
+					dF0_dXg.fillin(cscale);
+					// M_g0
+					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+						dFg_dX0 = 1.0 / c_v * dEg_dT;
+					} else {
+						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
+						const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
+						dEg_dT *= d_Td_d_T;
+						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
+						const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
+						dFg_dX0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * dF0_dX0;
+						yg = yg - 1.0 / cscale * rg * y0;
+					}
+					// M_gg, same for dust and dust-free cases
 					for (int g = 0; g < nGroups_; ++g) {
 						if (tau[g] <= 0.0) {
-							dFR_i_dD_i[g] = -std::numeric_limits<double>::infinity();
+							dFg_dXg[g] = -std::numeric_limits<double>::infinity();
 						} else {
-							dFR_i_dD_i[g] = -1.0 * (1.0 / tau[g] * kappaPoverE[g] + 1.0);
+							dFg_dXg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
 						}
 					}
+
 					if constexpr (use_D_as_base) {
-						dFG_dD = (c / chat) * tau0;
-						dFR_i_dD_i = dFR_i_dD_i * tau0;
-					} else {
-						dFG_dD.fillin(c / chat);
+						dF0_dXg = dF0_dXg * tau0;
+						dFg_dXg = dFg_dXg * tau0;
 					}
-					dFR_dEgas = 1.0 / c_v * kappaPoverE * (dfourPiB_dTgas / chat);
 
 					// update variables
-					RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dD, dFR_dEgas, dFR_i_dD_i, -F_G, -1. * F_D, deltaEgas, deltaD);
+					RadSystem<problem_t>::SolveLinearEqs(dF0_dX0, dF0_dXg, dFg_dX0, dFg_dXg, y0, yg, deltaEgas, deltaD);
 					AMREX_ASSERT(!std::isnan(deltaEgas));
 					AMREX_ASSERT(!deltaD.hasnan());
 
 					Egas_guess += deltaEgas;
 					if constexpr (use_D_as_base) {
-						D += deltaD;
+						Rvec += tau0 * deltaD;
 					} else {
 						Rvec += deltaD;
 					}
@@ -1566,21 +1688,25 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// }
 				} // END NEWTON-RAPHSON LOOP
 
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
+				AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
+				if (n >= maxIter) {
+					amrex::Gpu::Atomic::Add(p_num_failed_coupling_local, 1);
+				}
+
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
-				AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
-				AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
+				AMREX_ASSERT(Egas_guess > 0.0);
+				AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 
 				if (n > 0) {
 					// calculate kappaF since the temperature has changed
 					if constexpr (opacity_model_ == OpacityModel::single_group) {
-						kappaFVec[0] = ComputeFluxMeanOpacity(rho, T_gas);
+						kappaFVec[0] = ComputeFluxMeanOpacity(rho, T_d);
 					} else {
 						for (int g = 0; g < nGroups_; ++g) {
 							auto const nu_L = radBoundaries_g_copy[g];
 							auto const nu_R = radBoundaries_g_copy[g + 1];
-							auto const B_L = PlanckFunction(nu_L, T_gas); // 4 pi B(nu) / c
-							auto const B_R = PlanckFunction(nu_R, T_gas); // 4 pi B(nu) / c
+							auto const B_L = PlanckFunction(nu_L, T_d); // 4 pi B(nu) / c
+							auto const B_R = PlanckFunction(nu_R, T_d); // 4 pi B(nu) / c
 							auto const kappa_L = kappa_expo_and_lower_value[1][g];
 							auto const kappa_R = kappa_L * std::pow(nu_R / nu_L, kappa_expo_and_lower_value[0][g]);
 							delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
@@ -1603,15 +1729,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					}
 				}
 			} else { // if constexpr gamma_ == 1.0
+				T_d = T_gas;
 				if constexpr (opacity_model_ == OpacityModel::single_group) {
-					kappaFVec[0] = ComputeFluxMeanOpacity(rho, T_gas);
+					kappaFVec[0] = ComputeFluxMeanOpacity(rho, T_d);
 				} else if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
+					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
 					for (int g = 0; g < nGroups_; ++g) {
 						kappaFVec[g] = kappa_expo_and_lower_value[1][g];
 					}
 				} else {
-					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
+					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
 					kappaFVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
 				}
 			}
@@ -1822,7 +1949,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			}
 		} // end full-step iteration
 
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms iteration failed to converge!");
+		AMREX_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms iteration failed to converge!");
+		if (ite >= max_ite) {
+			amrex::Gpu::Atomic::Add(p_num_failed_outer_local, 1);
+		}
 
 		// 4b. Store new radiation energy, gas energy
 		// In the first stage of the IMEX scheme, the hydro quantities are updated by a fraction (defined by
