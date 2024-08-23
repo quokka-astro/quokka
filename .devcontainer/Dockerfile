@@ -8,10 +8,40 @@ RUN apt-get --yes -qq update \
                       sphinx-doc python3-sphinx-rtd-theme python3-sphinxcontrib.bibtex python3-sphinx-copybutton \
                       libopenmpi-dev \
                       libhdf5-mpi-dev \
+                      libglew-dev \
  && apt-get --yes -qq clean \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /home/ubuntu
+ENV CMAKE_PREFIX_PATH="/opt/conduit:/opt/catalyst"
+ENV catalyst_DIR="/opt/catalyst/lib/catalyst"
+
+# build Conduit
+RUN git clone --recursive https://github.com/llnl/conduit.git \
+ && cd conduit \
+ && mkdir -p /opt/conduit \
+ && cmake -S src -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_MPI=ON -DCMAKE_INSTALL_PREFIX=/opt/conduit \
+ && cmake --build build --parallel 8 \
+ && cmake --install build \
+ && cmake --build build --target clean
+
+# build Catalyst
+RUN git clone https://gitlab.kitware.com/paraview/catalyst.git \
+ && cd catalyst \
+ && mkdir -p /opt/catalyst \
+ && cmake -B build -S . -DCATALYST_WITH_EXTERNAL_CONDUIT=ON -DCMAKE_INSTALL_PREFIX=/opt/catalyst \
+ && cmake --build build --parallel 8 \
+ && cmake --install build \
+ && cmake --build build --target clean
+
+# build Paraview
+RUN git clone --recursive https://gitlab.kitware.com/paraview/paraview.git \
+ && cd paraview \
+ && cmake -B build -S . -GNinja -DPARAVIEW_BUILD_EDITION=CATALYST_RENDERING -DPARAVIEW_ENABLE_CATALYST=ON -DPARAVIEW_USE_FORTRAN=OFF -DPARAVIEW_USE_PYTHON=ON -DPARAVIEW_USE_MPI=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/paraview \
+ && cmake --build build --parallel 8 \
+ && cmake --install build \
+ && cmake --build build --target clean
+
 USER ubuntu
 
 # install esbonio for Sphinx VSCode support (no Ubuntu package for this)
