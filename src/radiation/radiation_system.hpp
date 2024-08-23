@@ -1290,6 +1290,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
+		const double Egas0 = consPrev(i, j, k, gasInternalEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// load radiation energy
@@ -1307,7 +1308,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Src[g] = dt * (chat * radEnergySource(i, j, k, g));
 		}
 
-		double Egas0 = NAN;
 		double Ekin0 = NAN;
 		double Etot0 = NAN;
 		double Egas_guess = NAN;
@@ -1338,7 +1338,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		work_prev.fillin(0.0);
 
 		if constexpr (gamma_ != 1.0) {
-			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 			Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 		}
 
