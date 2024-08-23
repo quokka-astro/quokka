@@ -1509,17 +1509,23 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
 
 				double F_G = NAN;
+				double F_G_previous = NAN;
 				double deltaEgas = NAN;
 				quokka::valarray<double, nGroups_> deltaD{};
 				quokka::valarray<double, nGroups_> F_D{};
+				quokka::valarray<double, nGroups_> F_D_previous{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
+				const double resid_tol_weak = 1.0e-11;
 				const int maxIter = 400;
+				const int maxIter_weak = 100;
 				int n = 0;
 				// bool good_iteration = true;
 				double F_sq = NAN;
 				double F_sq_previous = 0.0;
 				const double line_search_scale_factor = 0.9;
+				quokka::valarray<amrex::Real, nGroups_ + 1> n_flips{};
+				n_flips.fillin(0);
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
@@ -1712,12 +1718,43 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					}
 
+					const double local_resid_tol = (n < maxIter_weak) ? resid_tol : resid_tol_weak;
+					if (n > 0) {
+						if (std::abs(F_G) > local_resid_tol * Etot0 && F_G * F_G_previous <= 0.0) {
+							n_flips[nGroups_] += 1;
+						} else {
+							n_flips[nGroups_] = 0;
+						}
+						if ((c / chat) * F_D_abs_sum > local_resid_tol * Etot0) {
+							for (int g = 0; g < nGroups_; ++g) {
+								if (tau[g] > 0.0) {
+									if (F_D[g] * F_D_previous[g] <= 0.0) {
+										n_flips[g] += 1;
+									} else {
+										n_flips[g] = 0;
+									}
+								} else {
+									n_flips[g] = 0;
+								}
+							}
+						} else {
+							for (int g = 0; g < nGroups_; ++g) {
+								n_flips[g] = 0;
+							}
+						}
+					}
+					F_G_previous = F_G;
+					F_D_previous = F_D;
+
 					if constexpr (use_backward_line_search) {
-						if (n > 0 && F_sq >= F_sq_previous) {
-							Egas_guess = Egas_guess - (1. - line_search_scale_factor) * deltaEgas;
-							Rvec = Rvec - (1. - line_search_scale_factor) * deltaD;
-							deltaEgas *= line_search_scale_factor;
-							deltaD = deltaD * line_search_scale_factor;
+						// if (n > 0 && F_sq >= F_sq_previous) {
+						const double flipping_line_search_factor = 0.5;
+						if (max(n_flips) >= 5) {
+							n_flips.fillin(0);
+							Egas_guess = Egas_guess - (1. - flipping_line_search_factor) * deltaEgas;
+							Rvec = Rvec - (1. - flipping_line_search_factor) * deltaD;
+							deltaEgas *= flipping_line_search_factor;
+							deltaD = deltaD * flipping_line_search_factor;
 							continue;
 						}
 
@@ -1732,7 +1769,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					}
 
 					// check relative convergence of the residuals
-					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * F_D_abs_sum / Etot0 < resid_tol)) {
+					if ((std::abs(F_G / Etot0) < local_resid_tol) && ((c / chat) * F_D_abs_sum / Etot0 < local_resid_tol)) {
 						break;
 					}
 
@@ -1744,8 +1781,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// compute Jacobian elements
 					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
-
-					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
 
 					const double y0 = -F_G;
 					auto yg = -1. * F_D;
@@ -1786,8 +1821,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					}
 					// M_g0
-					dFg_dX0 = 1.0 / c_v * dEg_dT;
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+						dFg_dX0 = 1.0 / c_v * kappaPoverE * d_fourpiboverc_d_t;
 						if constexpr (enable_line_cooling_) {
 							// add d Lambda_g / d T
 							// dFg_dX0 = dFg_dX0 - 1.0 / (c_v * cscale) * dt * dLambda_g_dT;
@@ -1797,7 +1832,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 						const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-						dFg_dX0 = 1.0 / c_v * dEg_dT * d_Td_d_T;
+						dFg_dX0 = 1.0 / c_v * kappaPoverE * d_fourpiboverc_d_t * d_Td_d_T;
 						if constexpr (enable_line_cooling_) {
 							// add d Lambda_g / d T
 							// dFg_dX0 = dFg_dX0 - 1.0 / (c_v * cscale) * dt * dLambda_g_dT;
