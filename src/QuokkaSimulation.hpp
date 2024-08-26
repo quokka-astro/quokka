@@ -1664,7 +1664,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// Iteration counter
 			auto h_iteration_counter = iteration_counter.copyToHost();
 			const double iteration_mean = static_cast<double>(h_iteration_counter[1]) / static_cast<double>(h_iteration_counter[0]);
-			amrex::Print() << "time_subcycle = " << time_subcycle << ", (mean, max) of iteration_counter = " << iteration_mean << ", " << h_iteration_counter[2] << "\n";
+			amrex::Print() << "time_subcycle = " << time_subcycle << ", (mean, max) number of Newton-Raphson iterations are " << iteration_mean << ", " << h_iteration_counter[2] << "\n";
 		}
 
 		const int nf_coupling = *(num_failed_coupling.copyToHost());
