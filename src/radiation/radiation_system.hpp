@@ -621,18 +621,6 @@ RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amr
 	const double rho_L = consVar(i - 1, j, k, gasDensity_index);
 	const double rho_R = consVar(i, j, k, gasDensity_index);
 
-	const double x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
-	const double x1GasMom_R = consVar(i, j, k, x1GasMomentum_index);
-
-	const double x2GasMom_L = consVar(i - 1, j, k, x2GasMomentum_index);
-	const double x2GasMom_R = consVar(i, j, k, x2GasMomentum_index);
-
-	const double x3GasMom_L = consVar(i - 1, j, k, x3GasMomentum_index);
-	const double x3GasMom_R = consVar(i, j, k, x3GasMomentum_index);
-
-	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
-	const double Egas_R = consVar(i, j, k, gasEnergy_index);
-
 	auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(consVar, i - 1, j, k);
 	auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(consVar, i, j, k);
 
