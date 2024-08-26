@@ -205,7 +205,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::Real time);
 
 	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-				   double dustGasCoeff, int *num_failed_coupling, int *num_failed_dust, int *p_num_failed_outer_ite);
+				   double dustGasCoeff, int *p_iteration_counter, int *num_failed_coupling, int *num_failed_dust, int *p_num_failed_outer_ite);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -1264,7 +1264,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-					  const int stage, double dustGasCoeff, int *p_num_failed_coupling, int *p_num_failed_dust, int *p_num_failed_outer_ite)
+					  const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling, int *p_num_failed_dust, int *p_num_failed_outer_ite)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -1286,6 +1286,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		auto p_num_failed_coupling_local = p_num_failed_coupling;
 		auto p_num_failed_dust_local = p_num_failed_dust;
 		auto p_num_failed_outer_local = p_num_failed_outer_ite;
+		auto p_iteration_counter_local = p_iteration_counter;
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -1691,6 +1692,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				if (n >= maxIter) {
 					amrex::Gpu::Atomic::Add(p_num_failed_coupling_local, 1);
 				}
+
+				// update iteration counter: (+1, +ite, max(self, ite))
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1);
+				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1);
 
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
 				AMREX_ASSERT(Egas_guess > 0.0);

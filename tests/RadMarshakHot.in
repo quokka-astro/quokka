@@ -17,6 +17,11 @@ amr.n_cell          = 8 4 4
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 4     # grid size must be divisible by this
 
+# *****************************************************************
+# Radiation
+# *****************************************************************
+radiation.enable_counter = 1
+
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
