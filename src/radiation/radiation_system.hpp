@@ -33,18 +33,16 @@
 
 using Real = amrex::Real;
 
-// Hyper parameters of the radiation solver
-
+// Hyper parameters for the radiation solver
 static constexpr bool include_delta_B = true;
 static constexpr bool use_diffuse_flux_mean_opacity = true;
 static constexpr bool special_edge_bin_slopes = false;	    // Use 2 and -4 as the slopes for the first and last bins, respectively
 static constexpr bool force_rad_floor_in_iteration = false; // force radiation energy density to be positive (and above the floor value) in the Newton iteration
+static constexpr bool include_work_term_in_source = true;
 
-static constexpr bool use_diffuse_flux_mean_opacity_incl_kappaE = true;
 static const int max_ite_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_ite_to_update_alpha_E
 // iterations of the Newton iteration
-
-static constexpr bool include_work_term_in_source = true;
+static constexpr bool enable_dE_constrain = true;
 static constexpr bool use_D_as_base = false;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
@@ -1609,19 +1607,22 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					}
 
-					if (n > 100) {
-#ifndef NDEBUG
-						std::cout << "n = " << n << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs_sum
-							  << ", F_D_abs_sum / Etot0 = " << F_D_abs_sum / Etot0 << std::endl;
-#endif
-					}
-
 					// check relative convergence of the residuals
 					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * F_D_abs_sum / Etot0 < resid_tol)) {
 						break;
 					}
 
 					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+
+#ifndef NDEBUG
+					if (n == 100) {
+						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0] << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+					} else if (n >= 100) {
+						// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
+						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << EradVec_guess[0] << ", tau = " << tau[0];
+						std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs_sum << ", Etot0 = " << Etot0 << std::endl;
+					}
+#endif
 
 					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivative(T_d, radBoundaries_g_copy);
 					AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
@@ -1675,11 +1676,26 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					AMREX_ASSERT(!std::isnan(deltaEgas));
 					AMREX_ASSERT(!deltaD.hasnan());
 
-					Egas_guess += deltaEgas;
-					if constexpr (use_D_as_base) {
-						Rvec += tau0 * deltaD;
+					if (!enable_dE_constrain) {
+						Egas_guess += deltaEgas;
+						if constexpr (use_D_as_base) {
+							Rvec += tau0 * deltaD;
+						} else {
+							Rvec += deltaD;
+						}
 					} else {
-						Rvec += deltaD;
+						const double T_rad = std::pow(sum(EradVec_guess) / radiation_constant_, 0.25);
+						if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
+							Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+							Rvec.fillin(0.0);
+						} else {
+							Egas_guess += deltaEgas;
+							if constexpr (use_D_as_base) {
+								Rvec += tau0 * deltaD;
+							} else {
+								Rvec += deltaD;
+							}
+						}
 					}
 
 					// check relative and absolute convergence of E_r
