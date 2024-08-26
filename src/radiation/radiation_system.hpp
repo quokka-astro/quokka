@@ -1446,7 +1446,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 50;
+				const int maxIter = 200;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
@@ -1608,7 +1608,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					}
 
-					if (n > 200) {
+					if (n > 100) {
 #ifndef NDEBUG
 						std::cout << "n = " << n << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs_sum
 							  << ", F_D_abs_sum / Etot0 = " << F_D_abs_sum / Etot0 << std::endl;
