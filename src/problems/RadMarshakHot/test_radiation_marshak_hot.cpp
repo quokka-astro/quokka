@@ -19,8 +19,8 @@ struct StreamingProblem {
 constexpr double initial_Erad = 1.0e-5;
 constexpr double erad_floor = 1.0e-15;
 constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 1.0;	   // speed of light
-constexpr double chat = 1.0;	   // reduced speed of light
+constexpr double c = 1.0;	 // speed of light
+constexpr double chat = 1.0;	 // reduced speed of light
 constexpr double kappa0 = 1.0e4; // opacity
 constexpr double rho = 1.0;
 constexpr double a_rad = 1.0e15;
@@ -217,7 +217,7 @@ auto problem_main() -> int
 
 		// compute exact solution
 		const double tau = kappa0 * rho * x;
-		erad_exact.at(i) = (x <= chat * tmax) ? EradL * std::exp(- tau) : 0.0;
+		erad_exact.at(i) = (x <= chat * tmax) ? EradL * std::exp(-tau) : 0.0;
 	}
 
 	double err_norm = 0.;
