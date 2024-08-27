@@ -621,6 +621,18 @@ RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amr
 	const double rho_L = consVar(i - 1, j, k, gasDensity_index);
 	const double rho_R = consVar(i, j, k, gasDensity_index);
 
+	const double x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
+	const double x1GasMom_R = consVar(i, j, k, x1GasMomentum_index);
+
+	const double x2GasMom_L = consVar(i - 1, j, k, x2GasMomentum_index);
+	const double x2GasMom_R = consVar(i, j, k, x2GasMomentum_index);
+
+	const double x3GasMom_L = consVar(i - 1, j, k, x3GasMomentum_index);
+	const double x3GasMom_R = consVar(i, j, k, x3GasMomentum_index);
+
+	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
+	const double Egas_R = consVar(i, j, k, gasEnergy_index);
+
 	auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(consVar, i - 1, j, k);
 	auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(consVar, i, j, k);
 
@@ -630,8 +642,8 @@ RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amr
 	double Tgas_R = NAN;
 
 	if constexpr (gamma_ != 1.0) {
-		Eint_L = consVar(i - 1, j, k, gasInternalEnergy_index);
-		Eint_R = consVar(i, j, k, gasInternalEnergy_index);
+		Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
+		Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
 		Tgas_L = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L, massScalars_L);
 		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R, massScalars_R);
 	}
@@ -1286,7 +1298,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
-		const double Egas0 = consPrev(i, j, k, gasInternalEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// load radiation energy
@@ -1304,6 +1315,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Src[g] = dt * (chat * radEnergySource(i, j, k, g));
 		}
 
+		double Egas0 = NAN;
 		double Ekin0 = NAN;
 		double Etot0 = NAN;
 		double Egas_guess = NAN;
@@ -1334,6 +1346,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		work_prev.fillin(0.0);
 
 		if constexpr (gamma_ != 1.0) {
+			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 			Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 		}
 
