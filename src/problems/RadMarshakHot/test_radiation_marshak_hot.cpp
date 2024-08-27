@@ -23,7 +23,7 @@ constexpr double c = 1.0;	 // speed of light
 constexpr double chat = 1.0;	 // reduced speed of light
 constexpr double kappa0 = 1.0e4; // opacity
 constexpr double rho = 1.0;
-constexpr double a_rad = 1.0e15;
+constexpr double a_rad = 1.0e5;
 constexpr double EradL = a_rad;
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
