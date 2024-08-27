@@ -220,20 +220,20 @@ auto problem_main() -> int
 		erad_exact.at(i) = (x <= chat * tmax) ? EradL * std::exp(-tau) : 0.0;
 	}
 
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (int i = 0; i < nx; ++i) {
-		err_norm += std::abs(erad[i] - erad_exact[i]);
-		sol_norm += std::abs(erad_exact[i]);
-	}
+	// double err_norm = 0.;
+	// double sol_norm = 0.;
+	// for (int i = 0; i < nx; ++i) {
+	// 	err_norm += std::abs(erad[i] - erad_exact[i]);
+	// 	sol_norm += std::abs(erad_exact[i]);
+	// }
 
-	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 0.02;
-	int status = 1;
-	if (rel_err_norm < rel_err_tol) {
-		status = 0;
-	}
-	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
+	// const double rel_err_norm = err_norm / sol_norm;
+	// const double rel_err_tol = 0.02;
+	// int status = 1;
+	// if (rel_err_norm < rel_err_tol) {
+	// 	status = 0;
+	// }
+	// amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
 #ifdef HAVE_PYTHON
 	// Plot results
@@ -261,6 +261,5 @@ auto problem_main() -> int
 
 	// Cleanup and exit
 	amrex::Print() << "Finished." << std::endl;
-	// return status;
 	return 0;
 }
