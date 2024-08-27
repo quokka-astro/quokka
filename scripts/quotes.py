@@ -1,3 +1,5 @@
+
+#Copied from the KROME astrochemistry pacakage by T. Grassi et al.
 def get_quote(qall=False):
     import random
     import textwrap
