@@ -41,7 +41,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 
 	int num_failed = 0;
 
-	amrex::Real TCMB = 2.73 * (1.0 + network_rp::redshift);
+	amrex::Real T_CMB = 2.73 * (1.0 + network_rp::redshift);
 
 	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -95,7 +95,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			eos(eos_input_re, chemstate);
 
 			// set initial Tdust to CMB
-			chemstate.aux[0] = TCMB;
+			chemstate.aux[0] = amrex::max(chemstate.T, T_CMB);
 
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
