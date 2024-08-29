@@ -1619,9 +1619,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 #if 1
 					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 					if (n == maxIter - 10) {
-						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0] << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0]
+							  << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
 					} else if (n >= maxIter - 10) {
-						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << EradVec_guess[0] << ", tau = " << tau[0];
+						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << EradVec_guess[0]
+							  << ", tau = " << tau[0];
 						std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs_sum << ", Etot0 = " << Etot0 << std::endl;
 					}
 #endif
@@ -1712,7 +1714,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 
 				// update iteration counter: (+1, +ite, max(self, ite))
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1); // total number of radiation updates
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);     // total number of radiation updates
 				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations
 				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations
 

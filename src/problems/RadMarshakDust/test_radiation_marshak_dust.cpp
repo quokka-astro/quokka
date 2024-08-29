@@ -4,7 +4,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_radiation_marshak_dust.cpp
-/// \brief Defines a test Marshak wave problem with weak coupling between dust and gas. 
+/// \brief Defines a test Marshak wave problem with weak coupling between dust and gas.
 ///
 
 #include "test_radiation_marshak_dust.hpp"
@@ -16,8 +16,8 @@
 struct StreamingProblem {
 };
 
-constexpr double c = 1.0;	 // speed of light
-constexpr double chat = 1.0;	 // reduced speed of light
+constexpr double c = 1.0;	// speed of light
+constexpr double chat = 1.0;	// reduced speed of light
 constexpr double kappa0 = 10.0; // opacity
 constexpr double rho0 = 1.0;
 constexpr double CV = 1.0;
