@@ -7,6 +7,7 @@
 //==============================================================================
 /// \file Chemistry.hpp
 /// \brief Defines methods for integrating primordial chemical network using Microphysics
+/// \Authors: Piyush Sharda and Benjamin Wibking
 ///
 
 #include <array>
@@ -22,6 +23,7 @@
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "actual_network.H"
 
 namespace quokka::chemistry
 {
@@ -38,6 +40,8 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 	auto *p_num_failed = d_num_failed.data();
 
 	int num_failed = 0;
+
+	amrex::Real TCMB = 2.73 * (1.0 + network_rp::redshift);
 
 	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -90,6 +94,9 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			// call the EOS to set initial internal energy e
 			eos(eos_input_re, chemstate);
 
+			// set initial Tdust to CMB
+			chemstate.aux[0] = TCMB;
+
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
@@ -114,16 +121,18 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 				insum += inmfracs[nn];
 			}
 
+			// do not normalize ices
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] /= insum;
+
+				if (nn >= network_rp::idx_gas_species) {
+					inmfracs[nn] /= insum;
+				}
 				// update the number densities with conserved mass fractions
 				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 			}
 
 			// update the number density of electrons due to charge conservation
-			// TODO(psharda): generalize this to other chem networks
-			chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] +
-					  chemstate.xn[9] + 2.0 * chemstate.xn[11];
+			balance_charge(chemstate);
 
 			// reconserve mass fractions post charge conservation
 			insum = 0;
@@ -134,7 +143,10 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			}
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] /= insum;
+
+				if (nn >= network_rp::idx_gas_species) {
+					inmfracs[nn] /= insum;
+				}
 				// update the number densities with conserved mass fractions
 				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 			}
