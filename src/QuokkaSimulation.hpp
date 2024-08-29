@@ -1670,7 +1670,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
     	amrex::ParallelDescriptor::ReduceLongSum(global_iteration_sum);
     	amrex::ParallelDescriptor::ReduceIntMax(global_iteration_max);
 
-			const double global_iteration_mean = static_cast<double>(global_iteration_sum) / static_cast<double>(global_solver_count);	
+			const double global_iteration_mean = static_cast<double>(global_iteration_sum) / static_cast<double>(global_solver_count);
 
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 					amrex::Print() << "time_subcycle = " << time_subcycle << ", total number of Newton-Raphson solvings is " << global_solver_count 

@@ -6,7 +6,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_radiation_marshak_dust.hpp
-/// \brief Defines a test Marshak wave problem with weak coupling between dust and gas. 
+/// \brief Defines a test Marshak wave problem with weak coupling between dust and gas.
 ///
 
 // external headers
