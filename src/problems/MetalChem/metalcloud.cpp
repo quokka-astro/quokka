@@ -370,7 +370,7 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 	auto const &dvy = userData_.dvy.const_table();
 	auto const &dvz = userData_.dvz.const_table();
 
-	amrex::Real TCMB = 2.73 * (1.0 + network_rp::redshift);
+	amrex::Real T_CMB = 2.73 * (1.0 + network_rp::redshift);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
@@ -414,7 +414,7 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 
 		// calculate eos params for the core
 		state.rho = rhotot;
-		state.T = amrex::max(core_temp, TCMB);
+		state.T = amrex::max(core_temp, T_CMB);
 
 		eos(eos_input_rt, state);
 

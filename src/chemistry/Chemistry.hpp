@@ -94,7 +94,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			// call the EOS to set initial internal energy e
 			eos(eos_input_re, chemstate);
 
-			// set initial Tdust to CMB
+			// set initial Tdust to Tgas, floored by T_CMB
 			chemstate.aux[0] = amrex::max(chemstate.T, T_CMB);
 
 			// do the actual integration
