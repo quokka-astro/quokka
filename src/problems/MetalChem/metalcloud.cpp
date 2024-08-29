@@ -26,10 +26,10 @@
 #include "turbulence/TurbDataReader.hpp"
 
 #include "actual_eos_data.H"
+#include "actual_network.H"
 #include "eos.H"
 #include "extern_parameters.H"
 #include "network.H"
-#include "actual_network.H"
 
 using amrex::Real;
 
@@ -109,7 +109,6 @@ template <> void QuokkaSimulation<MetalCloud>::preCalculateInitialConditions()
 
 	// initialize microphysics routines
 	init_extern_parameters();
-
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("metal_chem");
@@ -371,7 +370,7 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 	auto const &dvy = userData_.dvy.const_table();
 	auto const &dvz = userData_.dvz.const_table();
 
-	amrex::Real TCMB = 2.73*(1.0 + network_rp::redshift);
+	amrex::Real TCMB = 2.73 * (1.0 + network_rp::redshift);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
@@ -394,7 +393,7 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 		for (int n = 0; n < NumSpec; ++n) {
 			mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
 			if (n >= network_rp::idx_gas_species) {
-			msum += mfracs[n];
+				msum += mfracs[n];
 			}
 		}
 
@@ -404,8 +403,8 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 			state.xn[n] = mfracs[n] * rhotot / spmasses[n];
 		}
 
-		//amrex::Print() << "cellaa " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
-		//amrex::Print() << "coretemp " << i << j << k << " " << core_temp << " " << std::endl;
+		// amrex::Print() << "cellaa " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
+		// amrex::Print() << "coretemp " << i << j << k << " " << core_temp << " " << std::endl;
 
 		amrex::Real const phi = atan2((y - y0), (x - x0));
 
@@ -419,7 +418,7 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 
 		eos(eos_input_rt, state);
 
-		//amrex::Print() << "state before pres eq: " << i << j << k << ", " << state.e << ", " << state.T << ", " << state.p << std::endl;
+		// amrex::Print() << "state before pres eq: " << i << j << k << ", " << state.e << ", " << state.T << ", " << state.p << std::endl;
 
 		if (r <= R_sphere) {
 			// add rotation to vx and vy
@@ -433,12 +432,12 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 			eos(eos_input_rp, state);
 		}
 
-		//amrex::Print() << "state after pres eq: " << i << j << k << ", " << state.e << ", " << state.T << ", " << state.p << std::endl;
+		// amrex::Print() << "state after pres eq: " << i << j << k << ", " << state.e << ", " << state.T << ", " << state.p << std::endl;
 
 		// call the EOS to set initial internal energy e
 		amrex::Real const e = state.rho * state.e;
 
-		//amrex::Print() << "cellbb " << i << j << k << " " << state.rho << " " << state.T << " " << e << std::endl;
+		// amrex::Print() << "cellbb " << i << j << k << " " << state.rho << " " << state.T << " " << e << std::endl;
 
 		state_cc(i, j, k, HydroSystem<MetalCloud>::density_index) = state.rho;
 		state_cc(i, j, k, HydroSystem<MetalCloud>::x1Momentum_index) = state.rho * vx;
@@ -450,7 +449,8 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<MetalCloud>::energy_index) = Egas;
 
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<MetalCloud>::scalar0_index + nn) = mfracs[nn] * state.rho; // we use partial densities and not mass fractions
+			state_cc(i, j, k, HydroSystem<MetalCloud>::scalar0_index + nn) =
+			    mfracs[nn] * state.rho; // we use partial densities and not mass fractions
 		}
 	});
 }
@@ -477,7 +477,8 @@ template <> void QuokkaSimulation<MetalCloud>::ErrorEst(int lev, amrex::TagBoxAr
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			Real const rho = state(i, j, k, nidx);
 			Real const pressure = HydroSystem<MetalCloud>::ComputePressure(state, i, j, k);
-			amrex::GpuArray<Real, Physics_Traits<MetalCloud>::numMassScalars> massScalars = RadSystem<MetalCloud>::ComputeMassScalars(state, i, j, k);
+			amrex::GpuArray<Real, Physics_Traits<MetalCloud>::numMassScalars> massScalars =
+			    RadSystem<MetalCloud>::ComputeMassScalars(state, i, j, k);
 
 			amrex::Real const cs = quokka::EOS<MetalCloud>::ComputeSoundSpeed(rho, pressure, massScalars);
 
@@ -503,7 +504,8 @@ template <> void QuokkaSimulation<MetalCloud>::ComputeDerivedVar(int lev, std::s
 			Real const rho = state[bx](i, j, k, HydroSystem<MetalCloud>::density_index);
 			amrex::Real const Eint = state[bx](i, j, k, HydroSystem<MetalCloud>::internalEnergy_index);
 
-			amrex::GpuArray<Real, Physics_Traits<MetalCloud>::numMassScalars> massScalars = RadSystem<MetalCloud>::ComputeMassScalars(state[bx], i, j, k);
+			amrex::GpuArray<Real, Physics_Traits<MetalCloud>::numMassScalars> massScalars =
+			    RadSystem<MetalCloud>::ComputeMassScalars(state[bx], i, j, k);
 
 			output[bx](i, j, k, ncomp) = quokka::EOS<MetalCloud>::ComputeTgasFromEint(rho, Eint, massScalars);
 		});
@@ -543,7 +545,8 @@ template <> void QuokkaSimulation<MetalCloud>::ComputeDerivedVar(int lev, std::s
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<MetalCloud>::density_index);
 			Real const pressure = HydroSystem<MetalCloud>::ComputePressure(state[bx], i, j, k);
-			amrex::GpuArray<Real, Physics_Traits<MetalCloud>::numMassScalars> massScalars = RadSystem<MetalCloud>::ComputeMassScalars(state[bx], i, j, k);
+			amrex::GpuArray<Real, Physics_Traits<MetalCloud>::numMassScalars> massScalars =
+			    RadSystem<MetalCloud>::ComputeMassScalars(state[bx], i, j, k);
 
 			amrex::Real const cs = quokka::EOS<MetalCloud>::ComputeSoundSpeed(rho, pressure, massScalars);
 			output[bx](i, j, k, ncomp) = cs;

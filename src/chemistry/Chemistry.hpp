@@ -20,10 +20,10 @@
 
 #ifdef PRIMORDIAL_CHEM
 #include "actual_eos_data.H"
+#include "actual_network.H"
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "actual_network.H"
 
 namespace quokka::chemistry
 {
