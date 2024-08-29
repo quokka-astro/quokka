@@ -3,11 +3,11 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radiation_marshak_hot.cpp
-/// \brief Defines a test Marshak wave problem with extremely high specific heat capacity in radiation.
+/// \file test_radiation_marshak_dust.cpp
+/// \brief Defines a test Marshak wave problem with weak coupling between dust and gas. 
 ///
 
-#include "test_radiation_marshak_hot.hpp"
+#include "test_radiation_marshak_dust.hpp"
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"

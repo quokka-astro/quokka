@@ -1,12 +1,12 @@
-#ifndef TEST_RADIATION_MARSHAK_HOT_HPP_ // NOLINT
-#define TEST_RADIATION_MARSHAK_HOT_HPP_
+#ifndef TEST_RADIATION_MARSHAK_DUST_HPP_ // NOLINT
+#define TEST_RADIATION_MARSHAK_DUST_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radiation_marshak_hot.hpp
-/// \brief Defines a test problem for radiation in the free-streaming regime.
+/// \file test_radiation_marshak_dust.hpp
+/// \brief Defines a test Marshak wave problem with weak coupling between dust and gas. 
 ///
 
 // external headers
@@ -21,4 +21,4 @@
 
 // function definitions
 
-#endif // TEST_RADIATION_MARSHAK_HOT_HPP_
+#endif // TEST_RADIATION_MARSHAK_DUST_HPP_
