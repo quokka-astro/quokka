@@ -43,6 +43,7 @@ jeansRefine.density_threshold = 5e-21 #do not refine if density is less than thi
 
 # density floor for popiii
 density_floor = 1e-25
+temperature_floor = 2.73
 
 # in quokka/src/StarCluster, generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
 # and put it in quokka/tests/
@@ -59,7 +60,7 @@ primordial_chem.min_density_allowed = 5e-21
 
 metal_chem.temperature = 7.12091
 
-metal_chem.small_temp = 2.73
+metal_chem.small_temp = 2.73*(network.redshift + 1.0)
 metal_chem.small_dens = 1.e-60
 
 
