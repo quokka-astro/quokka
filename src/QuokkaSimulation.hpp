@@ -131,7 +131,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real pressureFloor_ = 0.;
 
 	bool use_wavespeed_correction_ = false;
-	bool radiation_enable_counter_ = false;
+	bool print_rad_counter_ = false;
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
@@ -391,7 +391,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("reconstruction_order", radiationReconstructionOrder_);
 		rpp.query("cfl", radiationCflNumber_);
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
-		rpp.query("enable_counter", radiation_enable_counter_);
+		rpp.query("print_iteration_counts", print_rad_counter_);
 	}
 }
 
@@ -1660,7 +1660,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 						 p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer);
 		}
 
-		if (radiation_enable_counter_) {
+		if (print_rad_counter_) {
 			// Iteration counter
 			auto h_iteration_counter = iteration_counter.copyToHost();
 			const double iteration_mean = static_cast<double>(h_iteration_counter[1]) / static_cast<double>(h_iteration_counter[0]);

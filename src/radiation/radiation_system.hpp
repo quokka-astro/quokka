@@ -1712,9 +1712,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 
 				// update iteration counter: (+1, +ite, max(self, ite))
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1);
-				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1);
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1); // total number of radiation updates
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations
+				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations
 
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
 				AMREX_ASSERT(Egas_guess > 0.0);

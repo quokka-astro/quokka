@@ -20,7 +20,7 @@ amr.blocking_factor = 4     # grid size must be divisible by this
 # *****************************************************************
 # Radiation
 # *****************************************************************
-radiation.enable_counter = 1
+radiation.print_iteration_counts = 1
 
 do_reflux = 0
 do_subcycle = 0
