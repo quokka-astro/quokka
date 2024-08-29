@@ -1447,7 +1447,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 50;
+				const int maxIter = 100;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
@@ -1616,7 +1616,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
-#if 0
+#if 1
 					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 					if (n == maxIter - 10) {
 						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0] << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;

@@ -16,18 +16,22 @@
 struct StreamingProblem {
 };
 
-constexpr double initial_Erad = 1.0e-5;
-constexpr double erad_floor = 1.0e-15;
-constexpr double initial_Egas = 1.0e-5;
 constexpr double c = 1.0;	 // speed of light
 constexpr double chat = 1.0;	 // reduced speed of light
-constexpr double kappa0 = 1.0e4; // opacity
-constexpr double rho = 1.0;
-constexpr double a_rad = 1.0e5;
-constexpr double EradL = a_rad;
+constexpr double kappa0 = 10.0; // opacity
+constexpr double rho0 = 1.0;
+constexpr double CV = 1.0;
+constexpr double mu = 1.5 / CV; // mean molecular weight
+constexpr double initial_T = 1.0;
+constexpr double a_rad = 1.0e10;
+constexpr double erad_floor = 1.0e-10;
+constexpr double initial_Erad = erad_floor;
+constexpr double T_rad_L = 1.0e-2; // so EradL = 1e2
+constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
+constexpr double T_end_exact = 0.0031597766719577; // solution of 1 == a_rad * T^4 + T
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -68,24 +72,18 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const auto Erad0 = initial_Erad;
-	const auto Egas0 = initial_Egas;
-
-	// calculate radEnergyFractions
-	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
-	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
-	}
+	const auto Egas0 = initial_T * CV;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0 * radEnergyFractions[g];
+			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}
 		state_cc(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho0;
 		state_cc(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas0;
 		state_cc(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
@@ -116,41 +114,26 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
-	// calculate radEnergyFractions
-	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
-	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
-	}
-
 	if (i < lo[0]) {
 		// streaming inflow boundary
-		const double Erad = EradL;
+		// const double Erad = EradL;
+		const double Erad = erad_floor;
 		const double Frad = c * Erad;
 
 		// multigroup radiation
 		// x1 left side boundary (Marshak)
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-		}
-	} else if (i >= hi[0]) {
-		// right-side boundary -- constant
-		const double Erad = initial_Erad;
-		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			auto const Erad_g = Erad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad;
+			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad;
 			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}
 	}
 
 	// gas boundary conditions are the same everywhere
-	const double Egas = initial_Egas;
+	const double Egas = initial_T * CV;
 	consVar(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
+	consVar(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho0;
 	consVar(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
@@ -163,8 +146,8 @@ auto problem_main() -> int
 	// const int nx = 1000;
 	// const double Lx = 1.0;
 	const double CFL_number = 0.8;
-	const double dt_max = 1e-2;
-	const double tmax = 1.0;
+	const double dt_max = 1;
+	const double tmax = 0.5;
 	const int max_timesteps = 5000;
 
 	// Boundary conditions
@@ -203,6 +186,7 @@ auto problem_main() -> int
 	std::vector<double> erad(nx);
 	std::vector<double> erad_exact(nx);
 	std::vector<double> T(nx);
+	std::vector<double> T_exact(nx);
 	std::vector<double> xs(nx);
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
@@ -213,27 +197,28 @@ auto problem_main() -> int
 		}
 		erad.at(i) = erad_sim;
 		const double e_gas = values.at(RadSystem<StreamingProblem>::gasInternalEnergy_index)[i];
-		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho, e_gas);
+		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
+		T_exact.at(i) = T_end_exact;
 
 		// compute exact solution
-		const double tau = kappa0 * rho * x;
-		erad_exact.at(i) = (x <= chat * tmax) ? EradL * std::exp(-tau) : 0.0;
+		// const double tau = kappa0 * rho * x;
+		// erad_exact.at(i) = (x <= chat * tmax) ? EradL * std::exp(-tau) : 0.0;
 	}
 
-	// double err_norm = 0.;
-	// double sol_norm = 0.;
-	// for (int i = 0; i < nx; ++i) {
-	// 	err_norm += std::abs(erad[i] - erad_exact[i]);
-	// 	sol_norm += std::abs(erad_exact[i]);
-	// }
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	for (int i = 0; i < nx; ++i) {
+		err_norm += std::abs(T[i] - T_exact[i]);
+		sol_norm += std::abs(T_exact[i]);
+	}
 
-	// const double rel_err_norm = err_norm / sol_norm;
-	// const double rel_err_tol = 0.02;
-	// int status = 1;
-	// if (rel_err_norm < rel_err_tol) {
-	// 	status = 0;
-	// }
-	// amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
+	const double rel_err_norm = err_norm / sol_norm;
+	const double rel_err_tol = 0.02;
+	int status = 1;
+	if (rel_err_norm < rel_err_tol) {
+		status = 0;
+	}
+	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
 #ifdef HAVE_PYTHON
 	// Plot results
@@ -246,20 +231,21 @@ auto problem_main() -> int
 	erad_exact_args["label"] = "exact solution";
 	erad_exact_args["linestyle"] = "--";
 	matplotlibcpp::plot(xs, erad, erad_args);
-	matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
+	// matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::save("./radiation_marshak_hot_Erad.pdf");
+	matplotlibcpp::save("./radiation_marshak_dust_Erad.pdf");
 
 	// plot temperature
 	matplotlibcpp::clf();
+	// matplotlibcpp::ylim(0.0, 1.1);
 	matplotlibcpp::plot(xs, T);
 	matplotlibcpp::title("Temperature");
-	matplotlibcpp::save("./radiation_marshak_hot_temperature.pdf");
+	matplotlibcpp::save("./radiation_marshak_dust_temperature.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
 	amrex::Print() << "Finished." << std::endl;
-	return 0;
+	return status;
 }
