@@ -112,7 +112,7 @@ template <> void QuokkaSimulation<MetalCloud>::preCalculateInitialConditions()
 
 	// parmparse species and temperature
 	amrex::ParmParse const pp("metal_chem");
-	userData_.small_temp = 2e0;
+	userData_.small_temp = 2.73 * (1.0 + network_rp::redshift);
 	pp.query("small_temp", userData_.small_temp);
 
 	userData_.small_dens = 1e-60;
