@@ -113,7 +113,6 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
 	if (i < lo[0]) {
 		// streaming inflow boundary
@@ -183,7 +182,6 @@ auto problem_main() -> int
 
 	// compute error norm
 	std::vector<double> erad(nx);
-	std::vector<double> erad_exact(nx);
 	std::vector<double> T(nx);
 	std::vector<double> T_exact(nx);
 	std::vector<double> xs(nx);
@@ -198,10 +196,6 @@ auto problem_main() -> int
 		const double e_gas = values.at(RadSystem<StreamingProblem>::gasInternalEnergy_index)[i];
 		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = T_end_exact;
-
-		// compute exact solution
-		// const double tau = kappa0 * rho * x;
-		// erad_exact.at(i) = (x <= chat * tmax) ? EradL * std::exp(-tau) : 0.0;
 	}
 
 	double err_norm = 0.;
