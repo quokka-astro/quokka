@@ -1662,19 +1662,20 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		if (print_rad_counter_) {
 			auto h_iteration_counter = iteration_counter.copyToHost();
-			long global_solver_count = h_iteration_counter[0]; // number of Newton-Raphson solvings
+			long global_solver_count = h_iteration_counter[0];  // number of Newton-Raphson solvings
 			long global_iteration_sum = h_iteration_counter[1]; // sum of Newton-Raphson iterations
-    	int global_iteration_max = h_iteration_counter[2]; // max number of Newton-Raphson iterations
+			int global_iteration_max = h_iteration_counter[2];  // max number of Newton-Raphson iterations
 
-    	amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
-    	amrex::ParallelDescriptor::ReduceLongSum(global_iteration_sum);
-    	amrex::ParallelDescriptor::ReduceIntMax(global_iteration_max);
+			amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
+			amrex::ParallelDescriptor::ReduceLongSum(global_iteration_sum);
+			amrex::ParallelDescriptor::ReduceIntMax(global_iteration_max);
 
 			const double global_iteration_mean = static_cast<double>(global_iteration_sum) / static_cast<double>(global_solver_count);
 
 			if (amrex::ParallelDescriptor::IOProcessor()) {
-					amrex::Print() << "time_subcycle = " << time_subcycle << ", total number of Newton-Raphson solvings is " << global_solver_count 
-									 << ", (mean, max) number of Newton-Raphson iterations are " << global_iteration_mean << ", " << global_iteration_max << "\n";
+				amrex::Print() << "time_subcycle = " << time_subcycle << ", total number of Newton-Raphson solvings is " << global_solver_count
+					       << ", (mean, max) number of Newton-Raphson iterations are " << global_iteration_mean << ", "
+					       << global_iteration_max << "\n";
 			}
 		}
 
