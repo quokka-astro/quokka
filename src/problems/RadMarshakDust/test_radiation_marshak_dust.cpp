@@ -147,7 +147,6 @@ auto problem_main() -> int
 	// const double Lx = 1.0;
 	const double CFL_number = 0.8;
 	const double dt_max = 1;
-	const double tmax = 0.5;
 	const int max_timesteps = 5000;
 
 	// Boundary conditions
@@ -166,7 +165,7 @@ auto problem_main() -> int
 	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.stopTime_ = tmax;
+	// sim.stopTime_ = tmax; // set with runtime parameters
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxDt_ = dt_max;
 	sim.maxTimesteps_ = max_timesteps;

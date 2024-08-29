@@ -26,3 +26,4 @@ radiation.dust_gas_interaction_coeff = 1e-20
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
+stop_time = 0.5
