@@ -7,7 +7,8 @@
 //==============================================================================
 /// \file Chemistry.hpp
 /// \brief Defines methods for integrating primordial chemical network using Microphysics
-/// \Authors: Piyush Sharda and Benjamin Wibking
+/// \author{Piyush Sharda (Leiden University, 2023)}
+/// /author{Benjamin Wibking (Michigan State University, 2023)}
 ///
 
 #include <array>
