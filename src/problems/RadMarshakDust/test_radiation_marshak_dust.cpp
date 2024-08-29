@@ -28,7 +28,8 @@ constexpr double erad_floor = 1.0e-10;
 constexpr double initial_Erad = erad_floor;
 constexpr double T_rad_L = 1.0e-2; // so EradL = 1e2
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
-constexpr double T_end_exact = 0.0031597766719577; // solution of 1 == a_rad * T^4 + T
+// constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
+constexpr double T_end_exact = initial_T; // dust on
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -53,7 +54,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
-	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -116,8 +117,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
 	if (i < lo[0]) {
 		// streaming inflow boundary
-		// const double Erad = EradL;
-		const double Erad = erad_floor;
+		const double Erad = EradL;
 		const double Frad = c * Erad;
 
 		// multigroup radiation
@@ -223,25 +223,24 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 	// Plot results
 	matplotlibcpp::clf();
-	// matplotlibcpp::ylim(0.0, 1.1);
-
-	std::map<std::string, std::string> erad_args;
-	std::map<std::string, std::string> erad_exact_args;
-	erad_args["label"] = "numerical solution";
-	erad_exact_args["label"] = "exact solution";
-	erad_exact_args["linestyle"] = "--";
-	matplotlibcpp::plot(xs, erad, erad_args);
-	// matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
-
+	std::map<std::string, std::string> plot_args;
+	plot_args["label"] = "numerical solution";
+	matplotlibcpp::plot(xs, erad, plot_args);
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("E_rad");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("t = {:f}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radiation_marshak_dust_Erad.pdf");
 
 	// plot temperature
 	matplotlibcpp::clf();
-	// matplotlibcpp::ylim(0.0, 1.1);
-	matplotlibcpp::plot(xs, T);
-	matplotlibcpp::title("Temperature");
+	matplotlibcpp::ylim(0.0, 1.1);
+	matplotlibcpp::plot(xs, T, plot_args);
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("Temperature");
+	matplotlibcpp::title(fmt::format("t = {:f}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radiation_marshak_dust_temperature.pdf");
 #endif // HAVE_PYTHON
 
