@@ -5,7 +5,7 @@
 //==============================================================================
 /// \file popiii.cpp
 /// \brief Defines a test problem for Pop I/II star formation.
-/// Author: Piyush Sharda (Leiden University, 2024)
+/// \author {Piyush Sharda (Leiden University, 2024)}
 ///
 #include <array>
 

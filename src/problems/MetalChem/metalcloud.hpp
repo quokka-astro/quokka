@@ -7,7 +7,7 @@
 //==============================================================================
 /// \file star_cluster.hpp
 /// \brief Defines a test problem for Pop I/II star formation.
-/// Author: Piyush Sharda (Leiden University, 2024)
+/// \author{Piyush Sharda (Leiden University, 2024)}
 ///
 
 // external headers
