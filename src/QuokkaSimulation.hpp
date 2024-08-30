@@ -374,10 +374,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 	}
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	// set chemistry runtime parameters
 	{
-		amrex::ParmParse hpp("primordial_chem");
+		amrex::ParmParse hpp("chemistry");
 		hpp.query("enabled", enableChemistry_);
 		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
 		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
@@ -533,7 +533,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	// start by assuming chemistry burn is successful.
 	bool burn_success = true; // NOLINT
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	if (enableChemistry_ == 1) {
 		// compute chemistry
 		burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);

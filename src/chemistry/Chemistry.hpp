@@ -19,7 +19,7 @@
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 #include "actual_eos_data.H"
 #include "actual_network.H"
 #include "burn_type.H"
