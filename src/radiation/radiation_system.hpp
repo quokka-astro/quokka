@@ -1967,8 +1967,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 				const double lag_tol = 1.0e-13;
 				if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) < lag_tol * Etot0) ||
-				    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) ||
-				    (sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
+				    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) || (sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
 					break;
 				}
 			}

@@ -1676,7 +1676,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				amrex::Print() << "time_subcycle = " << time_subcycle << ", total number of cells updated is " << CountCells(lev)
-								 << ", average number of Newton-Raphson solvings per IMEX stage is " << global_solving_mean
+					       << ", average number of Newton-Raphson solvings per IMEX stage is " << global_solving_mean
 					       << ", (mean, max) number of Newton-Raphson iterations are " << global_iteration_mean << ", "
 					       << global_iteration_max << "\n";
 			}
