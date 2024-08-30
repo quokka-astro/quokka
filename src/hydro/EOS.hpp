@@ -20,7 +20,7 @@
 
 #include "eos.H"
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 #include "actual_eos_data.H"
 #endif
 
@@ -79,7 +79,7 @@ EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint,
 	// return temperature for an ideal gas given density and internal energy
 	amrex::Real Tgas = NAN;
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
@@ -121,7 +121,7 @@ EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas,
 	// return internal energy density given density and temperature
 	amrex::Real Eint = NAN;
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	// Define and initialize Tgas here
@@ -164,7 +164,7 @@ EOS<problem_t>::ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure,
 	// return internal energy density given density and pressure
 	amrex::Real Eint = NAN;
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
@@ -205,7 +205,7 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	// compute derivative of internal energy w/r/t temperature, given density and temperature
 	amrex::Real dEint_dT = NAN;
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
@@ -254,7 +254,7 @@ EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real
 	// fundamental derivative
 	amrex::Real G = NAN;
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = P;
@@ -302,7 +302,7 @@ EOS<problem_t>::ComputePressure(amrex::Real rho, amrex::Real Eint, std::optional
 {
 	// return pressure for an ideal gas
 	amrex::Real P = NAN;
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
@@ -348,7 +348,7 @@ EOS<problem_t>::ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure,
 	// return sound speed for an ideal gas
 	amrex::Real cs = NAN;
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
