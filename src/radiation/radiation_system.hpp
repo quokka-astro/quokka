@@ -1447,7 +1447,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 100;
+				const int maxIter = enable_dust_gas_thermal_coupling_model_ ? 100 : 50;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
@@ -1966,9 +1966,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 				const double lag_tol = 1.0e-13;
-				if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) / Etot0 < lag_tol) ||
+				if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) < lag_tol * Etot0) ||
 				    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) ||
-				    (sum(abs(work)) > 0.0 && sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
+				    (sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
 					break;
 				}
 			}
