@@ -33,18 +33,16 @@
 
 using Real = amrex::Real;
 
-// Hyper parameters of the radiation solver
-
+// Hyper parameters for the radiation solver
 static constexpr bool include_delta_B = true;
 static constexpr bool use_diffuse_flux_mean_opacity = true;
 static constexpr bool special_edge_bin_slopes = false;	    // Use 2 and -4 as the slopes for the first and last bins, respectively
 static constexpr bool force_rad_floor_in_iteration = false; // force radiation energy density to be positive (and above the floor value) in the Newton iteration
+static constexpr bool include_work_term_in_source = true;
 
-static constexpr bool use_diffuse_flux_mean_opacity_incl_kappaE = true;
 static const int max_ite_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_ite_to_update_alpha_E
 // iterations of the Newton iteration
-
-static constexpr bool include_work_term_in_source = true;
+static constexpr bool enable_dE_constrain = true;
 static constexpr bool use_D_as_base = false;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
@@ -205,7 +203,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::Real time);
 
 	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-				   double dustGasCoeff, int *num_failed_coupling, int *num_failed_dust, int *p_num_failed_outer_ite);
+				   double dustGasCoeff, int *p_iteration_counter, int *num_failed_coupling, int *num_failed_dust, int *p_num_failed_outer_ite);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -1264,7 +1262,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-					  const int stage, double dustGasCoeff, int *p_num_failed_coupling, int *p_num_failed_dust, int *p_num_failed_outer_ite)
+					  const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling, int *p_num_failed_dust,
+					  int *p_num_failed_outer_ite)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -1286,6 +1285,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		auto p_num_failed_coupling_local = p_num_failed_coupling;
 		auto p_num_failed_dust_local = p_num_failed_dust;
 		auto p_num_failed_outer_local = p_num_failed_outer_ite;
+		auto p_iteration_counter_local = p_iteration_counter;
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -1447,7 +1447,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 50;
+				const int maxIter = enable_dust_gas_thermal_coupling_model_ ? 100 : 50;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
@@ -1609,19 +1609,24 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 					}
 
-					if (n > 200) {
-#ifndef NDEBUG
-						std::cout << "n = " << n << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs_sum
-							  << ", F_D_abs_sum / Etot0 = " << F_D_abs_sum / Etot0 << std::endl;
-#endif
-					}
-
 					// check relative convergence of the residuals
 					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * F_D_abs_sum / Etot0 < resid_tol)) {
 						break;
 					}
 
 					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+
+#if 0
+					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
+					if (n == maxIter - 10) {
+						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0]
+							  << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+					} else if (n >= maxIter - 10) {
+						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << EradVec_guess[0]
+							  << ", tau = " << tau[0];
+						std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs_sum << ", Etot0 = " << Etot0 << std::endl;
+					}
+#endif
 
 					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivative(T_d, radBoundaries_g_copy);
 					AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
@@ -1675,11 +1680,26 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					AMREX_ASSERT(!std::isnan(deltaEgas));
 					AMREX_ASSERT(!deltaD.hasnan());
 
-					Egas_guess += deltaEgas;
-					if constexpr (use_D_as_base) {
-						Rvec += tau0 * deltaD;
+					if (!enable_dE_constrain) {
+						Egas_guess += deltaEgas;
+						if constexpr (use_D_as_base) {
+							Rvec += tau0 * deltaD;
+						} else {
+							Rvec += deltaD;
+						}
 					} else {
-						Rvec += deltaD;
+						const double T_rad = std::pow(sum(EradVec_guess) / radiation_constant_, 0.25);
+						if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
+							Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+							Rvec.fillin(0.0);
+						} else {
+							Egas_guess += deltaEgas;
+							if constexpr (use_D_as_base) {
+								Rvec += tau0 * deltaD;
+							} else {
+								Rvec += deltaD;
+							}
+						}
 					}
 
 					// check relative and absolute convergence of E_r
@@ -1692,6 +1712,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				if (n >= maxIter) {
 					amrex::Gpu::Atomic::Add(p_num_failed_coupling_local, 1);
 				}
+
+				// update iteration counter: (+1, +ite, max(self, ite))
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);     // total number of radiation updates
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations
+				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations
 
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
 				AMREX_ASSERT(Egas_guess > 0.0);
@@ -1941,9 +1966,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 				const double lag_tol = 1.0e-13;
-				if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) / Etot0 < lag_tol) ||
-				    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) ||
-				    (sum(abs(work)) > 0.0 && sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
+				if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) < lag_tol * Etot0) ||
+				    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) || (sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
 					break;
 				}
 			}

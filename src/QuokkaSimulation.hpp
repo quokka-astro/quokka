@@ -131,6 +131,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real pressureFloor_ = 0.;
 
 	bool use_wavespeed_correction_ = false;
+	bool print_rad_counter_ = false;
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
@@ -251,8 +252,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, amrex::Real time, double dt, int stage,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, int *num_failed_coupling, int *num_failed_dust,
-				      int *p_num_failed_outer_ite);
+				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, int *p_iteration_counter, int *num_failed_coupling,
+				      int *num_failed_dust, int *p_num_failed_outer_ite);
 
 	auto computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, int nvars,
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
@@ -390,6 +391,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("reconstruction_order", radiationReconstructionOrder_);
 		rpp.query("cfl", radiationCflNumber_);
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
+		rpp.query("print_iteration_counts", print_rad_counter_);
 	}
 }
 
@@ -1619,9 +1621,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		amrex::Gpu::Buffer<int> num_failed_coupling({0});
 		amrex::Gpu::Buffer<int> num_failed_dust({0});
 		amrex::Gpu::Buffer<int> num_failed_outer({0});
+		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0});
 		int *p_num_failed_coupling = num_failed_coupling.data();
 		int *p_num_failed_dust = num_failed_dust.data();
 		int *p_num_failed_outer = num_failed_outer.data();
+		int *p_iteration_counter = iteration_counter.data();
 
 		if constexpr (IMEX_a22 > 0.0) {
 			// matter-radiation exchange source terms of stage 1
@@ -1634,8 +1638,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
 				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
 				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
-				operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi, p_num_failed_coupling,
-							 p_num_failed_dust, p_num_failed_outer);
+				operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi, p_iteration_counter,
+							 p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer);
 			}
 		}
 
@@ -1652,8 +1656,30 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			auto const &prob_lo = geom[lev].ProbLoArray();
 			auto const &prob_hi = geom[lev].ProbHiArray();
 			// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
-			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi, p_num_failed_coupling,
-						 p_num_failed_dust, p_num_failed_outer);
+			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi, p_iteration_counter,
+						 p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer);
+		}
+
+		if (print_rad_counter_) {
+			auto h_iteration_counter = iteration_counter.copyToHost();
+			long global_solver_count = h_iteration_counter[0];  // number of Newton-Raphson solvings
+			long global_iteration_sum = h_iteration_counter[1]; // sum of Newton-Raphson iterations
+			int global_iteration_max = h_iteration_counter[2];  // max number of Newton-Raphson iterations
+
+			amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
+			amrex::ParallelDescriptor::ReduceLongSum(global_iteration_sum);
+			amrex::ParallelDescriptor::ReduceIntMax(global_iteration_max);
+
+			const auto n_cells = CountCells(lev);
+			const double global_iteration_mean = static_cast<double>(global_iteration_sum) / static_cast<double>(global_solver_count);
+			const double global_solving_mean = static_cast<double>(global_solver_count) / static_cast<double>(n_cells) / 2.0; // 2 stages
+
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				amrex::Print() << "time_subcycle = " << time_subcycle << ", total number of cells updated is " << CountCells(lev)
+					       << ", average number of Newton-Raphson solvings per IMEX stage is " << global_solving_mean
+					       << ", (mean, max) number of Newton-Raphson iterations are " << global_iteration_mean << ", "
+					       << global_iteration_max << "\n";
+			}
 		}
 
 		const int nf_coupling = *(num_failed_coupling.copyToHost());
@@ -1820,8 +1846,8 @@ template <typename problem_t>
 void QuokkaSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const amrex::Real time,
 							   const double dt, const int stage, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, int *p_num_failed_coupling,
-							   int *p_num_failed_dust, int *p_num_failed_outer_ite)
+							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, int *p_iteration_counter,
+							   int *p_num_failed_coupling, int *p_num_failed_dust, int *p_num_failed_outer_ite)
 {
 	amrex::FArrayBox radEnergySource(indexRange, Physics_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered scalar
@@ -1832,8 +1858,8 @@ void QuokkaSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx, prob_lo, prob_hi, time + dt);
 
 	// cell-centered source terms
-	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_, p_num_failed_coupling,
-					     p_num_failed_dust, p_num_failed_outer_ite);
+	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_, p_iteration_counter,
+					     p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer_ite);
 }
 
 template <typename problem_t>
