@@ -75,22 +75,17 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeFluxMeanOp
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-    -> quokka::valarray<amrex::Real, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationSingleGroup(amrex::Real temperature)
+    -> amrex::Real
 {
-	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	const double power = radiation_constant_ * temperature;
-	auto Erad_g = power * radEnergyFractions;
-	return Erad_g;
+	return radiation_constant_ * temperature;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivative(
-    amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeSingleGroup(
+    amrex::Real temperature) -> amrex::Real
 {
-	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	const double d_power_dt = radiation_constant_;
-	return d_power_dt * radEnergyFractions;
+	return radiation_constant_;
 }
 
 template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

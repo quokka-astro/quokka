@@ -1232,7 +1232,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureSingleGro
 
 	// solve for dust temperature T_d using Newton iteration
 	double T_d = T_d_init;
-	const double lambda_rel_tol = 1.0e-8;
+	const double lambda_rel_tol = 1.0e-10;
 	const int max_ite_td = 100;
 	int ite_td = 0;
 	for (; ite_td < max_ite_td; ++ite_td) {
@@ -2236,7 +2236,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				const double resid_tol = 1.0e-11; // 1.0e-15;
 				const int maxIter = enable_dust_gas_thermal_coupling_model_ ? 100 : 50;
 				int n = 0;
-				bool use_Trad_as_Tgas = false;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
@@ -2390,36 +2389,21 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					deltaEgas = (J11 * y0 - J01 * y1) / det;
 					deltaR = (J00 * y1 - J10 * y0) / det;
 
+					if (!enable_dE_constrain) {
 						Egas_guess += deltaEgas;
 						R += deltaR;
-					// if (!enable_dE_constrain) {
-					// 	Egas_guess += deltaEgas;
-					// 	R += deltaR;
-					// } else {
-					// 	double T_rad = NAN;
-					// 	if (use_Trad_as_Tgas) {
-					// 		use_Trad_as_Tgas = false;
-					// 	} else if (Erad_guess > 0.0) {
-					// 		T_rad = std::sqrt(std::sqrt(Erad_guess / radiation_constant_));
-					// 		if (deltaEgas / c_v > 100. * std::max(T_gas, T_rad)) {
-					// 			use_Trad_as_Tgas = true;
-					// 		}
-					// 	}
-					// 	if (use_Trad_as_Tgas) {
-					// 		if constexpr (debug_radiation_Newton_iteration) {
-					// 			amrex::Print() << "Using Trad as Tgas: Trad = " << T_rad << ", Egas_guess_old = " << Egas_guess << "\n";
-					// 			amrex::Print() << "deltaEgas = " << deltaEgas;
-					// 		}
-					// 		Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
-					// 		// R = 0.0;
-					// 		if constexpr (debug_radiation_Newton_iteration) {
-					// 			amrex::Print() << ", Egas_guess_new = " << Egas_guess << "\n";
-					// 		}
-					// 	} else {
-					// 		Egas_guess += deltaEgas;
-					// 		R += deltaR;
-					// 	}
-					// }
+					} else {
+						double T_rad = NAN;
+						AMREX_ASSERT(Erad_guess >= 0.0);
+						T_rad = std::sqrt(std::sqrt(Erad_guess / radiation_constant_));
+						if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
+							Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+							// R = 0.0;
+						} else {
+							Egas_guess += deltaEgas;
+							R += deltaR;
+						}
+					}
 
 				} // END NEWTON-RAPHSON LOOP
 
