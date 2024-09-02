@@ -1914,6 +1914,14 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		} else {
 			amrex::ignore_unused(EradVec_guess);
 			amrex::ignore_unused(Egas_guess);
+			amrex::ignore_unused(Egas0);
+			amrex::ignore_unused(Etot0);
+			amrex::ignore_unused(work);
+			amrex::ignore_unused(work_prev);
+			amrex::ignore_unused(kappaPVec);
+			amrex::ignore_unused(kappaEVec);
+			amrex::ignore_unused(kappaPoverE);
+			amrex::ignore_unused(fourPiBoverC);
 		}
 		for (int g = 0; g < nGroups_; ++g) {
 			if constexpr (gamma_ != 1.0) {
@@ -2433,6 +2441,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			amrex::ignore_unused(Egas_guess);
 			amrex::ignore_unused(Egas0);
 			amrex::ignore_unused(Etot0);
+			amrex::ignore_unused(work);
+			amrex::ignore_unused(work_prev);
+			amrex::ignore_unused(kappaP);
+			amrex::ignore_unused(kappaE);
+			amrex::ignore_unused(kappaPoverE);
+			amrex::ignore_unused(fourPiBoverC);
 		}
 		consNew(i, j, k, x1RadFlux_index) = Frad_t1[0];
 		consNew(i, j, k, x2RadFlux_index) = Frad_t1[1];
