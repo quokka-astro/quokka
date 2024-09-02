@@ -22,8 +22,8 @@ AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
 
 constexpr bool dust_on = true;
 
-constexpr double c = 1.0;	// speed of light
-constexpr double chat = 1.0;	// reduced speed of light
+constexpr double c = 1.0;    // speed of light
+constexpr double chat = 1.0; // reduced speed of light
 // constexpr double kappa0 = 10.0; // opacity
 constexpr double rho0 = 1.0;
 constexpr double CV = 1.0;
@@ -85,7 +85,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxM
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<StreamingProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							     const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+								  const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -237,8 +237,8 @@ auto problem_main() -> int
 		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = T_end_exact;
 
-		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(- x * rho0 * kappa2) : erad_floor;
-		erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(- x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
+		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) : erad_floor;
+		erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
 	}
 
 	double err_norm = 0.;
