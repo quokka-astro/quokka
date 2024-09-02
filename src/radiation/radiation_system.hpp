@@ -48,7 +48,7 @@ static const bool PPL_free_slope_st_total = false; // PPL with free slopes for a
 						   // well -- Newton iteration convergence issue.
 
 // ISM
-static constexpr bool approx_decoupled_dust_and_gas_for_single_group = true;
+// static constexpr bool approx_decoupled_dust_and_gas_for_single_group = true;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -2115,7 +2115,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				bool is_dust_gas_decoupled = false;
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
-				if constexpr (approx_decoupled_dust_and_gas_for_single_group && enable_dust_gas_thermal_coupling_model_) {
+				if constexpr (enable_dust_gas_thermal_coupling_model_) {
 					quokka::valarray<double, 1> EradVec_guess{Erad_guess};
 					T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, dustGasCoeff_local);
 					const double max_Gamma_gd = dust_coeff * std::max(std::sqrt(T_gas) * T_gas, std::sqrt(T_d) * T_d);
@@ -2123,13 +2123,17 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						is_dust_gas_decoupled = true;
 						gamma_gd_time_dt = dust_coeff * std::sqrt(T_gas) * (T_gas - T_d);
 
-						// In decoupled case, we update gas and radiation energy via forward Euler. This is stable and a good approximation since 
+						// In the decoupled case, we update gas and radiation energy via forward Euler. This is nonetheless stable and a good approximation since 
 						// cscale * gamma_gd_time_dt is much smaller than Egas0.
-						Egas_guess += cscale * gamma_gd_time_dt; // update Egas_guess once and won't update it in the iteration
-						AMREX_ASSERT(Egas_guess > 0.0);
-						// T_gas is not used anymore, so we don't need to update it
-						Erad_guess -= gamma_gd_time_dt; // TODO(cch): Caveat: what if Erad_guess becomes negative in this step?
-						AMREX_ASSERT(Erad_guess > 0.0);
+						if (Erad_guess - gamma_gd_time_dt < Erad_floor_) {
+							// Radiation field cannot cool down any further
+							Egas_guess += cscale * (Erad_guess - Erad_floor_);
+							Erad_guess = Erad_floor_;
+						} else {
+							Egas_guess += cscale * gamma_gd_time_dt;
+							Erad_guess -= gamma_gd_time_dt;
+						}
+						// TODO(cch): do the same thing for the multi-group case
 					}
 				}
 
@@ -2139,7 +2143,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
-
 
 					// dust temperature
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
@@ -2160,8 +2163,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					}
 
 					if (is_dust_gas_decoupled) {
-						// if dust and gas are decoupled, Egas and Erad are already updated, so break after first iteration
-						// Note that the calculated of T_gas and T_d are still required.
+						// If dust and gas are decoupled, Egas and Erad are already updated, so break in the first iteration.
+						// Note that the calculation of T_gas and T_d is still required.
 						break;
 					}
 
