@@ -105,7 +105,7 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const auto Egas0 = initial_T * CV;
-	const auto Erads = RadSystem<StreamingProblem>::ComputeThermalRadiation(initial_Trad, radBoundaries_);
+	const auto Erads = RadSystem<StreamingProblem>::ComputeThermalRadiationMultiGroup(initial_Trad, radBoundaries_);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
