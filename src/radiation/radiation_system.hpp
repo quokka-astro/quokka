@@ -2125,11 +2125,15 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 						// In decoupled case, we update gas and radiation energy via forward Euler. This is stable and a good approximation since 
 						// cscale * gamma_gd_time_dt is much smaller than Egas0.
-						Egas_guess += cscale * gamma_gd_time_dt; // update Egas_guess once and won't update it in the iteration
-						AMREX_ASSERT(Egas_guess > 0.0);
-						// T_gas is not used anymore, so we don't need to update it
-						Erad_guess -= gamma_gd_time_dt; // TODO(cch): Caveat: what if Erad_guess becomes negative in this step?
-						AMREX_ASSERT(Erad_guess > 0.0);
+						if (Erad_guess - gamma_gd_time_dt < Erad_floor_) {
+							// Radiation field cannot cool down any further
+							Egas_guess += cscale * (Erad_guess - Erad_floor_);
+							Erad_guess = Erad_floor_;
+						} else {
+							Egas_guess += cscale * gamma_gd_time_dt;
+							Erad_guess -= gamma_gd_time_dt;
+						}
+						// TODO(cch): do the same thing for the multi-group case
 					}
 				}
 
