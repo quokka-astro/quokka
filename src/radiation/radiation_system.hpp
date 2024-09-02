@@ -2123,8 +2123,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						is_dust_gas_decoupled = true;
 						gamma_gd_time_dt = dust_coeff * std::sqrt(T_gas) * (T_gas - T_d);
 
-						// In the decoupled case, we update gas and radiation energy via forward Euler. This is nonetheless stable and a good approximation since 
-						// cscale * gamma_gd_time_dt is much smaller than Egas0.
+						// In the decoupled case, we update gas and radiation energy via forward Euler. This is nonetheless stable and a
+						// good approximation since cscale * gamma_gd_time_dt is much smaller than Egas0.
 						if (Erad_guess - gamma_gd_time_dt < Erad_floor_) {
 							// Radiation field cannot cool down any further
 							Egas_guess += cscale * (Erad_guess - Erad_floor_);
