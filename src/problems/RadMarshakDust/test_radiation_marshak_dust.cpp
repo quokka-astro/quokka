@@ -219,32 +219,41 @@ auto problem_main() -> int
 	const int nx = static_cast<int>(position.size());
 
 	// compute error norm
-	std::vector<double> erad(nx);
+	std::vector<double> xs(nx);
 	std::vector<double> T(nx);
 	std::vector<double> T_exact(nx);
-	std::vector<double> xs(nx);
+	std::vector<double> erad(nx);
+	std::vector<double> erad1(nx);
+	std::vector<double> erad2(nx);
+	std::vector<double> erad1_exact(nx);
+	std::vector<double> erad2_exact(nx);
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		double erad_sim = 0.0;
-		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			erad_sim += values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
-		}
-		erad.at(i) = erad_sim;
+		erad1.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 0)[i];
+		erad2.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 1)[i];
+		erad.at(i) = erad1.at(i) + erad2.at(i);
 		const double e_gas = values.at(RadSystem<StreamingProblem>::gasInternalEnergy_index)[i];
 		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = T_end_exact;
+
+		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(- x * rho0 * kappa2) : erad_floor;
+		erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(- x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
 	}
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	for (int i = 0; i < nx; ++i) {
+	for (int i = 1; i < nx; ++i) { // skip the first cell
 		err_norm += std::abs(T[i] - T_exact[i]);
+		err_norm += std::abs(erad1[i] - erad1_exact[i]);
+		err_norm += std::abs(erad2[i] - erad2_exact[i]);
 		sol_norm += std::abs(T_exact[i]);
+		sol_norm += std::abs(erad1_exact[i]);
+		sol_norm += std::abs(erad2_exact[i]);
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 0.02;
+	const double rel_err_tol = 0.01;
 	int status = 1;
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
@@ -252,25 +261,41 @@ auto problem_main() -> int
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
 #ifdef HAVE_PYTHON
-	// Plot results
+	// Plot erad1
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> plot_args;
+	std::map<std::string, std::string> plot_args2;
 	plot_args["label"] = "numerical solution";
-	matplotlibcpp::plot(xs, erad, plot_args);
+	plot_args2["label"] = "exact solution";
+	matplotlibcpp::plot(xs, erad1, plot_args);
+	matplotlibcpp::plot(xs, erad1_exact, plot_args2);
 	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("E_rad");
+	matplotlibcpp::ylabel("E_rad_group1");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("t = {:f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radiation_marshak_dust_Erad.pdf");
+	matplotlibcpp::save("./radiation_marshak_dust_Erad1.pdf");
+
+	// Plot erad2
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(xs, erad2, plot_args);
+	matplotlibcpp::plot(xs, erad2_exact, plot_args2);
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("E_rad_group2");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radiation_marshak_dust_Erad2.pdf");
 
 	// plot temperature
 	matplotlibcpp::clf();
 	matplotlibcpp::ylim(0.0, 1.1);
 	matplotlibcpp::plot(xs, T, plot_args);
+	matplotlibcpp::plot(xs, T_exact, plot_args2);
 	matplotlibcpp::xlabel("x");
 	matplotlibcpp::ylabel("Temperature");
-	matplotlibcpp::title(fmt::format("t = {:f}", sim.tNew_[0]));
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radiation_marshak_dust_temperature.pdf");
 #endif // HAVE_PYTHON
