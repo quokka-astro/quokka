@@ -126,7 +126,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		const double px_L = rho0 * v0;
 		const double Egas_L = Egas0;
 
-		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiation(T0, radBoundaries_g);
+		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiationMultiGroup(T0, radBoundaries_g);
 
 		// x1 left side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
@@ -146,7 +146,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		const double px_R = rho1 * v1;
 		const double Egas_R = Egas1;
 
-		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiation(T1, radBoundaries_g);
+		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiationMultiGroup(T1, radBoundaries_g);
 
 		// x1 right-side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
@@ -199,7 +199,7 @@ template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quok
 			temp = T1;
 		}
 
-		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiation(temp, radBoundaries_g);
+		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiationMultiGroup(temp, radBoundaries_g);
 
 		state_cc(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
 		state_cc(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;

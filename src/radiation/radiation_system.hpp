@@ -39,7 +39,7 @@ static constexpr bool use_diffuse_flux_mean_opacity = true;
 static constexpr bool special_edge_bin_slopes = false;	    // Use 2 and -4 as the slopes for the first and last bins, respectively
 static constexpr bool force_rad_floor_in_iteration = false; // force radiation energy density to be positive (and above the floor value) in the Newton iteration
 static constexpr bool include_work_term_in_source = true;
-static constexpr int debug_radiation_Newton_iteration = 1;
+static constexpr int debug_radiation_Newton_iteration = 0;
 
 static const int max_ite_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_ite_to_update_alpha_E
 // iterations of the Newton iteration
@@ -261,24 +261,24 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 								       amrex::Real temperature) -> quokka::valarray<amrex::Real, nGroups_>;
 
 	AMREX_GPU_HOST_DEVICE static auto
-	ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
+	ComputeThermalRadiationMultiGroup(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
 
 	AMREX_GPU_HOST_DEVICE static auto
 	ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> double;
 
 	AMREX_GPU_HOST_DEVICE static auto
-	ComputeThermalRadiationTempDerivative(amrex::Real temperature,
+	ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
 					      amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
 
 	AMREX_GPU_HOST_DEVICE static auto
 	ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real;
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad,
-								 double dustGasCoeff, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-								 amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double;
+								 double dustGasCoeff, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
+								 amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperatureSingleGroup(double T_gas, double T_d_init, double rho, double Erad,
-								 double dustGasCoeff) -> double;
+	// AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperatureSingleGroup(double T_gas, double T_d_init, double rho, double Erad,
+	// 							 double dustGasCoeff) -> double;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
@@ -342,13 +342,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGr
 	return power;
 }
 
-// define ComputeThermalRadiation, returns the thermal radiation power for each photon group. = a_r * T^4 * radEnergyFractions
+// define ComputeThermalRadiationMultiGroup, returns the thermal radiation power for each photon group. = a_r * T^4 * radEnergyFractions
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGroup(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
-	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	const double power = radiation_constant_ * std::pow(temperature, 4);
+	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	auto Erad_g = power * radEnergyFractions;
 	// set floor
 	for (int g = 0; g < nGroups_; ++g) {
@@ -369,7 +369,7 @@ RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Re
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto
-RadSystem<problem_t>::ComputeThermalRadiationTempDerivative(amrex::Real temperature,
+RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
 							    amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
 {
 	// by default, d emission/dT = 4 emission / T
@@ -1217,55 +1217,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureSingleGroup(double const T_gas, double const T_d_init, double const rho,
-									double const Erad, double dustGasCoeff) -> double
-{
-	double kappaP = NAN;
-	double kappaE = NAN;
-
-	const double num_density = rho / mean_molecular_mass_;
-	const double Lambda_compare = dustGasCoeff * num_density * num_density * std::sqrt(T_gas) * T_gas;
-
-	// solve for dust temperature T_d using Newton iteration
-	double T_d = T_d_init;
-	const double lambda_rel_tol = 1.0e-10;
-	const int max_ite_td = 100;
-	int ite_td = 0;
-	for (; ite_td < max_ite_td; ++ite_td) {
-		const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
-
-		kappaP = ComputePlanckOpacity(rho, T_d);
-		kappaE = ComputeEnergyMeanOpacity(rho, T_d);
-		AMREX_ASSERT(!std::isnan(kappaP));
-		AMREX_ASSERT(!std::isnan(kappaE));
-
-		const double LHS = c_light_ * rho * (kappaE * Erad - kappaP * fourPiBoverC) +
-				   dustGasCoeff * num_density * num_density * std::sqrt(T_gas) * (T_gas - T_d);
-
-		if (std::abs(LHS) < lambda_rel_tol * std::abs(Lambda_compare)) {
-			break;
-		}
-
-		const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
-		const double dLHS_dTd = -c_light_ * rho * kappaP * d_fourpib_over_c_d_t - dustGasCoeff * num_density * num_density * std::sqrt(T_gas);
-		const double delta_T_d = LHS / dLHS_dTd;
-		T_d -= delta_T_d;
-
-		if (ite_td > 0) {
-			if (std::abs(delta_T_d) < lambda_rel_tol * std::abs(T_d)) {
-				break;
-			}
-		}
-	}
-
-	AMREX_ASSERT_WITH_MESSAGE(ite_td < max_ite_td, "Newton iteration for dust temperature failed to converge.");
-	if (ite_td >= max_ite_td) {
-		T_d = -1.0;
-	}
-	return T_d;
-}
-
-template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_d_init, double const rho,
 									quokka::valarray<double, nGroups_> const &Erad, double dustGasCoeff,
 									amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
@@ -1288,7 +1239,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 	const int max_ite_td = 100;
 	int ite_td = 0;
 	for (; ite_td < max_ite_td; ++ite_td) {
-		const auto fourPiBoverC = ComputeThermalRadiation(T_d, rad_boundaries);
+		quokka::valarray<double, nGroups_> fourPiBoverC{};
+
+		if constexpr (nGroups_ == 1) {
+			fourPiBoverC[0] = ComputeThermalRadiationSingleGroup(T_d);
+		} else {
+			fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		}
 
 		if constexpr (opacity_model_ == OpacityModel::single_group) {
 			kappaPVec[0] = ComputePlanckOpacity(rho, T_d);
@@ -1320,7 +1277,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 			break;
 		}
 
-		const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivative(T_d, rad_boundaries);
+		quokka::valarray<double, nGroups_> d_fourpib_over_c_d_t{};
+		if constexpr (nGroups_ == 1) {
+			d_fourpib_over_c_d_t[0] = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
+		} else {
+			d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
+		}
 		const double dLHS_dTd = -c_light_ * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - dustGasCoeff * num_density * num_density * std::sqrt(T_gas);
 		const double delta_T_d = LHS / dLHS_dTd;
 		T_d -= delta_T_d;
@@ -1524,7 +1486,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 						}
 					}
 
-					fourPiBoverC = ComputeThermalRadiation(T_d, radBoundaries_g_copy);
+					fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, radBoundaries_g_copy);
 
 					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
 					if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
@@ -1659,7 +1621,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					}
 #endif
 
-					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivative(T_d, radBoundaries_g_copy);
+					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
 					AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
 
 					// compute Jacobian elements
@@ -2128,7 +2090,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						T_d = T_gas;
 					} else {
 						if (n == 0) {
-							T_d = ComputeDustTemperatureSingleGroup(T_gas, T_gas, rho, Erad_guess, dustGasCoeff_local);
+							const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
+							T_d = ComputeDustTemperature(T_gas, T_gas, rho, Erad_guess_vec, dustGasCoeff_local);
 							AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 						} else {
 							const auto Lambda_gd = R / (dt * chat / c);

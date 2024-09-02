@@ -83,7 +83,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationSingle
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeSingleGroup(
-    amrex::Real temperature) -> amrex::Real
+    amrex::Real /*temperature*/) -> amrex::Real
 {
 	return radiation_constant_;
 }
