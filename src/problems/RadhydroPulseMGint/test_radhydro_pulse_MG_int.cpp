@@ -238,7 +238,7 @@ template <> void QuokkaSimulation<MGProblem>::setInitialConditionsOnGrid(quokka:
 		const double Egas = quokka::EOS<MGProblem>::ComputeEintFromTgas(rho, Trad);
 		const double v0 = v0_adv;
 
-		auto Erad_g = RadSystem<MGProblem>::ComputeThermalRadiation(Trad, radBoundaries_g);
+		auto Erad_g = RadSystem<MGProblem>::ComputeThermalRadiationMultiGroup(Trad, radBoundaries_g);
 		auto Frad_g = RadSystem<MGProblem>::ComputeFluxInDiffusionLimit(radBoundaries_g, Trad, v0);
 
 		for (int g = 0; g < Physics_Traits<MGProblem>::nGroups; ++g) {

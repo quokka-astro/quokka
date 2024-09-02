@@ -220,7 +220,7 @@ template <> void QuokkaSimulation<MGproblem>::setInitialConditionsOnGrid(quokka:
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<MGproblem>::ComputeEintFromTgas(rho, Trad);
 
-		auto Erad_g = RadSystem<MGproblem>::ComputeThermalRadiation(Trad, radBoundaries_g);
+		auto Erad_g = RadSystem<MGproblem>::ComputeThermalRadiationMultiGroup(Trad, radBoundaries_g);
 
 		for (int g = 0; g < Physics_Traits<MGproblem>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<MGproblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
