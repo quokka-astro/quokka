@@ -47,6 +47,9 @@ static constexpr bool use_D_as_base = false;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
 
+// ISM
+static constexpr bool approx_decoupled_dust_and_gas_for_single_group = true;
+
 // Time integration scheme
 // IMEX PD-ARS
 static constexpr double IMEX_a22 = 1.0;
@@ -1378,11 +1381,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		work.fillin(0.0);
 		work_prev.fillin(0.0);
 
-		if constexpr (gamma_ != 1.0) {
-			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
-			Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
-		}
-
 		// make a copy of radBoundaries_g
 		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
 		amrex::GpuArray<double, nGroups_> radBoundaryRatios_copy{};
@@ -1422,6 +1420,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			dust_coeff = dt * dustGasCoeff_local * num_den * num_den / cscale; // sum_g R = dust_coeff * sqrt(T_gas) * (T_gas - T_d)
 		}
 
+		if constexpr (gamma_ != 1.0) {
+			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+			Etot0 = Egas0 + cscale * (Erad0 + sum(Src));
+		}
+
 		const int max_ite = 5;
 		int ite = 0;
 		for (; ite < max_ite; ++ite) {
@@ -1450,8 +1453,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				//
 				// The Jacobian of F(E_g, D_i) is
 				//
-				// dF_G / dE_g = 1
-				// dF_G / dD_i = c / chat * tau0_i
+				// dF0 / dE_g = 1
+				// dF0 / dD_i = c / chat * tau0_i
 				// dF_{D,i} / dE_g = 1 / (chat * C_v) * (kappa_{P,i} / kappa_{E,i}) * d/dT (4 \pi B_i)
 				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
 
@@ -1462,27 +1465,27 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				const double convergence_tol_for_dust_gas_coupling = 1.0e-6;
 				double gamma_gd_time_dt = NAN;
-				bool is_dust_rad_in_eq = false;
+				bool is_dust_gas_decoupled = false;
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
 				if constexpr (enable_dust_gas_thermal_coupling_model_) {
 					T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, dustGasCoeff_local, radBoundaries_g_copy,
 											radBoundaryRatios_copy);
 					const double max_Gamma_gd = dust_coeff * std::max(std::sqrt(T_gas) * T_gas, std::sqrt(T_d) * T_d);
-					if (max_Gamma_gd < convergence_tol_for_dust_gas_coupling * Egas0) {
-						is_dust_rad_in_eq = true;
+					if (cscale * max_Gamma_gd < convergence_tol_for_dust_gas_coupling * Egas0) {
+						is_dust_gas_decoupled = true;
 						gamma_gd_time_dt = dust_coeff * std::sqrt(T_gas) * (T_gas - T_d);
-						Egas_guess += gamma_gd_time_dt; // update Egas_guess once and won't update it in the iteration
+						Egas_guess += cscale * gamma_gd_time_dt; // update Egas_guess once and won't update it in the iteration
 						// T_gas is not used anymore, so we don't need to update it
 					}
 				}
 
-				const double resid_tol = 1.0e-11; // 1.0e-15;
+				const double resid_tol = 1.0e-11;
 				const int maxIter = enable_dust_gas_thermal_coupling_model_ ? 100 : 50;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 
-					if (n > 0 && !is_dust_rad_in_eq) {
+					if (n > 0 && !is_dust_gas_decoupled) {
 						T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 						AMREX_ASSERT(T_gas >= 0.);
 					}
@@ -1491,7 +1494,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 						T_d = T_gas;
 					} else {
-						if (!is_dust_rad_in_eq) {
+						if (!is_dust_gas_decoupled) {
 							if (n == 0) {
 								T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, dustGasCoeff_local, radBoundaries_g_copy,
 													radBoundaryRatios_copy);
@@ -1610,7 +1613,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 						}
 					}
 
-					if (is_dust_rad_in_eq) {
+					if (is_dust_gas_decoupled) {
 						F0 = - gamma_gd_time_dt;
 					} else {
 						F0 = Egas_guess - Egas0;
@@ -1620,7 +1623,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					for (int g = 0; g < nGroups_; ++g) {
 						if (tau[g] > 0.0) {
 							F_D_abs_sum += std::abs(Fg[g]);
-							if (is_dust_rad_in_eq) {
+							if (is_dust_gas_decoupled) {
 								F0 += Rvec[g];
 							} else {
 								F0 += cscale * Rvec[g];
@@ -1664,7 +1667,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					quokka::valarray<double, nGroups_> Jg0{};
 					quokka::valarray<double, nGroups_> Jgg{};
 
-					if (is_dust_rad_in_eq) {
+					if (is_dust_gas_decoupled) {
 						J00 = 0.0;
 						J0g.fillin(1.0);
 						Jg0 = dEg_dTd;
@@ -1702,7 +1705,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					AMREX_ASSERT(!std::isnan(delta_x));
 					AMREX_ASSERT(!delta_R.hasnan());
 
-					if (is_dust_rad_in_eq) {
+					if (is_dust_gas_decoupled) {
 						T_d += delta_x;
 						Rvec += delta_R;
 					} else {
@@ -2031,20 +2034,23 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		amrex::GpuArray<Real, 3> dMomentum{};
 		amrex::GpuArray<Real, 3> Frad_t1{};
 
+		Real gas_update_factor = 1.0;
+		if (stage == 1) {
+			gas_update_factor = IMEX_a32;
+		}
+
 		const double cscale = c / chat;
+		const double num_den = rho / mean_molecular_mass_;
+		double dust_coeff = NAN;
+		if constexpr (enable_dust_gas_thermal_coupling_model_) {
+			dust_coeff = dt * dustGasCoeff_local * num_den * num_den / cscale; // sum_g R = dust_coeff * sqrt(T_gas) * (T_gas - T_d)
+		}
 
 		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 			Etot0 = Egas0 + cscale * (Erad0 + Src);
 			AMREX_ASSERT(Egas0 > 0.0);
 		}
-
-		Real gas_update_factor = 1.0;
-		if (stage == 1) {
-			gas_update_factor = IMEX_a32;
-		}
-
-		const double num_den = rho / mean_molecular_mass_;
 
 		const int max_ite = 5;
 		int ite = 0;
@@ -2094,22 +2100,46 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				//
 				// The Jacobian of F(E_g, D_i) is
 				//
-				// dF_G / dE_g = 1
-				// dF_G / dD_i = c / chat * tau0_i
+				// dF0 / dE_g = 1
+				// dF0 / dD_i = c / chat * tau0_i
 				// dF_{D,i} / dE_g = 1 / (chat * C_v) * (kappa_{P,i} / kappa_{E,i}) * d/dT (4 \pi B_i)
 				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
 
-				double F_G = NAN;
+				double F0 = NAN;
+				double Fg = NAN;
 				double deltaEgas = NAN;
 				double deltaR = NAN;
-				double F_D = NAN;
 
-				const double resid_tol = 1.0e-11; // 1.0e-15;
+				const double convergence_tol_for_dust_gas_coupling = 1.0e-6;
+				double gamma_gd_time_dt = NAN;
+				bool is_dust_gas_decoupled = false;
+				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+				AMREX_ASSERT(T_gas >= 0.);
+				if constexpr (approx_decoupled_dust_and_gas_for_single_group && enable_dust_gas_thermal_coupling_model_) {
+					quokka::valarray<double, 1> EradVec_guess{Erad_guess};
+					T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, dustGasCoeff_local);
+					const double max_Gamma_gd = dust_coeff * std::max(std::sqrt(T_gas) * T_gas, std::sqrt(T_d) * T_d);
+					if (cscale * max_Gamma_gd < convergence_tol_for_dust_gas_coupling * Egas0) {
+						is_dust_gas_decoupled = true;
+						gamma_gd_time_dt = dust_coeff * std::sqrt(T_gas) * (T_gas - T_d);
+
+						// In decoupled case, we update gas and radiation energy via forward Euler. This is stable and a good approximation since 
+						// cscale * gamma_gd_time_dt is much smaller than Egas0.
+						Egas_guess += cscale * gamma_gd_time_dt; // update Egas_guess once and won't update it in the iteration
+						AMREX_ASSERT(Egas_guess > 0.0);
+						// T_gas is not used anymore, so we don't need to update it
+						Erad_guess -= gamma_gd_time_dt; // TODO(cch): Caveat: what if Erad_guess becomes negative in this step?
+						AMREX_ASSERT(Erad_guess > 0.0);
+					}
+				}
+
+				const double resid_tol = 1.0e-11;
 				const int maxIter = enable_dust_gas_thermal_coupling_model_ ? 100 : 50;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
+
 
 					// dust temperature
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
@@ -2127,6 +2157,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						if (T_d < 0.0) {
 							amrex::Gpu::Atomic::Add(p_num_failed_dust_local, 1);
 						}
+					}
+
+					if (is_dust_gas_decoupled) {
+						// if dust and gas are decoupled, Egas and Erad are already updated, so break after first iteration
+						// Note that the calculated of T_gas and T_d are still required.
+						break;
 					}
 
 					fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
@@ -2180,16 +2216,16 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						}
 					}
 
-					F_G = Egas_guess - Egas0;
-					F_D = Erad_guess - Erad0 - (R + Src);
+					F0 = Egas_guess - Egas0;
+					Fg = Erad_guess - Erad0 - (R + Src);
 					double F_D_abs = 0.0;
 					if (tau > 0.0) {
-						F_G += cscale * R;
-						F_D_abs = std::abs(F_D);
+						F0 += cscale * R;
+						F_D_abs = std::abs(Fg);
 					}
 
 					// check relative convergence of the residuals
-					if ((std::abs(F_G) < resid_tol * Etot0) && (cscale * F_D_abs < resid_tol * Etot0)) {
+					if ((std::abs(F0) < resid_tol * Etot0) && (cscale * F_D_abs < resid_tol * Etot0)) {
 						break;
 					}
 
@@ -2203,7 +2239,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					} else if (n >= maxIter - 10) {
 						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
 							  << ", tau = " << tau;
-						std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
+						std::cout << ", F0 = " << F0 << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
 					}
 #endif
 
@@ -2216,8 +2252,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
 
-					const double y0 = -F_G;
-					const auto y1 = -1. * F_D;
+					const double y0 = -F0;
+					const auto y1 = -1. * Fg;
 
 					// M_00
 					const double J00 = 1.0;
