@@ -1994,8 +1994,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		double kappaE = NAN;
 		double kappaF = NAN;
 		double kappaPoverE = NAN;
-		double tau0 = NAN;
-		double tau = NAN;
 		double work = 0.0;
 		double work_prev = 0.0;
 		amrex::GpuArray<Real, 3> dMomentum{};
@@ -2024,6 +2022,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			Erad_guess = Erad0;
 
 			if constexpr (gamma_ != 1.0) {
+				double tau0 = NAN;
+				double tau = NAN;
+
 				Egas_guess = Egas0;
 				Ekin0 = Egastot0 - Egas0;
 
@@ -2440,12 +2441,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
 			consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+			consNew(i, j, k, radEnergy_index) = Erad_guess;
 		} else {
 			amrex::ignore_unused(Erad_guess);
 			amrex::ignore_unused(Egas_guess);
-		}
-		if constexpr (gamma_ != 1.0) {
-			consNew(i, j, k, radEnergy_index) = Erad_guess;
+			amrex::ignore_unused(Egas0);
+			amrex::ignore_unused(Etot0);
 		}
 		consNew(i, j, k, x1RadFlux_index) = Frad_t1[0];
 		consNew(i, j, k, x2RadFlux_index) = Frad_t1[1];
