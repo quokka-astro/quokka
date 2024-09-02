@@ -2179,12 +2179,13 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson
 						// iteration
 						if (n == 0) {
-							amrex::Print() << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0 << "; C_V = " << c_v
-								  << ", a_rad = " << radiation_constant_ << std::endl;
+							amrex::Print() << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
+								       << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
 						} else if (n < 10 || n % 10 == 0) {
 							amrex::Print() << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
-								  << ", tau = " << tau << std::endl;
-							amrex::Print() << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
+								       << ", tau = " << tau << std::endl;
+							amrex::Print()
+							    << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
 						}
 					}
 
