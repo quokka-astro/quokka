@@ -206,7 +206,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				   double dustGasCoeff, int *p_iteration_counter, int *num_failed_coupling, int *num_failed_dust, int *p_num_failed_outer_ite);
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-				   double dustGasCoeff, int *p_iteration_counter, int *num_failed_coupling, int *num_failed_dust, int *p_num_failed_outer_ite);
+					      double dustGasCoeff, int *p_iteration_counter, int *num_failed_coupling, int *num_failed_dust,
+					      int *p_num_failed_outer_ite);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -263,22 +264,17 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto
 	ComputeThermalRadiationMultiGroup(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto
-	ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> double;
 
 	AMREX_GPU_HOST_DEVICE static auto
 	ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
 					      amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto
-	ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real;
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real;
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad,
 								 double dustGasCoeff, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
 								 amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
-
-	// AMREX_GPU_HOST_DEVICE static auto ComputeDustTemperatureSingleGroup(double T_gas, double T_d_init, double rho, double Erad,
-	// 							 double dustGasCoeff) -> double;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
@@ -330,9 +326,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 }
 
 // define ComputeThermalRadiation for single-group, returns the thermal radiation power = a_r * T^4
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature)
-    -> Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> Real
 {
 	double power = radiation_constant_ * std::pow(temperature, 4);
 	// set floor
@@ -359,9 +353,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 	return Erad_g;
 }
 
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real
 {
 	// by default, d emission/dT = 4 emission / T
 	return 4. * radiation_constant_ * std::pow(temperature, 3);
@@ -1495,8 +1487,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 							kappaEVec[g] = kappa_expo_and_lower_value[1][g];
 						}
 					} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
-						kappaPVec =
-								ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
+						kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
 						kappaEVec = kappaPVec;
 					} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 						if (n < max_ite_to_update_alpha_E) {
@@ -1532,9 +1523,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 							kappaFVec = kappaPVec;
 						} else {
 							if constexpr (use_diffuse_flux_mean_opacity) {
-								kappaFVec = ComputeDiffusionFluxMeanOpacity(
-										kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
-										kappa_expo_and_lower_value[0]);
+								kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC,
+													    delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
+													    kappa_expo_and_lower_value[0]);
 							} else {
 								// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
 								// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't
@@ -1555,11 +1546,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 									// work = v * F * chi
 									if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 										work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) *
-												kappaFVec[g] * chat / (c * c) * dt;
+											  kappaFVec[g] * chat / (c * c) * dt;
 									} else {
 										work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) *
-												(1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat /
-												(c * c) * dt;
+											  (1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat /
+											  (c * c) * dt;
 									}
 								}
 							}
@@ -1731,9 +1722,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 						kappaFVec = kappaPVec;
 					} else {
 						if constexpr (use_diffuse_flux_mean_opacity) {
-							kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC,
-														delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
-														kappa_expo_and_lower_value[0]);
+							kappaFVec =
+							    ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge,
+											    delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
 						} else {
 							// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
 							// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't use this
@@ -1936,8 +1927,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
-					  const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling, int *p_num_failed_dust,
-					  int *p_num_failed_outer_ite)
+						     const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling,
+						     int *p_num_failed_dust, int *p_num_failed_outer_ite)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -2129,8 +2120,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 								const double frad1 = consPrev(i, j, k, x2RadFlux_index);
 								const double frad2 = consPrev(i, j, k, x3RadFlux_index);
 								// work = v * F * chi
-								work = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) *
-										(2.0 * kappaE - kappaF) * chat / (c * c) * lorentz_factor_v * dt;
+								work = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * (2.0 * kappaE - kappaF) *
+								       chat / (c * c) * lorentz_factor_v * dt;
 							}
 						}
 
@@ -2182,13 +2173,14 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 #endif
 
 					if constexpr (debug_radiation_Newton_iteration == 1) {
-						// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
+						// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson
+						// iteration
 						if (n == 0) {
-							std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
-									<< "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+							std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0 << "; C_V = " << c_v
+								  << ", a_rad = " << radiation_constant_ << std::endl;
 						} else if (n < 10 || n % 10 == 0) {
 							std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
-									<< ", tau = " << tau;
+								  << ", tau = " << tau;
 							std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
 						}
 					}
@@ -2335,8 +2327,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 							dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
 						}
 					} else {
-						const double K0 =
-								2.0 * rho * chat * dt * (kappaF - kappaE) / c / c * std::pow(lorentz_factor_v_v, 3);
+						const double K0 = 2.0 * rho * chat * dt * (kappaF - kappaE) / c / c * std::pow(lorentz_factor_v_v, 3);
 
 						// A test to see if this routine reduces to the correct result when ignoring the beta^2 terms
 						// const double X0 = 1.0 + rho * chat * dt * (kappaF);
@@ -2417,8 +2408,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				work_prev = work;
 				// compute new work term from the updated radiation flux and velocity
 				// work = v * F * chi
-				work = (x1GasMom1 * Frad_t1[0] + x2GasMom1 * Frad_t1[1] + x3GasMom1 * Frad_t1[2]) * chat / (c * c) *
-						lorentz_factor_v * (2.0 * kappaE - kappaF) * dt;
+				work = (x1GasMom1 * Frad_t1[0] + x2GasMom1 * Frad_t1[1] + x3GasMom1 * Frad_t1[2]) * chat / (c * c) * lorentz_factor_v *
+				       (2.0 * kappaE - kappaF) * dt;
 
 				// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 				const double lag_tol = 1.0e-13;

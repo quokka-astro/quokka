@@ -1859,8 +1859,8 @@ void QuokkaSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::
 
 	// cell-centered source terms
 	if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
-		RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_, p_iteration_counter,
-					     	 p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer_ite);
+		RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_,
+								p_iteration_counter, p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer_ite);
 	} else {
 		RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_, p_iteration_counter,
 					     	 p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer_ite);
