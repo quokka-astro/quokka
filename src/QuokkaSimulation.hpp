@@ -1862,7 +1862,7 @@ void QuokkaSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::
 		RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_, p_iteration_counter,
 					     	 p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer_ite);
 	} else {
-		RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_, p_iteration_counter,
+		RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew, radEnergySource.const_array(), indexRange, dt, stage, dustGasInteractionCoeff_, p_iteration_counter,
 					     	 p_num_failed_coupling, p_num_failed_dust, p_num_failed_outer_ite);
 	}
 }
