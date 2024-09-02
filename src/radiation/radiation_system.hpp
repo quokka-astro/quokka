@@ -1586,26 +1586,18 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							// compute the work term at the old state
 							// const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
 							if (ite == 0) {
-								// TODO: merge the following two cases
-								if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-									for (int g = 0; g < nGroups_; ++g) {
-										const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-										const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-										const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
-										// work = v * F * chi
+								for (int g = 0; g < nGroups_; ++g) {
+									const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+									const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+									const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+									// work = v * F * chi
+									if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 										work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) *
-											  kappaFVec[g] * chat / (c * c) * dt;
-									}
-								} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum ||
-										     opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-									for (int g = 0; g < nGroups_; ++g) {
-										const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-										const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-										const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
-										// work = v * F * chi
+												kappaFVec[g] * chat / (c * c) * dt;
+									} else {
 										work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) *
-											  (1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat /
-											  (c * c) * dt;
+												(1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat /
+												(c * c) * dt;
 									}
 								}
 							}
@@ -1816,7 +1808,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				if constexpr ((gamma_ != 1.0) && (beta_order_ == 1)) {
 					const auto erad = EradVec_guess[g];
-					std::array<double, 3> gasVel{};
 					std::array<double, 3> v_terms{};
 
 					auto fx = Frad_t0[0] / (c_light_ * erad);
@@ -2227,7 +2218,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					}
 #endif
 
-					if constexpr (debug_radiation_Newton_iteration) {
+					if constexpr (debug_radiation_Newton_iteration == 1) {
 						// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 						if (n == 0) {
 							std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
