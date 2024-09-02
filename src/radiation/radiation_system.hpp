@@ -39,7 +39,6 @@ static constexpr bool use_diffuse_flux_mean_opacity = true;
 static constexpr bool special_edge_bin_slopes = false;	    // Use 2 and -4 as the slopes for the first and last bins, respectively
 static constexpr bool force_rad_floor_in_iteration = false; // force radiation energy density to be positive (and above the floor value) in the Newton iteration
 static constexpr bool include_work_term_in_source = true;
-static constexpr int debug_radiation_Newton_iteration = 0;
 
 static const int max_ite_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_ite_to_update_alpha_E
 // iterations of the Newton iteration
@@ -2174,20 +2173,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
 					}
 #endif
-
-					if constexpr (debug_radiation_Newton_iteration == 1) {
-						// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson
-						// iteration
-						if (n == 0) {
-							amrex::Print() << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
-								       << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
-						} else if (n < 10 || n % 10 == 0) {
-							amrex::Print() << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
-								       << ", tau = " << tau << std::endl;
-							amrex::Print()
-							    << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
-						}
-					}
 
 					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
 					AMREX_ASSERT(!std::isnan(d_fourpiboverc_d_t));
