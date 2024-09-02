@@ -82,8 +82,9 @@ RadSystem<DustProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<dou
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationMultiGroup(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-    -> quokka::valarray<amrex::Real, nGroups_>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<DustProblem>::ComputeThermalRadiationMultiGroup(amrex::Real temperature,
+							  amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
 {
 	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	const double power = radiation_constant_ * temperature;
