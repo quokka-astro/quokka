@@ -191,6 +191,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	return T;
 }
 
+// TODO(cch): move ComputeRadPressure to transport.hpp
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,

@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cmath>
+#include <functional>
 
 // library headers
 #include "AMReX.H" // IWYU pragma: keep
@@ -76,6 +77,17 @@ template <typename problem_t> struct RadSystem_Traits {
 struct RadPressureResult {
 	quokka::valarray<double, 4> F; // components of radiation pressure tensor
 	double S;		       // maximum wavespeed for the radiation system
+};
+
+// A struct to hold the results of ComputeJacobianForPureGas or ComputeJacobianForGasAndDust
+template <typename problem_t> struct JacobianResult {
+	double J00;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> J0g;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg0;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jgg;
+	double F0;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;
+	double Fg_abs_sum;
 };
 
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
@@ -190,6 +202,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
+
+	static auto ComputeJacobianForPureGas(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> Erad_diff, 
+		quokka::valarray<double, nGroups_> Rvec, quokka::valarray<double, nGroups_> Src, double coeff_n,
+		quokka::valarray<double, nGroups_> tau, double c_v, double cscale, quokka::valarray<double, nGroups_> kappaPoverE, 
+		quokka::valarray<double, nGroups_> d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+
+	static auto ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> Erad_diff, 
+		quokka::valarray<double, nGroups_> Rvec, quokka::valarray<double, nGroups_> Src, double coeff_n,
+		quokka::valarray<double, nGroups_> tau, double c_v, double cscale, quokka::valarray<double, nGroups_> kappaPoverE, 
+		quokka::valarray<double, nGroups_> d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
 					     double dustGasCoeff, int *p_iteration_counter, int *num_failed_coupling, int *num_failed_dust,
