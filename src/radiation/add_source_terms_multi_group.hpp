@@ -1,4 +1,6 @@
-// IWYU pragma: private; include "radiation_system.h"
+// IWYU pragma: private; include "radiation/radiation_system.hpp"
+#ifndef ADD_SOURCE_TERMS_MULTI_GROUP_HPP_ // NOLINT
+#define ADD_SOURCE_TERMS_MULTI_GROUP_HPP_
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
@@ -639,3 +641,5 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		}
 	});
 }
+
+#endif // ADD_SOURCE_TERMS_MULTI_GROUP_HPP_

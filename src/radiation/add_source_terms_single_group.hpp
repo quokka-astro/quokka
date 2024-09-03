@@ -1,4 +1,6 @@
-// IWYU pragma: private; include "radiation_system.h"
+// IWYU pragma: private; include "radiation/radiation_system.hpp"
+#ifndef ADD_SOURCE_TERMS_SINGLE_GROUP_HPP_ // NOLINT
+#define ADD_SOURCE_TERMS_SINGLE_GROUP_HPP_
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
@@ -522,3 +524,5 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		consNew(i, j, k, x3RadFlux_index) = Frad_t1[2];
 	});
 }
+
+#endif // ADD_SOURCE_TERMS_SINGLE_GROUP_HPP_
