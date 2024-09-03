@@ -7,4 +7,4 @@
 /// \brief Implements methods for solving the (1d) radiation moment equations.
 ///
 
-#include "radiation/radiation_system.hpp"
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep
