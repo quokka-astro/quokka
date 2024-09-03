@@ -2149,9 +2149,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 									Egas_guess -= (c / chat) * (Erad_floor_ - Erad_guess);
 									Erad_guess = Erad_floor_;
 								}
-							} else {
-								// AMREX_ASSERT(Erad_guess > 0.0);
 							}
+							// In general, Erad_guess is not guaranteed to be positive during the iteration steps. 
+							// This is fine as long as it is positive at the end of the iteration. However, if Erad_guess 
+							// is negative in the last iteration, we need to turn on force_rad_floor_in_iteration to
+							// correct it. This is a backup safety measure. For all the test problems I have tried, this
+							// is not necessary.
 						}
 					}
 
