@@ -83,18 +83,16 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
 // solve the linear system
-//   [a00 a0i] [x0] = [y0]
-//   [ai0 aii] [xi]   [yi]
-// for x0 and xi, where a0i = (a01, a02, a03, ...); ai0 = (a10, a20, a30, ...); aii = (a11, a22, a33, ...), xi = (x1, x2, x3, ...), yi = (y1, y2, y3, ...)
+//   [J00 J0g] [x0] - [F0] = 0
+//   [Jg0 Jgg] [xg] - [Fg] = 0
+// for x0 and xg, where g = 1, 2, ..., nGroups
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(const double a00, const quokka::valarray<double, nGroups_> &a0i,
-								const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii,
-								const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
-								quokka::valarray<double, nGroups_> &xi)
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(
+	JacobianResult<problem_t> jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
 {
-	auto ratios = a0i / aii;
-	x0 = (-sum(ratios * yi) + y0) / (-sum(ratios * ai0) + a00);
-	xi = (yi - ai0 * x0) / aii;
+	auto ratios = jacobian.J0g / jacobian.Jgg;
+	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
+	xi = (-1.0 * jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
 }
 
 template <typename problem_t>

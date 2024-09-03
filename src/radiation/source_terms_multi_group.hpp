@@ -492,9 +492,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					}
 
 					// update variables
-					const double y0 = -jacobian.F0;
-					auto yg = -1. * jacobian.Fg;
-					RadSystem<problem_t>::SolveLinearEqs(jacobian.J00, jacobian.J0g, jacobian.Jg0, jacobian.Jgg, y0, yg, deltaEgas, deltaD);
+					RadSystem<problem_t>::SolveLinearEqs(jacobian, deltaEgas, deltaD);
 					AMREX_ASSERT(!std::isnan(deltaEgas));
 					AMREX_ASSERT(!deltaD.hasnan());
 
