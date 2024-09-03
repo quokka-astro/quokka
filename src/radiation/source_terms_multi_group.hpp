@@ -7,12 +7,12 @@
 
 template <typename problem_t>
 auto RadSystem<problem_t>::ComputeJacobianForPureGas(double /*T_gas*/, double /*T_d*/, 
-	double Egas_diff, quokka::valarray<double, nGroups_> Erad_diff, 
-	quokka::valarray<double, nGroups_> Rvec, quokka::valarray<double, nGroups_> Src, 
+	double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, 
+	quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, 
 	double /*coeff_n*/,
-	quokka::valarray<double, nGroups_> tau, double c_v, double cscale, 
-	quokka::valarray<double, nGroups_> kappaPoverE, 
-	quokka::valarray<double, nGroups_> d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+	quokka::valarray<double, nGroups_> const &tau, double c_v, double cscale, 
+	quokka::valarray<double, nGroups_> const &kappaPoverE, 
+	quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -51,12 +51,12 @@ auto RadSystem<problem_t>::ComputeJacobianForPureGas(double /*T_gas*/, double /*
 
 template <typename problem_t>
 auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff,
-	quokka::valarray<double, nGroups_> Erad_diff, 
-	quokka::valarray<double, nGroups_> Rvec, quokka::valarray<double, nGroups_> Src, 
+	quokka::valarray<double, nGroups_> const &Erad_diff, 
+	quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, 
 	double coeff_n,
-	quokka::valarray<double, nGroups_> tau, double c_v, double cscale, 
-	quokka::valarray<double, nGroups_> kappaPoverE, 
-	quokka::valarray<double, nGroups_> d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+	quokka::valarray<double, nGroups_> const &tau, double c_v, double cscale, 
+	quokka::valarray<double, nGroups_> const &kappaPoverE, 
+	quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
