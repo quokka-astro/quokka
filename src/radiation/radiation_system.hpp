@@ -100,6 +100,19 @@ template <typename problem_t> struct JacobianResult {
 	double Fg_abs_sum;
 };
 
+template <typename problem_t> struct NewtonIterationResult {	
+	int n;
+	double Egas;
+	double T_gas;
+	double T_d;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge;
+};
+
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
 {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
@@ -296,6 +309,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 						 double dt, double R_sum, int n_step,
 			       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
 			       amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
+
+	AMREX_GPU_HOST_DEVICE static auto 
+	SolveMatterRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src, amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy, amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
