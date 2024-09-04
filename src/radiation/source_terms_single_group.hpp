@@ -90,6 +90,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		}
 
 		const double num_den = rho / mean_molecular_mass_;
+		const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 
 		const int max_ite = 5;
 		int ite = 0;
@@ -160,15 +161,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 						T_d = T_gas;
 					} else {
-						if (n == 0) {
-							const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
-							T_d = ComputeDustTemperature(T_gas, T_gas, rho, Erad_guess_vec, dustGasCoeff_local);
-							AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
-						} else {
-							const auto Lambda_gd = R / (dt * chat / c);
-							T_d = T_gas - Lambda_gd / (dustGasCoeff_local * num_den * num_den * std::sqrt(T_gas));
-							AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
-						}
+						const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
+						T_d = ComputeDustTemperature(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n);
+						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 						if (T_d < 0.0) {
 							amrex::Gpu::Atomic::Add(p_num_failed_dust_local, 1);
 						}
@@ -281,7 +276,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 						dEg_dT *= d_Td_d_T;
-						const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 
 						J00 = 1.0;
