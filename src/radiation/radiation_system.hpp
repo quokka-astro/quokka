@@ -13,9 +13,10 @@
 
 #include <array>
 #include <cmath>
+#include <functional>
 
 // library headers
-#include "AMReX.H"
+#include "AMReX.H" // IWYU pragma: keep
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
@@ -46,9 +47,6 @@ static constexpr bool enable_dE_constrain = true;
 static constexpr bool use_D_as_base = false;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
-
-// ISM
-// static constexpr bool approx_decoupled_dust_and_gas_for_single_group = true;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -89,6 +87,17 @@ template <typename problem_t> struct RadSystem_Traits {
 struct RadPressureResult {
 	quokka::valarray<double, 4> F; // components of radiation pressure tensor
 	double S;		       // maximum wavespeed for the radiation system
+};
+
+// A struct to hold the results of ComputeJacobianForPureGas or ComputeJacobianForGasAndDust
+template <typename problem_t> struct JacobianResult {
+	double J00;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> J0g;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg0;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jgg;
+	double F0;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;
+	double Fg_abs_sum;
 };
 
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
@@ -174,8 +183,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		      "OpacityModel::single_group MUST be used when nGroups_ == 1. If nGroups_ > 1, you MUST set opacity_model."); // NOLINT
 
 	// Assertion: PPL_opacity_full_spectrum requires at least 3 photon groups
-	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum),
-		      "PPL_opacity_full_spectrum requires at least 3 photon groups."); // NOLINT
+	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
+		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
 
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
@@ -203,6 +212,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
+
+	static auto ComputeJacobianForPureGas(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, 
+		quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
+		quokka::valarray<double, nGroups_> const &tau, double c_v, double cscale, quokka::valarray<double, nGroups_> const &kappaPoverE, 
+		quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+
+	static auto ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, 
+		quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
+		quokka::valarray<double, nGroups_> const &tau, double c_v, double cscale, quokka::valarray<double, nGroups_> const &kappaPoverE, 
+		quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
 					     double dustGasCoeff, int *p_iteration_counter, int *num_failed_coupling, int *num_failed_dust,
@@ -253,10 +272,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto
 	ComputeRadQuantityExponents(ArrayType const &quant, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> amrex::GpuArray<double, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static void SolveLinearEqs(double a00, const quokka::valarray<double, nGroups_> &a0i,
-							 const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii,
-							 const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
-							 quokka::valarray<double, nGroups_> &xi);
+	AMREX_GPU_HOST_DEVICE static void SolveLinearEqs(JacobianResult<problem_t> jacobian, double &x0, quokka::valarray<double, nGroups_> &xi);
 
 	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21,
 							 double C22, double Y0, double Y1, double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
@@ -376,18 +392,16 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
 // solve the linear system
-//   [a00 a0i] [x0] = [y0]
-//   [ai0 aii] [xi]   [yi]
-// for x0 and xi, where a0i = (a01, a02, a03, ...); ai0 = (a10, a20, a30, ...); aii = (a11, a22, a33, ...), xi = (x1, x2, x3, ...), yi = (y1, y2, y3, ...)
+//   [J00 J0g] [x0] - [F0] = 0
+//   [Jg0 Jgg] [xg] - [Fg] = 0
+// for x0 and xg, where g = 1, 2, ..., nGroups
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(const double a00, const quokka::valarray<double, nGroups_> &a0i,
-								const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii,
-								const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
-								quokka::valarray<double, nGroups_> &xi)
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(
+	JacobianResult<problem_t> jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
 {
-	auto ratios = a0i / aii;
-	x0 = (-sum(ratios * yi) + y0) / (-sum(ratios * ai0) + a00);
-	xi = (yi - ai0 * x0) / aii;
+	auto ratios = jacobian.J0g / jacobian.Jgg;
+	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
+	xi = (-1.0 * jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
 }
 
 template <typename problem_t>
