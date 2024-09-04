@@ -74,7 +74,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(do
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
 	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
-	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.	
+	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] <= 0.0) {
@@ -88,7 +88,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(do
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation, const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling, int *p_num_failed_dust, int *p_num_failed_outer_ite)
+void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
+						    const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling,
+						    int *p_num_failed_dust, int *p_num_failed_outer_ite)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -385,11 +387,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 					if (enable_dust_gas_thermal_coupling_model_) {
 						const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
-						jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, 
-										tau, c_v, cscale, kappaPoverE, d_fourpiboverc_d_t);
+						jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, cscale,
+											kappaPoverE, d_fourpiboverc_d_t);
 					} else {
-						jacobian = ComputeJacobianForPureGas(NAN, NAN, Egas_diff, Erad_diff, Rvec, Src, NAN, 
-										tau, c_v, cscale, kappaPoverE, d_fourpiboverc_d_t);
+						jacobian = ComputeJacobianForPureGas(NAN, NAN, Egas_diff, Erad_diff, Rvec, Src, NAN, tau, c_v, cscale,
+										     kappaPoverE, d_fourpiboverc_d_t);
 					}
 
 					if constexpr (use_D_as_base) {
@@ -420,7 +422,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					AMREX_ASSERT(!deltaD.hasnan());
 
 					// Update independent variables (Egas_guess, Rvec)
-					// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation temperature
+					// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation
+					// temperature
 					if (!enable_dE_constrain) {
 						Egas_guess += deltaEgas;
 						if constexpr (use_D_as_base) {

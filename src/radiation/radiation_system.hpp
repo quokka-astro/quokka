@@ -396,8 +396,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 //   [Jg0 Jgg] [xg] - [Fg] = 0
 // for x0 and xg, where g = 1, 2, ..., nGroups
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(
-	JacobianResult<problem_t> jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(JacobianResult<problem_t> jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
 {
 	auto ratios = jacobian.J0g / jacobian.Jgg;
 	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
@@ -1311,7 +1310,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 	return T_d;
 }
 
-#include "radiation/source_terms_multi_group.hpp"	 // IWYU pragma: export
+#include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 
 #endif // RADIATION_SYSTEM_HPP_
