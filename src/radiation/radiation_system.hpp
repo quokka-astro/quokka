@@ -9,6 +9,8 @@
 /// \brief Defines a class for solving the (1d) radiation moment equations.
 ///
 
+// c++ headers
+
 #include <array>
 #include <cmath>
 #include <functional>
@@ -18,8 +20,8 @@
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
-// #include "AMReX_IParser_Y.H"
-// #include "AMReX_IntVect.H"
+#include "AMReX_IParser_Y.H"
+#include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
 // internal headers
@@ -310,36 +312,125 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
 };
 
+// Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
+// This function enforces that the total fraction is 1.0, no matter what are the group boundaries
 template <typename problem_t>
-template <typename ArrayType>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
+									      amrex::Real temperature) -> quokka::valarray<amrex::Real, nGroups_>
 {
-	amrex::GpuArray<Real, nmscalars_> massScalars;
-	for (int n = 0; n < nmscalars_; ++n) {
-		massScalars[n] = arr(i, j, k, scalar0_index + n);
+	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
+	if constexpr (nGroups_ == 1) {
+		radEnergyFractions[0] = 1.0;
+		return radEnergyFractions;
+	} else {
+		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
+		amrex::Real y = NAN;
+		amrex::Real previous = 0.0;
+		for (int g = 0; g < nGroups_ - 1; ++g) {
+			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+			if (x >= 100.) { // 100. is the upper limit of x in the table
+				y = 1.0;
+			} else {
+				y = integrate_planck_from_0_to_x(x);
+			}
+			radEnergyFractions[g] = y - previous;
+			previous = y;
+		}
+		// last group, enforcing the total fraction to be 1.0
+		y = 1.0;
+		radEnergyFractions[nGroups_ - 1] = y - previous;
+		AMREX_ASSERT(std::abs(sum(radEnergyFractions) - 1.0) < 1.0e-10);
+
+		return radEnergyFractions;
 	}
-	return massScalars;
+}
+
+// define ComputeThermalRadiation for single-group, returns the thermal radiation power = a_r * T^4
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> Real
+{
+	double power = radiation_constant_ * std::pow(temperature, 4);
+	// set floor
+	if (power < Erad_floor_) {
+		power = Erad_floor_;
+	}
+	return power;
+}
+
+// define ComputeThermalRadiationMultiGroup, returns the thermal radiation power for each photon group. = a_r * T^4 * radEnergyFractions
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<problem_t>::ComputeThermalRadiationMultiGroup(amrex::Real temperature,
+							amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
+{
+	const double power = radiation_constant_ * std::pow(temperature, 4);
+	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
+	auto Erad_g = power * radEnergyFractions;
+	// set floor
+	for (int g = 0; g < nGroups_; ++g) {
+		if (Erad_g[g] < Erad_floor_) {
+			Erad_g[g] = Erad_floor_;
+		}
+	}
+	return Erad_g;
+}
+
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real
+{
+	// by default, d emission/dT = 4 emission / T
+	return 4. * radiation_constant_ * std::pow(temperature, 3);
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
-								     const double Etot) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeMultiGroup(
+    amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
 {
-	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
-	const double Ekin = p_sq / (2.0 * density);
-	const double Eint = Etot - Ekin;
-	AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
-	return Eint;
+	// by default, d emission/dT = 4 emission / T
+	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
+	double d_power_dt = 4. * radiation_constant_ * std::pow(temperature, 3);
+	return d_power_dt * radEnergyFractions;
+}
+
+// Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
+// solve the linear system
+//   [J00 J0g] [x0] - [F0] = 0
+//   [Jg0 Jgg] [xg] - [Fg] = 0
+// for x0 and xg, where g = 1, 2, ..., nGroups
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(
+	JacobianResult<problem_t> jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
+{
+	auto ratios = jacobian.J0g / jacobian.Jgg;
+	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
+	xi = (-1.0 * jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
-								     const double Eint) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00, const double C01, const double C02, const double C10, const double C11,
+								const double C12, const double C20, const double C21, const double C22, const double Y0,
+								const double Y1, const double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>
 {
-	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
-	const double Ekin = p_sq / (2.0 * density);
-	const double Etot = Eint + Ekin;
-	return Etot;
+	// Solve the 3x3 matrix equation: C * X = Y under the assumption that only the diagonal terms
+	// are guaranteed to be non-zero and are thus allowed to be divided by.
+
+	auto E11 = C11 - C01 * C10 / C00;
+	auto E12 = C12 - C02 * C10 / C00;
+	auto E21 = C21 - C01 * C20 / C00;
+	auto E22 = C22 - C02 * C20 / C00;
+	auto Z1 = Y1 - Y0 * C10 / C00;
+	auto Z2 = Y2 - Y0 * C20 / C00;
+	auto X2 = (Z2 - Z1 * E21 / E11) / (E22 - E12 * E21 / E11);
+	auto X1 = (Z1 - E12 * X2) / E11;
+	auto X0 = (Y0 - C01 * X1 - C02 * X2) / C00;
+
+	return std::make_tuple(X0, X1, X2);
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time)
+{
+	// do nothing -- user implemented
 }
 
 template <typename problem_t>
@@ -526,6 +617,36 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 	});
 }
 
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
+{
+	// f is the reduced flux == |F|/cE.
+	// compute Levermore (1984) closure [Eq. 25]
+	// the is the M1 closure that is derived from Lorentz invariance
+	const double f = clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
+	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
+	const double chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
+
+#if 0 // NOLINT
+      // compute Minerbo (1978) closure [piecewise approximation]
+      // (For unknown reasons, this closure tends to work better
+      // than the Levermore/Lorentz closure on the Su & Olson 1997 test.)
+	const double chi = (f < 1. / 3.) ? (1. / 3.) : (0.5 - f + 1.5 * f*f);
+#endif
+
+	return chi;
+}
+
+template <typename problem_t>
+template <typename ArrayType>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>
+{
+	amrex::GpuArray<Real, nmscalars_> massScalars;
+	for (int n = 0; n < nmscalars_; ++n) {
+		massScalars[n] = arr(i, j, k, scalar0_index + n);
+	}
+	return massScalars;
+}
+
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto
@@ -593,6 +714,118 @@ RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amr
 	}
 
 	return optical_depths;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double fx, const double fy, const double fz) -> std::array<std::array<double, 3>, 3>
+{
+	// Compute the radiation pressure tensor
+
+	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
+	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
+
+	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
+	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
+
+	// angle between interface and radiation flux \hat{n}
+	// If direction is undefined, just drop direction-dependent
+	// terms.
+	std::array<amrex::Real, 3> n{};
+
+	for (int ii = 0; ii < 3; ++ii) {
+		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
+	}
+
+	// compute radiation pressure tensors
+	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
+
+	AMREX_ASSERT((chi >= 1. / 3.) && (chi <= 1.0)); // NOLINT
+
+	// diagonal term of Eddington tensor
+	const double Tdiag = (1.0 - chi) / 2.0;
+
+	// anisotropic term of Eddington tensor (in the direction of the
+	// rad. flux)
+	const double Tf = (3.0 * chi - 1.0) / 2.0;
+
+	// assemble Eddington tensor
+	std::array<std::array<double, 3>, 3> T{};
+
+	for (int ii = 0; ii < 3; ++ii) {
+		for (int jj = 0; jj < 3; ++jj) {
+			const double delta_ij = (ii == jj) ? 1 : 0;
+			T[ii][jj] = Tdiag * delta_ij + Tf * (n[ii] * n[jj]);
+		}
+	}
+
+	return T;
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
+							       const double fy, const double fz) -> RadPressureResult
+{
+	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct.
+
+	// check that states are physically admissible
+	AMREX_ASSERT(erad > 0.0);
+
+	// Compute the Eddington tensor
+	auto T = ComputeEddingtonTensor(fx, fy, fz);
+
+	// frozen Eddington tensor approximation, following Balsara
+	// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
+	double Tnormal = NAN;
+	if constexpr (DIR == FluxDir::X1) {
+		Tnormal = T[0][0];
+	} else if constexpr (DIR == FluxDir::X2) {
+		Tnormal = T[1][1];
+	} else if constexpr (DIR == FluxDir::X3) {
+		Tnormal = T[2][2];
+	}
+
+	// compute fluxes F_L, F_R
+	// T_nx, T_ny, T_nz indicate components where 'n' is the direction of the
+	// face normal. F_n is the radiation flux component in the direction of the
+	// face normal
+	double Fn = NAN;
+	double Tnx = NAN;
+	double Tny = NAN;
+	double Tnz = NAN;
+
+	if constexpr (DIR == FluxDir::X1) {
+		Fn = Fx;
+
+		Tnx = T[0][0];
+		Tny = T[0][1];
+		Tnz = T[0][2];
+	} else if constexpr (DIR == FluxDir::X2) {
+		Fn = Fy;
+
+		Tnx = T[1][0];
+		Tny = T[1][1];
+		Tnz = T[1][2];
+	} else if constexpr (DIR == FluxDir::X3) {
+		Fn = Fz;
+
+		Tnx = T[2][0];
+		Tny = T[2][1];
+		Tnz = T[2][2];
+	}
+
+	AMREX_ASSERT(Fn != NAN);
+	AMREX_ASSERT(Tnx != NAN);
+	AMREX_ASSERT(Tny != NAN);
+	AMREX_ASSERT(Tnz != NAN);
+
+	RadPressureResult result{};
+	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
+	// It might be possible to remove this 0.1 floor without affecting the code. I tried and only the 3D RadForce failed (causing S_L = S_R = 0.0 and F[0] =
+	// NAN). Read more on https://github.com/quokka-astro/quokka/pull/582 .
+	result.S = std::max(0.1, std::sqrt(Tnormal));
+
+	return result;
 }
 
 template <typename problem_t>
@@ -751,260 +984,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 	});
 }
 
-// Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
-// This function enforces that the total fraction is 1.0, no matter what are the group boundaries
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
-									      amrex::Real temperature) -> quokka::valarray<amrex::Real, nGroups_>
-{
-	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
-	if constexpr (nGroups_ == 1) {
-		radEnergyFractions[0] = 1.0;
-		return radEnergyFractions;
-	} else {
-		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real y = NAN;
-		amrex::Real previous = 0.0;
-		for (int g = 0; g < nGroups_ - 1; ++g) {
-			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
-			if (x >= 100.) { // 100. is the upper limit of x in the table
-				y = 1.0;
-			} else {
-				y = integrate_planck_from_0_to_x(x);
-			}
-			radEnergyFractions[g] = y - previous;
-			previous = y;
-		}
-		// last group, enforcing the total fraction to be 1.0
-		y = 1.0;
-		radEnergyFractions[nGroups_ - 1] = y - previous;
-		AMREX_ASSERT(std::abs(sum(radEnergyFractions) - 1.0) < 1.0e-10);
-
-		return radEnergyFractions;
-	}
-}
-
-// define ComputeThermalRadiation for single-group, returns the thermal radiation power = a_r * T^4
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> Real
-{
-	double power = radiation_constant_ * std::pow(temperature, 4);
-	// set floor
-	if (power < Erad_floor_) {
-		power = Erad_floor_;
-	}
-	return power;
-}
-
-// define ComputeThermalRadiationMultiGroup, returns the thermal radiation power for each photon group. = a_r * T^4 * radEnergyFractions
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<problem_t>::ComputeThermalRadiationMultiGroup(amrex::Real temperature,
-							amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
-{
-	const double power = radiation_constant_ * std::pow(temperature, 4);
-	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	auto Erad_g = power * radEnergyFractions;
-	// set floor
-	for (int g = 0; g < nGroups_; ++g) {
-		if (Erad_g[g] < Erad_floor_) {
-			Erad_g[g] = Erad_floor_;
-		}
-	}
-	return Erad_g;
-}
-
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real
-{
-	// by default, d emission/dT = 4 emission / T
-	return 4. * radiation_constant_ * std::pow(temperature, 3);
-}
-
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeMultiGroup(
-    amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
-{
-	// by default, d emission/dT = 4 emission / T
-	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	double d_power_dt = 4. * radiation_constant_ * std::pow(temperature, 3);
-	return d_power_dt * radEnergyFractions;
-}
-
-// Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
-// solve the linear system
-//   [J00 J0g] [x0] - [F0] = 0
-//   [Jg0 Jgg] [xg] - [Fg] = 0
-// for x0 and xg, where g = 1, 2, ..., nGroups
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(
-	JacobianResult<problem_t> jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
-{
-	auto ratios = jacobian.J0g / jacobian.Jgg;
-	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
-	xi = (-1.0 * jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
-}
-
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00, const double C01, const double C02, const double C10, const double C11,
-								const double C12, const double C20, const double C21, const double C22, const double Y0,
-								const double Y1, const double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>
-{
-	// Solve the 3x3 matrix equation: C * X = Y under the assumption that only the diagonal terms
-	// are guaranteed to be non-zero and are thus allowed to be divided by.
-
-	auto E11 = C11 - C01 * C10 / C00;
-	auto E12 = C12 - C02 * C10 / C00;
-	auto E21 = C21 - C01 * C20 / C00;
-	auto E22 = C22 - C02 * C20 / C00;
-	auto Z1 = Y1 - Y0 * C10 / C00;
-	auto Z2 = Y2 - Y0 * C20 / C00;
-	auto X2 = (Z2 - Z1 * E21 / E11) / (E22 - E12 * E21 / E11);
-	auto X1 = (Z1 - E12 * X2) / E11;
-	auto X0 = (Y0 - C01 * X1 - C02 * X2) / C00;
-
-	return std::make_tuple(X0, X1, X2);
-}
-
-template <typename problem_t>
-void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time)
-{
-	// do nothing -- user implemented
-}
-
-
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
-{
-	// f is the reduced flux == |F|/cE.
-	// compute Levermore (1984) closure [Eq. 25]
-	// the is the M1 closure that is derived from Lorentz invariance
-	const double f = clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
-	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
-	const double chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
-
-#if 0 // NOLINT
-      // compute Minerbo (1978) closure [piecewise approximation]
-      // (For unknown reasons, this closure tends to work better
-      // than the Levermore/Lorentz closure on the Su & Olson 1997 test.)
-	const double chi = (f < 1. / 3.) ? (1. / 3.) : (0.5 - f + 1.5 * f*f);
-#endif
-
-	return chi;
-}
-
-template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double fx, const double fy, const double fz) -> std::array<std::array<double, 3>, 3>
-{
-	// Compute the radiation pressure tensor
-
-	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
-	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
-
-	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
-	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
-
-	// angle between interface and radiation flux \hat{n}
-	// If direction is undefined, just drop direction-dependent
-	// terms.
-	std::array<amrex::Real, 3> n{};
-
-	for (int ii = 0; ii < 3; ++ii) {
-		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
-	}
-
-	// compute radiation pressure tensors
-	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
-
-	AMREX_ASSERT((chi >= 1. / 3.) && (chi <= 1.0)); // NOLINT
-
-	// diagonal term of Eddington tensor
-	const double Tdiag = (1.0 - chi) / 2.0;
-
-	// anisotropic term of Eddington tensor (in the direction of the
-	// rad. flux)
-	const double Tf = (3.0 * chi - 1.0) / 2.0;
-
-	// assemble Eddington tensor
-	std::array<std::array<double, 3>, 3> T{};
-
-	for (int ii = 0; ii < 3; ++ii) {
-		for (int jj = 0; jj < 3; ++jj) {
-			const double delta_ij = (ii == jj) ? 1 : 0;
-			T[ii][jj] = Tdiag * delta_ij + Tf * (n[ii] * n[jj]);
-		}
-	}
-
-	return T;
-}
-
-// TODO(cch): move ComputeRadPressure to transport.hpp
-template <typename problem_t>
-template <FluxDir DIR>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
-							       const double fy, const double fz) -> RadPressureResult
-{
-	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct.
-
-	// check that states are physically admissible
-	AMREX_ASSERT(erad > 0.0);
-
-	// Compute the Eddington tensor
-	auto T = ComputeEddingtonTensor(fx, fy, fz);
-
-	// frozen Eddington tensor approximation, following Balsara
-	// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
-	double Tnormal = NAN;
-	if constexpr (DIR == FluxDir::X1) {
-		Tnormal = T[0][0];
-	} else if constexpr (DIR == FluxDir::X2) {
-		Tnormal = T[1][1];
-	} else if constexpr (DIR == FluxDir::X3) {
-		Tnormal = T[2][2];
-	}
-
-	// compute fluxes F_L, F_R
-	// T_nx, T_ny, T_nz indicate components where 'n' is the direction of the
-	// face normal. F_n is the radiation flux component in the direction of the
-	// face normal
-	double Fn = NAN;
-	double Tnx = NAN;
-	double Tny = NAN;
-	double Tnz = NAN;
-
-	if constexpr (DIR == FluxDir::X1) {
-		Fn = Fx;
-
-		Tnx = T[0][0];
-		Tny = T[0][1];
-		Tnz = T[0][2];
-	} else if constexpr (DIR == FluxDir::X2) {
-		Fn = Fy;
-
-		Tnx = T[1][0];
-		Tny = T[1][1];
-		Tnz = T[1][2];
-	} else if constexpr (DIR == FluxDir::X3) {
-		Fn = Fz;
-
-		Tnx = T[2][0];
-		Tny = T[2][1];
-		Tnz = T[2][2];
-	}
-
-	AMREX_ASSERT(Fn != NAN);
-	AMREX_ASSERT(Tnx != NAN);
-	AMREX_ASSERT(Tny != NAN);
-	AMREX_ASSERT(Tnz != NAN);
-
-	RadPressureResult result{};
-	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
-	// It might be possible to remove this 0.1 floor without affecting the code. I tried and only the 3D RadForce failed (causing S_L = S_R = 0.0 and F[0] =
-	// NAN). Read more on https://github.com/quokka-astro/quokka/pull/582 .
-	result.S = std::max(0.1, std::sqrt(Tnormal));
-
-	return result;
-}
-
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> Real
 {
 	return NAN;
@@ -1151,6 +1130,27 @@ RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<do
 		AMREX_ASSERT(!std::isnan(kappa[g]));
 	}
 	return kappa;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
+								     const double Etot) -> double
+{
+	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
+	const double Ekin = p_sq / (2.0 * density);
+	const double Eint = Etot - Ekin;
+	AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
+	return Eint;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
+								     const double Eint) -> double
+{
+	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
+	const double Ekin = p_sq / (2.0 * density);
+	const double Etot = Eint + Ekin;
+	return Etot;
 }
 
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::PlanckFunction(const double nu, const double T) -> double
@@ -1311,7 +1311,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 	return T_d;
 }
 
-#include "radiation/source_terms_single_group.hpp" // IWYU pragma: keep
-#include "radiation/source_terms_multi_group.hpp" // IWYU pragma: keep
+#include "radiation/source_terms_multi_group.hpp"	 // IWYU pragma: export
+#include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 
 #endif // RADIATION_SYSTEM_HPP_
