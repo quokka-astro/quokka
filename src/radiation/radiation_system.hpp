@@ -1294,7 +1294,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double c
 	return T_d;
 }
 
-#include "source_terms_multi_group.hpp"  // IWYU pragma: export
+#include "source_terms_multi_group.hpp"	 // IWYU pragma: export
 #include "source_terms_single_group.hpp" // IWYU pragma: export
 
 #endif // RADIATION_SYSTEM_HPP_
