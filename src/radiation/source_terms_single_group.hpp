@@ -264,32 +264,41 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
 
-					const double y0 = -F_G;
-					const auto y1 = -1. * F_D;
+					double J00 = NAN;
+					double J01 = NAN;
+					double J10 = NAN;
+					double J11 = NAN;
 
-					// M_00
-					const double J00 = 1.0;
-					// M_01
-					const double J01 = cscale;
-					// M_10
-					// M_11, same for dust and dust-free cases
-					double J11 = 0.0;
-					if constexpr (enable_dust_gas_thermal_coupling_model_) {
+					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+						J00 = 1.0;
+						J01 = cscale;
+						J10 = 1.0 / c_v * dEg_dT;
+						if (tau <= 0.0) {
+							J11 = -std::numeric_limits<double>::infinity();
+						} else {
+							J11 += -1.0 * kappaPoverE / tau - 1.0;
+						}
+					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 						dEg_dT *= d_Td_d_T;
 						const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
-						J11 = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
+
+						J00 = 1.0;
+						J01 = cscale;
+						J10 = 1.0 / c_v * dEg_dT;
+						if (tau <= 0.0) {
+							J11 = -std::numeric_limits<double>::infinity();
+						} else {
+							J11 = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg - kappaPoverE / tau - 1.0;
+						}
 					}
-					if (tau <= 0.0) {
-						J11 = -std::numeric_limits<double>::infinity();
-					} else {
-						J11 += -1.0 * kappaPoverE / tau - 1.0;
-					}
-					const double J10 = 1.0 / c_v * dEg_dT;
 
 					AMREX_ASSERT(!std::isnan(J10));
 					AMREX_ASSERT(!std::isnan(J11));
+
+					const double y0 = -F_G;
+					const auto y1 = -1. * F_D;
 
 					// solve the linear system
 					const double det = J00 * J11 - J01 * J10;
