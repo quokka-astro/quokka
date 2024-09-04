@@ -2,6 +2,8 @@
 #ifndef ADD_SOURCE_TERMS_SINGLE_GROUP_HPP_ // NOLINT
 #define ADD_SOURCE_TERMS_SINGLE_GROUP_HPP_
 
+#include "radiation/radiation_system.hpp"
+
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
 						     const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling,
