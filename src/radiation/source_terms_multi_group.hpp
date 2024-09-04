@@ -2,8 +2,7 @@
 #ifndef RAD_SOURCE_TERMS_MULTI_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_MULTI_GROUP_HPP_
 
-#include "radiation/radiation_base.hpp"
-#include "radiation/source_terms_base.hpp"
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
 template <typename problem_t>
 auto RadSystem<problem_t>::ComputeJacobianForPureGas(double /*T_gas*/, double /*T_d*/, 

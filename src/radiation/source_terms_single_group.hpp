@@ -2,7 +2,7 @@
 #ifndef RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_
 
-#include "radiation/source_terms_base.hpp"
+#include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
