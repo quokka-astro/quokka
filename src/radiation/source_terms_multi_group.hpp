@@ -86,7 +86,8 @@ auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(double T_gas, double T_d
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
 	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
-	// yg = yg - 1.0 / cscale * rg * y0;
+	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.	
+	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] <= 0.0) {
 			result.Jgg[g] = -std::numeric_limits<double>::infinity();
