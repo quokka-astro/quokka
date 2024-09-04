@@ -89,15 +89,15 @@ struct RadPressureResult {
 	double S;		       // maximum wavespeed for the radiation system
 };
 
-template <typename problem_t> struct NewtonIterationResult {	
-	double Egas; // gas internal energy
-	double T_gas; // gas temperature
-	double T_d; // dust temperature
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec; // Planck mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec; // energy mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec; // flux mean opacity	
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work; // work term
+template <typename problem_t> struct NewtonIterationResult {
+	double Egas;									      // gas internal energy
+	double T_gas;									      // gas temperature
+	double T_d;									      // dust temperature
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec;		      // radiation energy density
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec;		      // Planck mean opacity
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec;		      // energy mean opacity
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec;		      // flux mean opacity
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;		      // work term
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa_B * B)
 };
 
@@ -304,13 +304,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real;
 
 	AMREX_GPU_HOST_DEVICE static auto
-	ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d,
-						 double dt, double R_sum, int n_step,
-			       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
+	ComputeDustTemperature(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
+			       int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
 			       amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
 
-	AMREX_GPU_HOST_DEVICE static auto 
-	SolveMatterRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src, amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy, amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy) -> NewtonIterationResult<problem_t>;
+	AMREX_GPU_HOST_DEVICE static auto
+	SolveMatterRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt,
+					   amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter,
+					   quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F,
+					   quokka::valarray<double, nGroups_> const &Src, amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy,
+					   amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
@@ -1243,8 +1246,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDustTemperature(double const T_gas, double const T_d_init, double const rho,
-									quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum, int n_step,
-									amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+									quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
+									int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
 									amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double
 {
 	if (n_step > 0) {
