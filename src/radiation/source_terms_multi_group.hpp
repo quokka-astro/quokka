@@ -272,7 +272,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 
 			tau0 = dt * rho * kappaPVec * c_hat_;
 			tau = tau0;
-			Rvec = (fourPiBoverC - EradVec_guess / kappaPoverE) * tau0 + work;
+			Rvec = (fourPiBoverC - EradVec_guess / kappaPoverE) * tau0 + work_local;
 			if constexpr (use_D_as_base) {
 				// tau0 is used as a scaling factor for Rvec
 				for (int g = 0; g < nGroups_; ++g) {
@@ -286,7 +286,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 			for (int g = 0; g < nGroups_; ++g) {
 				// If tau = 0.0, Erad_guess shouldn't change
 				if (tau[g] > 0.0) {
-					EradVec_guess[g] = kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work[g]) / tau[g]);
+					EradVec_guess[g] = kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
 					if constexpr (force_rad_floor_in_iteration) {
 						if (EradVec_guess[g] < 0.0) {
 							Egas_guess -= (c_light_ / c_hat_) * (Erad_floor_ - EradVec_guess[g]);
@@ -404,7 +404,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 		}
 	}
 
-	result.n = n;
 	result.Egas = Egas_guess;
 	result.EradVec = EradVec_guess;
 	result.kappaPVec = kappaPVec;
@@ -478,26 +477,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		double Ekin0 = NAN;
 		double Etot0 = NAN;
 		double Egas_guess = NAN;
-		double T_gas = NAN;
-		double T_d = NAN;
-		quokka::valarray<double, nGroups_> fourPiBoverC{};
 		quokka::valarray<double, nGroups_> EradVec_guess{};
-		quokka::valarray<double, nGroups_> kappaPVec{};
-		quokka::valarray<double, nGroups_> kappaEVec{};
-		quokka::valarray<double, nGroups_> kappaFVec{};
-		amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
-		amrex::GpuArray<double, nGroups_> alpha_B{};
-		amrex::GpuArray<double, nGroups_> alpha_E{};
-		quokka::valarray<double, nGroups_> kappaPoverE{};
-		quokka::valarray<double, nGroups_> tau0{}; // optical depth across c * dt at old state
-		quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt at new state
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
-		amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge{};
-		amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
-		NewtonIterationResult<problem_t> updated_energy;
 
 		work.fillin(0.0);
 		work_prev.fillin(0.0);
@@ -552,6 +536,14 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		int ite = 0;
 		for (; ite < max_ite; ++ite) {
 			quokka::valarray<double, nGroups_> Rvec{};
+			quokka::valarray<double, nGroups_> fourPiBoverC{};
+			double T_gas = NAN;
+			double T_d = NAN;
+			quokka::valarray<double, nGroups_> kappaPVec{};
+			quokka::valarray<double, nGroups_> kappaEVec{};
+			quokka::valarray<double, nGroups_> kappaFVec{};
+			amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
+			NewtonIterationResult<problem_t> updated_energy;
 
 			// 1. Compute matter-radiation energy exchange for non-isothermal gas
 
@@ -579,7 +571,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				kappaFVec = updated_energy.kappaFVec;
 
 				fourPiBoverC = ComputeThermalRadiationMultiGroup(updated_energy.T_d, radBoundaries_g_copy);
+				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
 			} else { // if constexpr gamma_ == 1.0
+				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 				T_d = T_gas;
 				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
@@ -590,6 +584,12 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
 					kappaFVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
 				}
+
+				amrex::ignore_unused(Rvec);
+				amrex::ignore_unused(fourPiBoverC);
+				amrex::ignore_unused(kappaPVec);
+				amrex::ignore_unused(kappaEVec);
+				amrex::ignore_unused(updated_energy);
 			}
 
 			// Erad_guess is the new radiation energy (excluding work term)
@@ -597,7 +597,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			// 2. Compute radiation flux update
 
-			const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
 
 			amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 			dMomentum = {0., 0., 0.};
@@ -765,10 +764,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			amrex::ignore_unused(Etot0);
 			amrex::ignore_unused(work);
 			amrex::ignore_unused(work_prev);
-			amrex::ignore_unused(kappaPVec);
-			amrex::ignore_unused(kappaEVec);
-			amrex::ignore_unused(kappaPoverE);
-			amrex::ignore_unused(fourPiBoverC);
 		}
 		for (int g = 0; g < nGroups_; ++g) {
 			if constexpr (gamma_ != 1.0) {

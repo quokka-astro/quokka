@@ -89,6 +89,18 @@ struct RadPressureResult {
 	double S;		       // maximum wavespeed for the radiation system
 };
 
+template <typename problem_t> struct NewtonIterationResult {	
+	double Egas; // gas internal energy
+	double T_gas; // gas temperature
+	double T_d; // dust temperature
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec; // Planck mean opacity
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec; // energy mean opacity
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec; // flux mean opacity	
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work; // work term
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa_B * B)
+};
+
 // A struct to hold the results of ComputeJacobianForPureGas or ComputeJacobianForGasAndDust
 template <typename problem_t> struct JacobianResult {
 	double J00;
@@ -98,19 +110,6 @@ template <typename problem_t> struct JacobianResult {
 	double F0;
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;
 	double Fg_abs_sum;
-};
-
-template <typename problem_t> struct NewtonIterationResult {	
-	int n;
-	double Egas;
-	double T_gas;
-	double T_d;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge;
 };
 
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
