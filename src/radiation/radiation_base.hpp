@@ -1,4 +1,0 @@
-#ifndef RADIATION_BASE_HPP_
-#define RADIATION_BASE_HPP_
-
-#endif // RADIATION_BASE_HPP_
