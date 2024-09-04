@@ -402,6 +402,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 						break;
 					}
 
+#if 0
+					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
+					if (n == 0) {
+						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0]
+							  << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+					} else if (n >= 0) {
+						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << EradVec_guess[0]
+							  << ", tau = " << tau[0];
+						std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << std::endl;
+					}
+#endif
+
 					// update variables
 					RadSystem<problem_t>::SolveLinearEqs(jacobian, deltaEgas, deltaD);
 					AMREX_ASSERT(!std::isnan(deltaEgas));
