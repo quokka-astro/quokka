@@ -5,13 +5,7 @@
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeJacobianForPureGas(double /*T_gas*/, double /*T_d*/, 
-	double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, 
-	quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, 
-	double /*coeff_n*/,
-	quokka::valarray<double, nGroups_> const &tau, double c_v, double cscale, 
-	quokka::valarray<double, nGroups_> const &kappaPoverE, 
-	quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+auto RadSystem<problem_t>::ComputeJacobianForPureGas(double /*T_gas*/, double /*T_d*/, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double /*coeff_n*/, quokka::valarray<double, nGroups_> const &tau, double c_v, double cscale, quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -49,13 +43,7 @@ auto RadSystem<problem_t>::ComputeJacobianForPureGas(double /*T_gas*/, double /*
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff,
-	quokka::valarray<double, nGroups_> const &Erad_diff, 
-	quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, 
-	double coeff_n,
-	quokka::valarray<double, nGroups_> const &tau, double c_v, double cscale, 
-	quokka::valarray<double, nGroups_> const &kappaPoverE, 
-	quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double cscale, quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -100,9 +88,7 @@ auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(double T_gas, double T_d
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-						    const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling,
-						    int *p_num_failed_dust, int *p_num_failed_outer_ite)
+void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation, const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling, int *p_num_failed_dust, int *p_num_failed_outer_ite)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -406,85 +392,10 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 										tau, c_v, cscale, kappaPoverE, d_fourpiboverc_d_t);
 					}
 
-#if 0
-					F_G = Egas_guess - Egas0;
-					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
-					double F_D_abs_sum = 0.0;
-					for (int g = 0; g < nGroups_; ++g) {
-						if (tau[g] > 0.0) {
-							F_D_abs_sum += std::abs(F_D[g]);
-							F_G += (c / chat) * Rvec[g];
-						}
-					}
-
-					// check relative convergence of the residuals
-					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * F_D_abs_sum / Etot0 < resid_tol)) {
-						break;
-					}
-
-					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
-
-#if 0
-					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
-					if (n == maxIter - 10) {
-						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0]
-							  << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
-					} else if (n >= maxIter - 10) {
-						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << EradVec_guess[0]
-							  << ", tau = " << tau[0];
-						std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs_sum << ", Etot0 = " << Etot0 << std::endl;
-					}
-#endif
-
-					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
-					AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-
-					// compute Jacobian elements
-					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
-					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
-
-					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
-
-					const double y0 = -F_G;
-					auto yg = -1. * F_D;
-
-					quokka::valarray<double, nGroups_> dF0_dXg{};
-					quokka::valarray<double, nGroups_> dFg_dX0{};
-					quokka::valarray<double, nGroups_> dFg_dXg{};
-
-					// M_00
-					const double dF0_dX0 = 1.0;
-					// M_0g
-					dF0_dXg.fillin(cscale);
-					// M_g0
-					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
-						dFg_dX0 = 1.0 / c_v * dEg_dT;
-					} else {
-						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
-						const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
-						dEg_dT *= d_Td_d_T;
-						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
-						const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-						dFg_dX0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * dF0_dX0;
-						yg = yg - 1.0 / cscale * rg * y0;
-					}
-					// M_gg, same for dust and dust-free cases
-					for (int g = 0; g < nGroups_; ++g) {
-						if (tau[g] <= 0.0) {
-							dFg_dXg[g] = -std::numeric_limits<double>::infinity();
-						} else {
-							dFg_dXg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
-						}
-					}
-
 					if constexpr (use_D_as_base) {
-						dF0_dXg = dF0_dXg * tau0;
-						dFg_dXg = dFg_dXg * tau0;
+						jacobian.J0g = jacobian.J0g * tau0;
+						jacobian.Jgg = jacobian.Jgg * tau0;
 					}
-
-					// update variables
-					RadSystem<problem_t>::SolveLinearEqs(dF0_dX0, dF0_dXg, dFg_dX0, dFg_dXg, y0, yg, deltaEgas, deltaD);
-#endif
 
 					// check relative convergence of the residuals
 					if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && ((c / chat) * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
