@@ -419,6 +419,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					AMREX_ASSERT(!std::isnan(deltaEgas));
 					AMREX_ASSERT(!deltaD.hasnan());
 
+					// Update independent variables (Egas_guess, Rvec)
+					// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation temperature
 					if (!enable_dE_constrain) {
 						Egas_guess += deltaEgas;
 						if constexpr (use_D_as_base) {
