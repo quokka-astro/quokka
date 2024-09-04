@@ -200,7 +200,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 			T_H = T_R;
 		}
 
-		auto Erad_g = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiation(T_H, radBoundaries_g);
+		auto Erad_g = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiationMultiGroup(T_H, radBoundaries_g);
 		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 
 		for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
@@ -231,7 +231,7 @@ template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 		// const double Erad = a_rad * std::pow(T_initial, 4);
-		auto Erad_g = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiation(T_initial, radBoundaries_g);
+		auto Erad_g = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiationMultiGroup(T_initial, radBoundaries_g);
 
 		for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];

@@ -74,23 +74,16 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeFluxMeanOp
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-    -> quokka::valarray<amrex::Real, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> amrex::Real
 {
-	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	const double power = radiation_constant_ * temperature;
-	auto Erad_g = power * radEnergyFractions;
-	return Erad_g;
+	// We assume the thermal emission is proportional to T_d in order to linearize the problem so that we can derive an analytical solution.
+	return radiation_constant_ * temperature;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivative(
-    amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> quokka::valarray<amrex::Real, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real /*temperature*/) -> amrex::Real
 {
-	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	const double d_power_dt = radiation_constant_;
-	return d_power_dt * radEnergyFractions;
+	// Same. We assume B(T_d) = a_rad * T_d.
+	return radiation_constant_;
 }
 
 template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
