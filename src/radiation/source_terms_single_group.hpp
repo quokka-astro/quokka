@@ -276,7 +276,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						if (tau <= 0.0) {
 							J11 = -std::numeric_limits<double>::infinity();
 						} else {
-							J11 += -1.0 * kappaPoverE / tau - 1.0;
+							J11 = -1.0 * kappaPoverE / tau - 1.0;
 						}
 					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
