@@ -89,15 +89,15 @@ struct RadPressureResult {
 	double S;		       // maximum wavespeed for the radiation system
 };
 
-template <typename problem_t> struct NewtonIterationResult {	
-	double Egas; // gas internal energy
-	double T_gas; // gas temperature
-	double T_d; // dust temperature
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec; // Planck mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec; // energy mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec; // flux mean opacity	
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work; // work term
+template <typename problem_t> struct NewtonIterationResult {
+	double Egas;									      // gas internal energy
+	double T_gas;									      // gas temperature
+	double T_d;									      // dust temperature
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec;		      // radiation energy density
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec;		      // Planck mean opacity
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec;		      // energy mean opacity
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec;		      // flux mean opacity
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;		      // work term
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa_B * B)
 };
 

@@ -146,9 +146,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	quokka::valarray<double, nGroups_> kappaEVec{};
 	quokka::valarray<double, nGroups_> kappaFVec{};
-	quokka::valarray<double, nGroups_> tau0{}; // optical depth across c * dt at old state
-	quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt at new state
-	quokka::valarray<double, nGroups_> work_local{};  // work term used in the Newton-Raphson iteration of the currect outer iteration
+	quokka::valarray<double, nGroups_> tau0{};	 // optical depth across c * dt at old state
+	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
+	quokka::valarray<double, nGroups_> work_local{}; // work term used in the Newton-Raphson iteration of the currect outer iteration
 	quokka::valarray<double, nGroups_> fourPiBoverC{};
 	amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge{};
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
@@ -157,7 +157,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 	// define a list of alpha_quant for the model PPL_opacity_fixed_slope_spectrum
 	amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
 	if constexpr ((opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) ||
-					(gamma_ == 1.0 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum)) {
+		      (gamma_ == 1.0 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum)) {
 		if constexpr (!special_edge_bin_slopes) {
 			for (int g = 0; g < nGroups_; ++g) {
 				alpha_quant_minus_one[g] = -1.0;
@@ -247,9 +247,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 				kappaFVec = kappaPVec;
 			} else {
 				if constexpr (use_diffuse_flux_mean_opacity) {
-					kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC,
-												delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
-												kappa_expo_and_lower_value[0]);
+					kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge,
+										    delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
 				} else {
 					// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
 					// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't
@@ -267,7 +266,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 						if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 							work_local[g] = vel_times_F[g] * kappaFVec[g] * c_hat_ / (c_light_ * c_light_) * dt;
 						} else {
-							work_local[g] = vel_times_F[g] * kappaFVec[g] * c_hat_ / (c_light_ * c_light_) * dt * (1.0 + kappa_expo_and_lower_value[0][g]);
+							work_local[g] = vel_times_F[g] * kappaFVec[g] * c_hat_ / (c_light_ * c_light_) * dt *
+									(1.0 + kappa_expo_and_lower_value[0][g]);
 						}
 					}
 				} else {
@@ -392,9 +392,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 			kappaFVec = kappaPVec;
 		} else {
 			if constexpr (use_diffuse_flux_mean_opacity) {
-				kappaFVec =
-						ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge,
-										delta_nu_B_at_edge, kappa_expo_and_lower_value[0]);
+				kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
+									    kappa_expo_and_lower_value[0]);
 			} else {
 				// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
 				// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't use this
