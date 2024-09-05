@@ -108,7 +108,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 	quokka::valarray<double, nGroups_> const &Src,
 	amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy,
 	amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy,
-	std::function<double(double, double, double, quokka::valarray<double, nGroups_>, double, double, double, int, amrex::GpuArray<double, nGroups_ + 1>, amrex::GpuArray<double, nGroups_>)> ComputeDustTemperature) -> NewtonIterationResult<problem_t>
+	std::function<JacobianResult<problem_t>(double, double, double, quokka::valarray<double, nGroups_>, quokka::valarray<double, nGroups_>,
+		quokka::valarray<double, nGroups_>, double, quokka::valarray<double, nGroups_>, double, 
+		quokka::valarray<double, nGroups_>, quokka::valarray<double, nGroups_>)> ComputeJacobian,
+	std::function<double(double, double, double, quokka::valarray<double, nGroups_>, double, double, double, int, 
+		amrex::GpuArray<double, nGroups_ + 1>, amrex::GpuArray<double, nGroups_>)> ComputeDustTemperature
+	) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -306,13 +311,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
 		JacobianResult<problem_t> jacobian;
 
-		if (enable_dust_gas_thermal_coupling_model_) {
-			jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, 
-								kappaPoverE, d_fourpiboverc_d_t);
-		} else {
-			jacobian = ComputeJacobianForGas(NAN, NAN, Egas_diff, Erad_diff, Rvec, Src, NAN, tau, c_v, 
-										kappaPoverE, d_fourpiboverc_d_t);
-		}
+		jacobian = ComputeJacobian(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, kappaPoverE, d_fourpiboverc_d_t);
 
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
@@ -563,12 +562,14 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// Step 1.2: Compute the gas and radiation energy update. This also updates the opacities. When ite == 0, this also computes the work term.
 
 				if constexpr (enable_dust_gas_thermal_coupling_model_) {
-					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work, vel_times_F, Src, radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeDustTemperatureBateKeto);
+					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work, vel_times_F, Src, 
+						radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeJacobianForGasAndDust, &ComputeDustTemperatureBateKeto);
 				} else {
-					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work, vel_times_F, Src, radBoundaries_g_copy, radBoundaryRatios_copy,
-						[](double T_gas_, double, double, quokka::valarray<double, nGroups_>, double, double, double, int, amrex::GpuArray<double, nGroups_ + 1>, amrex::GpuArray<double, nGroups_>) -> double {
-							return T_gas_;
-						});
+					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work, vel_times_F, Src, 
+						radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeJacobianForGas,
+						[](double T_gas_, double, double, quokka::valarray<double, nGroups_>, double, double, double, int, amrex::GpuArray<double, nGroups_ + 1>, 
+							amrex::GpuArray<double, nGroups_>) -> double {return T_gas_;}
+						);
 				}
 
 				Egas_guess = updated_energy.Egas;

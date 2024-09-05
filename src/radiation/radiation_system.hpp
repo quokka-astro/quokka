@@ -310,8 +310,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 			       amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
 
 	AMREX_GPU_HOST_DEVICE static auto 
-	SolveMatterRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src, amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy, amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy,
-		std::function<double(double, double, double, quokka::valarray<double, nGroups_>, double, double, double, int, amrex::GpuArray<double, nGroups_ + 1>, amrex::GpuArray<double, nGroups_>)> ComputeDustTemperature) -> NewtonIterationResult<problem_t>;
+	SolveMatterRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt, 
+						 amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work, 
+						 quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src, 
+						 amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy, amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy,
+						 std::function<JacobianResult<problem_t>(double, double, double, quokka::valarray<double, nGroups_>, 
+						 	quokka::valarray<double, nGroups_>, quokka::valarray<double, nGroups_>, double, quokka::valarray<double, nGroups_>, 
+						 	double, quokka::valarray<double, nGroups_>, quokka::valarray<double, nGroups_>)> ComputeJacobian,
+						 std::function<double(double, double, double, quokka::valarray<double, nGroups_>, double, double, double, int, 
+						 	amrex::GpuArray<double, nGroups_ + 1>, amrex::GpuArray<double, nGroups_>)> ComputeDustTemperature
+						 ) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
