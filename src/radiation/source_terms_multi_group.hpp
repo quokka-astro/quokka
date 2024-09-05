@@ -557,8 +557,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					}
 				}
 
-				// Step 1.2: Compute the gas and radiation energy update. This also updates the opacities. When iter == 0, this also computes the
-				// work term.
+				// Step 1.2: Compute the gas and radiation energy update. This also updates the opacities. When iter == 0, this also computes
+				// the work term.
 
 				if (enable_dust_gas_thermal_coupling_model_) {
 					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work,
