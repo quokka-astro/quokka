@@ -338,6 +338,16 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			} else { // if constexpr gamma_ == 1.0
 				T_d = T_gas;
 				kappaF = ComputeFluxMeanOpacity(rho, T_d);
+
+				amrex::ignore_unused(p_num_failed_coupling_local);
+				amrex::ignore_unused(p_num_failed_dust_local);
+				amrex::ignore_unused(p_iteration_counter_local);
+				amrex::ignore_unused(Ekin0);
+				amrex::ignore_unused(lorentz_factor);
+				amrex::ignore_unused(lorentz_factor_v);
+				amrex::ignore_unused(lorentz_factor_v_v);
+				amrex::ignore_unused(work_prev);
+				amrex::ignore_unused(R);
 			}
 
 			// Egas_guess is the new gas internal energy
