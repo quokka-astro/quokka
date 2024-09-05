@@ -98,6 +98,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 }
 
 template <typename problem_t>
+template <typename JacobianFunc, typename DustTempFunc>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec,
 	double const rho, double const coeff_n, double const dt, 
@@ -108,7 +109,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	quokka::valarray<double, nGroups_> const &Src,
 	amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy,
 	amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy,
-	auto ComputeJacobian, auto ComputeDustTemperature
+	JacobianFunc ComputeJacobian, DustTempFunc ComputeDustTemperature
 	) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
