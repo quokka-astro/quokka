@@ -144,7 +144,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	quokka::valarray<double, nGroups_> kappaFVec{};
 	quokka::valarray<double, nGroups_> tau0{};	 // optical depth across c * dt at old state
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
-	quokka::valarray<double, nGroups_> work_local{}; // work term used in the Newton-Raphson iteration of the currect outer iteration
+	quokka::valarray<double, nGroups_> work_local{}; // work term used in the Newton-Raphson iteration of the current outer iteration
 	quokka::valarray<double, nGroups_> fourPiBoverC{};
 	amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge{};
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
