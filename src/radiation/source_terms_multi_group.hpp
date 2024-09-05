@@ -169,8 +169,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExcha
 	const int maxIter = enable_dust_gas_thermal_coupling_model_ ? 100 : 50;
 	int n = 0;
 	for (; n < maxIter; ++n) {
-		quokka::valarray<double, nGroups_> alpha_B{};
-		quokka::valarray<double, nGroups_> alpha_E{};
+		amrex::GpuArray<double, nGroups_> alpha_B{};
+		amrex::GpuArray<double, nGroups_> alpha_E{};
 		quokka::valarray<double, nGroups_> kappaPoverE{};
 
 		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
