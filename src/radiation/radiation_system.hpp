@@ -41,7 +41,7 @@ static constexpr bool special_edge_bin_slopes = false;	    // Use 2 and -4 as th
 static constexpr bool force_rad_floor_in_iteration = false; // force radiation energy density to be positive (and above the floor value) in the Newton iteration
 static constexpr bool include_work_term_in_source = true;
 
-static const int max_ite_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_ite_to_update_alpha_E
+static const int max_iter_to_update_alpha_E = 5; // Apply to the PPL_opacity_full_spectrum only. Only update alpha_E for the first max_iter_to_update_alpha_E
 // iterations of the Newton iteration
 static constexpr bool enable_dE_constrain = true;
 static constexpr bool use_D_as_base = false;
@@ -1288,9 +1288,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	// solve for dust temperature T_d using Newton iteration
 	double T_d = T_d_init;
 	const double lambda_rel_tol = 1.0e-8;
-	const int max_ite_td = 100;
-	int ite_td = 0;
-	for (; ite_td < max_ite_td; ++ite_td) {
+	const int max_iter_td = 100;
+	int iter_Td = 0;
+	for (; iter_Td < max_iter_td; ++iter_Td) {
 		quokka::valarray<double, nGroups_> fourPiBoverC{};
 
 		if constexpr (nGroups_ == 1) {
@@ -1338,15 +1338,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		const double delta_T_d = LHS / dLHS_dTd;
 		T_d -= delta_T_d;
 
-		if (ite_td > 0) {
+		if (iter_Td > 0) {
 			if (std::abs(delta_T_d) < lambda_rel_tol * std::abs(T_d)) {
 				break;
 			}
 		}
 	}
 
-	AMREX_ASSERT_WITH_MESSAGE(ite_td < max_ite_td, "Newton iteration for dust temperature failed to converge.");
-	if (ite_td >= max_ite_td) {
+	AMREX_ASSERT_WITH_MESSAGE(iter_Td < max_iter_td, "Newton iteration for dust temperature failed to converge.");
+	if (iter_Td >= max_iter_td) {
 		T_d = -1.0;
 	}
 	return T_d;

@@ -205,7 +205,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 			kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
 			kappaEVec = kappaPVec;
 		} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-			if (n < max_ite_to_update_alpha_E) {
+			if (n < max_iter_to_update_alpha_E) {
 				alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
 				alpha_E = ComputeRadQuantityExponents(EradVec_guess, radBoundaries_g_copy);
 			}
@@ -529,9 +529,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		}
 
 		// Outer iteration loop
-		const int max_ite = 5;
-		int ite = 0;
-		for (; ite < max_ite; ++ite) {
+		const int max_iter = 5;
+		int iter = 0;
+		for (; iter < max_iter; ++iter) {
 			quokka::valarray<double, nGroups_> Rvec{};
 			quokka::valarray<double, nGroups_> fourPiBoverC{};
 			quokka::valarray<double, nGroups_> kappaPVec{};
@@ -547,7 +547,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// Step 1.1: Compute a term required to calculate the work. This is only required in the first outer loop.
 
 				quokka::valarray<double, nGroups_> vel_times_F{};
-				if (ite == 0) {
+				if (iter == 0) {
 					for (int g = 0; g < nGroups_; ++g) {
 						const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
 						const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
@@ -557,22 +557,22 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					}
 				}
 
-				// Step 1.2: Compute the gas and radiation energy update. This also updates the opacities. When ite == 0, this also computes the
+				// Step 1.2: Compute the gas and radiation energy update. This also updates the opacities. When iter == 0, this also computes the
 				// work term.
 
 				if (enable_dust_gas_thermal_coupling_model_) {
-					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work,
+					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work,
 											    vel_times_F, Src, radBoundaries_g_copy, radBoundaryRatios_copy,
 											    &ComputeJacobianForGasAndDust, &ComputeDustTemperatureBateKeto,
 											    p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
-					// Passing ComputeDustTemperatureGasOnly as GPU_LAMBDA function didn't work
-					// updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work,
+					// Passing ComputeDustTemperatureGasOnly as GPU_LAMBDA function didn't work, so I have to define a separate function.
+					// updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work,
 					// vel_times_F, Src, 	radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeJacobianForGas, 	AMREX_GPU_LAMBDA(double
 					// T_gas_, double, double, quokka::valarray<double, nGroups_>, double, double, double, int,
 					// amrex::GpuArray<double, nGroups_ + 1>, amrex::GpuArray<double, nGroups_>) -> double { return T_gas_; }
 					// 	);
-					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work,
+					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work,
 											    vel_times_F, Src, radBoundaries_g_copy, radBoundaryRatios_copy,
 											    &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly,
 											    p_iteration_counter_local, p_iteration_failure_counter_local);
@@ -757,8 +757,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			}
 		} // end full-step iteration
 
-		AMREX_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms iteration failed to converge!");
-		if (ite >= max_ite) {
+		AMREX_ASSERT_WITH_MESSAGE(iter < max_iter, "AddSourceTerms iteration failed to converge!");
+		if (iter >= max_iter) {
 			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1);
 		}
 

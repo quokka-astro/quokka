@@ -147,7 +147,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				double F_D = NAN;
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = enable_dust_gas_thermal_coupling_model_ ? 100 : 50;
+				const int maxIter = 100;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
