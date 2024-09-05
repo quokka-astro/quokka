@@ -417,8 +417,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-						    const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling,
-						    int *p_num_failed_dust, int *p_num_failed_outer_ite)
+						    const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -438,11 +437,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// make a local reference of p_num_failed
-		auto p_num_failed_coupling_local = p_num_failed_coupling;
-		auto p_num_failed_dust_local = p_num_failed_dust;
-		auto p_num_failed_outer_local = p_num_failed_outer_ite;
+		// make a local reference
 		auto p_iteration_counter_local = p_iteration_counter;
+		auto p_iteration_failure_counter_local = p_iteration_failure_counter;
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -756,7 +753,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 		AMREX_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms iteration failed to converge!");
 		if (ite >= max_ite) {
-			amrex::Gpu::Atomic::Add(p_num_failed_outer_local, 1);
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1);
 		}
 
 		// 4b. Store new radiation energy, gas energy

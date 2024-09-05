@@ -6,8 +6,7 @@
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
-						     const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_num_failed_coupling,
-						     int *p_num_failed_dust, int *p_num_failed_outer_ite)
+						     const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -26,11 +25,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// make a local reference of p_num_failed
-		auto p_num_failed_coupling_local = p_num_failed_coupling;
-		auto p_num_failed_dust_local = p_num_failed_dust;
-		auto p_num_failed_outer_local = p_num_failed_outer_ite;
 		auto p_iteration_counter_local = p_iteration_counter;
+		auto p_iteration_failure_counter_local = p_iteration_failure_counter;
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -165,7 +161,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n);
 						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 						if (T_d < 0.0) {
-							amrex::Gpu::Atomic::Add(p_num_failed_dust_local, 1);
+							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[1], 1);
 						}
 					}
 
@@ -320,7 +316,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 				AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 				if (n >= maxIter) {
-					amrex::Gpu::Atomic::Add(p_num_failed_coupling_local, 1);
+					amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[0], 1);
 				}
 
 				// update iteration counter: (+1, +ite, max(self, ite))
@@ -339,8 +335,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				T_d = T_gas;
 				kappaF = ComputeFluxMeanOpacity(rho, T_d);
 
-				amrex::ignore_unused(p_num_failed_coupling_local);
-				amrex::ignore_unused(p_num_failed_dust_local);
 				amrex::ignore_unused(p_iteration_counter_local);
 				amrex::ignore_unused(Ekin0);
 				amrex::ignore_unused(lorentz_factor);
@@ -503,9 +497,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			}
 		} // end full-step iteration
 
-		AMREX_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms iteration failed to converge!");
+		AMREX_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms outer iteration failed to converge!");
 		if (ite >= max_ite) {
-			amrex::Gpu::Atomic::Add(p_num_failed_outer_local, 1);
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1);
 		}
 
 		// 4b. Store new radiation energy, gas energy
