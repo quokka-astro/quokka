@@ -70,8 +70,8 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real x1_L = prob_lo[0];
   const amrex::Real x1_C = x1_L + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
-  const double cos_theta = std::cos(theta * 2.0 * M_PI);
-  const double sin_theta = std::sin(theta * 2.0 * M_PI);
+  const double cos_theta = std::cos(theta * M_PI / 180.0);
+  const double sin_theta = std::sin(theta * M_PI / 180.0);
 
   const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
   const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
@@ -93,8 +93,8 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
     const double x3mag = bg_mag_x3 * delta_b * cos_wave_C;
   
     const double Eint = pressure / (gamma - 1);
-    const double mom_tot = 0.5 * density * (std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
-    const double Ekin = 0.5 * std::pow(mom_tot,2) / density;
+    const double momentum = 0.5 * density * (std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
+    const double Ekin = 0.5 * std::pow(momentum,2) / density;
     const double Emag = 0.5 * (std::pow(x1mag, 2) + std::pow(x2mag, 2) + std::pow(x3mag, 2));
     const double Etot = Ekin + Emag + Eint;
 
