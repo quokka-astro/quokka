@@ -109,7 +109,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	quokka::valarray<double, nGroups_> const &Src,
 	amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy,
 	amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy,
-	JacobianFunc ComputeJacobian, DustTempFunc ComputeDustTemperature
+	JacobianFunc ComputeJacobian, DustTempFunc ComputeDustTemperature,
+	int *p_iteration_counter, int *p_iteration_failure_counter
 	) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
@@ -192,9 +193,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, coeff_n, dt, R_sum, n,
 								radBoundaries_g_copy, radBoundaryRatios_copy);
 		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
-		// if (T_d < 0.0) {
-		// 	amrex::Gpu::Atomic::Add(p_num_failed_dust_local, 1);
-		// }
+		if (T_d < 0.0) {
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
+		}
 
 		// 2. Compute kappaP and kappaE at dust temperature
 
@@ -373,6 +374,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 	AMREX_ASSERT(Egas_guess > 0.0);
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
+
+	AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
+	if (n >= maxIter) {
+		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
+	}
+
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1); // total number of radiation updates
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations
+	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations
 
 	NewtonIterationResult<problem_t> result;
 
@@ -559,7 +569,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				if (enable_dust_gas_thermal_coupling_model_) {
 					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work, vel_times_F, Src, 
-						radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeJacobianForGasAndDust, &ComputeDustTemperatureBateKeto);
+						radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeJacobianForGasAndDust, &ComputeDustTemperatureBateKeto, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
 					// Passing ComputeDustTemperatureGasOnly as GPU_LAMBDA function didn't work
 					// updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work, vel_times_F, Src, 
@@ -568,7 +578,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					// 		amrex::GpuArray<double, nGroups_ + 1>, amrex::GpuArray<double, nGroups_>) -> double { return T_gas_; }
 					// 	);
 					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work, vel_times_F, Src, 
-						radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly);
+						radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly, p_iteration_counter_local, p_iteration_failure_counter_local);
 				}
 
 				Egas_guess = updated_energy.Egas;

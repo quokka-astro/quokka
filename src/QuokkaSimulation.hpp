@@ -1668,7 +1668,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				const auto n_cells = CountCells(lev);
 				amrex::Print() << "time_subcycle = " << time_subcycle << ", total number of cells updated is " << n_cells << "\n";
-				amrex::Print() << "global_solver_count = " << global_solver_count << "\n";
 				if (n_cells > 0 && global_solver_count > 0) {
 					const double global_iteration_mean = static_cast<double>(global_iteration_sum) / static_cast<double>(global_solver_count);
 					const double global_solving_mean = static_cast<double>(global_solver_count) / static_cast<double>(n_cells) / 2.0; // 2 stages
