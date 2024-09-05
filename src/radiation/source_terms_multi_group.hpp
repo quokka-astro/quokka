@@ -534,8 +534,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		for (; ite < max_ite; ++ite) {
 			quokka::valarray<double, nGroups_> Rvec{};
 			quokka::valarray<double, nGroups_> fourPiBoverC{};
-			double T_gas = NAN;
-			double T_d = NAN;
 			quokka::valarray<double, nGroups_> kappaPVec{};
 			quokka::valarray<double, nGroups_> kappaEVec{};
 			quokka::valarray<double, nGroups_> kappaFVec{};
@@ -591,8 +589,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			} else { // not constexpr (gamma_ != 1.0)
 
-				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
-				T_d = T_gas;
+				const double T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+				const double T_d = T_gas;
 				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
 					for (int g = 0; g < nGroups_; ++g) {
