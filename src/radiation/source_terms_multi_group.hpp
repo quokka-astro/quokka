@@ -571,8 +571,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					// Passing ComputeDustTemperatureGasOnly as GPU_LAMBDA function didn't work
 					// updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work,
 					// vel_times_F, Src, 	radBoundaries_g_copy, radBoundaryRatios_copy, &ComputeJacobianForGas, 	AMREX_GPU_LAMBDA(double
-					// T_gas_, double, double, quokka::valarray<double, nGroups_>, double, double, double, int, 		amrex::GpuArray<double,
-					// nGroups_ + 1>, amrex::GpuArray<double, nGroups_>) -> double { return T_gas_; }
+					// T_gas_, double, double, quokka::valarray<double, nGroups_>, double, double, double, int,
+					// amrex::GpuArray<double, nGroups_ + 1>, amrex::GpuArray<double, nGroups_>) -> double { return T_gas_; }
 					// 	);
 					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, ite, work,
 											    vel_times_F, Src, radBoundaries_g_copy, radBoundaryRatios_copy,
