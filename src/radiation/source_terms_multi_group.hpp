@@ -104,7 +104,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &radBoundaries_g_copy, amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy,
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &radBoundaryRatios_copy,
     JacobianFunc ComputeJacobian, DustTempFunc ComputeDustTemperature, int *p_iteration_counter,
     int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
@@ -149,6 +149,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge{};
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
+	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
+
+	if constexpr (!(opacity_model_ == OpacityModel::piecewise_constant_opacity)) {
+		for (int g = 0; g < nGroups_; ++g) {
+			rad_boundary_ratios[g] = rad_boundaries[g + 1] / rad_boundaries[g];
+		}
+	}
 
 	// define a list of alpha_quant for the model PPL_opacity_fixed_slope_spectrum
 	amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
@@ -185,7 +192,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
 		const double R_sum = n == 0 ? NAN : sum(Rvec);
-		T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, coeff_n, dt, R_sum, n, radBoundaries_g_copy, radBoundaryRatios_copy);
+		T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, coeff_n, dt, R_sum, n, rad_boundaries, rad_boundary_ratios);
 		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 		if (T_d < 0.0) {
 			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
@@ -193,24 +200,24 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 		// 2. Compute kappaP and kappaE at dust temperature
 
-		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, radBoundaries_g_copy);
+		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
 
-		kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
+		kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
 		if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 			for (int g = 0; g < nGroups_; ++g) {
 				kappaPVec[g] = kappa_expo_and_lower_value[1][g];
 				kappaEVec[g] = kappa_expo_and_lower_value[1][g];
 			}
 		} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
-			kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
+			kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
 			kappaEVec = kappaPVec;
 		} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 			if (n < max_iter_to_update_alpha_E) {
-				alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
-				alpha_E = ComputeRadQuantityExponents(EradVec_guess, radBoundaries_g_copy);
+				alpha_B = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
+				alpha_E = ComputeRadQuantityExponents(EradVec_guess, rad_boundaries);
 			}
-			kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_B);
-			kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_E);
+			kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_B);
+			kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
 		}
 		AMREX_ASSERT(!kappaPVec.hasnan());
 		AMREX_ASSERT(!kappaEVec.hasnan());
@@ -229,8 +236,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 			// Step 1.1: Compute kappaF (required for the work term)
 
 			for (int g = 0; g < nGroups_; ++g) {
-				auto const nu_L = radBoundaries_g_copy[g];
-				auto const nu_R = radBoundaries_g_copy[g + 1];
+				auto const nu_L = rad_boundaries[g];
+				auto const nu_R = rad_boundaries[g + 1];
 				auto const B_L = PlanckFunction(nu_L, T_d); // 4 pi B(nu) / c
 				auto const B_R = PlanckFunction(nu_R, T_d); // 4 pi B(nu) / c
 				auto const kappa_L = kappa_expo_and_lower_value[1][g];
@@ -298,7 +305,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 			}
 		}
 
-		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
+		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
 		const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
@@ -383,8 +390,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	if (n > 0) {
 		// calculate kappaF since the temperature has changed
 		for (int g = 0; g < nGroups_; ++g) {
-			auto const nu_L = radBoundaries_g_copy[g];
-			auto const nu_R = radBoundaries_g_copy[g + 1];
+			auto const nu_L = rad_boundaries[g];
+			auto const nu_R = rad_boundaries[g + 1];
 			auto const B_L = PlanckFunction(nu_L, T_d); // 4 pi B(nu) / c
 			auto const B_R = PlanckFunction(nu_R, T_d); // 4 pi B(nu) / c
 			auto const kappa_L = kappa_expo_and_lower_value[1][g];
@@ -528,7 +535,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 		}
 
-		// Outer iteration loop
+		// Outer iteration loop to update the work term until it converges
 		const int max_iter = 5;
 		int iter = 0;
 		for (; iter < max_iter; ++iter) {
