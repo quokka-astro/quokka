@@ -9,7 +9,7 @@ if (AMReX_SPACEDIM EQUAL 3)
     include_directories(BEFORE ${metal_chem_dirs} "${CMAKE_CURRENT_BINARY_DIR}/" "includes/extern_parameters.H" "includes/network_properties.H")
 
     add_executable(metalcloud metalcloud.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp ../../chemistry/Chemistry.cpp ${metal_chem_sources})
-    target_compile_definitions(metalcloud PUBLIC PRIMORDIAL_CHEM) #this will add #define PRIMORDIAL_CHEM
+    target_compile_definitions(metalcloud PUBLIC CHEMISTRY) #this will add #define CHEMISTRY
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(metalcloud)
