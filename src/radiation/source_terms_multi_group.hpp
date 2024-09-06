@@ -192,8 +192,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
-		const double R_sum = n == 0 ? NAN : sum(Rvec);
-		T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, coeff_n, dt, R_sum, n, rad_boundaries, rad_boundary_ratios);
+		// const double R_sum = n == 0 ? NAN : sum(Rvec);
+		// T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, coeff_n, dt, R_sum, n, rad_boundaries, rad_boundary_ratios);
+		if (dust_model == 0) {
+			T_d = T_gas;
+		} else if (dust_model == 1) {
+			if (n == 0) {
+				T_d = T_d0;
+			} else {
+				T_d = T_gas - sum(Rvec) / (coeff_n * std::sqrt(T_gas));
+			}
+		}
 		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 		if (T_d < 0.0) {
 			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
