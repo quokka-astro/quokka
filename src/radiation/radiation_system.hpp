@@ -303,14 +303,21 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGas(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
 							   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-							   double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
+							   double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
 							   quokka::valarray<double, nGroups_> const &kappaPoverE,
 							   quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff,
 								  quokka::valarray<double, nGroups_> const &Erad_diff,
 								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
+								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
+								  quokka::valarray<double, nGroups_> const &kappaPoverE,
+								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+
+	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustDecoupled(double T_gas, double T_d, double Egas_diff,
+								  quokka::valarray<double, nGroups_> const &Erad_diff,
+								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
+								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
 								  quokka::valarray<double, nGroups_> const &kappaPoverE,
 								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
