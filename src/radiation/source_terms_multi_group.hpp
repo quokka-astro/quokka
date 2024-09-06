@@ -99,14 +99,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 }
 
 template <typename problem_t>
-template <typename JacobianFunc, typename DustTempFunc>
+template <typename JacobianFunc>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const T_d0,
 		int const dust_model, double const coeff_n, double const lambda_gd_times_dt, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-    JacobianFunc ComputeJacobian, DustTempFunc ComputeDustTemperature, int *p_iteration_counter,
+    JacobianFunc ComputeJacobian, int *p_iteration_counter,
     int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
@@ -627,7 +627,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work,
 				// 							vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly, p_iteration_counter_local, p_iteration_failure_counter_local);
 				updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
-												vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly, p_iteration_counter_local, p_iteration_failure_counter_local);
+												vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
 
 				Egas_guess = updated_energy.Egas;
 				EradVec_guess = updated_energy.EradVec;
