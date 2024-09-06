@@ -16,20 +16,32 @@
 struct StreamingProblem {
 };
 
-constexpr double c = 1.0;	// speed of light
-constexpr double chat = 1.0;	// reduced speed of light
-constexpr double kappa0 = 10.0; // opacity
+// AMREX_GPU_MANAGED double a_rad = NAN; // a_rad has to be constexpr
+AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR
+AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
+
+constexpr bool dust_on = true;
+
+constexpr double c = 1.0;    // speed of light
+constexpr double chat = 1.0; // reduced speed of light
+// constexpr double kappa0 = 10.0; // opacity
 constexpr double rho0 = 1.0;
 constexpr double CV = 1.0;
 constexpr double mu = 1.5 / CV; // mean molecular weight
 constexpr double initial_T = 1.0;
 constexpr double a_rad = 1.0e10;
+// constexpr double a_rad = 1.0e2;
 constexpr double erad_floor = 1.0e-10;
-constexpr double initial_Erad = erad_floor;
+constexpr double initial_Trad = 1.0e-5;
+constexpr double initial_Erad = a_rad * initial_Trad * initial_Trad * initial_Trad * initial_Trad;
 constexpr double T_rad_L = 1.0e-2; // so EradL = 1e2
+// constexpr double T_rad_L = 1.0; // so EradL = 1e2
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
 // constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
 constexpr double T_end_exact = initial_T; // dust on
+
+constexpr int n_group_ = 2;
+static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 100, 1e4};
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -45,7 +57,7 @@ template <> struct Physics_Traits<StreamingProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
+	static constexpr int nGroups = n_group_; // number of radiation groups
 };
 
 template <> struct RadSystem_Traits<StreamingProblem> {
@@ -54,17 +66,37 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
-	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
+	static constexpr double energy_unit = 1.0;
+	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
-	return kappa0;
+	return kappa1;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
-	return kappa0;
+	return kappa1;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<StreamingProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+								  const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+{
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[0][i] = 0.0;
+		if (i == 0) {
+			exponents_and_values[1][i] = kappa1;
+		} else {
+			exponents_and_values[1][i] = kappa2;
+		}
+	}
+	return exponents_and_values;
 }
 
 template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -72,13 +104,13 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto Erad0 = initial_Erad;
 	const auto Egas0 = initial_T * CV;
+	const auto Erads = RadSystem<StreamingProblem>::ComputeThermalRadiationMultiGroup(initial_Trad, radBoundaries_);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
+			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erads[g];
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
@@ -114,16 +146,17 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 
+	// const auto Erads = RadSystem<StreamingProblem>::ComputeThermalRadiation(T_rad_L, radBoundaries_);
+	quokka::valarray<double, 2> const Erads = {erad_floor, EradL};
+	const auto Frads = Erads * c;
+
 	if (i < lo[0]) {
 		// streaming inflow boundary
-		const double Erad = EradL;
-		const double Frad = c * Erad;
-
 		// multigroup radiation
 		// x1 left side boundary (Marshak)
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad;
+			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erads[g];
+			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frads[g];
 			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}
@@ -147,6 +180,11 @@ auto problem_main() -> int
 	const double CFL_number = 0.8;
 	const double dt_max = 1;
 	const int max_timesteps = 5000;
+
+	// read user parameters
+	amrex::ParmParse pp("problem");
+	pp.query("kappa1", kappa1);
+	pp.query("kappa2", kappa2);
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
@@ -181,32 +219,41 @@ auto problem_main() -> int
 	const int nx = static_cast<int>(position.size());
 
 	// compute error norm
-	std::vector<double> erad(nx);
+	std::vector<double> xs(nx);
 	std::vector<double> T(nx);
 	std::vector<double> T_exact(nx);
-	std::vector<double> xs(nx);
+	std::vector<double> erad(nx);
+	std::vector<double> erad1(nx);
+	std::vector<double> erad2(nx);
+	std::vector<double> erad1_exact(nx);
+	std::vector<double> erad2_exact(nx);
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		double erad_sim = 0.0;
-		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			erad_sim += values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
-		}
-		erad.at(i) = erad_sim;
+		erad1.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 0)[i];
+		erad2.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 1)[i];
+		erad.at(i) = erad1.at(i) + erad2.at(i);
 		const double e_gas = values.at(RadSystem<StreamingProblem>::gasInternalEnergy_index)[i];
 		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = T_end_exact;
+
+		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) : erad_floor;
+		erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
 	}
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	for (int i = 0; i < nx; ++i) {
+	for (int i = 1; i < nx; ++i) { // skip the first cell
 		err_norm += std::abs(T[i] - T_exact[i]);
+		err_norm += std::abs(erad1[i] - erad1_exact[i]);
+		err_norm += std::abs(erad2[i] - erad2_exact[i]);
 		sol_norm += std::abs(T_exact[i]);
+		sol_norm += std::abs(erad1_exact[i]);
+		sol_norm += std::abs(erad2_exact[i]);
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 0.02;
+	const double rel_err_tol = 0.01;
 	int status = 1;
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
@@ -214,25 +261,41 @@ auto problem_main() -> int
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
 #ifdef HAVE_PYTHON
-	// Plot results
+	// Plot erad1
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> plot_args;
+	std::map<std::string, std::string> plot_args2;
 	plot_args["label"] = "numerical solution";
-	matplotlibcpp::plot(xs, erad, plot_args);
+	plot_args2["label"] = "exact solution";
+	matplotlibcpp::plot(xs, erad1, plot_args);
+	matplotlibcpp::plot(xs, erad1_exact, plot_args2);
 	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("E_rad");
+	matplotlibcpp::ylabel("E_rad_group1");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("t = {:f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radiation_marshak_dust_Erad.pdf");
+	matplotlibcpp::save("./radiation_marshak_dust_Erad1.pdf");
+
+	// Plot erad2
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(xs, erad2, plot_args);
+	matplotlibcpp::plot(xs, erad2_exact, plot_args2);
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("E_rad_group2");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radiation_marshak_dust_Erad2.pdf");
 
 	// plot temperature
 	matplotlibcpp::clf();
 	matplotlibcpp::ylim(0.0, 1.1);
 	matplotlibcpp::plot(xs, T, plot_args);
+	matplotlibcpp::plot(xs, T_exact, plot_args2);
 	matplotlibcpp::xlabel("x");
 	matplotlibcpp::ylabel("Temperature");
-	matplotlibcpp::title(fmt::format("t = {:f}", sim.tNew_[0]));
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radiation_marshak_dust_temperature.pdf");
 #endif // HAVE_PYTHON
