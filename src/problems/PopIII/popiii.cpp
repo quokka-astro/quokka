@@ -20,6 +20,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
+#include "hydro/NSCBC_outflow.hpp"
 #include "hydro/hydro_system.hpp"
 #include "popiii.hpp"
 #include "radiation/radiation_system.hpp"
@@ -83,9 +84,12 @@ template <> struct SimulationData<PopIII> {
 	amrex::Real primary_species_14{};
 };
 
+// This global variable is required for the boundary conditions
+// (SimulationData is not accessible from the boundary conditions)
+AMREX_GPU_MANAGED amrex::Real P_bdry = NAN;
+
 template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 {
-
 	// initialize microphysics routines
 	init_extern_parameters();
 
@@ -168,6 +172,88 @@ template <> void QuokkaSimulation<PopIII>::preCalculateInitialConditions()
 
 		isSamplingDone = true;
 	}
+
+	// Compute background pressure
+	// (this is required for the outflow boundary conditions)
+
+	std::array<Real, NumSpec> numdens = {-1.0};
+	for (int n = 1; n <= NumSpec; ++n) {
+		switch (n) {
+			case 1:
+				numdens[n - 1] = userData_.primary_species_1;
+				break;
+			case 2:
+				numdens[n - 1] = userData_.primary_species_2;
+				break;
+			case 3:
+				numdens[n - 1] = userData_.primary_species_3;
+				break;
+			case 4:
+				numdens[n - 1] = userData_.primary_species_4;
+				break;
+			case 5:
+				numdens[n - 1] = userData_.primary_species_5;
+				break;
+			case 6:
+				numdens[n - 1] = userData_.primary_species_6;
+				break;
+			case 7:
+				numdens[n - 1] = userData_.primary_species_7;
+				break;
+			case 8:
+				numdens[n - 1] = userData_.primary_species_8;
+				break;
+			case 9:
+				numdens[n - 1] = userData_.primary_species_9;
+				break;
+			case 10:
+				numdens[n - 1] = userData_.primary_species_10;
+				break;
+			case 11:
+				numdens[n - 1] = userData_.primary_species_11;
+				break;
+			case 12:
+				numdens[n - 1] = userData_.primary_species_12;
+				break;
+			case 13:
+				numdens[n - 1] = userData_.primary_species_13;
+				break;
+			case 14:
+				numdens[n - 1] = userData_.primary_species_14;
+				break;
+			default:
+				amrex::Abort("Cannot initialize number density for chem specie");
+				break;
+		}
+	}
+
+	eos_t state;
+	amrex::Real rhotot = 0.0;
+	for (int n = 0; n < NumSpec; ++n) {
+		state.xn[n] = numdens[n] * userData_.numdens_init;
+		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
+	}
+
+	// normalize -- just in case
+	std::array<Real, NumSpec> mfracs = {-1.0};
+	Real msum = 0.0;
+	for (int n = 0; n < NumSpec; ++n) {
+		mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
+		msum += mfracs[n];
+	}
+
+	// compute species number densities
+	for (int n = 0; n < NumSpec; ++n) {
+		mfracs[n] /= msum;
+		// use the normalized mass fractions to obtain the corresponding number densities
+		state.xn[n] = mfracs[n] * rhotot / spmasses[n];
+	}
+
+	// Calculate background pressure (outside the core)
+	state.rho = 0.01 * rhotot;
+	state.T = userData_.temperature;
+	eos(eos_input_rp, state);
+	::P_bdry = state.p;
 }
 
 template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -322,6 +408,37 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 	});
 }
 
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<PopIII>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
+											    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+											    const Real time, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+											    int /*orig_comp*/)
+{
+	auto [i, j, k] = iv.toArray();
+
+	amrex::Box const &box = geom.Domain();
+	const auto &domain_lo = box.loVect3d();
+	const auto &domain_hi = box.hiVect3d();
+
+	// simplified NSCBC subsonic outflow
+	// For this boundary condition, we must specify the pressure at the boundary.
+	const amrex::Real P_bg = ::P_bdry;
+
+	if (i < domain_lo[0]) { // x lower boundary
+		NSCBC::setOutflowBoundaryLowOrder<PopIII, FluxDir::X1, NSCBC::BoundarySide::Lower>(iv, consVar, geom, P_bg);
+	} else if (i > domain_hi[0]) { // x upper boundary
+		NSCBC::setOutflowBoundaryLowOrder<PopIII, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_bg);
+	} else if (j < domain_lo[1]) { // y lower boundary
+		NSCBC::setOutflowBoundaryLowOrder<PopIII, FluxDir::X2, NSCBC::BoundarySide::Lower>(iv, consVar, geom, P_bg);
+	} else if (j > domain_hi[1]) { // y upper boundary
+		NSCBC::setOutflowBoundaryLowOrder<PopIII, FluxDir::X2, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_bg);
+	} else if (k < domain_lo[2]) { // z lower boundary
+		NSCBC::setOutflowBoundaryLowOrder<PopIII, FluxDir::X3, NSCBC::BoundarySide::Lower>(iv, consVar, geom, P_bg);
+	} else if (k > domain_hi[2]) { // z upper boundary
+		NSCBC::setOutflowBoundaryLowOrder<PopIII, FluxDir::X3, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_bg);
+	}
+}
+
 template <> void QuokkaSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 
@@ -440,8 +557,8 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+			BCs_cc[n].setLo(i, amrex::BCType::ext_dir_cc);
+			BCs_cc[n].setHi(i, amrex::BCType::ext_dir_cc);
 		}
 	}
 
