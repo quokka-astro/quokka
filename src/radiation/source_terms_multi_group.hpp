@@ -101,7 +101,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 template <typename problem_t>
 template <typename JacobianFunc, typename DustTempFunc>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
-    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, double const dt,
+    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const T_d0,
+		int const dust_model, double const coeff_n, double const lambda_gd_times_dt, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
@@ -551,6 +552,35 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			if constexpr (gamma_ != 1.0) {
 
+				// Step 1.2.0: If enable_dust_model, determine if or not to use the weak-coupling approximation
+
+				int dust_model = 0;
+				double T_d0 = NAN;
+				double lambda_gd_times_dt = NAN;
+				if constexpr (gamma_ != 1.0) {
+					if (enable_dust_gas_thermal_coupling_model_) {
+						const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+						AMREX_ASSERT(T_gas0 >= 0.);
+						T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, radBoundaries_g_copy);
+						AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
+						if (T_d0 < 0.0) {
+							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
+						}
+
+						const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
+						const double convergence_tol_for_dust_gas_coupling = 1.0e-6;
+						if (cscale * max_Gamma_gd < convergence_tol_for_dust_gas_coupling * Egas0) {
+							dust_model = 2;
+							lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
+							// Egas_guess += cscale * lambda_gd_times_dt; // update Egas_guess once and won't update it in the iteration
+							// 						// T_gas is not used anymore, so we don't need to update it
+							// update Egas inside SolveMatterRadiationEnergyExchange instead
+						} else {
+							dust_model = 1;
+						}
+					}
+				}
+
 				// Step 1.1: Compute a term required to calculate the work. This is only required in the first outer loop.
 
 				quokka::valarray<double, nGroups_> vel_times_F{};
@@ -585,10 +615,10 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// 							    p_iteration_counter_local, p_iteration_failure_counter_local);
 				// }
 
-				updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work,
-											vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly, p_iteration_counter_local, p_iteration_failure_counter_local);
-				// updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
-				// 								vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
+				// updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work,
+				// 							vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly, p_iteration_counter_local, p_iteration_failure_counter_local);
+				updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
+												vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly, p_iteration_counter_local, p_iteration_failure_counter_local);
 
 				Egas_guess = updated_energy.Egas;
 				EradVec_guess = updated_energy.EradVec;
