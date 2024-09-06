@@ -115,20 +115,17 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
 			}
 
-			// ensure positivity and normalize
+			// ensure positivity
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
 				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
 				insum += inmfracs[nn];
 			}
 
-			// do not normalize ices
+			// normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
-
-				if (nn >= network_rp::idx_gas_species) {
-					inmfracs[nn] /= insum;
-				}
 				// update the number densities with conserved mass fractions
+				inmfracs[nn] /= insum;
 				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 			}
 
@@ -144,11 +141,8 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			}
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
-
-				if (nn >= network_rp::idx_gas_species) {
-					inmfracs[nn] /= insum;
-				}
 				// update the number densities with conserved mass fractions
+				inmfracs[nn] /= insum;
 				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 			}
 
