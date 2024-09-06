@@ -387,17 +387,15 @@ template <> void QuokkaSimulation<MetalCloud>::setInitialConditionsOnGrid(quokka
 			rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 		}
 
-		// normalize -- just in case, but do not includes ices in normalization
+		// normalize -- just in case
 		std::array<Real, NumSpec> mfracs = {-1.0};
 		Real msum = 0.0;
 		for (int n = 0; n < NumSpec; ++n) {
 			mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
-			if (n >= network_rp::idx_gas_species) {
-				msum += mfracs[n];
-			}
+			msum += mfracs[n];
 		}
 
-		for (int n = network_rp::idx_gas_species; n < NumSpec; ++n) {
+		for (int n = 0; n < NumSpec; ++n) {
 			mfracs[n] /= msum;
 			// use the normalized mass fractions to obtain the corresponding number densities
 			state.xn[n] = mfracs[n] * rhotot / spmasses[n];
