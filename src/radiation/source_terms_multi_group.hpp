@@ -134,10 +134,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 	const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 
-	double deltaEgas = NAN;
 	double T_gas = NAN;
 	double T_d = NAN;
-	quokka::valarray<double, nGroups_> deltaD{};
+	double delta_x = NAN;
+	quokka::valarray<double, nGroups_> delta_R{};
 	quokka::valarray<double, nGroups_> F_D{};
 	quokka::valarray<double, nGroups_> Rvec{};
 	quokka::valarray<double, nGroups_> kappaPVec{};
@@ -192,8 +192,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
-		// const double R_sum = n == 0 ? NAN : sum(Rvec);
-		// T_d = ComputeDustTemperature(T_gas, T_gas, rho, EradVec_guess, coeff_n, dt, R_sum, n, rad_boundaries, rad_boundary_ratios);
 		if (dust_model == 0) {
 			T_d = T_gas;
 		} else if (dust_model == 1) {
@@ -348,31 +346,31 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 #endif
 
 		// update variables
-		RadSystem<problem_t>::SolveLinearEqs(jacobian, deltaEgas, deltaD);
-		AMREX_ASSERT(!std::isnan(deltaEgas));
-		AMREX_ASSERT(!deltaD.hasnan());
+		RadSystem<problem_t>::SolveLinearEqs(jacobian, delta_x, delta_R); // This is modify delta_x and delta_R in place
+		AMREX_ASSERT(!std::isnan(delta_x));
+		AMREX_ASSERT(!delta_R.hasnan());
 
 		// Update independent variables (Egas_guess, Rvec)
 		// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation
 		// temperature
 		if (!enable_dE_constrain) {
-			Egas_guess += deltaEgas;
+			Egas_guess += delta_x;
 			if constexpr (use_D_as_base) {
-				Rvec += tau0 * deltaD;
+				Rvec += tau0 * delta_R;
 			} else {
-				Rvec += deltaD;
+				Rvec += delta_R;
 			}
 		} else {
 			const double T_rad = std::pow(sum(EradVec_guess) / radiation_constant_, 0.25);
-			if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
+			if (delta_x / c_v > std::max(T_gas, T_rad)) {
 				Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 				Rvec.fillin(0.0);
 			} else {
-				Egas_guess += deltaEgas;
+				Egas_guess += delta_x;
 				if constexpr (use_D_as_base) {
-					Rvec += tau0 * deltaD;
+					Rvec += tau0 * delta_R;
 				} else {
-					Rvec += deltaD;
+					Rvec += delta_R;
 				}
 			}
 		}
