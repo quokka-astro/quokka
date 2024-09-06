@@ -570,7 +570,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					if (enable_dust_gas_thermal_coupling_model_) {
 						const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 						AMREX_ASSERT(T_gas0 >= 0.);
-						T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, radBoundaries_g_copy);
+						T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, radBoundaries_g_copy, radBoundaryRatios_copy);
 						AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
 						if (T_d0 < 0.0) {
 							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
@@ -626,8 +626,14 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				// updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work,
 				// 							vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, &ComputeDustTemperatureGasOnly, p_iteration_counter_local, p_iteration_failure_counter_local);
-				updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
-												vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
+
+				if (dust_model == 0) {
+					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
+													vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
+				} else if (dust_model == 1) {
+					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
+													vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGasAndDust, p_iteration_counter_local, p_iteration_failure_counter_local);
+				}
 
 				Egas_guess = updated_energy.Egas;
 				EradVec_guess = updated_energy.EradVec;
