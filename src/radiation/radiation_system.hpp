@@ -293,9 +293,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureBateKeto(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
-				       double R_sum, int n_step,
-				       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
-				       amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
+				       double R_sum, int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{}) -> double;
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureGasOnly(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
@@ -1267,11 +1265,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureGasOnly(double
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(double const T_gas, double const T_d_init, double const rho,
 									   quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
-									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-									   amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios) -> double
+									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
 {
 	if (n_step > 0) {
 		return T_gas - R_sum / (N_d * std::sqrt(T_gas));
+	}
+
+	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
+
+	if constexpr (!(opacity_model_ == OpacityModel::piecewise_constant_opacity)) {
+		for (int g = 0; g < nGroups_; ++g) {
+			rad_boundary_ratios[g] = rad_boundaries[g + 1] / rad_boundaries[g];
+		}
 	}
 
 	quokka::valarray<double, nGroups_> kappaPVec{};
