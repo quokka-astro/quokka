@@ -30,7 +30,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 		const double c = c_light_;
 		const double chat = c_hat_;
-		const double dustGasCoeff_local = dustGasCoeff;
+		const double dustGasCoeff_ = dustGasCoeff;
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -85,8 +85,15 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			gas_update_factor = IMEX_a32;
 		}
 
+		double coeff_n = NAN;
 		const double num_den = rho / mean_molecular_mass_;
-		const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
+		if constexpr (enable_dust_gas_thermal_coupling_model_) {
+			coeff_n = dt * dustGasCoeff_ * num_den * num_den / cscale;
+		} else {
+			amrex::ignore_unused(coeff_n);
+			amrex::ignore_unused(num_den);
+			amrex::ignore_unused(dustGasCoeff_);
+		}
 
 		const int max_ite = 5;
 		int ite = 0;
