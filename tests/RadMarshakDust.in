@@ -13,7 +13,7 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 4 4
+amr.n_cell          = 128 4 4
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 4     # grid size must be divisible by this
 
@@ -21,7 +21,13 @@ amr.blocking_factor = 4     # grid size must be divisible by this
 # Radiation
 # *****************************************************************
 radiation.print_iteration_counts = 1
-radiation.dust_gas_interaction_coeff = 1e-20
+radiation.dust_gas_interaction_coeff = 1e20
+
+# *****************************************************************
+# Problem
+# *****************************************************************
+problem.kappa1 			= 1.0e10
+problem.kappa2 			= 1.0e0
 
 do_reflux = 0
 do_subcycle = 0
