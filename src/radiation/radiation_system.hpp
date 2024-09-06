@@ -1260,16 +1260,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureGasOnly(double const T_gas, double const /*T_d_init*/, double const /*rho*/,
-									  quokka::valarray<double, nGroups_> const & /*Erad*/, double /*N_d*/, double /*dt*/,
-									  double /*R_sum*/, int /*n_step*/,
-									  amrex::GpuArray<double, nGroups_ + 1> const & /*rad_boundaries*/,
-									  amrex::GpuArray<double, nGroups_> const & /*rad_boundary_ratios*/) -> double
-{
-	return T_gas;
-}
-
-template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(double const T_gas, double const T_d_init, double const rho,
 									   quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
 									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double

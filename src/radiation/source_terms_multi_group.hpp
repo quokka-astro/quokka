@@ -404,29 +404,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		// Update independent variables (Egas_guess, Rvec)
 		// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation
 		// temperature
-/*
-		if (!enable_dE_constrain) {
-			Egas_guess += delta_x;
-			if constexpr (use_D_as_base) {
-				Rvec += tau0 * delta_R;
-			} else {
-				Rvec += delta_R;
-			}
-		} else {
-			const double T_rad = std::pow(sum(EradVec_guess) / radiation_constant_, 0.25);
-			if (delta_x / c_v > std::max(T_gas, T_rad)) {
-				Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
-				Rvec.fillin(0.0);
-			} else {
-				Egas_guess += delta_x;
-				if constexpr (use_D_as_base) {
-					Rvec += tau0 * delta_R;
-				} else {
-					Rvec += delta_R;
-				}
-			}
-		}
-*/
 		if (dust_model == 2) {
 			T_d += delta_x;
 			Rvec += delta_R;
