@@ -10,6 +10,7 @@
 #include "test_radiation_marshak_dust.hpp"
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
 
@@ -40,8 +41,12 @@ constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
 // constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
 constexpr double T_end_exact = initial_T; // dust on
 
-constexpr int n_group_ = 2;
-static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 100, 1e4};
+constexpr int n_group_ = 1;
+static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 1e4};
+static constexpr OpacityModel opacity_model_ = OpacityModel::single_group;
+// constexpr int n_group_ = 2;
+// static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 100, 1e4};
+// static constexpr opacity_model_ = OpacityModel::piecewise_constant_opacity;
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -69,7 +74,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
 	static constexpr double energy_unit = 1.0;
 	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
-	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
