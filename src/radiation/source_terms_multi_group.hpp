@@ -13,11 +13,12 @@
 // Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
 // Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
 template <typename problem_t>
-AMREX_GPU_DEVICE auto
-RadSystem<problem_t>::ComputeJacobianForGas(double /*T_gas*/, double /*T_d*/, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
-					    quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double /*coeff_n*/,
-					    quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/, quokka::valarray<double, nGroups_> const &kappaPoverE,
-					    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_gas*/, double /*T_d*/, double Egas_diff,
+								  quokka::valarray<double, nGroups_> const &Erad_diff,
+								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
+								  double /*coeff_n*/, quokka::valarray<double, nGroups_> const &tau, double c_v,
+								  double /*lambda_gd_time_dt*/, quokka::valarray<double, nGroups_> const &kappaPoverE,
+								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -114,9 +115,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 	return result;
 }
 
-// Compute the Jacobian of energy update equations for the gas-dust-radiation system with gas and dust decoupled. The result is a struct containing the following elements:
-// J00: (0, 0) component of the Jacobian matrix. = d F0 / d T_d
-// F0: (0) component of the residual. = sum_g R_g - lambda_gd_time_dt
+// Compute the Jacobian of energy update equations for the gas-dust-radiation system with gas and dust decoupled. The result is a struct containing the
+// following elements: J00: (0, 0) component of the Jacobian matrix. = d F0 / d T_d F0: (0) component of the residual. = sum_g R_g - lambda_gd_time_dt
 // Fg_abs_sum: sum of the absolute values of the each component of Fg that has tau(g) > 0
 // J0g: (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d F0 / d R_g
 // Jg0: (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d T_d
@@ -168,10 +168,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 template <typename problem_t>
 template <typename JacobianFunc>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
-    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const T_d0,
-		int const dust_model, double const coeff_n, double const lambda_gd_times_dt, double const dt,
-    amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-    quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const T_d0, int const dust_model, double const coeff_n,
+    double const lambda_gd_times_dt, double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter,
+    quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, JacobianFunc ComputeJacobian, int *p_iteration_counter,
     int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
@@ -679,14 +678,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// the work term.
 
 				if (dust_model == 0) {
-					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
-													vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
+					updated_energy = SolveMatterRadiationEnergyExchange(
+					    Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
+					    radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else if (dust_model == 1) {
-					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
-													vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGasAndDust, p_iteration_counter_local, p_iteration_failure_counter_local);
+					updated_energy = SolveMatterRadiationEnergyExchange(
+					    Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
+					    radBoundaries_g_copy, &ComputeJacobianForGasAndDust, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else if (dust_model == 2) {
-					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work,
-													vel_times_F, Src, radBoundaries_g_copy, &ComputeJacobianForGasAndDustDecoupled, p_iteration_counter_local, p_iteration_failure_counter_local);
+					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt,
+											    dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
+											    &ComputeJacobianForGasAndDustDecoupled, p_iteration_counter_local,
+											    p_iteration_failure_counter_local);
 				}
 
 				Egas_guess = updated_energy.Egas;
