@@ -10,13 +10,13 @@
 #include "test_radiation_marshak_dust.hpp"
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
 
 struct StreamingProblem {
 };
 
-// AMREX_GPU_MANAGED double a_rad = NAN; // a_rad has to be constexpr
 AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR
 AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
 
@@ -24,24 +24,25 @@ constexpr bool dust_on = true;
 
 constexpr double c = 1.0;    // speed of light
 constexpr double chat = 1.0; // reduced speed of light
-// constexpr double kappa0 = 10.0; // opacity
 constexpr double rho0 = 1.0;
 constexpr double CV = 1.0;
 constexpr double mu = 1.5 / CV; // mean molecular weight
 constexpr double initial_T = 1.0;
 constexpr double a_rad = 1.0e10;
-// constexpr double a_rad = 1.0e2;
 constexpr double erad_floor = 1.0e-10;
 constexpr double initial_Trad = 1.0e-5;
 constexpr double initial_Erad = a_rad * initial_Trad * initial_Trad * initial_Trad * initial_Trad;
 constexpr double T_rad_L = 1.0e-2; // so EradL = 1e2
-// constexpr double T_rad_L = 1.0; // so EradL = 1e2
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
 // constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
 constexpr double T_end_exact = initial_T; // dust on
 
+// constexpr int n_group_ = 1;
+// static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 1e4};
+// static constexpr OpacityModel opacity_model_ = OpacityModel::single_group;
 constexpr int n_group_ = 2;
 static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 100, 1e4};
+static constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -69,7 +70,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
 	static constexpr double energy_unit = 1.0;
 	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
-	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -231,8 +232,11 @@ auto problem_main() -> int
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
 		erad1.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 0)[i];
-		erad2.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 1)[i];
-		erad.at(i) = erad1.at(i) + erad2.at(i);
+		erad.at(i) = erad1.at(i);
+		if (n_group_ > 1) {
+			erad2.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 1)[i];
+			erad.at(i) += erad2.at(i);
+		}
 		const double e_gas = values.at(RadSystem<StreamingProblem>::gasInternalEnergy_index)[i];
 		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = T_end_exact;
@@ -277,15 +281,17 @@ auto problem_main() -> int
 	matplotlibcpp::save("./radiation_marshak_dust_Erad1.pdf");
 
 	// Plot erad2
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(xs, erad2, plot_args);
-	matplotlibcpp::plot(xs, erad2_exact, plot_args2);
-	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("E_rad_group2");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radiation_marshak_dust_Erad2.pdf");
+	if (n_group_ > 1) {
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(xs, erad2, plot_args);
+		matplotlibcpp::plot(xs, erad2_exact, plot_args2);
+		matplotlibcpp::xlabel("x");
+		matplotlibcpp::ylabel("E_rad_group2");
+		matplotlibcpp::legend();
+		matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./radiation_marshak_dust_Erad2.pdf");
+	}
 
 	// plot temperature
 	matplotlibcpp::clf();

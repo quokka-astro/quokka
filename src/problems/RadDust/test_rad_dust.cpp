@@ -76,11 +76,13 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeFluxMeanOp
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> amrex::Real
 {
+	// We assume the thermal emission is proportional to T_d in order to linearize the problem so that we can derive an analytical solution.
 	return radiation_constant_ * temperature;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real /*temperature*/) -> amrex::Real
 {
+	// Same. We assume B(T_d) = a_rad * T_d.
 	return radiation_constant_;
 }
 
