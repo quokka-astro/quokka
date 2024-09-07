@@ -41,12 +41,12 @@ constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
 // constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
 constexpr double T_end_exact = initial_T; // dust on
 
-constexpr int n_group_ = 1;
-static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 1e4};
-static constexpr OpacityModel opacity_model_ = OpacityModel::single_group;
-// constexpr int n_group_ = 2;
-// static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 100, 1e4};
-// static constexpr opacity_model_ = OpacityModel::piecewise_constant_opacity;
+// constexpr int n_group_ = 1;
+// static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 1e4};
+// static constexpr OpacityModel opacity_model_ = OpacityModel::single_group;
+constexpr int n_group_ = 2;
+static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 100, 1e4};
+static constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = mu;

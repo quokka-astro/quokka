@@ -259,13 +259,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
+		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+		AMREX_ASSERT(T_gas >= 0.);
+
 		if (dust_model == 0) {
-			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-			AMREX_ASSERT(T_gas >= 0.);
 			T_d = T_gas;
 		} else if (dust_model == 1) {
-			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-			AMREX_ASSERT(T_gas >= 0.);
 			if (n == 0) {
 				T_d = T_d0;
 			} else {
@@ -404,6 +403,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		}
 
 		// check relative convergence of the residuals
+		// TODO: confirm using Etot0 for dust_model == 2
 		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
 			break;
 		}
