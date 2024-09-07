@@ -1270,7 +1270,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 
 	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
 
-	if constexpr (!(opacity_model_ == OpacityModel::piecewise_constant_opacity)) {
+	if constexpr (nGroups_ > 1 && opacity_model_ != OpacityModel::piecewise_constant_opacity) {
 		for (int g = 0; g < nGroups_; ++g) {
 			rad_boundary_ratios[g] = rad_boundaries[g + 1] / rad_boundaries[g];
 		}

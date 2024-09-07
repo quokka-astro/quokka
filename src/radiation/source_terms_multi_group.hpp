@@ -130,8 +130,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 {
 	JacobianResult<problem_t> result;
 
-	const double cscale = c_light_ / c_hat_;
-
 	result.F0 = -lambda_gd_time_dt;
 	result.Fg = Erad_diff - (Rvec + Src);
 	result.Fg_abs_sum = 0.0;
