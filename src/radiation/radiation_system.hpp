@@ -296,7 +296,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureBateKeto(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
-				       double R_sum, int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{}) -> double;
+				       double R_sum, int n_step,
+				       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{}) -> double;
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureGasOnly(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
@@ -313,25 +314,23 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff,
 								  quokka::valarray<double, nGroups_> const &Erad_diff,
 								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
-								  quokka::valarray<double, nGroups_> const &kappaPoverE,
+								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
+								  double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
 								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustDecoupled(double T_gas, double T_d, double Egas_diff,
-								  quokka::valarray<double, nGroups_> const &Erad_diff,
-								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
-								  quokka::valarray<double, nGroups_> const &kappaPoverE,
-								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustDecoupled(
+	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
+	    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
+	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
 	template <typename JacobianFunc>
 	AMREX_GPU_DEVICE static auto
-	SolveMatterRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double T_d0, 
-						 int dust_model, double coeff_n, double lambda_gd_times_dt, double dt,
-					   amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter,
-					   quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F,
-					   quokka::valarray<double, nGroups_> const &Src, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-						 JacobianFunc ComputeJacobian, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
+	SolveMatterRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double T_d0, int dust_model,
+					   double coeff_n, double lambda_gd_times_dt, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
+					   int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+					   quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+					   amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, JacobianFunc ComputeJacobian, int *p_iteration_counter,
+					   int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
