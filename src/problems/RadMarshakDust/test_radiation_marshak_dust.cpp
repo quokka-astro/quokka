@@ -67,7 +67,6 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
-	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
 	static constexpr double energy_unit = 1.0;
 	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
 	static constexpr OpacityModel opacity_model = opacity_model_;

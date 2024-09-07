@@ -124,7 +124,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
-	amrex::Real dustGasInteractionCoeff_ = 2.5e-34; // erg cm^3 s^−1 K^−3/2
+	amrex::Real dustGasInteractionCoeff_ = -1.0; // < 0: dust model off; >= 0: dust model on. Example value: 2.5e-34 erg cm^3 s^−1 K^−3/2, Keto & Field (2005)
 
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
