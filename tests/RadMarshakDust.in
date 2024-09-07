@@ -21,7 +21,7 @@ amr.blocking_factor = 4     # grid size must be divisible by this
 # Radiation
 # *****************************************************************
 radiation.print_iteration_counts = 1
-radiation.dust_gas_interaction_coeff = 1e-20
+radiation.dust_gas_interaction_coeff = 1e-10
 
 # *****************************************************************
 # Problem

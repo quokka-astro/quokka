@@ -198,7 +198,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	const double chat = c_hat_;
 	const double cscale = c / chat;
 
-	const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
+	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
+	double Etot0 = NAN;
+	if (dust_model == 0 || dust_model == 1) {
+		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
+	} else {
+		// for dust_model == 2 (decoupled gas and dust), Egas0 is not envolved in the iteration
+		Etot0 = std::abs(lambda_gd_times_dt) + (sum(Erad0Vec) + sum(Src));
+	}
 
 	double T_gas = NAN;
 	double T_d = NAN;
@@ -403,7 +410,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		}
 
 		// check relative convergence of the residuals
-		// TODO: confirm using Etot0 for dust_model == 2
 		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
 			break;
 		}
