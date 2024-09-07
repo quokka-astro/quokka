@@ -203,7 +203,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	if (dust_model == 0 || dust_model == 1) {
 		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 	} else {
-		// for dust_model == 2 (decoupled gas and dust), Egas0 is not envolved in the iteration
+		// for dust_model == 2 (decoupled gas and dust), Egas0 is not involved in the iteration
 		Etot0 = std::abs(lambda_gd_times_dt) + (sum(Erad0Vec) + sum(Src));
 	}
 
