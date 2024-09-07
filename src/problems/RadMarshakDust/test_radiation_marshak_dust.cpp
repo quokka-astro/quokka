@@ -253,15 +253,15 @@ auto problem_main() -> int
 	double sol_norm = 0.;
 	for (int i = 1; i < nx; ++i) { // skip the first cell
 		err_norm += std::abs(T[i] - T_exact[i]);
-		// err_norm += std::abs(erad1[i] - erad1_exact[i]);
-		// err_norm += std::abs(erad2[i] - erad2_exact[i]);
+		err_norm += std::abs(erad1[i] - erad1_exact[i]);
+		err_norm += std::abs(erad2[i] - erad2_exact[i]);
 		sol_norm += std::abs(T_exact[i]);
-		// sol_norm += std::abs(erad1_exact[i]);
-		// sol_norm += std::abs(erad2_exact[i]);
+		sol_norm += std::abs(erad1_exact[i]);
+		sol_norm += std::abs(erad2_exact[i]);
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 0.03;
+	const double rel_err_tol = 0.01;
 	int status = 1;
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;

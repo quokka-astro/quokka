@@ -650,9 +650,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 						if (cscale * max_Gamma_gd < convergence_tol_for_dust_gas_coupling * Egas0) {
 							dust_model = 2;
 							lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
-							// Egas_guess += cscale * lambda_gd_times_dt; // update Egas_guess once and won't update it in the iteration
-							// 						// T_gas is not used anymore, so we don't need to update it
-							// update Egas inside SolveMatterRadiationEnergyExchange instead
 						} else {
 							dust_model = 1;
 						}
