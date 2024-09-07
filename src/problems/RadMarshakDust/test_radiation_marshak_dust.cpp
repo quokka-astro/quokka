@@ -17,7 +17,6 @@
 struct StreamingProblem {
 };
 
-// AMREX_GPU_MANAGED double a_rad = NAN; // a_rad has to be constexpr
 AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR
 AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
 
@@ -25,18 +24,15 @@ constexpr bool dust_on = true;
 
 constexpr double c = 1.0;    // speed of light
 constexpr double chat = 1.0; // reduced speed of light
-// constexpr double kappa0 = 10.0; // opacity
 constexpr double rho0 = 1.0;
 constexpr double CV = 1.0;
 constexpr double mu = 1.5 / CV; // mean molecular weight
 constexpr double initial_T = 1.0;
 constexpr double a_rad = 1.0e10;
-// constexpr double a_rad = 1.0e2;
 constexpr double erad_floor = 1.0e-10;
 constexpr double initial_Trad = 1.0e-5;
 constexpr double initial_Erad = a_rad * initial_Trad * initial_Trad * initial_Trad * initial_Trad;
 constexpr double T_rad_L = 1.0e-2; // so EradL = 1e2
-// constexpr double T_rad_L = 1.0; // so EradL = 1e2
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
 // constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
 constexpr double T_end_exact = initial_T; // dust on
