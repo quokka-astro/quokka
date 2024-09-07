@@ -89,6 +89,8 @@ struct RadPressureResult {
 	double S;		       // maximum wavespeed for the radiation system
 };
 
+// A struct to hold the results of the Newton-Raphson iteration for energy update, containing the following elements:
+// Egas, T_gas, T_d, EradVec, kappaPVec, kappaEVec, kappaFVec, work, delta_nu_kappa_B_at_edge
 template <typename problem_t> struct NewtonIterationResult {
 	double Egas;									      // gas internal energy
 	double T_gas;									      // gas temperature
@@ -101,7 +103,8 @@ template <typename problem_t> struct NewtonIterationResult {
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa_B * B)
 };
 
-// A struct to hold the results of ComputeJacobianForPureGas or ComputeJacobianForGasAndDust
+// A struct to hold the results of ComputeJacobian functions, containing the following elements:
+// J00, F0, Fg_abs_sum, J0g, Jg0, Jgg, Fg
 template <typename problem_t> struct JacobianResult {
 	double J00;	   // (0, 0) component of the Jacobian matrix
 	double F0;	   // (0) component of the residual

@@ -4,6 +4,14 @@
 
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
+// Compute the Jacobian of energy update equations for the gas-radiation system. The result is a struct containing the following elements:
+// J00: (0, 0) component of the Jacobian matrix. = d F0 / d Egas
+// F0: (0) component of the residual. = Egas residual
+// Fg_abs_sum: sum of the absolute values of the each component of Fg that has tau(g) > 0
+// J0g: (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d F0 / d R_g
+// Jg0: (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d Egas
+// Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
+// Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
 template <typename problem_t>
 AMREX_GPU_DEVICE auto
 RadSystem<problem_t>::ComputeJacobianForGas(double /*T_gas*/, double /*T_d*/, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
@@ -48,6 +56,14 @@ RadSystem<problem_t>::ComputeJacobianForGas(double /*T_gas*/, double /*T_d*/, do
 	return result;
 }
 
+// Compute the Jacobian of energy update equations for the gas-dust-radiation system. The result is a struct containing the following elements:
+// J00: (0, 0) component of the Jacobian matrix. = d F0 / d Egas
+// F0: (0) component of the residual. = Egas residual
+// Fg_abs_sum: sum of the absolute values of the each component of Fg that has tau(g) > 0
+// J0g: (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d F0 / d R_g
+// Jg0: (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d Egas
+// Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
+// Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
     double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
