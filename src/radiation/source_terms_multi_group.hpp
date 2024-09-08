@@ -613,7 +613,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		const double num_den = rho / mean_molecular_mass_;
 		const double cscale = c / chat;
 		double coeff_n = NAN;
-		if (enable_dust_gas_thermal_coupling_model_) {
+		if constexpr (enable_dust_gas_thermal_coupling_model_) {
 			coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 		}
 
@@ -639,7 +639,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				double T_d0 = NAN;
 				double lambda_gd_times_dt = NAN;
 				if constexpr (gamma_ != 1.0) {
-					if (enable_dust_gas_thermal_coupling_model_) {
+					if constexpr (enable_dust_gas_thermal_coupling_model_) {
 						const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 						AMREX_ASSERT(T_gas0 >= 0.);
 						T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, radBoundaries_g_copy);
@@ -675,19 +675,21 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// Step 1.2: Compute the gas and radiation energy update. This also updates the opacities. When iter == 0, this also computes
 				// the work term.
 
-				if (dust_model == 0) {
+				if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 					updated_energy = SolveMatterRadiationEnergyExchange(
 					    Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
 					    radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
-				} else if (dust_model == 1) {
-					updated_energy = SolveMatterRadiationEnergyExchange(
-					    Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
-					    radBoundaries_g_copy, &ComputeJacobianForGasAndDust, p_iteration_counter_local, p_iteration_failure_counter_local);
-				} else if (dust_model == 2) {
-					updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt,
-											    dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
-											    &ComputeJacobianForGasAndDustDecoupled, p_iteration_counter_local,
-											    p_iteration_failure_counter_local);
+				} else {
+					if (dust_model == 1) {
+						updated_energy = SolveMatterRadiationEnergyExchange(
+								Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
+								radBoundaries_g_copy, &ComputeJacobianForGasAndDust, p_iteration_counter_local, p_iteration_failure_counter_local);
+					} else if (dust_model == 2) {
+						updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt,
+														dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
+														&ComputeJacobianForGasAndDustDecoupled, p_iteration_counter_local,
+														p_iteration_failure_counter_local);
+					}
 				}
 
 				Egas_guess = updated_energy.Egas;
