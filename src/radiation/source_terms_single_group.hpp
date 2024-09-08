@@ -15,8 +15,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		dt = (1.0 - IMEX_a32) * dt_radiation;
 	}
 
-	const bool enable_dust_gas_thermal_coupling_model = dustGasCoeff >= 0.0;
-
 	// don't need radBoundaries_g for single-group
 
 	// Add source terms
@@ -89,7 +87,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 		double coeff_n = NAN;
 		const double num_den = rho / mean_molecular_mass_;
-		if (enable_dust_gas_thermal_coupling_model) {
+		if constexpr (enable_dust_gas_thermal_coupling_model_) {
 			coeff_n = dt * dustGasCoeff_ * num_den * num_den / cscale;
 		} else {
 			amrex::ignore_unused(coeff_n);
@@ -163,7 +161,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					AMREX_ASSERT(T_gas >= 0.);
 
 					// dust temperature
-					if (!enable_dust_gas_thermal_coupling_model) {
+					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 						T_d = T_gas;
 					} else {
 						const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
@@ -269,7 +267,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					double J10 = NAN;
 					double J11 = NAN;
 
-					if (!enable_dust_gas_thermal_coupling_model) {
+					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 						J00 = 1.0;
 						J01 = cscale;
 						J10 = 1.0 / c_v * dEg_dT;

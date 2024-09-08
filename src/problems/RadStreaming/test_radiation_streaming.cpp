@@ -46,6 +46,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = 1.0;
 	static constexpr double Erad_floor = initial_Erad;
 	static constexpr int beta_order = 0;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
