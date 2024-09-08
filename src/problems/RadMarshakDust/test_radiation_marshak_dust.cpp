@@ -10,7 +10,6 @@
 #include "test_radiation_marshak_dust.hpp"
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
-#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
 
@@ -31,7 +30,6 @@ constexpr double initial_T = 1.0;
 constexpr double a_rad = 1.0e10;
 constexpr double erad_floor = 1.0e-10;
 constexpr double initial_Trad = 1.0e-5;
-constexpr double initial_Erad = a_rad * initial_Trad * initial_Trad * initial_Trad * initial_Trad;
 constexpr double T_rad_L = 1.0e-2; // so EradL = 1e2
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
 // constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
@@ -149,7 +147,8 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
 	// const auto Erads = RadSystem<StreamingProblem>::ComputeThermalRadiation(T_rad_L, radBoundaries_);
 	quokka::valarray<double, 2> const Erads = {erad_floor, EradL};
-	const auto Frads = Erads * c;
+	const double c_light = c;
+	const auto Frads = Erads * c_light;
 
 	if (i < lo[0]) {
 		// streaming inflow boundary
