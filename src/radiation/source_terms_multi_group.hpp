@@ -680,16 +680,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					    Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
 					    radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
-					if (dust_model == 1) {
-						updated_energy = SolveMatterRadiationEnergyExchange(
-								Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
-								radBoundaries_g_copy, &ComputeJacobianForGasAndDust, p_iteration_counter_local, p_iteration_failure_counter_local);
-					} else if (dust_model == 2) {
-						updated_energy = SolveMatterRadiationEnergyExchange(Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt,
-														dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
-														&ComputeJacobianForGasAndDustDecoupled, p_iteration_counter_local,
-														p_iteration_failure_counter_local);
-					}
+					auto ComputeJacobian = (dust_model == 1) ? &ComputeJacobianForGasAndDust : &ComputeJacobianForGasAndDustDecoupled;
+
+					updated_energy = SolveMatterRadiationEnergyExchange(
+							Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
+							radBoundaries_g_copy, ComputeJacobian, p_iteration_counter_local, p_iteration_failure_counter_local);
 				}
 
 				Egas_guess = updated_energy.Egas;
