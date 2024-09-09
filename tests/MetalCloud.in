@@ -1,0 +1,135 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -3.703e18  -3.703e18  -3.703e18
+geometry.prob_hi     =  3.703e18   3.703e18   3.703e18
+geometry.is_periodic =  0    0    0
+#restartfile = "chk15360"
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 16 16 16
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 16    # grid size must be divisible by this
+amr.max_grid_size   = 128    # at least 128 for GPUs
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+
+hydro.reconstruction_order = 3  # PPM
+cfl = 0.15
+max_timesteps = 3
+stop_time = 1e16
+
+do_reflux = 1
+do_subcycle = 0
+
+#ascent_interval = 50
+plotfile_interval = 50 #100
+checkpoint_interval = 200
+
+perturb.cloud_radius = 3.086e18 #initial cloud radius in cm
+perturb.cloud_omega = 2.016008E-14 #initial cloud angular velocity in s^-1
+perturb.cloud_numdens = 0.90861183E+004 #initial cloud number density in cm^-3
+perturb.rms_velocity = 1.8050e5 #initial cloud rms velocity (to drive turbulence)
+
+# params for jeans refinement
+jeansRefine.ncells = 64 #refine on these many cells per jeans length
+jeansRefine.density_threshold = 5e-21 #do not refine if density is less than this density
+
+# density floor for popiii
+density_floor = 1e-25
+temperature_floor = 2.73
+
+# in quokka/src/StarCluster, generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
+# and put it in quokka/tests/
+perturb.filename = "zdrv.hdf5"
+
+derived_vars = temperature velx pressure sound_speed
+
+amrex.throw_exception = 0
+amrex.signal_handling = 1
+
+primordial_chem.enabled = 1
+primordial_chem.max_density_allowed = 3e-6
+primordial_chem.min_density_allowed = 5e-21
+
+metal_chem.temperature = 7.12091
+
+metal_chem.small_temp = 2.73*(network.redshift + 1.0)
+metal_chem.small_dens = 1.e-60
+
+
+metal_chem.primary_species_1 = 0.000125118 #co_ice
+metal_chem.primary_species_2 = 3.51332E-08 #h2o_ice
+metal_chem.primary_species_3 = 2.31005E-12 #e
+metal_chem.primary_species_4 = 9.56989E-23 #hp
+metal_chem.primary_species_5 = 0.008028631 #h
+metal_chem.primary_species_6 = 7.06903E-21 #hm
+metal_chem.primary_species_7 = 1.31741E-35 #dp
+metal_chem.primary_species_8 = 1.71922E-05 #d
+metal_chem.primary_species_9 = 4.1585E-33 #h2p
+metal_chem.primary_species_10 = 1.77859E-23 #dm
+metal_chem.primary_species_11 = 0.857764351 #h2
+metal_chem.primary_species_12 = 3.6383E-36 #hdp
+metal_chem.primary_species_13 = 4.17471E-08 #hd
+metal_chem.primary_species_14 = 1.90687E-29 #hepp
+metal_chem.primary_species_15 = 4.32113E-26 #hep
+metal_chem.primary_species_16 = 0.133562076 #he
+metal_chem.primary_species_17 = 1.05925E-22 #cp
+metal_chem.primary_species_18 = 1.04315E-05 #c
+metal_chem.primary_species_19 = 2.40764E-06 #ch
+metal_chem.primary_species_20 = 5.06588E-11 #ch2
+metal_chem.primary_species_21 = 1.30043E-25 #ch3
+metal_chem.primary_species_22 = 2.85074E-31 #op
+metal_chem.primary_species_23 = 0.000467904 #o
+metal_chem.primary_species_24 = 3.31677E-25 #ch4
+metal_chem.primary_species_25 = 3.15184E-27 #ohp
+metal_chem.primary_species_26 = 6.39488E-10 #oh
+metal_chem.primary_species_27 = 1.94654E-29 #h2op
+metal_chem.primary_species_28 = 1.98124E-09 #h2o
+metal_chem.primary_species_29 = 2.31005E-12 #h3op
+metal_chem.primary_species_30 = 3.58768E-28	#cop
+metal_chem.primary_species_31 = 2.17747E-05	#co
+metal_chem.primary_species_32 = 1.69402E-24	#o2p
+metal_chem.primary_species_33 = 8.63209E-09	#o2
+metal_chem.primary_species_34 = 2.55604E-08 #co2
+
+
+# integrator runtime parameters
+# are we using metal chemistry? then we use number densities
+integrator.use_number_densities = 1
+# we do not want to subtract the internal energy
+integrator.subtract_internal_energy = 0
+# we do not want to clip species between 0 and 1
+integrator.do_species_clip = 0
+# minimum positive value of number densities 
+integrator.SMALL_X_SAFE = 1e-60
+integrator.burner_verbose = 0
+# do you want to use the jacobian calculated in a previous step?
+integrator.use_jacobian_caching = 1
+# integration will fail if the number density > X_reject_buffer*atol
+integrator.X_reject_buffer = 1e100
+# Set which jacobian to use
+# 1 = analytic jacobian
+# 2 = numerical jacobian
+# we do not have an analytic jacobian for this network!!
+integrator.jacobian = 2
+# do you want to normalize abundances within VODE? (you don't!)
+integrator.renormalize_abundances = 0
+# tolerances
+integrator.rtol_spec = 1.0e-4
+integrator.atol_spec = 1.0e-10
+integrator.rtol_enuc = 1.0e-4
+integrator.atol_enuc = 1.0e-10
+#integrator.ode_max_steps = 3000000
+
+#assumed redshift for Pop III star formation
+network.redshift = 0.0
+network.metallicity = 1
+network.dust2gas_ratio = 1
+network.small_x = 1e-60
