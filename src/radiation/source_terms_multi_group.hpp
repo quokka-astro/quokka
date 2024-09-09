@@ -140,9 +140,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 		}
 	}
 
-	// const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
-	AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-
 	// compute Jacobian elements
 	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
@@ -649,8 +646,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 						}
 
 						const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-						const double convergence_tol_for_dust_gas_coupling = 1.0e-6;
-						if (cscale * max_Gamma_gd < convergence_tol_for_dust_gas_coupling * Egas0) {
+						if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
 							dust_model = 2;
 							lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
 						} else {

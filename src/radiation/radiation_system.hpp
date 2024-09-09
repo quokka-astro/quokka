@@ -83,6 +83,12 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 };
 
+// this struct is specialized by the user application code
+//
+template <typename problem_t> struct ISM_Traits {
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+};
+
 // A struct to hold the results of the ComputeRadPressure function.
 struct RadPressureResult {
 	quokka::valarray<double, 4> F; // components of radiation pressure tensor
