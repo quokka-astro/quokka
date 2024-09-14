@@ -129,6 +129,41 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					lorentz_factor_v_v = lorentz_factor;
 				}
 
+
+
+
+				// Use Microphysics to update the energy
+
+				burn_t burn_state;
+				// bool success = do_react(i, j, k, s, burn_state, n_rhs, vars);
+
+				//--- do_react ---
+
+				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+				AMREX_ASSERT(T_gas >= 0.);
+
+				burn_state.rho = rho;
+				burn_state.T = T_gas;
+				// for (int n = 0; n < NumSpec; ++n) {
+				// 		burn_state.xn[n] = Erad0Vec[n];
+				// }
+				burn_state.xn[0] = Erad0; // assuming NumSpec = 1
+				// TODO(cch): make sure NumSpec == nGroups_
+
+				burn_state.T_fixed = -1.0_rt;
+
+				burn_state.e = 0.0_rt;
+
+				// burner(burn_state, dt);
+
+				if (!burn_state.success) {
+					// Handle integration failure
+					// amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
+				}
+
+
+
+
 				// 1. Compute energy exchange
 
 				// BEGIN NEWTON-RAPHSON LOOP (this is written for multi-group, but it's valid for single-group if we set i == 0)

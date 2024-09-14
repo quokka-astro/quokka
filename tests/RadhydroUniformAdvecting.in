@@ -20,4 +20,9 @@ amr.max_grid_size   = 64
 
 do_reflux = 0
 do_subcycle = 0
-suppress_output = 1
+suppress_output = 0
+
+radiation.print_iteration_counts = 1
+
+integrator.jacobian = 2
+integrator.burner_verbose = 1

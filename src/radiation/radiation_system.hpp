@@ -32,6 +32,12 @@
 #include "radiation/planck_integral.hpp"
 #include "util/valarray.hpp"
 
+// Microphysics
+// #include <eos.H>
+#include <network.H>
+#include <burn_type.H>
+#include <burner.H>
+
 using Real = amrex::Real;
 
 // Hyper parameters for the radiation solver
@@ -1361,7 +1367,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
-#include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
+// #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
+#include "radiation/source_terms_microphysics.hpp"
 
 #endif // RADIATION_SYSTEM_HPP_
