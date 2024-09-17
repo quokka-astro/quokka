@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04
+FROM --platform=linux/amd64 mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04
 
 RUN apt-get --yes -qq update \
  && apt-get --yes -qq upgrade \
@@ -15,7 +15,7 @@ RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
  echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" > /etc/apt/sources.list.d/llvm.list
 
 RUN apt-get clean && apt-get update -y && \
- apt-get install -y --no-install-recommends clang-19 llvm-19 libomp-19-dev clangd-19 && \
+ apt-get install -y --no-install-recommends clang-19 llvm-19 libomp-19-dev libclang-rt-19-dev clangd-19 && \
  rm -rf /var/lib/apt/lists/*
 
 # install blosc2 (needed for ADIOS2)
