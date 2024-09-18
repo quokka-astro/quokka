@@ -151,17 +151,23 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				// TODO(cch): make sure NumSpec == nGroups_
 
 				burn_state.T_fixed = -1.0_rt;
-
 				burn_state.e = 0.0_rt;
 
-				// burner(burn_state, dt);
+				burn_state.i = i;
+				burn_state.j = j;
+				burn_state.k = k;
+
+				// amrex::Array1D<amrex::Real, 1, neqs> ydot;
+				// ArrayUtil::MathArray2D<1, neqs, 1, neqs> jac;
+				// actual_rhs(burn_state, ydot);
+				// // actual_jac(burn_state, jac);
+
+				burner(burn_state, dt);
 
 				if (!burn_state.success) {
 					// Handle integration failure
 					// amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
 				}
-
-
 
 
 				// 1. Compute energy exchange

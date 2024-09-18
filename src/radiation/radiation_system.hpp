@@ -40,6 +40,8 @@
 
 using Real = amrex::Real;
 
+static constexpr int n_group_in_rhs = 1;
+
 // Hyper parameters for the radiation solver
 static constexpr bool include_delta_B = true;
 static constexpr bool use_diffuse_flux_mean_opacity = true;
@@ -1367,8 +1369,67 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void rhs_specie(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X);
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void rhs_specie(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X) {
+	Real const Tdust = state.T;
+	Real const rho = state.rho;
+
+	// Radiation
+	const auto fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
+	const auto kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
+	const auto kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
+
+	// <ydot>
+	for (int g = 0; g < n_group_in_rhs; ++g) {
+		ydot(g + 1) = RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
+	}
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+Real rhs_eint(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
+    Real Tdust = state.T;
+		Real rho = state.rho;
+
+		// Assuming NumSpec - 1 = neqs
+		const amrex::GpuArray<Real, n_group_in_rhs> fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
+		const amrex::GpuArray<Real, n_group_in_rhs> kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
+		const amrex::GpuArray<Real, n_group_in_rhs> kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
+
+		Real edot = 0.0;
+		for (int g = 0; g < n_group_in_rhs; ++g) {
+			edot += - RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
+		}
+
+    return edot;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
+{
+	Array1D<Real, 0, NumSpec-1> X;
+	for (int i = 0; i < NumSpec; ++i) {
+		X(i) = state.xn[i];
+	}
+
+	// YDOTS
+	rhs_specie(state, ydot, X);
+
+	// Edot
+	Real edot = rhs_eint(state, X);
+
+	// Append the energy equation (this is erg/g/s)
+	ydot(net_ienuc) = edot;
+}
+
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
-// #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
-#include "radiation/source_terms_microphysics.hpp"
+#include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
+// #include "radiation/source_terms_microphysics.hpp"
 
 #endif // RADIATION_SYSTEM_HPP_
