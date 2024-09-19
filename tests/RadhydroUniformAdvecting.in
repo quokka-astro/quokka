@@ -20,9 +20,11 @@ amr.max_grid_size   = 64
 
 do_reflux = 0
 do_subcycle = 0
-suppress_output = 0
+suppress_output = 1
 
 radiation.print_iteration_counts = 1
 
 integrator.jacobian = 2
 integrator.burner_verbose = 1
+integrator.ode_max_steps = 1000
+integrator.use_number_densities = 1 	# treat Erad as species number density. If set to 0, it will be clipped to [0, 1]

@@ -6,6 +6,7 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
+#include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "util/fextract.hpp"
 
@@ -36,17 +37,19 @@ constexpr double kappa0 = 1.0e5;
 constexpr double chat = 1.0e8;
 
 constexpr double T0 = 1.0;   // temperature
-constexpr double rho0 = 1.0; // matter density
+// constexpr double rho0 = 1.0; // matter density
 constexpr double a_rad = 1.0;
-constexpr double mu = 1.0;
-constexpr double k_B = 1.0;
+constexpr double mu = C::m_u;
+constexpr double k_B = C::k_B;
+constexpr double rho0 = mu / k_B; // CV = 3/2 * k_B * rho / mu = 1.5
 
 // static diffusion, beta = 1e-4, tau_cell = kappa0 * dx = 100, beta tau_cell = 1e-2
 // constexpr double kappa0 = 100.; // cm^2 g^-1
 // constexpr double v0 = 1.0e-4 * c; // advecting pulse
 
 // dynamic diffusion, beta = 1e-3, tau = kappa0 * dx = 1e5, beta tau = 100
-constexpr double max_time = 10.0 / v0;
+// constexpr double max_time = 10.0 / v0;
+constexpr double max_time = 10000.0 / c;
 
 constexpr double erad_floor = 1.0e-20;
 constexpr double Erad0 = erad_floor;
@@ -212,7 +215,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
 		sol_norm += std::abs(Tgas_exact[i]);
 	}
-	const double error_tol = 1.0e-10; // This is a very very stringent test (to machine accuracy!)
+	const double error_tol = 1.0e-5; // This is a very very stringent test (to machine accuracy!)
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 

@@ -169,7 +169,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					// amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
 				}
 
-
+				{
+#if 0
 				// 1. Compute energy exchange
 
 				// BEGIN NEWTON-RAPHSON LOOP (this is written for multi-group, but it's valid for single-group if we set i == 0)
@@ -379,6 +380,21 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					// calculate kappaF since the temperature has changed
 					kappaF = ComputeFluxMeanOpacity(rho, T_d);
 				}
+#endif
+				}
+
+				Egas_guess += burn_state.e;
+				Erad_guess = burn_state.xn[0];
+				AMREX_ASSERT(Egas_guess > 0.0);
+				AMREX_ASSERT(Erad_guess >= 0.0);
+
+				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+				T_d = T_gas;
+				kappaF = ComputeFluxMeanOpacity(rho, T_d);
+				kappaP = ComputePlanckOpacity(rho, T_d);
+				kappaE = ComputeEnergyMeanOpacity(rho, T_d);
+				fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+
 			} else { // if constexpr gamma_ == 1.0
 				T_d = T_gas;
 				kappaF = ComputeFluxMeanOpacity(rho, T_d);
