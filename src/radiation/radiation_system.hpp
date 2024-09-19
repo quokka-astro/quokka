@@ -1398,18 +1398,18 @@ void rhs_specie(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D
 // template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE
 Real rhs_eint(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
-    Real Tdust = state.T;
-		Real rho = state.rho;
+	Real Tdust = state.T;
+	Real rho = state.rho;
 
-		// // Assuming NumSpec - 1 = neqs
-		// const amrex::GpuArray<Real, n_group_in_rhs> fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
-		// const amrex::GpuArray<Real, n_group_in_rhs> kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
-		// const amrex::GpuArray<Real, n_group_in_rhs> kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
+	// // Assuming NumSpec - 1 = neqs
+	// const amrex::GpuArray<Real, n_group_in_rhs> fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
+	// const amrex::GpuArray<Real, n_group_in_rhs> kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
+	// const amrex::GpuArray<Real, n_group_in_rhs> kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
 
-		// Real edot = 0.0;
-		// for (int g = 0; g < n_group_in_rhs; ++g) {
-		// 	edot += - RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
-		// }
+	// Real edot = 0.0;
+	// for (int g = 0; g < n_group_in_rhs; ++g) {
+	// 	edot += - RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
+	// }
 
 	const Real chat = 1.0e8;
 	const Real a_rad = 1.0;
@@ -1442,95 +1442,6 @@ void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
 
 	// Append the energy equation (this is erg/g/s)
 	ydot(net_ienuc) = edot;
-}
-
-template <typename BurnT, typename T, typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void rhs (const amrex::Real time, BurnT& state, T& int_state, RArray1D& ydot, [[maybe_unused]] const bool in_jacobian=false)
-{
-
-	const int INT_NEQS = NumSpec + 1;
-
-    // We are integrating a system of
-    //
-    // y(1:NumSpec) = dX/dt
-    // y(net_ienuc) = denuc/dt
-
-    // we come in with (integrator type) int_state having the current
-    // solution (or predicted) state and we need to copy this over to
-    // the (burn_t) state to interface with the actual reaction
-    // network
-
-    // Fix the state as necessary -- this ensures that the mass
-    // fractions that enter are valid (and optionally normalized)
-
-    clean_state(time, state, int_state);
-
-    // Update the thermodynamics as necessary -- this primarily takes
-    // the information in int_state (X and e), copies it to the
-    // (burn_t) state and calls the EOS to get state.T
-
-    update_thermodynamics(state, int_state);
-
-    // Only do the burn if the incoming temperature is within the temperature
-    // bounds. Otherwise set the RHS to zero and return.
-
-    if (state.T <= EOSData::mintemp || state.T >= integrator_rp::MAX_TEMP) {
-
-        for (int n = 1; n <= INT_NEQS; ++n) {
-            ydot(n) = 0.0_rt;
-        }
-
-        return;
-
-    }
-
-    state.time = time;
-
-    // at this point, the (burn_t) state is synchronized with the integrator
-    // and is thermodynamically consistent.
-
-    // Call the specific network routine to get the RHS.
-
-#ifdef NEW_NETWORK_IMPLEMENTATION
-    RHS::rhs(state, ydot);
-#else
-    actual_rhs(state, ydot);
-#endif
-
-#ifdef NONAKA_PLOT
-    if (! in_jacobian) {
-        nonaka_rhs(time, state, ydot);
-    }
-#endif
-
-    // We integrate X, not Y
-    // turn it off for primordial chem
-    if (! integrator_rp::use_number_densities) {
-        for (int n = 1; n <= NumSpec; ++n) {
-            ydot(n) *= aion[n-1];
-        }
-    }
-
-    // scale the energy
-    if (integrator_rp::scale_system) {
-        ydot(net_ienuc) /= state.e_scale;
-    }
-
-    // Allow energy integration to be disabled.
-
-    if (! integrator_rp::integrate_energy) {
-        ydot(net_ienuc) = 0.0_rt;
-    }
-
-    // apply fudge factor:
-
-    if (integrator_rp::react_boost > 0.0_rt) {
-        for (int n = 1; n <= INT_NEQS; ++n) {
-            ydot(n) *= integrator_rp::react_boost;
-        }
-    }
-
 }
 
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
