@@ -16,13 +16,13 @@
 # hydro
 src/hydro/ @BenWibking @markkrumholz
 
-# optically-thin radiative cooling
+# optically-thin radiative cooling (assuming ionization equilibrium)
 src/cooling/ @BenWibking @markkrumholz
 
 # particles -- CICParticles only
 src/particles/CICParticles.hpp @BenWibking @markkrumholz
 
-# chemistry
+# chemistry (including chemical heating/cooling)
 src/chemistry/ @psharda @BenWibking @markkrumholz
 
 # radiation
