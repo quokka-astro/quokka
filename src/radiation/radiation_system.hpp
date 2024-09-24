@@ -121,6 +121,14 @@ template <typename problem_t> struct JacobianResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
 };
 
+// A struct to hold the results of the UpdateFlux function, containing the following elements:
+// Erad, gasMomentum, Frad
+template <typename problem_t> struct FluxUpdateResult {
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad; // radiation energy density
+	amrex::GpuArray<double, 3> gasMomentum; // gas momentum
+	amrex::GpuArray<amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nGroups>, 3> Frad; // radiation flux
+};
+
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
 {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
@@ -233,6 +241,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
+
+	static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, 
+							NewtonIterationResult<problem_t> &energy, // quokka::valarray<double, nGroups_> &EradVec_guess,
+							double dt, double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
 					     double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
