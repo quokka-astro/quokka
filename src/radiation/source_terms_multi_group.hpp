@@ -506,17 +506,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t &consPrev, 
-							NewtonIterationResult<problem_t> &energy, // quokka::valarray<double, nGroups_> &EradVec_guess,
-							double const dt, double const gas_update_factor, double const Ekin0) -> FluxUpdateResult<problem_t>
-							//  quokka::valarray<double, nGroups_> const &kappaFVec, quokka::valarray<double, nGroups_> const &kappaPVec, 
-							//  quokka::valarray<double, nGroups_> const &kappaEVec, 
-							//  quokka::valarray<double, nGroups_> const &EradVec_guess, double const dt,
-							//  double Egas_guess, double const Ekin0,
-							//  quokka::valarray<double, nGroups_> const &fourPiBoverC,
-							//  amrex::GpuArray<double, nGroups_> const &delta_nu_kappa_B_at_edge,
-							//  amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const &kappa_expo_and_lower_value,
-							//  double const gas_update_factor
+auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t &consPrev, NewtonIterationResult<problem_t> &energy, double const dt, double const gas_update_factor, double const Ekin0) -> FluxUpdateResult<problem_t>
 {
 	amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 	amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
@@ -534,7 +524,6 @@ auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arr
 	auto const kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_, rho, energy.T_d);
 
 	const double chat = c_hat_;
-
 
 	for (int g = 0; g < nGroups_; ++g) {
 		Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
@@ -654,15 +643,6 @@ auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arr
 					(1.0 + kappa_expo_and_lower_value[0][g]) * energy.kappaFVec[g] * chat / (c_light_ * c_light_) * dt;
 		}
 	}
-
-	// // Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
-	// const double lag_tol = 1.0e-13;
-	// bool converged = false;
-	// if ((sum(abs(energy.work)) == 0.0) || ((c_light_ / c_hat_) * sum(abs(energy.work - work_prev)) < lag_tol * Egastot1) ||
-	// 		(sum(abs(energy.work - work_prev)) <= lag_tol * sum(Rvec)) || (sum(abs(energy.work - work_prev)) <= 1.0e-8 * sum(abs(energy.work)))) {
-	// 	converged = true;
-	// }
-	// return converged;
 
 	FluxUpdateResult<problem_t> updated_flux;
 
@@ -789,10 +769,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		if constexpr (enable_dust_gas_thermal_coupling_model_) {
 			coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 		}
-
-		// double x1GasMom1 = NAN;
-		// double x2GasMom1 = NAN;
-		// double x3GasMom1 = NAN;
 
 		// Outer iteration loop to update the work term until it converges
 		const int max_iter = 5;
