@@ -718,6 +718,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			// 2. Compute radiation flux update
 
+			amrex::GpuArray<amrex::GpuArray<amrex::Real, 3>, nGroups_> Frad_t0{};
+
+
+			UpdateFlux(i, j, k, consPrev, consNew, gas_update_factor, kappaFVec, kappaPVec, updated_energy.delta_nu_kappa_B_at_edge, kappa_expo_and_lower_value)
+
 			amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 			dMomentum = {0., 0., 0.};
 
