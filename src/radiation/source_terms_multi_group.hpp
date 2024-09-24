@@ -904,13 +904,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				consNew(i, j, k, x3GasMomentum_index) = updated_flux.gasMomentum[2];
 				for (int g = 0; g < nGroups_; ++g) {
 					if constexpr (include_work_term_in_source) {
+						// Erad is not changed in the UpdateFlux function
 						consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_energy.EradVec[g];
 					} else {
+						// Erad is changed in the UpdateFlux function
 						consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g];
 					}
 					consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = updated_flux.Frad[0][g];
 					consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = updated_flux.Frad[1][g];
 					consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = updated_flux.Frad[2][g];
+				}
+				if constexpr (gamma_ != 1.0) {
+						Egas_guess = updated_energy.Egas;
 				}
 				break;
 			}
@@ -933,6 +938,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		const auto x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
 		const auto x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
 		const auto x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
+
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
