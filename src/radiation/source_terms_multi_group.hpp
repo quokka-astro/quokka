@@ -516,7 +516,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
 	amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
 
-	// make a copy of radBoundaries_ 
+	// make a copy of radBoundaries_
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
 
 	double const rho = consPrev(i, j, k, gasDensity_index);
