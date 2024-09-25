@@ -1,6 +1,6 @@
 // devcontainer.json
     {
-      "name": "quokka-dev",
+      "name": "Quokka CUDA Dev Container",
       // (NOTE: using the cloud image is temporarily disabled, since it doesn't exist yet)
       // "image": "ghcr.io/quokka-astro/quokka:development",
       "build": {
