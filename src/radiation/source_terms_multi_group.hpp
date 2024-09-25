@@ -590,6 +590,10 @@ auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arr
 
 	FluxUpdateResult<problem_t> updated_flux;
 
+	for (int g = 0; g < nGroups_; ++g) {
+		updated_flux.Erad[g] = energy.EradVec[g];
+	}
+
 	// 3. Deal with the work term.
 	if constexpr ((gamma_ != 1.0) && (beta_order_ == 1)) {
 		// compute difference in gas kinetic energy before and after momentum update
@@ -601,9 +605,6 @@ auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arr
 			// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
 			// should go to the kinetic energy. Remove the work term from internal energy.
 			energy.Egas -= dEkin_work;
-			for (int g = 0; g < nGroups_; ++g) {
-				updated_flux.Erad[g] = energy.EradVec[g];
-			}
 			// The work term is included in the source term, but it is lagged. We update the work term here.
 			for (int g = 0; g < nGroups_; ++g) {
 				// compute new work term from the updated radiation flux and velocity
