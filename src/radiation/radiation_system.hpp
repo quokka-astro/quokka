@@ -118,7 +118,7 @@ template <typename problem_t> struct JacobianResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
 };
 
-// A struct to hold the results of the UpdateFlux function, containing the following elements:
+// A struct to hold the results of UpdateFlux(), containing the following elements:
 // Erad, gasMomentum, Frad
 template <typename problem_t> struct FluxUpdateResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad; // radiation energy density

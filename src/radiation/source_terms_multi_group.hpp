@@ -507,7 +507,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	return result;
 }
 
-// The function returns the updated radiation flux and gas momentum. It also update energy.Egas and energy.work
+// Update radiation flux and gas momentum. Returns FluxUpdateResult struct. The function also updates energy.Egas and energy.work.
 template <typename problem_t>
 auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t &consPrev, NewtonIterationResult<problem_t> &energy, double const dt, double const gas_update_factor, double const Ekin0) -> FluxUpdateResult<problem_t>
 {
