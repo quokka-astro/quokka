@@ -13,15 +13,15 @@
 
 #include <array>
 #include <cmath>
-#include <functional>
+// #include <functional>
 
 // library headers
 #include "AMReX.H" // IWYU pragma: keep
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
-#include "AMReX_IParser_Y.H"
-#include "AMReX_IntVect.H"
+// #include "AMReX_IParser_Y.H"
+// #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
 // internal headers

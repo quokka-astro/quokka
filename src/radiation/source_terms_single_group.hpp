@@ -25,8 +25,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		auto p_iteration_counter_local = p_iteration_counter;
-		auto p_iteration_failure_counter_local = p_iteration_failure_counter;
+		auto p_iteration_counter_local = p_iteration_counter; // NOLINT
+		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -168,7 +168,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n);
 						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 						if (T_d < 0.0) {
-							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[1], 1);
+							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[1], 1); // NOLINT
 						}
 					}
 
@@ -323,13 +323,13 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 				AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 				if (n >= maxIter) {
-					amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[0], 1);
+					amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[0], 1); // NOLINT
 				}
 
 				// update iteration counter: (+1, +ite, max(self, ite))
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);     // total number of radiation updates
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations
-				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);     // total number of radiation updates. NOLINT
+				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
+				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
 
 				AMREX_ASSERT(Egas_guess > 0.0);
 				AMREX_ASSERT(Erad_guess >= 0.0);
@@ -506,7 +506,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 		AMREX_ASSERT_WITH_MESSAGE(ite < max_ite, "AddSourceTerms outer iteration failed to converge!");
 		if (ite >= max_ite) {
-			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1);
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1); // NOLINT
 		}
 
 		// 4b. Store new radiation energy, gas energy

@@ -278,7 +278,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		}
 		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 		if (T_d < 0.0) {
-			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
 		}
 
 		// 2. Compute kappaP and kappaE at dust temperature
@@ -459,12 +459,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 	AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 	if (n >= maxIter) {
-		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
+		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1); // NOLINT
 	}
 
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations
-	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates. NOLINT
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
+	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
 
 	NewtonIterationResult<problem_t> result;
 
@@ -686,8 +686,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// make a local reference
-		auto p_iteration_counter_local = p_iteration_counter;
-		auto p_iteration_failure_counter_local = p_iteration_failure_counter;
+		auto p_iteration_counter_local = p_iteration_counter; // NOLINT
+		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -791,7 +791,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, radBoundaries_g_copy);
 					AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
 					if (T_d0 < 0.0) {
-						amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
+						amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
 					}
 
 					const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
@@ -901,7 +901,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 		AMREX_ASSERT_WITH_MESSAGE(iter < max_iter, "AddSourceTerms iteration failed to converge!");
 		if (iter >= max_iter) {
-			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1);
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1); // NOLINT
 		}
 
 		// 4b. Store new radiation energy, gas energy
