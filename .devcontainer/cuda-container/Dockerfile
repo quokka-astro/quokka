@@ -9,14 +9,15 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 RUN apt-get update -qq && apt-get upgrade -y -qq && \
     apt-get install -y -qq --no-install-recommends \
         build-essential \
-				wget \
+		wget \
         git \
         cmake \
         gcc \
         g++ \
         libopenmpi-dev \
         libhdf5-mpi-dev \
-				ninja-build && \
+        libpython-dev \
+		ninja-build && \
     apt-get --yes -qq clean && \
     rm -rf /var/lib/apt/lists/*
 
