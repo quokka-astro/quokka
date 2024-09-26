@@ -278,7 +278,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		}
 		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 		if (T_d < 0.0) {
-			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
 		}
 
 		// 2. Compute kappaP and kappaE at dust temperature
@@ -359,6 +359,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 					// If n_outer_iter > 0, use the work term from the previous outer iteration, which is passed as the parameter 'work'
 					work_local = work;
 				}
+			} else {
+				work_local.fillin(0.0);
 			}
 
 			tau0 = dt * rho * kappaPVec * chat;
@@ -457,12 +459,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 	AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 	if (n >= maxIter) {
-		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
+		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1); // NOLINT
 	}
 
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations
-	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates. NOLINT
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
+	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
 
 	NewtonIterationResult<problem_t> result;
 
@@ -505,6 +507,166 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	return result;
 }
 
+// Update radiation flux and gas momentum. Returns FluxUpdateResult struct. The function also updates energy.Egas and energy.work.
+template <typename problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t &consPrev, NewtonIterationResult<problem_t> &energy,
+						       double const dt, double const gas_update_factor, double const Ekin0) -> FluxUpdateResult<problem_t>
+{
+	amrex::GpuArray<amrex::Real, 3> Frad_t0{};
+	amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
+	amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
+
+	// make a copy of radBoundaries_
+	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
+
+	double const rho = consPrev(i, j, k, gasDensity_index);
+	const double x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
+	const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
+	const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
+	const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
+
+	auto const fourPiBoverC = ComputeThermalRadiationMultiGroup(energy.T_d, radBoundaries_g);
+	auto const kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, energy.T_d);
+
+	const double chat = c_hat_;
+
+	for (int g = 0; g < nGroups_; ++g) {
+		Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+		Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+		Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+
+		if constexpr ((gamma_ == 1.0) || (beta_order_ == 0)) {
+			for (int n = 0; n < 3; ++n) {
+				Frad_t1[n][g] = Frad_t0[n] / (1.0 + rho * energy.kappaFVec[g] * chat * dt);
+				// Compute conservative gas momentum update
+				dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c_light_ * chat);
+			}
+		} else {
+			const auto erad = energy.EradVec[g];
+			std::array<double, 3> v_terms{};
+
+			auto fx = Frad_t0[0] / (c_light_ * erad);
+			auto fy = Frad_t0[1] / (c_light_ * erad);
+			auto fz = Frad_t0[2] / (c_light_ * erad);
+			double F_coeff = chat * rho * energy.kappaFVec[g] * dt;
+			auto Tedd = ComputeEddingtonTensor(fx, fy, fz);
+
+			for (int n = 0; n < 3; ++n) {
+				// compute thermal radiation term
+				double Planck_term = NAN;
+
+				if constexpr (include_delta_B) {
+					Planck_term = energy.kappaPVec[g] * fourPiBoverC[g] - 1.0 / 3.0 * energy.delta_nu_kappa_B_at_edge[g];
+				} else {
+					Planck_term = energy.kappaPVec[g] * fourPiBoverC[g];
+				}
+
+				Planck_term *= chat * dt * gasMtm0[n];
+
+				// compute radiation pressure
+				double pressure_term = 0.0;
+				for (int z = 0; z < 3; ++z) {
+					pressure_term += gasMtm0[z] * Tedd[n][z] * erad;
+				}
+				// Simplification: assuming Eddington tensors are the same for all groups, we have kappaP = kappaE
+				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+					pressure_term *= chat * dt * energy.kappaEVec[g];
+				} else {
+					pressure_term *= chat * dt * (1.0 + kappa_expo_and_lower_value[0][g]) * energy.kappaEVec[g];
+				}
+
+				v_terms[n] = Planck_term + pressure_term;
+			}
+
+			for (int n = 0; n < 3; ++n) {
+				// Compute flux update
+				Frad_t1[n][g] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
+
+				// Compute conservative gas momentum update
+				dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c_light_ * chat);
+			}
+		}
+	}
+
+	amrex::Real x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
+	amrex::Real x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1];
+	amrex::Real x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
+
+	FluxUpdateResult<problem_t> updated_flux;
+
+	for (int g = 0; g < nGroups_; ++g) {
+		updated_flux.Erad[g] = energy.EradVec[g];
+	}
+
+	// 3. Deal with the work term.
+	if constexpr ((gamma_ != 1.0) && (beta_order_ == 1)) {
+		// compute difference in gas kinetic energy before and after momentum update
+		amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, energy.Egas);
+		amrex::Real const Ekin1 = Egastot1 - energy.Egas;
+		amrex::Real const dEkin_work = Ekin1 - Ekin0;
+
+		if constexpr (include_work_term_in_source) {
+			// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
+			// should go to the kinetic energy. Remove the work term from internal energy.
+			energy.Egas -= dEkin_work;
+			// The work term is included in the source term, but it is lagged. We update the work term here.
+			for (int g = 0; g < nGroups_; ++g) {
+				// compute new work term from the updated radiation flux and velocity
+				// work = v * F * chi
+				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+					energy.work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) *
+							 energy.kappaFVec[g] * chat / (c_light_ * c_light_) * dt;
+				} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum ||
+						     opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
+					energy.work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) *
+							 (1.0 + kappa_expo_and_lower_value[0][g]) * energy.kappaFVec[g] * chat / (c_light_ * c_light_) * dt;
+				}
+			}
+		} else {
+			// Old scheme: the source term does not include the work term, so we add the work term to the Erad.
+
+			// compute loss of radiation energy to gas kinetic energy
+			auto dErad_work = -(c_hat_ / c_light_) * dEkin_work;
+
+			// apportion dErad_work according to kappaF_i * (v * F_i)
+			quokka::valarray<double, nGroups_> energyLossFractions{};
+			if constexpr (nGroups_ == 1) {
+				energyLossFractions[0] = 1.0;
+			} else {
+				// compute energyLossFractions
+				for (int g = 0; g < nGroups_; ++g) {
+					energyLossFractions[g] =
+					    energy.kappaFVec[g] * (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]);
+				}
+				auto energyLossFractionsTot = sum(energyLossFractions);
+				if (energyLossFractionsTot != 0.0) {
+					energyLossFractions /= energyLossFractionsTot;
+				} else {
+					energyLossFractions.fillin(0.0);
+				}
+			}
+			for (int g = 0; g < nGroups_; ++g) {
+				auto radEnergyNew = energy.EradVec[g] + dErad_work * energyLossFractions[g];
+				// AMREX_ASSERT(radEnergyNew > 0.0);
+				if (radEnergyNew < Erad_floor_) {
+					// return energy to Egas_guess
+					energy.Egas -= (Erad_floor_ - radEnergyNew) * (c_light_ / c_hat_);
+					radEnergyNew = Erad_floor_;
+				}
+				updated_flux.Erad[g] = radEnergyNew;
+			}
+		}
+	}
+
+	x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
+	x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
+	x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
+	updated_flux.gasMomentum = {x1GasMom1, x2GasMom1, x3GasMom1};
+	updated_flux.Frad = Frad_t1;
+
+	return updated_flux;
+}
+
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
 						    const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter)
@@ -528,8 +690,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// make a local reference
-		auto p_iteration_counter_local = p_iteration_counter;
-		auto p_iteration_failure_counter_local = p_iteration_failure_counter;
+		auto p_iteration_counter_local = p_iteration_counter;		      // NOLINT
+		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -540,7 +702,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		const double x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
-		const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
@@ -566,8 +727,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		quokka::valarray<double, nGroups_> EradVec_guess{};
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
-		amrex::GpuArray<amrex::Real, 3> dMomentum{};
-		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
 
 		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
@@ -618,11 +777,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		const int max_iter = 5;
 		int iter = 0;
 		for (; iter < max_iter; ++iter) {
-			quokka::valarray<double, nGroups_> Rvec{};
-			quokka::valarray<double, nGroups_> fourPiBoverC{};
-			quokka::valarray<double, nGroups_> kappaPVec{};
-			quokka::valarray<double, nGroups_> kappaEVec{};
-			quokka::valarray<double, nGroups_> kappaFVec{};
 			amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
 			NewtonIterationResult<problem_t> updated_energy;
 
@@ -630,45 +784,45 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			if constexpr (gamma_ != 1.0) {
 
-				// Step 1.2.0: If enable_dust_model, determine if or not to use the weak-coupling approximation
+				// 1.1. If enable_dust_model, determine if or not to use the weak-coupling approximation
 
 				int dust_model = 0;
 				double T_d0 = NAN;
 				double lambda_gd_times_dt = NAN;
-				if constexpr (gamma_ != 1.0) {
-					if constexpr (enable_dust_gas_thermal_coupling_model_) {
-						const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
-						AMREX_ASSERT(T_gas0 >= 0.);
-						T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, radBoundaries_g_copy);
-						AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
-						if (T_d0 < 0.0) {
-							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1);
-						}
+				if constexpr (enable_dust_gas_thermal_coupling_model_) {
+					const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+					AMREX_ASSERT(T_gas0 >= 0.);
+					T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, radBoundaries_g_copy);
+					AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
+					if (T_d0 < 0.0) {
+						amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
+					}
 
-						const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-						if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
-							dust_model = 2;
-							lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
-						} else {
-							dust_model = 1;
-						}
+					const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
+					if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
+						dust_model = 2;
+						lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
+					} else {
+						dust_model = 1;
 					}
 				}
 
-				// Step 1.1: Compute a term required to calculate the work. This is only required in the first outer loop.
+				// 1.2. Compute a term required to calculate the work. This is only required in the first outer loop.
 
 				quokka::valarray<double, nGroups_> vel_times_F{};
-				if (iter == 0) {
-					for (int g = 0; g < nGroups_; ++g) {
-						const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-						const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-						const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
-						// Compute vel_times_F[g] = sum(vel * F_g)
-						vel_times_F[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2);
+				if constexpr (include_work_term_in_source) {
+					if (iter == 0) {
+						for (int g = 0; g < nGroups_; ++g) {
+							// Compute vel_times_F[g] = sum(vel * F_g)
+							const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+							const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+							const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+							vel_times_F[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2);
+						}
 					}
 				}
 
-				// Step 1.2: Compute the gas and radiation energy update. This also updates the opacities. When iter == 0, this also computes
+				// 1.3. Compute the gas and radiation energy update. This also updates the opacities. When iter == 0, this also computes
 				// the work term.
 
 				if constexpr (!enable_dust_gas_thermal_coupling_model_) {
@@ -685,32 +839,24 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				Egas_guess = updated_energy.Egas;
 				EradVec_guess = updated_energy.EradVec;
-				kappaPVec = updated_energy.kappaPVec;
-				kappaEVec = updated_energy.kappaEVec;
-				kappaFVec = updated_energy.kappaFVec;
 
-				fourPiBoverC = ComputeThermalRadiationMultiGroup(updated_energy.T_d, radBoundaries_g_copy);
-				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
-
-			} else { // not constexpr (gamma_ != 1.0)
-
-				const double T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
-				const double T_d = T_gas;
-				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
-					for (int g = 0; g < nGroups_; ++g) {
-						kappaFVec[g] = kappa_expo_and_lower_value[1][g];
-					}
-				} else {
-					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_d);
-					kappaFVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
+				// copy work to work_prev
+				for (int g = 0; g < nGroups_; ++g) {
+					work_prev[g] = updated_energy.work[g];
 				}
 
-				amrex::ignore_unused(Rvec);
-				amrex::ignore_unused(fourPiBoverC);
-				amrex::ignore_unused(kappaPVec);
-				amrex::ignore_unused(kappaEVec);
-				amrex::ignore_unused(updated_energy);
+				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, updated_energy.T_d);
+			} else { // constexpr (gamma_ == 1.0)
+				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
+					for (int g = 0; g < nGroups_; ++g) {
+						updated_energy.kappaFVec[g] = kappa_expo_and_lower_value[1][g];
+					}
+				} else {
+					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, NAN);
+					updated_energy.kappaFVec =
+					    ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_quant_minus_one);
+				}
 			}
 
 			// Erad_guess is the new radiation energy (excluding work term)
@@ -718,164 +864,59 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			// 2. Compute radiation flux update
 
-			amrex::GpuArray<amrex::Real, 3> Frad_t0{};
-			dMomentum = {0., 0., 0.};
+			// 2.1. Update flux and gas momentum
+			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0);
 
-			for (int g = 0; g < nGroups_; ++g) {
-				Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-				Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-				Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
-
-				if constexpr ((gamma_ != 1.0) && (beta_order_ == 1)) {
-					const auto erad = EradVec_guess[g];
-					std::array<double, 3> v_terms{};
-
-					auto fx = Frad_t0[0] / (c_light_ * erad);
-					auto fy = Frad_t0[1] / (c_light_ * erad);
-					auto fz = Frad_t0[2] / (c_light_ * erad);
-					double F_coeff = chat * rho * kappaFVec[g] * dt;
-					auto Tedd = ComputeEddingtonTensor(fx, fy, fz);
-
-					for (int n = 0; n < 3; ++n) {
-						// compute thermal radiation term
-						double Planck_term = NAN;
-
-						if constexpr (include_delta_B) {
-							Planck_term = kappaPVec[g] * fourPiBoverC[g] - 1.0 / 3.0 * updated_energy.delta_nu_kappa_B_at_edge[g];
-						} else {
-							Planck_term = kappaPVec[g] * fourPiBoverC[g];
-						}
-
-						Planck_term *= chat * dt * gasMtm0[n];
-
-						// compute radiation pressure
-						double pressure_term = 0.0;
-						for (int z = 0; z < 3; ++z) {
-							pressure_term += gasMtm0[z] * Tedd[n][z] * erad;
-						}
-						// Simplification: assuming Eddington tensors are the same for all groups, we have kappaP = kappaE
-						if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-							pressure_term *= chat * dt * kappaEVec[g];
-						} else {
-							pressure_term *= chat * dt * (1.0 + kappa_expo_and_lower_value[0][g]) * kappaEVec[g];
-						}
-
-						v_terms[n] = Planck_term + pressure_term;
-					}
-
-					for (int n = 0; n < 3; ++n) {
-						// Compute flux update
-						Frad_t1[n][g] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
-
-						// Compute conservative gas momentum update
-						dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
-					}
-				} else { // NOT if constexpr (gamma_ != 1.0 && beta_order_ == 1), i.e. gamma_ == 1.0 or beta_order_ == 0
-					for (int n = 0; n < 3; ++n) {
-						Frad_t1[n][g] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
-						// Compute conservative gas momentum update
-						dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
-					}
-				}
-			} // end loop over radiation groups for flux update
-
-			// 3. Deal with the work term.
-
-			amrex::Real const x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
-			amrex::Real const x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1];
-			amrex::Real const x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
-
-			if constexpr ((gamma_ != 1.0) && (beta_order_ == 1)) {
-				// compute difference in gas kinetic energy before and after momentum update
-				amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
-				amrex::Real const Ekin1 = Egastot1 - Egas_guess;
-				amrex::Real const dEkin_work = Ekin1 - Ekin0;
-
-				if constexpr (include_work_term_in_source) {
-					// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
-					// should go to the kinetic energy. Remove the work term from internal energy.
-					Egas_guess -= dEkin_work;
-				} else {
-					// Old scheme: since the source term does not include work term, add the work term to radiation energy.
-
-					// compute loss of radiation energy to gas kinetic energy
-					auto dErad_work = -(c_hat_ / c_light_) * dEkin_work;
-
-					// apportion dErad_work according to kappaF_i * (v * F_i)
-					quokka::valarray<double, nGroups_> energyLossFractions{};
-					if constexpr (nGroups_ == 1) {
-						energyLossFractions[0] = 1.0;
-					} else {
-						// compute energyLossFractions
-						for (int g = 0; g < nGroups_; ++g) {
-							energyLossFractions[g] =
-							    kappaFVec[g] * (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]);
-						}
-						auto energyLossFractionsTot = sum(energyLossFractions);
-						if (energyLossFractionsTot != 0.0) {
-							energyLossFractions /= energyLossFractionsTot;
-						} else {
-							energyLossFractions.fillin(0.0);
-						}
-					}
-					for (int g = 0; g < nGroups_; ++g) {
-						auto radEnergyNew = EradVec_guess[g] + dErad_work * energyLossFractions[g];
-						// AMREX_ASSERT(radEnergyNew > 0.0);
-						if (radEnergyNew < Erad_floor_) {
-							// return energy to Egas_guess
-							Egas_guess -= (Erad_floor_ - radEnergyNew) * (c / chat);
-							radEnergyNew = Erad_floor_;
-						}
-						EradVec_guess[g] = radEnergyNew;
-					}
-				}
-			} // End of step 3
-
-			// 4. Check for convergence of the outer loop
-
+			// 2.2. Check for convergence of the work term
+			bool work_converged = true;
 			if constexpr ((beta_order_ == 0) || (gamma_ == 1.0) || (!include_work_term_in_source)) {
-				break;
+				// pass
 			} else {
-				// If you are here, then you are using the new scheme. Step 3 is skipped. The work term is included in the source term, but it
-				// is lagged. The work term is updated in the next step.
-				for (int g = 0; g < nGroups_; ++g) {
-					// copy work to work_prev
-					work_prev[g] = updated_energy.work[g];
-					// compute new work term from the updated radiation flux and velocity
-					// work = v * F * chi
-					if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-						work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * kappaFVec[g] *
-							  chat / (c * c) * dt;
-					} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum ||
-							     opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-						work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) *
-							  (1.0 + kappa_expo_and_lower_value[0][g]) * kappaFVec[g] * chat / (c * c) * dt;
-					}
-				}
+				work = updated_energy.work;
 
-				// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
+				// Check for convergence of the work term
+				auto const Egastot1 =
+				    ComputeEgasFromEint(rho, updated_flux.gasMomentum[0], updated_flux.gasMomentum[1], updated_flux.gasMomentum[2], Egas_guess);
+				const double rel_lag_tol = 1.0e-8;
 				const double lag_tol = 1.0e-13;
-				if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) < lag_tol * Etot0) ||
-				    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec)) || (sum(abs(work - work_prev)) <= 1.0e-8 * sum(abs(work)))) {
-					break;
+				double ref_work = rel_lag_tol * sum(abs(work));
+				ref_work = std::max(ref_work, lag_tol * Egastot1 / (c_light_ / c_hat_));
+				// ref_work = std::max(ref_work, lag_tol * sum(Rvec)); // comment out because Rvec is not accessible here
+				if (sum(abs(work - work_prev)) > ref_work) {
+					work_converged = false;
 				}
+			}
+
+			// 3. If converged, store new radiation energy, gas energy
+			if (work_converged) {
+				consNew(i, j, k, x1GasMomentum_index) = updated_flux.gasMomentum[0];
+				consNew(i, j, k, x2GasMomentum_index) = updated_flux.gasMomentum[1];
+				consNew(i, j, k, x3GasMomentum_index) = updated_flux.gasMomentum[2];
+				for (int g = 0; g < nGroups_; ++g) {
+					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g];
+					consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = updated_flux.Frad[0][g];
+					consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = updated_flux.Frad[1][g];
+					consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = updated_flux.Frad[2][g];
+				}
+				if constexpr (gamma_ != 1.0) {
+					Egas_guess = updated_energy.Egas;
+				}
+				break;
 			}
 		} // end full-step iteration
 
 		AMREX_ASSERT_WITH_MESSAGE(iter < max_iter, "AddSourceTerms iteration failed to converge!");
 		if (iter >= max_iter) {
-			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1);
+			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[2], 1); // NOLINT
 		}
 
 		// 4b. Store new radiation energy, gas energy
 		// In the first stage of the IMEX scheme, the hydro quantities are updated by a fraction (defined by
 		// gas_update_factor) of the time step.
-		const auto x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
-		const auto x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
-		const auto x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
-		consNew(i, j, k, x1GasMomentum_index) = x1GasMom1;
-		consNew(i, j, k, x2GasMomentum_index) = x2GasMom1;
-		consNew(i, j, k, x3GasMomentum_index) = x3GasMom1;
+		const auto x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
+		const auto x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
+		const auto x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
+
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
@@ -887,14 +928,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			amrex::ignore_unused(Etot0);
 			amrex::ignore_unused(work);
 			amrex::ignore_unused(work_prev);
-		}
-		for (int g = 0; g < nGroups_; ++g) {
-			if constexpr (gamma_ != 1.0) {
-				consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g];
-			}
-			consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0][g];
-			consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1][g];
-			consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2][g];
 		}
 	});
 }
