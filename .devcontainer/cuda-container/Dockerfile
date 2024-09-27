@@ -27,7 +27,6 @@ RUN apt-get clean && apt-get update -y && \
 RUN ln -s /usr/bin/clangd-19 /usr/bin/clangd
 
 # Install blosc2 (needed for ADIOS2)
-# Commented out because python is not installed
 RUN pip3 install blosc2 --break-system-packages
 
 # Install ADIOS2 (needed for OpenPMD)
