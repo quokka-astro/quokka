@@ -71,6 +71,11 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 
+template <> struct ISM_Traits<StreamingProblem> {
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr bool enable_photoelectric_heating = false;
+};
+
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return kappa1;
