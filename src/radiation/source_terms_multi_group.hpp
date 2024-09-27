@@ -170,7 +170,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 // Jg0: (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d T_d
 // Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecoupledWithPE(
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
     double /*T_gas*/, double /*T_d*/, double /*Egas_diff*/, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
     quokka::valarray<double, nGroups_> const &Src, double /*coeff_n*/, quokka::valarray<double, nGroups_> const &tau, double /*c_v*/, double lambda_gd_time_dt,
     quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
@@ -292,6 +292,16 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
+	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+	AMREX_ASSERT(T_gas >= 0.);
+
+	// phtoelectric heating
+	double photoelectric_heating_rate = 0.0;
+	if constexpr (enable_photoelectric_heating_) {
+		const double num_den = rho / mean_molecular_mass_;
+		photoelectric_heating_rate = DefinePhotoelectricHeatingE1Derivative(T_gas, num_den);
+	}
+
 	if (dust_model == 2) {
 		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
 	}
@@ -307,8 +317,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
-		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-		AMREX_ASSERT(T_gas >= 0.);
+		if (n > 0) {
+			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+			AMREX_ASSERT(T_gas >= 0.);
+		}
 
 		if (dust_model == 0) {
 			T_d = T_gas;
@@ -443,9 +455,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
-		JacobianResult<problem_t> jacobian;
+		// JacobianResult<problem_t> jacobian;
 
-		jacobian = ComputeJacobian(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+		auto jacobian = ComputeJacobian(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
 
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
@@ -877,7 +889,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					    Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
 					    radBoundaries_g_copy, &ComputeJacobianForGas, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
-					if constexpr (!enable_photoelectric_heating) {
+					if constexpr (!enable_photoelectric_heating_) {
 						auto ComputeJacobian = (dust_model == 1) ? &ComputeJacobianForGasAndDust : &ComputeJacobianForGasAndDustDecoupled;
 						updated_energy = SolveMatterRadiationEnergyExchange(
 								Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
@@ -892,7 +904,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				}
 
 				Egas_guess = updated_energy.Egas;
-				EradVec_guess = updated_energy.EradVec;
 
 				// copy work to work_prev
 				for (int g = 0; g < nGroups_; ++g) {
@@ -976,7 +987,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
 			consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
 		} else {
-			amrex::ignore_unused(EradVec_guess);
 			amrex::ignore_unused(Egas_guess);
 			amrex::ignore_unused(Egas0);
 			amrex::ignore_unused(Etot0);

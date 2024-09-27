@@ -32,7 +32,6 @@
 using Real = amrex::Real;
 
 // Hyper parameters for the radiation solver
-static constexpr bool enable_photoelectric_heating = false;
 static constexpr bool include_delta_B = true;
 static constexpr bool use_diffuse_flux_mean_opacity = true;
 static constexpr bool special_edge_bin_slopes = false;	    // Use 2 and -4 as the slopes for the first and last bins, respectively
@@ -185,6 +184,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr int beta_order_ = RadSystem_Traits<problem_t>::beta_order;
 
 	static constexpr bool enable_dust_gas_thermal_coupling_model_ = RadSystem_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
+	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
@@ -321,6 +321,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				      amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
 				      amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
 
+	AMREX_GPU_HOST_DEVICE static auto
+	DefinePhotoelectricHeatingE1Derivative(amrex::Real temperature, amrex::Real num_density) -> amrex::Real;
+
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGas(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
 							   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
 							   double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
@@ -450,6 +453,16 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	double d_power_dt = 4. * radiation_constant_ * std::pow(temperature, 3);
 	return d_power_dt * radEnergyFractions;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density) -> amrex::Real
+{
+	const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
+	const double coeff = 1.33e-24;
+	return coeff * epsilon * num_density / ref_J_ISR; // s^-1
 }
 
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
