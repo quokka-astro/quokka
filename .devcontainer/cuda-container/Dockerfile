@@ -16,7 +16,7 @@ RUN apt-get update -qq && apt-get upgrade -y -qq && \
         g++ \
         libopenmpi-dev \
         libhdf5-mpi-dev \
-        python3-defaults \
+        python3 \
 	ninja-build && \
     apt-get --yes -qq clean && \
     rm -rf /var/lib/apt/lists/*
