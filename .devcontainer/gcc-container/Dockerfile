@@ -11,8 +11,9 @@ RUN apt-get --yes -qq update \
  && rm -rf /var/lib/apt/lists/*
 
 # install Clang 19.x
-RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
- echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" > /etc/apt/sources.list.d/llvm.list
+RUN mkdir -m 0755 -p /etc/apt/keyrings/ && \
+ curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg.key && \
+ echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | tee /etc/apt/sources.list.d/llvm.list > /dev/null
 
 RUN apt-get clean && apt-get update -y && \
  apt-get install -y --no-install-recommends clang-19 llvm-19 libomp-19-dev libclang-rt-19-dev clangd-19 && \
