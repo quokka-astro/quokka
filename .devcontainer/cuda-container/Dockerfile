@@ -8,7 +8,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 # Update package lists and install necessary dependencies
 RUN apt-get update -qq && apt-get upgrade -y -qq && \
     apt-get install -y -qq --no-install-recommends \
-    build-essential wget curl git cmake ninja-build gcc g++ \
+    build-essential wget curl git ninja-build gcc g++ \
     python3-dev python3-numpy python3-matplotlib python3-pip \
     libhdf5-dev && \
     apt-get --yes -qq clean && \
@@ -25,6 +25,14 @@ RUN apt-get clean && apt-get update -y && \
 
 # Create symlink for clangd
 RUN ln -s /usr/bin/clangd-19 /usr/bin/clangd
+
+# Install the latest version of CMake
+RUN test -f /usr/share/doc/kitware-archive-keyring/copyright || wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null && \
+    echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ noble main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null
+
+RUN apt-get clean && apt-get update -y && \
+    apt-get install -y --no-install-recommends cmake && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install blosc2 (needed for ADIOS2)
 RUN pip3 install blosc2 --break-system-packages
