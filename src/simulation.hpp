@@ -88,7 +88,7 @@ namespace filesystem = experimental::filesystem;
 #include "physics_info.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
-#include "openPMD.hpp"
+#include "io/openPMD.hpp"
 #endif
 
 #define USE_YAFLUXREGISTER
