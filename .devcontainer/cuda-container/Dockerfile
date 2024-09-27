@@ -23,6 +23,9 @@ RUN apt-get clean && apt-get update -y && \
  apt-get install -y --no-install-recommends clang-19 llvm-19 libomp-19-dev libclang-rt-19-dev clangd-19 && \
  rm -rf /var/lib/apt/lists/*
 
+# Create symlink for clangd
+RUN ln -s /usr/bin/clangd-19 /usr/bin/clangd
+
 # Install blosc2 (needed for ADIOS2)
 # Commented out because python is not installed
 RUN pip3 install blosc2 --break-system-packages
