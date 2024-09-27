@@ -128,6 +128,11 @@ link_libraries(yaml-cpp::yaml-cpp)
 
 include(CTest)
 
+# Run each test with "mpirun". This is required for NVIDIA's HPC-X MPI.
+if (USE_MPIRUN_FOR_TESTS)
+  set (MPI_RUNNER "mpirun")
+endif(USE_MPIRUN_FOR_TESTS)
+
 set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagBase.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFilter.cpp" 

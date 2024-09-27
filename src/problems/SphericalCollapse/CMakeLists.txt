@@ -4,5 +4,5 @@ if (AMReX_SPACEDIM EQUAL 3)
         setup_target_for_cuda_compilation(spherical_collapse)
     endif()
 
-    add_test(NAME SphericalCollapse COMMAND spherical_collapse SphericalCollapse.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME SphericalCollapse COMMAND ${MPI_RUNNER} spherical_collapse SphericalCollapse.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

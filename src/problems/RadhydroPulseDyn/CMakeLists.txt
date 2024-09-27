@@ -5,5 +5,5 @@ if (AMReX_SPACEDIM EQUAL 1)
       setup_target_for_cuda_compilation(test_radhydro_pulse_dyn)
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME RadhydroPulseDyn COMMAND test_radhydro_pulse_dyn RadhydroPulseDyn.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME RadhydroPulseDyn COMMAND ${MPI_RUNNER} test_radhydro_pulse_dyn RadhydroPulseDyn.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

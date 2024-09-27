@@ -34,6 +34,7 @@ option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
 option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" ON)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
+option(USE_MPIRUN_FOR_TESTS "Use 'mpirun' to run tests" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)

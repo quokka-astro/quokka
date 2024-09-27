@@ -4,5 +4,5 @@ if (AMReX_SPACEDIM EQUAL 3)
         setup_target_for_cuda_compilation(binary_orbit)
     endif()
 
-    add_test(NAME BinaryOrbitCIC COMMAND binary_orbit BinaryOrbit.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME BinaryOrbitCIC COMMAND ${MPI_RUNNER} binary_orbit BinaryOrbit.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

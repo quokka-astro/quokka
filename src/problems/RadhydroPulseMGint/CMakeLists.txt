@@ -10,4 +10,4 @@ endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 # mkdir -p WORK_PATH
 # file(MAKE_DIRECTORY ${WORK_PATH})
 
-add_test(NAME RadhydroPulseMGint COMMAND test_radhydro_pulse_MG_int RadhydroPulse.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME RadhydroPulseMGint COMMAND ${MPI_RUNNER} test_radhydro_pulse_MG_int RadhydroPulse.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
