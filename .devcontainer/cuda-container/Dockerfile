@@ -8,16 +8,15 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 # Update package lists and install necessary dependencies
 RUN apt-get update -qq && apt-get upgrade -y -qq && \
     apt-get install -y -qq --no-install-recommends \
-        build-essential \
-	wget \
-        git \
-        cmake \
-        gcc \
-        g++ \
-        libopenmpi-dev \
-        libhdf5-mpi-dev \
-        python3 \
-	ninja-build && \
+    build-essential \
+    wget \
+    git \
+    cmake \
+    ninja-build \
+    gcc \
+    g++ \
+    python3 \
+    libhdf5-dev && \
     apt-get --yes -qq clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -26,16 +25,16 @@ RUN wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
     echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-19 main" > /etc/apt/sources.list.d/llvm.list && \
     apt-get update -qq && \
     apt-get install -y -qq --no-install-recommends \
-        clang-19 \
-        llvm-19 \
-        libomp-19-dev \
-        libclang-rt-19-dev \
-        clangd-19 && \
+    clang-19 \
+    llvm-19 \
+    libomp-19-dev \
+    libclang-rt-19-dev \
+    clangd-19 && \
     rm -rf /var/lib/apt/lists/*
 
 # Install blosc2 (needed for ADIOS2)
 # Commented out because python is not installed
-# RUN pip3 install blosc2 --break-system-packages
+RUN pip3 install blosc2 --break-system-packages
 
 # Install ADIOS2 (needed for OpenPMD)
 RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
