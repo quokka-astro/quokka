@@ -37,9 +37,6 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
     cd / && \
     rm -rf /tmp/build-adios2
 
-# Create a new user 'ubuntu' and set the working directory
-RUN useradd -ms /bin/bash ubuntu
-
 # Set the working directory and user
 WORKDIR /home/ubuntu
 USER ubuntu
