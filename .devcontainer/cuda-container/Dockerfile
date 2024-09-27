@@ -9,7 +9,8 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 RUN apt-get update -qq && apt-get upgrade -y -qq && \
     apt-get install -y -qq --no-install-recommends \
     build-essential wget curl git cmake ninja-build gcc g++ \
-    python3 libhdf5-dev && \
+    python3-dev python3-numpy python3-matplotlib python3-pip \
+    libhdf5-dev && \
     apt-get --yes -qq clean && \
     rm -rf /var/lib/apt/lists/*
 
