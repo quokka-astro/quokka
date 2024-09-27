@@ -2,6 +2,8 @@
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=BenWibking_TwoMomentRad&metric=bugs&token=5049c56ffe08dcc83afd5ca4c8e0d951a2836652)](https://sonarcloud.io/dashboard?id=BenWibking_TwoMomentRad)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=BenWibking_TwoMomentRad&metric=ncloc&token=5049c56ffe08dcc83afd5ca4c8e0d951a2836652)](https://sonarcloud.io/dashboard?id=BenWibking_TwoMomentRad)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/9489/badge)](https://www.bestpractices.dev/projects/9489)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/quokka-astro/quokka/badge)](https://scorecard.dev/viewer/?uri=github.com/quokka-astro/quokka)
+
 [![AMReX](https://amrex-codes.github.io/badges/powered%20by-AMReX-red.svg)](https://amrex-codes.github.io)
 [![yt-project](https://img.shields.io/static/v1?label="works%20with"&message="yt"&color="blueviolet")](https://yt-project.org)
 
