@@ -116,6 +116,7 @@ template <typename problem_t> struct JacobianResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> J0g; // (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg0; // (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jgg; // (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg1;  // (g, 1) components of the Jacobian matrix, g = 1, 2, ..., nGroups
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
 };
 
