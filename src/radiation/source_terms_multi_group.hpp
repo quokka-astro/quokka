@@ -66,6 +66,64 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_gas
 // Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
 // Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
 template <typename problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
+    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
+    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/,
+    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+{
+	JacobianResult<problem_t> result;
+
+	const double cscale = c_light_ / c_hat_;
+
+	result.F0 = Egas_diff;
+	result.Fg = Erad_diff - (Rvec + Src);
+	result.Fg_abs_sum = 0.0;
+	for (int g = 0; g < nGroups_; ++g) {
+		if (tau[g] > 0.0) {
+			result.Fg_abs_sum += std::abs(result.Fg[g]);
+			result.F0 += cscale * Rvec[g];
+		}
+	}
+
+	// const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
+	AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
+
+	// compute Jacobian elements
+	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
+	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
+
+	auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
+
+	result.J00 = 1.0;
+	result.J0g.fillin(cscale);
+	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
+	// const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
+	dEg_dT *= d_Td_d_T;
+	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
+	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
+	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
+	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
+	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
+	for (int g = 0; g < nGroups_; ++g) {
+		if (tau[g] <= 0.0) {
+			result.Jgg[g] = -std::numeric_limits<double>::infinity();
+		} else {
+			result.Jgg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
+		}
+	}
+
+	return result;
+}
+
+// Compute the Jacobian of energy update equations for the gas-dust-radiation system. The result is a struct containing the following elements:
+// J00: (0, 0) component of the Jacobian matrix. = d F0 / d Egas
+// F0: (0) component of the residual. = Egas residual
+// Fg_abs_sum: sum of the absolute values of the each component of Fg that has tau(g) > 0
+// J0g: (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d F0 / d R_g
+// Jg0: (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d Egas
+// Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
+// Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
+template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
     double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
     quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/,
@@ -124,53 +182,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 // Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecoupled(
-    double /*T_gas*/, double /*T_d*/, double /*Egas_diff*/, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
-    quokka::valarray<double, nGroups_> const &Src, double /*coeff_n*/, quokka::valarray<double, nGroups_> const &tau, double /*c_v*/, double lambda_gd_time_dt,
-    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
-{
-	JacobianResult<problem_t> result;
-
-	result.F0 = -lambda_gd_time_dt;
-	result.Fg = Erad_diff - (Rvec + Src);
-	result.Fg_abs_sum = 0.0;
-	for (int g = 0; g < nGroups_; ++g) {
-		if (tau[g] > 0.0) {
-			result.F0 += Rvec[g];
-			result.Fg_abs_sum += std::abs(result.Fg[g]);
-		}
-	}
-
-	// compute Jacobian elements
-	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
-	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
-
-	auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
-
-	result.J00 = 0.0;
-	result.J0g.fillin(1.0);
-	result.Jg0 = dEg_dT;
-	for (int g = 0; g < nGroups_; ++g) {
-		if (tau[g] <= 0.0) {
-			result.Jgg[g] = -std::numeric_limits<double>::infinity();
-		} else {
-			result.Jgg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
-		}
-	}
-
-	return result;
-}
-
-// Compute the Jacobian of energy update equations for the gas-dust-radiation system with gas and dust decoupled, including photoelectric heating. 
-// The result is a struct containing the following elements: 
-// F0: (0) component of the residual. = sum_g R_g - lambda_gd_time_dt
-// Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
-// Fg_abs_sum: sum of the absolute values of the each component of Fg that has tau(g) > 0
-// J00: (0, 0) component of the Jacobian matrix. = d F0 / d T_d 
-// J0g: (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d F0 / d R_g
-// Jg0: (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d T_d
-// Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
-template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
     double /*T_gas*/, double /*T_d*/, double /*Egas_diff*/, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
     quokka::valarray<double, nGroups_> const &Src, double /*coeff_n*/, quokka::valarray<double, nGroups_> const &tau, double /*c_v*/, double lambda_gd_time_dt,
     quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
