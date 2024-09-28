@@ -252,16 +252,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	const double cscale = c / chat;
 
 	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
-	double Etot0 = NAN;
-	if (dust_model == 0 || dust_model == 1) {
-		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
-	} else {
-		// for dust_model == 2 (decoupled gas and dust), Egas0 is not involved in the iteration
-		Etot0 = std::abs(lambda_gd_times_dt) + (sum(Erad0Vec) + sum(Src));
-	}
+	double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 
 	double T_gas = NAN;
-	double T_d = NAN;
+	double T_d = NAN; // a dummy dust temperature, T_d = T_gas for gas-only model
 	double delta_x = NAN;
 	quokka::valarray<double, nGroups_> delta_R{};
 	quokka::valarray<double, nGroups_> F_D{};
@@ -304,20 +298,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
-	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-	AMREX_ASSERT(T_gas >= 0.);
-
-	// phtoelectric heating
-	double photoelectric_heating_rate = 0.0;
-	if constexpr (enable_photoelectric_heating_) {
-		const double num_den = rho / mean_molecular_mass_;
-		photoelectric_heating_rate = DefinePhotoelectricHeatingE1Derivative(T_gas, num_den);
-	}
-
-	if (dust_model == 2) {
-		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
-	}
-
 	const double resid_tol = 1.0e-11; // 1.0e-15;
 	const int maxIter = 100;
 	int n = 0;
@@ -329,28 +309,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
-		if (n > 0) {
-			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-			AMREX_ASSERT(T_gas >= 0.);
-		}
-
-		if (dust_model == 0) {
-			T_d = T_gas;
-		} else if (dust_model == 1) {
-			if (n == 0) {
-				T_d = T_d0;
-			} else {
-				T_d = T_gas - sum(Rvec) / (coeff_n * std::sqrt(T_gas));
-			}
-		} else if (dust_model == 2) {
-			if (n == 0) {
-				T_d = T_d0;
-			}
-		}
-		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
-		if (T_d < 0.0) {
-			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
-		}
+		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+		AMREX_ASSERT(T_gas >= 0.);
+		T_d = T_gas;
 
 		// 2. Compute kappaP and kappaE at dust temperature
 
@@ -467,7 +428,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
-		// JacobianResult<problem_t> jacobian;
 
 		auto jacobian = ComputeJacobian(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
 
@@ -501,21 +461,16 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// Update independent variables (Egas_guess, Rvec)
 		// enable_dE_constrain is used to prevent the gas temperature from dropping/increasing below/above the radiation
 		// temperature
-		if (dust_model == 2) {
-			T_d += delta_x;
-			Rvec += delta_R;
+		const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
+		if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
+			Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+			// Rvec.fillin(0.0);
 		} else {
-			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
-			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
-				Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
-				// Rvec.fillin(0.0);
+			Egas_guess += delta_x;
+			if constexpr (use_D_as_base) {
+				Rvec += tau0 * delta_R;
 			} else {
-				Egas_guess += delta_x;
-				if constexpr (use_D_as_base) {
-					Rvec += tau0 * delta_R;
-				} else {
-					Rvec += delta_R;
-				}
+				Rvec += delta_R;
 			}
 		}
 
