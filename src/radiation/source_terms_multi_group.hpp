@@ -532,12 +532,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 }
 
 template <typename problem_t>
-template <typename JacobianFunc>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
-    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const T_d0, int const dust_model, double const coeff_n,
-    double const lambda_gd_times_dt, double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter,
+    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, 
+		double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter,
     quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, JacobianFunc ComputeJacobian, int *p_iteration_counter,
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
     int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
@@ -562,6 +561,25 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	const double c = c_light_; // make a copy of c_light_ to avoid compiler error "undefined in device code"
 	const double chat = c_hat_;
 	const double cscale = c / chat;
+
+	int dust_model = 0;
+	double T_d0 = NAN;
+	double lambda_gd_times_dt = NAN;
+	const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+	AMREX_ASSERT(T_gas0 >= 0.);
+	T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, rad_boundaries);
+	AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
+	if (T_d0 < 0.0) {
+		amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
+	}
+
+	const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
+	if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
+		dust_model = 2;
+		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
+	} else {
+		dust_model = 1;
+	}
 
 	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 	double Etot0 = NAN;
@@ -779,9 +797,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
-		// JacobianResult<problem_t> jacobian;
 
-		auto jacobian = ComputeJacobian(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+		JacobianResult<problem_t> jacobian;
+
+		if (dust_model == 1) {
+			jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+		} else {
+			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+		}
 
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
@@ -1167,29 +1190,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			if constexpr (gamma_ != 1.0) {
 
-				// 1.1. If enable_dust_model, determine if or not to use the weak-coupling approximation
-
-				int dust_model = 0;
-				double T_d0 = NAN;
-				double lambda_gd_times_dt = NAN;
-				if constexpr (enable_dust_gas_thermal_coupling_model_) {
-					const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
-					AMREX_ASSERT(T_gas0 >= 0.);
-					T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, radBoundaries_g_copy);
-					AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
-					if (T_d0 < 0.0) {
-						amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
-					}
-
-					const double max_Gamma_gd = coeff_n * std::max(std::sqrt(T_gas0) * T_gas0, std::sqrt(T_d0) * T_d0);
-					if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
-						dust_model = 2;
-						lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
-					} else {
-						dust_model = 1;
-					}
-				}
-
 				// 1.2. Compute a term required to calculate the work. This is only required in the first outer loop.
 
 				quokka::valarray<double, nGroups_> vel_times_F{};
@@ -1214,16 +1214,15 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					    radBoundaries_g_copy, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
 					if constexpr (!enable_photoelectric_heating_) {
-						auto ComputeJacobian = (dust_model == 1) ? &ComputeJacobianForGasAndDust : &ComputeJacobianForGasAndDustDecoupled;
 						updated_energy = SolveGasDustRadiationEnergyExchange(
-								Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
-								radBoundaries_g_copy, ComputeJacobian, p_iteration_counter_local, p_iteration_failure_counter_local);
+								Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src,
+								radBoundaries_g_copy, p_iteration_counter_local, p_iteration_failure_counter_local);
 					} else {
-						auto ComputeJacobian = (dust_model == 1) ? &ComputeJacobianForGasAndDustWithPE : &ComputeJacobianForGasAndDustDecoupled;
-						// auto ComputeJacobian = &ComputeJacobianForGasAndDustDecoupledWithPE;
-						updated_energy = SolveGasDustRadiationEnergyExchange(
-								Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
-								radBoundaries_g_copy, ComputeJacobian, p_iteration_counter_local, p_iteration_failure_counter_local);
+						// auto ComputeJacobian = (dust_model == 1) ? &ComputeJacobianForGasAndDustWithPE : &ComputeJacobianForGasAndDustDecoupled;
+						// // auto ComputeJacobian = &ComputeJacobianForGasAndDustDecoupledWithPE;
+						// updated_energy = SolveGasDustRadiationEnergyExchange(
+						// 		Egas0, Erad0Vec, rho, T_d0, dust_model, coeff_n, lambda_gd_times_dt, dt, massScalars, iter, work, vel_times_F, Src,
+						// 		radBoundaries_g_copy, ComputeJacobian, p_iteration_counter_local, p_iteration_failure_counter_local);
 					}
 				}
 
