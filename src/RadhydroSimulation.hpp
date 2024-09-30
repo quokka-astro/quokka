@@ -270,7 +270,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 			  const amrex::Box &indexRange, int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 	template <FluxDir DIR>
-	void hydroFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &x1Flux,
+	void hydroFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &x1Flux,
 			       amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
                   amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, int ng_reconstruct, int nvars);
 
@@ -1071,7 +1071,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
-			state_inter_fc_[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, nghost_fc_);
+			state_inter_fc_[idim].define(ba_fc, dm, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
 			state_inter_fc_[idim].setVal(0);
 		}
 	}
@@ -1122,7 +1122,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		auto const &stateOld_fc = state_old_fc_tmp;
 		auto &stateNew_fc = state_inter_fc_;
 
-		auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateOld_cc, stateOld_fc, ncompHydro_, lev);
+    int nvars = ncompHydro_;
+    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+      // also create space to append the two magnetic field components orthogonal to the solving direction
+      nvars += 3; // add-hoc +3 because +1 (primScalar0_index) precedes +2 (x2Magnetic_index and x3Magnetic_index) at the end of the enum of primitive quantities
+    }
+    auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateOld_cc, stateOld_fc, nvars, lev);
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
@@ -1251,7 +1256,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		auto &stateFinal_cc = state_new_cc_[lev];
 
-		auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateInter_cc, stateInter_fc, ncompHydro_, lev);
+    int nvars = ncompHydro_;
+    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+      // also create space to append the two magnetic field components orthogonal to the solving direction
+      nvars += 3; // add-hoc step: +3 because primScalar0_index precedes x2Magnetic_index and x3Magnetic_index at the end of the enum of primitive quantities
+    }
+    auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateInter_cc, stateInter_fc, nvars, lev);
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
@@ -1449,7 +1459,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 	const int reconstructGhost = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba_cc, dm, nvars, nghost_cc_);
+  amrex::MultiFab primVar(ba_cc, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, 3> flatCoefs;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
@@ -1529,28 +1539,71 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
+void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
 						      amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
                   amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
 {
-	if (reconstructionOrder_ == 3) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+  amrex::MultiArray4<const amrex::Real> x1State_fc_in;
+  amrex::MultiArray4<const amrex::Real> x2State_fc_in;
+  amrex::MultiArray4<const amrex::Real> x3State_fc_in;
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+    std::array<int, 3> delta_x2 = {0, 0, 0};
+    std::array<int, 3> delta_x3 = {0, 0, 0};
+    if constexpr (DIR == FluxDir::X1) {
+      delta_x2[1] = 1;
+      delta_x3[2] = 1;
+      x1State_fc_in = consVar_fc[0].const_arrays();
+      x2State_fc_in = consVar_fc[1].const_arrays();
+      x3State_fc_in = consVar_fc[2].const_arrays();
+    } else if constexpr (DIR == FluxDir::X2) {
+      delta_x2[2] = 1;
+      delta_x3[0] = 1;
+      x1State_fc_in = consVar_fc[1].const_arrays();
+      x2State_fc_in = consVar_fc[2].const_arrays();
+      x3State_fc_in = consVar_fc[0].const_arrays();
+    } else if constexpr (DIR == FluxDir::X3) {
+      delta_x2[0] = 1;
+      delta_x3[1] = 1;
+      x1State_fc_in = consVar_fc[2].const_arrays();
+      x2State_fc_in = consVar_fc[0].const_arrays();
+      x3State_fc_in = consVar_fc[1].const_arrays();
+    }
+    auto primVar_in = primVar_mf.arrays();
+    amrex::ParallelFor(primVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
+      quokka::Array4View<const amrex::Real, DIR> x2State_fc(x2State_fc_in[bx]);
+      quokka::Array4View<const amrex::Real, DIR> x3State_fc(x3State_fc_in[bx]);
+      quokka::Array4View<amrex::Real, DIR> primVar(primVar_in[bx]);
+
+      auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+      const double bx2_m = x2State_fc(i,             j,             k,             Physics_Indices<problem_t>::mhdFirstIndex);
+      const double bx2_p = x2State_fc(i+delta_x2[0], j+delta_x2[1], k+delta_x2[2], Physics_Indices<problem_t>::mhdFirstIndex);
+      primVar(i, j, k, HydroSystem<problem_t>::x2Magnetic_index) = 0.5 * (bx2_m + bx2_p);
+
+      const double bx3_m = x3State_fc(i,             j,             k,             Physics_Indices<problem_t>::mhdFirstIndex);
+      const double bx3_p = x3State_fc(i+delta_x3[0], j+delta_x3[1], k+delta_x3[2], Physics_Indices<problem_t>::mhdFirstIndex);
+      primVar(i, j, k, HydroSystem<problem_t>::x3Magnetic_index) = 0.5 * (bx3_m + bx3_p);
+    });
+  }
+
+  if (reconstructionOrder_ == 3) {
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 2) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 1) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
 
 	// cell-centered kernel
-	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_, &x1FSpds, &consVar_fc);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar_mf, artificialViscosityK_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)]);
 	} else {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_, nullptr, nullptr);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar_mf, artificialViscosityK_, nullptr, nullptr);
 	}
 }
 

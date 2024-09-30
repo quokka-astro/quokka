@@ -71,7 +71,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		x3Velocity_index,
 		pressure_index,
 		primEint_index,	  // auxiliary internal energy (rho * e)
-		primScalar0_index // first passive scalar (only present if nscalars > 0!)
+		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
+    x2Magnetic_index, // when magnetic fields exist, then we also store cc-ave of the two orthogonal b-fields, so they can be reconstructed to the solving face
+    x3Magnetic_index,
 	};
 
 	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, int nghost);
@@ -120,7 +122,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	template <RiemannSolver RIEMANN, FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_cc_mf,
 				  amrex::MultiFab const &x1RightState_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc,
-          amrex::MultiFab *x1FSpds_mf = nullptr, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *consVar_fc_mf = nullptr);
+          amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr);
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
@@ -893,7 +895,7 @@ template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_cc_mf,
 					   amrex::MultiFab const &x1RightState_cc_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
-             amrex::MultiFab *x1FSpds_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *consVar_fc_mf)
+             amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf)
 {
 
 	// By convention, the interfaces are defined on the left edge of each
@@ -908,43 +910,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
 
-  int delta_L_i = 0;
-  int delta_L_j = 0;
-  int delta_L_k = 0;
-  int delta_x2p_i = 0;
-  int delta_x2p_j = 0;
-  int delta_x2p_k = 0;
-  int delta_x3p_i = 0;
-  int delta_x3p_j = 0;
-  int delta_x3p_k = 0;
 	amrex::MultiArray4<double> x1FSpds_in;
-  amrex::MultiArray4<const double> x1State_fc_in;
-  amrex::MultiArray4<const double> x2State_fc_in;
-  amrex::MultiArray4<const double> x3State_fc_in;
+  amrex::MultiArray4<const double> x1ConsVar_fc_in;
 	if constexpr (RIEMANN == RiemannSolver::HLLD) {
 		x1FSpds_in = (*x1FSpds_mf).arrays();
-    if constexpr (DIR == FluxDir::X1) {
-      delta_L_i = -1;
-      delta_x2p_j = 1;
-      delta_x3p_k = 1;
-      x1State_fc_in = (*consVar_fc_mf)[0].const_arrays();
-      x2State_fc_in = (*consVar_fc_mf)[1].const_arrays();
-      x3State_fc_in = (*consVar_fc_mf)[2].const_arrays();
-    } else if constexpr (DIR == FluxDir::X2) {
-      delta_L_j = -1;
-      delta_x2p_k = 1;
-      delta_x3p_i = 1;
-      x1State_fc_in = (*consVar_fc_mf)[1].const_arrays();
-      x2State_fc_in = (*consVar_fc_mf)[2].const_arrays();
-      x3State_fc_in = (*consVar_fc_mf)[0].const_arrays();
-    } else if constexpr (DIR == FluxDir::X3) {
-      delta_L_k = -1;
-      delta_x2p_i = 1;
-      delta_x3p_j = 1;
-      x1State_fc_in = (*consVar_fc_mf)[2].const_arrays();
-      x2State_fc_in = (*consVar_fc_mf)[0].const_arrays();
-      x3State_fc_in = (*consVar_fc_mf)[1].const_arrays();
-    }
+    x1ConsVar_fc_in = (*x1ConsVar_fc_mf).const_arrays();
 	}
 
 	amrex::ParallelFor(x1Flux_mf, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
@@ -987,12 +957,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		double cs_L = NAN;
 		double cs_R = NAN;
 
-    double bx1 = NAN;
-    double bx2_L = NAN;
-    double bx2_R = NAN;
-    double bx3_L = NAN;
-    double bx3_R = NAN;
-
 		if constexpr (is_eos_isothermal()) {
 			P_L = rho_L * (cs_iso_ * cs_iso_);
 			P_R = rho_R * (cs_iso_ * cs_iso_);
@@ -1032,46 +996,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			E_R = quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars_R) + ke_R;
 		}
 
-    if constexpr (RIEMANN == RiemannSolver::HLLD) {
-      quokka::Array4View<const amrex::Real, DIR> x1State_fc(x1State_fc_in[bx]);
-      quokka::Array4View<const amrex::Real, DIR> x2State_fc(x2State_fc_in[bx]);
-      quokka::Array4View<const amrex::Real, DIR> x3State_fc(x3State_fc_in[bx]);
-
-      bx1 = x1State_fc(i_in, j_in, k_in, Physics_Indices<problem_t>::mhdFirstIndex);
-
-      amrex::Print() << static_cast<int>(DIR) << ": (" <<\
-        i_in << "," << j_in << "," << k_in << "): " <<\
-        bx1 << std::endl;
-
-      const double bx2_Lm = x2State_fc(i_in+delta_L_i, j_in+delta_L_j, k_in+delta_L_k, Physics_Indices<problem_t>::mhdFirstIndex);
-      const double bx2_Lp = x2State_fc(i_in+delta_L_i+delta_x2p_i, j_in+delta_L_j+delta_x2p_j, k_in+delta_L_k+delta_x2p_k, Physics_Indices<problem_t>::mhdFirstIndex);
-      bx2_L = 0.5 * (bx2_Lm + bx2_Lp);
-
-      amrex::Print() << static_cast<int>(DIR) << ": (" <<\
-        i_in << "," << j_in << "," << k_in << "): " <<\
-        bx1 << std::endl;
-
-      const double bx2_Rm = x2State_fc(i_in, j_in, k_in, Physics_Indices<problem_t>::mhdFirstIndex);
-      const double bx2_Rp = x2State_fc(i_in+delta_x2p_i, j_in+delta_x2p_j, k_in+delta_x2p_k, Physics_Indices<problem_t>::mhdFirstIndex);
-      bx2_R = 0.5 * (bx2_Rm + bx2_Rp);
-
-      amrex::Print() << static_cast<int>(DIR) << ": (" <<\
-        i_in << "," << j_in << "," << k_in << "): " <<\
-        bx1 << std::endl;
-
-      const double bx3_Lm = x3State_fc(i_in+delta_L_i, j_in+delta_L_j, k_in+delta_L_k, Physics_Indices<problem_t>::mhdFirstIndex);
-      const double bx3_Lp = x3State_fc(i_in+delta_L_i+delta_x3p_i, j_in+delta_L_j+delta_x3p_j, k_in+delta_L_k+delta_x3p_k, Physics_Indices<problem_t>::mhdFirstIndex);
-      bx3_L = 0.5 * (bx3_Lm + bx3_Lp);
-
-      amrex::Print() << static_cast<int>(DIR) << ": (" <<\
-        i_in << "," << j_in << "," << k_in << "): " <<\
-        bx1 << std::endl;
-
-      const double bx3_Rm = x3State_fc(i_in, j_in, k_in, Physics_Indices<problem_t>::mhdFirstIndex);
-      const double bx3_Rp = x3State_fc(i_in+delta_x3p_i, j_in+delta_x3p_j, k_in+delta_x3p_k, Physics_Indices<problem_t>::mhdFirstIndex);
-      bx3_R = 0.5 * (bx3_Rm + bx3_Rp);
-    }
-
 		AMREX_ASSERT(cs_L > 0.0);
 		AMREX_ASSERT(cs_R > 0.0);
 
@@ -1110,10 +1034,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sL.cs = cs_L;
 		sL.E = E_L;
 		sL.Eint = Eint_L;
-		// the following has been set to zero to test that the HLLD solver works with hydro only
-		// TODO(Neco): set correct magnetic field values once magnetic fields are enabled
-		sL.by = bx2_L;
-		sL.bz = bx3_L;
+    if constexpr (RIEMANN == RiemannSolver::HLLD) {
+      sL.by = x1LeftState(i, j, k, x2Magnetic_index);
+      sL.bz = x1LeftState(i, j, k, x3Magnetic_index);
+    } else {
+      sL.by = 0.0;
+      sL.bz = 0.0;
+    }
 
 		quokka::HydroState<nscalars_, nmscalars_> sR{};
 		sR.rho = rho_R;
@@ -1124,9 +1051,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sR.cs = cs_R;
 		sR.E = E_R;
 		sR.Eint = Eint_R;
-		// as above, set to zero for testing purposes
-		sR.by = bx2_R;
-		sR.bz = bx3_R;
+    if constexpr (RIEMANN == RiemannSolver::HLLD) {
+      sR.by = x1RightState(i, j, k, x2Magnetic_index);
+      sR.bz = x1RightState(i, j, k, x3Magnetic_index);
+    } else {
+      sR.by = 0.0;
+      sR.bz = 0.0;
+    }
 
 		// The remaining components are mass scalars and passive scalars, so just copy them from
 		// x1LeftState and x1RightState into the (left, right) state vectors U_L and
@@ -1169,6 +1100,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_in[bx]);
+      quokka::Array4View<const amrex::Real, DIR> x1ConsVar_fc(x1ConsVar_fc_in[bx]);
+      const double bx1 = x1ConsVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 			auto [F_canonical, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;
