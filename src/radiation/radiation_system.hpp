@@ -294,6 +294,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_HOST_DEVICE static void SolveLinearEqs(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi);
 
+	AMREX_GPU_HOST_DEVICE static void SolveLinearEqsWithLastColumn(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi);
+
 	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21,
 							 double C22, double Y0, double Y1, double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
 
@@ -344,7 +346,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustWithPE(
-	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
+	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0, 
+			double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec,
 	    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
 	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
@@ -474,10 +477,11 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density) -> amrex::Real
 {
-	const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
-	const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
-	const double coeff = 1.33e-24;
-	return coeff * epsilon * num_density / ref_J_ISR; // s^-1
+	// const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	// const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
+	// const double coeff = 1.33e-24;
+	// return coeff * epsilon * num_density / ref_J_ISR; // s^-1
+	return 0.0;
 }
 
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
@@ -492,6 +496,39 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(JacobianResult<p
 	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
 	xi = (-1.0 * jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
 }
+
+// Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
+// solve the linear system
+//   [a00 a0i] [x0] = [y0]
+//   [ai0 aii] [xi]   [yi]
+// for x0 and xi, where a0i = (a01, a02, a03, ...); ai0 = (a10, a20, a30, ...); aii = (a11, a22, a33, ...), xi = (x1, x2, x3, ...), yi = (y1, y2, y3, ...)
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqsWithLastColumn(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
+{
+	// Note that the following routine only works when the FUV group is the last group, i.e., pe_index = nGroups_ - 1
+
+	// note that jacobian.Jgg[pe_index] is the right value for a[pe_index][pe_index], while jacobian.Jg1[pe_index] is NOT.
+	const int pe_index = nGroups_ - 1;
+	const auto ratios = jacobian.J0g / jacobian.Jgg;
+
+	const auto a00_new = jacobian.J00 - sum(ratios * jacobian.Jg0);
+	const auto y0_new = jacobian.F0 - sum(ratios * jacobian.Fg);
+	auto a01_new = jacobian.J0g[pe_index] - sum(ratios * jacobian.Jg1);
+	// re-accounting for the pe_index'th element of jacobian.Jg1
+	a01_new = a01_new + ratios[pe_index] * jacobian.Jg1[pe_index] - ratios[pe_index] * jacobian.Jgg[pe_index];
+	const auto a10 = jacobian.Jg0[pe_index];
+	const auto a11 = jacobian.Jgg[pe_index];
+	const auto y1 = jacobian.Fg[pe_index];
+	// solve linear equations [[a00_new, a01_new], [a10, a11]] [[x0], [xi[pe_index]]] = [y0_new, y1]
+	x0 = (y0_new - a01_new / a11 * y1) / (a00_new - a01_new / a11 * a10);
+	const auto x1 = (y1 - a10 * x0) / a11;
+	xi[pe_index] = x1;
+	// xi = (jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
+	for (int g = 0; g < pe_index; ++g) {
+		xi[g] = (jacobian.Fg[g] - jacobian.Jg0[g] * x0 - jacobian.Jg1[g] * x1) / jacobian.Jgg[g];
+	}
+}
+
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00, const double C01, const double C02, const double C10, const double C11,
