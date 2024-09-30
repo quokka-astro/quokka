@@ -368,6 +368,14 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					   amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
 					   int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
+	AMREX_GPU_DEVICE static auto
+	SolveGasDustRadiationEnergyExchangeWithPE(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, 
+					   double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
+					   int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+					   quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+					   amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
+					   int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
+
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto
 	ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
