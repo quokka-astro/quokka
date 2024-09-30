@@ -177,9 +177,16 @@ auto problem_main() -> int
 		}
 	}
 
-	RadhydroSimulation<AlfvenWave> sim_write(BCs_cc, BCs_fc);
-	sim_write.setInitialConditions();
-	sim_write.evolve();
+	RadhydroSimulation<AlfvenWave> sim(BCs_cc, BCs_fc);
+	sim.setInitialConditions();
+	sim.evolve();
 
-	return 0;
+  // Compute test success condition
+	int status = 0;
+	const double error_tol = 0.002;
+	if (sim.errorNorm_ > error_tol) {
+		status = 1;
+	}
+
+	return status;
 }
