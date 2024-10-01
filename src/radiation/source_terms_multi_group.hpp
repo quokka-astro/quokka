@@ -2,6 +2,8 @@
 #ifndef RAD_SOURCE_TERMS_MULTI_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_MULTI_GROUP_HPP_
 
+#define LARGE 1.e100
+
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
 // Compute the Jacobian of energy update equations for the gas-radiation system. The result is a struct containing the following elements:
@@ -152,13 +154,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 
-	auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
+	const auto d_Eg_d_Rg = -1.0 * kappaPoverE / tau;
 
 	result.J00 = 1.0;
 	result.J0g.fillin(cscale);
 	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 	// const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
-	dEg_dT *= d_Td_d_T;
+	const auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t * d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
 	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
@@ -166,9 +168,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] <= 0.0) {
-			result.Jgg[g] = -std::numeric_limits<double>::infinity();
+			result.Jgg[g] = - LARGE;
 		} else {
-			result.Jgg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
+			result.Jgg[g] = d_Eg_d_Rg[g] - 1.0;
 		}
 	}
 
@@ -678,7 +680,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 				T_d = T_d0;
 			}
 		}
-		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
 		if (T_d < 0.0) {
 			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
 		}
@@ -872,6 +874,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates. NOLINT
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
 	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
+	if (dust_model == 2) {
+		amrex::Gpu::Atomic::Add(&p_iteration_counter[3], 1); // total number of decoupled gas-dust iterations. NOLINT
+	}
 
 	NewtonIterationResult<problem_t> result;
 
@@ -1031,6 +1036,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
 	}
 
+	// phtoelectric heating
+	const double num_den = rho / mean_molecular_mass_;
+	const double PE_heating_energy_derivative = dt * DefinePhotoelectricHeatingE1Derivative(T_gas, num_den);
+
 	const double resid_tol = 1.0e-11; // 1.0e-15;
 	const int maxIter = 100;
 	int n = 0;
@@ -1060,7 +1069,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 				T_d = T_d0;
 			}
 		}
-		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
 		if (T_d < 0.0) {
 			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
 		}
@@ -1184,7 +1193,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		JacobianResult<problem_t> jacobian;
 
 		if (dust_model == 1) {
-			jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+			jacobian = ComputeJacobianForGasAndDustWithPE(T_gas, T_d, Egas_diff, EradVec_guess, Erad0Vec, PE_heating_energy_derivative, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
 		} else {
 			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
 		}
