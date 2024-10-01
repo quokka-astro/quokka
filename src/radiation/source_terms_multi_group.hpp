@@ -1019,13 +1019,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
-	// phtoelectric heating
-	double photoelectric_heating_rate = 0.0;
-	if constexpr (enable_photoelectric_heating_) {
-		const double num_den = rho / mean_molecular_mass_;
-		photoelectric_heating_rate = DefinePhotoelectricHeatingE1Derivative(T_gas, num_den);
-	}
-
 	if (dust_model == 2) {
 		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
 	}
