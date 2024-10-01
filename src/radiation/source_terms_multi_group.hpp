@@ -565,7 +565,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	const double chat = c_hat_;
 	const double cscale = c / chat;
 
-	int dust_model = 0;
+	int dust_model = 1;
 	double T_d0 = NAN;
 	double lambda_gd_times_dt = NAN;
 	const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
@@ -580,13 +580,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
 		dust_model = 2;
 		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
-	} else {
-		dust_model = 1;
 	}
 
 	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 	double Etot0 = NAN;
-	if (dust_model == 0 || dust_model == 1) {
+	if (dust_model == 1) {
 		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 	} else {
 		// for dust_model == 2 (decoupled gas and dust), Egas0 is not involved in the iteration
@@ -667,15 +665,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 			AMREX_ASSERT(T_gas >= 0.);
 		}
 
-		if (dust_model == 0) {
-			T_d = T_gas;
-		} else if (dust_model == 1) {
+		if (dust_model == 1) {
 			if (n == 0) {
 				T_d = T_d0;
 			} else {
 				T_d = T_gas - sum(Rvec) / (coeff_n * std::sqrt(T_gas));
 			}
-		} else if (dust_model == 2) {
+		} else {
 			if (n == 0) {
 				T_d = T_d0;
 			}
@@ -950,7 +946,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	const double chat = c_hat_;
 	const double cscale = c / chat;
 
-	int dust_model = 0;
+	int dust_model = 1;
 	double T_d0 = NAN;
 	double lambda_gd_times_dt = NAN;
 	const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
@@ -965,13 +961,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	if (cscale * max_Gamma_gd < ISM_Traits<problem_t>::gas_dust_coupling_threshold * Egas0) {
 		dust_model = 2;
 		lambda_gd_times_dt = coeff_n * std::sqrt(T_gas0) * (T_gas0 - T_d0);
-	} else {
-		dust_model = 1;
 	}
 
 	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 	double Etot0 = NAN;
-	if (dust_model == 0 || dust_model == 1) {
+	if (dust_model == 1) {
 		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 	} else {
 		// for dust_model == 2 (decoupled gas and dust), Egas0 is not involved in the iteration
@@ -1056,15 +1050,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 			AMREX_ASSERT(T_gas >= 0.);
 		}
 
-		if (dust_model == 0) {
-			T_d = T_gas;
-		} else if (dust_model == 1) {
+		if (dust_model == 1) {
 			if (n == 0) {
 				T_d = T_d0;
 			} else {
 				T_d = T_gas - sum(Rvec) / (coeff_n * std::sqrt(T_gas));
 			}
-		} else if (dust_model == 2) {
+		} else {
 			if (n == 0) {
 				T_d = T_d0;
 			}
