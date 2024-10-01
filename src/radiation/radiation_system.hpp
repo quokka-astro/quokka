@@ -1425,6 +1425,79 @@ Real rhs_eint(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
 
 // template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void rhs_specie_shock(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X) {
+	Real const Tdust = state.T;
+	Real const rho = state.rho;
+
+	const double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
+	const double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
+	const double c_s0 = 1.0;		 // adiabatic sound speed
+	const double Mach0 = 3.0;
+	const double v0 = (Mach0 * c_s0);
+	const double chat = 10.0 * (v0 + c_s0); // reduced speed of light
+	const double sigma_a = 1.0e6; // absorption cross section
+	const amrex::Real kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
+	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+
+	ydot(1) = c * kappa * (fourPiBoverc - X(0));
+}
+
+// template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+Real rhs_eint_shock(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
+	Real Tdust = state.T;
+	Real rho = state.rho;
+
+	const double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
+	const double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
+	const double c_s0 = 1.0;		 // adiabatic sound speed
+	const double Mach0 = 3.0;
+	const double v0 = (Mach0 * c_s0);
+	const double chat = 10.0 * (v0 + c_s0); // reduced speed of light
+	const double sigma_a = 1.0e6; // absorption cross section
+	const amrex::Real kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
+	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+
+	const Real edot = - chat * kappa * (fourPiBoverc - X(0));
+
+  return edot;
+}
+
+// template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void rhs_specie_marshak(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X) {
+	Real const Tdust = state.T;
+	Real const rho = state.rho;
+
+	const Real chat = c_light_cgs_;
+	const Real a_rad = radiation_constant_cgs_;
+	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+	const double kappa = 300.0;		      // cm^-1 (opacity)
+	const double T_hohlraum = 1.1604448449e7; // K (1 keV)
+	const double sigma = kappa * std::pow(Tdust / T_hohlraum, -3); // cm^-1
+
+	ydot(1) = chat * sigma * (fourPiBoverc - X(0));
+}
+
+// template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+Real rhs_eint_marshak(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
+	Real Tdust = state.T;
+	Real rho = state.rho;
+
+	const Real chat = c_light_cgs_;
+	const Real a_rad = radiation_constant_cgs_;
+	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+	const double kappa = 300.0;		      // cm^-1 (opacity)
+	const double T_hohlraum = 1.1604448449e7; // K (1 keV)
+	const double sigma = kappa * std::pow(Tdust / T_hohlraum, -3); // cm^-1
+
+	const Real edot = - chat * sigma * (fourPiBoverc - X(0));
+  return edot;
+}
+
+// template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
 void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
 {
 	Array1D<Real, 0, NumSpec-1> X;
@@ -1432,12 +1505,18 @@ void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
 		X(i) = state.xn[i];
 	}
 
-	// YDOTS
-	rhs_specie(state, ydot, X);
-	// rhs_specie<problem_t>(state, ydot, X);
+	// YDOTS and Edot
 
-	// Edot
-	Real edot = rhs_eint(state, X);
+	// rhs_specie(state, ydot, X);
+	// Real edot = rhs_eint(state, X);
+
+	// rhs_specie_marshak(state, ydot, X);
+	// Real edot = rhs_eint_marshak(state, X);
+
+	rhs_specie_shock(state, ydot, X);
+	Real edot = rhs_eint_shock(state, X);
+
+	// rhs_specie<problem_t>(state, ydot, X);
 	// Real edot = rhs_eint<problem_t>(state, X);
 
 	// Append the energy equation (this is erg/g/s)

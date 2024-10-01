@@ -555,7 +555,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 				const double lag_tol = 1.0e-13;
 				if ((std::abs(work) == 0.0) || (cscale * std::abs(work - work_prev) < lag_tol * Etot0) ||
-				    (std::abs(work - work_prev) <= lag_tol * R) || (std::abs(work - work_prev) <= 1.0e-8 * std::abs(work))) {
+				     (std::abs(work - work_prev) <= 1.0e-8 * std::abs(work))) {
 					break;
 				}
 			}
