@@ -160,6 +160,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 	return result;
 }
 
+// Compute kappaF and the delta_nu_kappa_B_at_edge term. kappaF is used to compute the work term and the delta_nu_kappa_B_at_edge term is used to compute the transport between groups in the momentum function.
+// Only the last two arguments (kappaFVec, delta_nu_kappa_B_at_edge) are modified in this function.
 template <typename problem_t>
 AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaFAndDeltaTerms(double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &kappaP, quokka::valarray<double, nGroups_> const &kappaE, quokka::valarray<double, nGroups_> &kappaF, amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge)
 {
@@ -190,6 +192,7 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaFAndDeltaTerms
 	}
 }
 
+// Compute kappaE and kappaP based on the opacity model. The result is stored in the last five arguments: alpha_B, alpha_E, kappaP, kappaE, and kappaPoverE.
 template <typename problem_t>
 AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaEAndKappaP(double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int const n_iter, amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaP, quokka::valarray<double, nGroups_> &kappaE, quokka::valarray<double, nGroups_> &kappaPoverE)
 {
