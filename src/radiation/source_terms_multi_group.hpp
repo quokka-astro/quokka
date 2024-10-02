@@ -1207,7 +1207,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 #endif
 
 		// update variables
-		RadSystem<problem_t>::SolveLinearEqs(jacobian, delta_x, delta_R); // This is modify delta_x and delta_R in place
+		RadSystem<problem_t>::SolveLinearEqsWithLastColumn(jacobian, delta_x, delta_R); // This is modify delta_x and delta_R in place
 		AMREX_ASSERT(!std::isnan(delta_x));
 		AMREX_ASSERT(!delta_R.hasnan());
 

@@ -1,3 +1,6 @@
+# pylint: disable=all
+# type: ignore
+
 if gamma != 1: 
 	cal T_gas 
 	if dust_off:
