@@ -161,7 +161,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaFAndDeltaTerms(double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &kappaPVec, quokka::valarray<double, nGroups_> const &kappaEVec, quokka::valarray<double, nGroups_> &kappaFVec, amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge)
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaFAndDeltaTerms(double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &kappaP, quokka::valarray<double, nGroups_> const &kappaE, quokka::valarray<double, nGroups_> &kappaF, amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge)
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
@@ -176,28 +176,28 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaFAndDeltaTerms
 		delta_nu_B_at_edge[g] = nu_R * B_R - nu_L * B_L;
 	}
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-		kappaFVec = kappaPVec;
+		kappaF = kappaP;
 	} else {
 		if constexpr (use_diffuse_flux_mean_opacity) {
-			kappaFVec = ComputeDiffusionFluxMeanOpacity(kappaPVec, kappaEVec, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
+			kappaF = ComputeDiffusionFluxMeanOpacity(kappaP, kappaE, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
 										kappa_expo_and_lower_value[0]);
 		} else {
 			// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
 			// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't use this
 			// option anyway.
-			kappaFVec = kappaEVec;
+			kappaF = kappaE;
 		}
 	}
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaEAndKappaP(double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int const n_iter, amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaPVec, quokka::valarray<double, nGroups_> &kappaEVec, quokka::valarray<double, nGroups_> &kappaPoverE)
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaEAndKappaP(double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int const n_iter, amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaP, quokka::valarray<double, nGroups_> &kappaE, quokka::valarray<double, nGroups_> &kappaPoverE)
 {
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 		for (int g = 0; g < nGroups_; ++g) {
-			kappaPVec[g] = kappa_expo_and_lower_value[1][g];
-			kappaEVec[g] = kappa_expo_and_lower_value[1][g];
+			kappaP[g] = kappa_expo_and_lower_value[1][g];
+			kappaE[g] = kappa_expo_and_lower_value[1][g];
 		}
 	} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
 		amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
@@ -212,21 +212,21 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelBasedKappaEAndKappaP(dou
 				alpha_quant_minus_one[g] = -1.0;
 			}
 		}
-		kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
-		kappaEVec = kappaPVec;
+		kappaP = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
+		kappaE = kappaP;
 	} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 		if (n_iter < max_iter_to_update_alpha_E) {
 			alpha_B = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
 			alpha_E = ComputeRadQuantityExponents(Erad, rad_boundaries);
 		}
-		kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_B);
-		kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
+		kappaP = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_B);
+		kappaE = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
 	}
-	AMREX_ASSERT(!kappaPVec.hasnan());
-	AMREX_ASSERT(!kappaEVec.hasnan());
+	AMREX_ASSERT(!kappaP.hasnan());
+	AMREX_ASSERT(!kappaE.hasnan());
 	for (int g = 0; g < nGroups_; ++g) {
-		if (kappaEVec[g] > 0.0) {
-			kappaPoverE[g] = kappaPVec[g] / kappaEVec[g];
+		if (kappaE[g] > 0.0) {
+			kappaPoverE[g] = kappaP[g] / kappaE[g];
 		} else {
 			kappaPoverE[g] = 1.0;
 		}
