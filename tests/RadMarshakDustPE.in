@@ -26,8 +26,8 @@ radiation.dust_gas_interaction_coeff = 1e20
 # *****************************************************************
 # Problem
 # *****************************************************************
-problem.kappa1 			= 1e-20
-problem.kappa2 			= 1e-20
+problem.kappa1 			= 1e0
+problem.kappa2 			= 1e0
 
 do_reflux = 0
 do_subcycle = 0
