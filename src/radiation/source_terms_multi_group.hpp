@@ -145,7 +145,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 			result.F0 += cscale * Rvec[g];
 		}
 	}
-	// result.F0 -= PE_heating_energy_derivative * Erad[nGroups_ - 1];
+	result.F0 -= PE_heating_energy_derivative * Erad[nGroups_ - 1];
 
 	// const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
 	AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
@@ -158,6 +158,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 
 	result.J00 = 1.0;
 	result.J0g.fillin(cscale);
+	if (tau[nGroups_ - 1] <= 0.0) {
+		result.J0g[nGroups_ - 1] = LARGE;
+	} else {
+		result.J0g[nGroups_ - 1] -= PE_heating_energy_derivative * d_Eg_d_Rg[nGroups_ - 1];
+	}
 	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 	// const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 	const auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t * d_Td_d_T;
@@ -173,6 +178,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 			result.Jgg[g] = d_Eg_d_Rg[g] - 1.0;
 		}
 	}
+	result.Jgg[nGroups_ - 1] += rg[nGroups_ - 1] / cscale * PE_heating_energy_derivative * d_Eg_d_Rg[nGroups_ - 1];
+	result.Jg1 = rg - 1.0 / cscale * rg * result.J0g[nGroups_ - 1]; // note that this is the (nGroups_ - 1)th column, except for the (nGroups_ - 1)th row
 
 	return result;
 }
@@ -442,7 +449,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			break;
 		}
 
-#if 1
+#if 0
 		// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 		if (n == 0) {
 			std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0]
@@ -638,13 +645,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
-
-	// phtoelectric heating
-	double photoelectric_heating_rate = 0.0;
-	if constexpr (enable_photoelectric_heating_) {
-		const double num_den = rho / mean_molecular_mass_;
-		photoelectric_heating_rate = DefinePhotoelectricHeatingE1Derivative(T_gas, num_den);
-	}
 
 	if (dust_model == 2) {
 		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
