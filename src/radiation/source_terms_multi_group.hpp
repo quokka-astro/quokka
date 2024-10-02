@@ -1239,6 +1239,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
+	if (dust_model == 2) {
+		Egas_guess += PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
+	}
+
 	AMREX_ASSERT(Egas_guess > 0.0);
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 
@@ -1250,6 +1254,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates. NOLINT
 	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations. NOLINT
 	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations. NOLINT
+	if (dust_model == 2) {
+		amrex::Gpu::Atomic::Add(&p_iteration_counter[3], 1); // total number of decoupled gas-dust iterations. NOLINT
+	}
 
 	NewtonIterationResult<problem_t> result;
 
@@ -1588,17 +1595,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// the work term.
 
 				if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+					// gas + radiation
 					updated_energy =
 					    SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
 									    radBoundaries_g_copy, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
 					if constexpr (!enable_photoelectric_heating_) {
+						// gas + radiation + dust
 						updated_energy = SolveGasDustRadiationEnergyExchange(
 						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
 						    p_iteration_counter_local, p_iteration_failure_counter_local);
 					} else {
-						// auto ComputeJacobian = (dust_model == 1) ? &ComputeJacobianForGasAndDustWithPE :
-						// &ComputeJacobianForGasAndDustDecoupled; auto ComputeJacobian = &ComputeJacobianForGasAndDustDecoupledWithPE;
+						// gas + radiation + dust + photoelectric heating
 						updated_energy = SolveGasDustRadiationEnergyExchangeWithPE(
 						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
 						    p_iteration_counter_local, p_iteration_failure_counter_local);
