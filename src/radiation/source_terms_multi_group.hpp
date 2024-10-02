@@ -488,12 +488,31 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 #if 0
 		// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 		if (n == 0) {
-			std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0Vec[0] << ", tau0 = " << tau0[0]
-					<< "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+			std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << Erad0Vec[g];
+				if (g < nGroups_ - 1) { std::cout << ", "; }
+			}
+			std::cout << "], tau0 = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << tau0[g];
+				if (g < nGroups_ - 1) { std::cout << ", "; }
+			}
+			std::cout << "]";
+			std::cout << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << ", coeff_n = " << coeff_n << "\n";
 		} else if (n >= 0) {
-			std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << EradVec_guess[0]
-					<< ", tau = " << tau[0];
-			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << std::endl;
+			std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << EradVec_guess[g];
+				if (g < nGroups_ - 1) { std::cout << ", "; }
+			}
+			std::cout << "], tau = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << tau[g];
+				if (g < nGroups_ - 1) { std::cout << ", "; }
+			}
+			std::cout << "]";
+			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
 		}
 #endif
 
