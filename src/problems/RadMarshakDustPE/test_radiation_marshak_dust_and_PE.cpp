@@ -19,7 +19,7 @@ struct StreamingProblem {
 AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR
 AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
 
-constexpr bool dust_on = 0;
+constexpr bool dust_on = 1;
 
 constexpr double c = 1.0;    // speed of light
 constexpr double chat = 1.0; // reduced speed of light
@@ -28,17 +28,13 @@ constexpr double CV = 1.0;
 constexpr double mu = 1.5 / CV; // mean molecular weight
 constexpr double initial_T = 1.0;
 constexpr double a_rad = 1.0;
-constexpr double erad_floor = 1.0e-20;
-constexpr double T_rad_L = 1.0; // so EradL = 1e2
+constexpr double erad_floor = 1.0e-6;
+constexpr double T_rad_L = 1.0;
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
-// constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
 constexpr double T_end_exact = initial_T; // dust on
 
-// constexpr int n_group_ = 1;
-// static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 1e4};
-// static constexpr OpacityModel opacity_model_ = OpacityModel::single_group;
 constexpr int n_group_ = 2;
-static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 100, 1e4};
+static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 30, 1e4};
 static constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
@@ -233,8 +229,10 @@ auto problem_main() -> int
 		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = T_end_exact;
 
-		erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
-		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) : erad_floor;
+		// erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
+		// erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) : erad_floor;
+		erad1_exact.at(i) = 0.0;
+		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL : erad_floor;
 	}
 
 	double err_norm = 0.;
@@ -263,6 +261,7 @@ auto problem_main() -> int
 	std::map<std::string, std::string> plot_args2;
 	plot_args["label"] = "numerical solution";
 	plot_args2["label"] = "exact solution";
+	matplotlibcpp::ylim(-0.05, 1.05);
 	matplotlibcpp::plot(xs, erad1, plot_args);
 	matplotlibcpp::plot(xs, erad1_exact, plot_args2);
 	matplotlibcpp::xlabel("x");
@@ -275,6 +274,7 @@ auto problem_main() -> int
 	// Plot erad2
 	if (n_group_ > 1) {
 		matplotlibcpp::clf();
+		matplotlibcpp::ylim(-0.05, 1.05);
 		matplotlibcpp::plot(xs, erad2, plot_args);
 		matplotlibcpp::plot(xs, erad2_exact, plot_args2);
 		matplotlibcpp::xlabel("x");
