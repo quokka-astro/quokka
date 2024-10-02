@@ -172,8 +172,8 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho,
-							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho, const double Tgas)
+    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<double, nGroups_ + 1> exponents{};
 	amrex::GpuArray<double, nGroups_ + 1> kappa_lower{};
