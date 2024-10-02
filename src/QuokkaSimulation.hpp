@@ -1617,11 +1617,10 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		// new radiation state is stored in state_new_cc_
 		// new hydro state is stored in state_new_cc_ (always the case during radiation update)
 
-		amrex::Gpu::Buffer<int> iteration_failure_counter(
-		    {0, 0, 0}); // failure counter for: matter-radiation coupling, dust temperature, outer iteration
-		amrex::Gpu::Buffer<int> iteration_counter(
-		    {0, 0, 0,
-		     0}); // iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
+		// failure counter for: matter-radiation coupling, dust temperature, outer iteration
+		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0}); 
+		// iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
+		amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0, 0}); 
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
 		int *p_iteration_counter = iteration_counter.data();
 
@@ -1660,9 +1659,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		if (print_rad_counter_) {
 			auto h_iteration_counter = iteration_counter.copyToHost();
-			long global_solver_count = h_iteration_counter[0];	      // number of Newton-Raphson solvings
-			long global_iteration_sum = h_iteration_counter[1];	      // sum of Newton-Raphson iterations
-			int global_iteration_max = h_iteration_counter[2];	      // max number of Newton-Raphson iterations
+			long global_solver_count = h_iteration_counter[0];	          // number of Newton-Raphson solvings
+			long global_iteration_sum = h_iteration_counter[1];	          // sum of Newton-Raphson iterations
+			int global_iteration_max = h_iteration_counter[2];	          // max number of Newton-Raphson iterations
 			long global_decoupled_iteration_sum = h_iteration_counter[3]; // sum of decoupled gas-dust Newton-Raphson iterations
 
 			amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
