@@ -21,6 +21,7 @@ AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
 
 constexpr bool dust_on = 1;
 constexpr bool PE_on = 1;
+constexpr double gas_dust_coupling_threshold_ = 1.0e-4;
 
 constexpr double c = 1.0;    // speed of light
 constexpr double chat = 1.0; // reduced speed of light
@@ -68,7 +69,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 };
 
 template <> struct ISM_Traits<StreamingProblem> {
-	static constexpr double gas_dust_coupling_threshold = 1.0e-4;
+	static constexpr double gas_dust_coupling_threshold = gas_dust_coupling_threshold_;
 	static constexpr bool enable_photoelectric_heating = PE_on;
 };
 
