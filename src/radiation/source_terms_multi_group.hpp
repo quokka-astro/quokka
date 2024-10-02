@@ -289,8 +289,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	quokka::valarray<double, nGroups_> fourPiBoverC{};
 	amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge{};
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
-	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
 	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
+
+	// fill kappa_expo_and_lower_value with NAN to avoid mistakes caused by uninitialized values
+	for (int i = 0; i < 2; ++i) {
+		for (int j = 0; j < nGroups_ + 1; ++j) {
+			kappa_expo_and_lower_value[i][j] = NAN;
+		}
+	}
 
 	if constexpr (!(opacity_model_ == OpacityModel::piecewise_constant_opacity)) {
 		for (int g = 0; g < nGroups_; ++g) {
@@ -359,6 +366,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
 
 		ComputeAllOpacity(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n, alpha_B, alpha_E, kappaPVec, kappaEVec, kappaFVec, kappaPoverE, delta_nu_kappa_B_at_edge);
+		kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
 
 		// kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
 		// if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
