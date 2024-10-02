@@ -1425,7 +1425,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 
 		const double LHS = c_hat_ * dt * rho * sum(kappaEVec * Erad - kappaPVec * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d);
 
-		if (std::abs(LHS) < lambda_rel_tol * std::abs(Lambda_compare)) { // TODO: remove abs here
+		if (std::abs(LHS) < lambda_rel_tol * std::abs(Lambda_compare)) {
 			break;
 		}
 
