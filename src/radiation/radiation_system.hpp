@@ -337,7 +337,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
 	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static void ComputeAllOpacity(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int n_iter, amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaPVec, quokka::valarray<double, nGroups_> &kappaEVec, quokka::valarray<double, nGroups_> &kappaFVec, quokka::valarray<double, nGroups_> &kappaPoverE, amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge);
+	AMREX_GPU_DEVICE static void ComputeKappaFandDeltaTerms(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &kappaPVec, quokka::valarray<double, nGroups_> const &kappaEVec, quokka::valarray<double, nGroups_> &kappaFVec, amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge);
+
+	AMREX_GPU_DEVICE static void ComputeAllOpacity(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int n_iter, amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaPVec, quokka::valarray<double, nGroups_> &kappaEVec, quokka::valarray<double, nGroups_> &kappaPoverE);
 
 	template <typename JacobianFunc>
 	AMREX_GPU_DEVICE static auto
