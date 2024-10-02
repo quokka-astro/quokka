@@ -27,10 +27,9 @@ constexpr double rho0 = 1.0;
 constexpr double CV = 1.0;
 constexpr double mu = 1.5 / CV; // mean molecular weight
 constexpr double initial_T = 1.0;
-constexpr double a_rad = 1.0e10;
-constexpr double erad_floor = 1.0e-10;
-constexpr double initial_Trad = 1.0e-5;
-constexpr double T_rad_L = 1.0e-2; // so EradL = 1e2
+constexpr double a_rad = 1.0;
+constexpr double erad_floor = 1.0e-20;
+constexpr double T_rad_L = 1.0; // so EradL = 1e2
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
 // constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
 constexpr double T_end_exact = initial_T; // dust on
@@ -64,7 +63,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
-	static constexpr int beta_order = 0;
+	static constexpr int beta_order = 1;
 	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
 	static constexpr double energy_unit = 1.0;
 	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
@@ -72,19 +71,9 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 };
 
 template <> struct ISM_Traits<StreamingProblem> {
-	static constexpr double gas_dust_coupling_threshold = 1.0e20;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-4;
 	static constexpr bool enable_photoelectric_heating = 0;
 };
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return kappa1;
-}
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return kappa1;
-}
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
@@ -109,12 +98,11 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const auto Egas0 = initial_T * CV;
-	const auto Erads = RadSystem<StreamingProblem>::ComputeThermalRadiationMultiGroup(initial_Trad, radBoundaries_);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erads[g];
+			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad_floor;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
@@ -245,8 +233,8 @@ auto problem_main() -> int
 		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = T_end_exact;
 
-		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) : erad_floor;
 		erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
+		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) : erad_floor;
 	}
 
 	double err_norm = 0.;
