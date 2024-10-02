@@ -16,7 +16,7 @@
 struct StreamingProblem {
 };
 
-constexpr double PE_rate = 1.0; // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
+constexpr double PE_rate = 1.0;	       // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
 AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR
 AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
 
@@ -74,8 +74,8 @@ template <> struct ISM_Traits<StreamingProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<StreamingProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density) -> amrex::Real
+AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
+    -> amrex::Real
 {
 	return PE_rate;
 }

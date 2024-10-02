@@ -15,8 +15,7 @@
 // Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
 // Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/, double Egas_diff,
-								  quokka::valarray<double, nGroups_> const &Erad_diff,
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
 								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
 								  quokka::valarray<double, nGroups_> const &tau, double c_v,
 								  quokka::valarray<double, nGroups_> const &kappaPoverE,
@@ -127,10 +126,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 // Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
-    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0, 
-		double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec,
-    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/,
-    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0,
+    double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
+    quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/, quokka::valarray<double, nGroups_> const &kappaPoverE,
+    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -173,7 +172,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] <= 0.0) {
-			result.Jgg[g] = - LARGE;
+			result.Jgg[g] = -LARGE;
 		} else {
 			result.Jgg[g] = d_Eg_d_Rg[g] - 1.0;
 		}
@@ -231,8 +230,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
-    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter,
-    quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const dt,
+    amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+    quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
@@ -542,11 +542,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
-    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, 
-		double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter,
-    quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
-    int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
+    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, double const dt,
+    amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+    quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -800,9 +799,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		JacobianResult<problem_t> jacobian;
 
 		if (dust_model == 1) {
-			jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+			jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE,
+								d_fourpiboverc_d_t);
 		} else {
-			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt,
+									 kappaPoverE, d_fourpiboverc_d_t);
 		}
 
 		if constexpr (use_D_as_base) {
@@ -917,11 +918,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeWithPE(
-    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, 
-		double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter,
-    quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
-    int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
+    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, double const dt,
+    amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+    quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -1178,9 +1178,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		JacobianResult<problem_t> jacobian;
 
 		if (dust_model == 1) {
-			jacobian = ComputeJacobianForGasAndDustWithPE(T_gas, T_d, Egas_diff, EradVec_guess, Erad0Vec, PE_heating_energy_derivative, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+			jacobian = ComputeJacobianForGasAndDustWithPE(T_gas, T_d, Egas_diff, EradVec_guess, Erad0Vec, PE_heating_energy_derivative, Rvec, Src,
+								      coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
 		} else {
-			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, kappaPoverE, d_fourpiboverc_d_t);
+			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt,
+									 kappaPoverE, d_fourpiboverc_d_t);
 		}
 
 		if constexpr (use_D_as_base) {
@@ -1586,20 +1588,20 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				// the work term.
 
 				if constexpr (!enable_dust_gas_thermal_coupling_model_) {
-					updated_energy = SolveGasRadiationEnergyExchange(
-					    Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
-					    radBoundaries_g_copy, p_iteration_counter_local, p_iteration_failure_counter_local);
+					updated_energy =
+					    SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
+									    radBoundaries_g_copy, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
 					if constexpr (!enable_photoelectric_heating_) {
 						updated_energy = SolveGasDustRadiationEnergyExchange(
-								Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src,
-								radBoundaries_g_copy, p_iteration_counter_local, p_iteration_failure_counter_local);
+						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
+						    p_iteration_counter_local, p_iteration_failure_counter_local);
 					} else {
-						// auto ComputeJacobian = (dust_model == 1) ? &ComputeJacobianForGasAndDustWithPE : &ComputeJacobianForGasAndDustDecoupled;
-						// auto ComputeJacobian = &ComputeJacobianForGasAndDustDecoupledWithPE;
+						// auto ComputeJacobian = (dust_model == 1) ? &ComputeJacobianForGasAndDustWithPE :
+						// &ComputeJacobianForGasAndDustDecoupled; auto ComputeJacobian = &ComputeJacobianForGasAndDustDecoupledWithPE;
 						updated_energy = SolveGasDustRadiationEnergyExchangeWithPE(
-								Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src,
-								radBoundaries_g_copy, p_iteration_counter_local, p_iteration_failure_counter_local);
+						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
+						    p_iteration_counter_local, p_iteration_failure_counter_local);
 					}
 				}
 

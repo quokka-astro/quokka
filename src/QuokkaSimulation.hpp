@@ -1620,7 +1620,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		amrex::Gpu::Buffer<int> iteration_failure_counter(
 		    {0, 0, 0}); // failure counter for: matter-radiation coupling, dust temperature, outer iteration
 		amrex::Gpu::Buffer<int> iteration_counter(
-		    {0, 0, 0, 0}); // iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
+		    {0, 0, 0,
+		     0}); // iteration counter for: radiation update, Newton-Raphson iterations, max Newton-Raphson iterations, decoupled gas-dust update
 		int *p_iteration_failure_counter = iteration_failure_counter.data();
 		int *p_iteration_counter = iteration_counter.data();
 
@@ -1659,9 +1660,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		if (print_rad_counter_) {
 			auto h_iteration_counter = iteration_counter.copyToHost();
-			long global_solver_count = h_iteration_counter[0];  // number of Newton-Raphson solvings
-			long global_iteration_sum = h_iteration_counter[1]; // sum of Newton-Raphson iterations
-			int global_iteration_max = h_iteration_counter[2];  // max number of Newton-Raphson iterations
+			long global_solver_count = h_iteration_counter[0];	      // number of Newton-Raphson solvings
+			long global_iteration_sum = h_iteration_counter[1];	      // sum of Newton-Raphson iterations
+			int global_iteration_max = h_iteration_counter[2];	      // max number of Newton-Raphson iterations
 			long global_decoupled_iteration_sum = h_iteration_counter[3]; // sum of decoupled gas-dust Newton-Raphson iterations
 
 			amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
@@ -1679,10 +1680,10 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					    static_cast<double>(global_solver_count) / static_cast<double>(n_cells) / 2.0; // 2 stages
 					const double global_decoupled_iteration_mean =
 					    static_cast<double>(global_decoupled_iteration_sum) / static_cast<double>(global_solver_count);
-					amrex::Print() << "average number of Newton-Raphson solvings per IMEX stage is " << global_solving_mean
-						       << ", (mean, max) number of Newton-Raphson iterations are " << global_iteration_mean << ", "
-						       << global_iteration_max << ", mean number of decoupled gas-dust Newton-Raphson iterations is "
-									 << global_decoupled_iteration_mean << "\n";
+					amrex::Print()
+					    << "average number of Newton-Raphson solvings per IMEX stage is " << global_solving_mean
+					    << ", (mean, max) number of Newton-Raphson iterations are " << global_iteration_mean << ", " << global_iteration_max
+					    << ", mean number of decoupled gas-dust Newton-Raphson iterations is " << global_decoupled_iteration_mean << "\n";
 				}
 			}
 		}
