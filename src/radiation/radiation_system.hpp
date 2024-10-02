@@ -527,6 +527,8 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqsWithLastColumn(Ja
 	for (int g = 0; g < pe_index; ++g) {
 		xi[g] = (jacobian.Fg[g] - jacobian.Jg0[g] * x0 - jacobian.Jg1[g] * x1) / jacobian.Jgg[g];
 	}
+	x0 *= -1.0;
+	xi *= -1.0;
 }
 
 
