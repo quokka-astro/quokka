@@ -16,6 +16,7 @@
 struct StreamingProblem {
 };
 
+constexpr double PE_rate = 1.0; // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
 AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR
 AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
 
@@ -33,7 +34,6 @@ constexpr double a_rad = 1.0;
 constexpr double erad_floor = 1.0e-6;
 constexpr double T_rad_L = 1.0;
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
-constexpr double T_end_exact = initial_T; // dust on
 
 constexpr int n_group_ = 2;
 static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 30, 1e4};
@@ -77,11 +77,7 @@ template <>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<StreamingProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density) -> amrex::Real
 {
-	// const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
-	// const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
-	// const double coeff = 1.33e-24;
-	// return coeff * epsilon * num_density / ref_J_ISR; // s^-1
-	return 0.0;
+	return PE_rate;
 }
 
 template <>
@@ -240,12 +236,10 @@ auto problem_main() -> int
 		}
 		const double e_gas = values.at(RadSystem<StreamingProblem>::gasInternalEnergy_index)[i];
 		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
-		T_exact.at(i) = T_end_exact;
+		T_exact.at(i) = x < c * sim.tNew_[0] ? initial_T + PE_rate * (sim.tNew_[0] - x / c) : initial_T;
 
-		// erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
-		// erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) : erad_floor;
 		erad1_exact.at(i) = 0.0;
-		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL : erad_floor;
+		erad2_exact.at(i) = x < c * sim.tNew_[0] ? EradL : erad_floor;
 	}
 
 	double err_norm = 0.;
@@ -300,7 +294,7 @@ auto problem_main() -> int
 
 	// plot temperature
 	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 1.1);
+	matplotlibcpp::ylim(0.0, 2.1);
 	matplotlibcpp::plot(xs, T, plot_args);
 	matplotlibcpp::plot(xs, T_exact, plot_args2);
 	matplotlibcpp::xlabel("x");
