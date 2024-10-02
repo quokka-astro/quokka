@@ -337,9 +337,18 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
 	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static void ComputeModelDependentKappaFAndDeltaTerms(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &kappaP, quokka::valarray<double, nGroups_> const &kappaE, quokka::valarray<double, nGroups_> &kappaF, amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge);
+	AMREX_GPU_DEVICE static void ComputeModelDependentKappaFAndDeltaTerms(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+									      quokka::valarray<double, nGroups_> const &fourPiBoverC,
+									      quokka::valarray<double, nGroups_> const &kappaP,
+									      quokka::valarray<double, nGroups_> const &kappaE,
+									      quokka::valarray<double, nGroups_> &kappaF,
+									      amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge);
 
-	AMREX_GPU_DEVICE static void ComputeModelDependentKappaEAndKappaP(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int n_iter, amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaP, quokka::valarray<double, nGroups_> &kappaE, quokka::valarray<double, nGroups_> &kappaPoverE);
+	AMREX_GPU_DEVICE static void ComputeModelDependentKappaEAndKappaP(
+	    double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
+	    quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int n_iter,
+	    amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaP,
+	    quokka::valarray<double, nGroups_> &kappaE, quokka::valarray<double, nGroups_> &kappaPoverE);
 
 	template <typename JacobianFunc>
 	AMREX_GPU_DEVICE static auto

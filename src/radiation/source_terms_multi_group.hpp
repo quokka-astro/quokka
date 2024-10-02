@@ -160,10 +160,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 	return result;
 }
 
-// Compute kappaF and the delta_nu_kappa_B_at_edge term. kappaF is used to compute the work term and the delta_nu_kappa_B_at_edge term is used to compute the transport between groups in the momentum function.
-// Only the last two arguments (kappaFVec, delta_nu_kappa_B_at_edge) are modified in this function.
+// Compute kappaF and the delta_nu_kappa_B_at_edge term. kappaF is used to compute the work term and the delta_nu_kappa_B_at_edge term is used to compute the
+// transport between groups in the momentum function. Only the last two arguments (kappaFVec, delta_nu_kappa_B_at_edge) are modified in this function.
 template <typename problem_t>
-AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &kappaP, quokka::valarray<double, nGroups_> const &kappaE, quokka::valarray<double, nGroups_> &kappaF, amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge)
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(
+    double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, quokka::valarray<double, nGroups_> const &fourPiBoverC,
+    quokka::valarray<double, nGroups_> const &kappaP, quokka::valarray<double, nGroups_> const &kappaE, quokka::valarray<double, nGroups_> &kappaF,
+    amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge)
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
@@ -182,7 +185,7 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaT
 	} else {
 		if constexpr (use_diffuse_flux_mean_opacity) {
 			kappaF = ComputeDiffusionFluxMeanOpacity(kappaP, kappaE, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
-										kappa_expo_and_lower_value[0]);
+								 kappa_expo_and_lower_value[0]);
 		} else {
 			// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
 			// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't use this
@@ -194,7 +197,11 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaT
 
 // Compute kappaE and kappaP based on the opacity model. The result is stored in the last five arguments: alpha_B, alpha_E, kappaP, kappaE, and kappaPoverE.
 template <typename problem_t>
-AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP(double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios, quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int const n_iter, amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaP, quokka::valarray<double, nGroups_> &kappaE, quokka::valarray<double, nGroups_> &kappaPoverE)
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP(
+    double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
+    quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int const n_iter,
+    amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaP,
+    quokka::valarray<double, nGroups_> &kappaE, quokka::valarray<double, nGroups_> &kappaPoverE)
 {
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
@@ -368,12 +375,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
 
-		ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n, alpha_B, alpha_E, kappaPVec, kappaEVec, kappaPoverE);
+		ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n, alpha_B, alpha_E, kappaPVec,
+						     kappaEVec, kappaPoverE);
 
 		if (n == 0) {
 			// Compute kappaF and the delta_nu_kappa_B term. kappaF is used to compute the work term.
 			// Only the last two arguments (kappaFVec, delta_nu_kappa_B_at_edge) are modified in this function.
-			ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, kappaPVec, kappaEVec, kappaFVec, delta_nu_kappa_B_at_edge);
+			ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, kappaPVec, kappaEVec, kappaFVec,
+								 delta_nu_kappa_B_at_edge);
 		}
 
 		// 3. In the first loop, calculate kappaF, work, tau0, R
