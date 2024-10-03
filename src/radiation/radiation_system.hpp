@@ -92,18 +92,27 @@ struct RadPressureResult {
 	double S;		       // maximum wavespeed for the radiation system
 };
 
+// A struct to hold the opacity terms for the radiation-matter energy exchange, containing the following elements:
+// kappaE, kappaP, kappaF, kappaPoverE, delta_nu_kappa_B_at_edge, alpha_P, alpha_E
+template <typename problem_t> struct OpacityTerms {
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaE;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaP;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaF;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPoverE;
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa * B)
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_P;
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
+};
+
 // A struct to hold the results of the Newton-Raphson iteration for energy update, containing the following elements:
-// Egas, T_gas, T_d, EradVec, kappaPVec, kappaEVec, kappaFVec, work, delta_nu_kappa_B_at_edge
+// Egas, T_gas, T_d, EradVec, work, opacity_terms
 template <typename problem_t> struct NewtonIterationResult {
-	double Egas;									      // gas internal energy
-	double T_gas;									      // gas temperature
-	double T_d;									      // dust temperature
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec;		      // radiation energy density
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec;		      // Planck mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec;		      // energy mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec;		      // flux mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;		      // work term
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa_B * B)
+	double Egas;							      // gas internal energy
+	double T_gas;							      // gas temperature
+	double T_d;							      // dust temperature
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;    // work term
+	OpacityTerms<problem_t> opacity_terms;
 };
 
 // A struct to hold the results of ComputeJacobian functions, containing the following elements:
@@ -336,6 +345,17 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
 	    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
 	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+
+	AMREX_GPU_DEVICE static void ComputeModelDependentKappaFAndDeltaTerms(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+									      quokka::valarray<double, nGroups_> const &fourPiBoverC,
+									      OpacityTerms<problem_t> &opacity_terms);
+
+	AMREX_GPU_DEVICE static auto ComputeModelDependentKappaEAndKappaP(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+									  amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
+									  quokka::valarray<double, nGroups_> const &fourPiBoverC,
+									  quokka::valarray<double, nGroups_> const &Erad, int n_iter,
+									  amrex::GpuArray<double, nGroups_> const &alpha_E,
+									  amrex::GpuArray<double, nGroups_> const &alpha_P) -> OpacityTerms<problem_t>;
 
 	template <typename JacobianFunc>
 	AMREX_GPU_DEVICE static auto
@@ -1336,9 +1356,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
 				kappaEVec = kappaPVec;
 			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-				const auto alpha_B = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
+				const auto alpha_P = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
 				const auto alpha_E = ComputeRadQuantityExponents(Erad, rad_boundaries);
-				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_B);
+				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_P);
 				kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
 			}
 		}
