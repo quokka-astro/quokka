@@ -541,13 +541,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 	result.Egas = Egas_guess;
 	result.EradVec = EradVec_guess;
-	// result.kappaPVec = opacity_terms.kappaP;
-	// result.kappaEVec = opacity_terms.kappaE;
-	// result.kappaFVec = opacity_terms.kappaF;
 	result.work = work_local;
 	result.T_gas = T_gas;
 	result.T_d = T_d;
-	// result.delta_nu_kappa_B_at_edge = opacity_terms.delta_nu_kappa_B_at_edge;
 	result.opacity_terms = opacity_terms;
 	return result;
 }

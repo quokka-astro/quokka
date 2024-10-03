@@ -86,6 +86,14 @@ template <typename problem_t> struct ISM_Traits {
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 };
 
+// A struct to hold the results of the ComputeRadPressure function.
+struct RadPressureResult {
+	quokka::valarray<double, 4> F; // components of radiation pressure tensor
+	double S;		       // maximum wavespeed for the radiation system
+};
+
+// A struct to hold the opacity terms for the radiation-matter energy exchange, containing the following elements:
+// kappaE, kappaP, kappaF, kappaPoverE, delta_nu_kappa_B_at_edge, alpha_P, alpha_E
 template <typename problem_t> struct OpacityTerms {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaE;
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaP;
@@ -96,24 +104,14 @@ template <typename problem_t> struct OpacityTerms {
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
 };
 
-// A struct to hold the results of the ComputeRadPressure function.
-struct RadPressureResult {
-	quokka::valarray<double, 4> F; // components of radiation pressure tensor
-	double S;		       // maximum wavespeed for the radiation system
-};
-
 // A struct to hold the results of the Newton-Raphson iteration for energy update, containing the following elements:
-// Egas, T_gas, T_d, EradVec, kappaPVec, kappaEVec, kappaFVec, work, delta_nu_kappa_B_at_edge
+// Egas, T_gas, T_d, EradVec, work, opacity_terms
 template <typename problem_t> struct NewtonIterationResult {
 	double Egas;									      // gas internal energy
 	double T_gas;									      // gas temperature
 	double T_d;									      // dust temperature
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec;		      // radiation energy density
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;		      // work term
-	// quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec;		      // Planck mean opacity
-	// quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec;		      // energy mean opacity
-	// quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec;		      // flux mean opacity
-	// amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa_B * B)
 	OpacityTerms<problem_t> opacity_terms;
 };
 
