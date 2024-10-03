@@ -107,11 +107,11 @@ template <typename problem_t> struct OpacityTerms {
 // A struct to hold the results of the Newton-Raphson iteration for energy update, containing the following elements:
 // Egas, T_gas, T_d, EradVec, work, opacity_terms
 template <typename problem_t> struct NewtonIterationResult {
-	double Egas;									      // gas internal energy
-	double T_gas;									      // gas temperature
-	double T_d;									      // dust temperature
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec;		      // radiation energy density
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;		      // work term
+	double Egas;							      // gas internal energy
+	double T_gas;							      // gas temperature
+	double T_d;							      // dust temperature
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;    // work term
 	OpacityTerms<problem_t> opacity_terms;
 };
 

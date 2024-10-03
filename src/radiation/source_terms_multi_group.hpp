@@ -597,7 +597,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 				double Planck_term = NAN;
 
 				if constexpr (include_delta_B) {
-					Planck_term = energy.opacity_terms.kappaP[g] * fourPiBoverC[g] - 1.0 / 3.0 * energy.opacity_terms.delta_nu_kappa_B_at_edge[g];
+					Planck_term =
+					    energy.opacity_terms.kappaP[g] * fourPiBoverC[g] - 1.0 / 3.0 * energy.opacity_terms.delta_nu_kappa_B_at_edge[g];
 				} else {
 					Planck_term = energy.opacity_terms.kappaP[g] * fourPiBoverC[g];
 				}
@@ -660,7 +661,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 				} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum ||
 						     opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
 					energy.work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) *
-							 (1.0 + kappa_expo_and_lower_value[0][g]) * energy.opacity_terms.kappaF[g] * chat / (c_light_ * c_light_) * dt;
+							 (1.0 + kappa_expo_and_lower_value[0][g]) * energy.opacity_terms.kappaF[g] * chat /
+							 (c_light_ * c_light_) * dt;
 				}
 			}
 		} else {
@@ -676,8 +678,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 			} else {
 				// compute energyLossFractions
 				for (int g = 0; g < nGroups_; ++g) {
-					energyLossFractions[g] =
-					    energy.opacity_terms.kappaF[g] * (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]);
+					energyLossFractions[g] = energy.opacity_terms.kappaF[g] *
+								 (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]);
 				}
 				auto energyLossFractionsTot = sum(energyLossFractions);
 				if (energyLossFractionsTot != 0.0) {
