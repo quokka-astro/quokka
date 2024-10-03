@@ -40,6 +40,8 @@
 
 using Real = amrex::Real;
 
+static constexpr double const_kappa = 1.0;
+
 static constexpr int n_group_in_rhs = 1;
 
 // Hyper parameters for the radiation solver
@@ -1369,30 +1371,21 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
+#if 1
 // template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE
 void rhs_specie(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X) {
 	Real const Tdust = state.T;
 	Real const rho = state.rho;
 
-	// // Radiation
-	// const auto fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
-	// const auto kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
-	// const auto kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
-
-	// // <ydot>
-	// for (int g = 0; g < n_group_in_rhs; ++g) {
-	// 	ydot(g + 1) = RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
-	// }
-
-	const Real chat = 1.0e8;
+	const Real c = 1.0;
 	const Real a_rad = 1.0;
-	const Real kappa0 = 1.0e5;
+	const Real kappa0 = 1.0;
 	const Real kappa_B = kappa0;
 	const Real kappa_E = kappa0;
 	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
 
-	ydot(1) = chat * rho * (kappa_B * fourPiBoverc - kappa_E * X(0));
+	ydot(1) = c * (kappa_B * fourPiBoverc - kappa_E * X(0));
 }
 
 // template <typename problem_t>
@@ -1401,67 +1394,111 @@ Real rhs_eint(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
 	Real Tdust = state.T;
 	Real rho = state.rho;
 
-	// // Assuming NumSpec - 1 = neqs
-	// const amrex::GpuArray<Real, n_group_in_rhs> fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
-	// const amrex::GpuArray<Real, n_group_in_rhs> kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
-	// const amrex::GpuArray<Real, n_group_in_rhs> kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
-
-	// Real edot = 0.0;
-	// for (int g = 0; g < n_group_in_rhs; ++g) {
-	// 	edot += - RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
-	// }
-
-	const Real chat = 1.0e8;
+	const Real chat = 1.0;
 	const Real a_rad = 1.0;
-	const Real kappa0 = 1.0e5;
+	const Real kappa0 = 1.0;
 	const Real kappa_B = kappa0;
 	const Real kappa_E = kappa0;
 	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
 
-	const Real edot = - chat * rho * (kappa_B * fourPiBoverc - kappa_E * X(0));
+	const Real edot = - chat * (kappa_B * fourPiBoverc - kappa_E * X(0));
 
   return edot;
 }
 
-// template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE
-void rhs_specie_shock(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X) {
-	Real const Tdust = state.T;
-	Real const rho = state.rho;
+// // template <typename problem_t>
+// AMREX_GPU_HOST_DEVICE AMREX_INLINE
+// void rhs_specie(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X) {
+// 	Real const Tdust = state.T;
+// 	Real const rho = state.rho;
 
-	const double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
-	const double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
-	const double c_s0 = 1.0;		 // adiabatic sound speed
-	const double Mach0 = 3.0;
-	const double v0 = (Mach0 * c_s0);
-	const double chat = 10.0 * (v0 + c_s0); // reduced speed of light
-	const double sigma_a = 1.0e6; // absorption cross section
-	const amrex::Real kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
-	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+// 	// // Radiation
+// 	// const auto fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
+// 	// const auto kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
+// 	// const auto kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
 
-	ydot(1) = c * kappa * (fourPiBoverc - X(0));
-}
+// 	// // <ydot>
+// 	// for (int g = 0; g < n_group_in_rhs; ++g) {
+// 	// 	ydot(g + 1) = RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
+// 	// }
 
-// template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE
-Real rhs_eint_shock(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
-	Real Tdust = state.T;
-	Real rho = state.rho;
+// 	const Real chat = 1.0e8;
+// 	const Real a_rad = 1.0;
+// 	const Real kappa0 = 1.0e5;
+// 	const Real kappa_B = kappa0;
+// 	const Real kappa_E = kappa0;
+// 	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
 
-	const double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
-	const double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
-	const double c_s0 = 1.0;		 // adiabatic sound speed
-	const double Mach0 = 3.0;
-	const double v0 = (Mach0 * c_s0);
-	const double chat = 10.0 * (v0 + c_s0); // reduced speed of light
-	const double sigma_a = 1.0e6; // absorption cross section
-	const amrex::Real kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
-	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+// 	ydot(1) = chat * rho * (kappa_B * fourPiBoverc - kappa_E * X(0));
+// }
 
-	const Real edot = - chat * kappa * (fourPiBoverc - X(0));
+// // template <typename problem_t>
+// AMREX_GPU_HOST_DEVICE AMREX_INLINE
+// Real rhs_eint(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
+// 	Real Tdust = state.T;
+// 	Real rho = state.rho;
 
-  return edot;
-}
+// 	// // Assuming NumSpec - 1 = neqs
+// 	// const amrex::GpuArray<Real, n_group_in_rhs> fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
+// 	// const amrex::GpuArray<Real, n_group_in_rhs> kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
+// 	// const amrex::GpuArray<Real, n_group_in_rhs> kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
+
+// 	// Real edot = 0.0;
+// 	// for (int g = 0; g < n_group_in_rhs; ++g) {
+// 	// 	edot += - RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
+// 	// }
+
+// 	const Real chat = 1.0e8;
+// 	const Real a_rad = 1.0;
+// 	const Real kappa0 = 1.0e5;
+// 	const Real kappa_B = kappa0;
+// 	const Real kappa_E = kappa0;
+// 	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+
+// 	const Real edot = - chat * rho * (kappa_B * fourPiBoverc - kappa_E * X(0));
+
+//   return edot;
+// }
+
+// // template <typename problem_t>
+// AMREX_GPU_HOST_DEVICE AMREX_INLINE
+// void rhs_specie(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X) {
+// 	Real const Tdust = state.T;
+// 	Real const rho = state.rho;
+
+// 	const double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
+// 	const double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
+// 	const double c_s0 = 1.0;		 // adiabatic sound speed
+// 	const double Mach0 = 3.0;
+// 	const double v0 = (Mach0 * c_s0);
+// 	const double chat = 10.0 * (v0 + c_s0); // reduced speed of light
+// 	const double sigma_a = 1.0e6; // absorption cross section
+// 	const amrex::Real kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
+// 	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+
+// 	ydot(1) = c * kappa * (fourPiBoverc - X(0));
+// }
+
+// // template <typename problem_t>
+// AMREX_GPU_HOST_DEVICE AMREX_INLINE
+// Real rhs_eint(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
+// 	Real Tdust = state.T;
+// 	Real rho = state.rho;
+
+// 	const double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
+// 	const double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
+// 	const double c_s0 = 1.0;		 // adiabatic sound speed
+// 	const double Mach0 = 3.0;
+// 	const double v0 = (Mach0 * c_s0);
+// 	const double chat = 10.0 * (v0 + c_s0); // reduced speed of light
+// 	const double sigma_a = 1.0e6; // absorption cross section
+// 	const amrex::Real kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
+// 	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+
+// 	const Real edot = - chat * kappa * (fourPiBoverc - X(0));
+
+//   return edot;
+// }
 
 // template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE
@@ -1507,14 +1544,14 @@ void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
 
 	// YDOTS and Edot
 
-	// rhs_specie(state, ydot, X);
-	// Real edot = rhs_eint(state, X);
+	rhs_specie(state, ydot, X);
+	Real edot = rhs_eint(state, X);
 
 	// rhs_specie_marshak(state, ydot, X);
 	// Real edot = rhs_eint_marshak(state, X);
 
-	rhs_specie_shock(state, ydot, X);
-	Real edot = rhs_eint_shock(state, X);
+	// rhs_specie_shock(state, ydot, X);
+	// Real edot = rhs_eint_shock(state, X);
 
 	// rhs_specie<problem_t>(state, ydot, X);
 	// Real edot = rhs_eint<problem_t>(state, X);
@@ -1522,6 +1559,7 @@ void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
 	// Append the energy equation (this is erg/g/s)
 	ydot(net_ienuc) = edot;
 }
+#endif
 
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export

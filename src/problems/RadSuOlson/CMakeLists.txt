@@ -1,3 +1,7 @@
+# Include all subdirectories under ../../../extern/Microphysics/integration
+include_directories(../../../extern/Microphysics/integration)
+include_directories(../../../extern/Microphysics/integration/VODE)
+include_directories(../../../extern/Microphysics/integration/utils)
 
 add_executable(test_radiation_SuOlson test_radiation_SuOlson.cpp ../../util/fextract.cpp ../../math/interpolate.cpp ${QuokkaObjSources})
 
