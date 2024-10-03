@@ -165,8 +165,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 template <typename problem_t>
 AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(
     double const T, double const rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, quokka::valarray<double, nGroups_> const &fourPiBoverC,
-    quokka::valarray<double, nGroups_> const &kappaP, quokka::valarray<double, nGroups_> const &kappaE, quokka::valarray<double, nGroups_> &kappaF,
-    amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge)
+		OpacityTerms<problem_t> &opacity_terms)
 {
 	amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge{};
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
@@ -177,20 +176,20 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaT
 		auto const B_R = PlanckFunction(nu_R, T); // 4 pi B(nu) / c
 		auto const kappa_L = kappa_expo_and_lower_value[1][g];
 		auto const kappa_R = kappa_L * std::pow(nu_R / nu_L, kappa_expo_and_lower_value[0][g]);
-		delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
+		opacity_terms.delta_nu_kappa_B_at_edge[g] = nu_R * kappa_R * B_R - nu_L * kappa_L * B_L;
 		delta_nu_B_at_edge[g] = nu_R * B_R - nu_L * B_L;
 	}
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-		kappaF = kappaP;
+		opacity_terms.kappaF = opacity_terms.kappaP;
 	} else {
 		if constexpr (use_diffuse_flux_mean_opacity) {
-			kappaF = ComputeDiffusionFluxMeanOpacity(kappaP, kappaE, fourPiBoverC, delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
+			opacity_terms.kappaF = ComputeDiffusionFluxMeanOpacity(opacity_terms.kappaP, opacity_terms.kappaE, fourPiBoverC, opacity_terms.delta_nu_kappa_B_at_edge, delta_nu_B_at_edge,
 								 kappa_expo_and_lower_value[0]);
 		} else {
 			// for simplicity, I assume kappaF = kappaE when opacity_model_ ==
 			// OpacityModel::PPL_opacity_full_spectrum, if !use_diffuse_flux_mean_opacity. We won't use this
 			// option anyway.
-			kappaF = kappaE;
+			opacity_terms.kappaF = opacity_terms.kappaE;
 		}
 	}
 }
@@ -207,8 +206,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP
 	const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T);
 
 	if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-		result.kappaP = kappa_expo_and_lower_value[1];
-		result.kappaE = kappa_expo_and_lower_value[1];
+		for (int g = 0; g < nGroups_; ++g) {
+			result.kappaP[g] = kappa_expo_and_lower_value[1][g];
+			result.kappaE[g] = kappa_expo_and_lower_value[1][g];
+		}
 	} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
 		amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
 		if constexpr (!special_edge_bin_slopes) {
@@ -295,15 +296,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	quokka::valarray<double, nGroups_> delta_R{};
 	quokka::valarray<double, nGroups_> F_D{};
 	quokka::valarray<double, nGroups_> Rvec{};
-	quokka::valarray<double, nGroups_> kappaFVec{};
 	quokka::valarray<double, nGroups_> tau0{};	 // optical depth across c * dt at old state
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
 	quokka::valarray<double, nGroups_> work_local{}; // work term used in the Newton-Raphson iteration of the current outer iteration
 	quokka::valarray<double, nGroups_> fourPiBoverC{};
-	amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge{};
 	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
-	OpacityTerms<problem_t> opacity_result{};
+	OpacityTerms<problem_t> opacity_terms{};
 
 	// fill kappa_expo_and_lower_value with NAN to avoid mistakes caused by uninitialized values
 	for (int i = 0; i < 2; ++i) {
@@ -374,13 +373,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 
 		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
 
-		opacity_result = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n, opacity_result.alpha_E, opacity_result.alpha_B);
+		opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n, opacity_terms.alpha_E, opacity_terms.alpha_B);
 
 		if (n == 0) {
 			// Compute kappaF and the delta_nu_kappa_B term. kappaF is used to compute the work term.
 			// Only the last two arguments (kappaFVec, delta_nu_kappa_B_at_edge) are modified in this function.
-			ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, opacity_result.kappaP, opacity_result.kappaE, kappaFVec,
-								 delta_nu_kappa_B_at_edge);
+			ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, opacity_terms); // update opacity_terms in place
 		}
 
 		// 3. In the first loop, calculate kappaF, work, tau0, R
@@ -393,11 +391,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 				if (n_outer_iter == 0) {
 					for (int g = 0; g < nGroups_; ++g) {
 						if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-							work_local[g] = vel_times_F[g] * kappaFVec[g] * chat / (c * c) * dt;
+							work_local[g] = vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt;
 						} else {
 							kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
 							work_local[g] =
-							    vel_times_F[g] * kappaFVec[g] * chat / (c * c) * dt * (1.0 + kappa_expo_and_lower_value[0][g]);
+							    vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt * (1.0 + kappa_expo_and_lower_value[0][g]);
 						}
 					}
 				} else {
@@ -408,9 +406,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 				work_local.fillin(0.0);
 			}
 
-			tau0 = dt * rho * opacity_result.kappaP * chat;
+			tau0 = dt * rho * opacity_terms.kappaP * chat;
 			tau = tau0;
-			Rvec = (fourPiBoverC - EradVec_guess / opacity_result.kappaPoverE) * tau0 + work_local;
+			Rvec = (fourPiBoverC - EradVec_guess / opacity_terms.kappaPoverE) * tau0 + work_local;
 			if constexpr (use_D_as_base) {
 				// tau0 is used as a scaling factor for Rvec
 				for (int g = 0; g < nGroups_; ++g) {
@@ -420,11 +418,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 				}
 			}
 		} else { // in the second and later loops, calculate tau and E (given R)
-			tau = dt * rho * opacity_result.kappaP * chat;
+			tau = dt * rho * opacity_terms.kappaP * chat;
 			for (int g = 0; g < nGroups_; ++g) {
 				// If tau = 0.0, Erad_guess shouldn't change
 				if (tau[g] > 0.0) {
-					EradVec_guess[g] = opacity_result.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
+					EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
 					if constexpr (force_rad_floor_in_iteration) {
 						if (EradVec_guess[g] < 0.0) {
 							Egas_guess -= cscale * (Erad_floor_ - EradVec_guess[g]);
@@ -443,7 +441,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
 		JacobianResult<problem_t> jacobian;
 
-		jacobian = ComputeJacobian(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, opacity_result.kappaPoverE, d_fourpiboverc_d_t);
+		jacobian = ComputeJacobian(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt, opacity_terms.kappaPoverE, d_fourpiboverc_d_t);
 
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
@@ -535,18 +533,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveMatterRadiationEnergyExchange(
 	if (n > 0) {
 		// calculate kappaF since the temperature has changed
 		// Only the last two arguments (kappaFVec, delta_nu_kappa_B_at_edge) are modified in this function.
-		ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, opacity_result.kappaP, opacity_result.kappaE, kappaFVec, delta_nu_kappa_B_at_edge);
+		ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, opacity_terms); // update opacity_terms in place
 	}
 
 	result.Egas = Egas_guess;
 	result.EradVec = EradVec_guess;
-	result.kappaPVec = opacity_result.kappaP;
-	result.kappaEVec = opacity_result.kappaE;
-	result.kappaFVec = kappaFVec;
+	result.kappaPVec = opacity_terms.kappaP;
+	result.kappaEVec = opacity_terms.kappaE;
+	result.kappaFVec = opacity_terms.kappaF;
 	result.work = work_local;
 	result.T_gas = T_gas;
 	result.T_d = T_d;
-	result.delta_nu_kappa_B_at_edge = delta_nu_kappa_B_at_edge;
+	result.delta_nu_kappa_B_at_edge = opacity_terms.delta_nu_kappa_B_at_edge;
 	return result;
 }
 

@@ -89,7 +89,9 @@ template <typename problem_t> struct ISM_Traits {
 template <typename problem_t> struct OpacityTerms {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaE;
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaP;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaF;
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPoverE;
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa * B)
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_B;
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
 };
@@ -346,11 +348,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
 	AMREX_GPU_DEVICE static void ComputeModelDependentKappaFAndDeltaTerms(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-									      quokka::valarray<double, nGroups_> const &fourPiBoverC,
-									      quokka::valarray<double, nGroups_> const &kappaP,
-									      quokka::valarray<double, nGroups_> const &kappaE,
-									      quokka::valarray<double, nGroups_> &kappaF,
-									      amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge);
+									      quokka::valarray<double, nGroups_> const &fourPiBoverC, OpacityTerms<problem_t> &opacity_terms);
 
 	AMREX_GPU_DEVICE static auto ComputeModelDependentKappaEAndKappaP(
 			double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
