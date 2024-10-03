@@ -92,7 +92,7 @@ template <typename problem_t> struct OpacityTerms {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaF;
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPoverE;
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa * B)
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_B;
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_P;
 	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
 };
 
@@ -1354,9 +1354,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
 				kappaEVec = kappaPVec;
 			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-				const auto alpha_B = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
+				const auto alpha_P = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
 				const auto alpha_E = ComputeRadQuantityExponents(Erad, rad_boundaries);
-				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_B);
+				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_P);
 				kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
 			}
 		}
