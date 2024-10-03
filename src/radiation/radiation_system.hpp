@@ -109,11 +109,12 @@ template <typename problem_t> struct NewtonIterationResult {
 	double T_gas;									      // gas temperature
 	double T_d;									      // dust temperature
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec;		      // radiation energy density
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec;		      // Planck mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec;		      // energy mean opacity
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec;		      // flux mean opacity
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;		      // work term
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa_B * B)
+	// quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPVec;		      // Planck mean opacity
+	// quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaEVec;		      // energy mean opacity
+	// quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaFVec;		      // flux mean opacity
+	// amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa_B * B)
+	OpacityTerms<problem_t> opacity_terms;
 };
 
 // A struct to hold the results of ComputeJacobian functions, containing the following elements:
