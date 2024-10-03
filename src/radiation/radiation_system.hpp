@@ -86,6 +86,14 @@ template <typename problem_t> struct ISM_Traits {
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 };
 
+template <typename problem_t> struct OpacityTerms {
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaE;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaP;
+	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPoverE;
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_B;
+	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
+};
+
 // A struct to hold the results of the ComputeRadPressure function.
 struct RadPressureResult {
 	quokka::valarray<double, 4> F; // components of radiation pressure tensor
@@ -344,11 +352,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									      quokka::valarray<double, nGroups_> &kappaF,
 									      amrex::GpuArray<double, nGroups_> &delta_nu_kappa_B_at_edge);
 
-	AMREX_GPU_DEVICE static void ComputeModelDependentKappaEAndKappaP(
-	    double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
-	    quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int n_iter,
-	    amrex::GpuArray<double, nGroups_> &alpha_B, amrex::GpuArray<double, nGroups_> &alpha_E, quokka::valarray<double, nGroups_> &kappaP,
-	    quokka::valarray<double, nGroups_> &kappaE, quokka::valarray<double, nGroups_> &kappaPoverE);
+	AMREX_GPU_DEVICE static auto ComputeModelDependentKappaEAndKappaP(
+			double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
+			quokka::valarray<double, nGroups_> const &fourPiBoverC, quokka::valarray<double, nGroups_> const &Erad, int n_iter,
+			amrex::GpuArray<double, nGroups_> const &alpha_E, amrex::GpuArray<double, nGroups_> const &alpha_P) -> OpacityTerms<problem_t>;
 
 	template <typename JacobianFunc>
 	AMREX_GPU_DEVICE static auto
