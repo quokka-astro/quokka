@@ -1,6 +1,6 @@
 // IWYU pragma: private; include "radiation/radiation_system.hpp"
-#ifndef RADIATION_SOURCE_TERMS_IMPERFECTLY_COUPLED_DUST_HPP_
-#define RADIATION_SOURCE_TERMS_IMPERFECTLY_COUPLED_DUST_HPP_
+#ifndef RADIATION_DUST_SYSTEM_HPP_
+#define RADIATION_DUST_SYSTEM_HPP_
 
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
@@ -871,4 +871,4 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	return result;
 }
 
-#endif // RADIATION_SOURCE_TERMS_IMPERFECTLY_COUPLED_DUST_HPP_
+#endif // RADIATION_DUST_SYSTEM_HPP_

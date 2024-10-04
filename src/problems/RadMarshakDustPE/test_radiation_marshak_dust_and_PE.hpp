@@ -17,7 +17,7 @@
 
 // internal headers
 
-#include "radiation/radiation_system.hpp"
+#include "radiation/radiation_dust_system.hpp"
 
 // function definitions
 
