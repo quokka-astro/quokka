@@ -13,7 +13,7 @@
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
 
-struct StreamingProblem {
+struct MarshakProblem {
 };
 
 constexpr double PE_rate = 1.0;	       // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
@@ -39,13 +39,13 @@ constexpr int n_group_ = 2;
 static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 30, 1e4};
 static constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
 
-template <> struct quokka::EOS_Traits<StreamingProblem> {
+template <> struct quokka::EOS_Traits<MarshakProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<StreamingProblem> {
+template <> struct Physics_Traits<MarshakProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -56,7 +56,7 @@ template <> struct Physics_Traits<StreamingProblem> {
 	static constexpr int nGroups = n_group_; // number of radiation groups
 };
 
-template <> struct RadSystem_Traits<StreamingProblem> {
+template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
@@ -68,13 +68,13 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr OpacityModel opacity_model = opacity_model_;
 };
 
-template <> struct ISM_Traits<StreamingProblem> {
+template <> struct ISM_Traits<MarshakProblem> {
 	static constexpr double gas_dust_coupling_threshold = gas_dust_coupling_threshold_;
 	static constexpr bool enable_photoelectric_heating = PE_on;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
     -> amrex::Real
 {
 	return PE_rate;
@@ -82,7 +82,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::DefinePhotoelectricHeati
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<StreamingProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+RadSystem<MarshakProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
 								  const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
@@ -97,7 +97,7 @@ RadSystem<StreamingProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArra
 	return exponents_and_values;
 }
 
-template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MarshakProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -106,24 +106,24 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad_floor;
-			state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
+			state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad_floor;
+			state_cc(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}
-		state_cc(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas0;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
 	});
 }
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+AMRSimulation<MarshakProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
 							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
@@ -143,7 +143,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 
-	// const auto Erads = RadSystem<StreamingProblem>::ComputeThermalRadiation(T_rad_L, radBoundaries_);
+	// const auto Erads = RadSystem<MarshakProblem>::ComputeThermalRadiation(T_rad_L, radBoundaries_);
 	quokka::valarray<double, 2> const Erads = {erad_floor, EradL};
 	const double c_light = c;
 	const auto Frads = Erads * c_light;
@@ -152,22 +152,22 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		// streaming inflow boundary
 		// multigroup radiation
 		// x1 left side boundary (Marshak)
-		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erads[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frads[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
+			consVar(i, j, k, RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erads[g];
+			consVar(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frads[g];
+			consVar(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}
 	}
 
 	// gas boundary conditions are the same everywhere
 	const double Egas = initial_T * CV;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho0;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+	consVar(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas;
+	consVar(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
+	consVar(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas;
+	consVar(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
+	consVar(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
+	consVar(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
 }
 
 auto problem_main() -> int
@@ -185,7 +185,7 @@ auto problem_main() -> int
 	pp.query("kappa2", kappa2);
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
+	constexpr int nvars = RadSystem<MarshakProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
@@ -197,7 +197,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
+	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	// sim.stopTime_ = tmax; // set with runtime parameters
@@ -228,14 +228,14 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		erad1.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 0)[i];
+		erad1.at(i) = values.at(RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * 0)[i];
 		erad.at(i) = erad1.at(i);
 		if (n_group_ > 1) {
-			erad2.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * 1)[i];
+			erad2.at(i) = values.at(RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * 1)[i];
 			erad.at(i) += erad2.at(i);
 		}
-		const double e_gas = values.at(RadSystem<StreamingProblem>::gasInternalEnergy_index)[i];
-		T.at(i) = quokka::EOS<StreamingProblem>::ComputeTgasFromEint(rho0, e_gas);
+		const double e_gas = values.at(RadSystem<MarshakProblem>::gasInternalEnergy_index)[i];
+		T.at(i) = quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = x < c * sim.tNew_[0] ? initial_T + PE_rate * (sim.tNew_[0] - x / c) : initial_T;
 
 		erad1_exact.at(i) = 0.0;

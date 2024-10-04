@@ -174,6 +174,41 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	return result;
 }
 
+// Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
+// solve the linear system
+//   [a00 a0i] [x0] = [y0]
+//   [ai0 aii] [xi]   [yi]
+// for x0 and xi, where a0i = (a01, a02, a03, ...); ai0 = (a10, a20, a30, ...); aii = (a11, a22, a33, ...), xi = (x1, x2, x3, ...), yi = (y1, y2, y3, ...)
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqsWithLastColumn(JacobianResult<problem_t> const &jacobian, double &x0,
+									      quokka::valarray<double, nGroups_> &xi)
+{
+	// Note that the following routine only works when the FUV group is the last group, i.e., pe_index = nGroups_ - 1
+
+	// note that jacobian.Jgg[pe_index] is the right value for a[pe_index][pe_index], while jacobian.Jg1[pe_index] is NOT.
+	const int pe_index = nGroups_ - 1;
+	const auto ratios = jacobian.J0g / jacobian.Jgg;
+
+	const auto a00_new = jacobian.J00 - sum(ratios * jacobian.Jg0);
+	const auto y0_new = jacobian.F0 - sum(ratios * jacobian.Fg);
+	auto a01_new = jacobian.J0g[pe_index] - sum(ratios * jacobian.Jg1);
+	// re-accounting for the pe_index'th element of jacobian.Jg1
+	a01_new = a01_new + ratios[pe_index] * jacobian.Jg1[pe_index] - ratios[pe_index] * jacobian.Jgg[pe_index];
+	const auto a10 = jacobian.Jg0[pe_index];
+	const auto a11 = jacobian.Jgg[pe_index];
+	const auto y1 = jacobian.Fg[pe_index];
+	// solve linear equations [[a00_new, a01_new], [a10, a11]] [[x0], [xi[pe_index]]] = [y0_new, y1]
+	x0 = (y0_new - a01_new / a11 * y1) / (a00_new - a01_new / a11 * a10);
+	const auto x1 = (y1 - a10 * x0) / a11;
+	xi[pe_index] = x1;
+	// xi = (jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
+	for (int g = 0; g < pe_index; ++g) {
+		xi[g] = (jacobian.Fg[g] - jacobian.Jg0[g] * x0 - jacobian.Jg1[g] * x1) / jacobian.Jgg[g];
+	}
+	x0 *= -1.0;
+	xi *= -1.0;
+}
+
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, double const dt,
