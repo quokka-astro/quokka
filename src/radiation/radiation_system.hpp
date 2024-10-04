@@ -29,6 +29,8 @@
 #include "radiation/planck_integral.hpp"
 #include "util/valarray.hpp"
 
+#define LARGE 1.e100
+
 using Real = amrex::Real;
 
 // Hyper parameters for the radiation solver

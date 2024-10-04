@@ -2,8 +2,6 @@
 #ifndef RAD_SOURCE_TERMS_MULTI_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_MULTI_GROUP_HPP_
 
-#define LARGE 1.e100
-
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
 // Compute kappaE and kappaP based on the opacity model. The result is stored in the last five arguments: alpha_P, alpha_E, kappaP, kappaE, and kappaPoverE.
