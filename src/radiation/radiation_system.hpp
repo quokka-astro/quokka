@@ -1473,7 +1473,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
-#include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
+#include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
+#include "radiation/source_terms_imperfectly_coupled_dust.hpp"  // IWYU pragma: export
 
 #endif // RADIATION_SYSTEM_HPP_
