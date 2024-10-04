@@ -2,6 +2,8 @@
 #ifndef RADIATION_DUST_SYSTEM_HPP_
 #define RADIATION_DUST_SYSTEM_HPP_
 
+#define LARGE 1.e100
+
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
 template <typename problem_t>
