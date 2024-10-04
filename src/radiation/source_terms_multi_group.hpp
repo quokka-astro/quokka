@@ -123,9 +123,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 		}
 	}
 
-	// const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
-	AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-
 	// compute Jacobian elements
 	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.

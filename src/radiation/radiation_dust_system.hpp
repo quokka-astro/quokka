@@ -10,10 +10,6 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
     -> amrex::Real
 {
-	// const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
-	// const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
-	// const double coeff = 1.33e-24;
-	// return coeff * epsilon * num_density / ref_J_ISR; // s^-1
 	return 0.0;
 }
 
@@ -45,9 +41,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 		}
 	}
 
-	// const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
-	AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-
 	// compute Jacobian elements
 	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
@@ -57,7 +50,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 	result.J00 = 1.0;
 	result.J0g.fillin(cscale);
 	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
-	// const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 	dEg_dT *= d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
@@ -167,7 +159,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 		result.J0g[nGroups_ - 1] -= PE_heating_energy_derivative * d_Eg_d_Rg[nGroups_ - 1];
 	}
 	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
-	// const double coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
 	const auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t * d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
