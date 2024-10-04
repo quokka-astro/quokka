@@ -6,58 +6,6 @@
 
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
-// Compute the Jacobian of energy update equations for the gas-radiation system. The result is a struct containing the following elements:
-// J00: (0, 0) component of the Jacobian matrix. = d F0 / d Egas
-// F0: (0) component of the residual. = Egas residual
-// Fg_abs_sum: sum of the absolute values of the each component of Fg that has tau(g) > 0
-// J0g: (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d F0 / d R_g
-// Jg0: (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d Egas
-// Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
-// Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
-template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
-								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  quokka::valarray<double, nGroups_> const &tau, double c_v,
-								  quokka::valarray<double, nGroups_> const &kappaPoverE,
-								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
-{
-	JacobianResult<problem_t> result;
-
-	const double cscale = c_light_ / c_hat_;
-
-	result.F0 = Egas_diff;
-	result.Fg = Erad_diff - (Rvec + Src);
-	result.Fg_abs_sum = 0.0;
-	for (int g = 0; g < nGroups_; ++g) {
-		if (tau[g] > 0.0) {
-			result.Fg_abs_sum += std::abs(result.Fg[g]);
-			result.F0 += cscale * Rvec[g];
-		}
-	}
-
-	// const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
-	AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-
-	// compute Jacobian elements
-	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
-	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
-
-	auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
-
-	result.J00 = 1.0;
-	result.J0g.fillin(cscale);
-	result.Jg0 = 1.0 / c_v * dEg_dT;
-	for (int g = 0; g < nGroups_; ++g) {
-		if (tau[g] <= 0.0) {
-			result.Jgg[g] = -std::numeric_limits<double>::infinity();
-		} else {
-			result.Jgg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
-		}
-	}
-
-	return result;
-}
-
 // Compute kappaE and kappaP based on the opacity model. The result is stored in the last five arguments: alpha_P, alpha_E, kappaP, kappaE, and kappaPoverE.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP(
@@ -146,6 +94,58 @@ RadSystem<problem_t>::ComputeModelDependentKappaFAndDeltaTerms(double const T, d
 			opacity_terms.kappaF = opacity_terms.kappaE;
 		}
 	}
+}
+
+// Compute the Jacobian of energy update equations for the gas-radiation system. The result is a struct containing the following elements:
+// J00: (0, 0) component of the Jacobian matrix. = d F0 / d Egas
+// F0: (0) component of the residual. = Egas residual
+// Fg_abs_sum: sum of the absolute values of the each component of Fg that has tau(g) > 0
+// J0g: (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d F0 / d R_g
+// Jg0: (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d Egas
+// Jgg: (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups. = d Fg / d R_g
+// Fg: (g) components of the residual, g = 1, 2, ..., nGroups. = Erad residual
+template <typename problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
+								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
+								  quokka::valarray<double, nGroups_> const &tau, double c_v,
+								  quokka::valarray<double, nGroups_> const &kappaPoverE,
+								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+{
+	JacobianResult<problem_t> result;
+
+	const double cscale = c_light_ / c_hat_;
+
+	result.F0 = Egas_diff;
+	result.Fg = Erad_diff - (Rvec + Src);
+	result.Fg_abs_sum = 0.0;
+	for (int g = 0; g < nGroups_; ++g) {
+		if (tau[g] > 0.0) {
+			result.Fg_abs_sum += std::abs(result.Fg[g]);
+			result.F0 += cscale * Rvec[g];
+		}
+	}
+
+	// const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
+	AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
+
+	// compute Jacobian elements
+	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
+	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
+
+	auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
+
+	result.J00 = 1.0;
+	result.J0g.fillin(cscale);
+	result.Jg0 = 1.0 / c_v * dEg_dT;
+	for (int g = 0; g < nGroups_; ++g) {
+		if (tau[g] <= 0.0) {
+			result.Jgg[g] = -std::numeric_limits<double>::infinity();
+		} else {
+			result.Jgg[g] = -1.0 * kappaPoverE[g] / tau[g] - 1.0;
+		}
+	}
+
+	return result;
 }
 
 template <typename problem_t>
