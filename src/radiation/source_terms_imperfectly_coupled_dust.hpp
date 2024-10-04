@@ -4,6 +4,17 @@
 
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
+    -> amrex::Real
+{
+	// const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	// const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
+	// const double coeff = 1.33e-24;
+	// return coeff * epsilon * num_density / ref_J_ISR; // s^-1
+	return 0.0;
+}
+
 // Compute the Jacobian of energy update equations for the gas-dust-radiation system. The result is a struct containing the following elements:
 // J00: (0, 0) component of the Jacobian matrix. = d F0 / d Egas
 // F0: (0) component of the residual. = Egas residual

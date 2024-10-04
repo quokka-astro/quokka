@@ -496,17 +496,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 	return d_power_dt * radEnergyFractions;
 }
 
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
-    -> amrex::Real
-{
-	// const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
-	// const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
-	// const double coeff = 1.33e-24;
-	// return coeff * epsilon * num_density / ref_J_ISR; // s^-1
-	return 0.0;
-}
-
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
 // solve the linear system
 //   [J00 J0g] [x0] - [F0] = 0
