@@ -3,11 +3,11 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radiation_marshak_dust.cpp
+/// \file test_radiation_marshak_dust_and_PE.cpp
 /// \brief Defines a test Marshak wave problem with weak coupling between dust and gas.
 ///
 
-#include "test_radiation_marshak_dust.hpp"
+#include "test_radiation_marshak_dust_and_PE.hpp"
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
@@ -16,10 +16,13 @@
 struct MarshakProblem {
 };
 
+constexpr double PE_rate = 1.0;	       // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
 AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR
 AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
 
-constexpr bool dust_on = true;
+constexpr bool dust_on = 1;
+constexpr bool PE_on = 1;
+constexpr double gas_dust_coupling_threshold_ = 1.0e-4;
 
 constexpr double c = 1.0;    // speed of light
 constexpr double chat = 1.0; // reduced speed of light
@@ -27,19 +30,13 @@ constexpr double rho0 = 1.0;
 constexpr double CV = 1.0;
 constexpr double mu = 1.5 / CV; // mean molecular weight
 constexpr double initial_T = 1.0;
-constexpr double a_rad = 1.0e10;
-constexpr double erad_floor = 1.0e-10;
-constexpr double initial_Trad = 1.0e-5;
-constexpr double T_rad_L = 1.0e-2; // so EradL = 1e2
+constexpr double a_rad = 1.0;
+constexpr double erad_floor = 1.0e-6;
+constexpr double T_rad_L = 1.0;
 constexpr double EradL = a_rad * T_rad_L * T_rad_L * T_rad_L * T_rad_L;
-// constexpr double T_end_exact = 0.0031597766719577; // dust off; solution of 1 == a_rad * T^4 + T
-constexpr double T_end_exact = initial_T; // dust on
 
-// constexpr int n_group_ = 1;
-// static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 1e4};
-// static constexpr OpacityModel opacity_model_ = OpacityModel::single_group;
 constexpr int n_group_ = 2;
-static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 100, 1e4};
+static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 30, 1e4};
 static constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
 
 template <> struct quokka::EOS_Traits<MarshakProblem> {
@@ -64,7 +61,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
-	static constexpr int beta_order = 0;
+	static constexpr int beta_order = 1;
 	static constexpr bool enable_dust_gas_thermal_coupling_model = dust_on;
 	static constexpr double energy_unit = 1.0;
 	static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries = radBoundaries_;
@@ -72,18 +69,22 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 };
 
 template <> struct ISM_Traits<MarshakProblem> {
-	static constexpr double gas_dust_coupling_threshold = 1.0e-5;
-	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr double gas_dust_coupling_threshold = gas_dust_coupling_threshold_;
+	static constexpr bool enable_photoelectric_heating = PE_on;
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
+											     amrex::Real const /*num_density*/) -> amrex::Real
 {
-	return kappa1;
-}
+	// Values in cgs units from Bate & Keto (2015), Eq. 26.
+	// const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	// const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
+	// const double coeff = 1.33e-24;
+	// return coeff * epsilon * num_density / ref_J_ISR; // s^-1
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return kappa1;
+	// constant rate for testing
+	return PE_rate;
 }
 
 template <>
@@ -109,12 +110,11 @@ template <> void QuokkaSimulation<MarshakProblem>::setInitialConditionsOnGrid(qu
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const auto Egas0 = initial_T * CV;
-	const auto Erads = RadSystem<MarshakProblem>::ComputeThermalRadiationMultiGroup(initial_Trad, radBoundaries_);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erads[g];
+			state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad_floor;
 			state_cc(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
@@ -243,10 +243,10 @@ auto problem_main() -> int
 		}
 		const double e_gas = values.at(RadSystem<MarshakProblem>::gasInternalEnergy_index)[i];
 		T.at(i) = quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho0, e_gas);
-		T_exact.at(i) = T_end_exact;
+		T_exact.at(i) = x < c * sim.tNew_[0] ? initial_T + PE_rate * (sim.tNew_[0] - x / c) : initial_T;
 
-		erad2_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) : erad_floor;
-		erad1_exact.at(i) = x < sim.tNew_[0] ? EradL * std::exp(-x * rho0 * kappa2) * (sim.tNew_[0] - x) : erad_floor;
+		erad1_exact.at(i) = 0.0;
+		erad2_exact.at(i) = x < c * sim.tNew_[0] ? EradL : erad_floor;
 	}
 
 	double err_norm = 0.;
@@ -275,6 +275,7 @@ auto problem_main() -> int
 	std::map<std::string, std::string> plot_args2;
 	plot_args["label"] = "numerical solution";
 	plot_args2["label"] = "exact solution";
+	matplotlibcpp::ylim(-0.05, 1.05);
 	matplotlibcpp::plot(xs, erad1, plot_args);
 	matplotlibcpp::plot(xs, erad1_exact, plot_args2);
 	matplotlibcpp::xlabel("x");
@@ -282,11 +283,12 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radiation_marshak_dust_Erad1.pdf");
+	matplotlibcpp::save("./radiation_marshak_dust_PE_Erad1.pdf");
 
 	// Plot erad2
 	if (n_group_ > 1) {
 		matplotlibcpp::clf();
+		matplotlibcpp::ylim(-0.05, 1.05);
 		matplotlibcpp::plot(xs, erad2, plot_args);
 		matplotlibcpp::plot(xs, erad2_exact, plot_args2);
 		matplotlibcpp::xlabel("x");
@@ -294,12 +296,12 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./radiation_marshak_dust_Erad2.pdf");
+		matplotlibcpp::save("./radiation_marshak_dust_PE_Erad2.pdf");
 	}
 
 	// plot temperature
 	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 1.1);
+	matplotlibcpp::ylim(0.0, 2.1);
 	matplotlibcpp::plot(xs, T, plot_args);
 	matplotlibcpp::plot(xs, T_exact, plot_args2);
 	matplotlibcpp::xlabel("x");
@@ -307,7 +309,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("Marshak_dust test at t = {:.1f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radiation_marshak_dust_temperature.pdf");
+	matplotlibcpp::save("./radiation_marshak_dust_PE_temperature.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
