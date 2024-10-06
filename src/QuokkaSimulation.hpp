@@ -1682,7 +1682,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					amrex::Print() << "The average number of Newton-Raphson solvings per IMEX stage is " << global_solving_mean
 						       << ", (mean, max) number of Newton-Raphson iterations are " << global_iteration_mean << ", "
 						       << global_iteration_max << ".\n";
-					if constexpr (RadSystem_Traits<problem_t>::enable_dust_gas_thermal_coupling_model) {
+					if constexpr (ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model) {
 						amrex::Print() << "The fraction of gas-dust interactions that are decoupled is "
 							       << global_decoupled_iteration_mean << "\n";
 					}
