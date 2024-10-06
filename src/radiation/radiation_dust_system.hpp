@@ -4,7 +4,7 @@
 
 #define LARGE 1.e100
 
-#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+#include "radiation/radiation_system.hpp"
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
