@@ -9,18 +9,11 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "AMReX_BLassert.H"
-#include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 
-// #include "AMReX_BC_TYPES.H"
-#include "AMReX_IntVect.H"
 #include "AMReX_Print.H"
-// #include "QuokkaSimulation.hpp"
-// #include "util/fextract.hpp"
 #include "physics_info.hpp"
-// #include "radiation/radiation_system.hpp"
 #include "test_radhydro_bb.hpp"
 
 static constexpr bool export_csv = true;
