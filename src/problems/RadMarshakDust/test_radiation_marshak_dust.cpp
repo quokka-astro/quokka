@@ -73,7 +73,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 template <> struct ISM_Traits<MarshakProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr bool enable_photoelectric_heating = false;
-	// 1.0e-5 is the minimum value allowed for this test; smaller values will result in negative T_d. 
+	// 1.0e-5 is the minimum value allowed for this test; smaller values will result in negative T_d.
 	static constexpr double gas_dust_coupling_threshold = 1.0e-5;
 };
 
