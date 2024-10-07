@@ -25,7 +25,7 @@ constexpr double CR_heating_rate = 1.0;
 constexpr double line_cooling_rate = CR_heating_rate;
 constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
 
-constexpr double c = 1.0e8;
+constexpr double c = 1.0;
 constexpr double chat = c;
 constexpr double v0 = 0.0;
 constexpr double kappa0 = 0.0;
@@ -33,7 +33,7 @@ constexpr double kappa0 = 0.0;
 constexpr double T0 = 1.0;   // temperature
 constexpr double rho0 = 1.0; // matter density
 constexpr double a_rad = 1.0;
-constexpr double mu = 1.0;
+constexpr double mu = 1.5; // mean molecular weight; so that C_V = 1.0
 constexpr double k_B = 1.0;
 
 constexpr double nu_unit = 1.0;
@@ -41,7 +41,7 @@ constexpr double T_equilibrium = 0.768032502191;
 constexpr double Erad_bar = a_rad * T0 * T0 * T0 * T0;
 constexpr double erad_floor = a_rad * 1e-20;
 
-constexpr double max_time = 10.0 / (1e-2 * c);
+constexpr double max_time = 1.0;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -71,6 +71,21 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
+
+template <> struct ISM_Traits<PulseProblem> {
+	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr bool enable_linear_cooling_heating = true;
+};
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> cooling{};
+	cooling.fillin(0.0);
+	return cooling;
+}
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
@@ -222,7 +237,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::ylim(0.0, 2.0);
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./rad_line_cooling_temperature.pdf");
 
@@ -239,7 +254,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("x (dimensionless)");
 	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./rad_line_cooling_radiation_energy_density.pdf");
 #endif
