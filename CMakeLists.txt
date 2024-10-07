@@ -70,3 +70,5 @@ add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DI
 add_definitions(-DNAUX_NET -DSTRANG)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
+
+execute_process(COMMAND python3 "${CMAKE_SOURCE_DIR}/scripts/quotes.py")
