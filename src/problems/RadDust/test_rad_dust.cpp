@@ -50,7 +50,12 @@ template <> struct RadSystem_Traits<DustProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = beta_order_;
+};
+
+template <> struct ISM_Traits<DustProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr bool enable_photoelectric_heating = false;
 };
 
 template <> struct Physics_Traits<DustProblem> {

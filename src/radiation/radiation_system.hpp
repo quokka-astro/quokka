@@ -83,8 +83,9 @@ template <typename problem_t> struct RadSystem_Traits {
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct ISM_Traits {
-	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -193,7 +194,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr int beta_order_ = RadSystem_Traits<problem_t>::beta_order;
 
-	static constexpr bool enable_dust_gas_thermal_coupling_model_ = RadSystem_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
+	static constexpr bool enable_dust_gas_thermal_coupling_model_ = ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
