@@ -103,12 +103,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 {
 	JacobianResult<problem_t> result;
 
-	result.F0 = -lambda_gd_time_dt;
+	result.F0 = -lambda_gd_time_dt + sum(Rvec);
 	result.Fg = Erad_diff - (Rvec + Src);
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] > 0.0) {
-			result.F0 += Rvec[g];
 			result.Fg_abs_sum += std::abs(result.Fg[g]);
 		}
 	}
@@ -152,13 +151,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 
 	const double cscale = c_light_ / c_hat_;
 
-	result.F0 = Egas_diff;
+	result.F0 = Egas_diff + cscale * sum(Rvec);
 	result.Fg = Erad - Erad0 - (Rvec + Src);
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] > 0.0) {
 			result.Fg_abs_sum += std::abs(result.Fg[g]);
-			result.F0 += cscale * Rvec[g];
 		}
 	}
 	result.F0 -= PE_heating_energy_derivative * Erad[nGroups_ - 1];

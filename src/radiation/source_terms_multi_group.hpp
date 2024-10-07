@@ -113,13 +113,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 
 	const double cscale = c_light_ / c_hat_;
 
-	result.F0 = Egas_diff;
+	result.F0 = Egas_diff + cscale * sum(Rvec);
 	result.Fg = Erad_diff - (Rvec + Src);
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] > 0.0) {
 			result.Fg_abs_sum += std::abs(result.Fg[g]);
-			result.F0 += cscale * Rvec[g];
 		}
 	}
 
