@@ -1,4 +1,4 @@
-/// \file test_rad_line_cooling.cpp
+/// \file test_rad_line_cooling_MG.cpp
 /// \brief Defines a test problem for line cooling and cosmic-ray heating in a uniform medium.
 ///
 
@@ -9,14 +9,15 @@
 #include "util/fextract.hpp"
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
-#include "test_rad_line_cooling.hpp"
+#include "test_rad_line_cooling_MG.hpp"
 
 static constexpr bool export_csv = true;
 
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr int n_groups_ = 1;
+constexpr int n_groups_ = 4;
+constexpr int line_index = 3; // last group
 constexpr double CR_heating_rate = 1.0;
 constexpr double line_cooling_rate = CR_heating_rate;
 constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
@@ -55,7 +56,7 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
+	static constexpr int nGroups = n_groups_;
 };
 
 template <> struct RadSystem_Traits<PulseProblem> {
@@ -65,6 +66,9 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = nu_unit;
+	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <> struct ISM_Traits<PulseProblem> {
@@ -92,17 +96,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDeri
 	return cooling;
 }
 
-template <> 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return kappa0;
-}
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return kappa0;
-}
-
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
@@ -128,10 +121,12 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0.;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0.;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0.;
+		for (int g = 0; g < n_groups_; ++g) {
+			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad_floor;
+			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+		}
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
@@ -205,9 +200,16 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		const double Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
-		Erad_line.push_back(Erad_t);
-		Erad_line_exact.push_back(erad_floor); // TODO
+		double Erad_t = 0.0;
+		for (int g = 0; g < n_groups_; ++g) {
+			Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+			if (g == line_index) {
+				Erad_line.push_back(Erad_t);
+				Erad_line_exact.push_back(erad_floor); // TODO
+			} else {
+				Erad_other_groups_error += std::abs(Erad_t - erad_floor);
+			}
+		}
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
@@ -254,7 +256,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylim(0.0, 2.0);
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./rad_line_cooling_temperature.pdf");
+	matplotlibcpp::save("./rad_line_cooling_MG_temperature.pdf");
 
 	// plot Erad_line
 	matplotlibcpp::clf();
@@ -271,7 +273,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./rad_line_cooling_radiation_energy_density.pdf");
+	matplotlibcpp::save("./rad_line_cooling_MG_radiation_energy_density.pdf");
 #endif
 
 	if (export_csv) {

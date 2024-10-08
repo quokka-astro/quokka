@@ -4,40 +4,11 @@
 
 #include "radiation/radiation_system.hpp"
 
-#define LARGE 1.0e100
-
-static constexpr bool add_line_cooling_to_radiation = false;
-
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
     -> amrex::Real
 {
 	return 0.0;
-}
-
-// Define the background heating rate for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineBackgroundHeatingRate(amrex::Real const /*num_density*/) -> amrex::Real
-{
-	return 0.0;
-}
-
-// Define the net cooling rate (line cooling + heating) for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRate(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> cooling{};
-	cooling.fillin(0.0);
-	return cooling;
-}
-
-// Define the derivative of the net cooling rate with respect to temperature for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1 K^-1
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> cooling{};
-	cooling.fillin(0.0);
-	return cooling;
 }
 
 // Compute the Jacobian of energy update equations for the gas-dust-radiation system. The result is a struct containing the following elements:
