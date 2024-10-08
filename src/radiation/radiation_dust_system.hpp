@@ -171,18 +171,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 		}
 	}
 
-	result.J00 = 1.0;
+	result.J00 = 1.0 + sum(cooling_derivative) * dt / c_v;
 	result.J0g.fillin(cscale);
-	if (tau[nGroups_ - 1] <= 0.0) {
-		result.J0g[nGroups_ - 1] = LARGE;
-	} else {
-		result.J0g[nGroups_ - 1] -= PE_heating_energy_derivative * d_Eg_d_Rg[nGroups_ - 1];
-	}
+	result.J0g[nGroups_ - 1] -= PE_heating_energy_derivative * d_Eg_d_Rg[nGroups_ - 1];
 	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 	const auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t * d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
+	result.Jg0 = 1.0 / c_v * dEg_dT - (1/cscale) * cooling_derivative * dt - 1.0 / cscale * rg * result.J00;
 	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	result.Jgg = d_Eg_d_Rg + (-1.0);
