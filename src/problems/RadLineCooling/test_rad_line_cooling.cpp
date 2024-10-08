@@ -3,12 +3,9 @@
 ///
 
 #include <cmath>
-#include <unordered_map>
 
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLassert.H"
-#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include "AMReX_Print.H"
 #include "physics_info.hpp"

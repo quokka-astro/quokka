@@ -21,7 +21,7 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
-#include "radiation/radiation_system.hpp"
+#include "radiation/radiation_dust_system.hpp"
 
 // function definitions
 auto problem_main() -> int;
