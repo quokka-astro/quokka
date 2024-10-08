@@ -2,9 +2,11 @@
 #ifndef RADIATION_DUST_SYSTEM_HPP_
 #define RADIATION_DUST_SYSTEM_HPP_
 
+#include "radiation/radiation_system.hpp"
+
 #define LARGE 1.0e100
 
-#include "radiation/radiation_system.hpp"
+static constexpr bool add_line_cooling_to_radiation = false;
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
@@ -62,7 +64,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN);
 
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) * dt;
-	result.Fg = Erad_diff - (Rvec + Src) - (1.0/cscale) * cooling * dt;
+	result.Fg = Erad_diff - (Rvec + Src);
+	if constexpr (add_line_cooling_to_radiation) {
+		result.Fg -= (1.0/cscale) * cooling * dt;
+	}
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] > 0.0) {

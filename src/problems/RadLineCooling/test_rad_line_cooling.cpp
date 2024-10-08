@@ -22,6 +22,8 @@ constexpr double CR_heating_rate = 1.0;
 constexpr double line_cooling_rate = CR_heating_rate;
 constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
 
+const double cooling_rate = 1.0e-1;
+
 constexpr double c = 1.0;
 constexpr double chat = c;
 constexpr double v0 = 0.0;
@@ -38,7 +40,7 @@ constexpr double T_equilibrium = 0.768032502191;
 constexpr double Erad_bar = a_rad * T0 * T0 * T0 * T0;
 constexpr double erad_floor = a_rad * 1e-20;
 
-constexpr double max_time = 1.0;
+const double max_time = 1.0;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -77,10 +79,20 @@ template <> struct ISM_Traits<PulseProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const temperature, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
 	cooling.fillin(0.0);
+	cooling[0] = cooling_rate * temperature;
+	return cooling;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDerivative(amrex::Real const temperature, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> cooling{};
+	cooling.fillin(0.0);
+	cooling[0] = cooling_rate;
 	return cooling;
 }
 
@@ -139,9 +151,9 @@ auto problem_main() -> int
 	// Problem parameters
 	const int max_timesteps = 1e6;
 	const double CFL_number_gas = 0.8;
-	const double CFL_number_rad = 8.0;
+	const double CFL_number_rad = 0.8;
 
-	const double max_dt = 1.0;
+	const double the_dt = 1.0e-1;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
@@ -160,7 +172,8 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number_rad;
 	sim.cflNumber_ = CFL_number_gas;
-	sim.maxDt_ = max_dt;
+	sim.initDt_ = the_dt;
+	sim.maxDt_ = the_dt;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
@@ -181,6 +194,8 @@ auto problem_main() -> int
 	std::vector<double> Erad_line_exact{};
 	double Erad_other_groups_error = 0.0;
 
+	const auto t_end = sim.tNew_[0];
+
 	// compute exact solution and error norm
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
@@ -198,7 +213,9 @@ auto problem_main() -> int
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
-		Tgas_exact.push_back(T0);
+		// const double T_exact_solution = T0 - cooling_rate * max_time;
+		const double T_exact_solution = std::exp(-cooling_rate * t_end) * T0;
+		Tgas_exact.push_back(T_exact_solution);
 	}
 	// compare temperature with Tgas_exact
 	double err_norm_T = 0.;
@@ -216,7 +233,7 @@ auto problem_main() -> int
 	const double rel_error_Erad = (err_norm_Erad + Erad_other_groups_error) / Erad_bar;
 	const double rel_error = std::max(rel_error_T, rel_error_Erad);
 
-	const double error_tol = 0.01;
+	const double error_tol = 1.0e-3;
 	amrex::Print() << "Relative L1 error norm for T_gas = " << rel_error << std::endl;
 	int status = 0;
 	if ((rel_error > error_tol) || std::isnan(rel_error)) {
@@ -230,6 +247,9 @@ auto problem_main() -> int
 	Tgas_args["label"] = "T_gas (numerical)";
 	Tgas_args["linestyle"] = "-";
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
+	Tgas_args["label"] = "T_gas (exact)";
+	Tgas_args["linestyle"] = "--";
+	matplotlibcpp::plot(xs, Tgas_exact, Tgas_args);
 	matplotlibcpp::xlabel("x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
