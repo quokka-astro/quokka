@@ -137,15 +137,23 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 
 	const double cscale = c_light_ / c_hat_;
 
-	result.F0 = Egas_diff + cscale * sum(Rvec);
+	// compute cooling/heating terms
+	const auto cooling = DefineNetCoolingRate(T_gas, NAN);
+	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN);
+
+	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1];
 	result.Fg = Erad - Erad0 - (Rvec + Src);
+	if constexpr (add_line_cooling_to_radiation) {
+		result.Fg -= (1.0/cscale) * cooling * dt;
+	}
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] > 0.0) {
 			result.Fg_abs_sum += std::abs(result.Fg[g]);
+		} else {
+			result.Fg_abs_sum += std::abs(result.Fg[g] + Rvec[g]);
 		}
 	}
-	result.F0 -= PE_heating_energy_derivative * Erad[nGroups_ - 1];
 
 	// const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, radBoundaries_g_copy);
 	AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
@@ -154,7 +162,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 
-	const auto d_Eg_d_Rg = -1.0 * kappaPoverE / tau;
+	auto d_Eg_d_Rg = -1.0 * kappaPoverE;
+	for (int g = 0; g < nGroups_; ++g) {
+		if (tau[g] <= 0.0) {
+			d_Eg_d_Rg[g] = -LARGE;
+		} else {
+			d_Eg_d_Rg[g] /= tau[g];
+		}
+	}
 
 	result.J00 = 1.0;
 	result.J0g.fillin(cscale);
@@ -170,13 +185,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
 	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
-	for (int g = 0; g < nGroups_; ++g) {
-		if (tau[g] <= 0.0) {
-			result.Jgg[g] = -LARGE;
-		} else {
-			result.Jgg[g] = d_Eg_d_Rg[g] - 1.0;
-		}
-	}
+	result.Jgg = d_Eg_d_Rg + (-1.0);
 	result.Jgg[nGroups_ - 1] += rg[nGroups_ - 1] / cscale * PE_heating_energy_derivative * d_Eg_d_Rg[nGroups_ - 1];
 	result.Jg1 = rg - 1.0 / cscale * rg * result.J0g[nGroups_ - 1]; // note that this is the (nGroups_ - 1)th column, except for the (nGroups_ - 1)th row
 

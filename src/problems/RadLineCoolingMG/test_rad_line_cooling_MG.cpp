@@ -22,7 +22,8 @@ constexpr double CR_heating_rate = 1.0;
 constexpr double line_cooling_rate = CR_heating_rate;
 constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
 
-const double cooling_rate = 1.0e-1;
+// const double cooling_rate = 1.0e-1;
+const double cooling_rate = 0.0;
 
 constexpr double c = 1.0;
 constexpr double chat = c;
