@@ -57,13 +57,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 
 	const double cscale = c_light_ / c_hat_;
 
-	result.F0 = Egas_diff;
-	result.Fg = Erad_diff - (Rvec + Src);
+	// compute cooling/heating terms
+	const auto cooling = DefineNetCoolingRate(T_gas, NAN);
+	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN);
+
+	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) * dt;
+	result.Fg = Erad_diff - (Rvec + Src) - (1.0/cscale) * cooling * dt;
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] > 0.0) {
 			result.Fg_abs_sum += std::abs(result.Fg[g]);
-			result.F0 += cscale * Rvec[g];
+		} else {
+			result.Fg_abs_sum += std::abs(result.Fg[g] + Rvec[g]);
 		}
 	}
 
@@ -73,13 +78,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 
 	auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
 
-	result.J00 = 1.0;
+	result.J00 = 1.0 + sum(cooling_derivative) * dt / c_v;
 	result.J0g.fillin(cscale);
 	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 	dEg_dT *= d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-	result.Jg0 = 1.0 / c_v * dEg_dT - 1.0 / cscale * rg * result.J00;
+	result.Jg0 = 1.0 / c_v * dEg_dT - (1/cscale) * cooling_derivative * dt - 1.0 / cscale * rg * result.J00;
 	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	for (int g = 0; g < nGroups_; ++g) {
@@ -344,10 +349,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
-	if (dust_model == 2) {
-		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
-	}
-
 	const double resid_tol = 1.0e-11; // 1.0e-15;
 	const int maxIter = 100;
 	int n = 0;
@@ -526,6 +527,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		// 	break;
 		// }
 	} // END NEWTON-RAPHSON LOOP
+
+	if (dust_model == 2) {
+		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
+	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
 	AMREX_ASSERT(min(EradVec_guess) >= 0.0);
