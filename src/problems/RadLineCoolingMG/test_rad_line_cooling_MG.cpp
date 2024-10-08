@@ -74,7 +74,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 template <> struct ISM_Traits<PulseProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr bool enable_photoelectric_heating = true;
 	static constexpr bool enable_linear_cooling_heating = true;
 };
 

@@ -131,7 +131,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
     double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0,
     double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
     quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/, quokka::valarray<double, nGroups_> const &kappaPoverE,
-    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const dt) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -758,7 +758,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		if (dust_model == 1) {
 			jacobian = ComputeJacobianForGasAndDustWithPE(T_gas, T_d, Egas_diff, EradVec_guess, Erad0Vec, PE_heating_energy_derivative, Rvec, Src,
-								      coeff_n, tau, c_v, lambda_gd_times_dt, opacity_terms.kappaPoverE, d_fourpiboverc_d_t);
+								      coeff_n, tau, c_v, lambda_gd_times_dt, opacity_terms.kappaPoverE, d_fourpiboverc_d_t, dt);
 		} else {
 			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt,
 									 opacity_terms.kappaPoverE, d_fourpiboverc_d_t);
