@@ -33,7 +33,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRate(amrex::Rea
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
 {
-	return 0.0;
+	quokka::valarray<double, nGroups_> cooling{};
+	cooling.fillin(0.0);
+	return cooling;
 }
 
 // Compute the Jacobian of energy update equations for the gas-dust-radiation system. The result is a struct containing the following elements:
