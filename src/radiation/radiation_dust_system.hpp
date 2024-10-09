@@ -141,7 +141,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	const auto cooling = DefineNetCoolingRate(T_gas, NAN);
 	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN);
 
-	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1];
+	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) * dt - PE_heating_energy_derivative * Erad[nGroups_ - 1];
 	result.Fg = Erad - Erad0 - (Rvec + Src);
 	if constexpr (add_line_cooling_to_radiation) {
 		result.Fg -= (1.0/cscale) * cooling * dt;
