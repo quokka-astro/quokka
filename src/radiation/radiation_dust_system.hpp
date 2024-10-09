@@ -89,6 +89,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustDecouple
 {
 	JacobianResult<problem_t> result;
 
+	// I will ignore the cooling radiation here, because that replies on the updated gas temperature, which is not available here.
+	// // compute cooling/heating terms
+	// const double cscale = c_light_ / c_hat_;
+	// const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
+
 	result.F0 = -lambda_gd_time_dt + sum(Rvec);
 	result.Fg = Erad_diff - (Rvec + Src);
 	result.Fg_abs_sum = 0.0;
@@ -510,7 +515,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	} // END NEWTON-RAPHSON LOOP
 
 	if (dust_model == 2) {
-		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
+		// compute cooling/heating terms
+		const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
+		// const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
+
+		Egas_guess = Egas0 - cscale * lambda_gd_times_dt - sum(cooling); // update Egas_guess once for all
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);

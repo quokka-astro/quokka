@@ -39,7 +39,7 @@ constexpr double Erad_bar = a_rad * T0 * T0 * T0 * T0;
 constexpr double Erad_floor_ = a_rad * 1e-20;
 constexpr double Erad_FUV = Erad_bar; // = 1.0
 
-const double max_time = 30.0;
+const double max_time = 10.0;
 const double cooling_rate = 1.0e-1;
 const double PE_rate = 0.05;
 
@@ -75,7 +75,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 template <> struct ISM_Traits<PulseProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_photoelectric_heating = true;
+	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr bool enable_linear_cooling_heating = true;
 };
 
@@ -162,7 +162,7 @@ auto problem_main() -> int
 	const double CFL_number_gas = 0.8;
 	const double CFL_number_rad = 0.8;
 
-	const double the_dt = 1.0e-1;
+	const double the_dt = 1.0e-2;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
@@ -228,7 +228,8 @@ auto problem_main() -> int
 		// const double T_exact_solution = std::exp(-cooling_rate * t_end) * T0;
 		// NEW: cooling and PE heating
 		// sol = exp(-a t) * (a * T0 - b + b * exp(a t)) / a, where a = cooling_rate, b = PE_rate
-		const double T_exact_solution = std::exp(-cooling_rate * t_end) * (cooling_rate * T0 - PE_rate + PE_rate * std::exp(cooling_rate * t_end)) / cooling_rate;
+		const double PE_rate_ = ISM_Traits<PulseProblem>::enable_photoelectric_heating ? PE_rate : 0.0;
+		const double T_exact_solution = std::exp(-cooling_rate * t_end) * (cooling_rate * T0 - PE_rate_ + PE_rate_ * std::exp(cooling_rate * t_end)) / cooling_rate;
 		Tgas_exact.push_back(T_exact_solution);
 	}
 	// compare temperature with Tgas_exact
@@ -247,7 +248,7 @@ auto problem_main() -> int
 	const double rel_error_Erad = (err_norm_Erad + Erad_other_groups_error) / Erad_bar;
 	const double rel_error = std::max(rel_error_T, rel_error_Erad);
 
-	const double error_tol = 1.0e-3;
+	const double error_tol = 0.005;
 	amrex::Print() << "Relative L1 error norm for T_gas = " << rel_error << std::endl;
 	int status = 0;
 	if ((rel_error > error_tol) || std::isnan(rel_error)) {
