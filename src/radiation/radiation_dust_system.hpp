@@ -24,15 +24,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
     double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
     quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/,
     quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t,
-		const double dt) -> JacobianResult<problem_t>
+		const double n, const double dt) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
 	const double cscale = c_light_ / c_hat_;
 
 	// compute cooling/heating terms
-	const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
-	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
+	const auto cooling = DefineNetCoolingRate(T_gas, n) * dt;
+	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, n) * dt;
 
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling);
 	result.Fg = Erad_diff - (Rvec + Src);
@@ -131,15 +131,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
     double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0,
     double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
     quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/, quokka::valarray<double, nGroups_> const &kappaPoverE,
-    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const dt) -> JacobianResult<problem_t>
+    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const n, double const dt) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
 	const double cscale = c_light_ / c_hat_;
 
 	// compute cooling/heating terms
-	const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
-	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
+	const auto cooling = DefineNetCoolingRate(T_gas, n) * dt;
+	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, n) * dt;
 
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1];
 	result.Fg = Erad - Erad0 - (Rvec + Src);
@@ -327,6 +327,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
+	const double num_den = rho / mean_molecular_mass_;
+
 	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
@@ -434,7 +436,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 		if (dust_model == 1) {
 			jacobian = ComputeJacobianForGasAndDust(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt,
-								opacity_terms.kappaPoverE, d_fourpiboverc_d_t, dt);
+								opacity_terms.kappaPoverE, d_fourpiboverc_d_t, num_den, dt);
 		} else {
 			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt,
 									 opacity_terms.kappaPoverE, d_fourpiboverc_d_t);
@@ -509,7 +511,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
-	const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
+	const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
 	if (dust_model == 2) {
 		// compute cooling/heating terms
 		// const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
@@ -767,7 +769,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		if (dust_model == 1) {
 			jacobian = ComputeJacobianForGasAndDustWithPE(T_gas, T_d, Egas_diff, EradVec_guess, Erad0Vec, PE_heating_energy_derivative, Rvec, Src,
-								      coeff_n, tau, c_v, lambda_gd_times_dt, opacity_terms.kappaPoverE, d_fourpiboverc_d_t, dt);
+								      coeff_n, tau, c_v, lambda_gd_times_dt, opacity_terms.kappaPoverE, d_fourpiboverc_d_t, num_den, dt);
 		} else {
 			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt,
 									 opacity_terms.kappaPoverE, d_fourpiboverc_d_t);
@@ -842,7 +844,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
-	const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
+	const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
 	if (dust_model == 2) {
 		// compute cooling/heating terms
 		// const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
