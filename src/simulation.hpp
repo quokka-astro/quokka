@@ -406,7 +406,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka_sinkparticle::SinkParticleContainer> SinkParticles;
-	std::unique_ptr<quokka_sinkparticle::NeighborSinkParticleContainer> NeighborSinkParticles;
+        const amrex::ParGDBBase* gdb = SinkParticles->GetParGDB();
+        int R_merge=8;
+  //  std::unique_ptr<quokka_sinkparticle::NeighborSinkParticleContainer<problem_t>> NeighborSinkParticles(amrex::ParGDBBase* gdb, int R_merge);
+  //  amrex::NeighborParticleContainer::NeighborParticleContainer NeighborSinkParticles(amrex::ParGDBBase* gdb, int R_merge);
+  //       std::unique_ptr<quokka_sinkparticle::NeighborSinkParticleContainer> NeighborSinkParticles(amrex::ParGDBBase* gdb, int R_merge);
+  //       std::unique_ptr<quokka_sinkparticle::NeighborSinkParticleContainer> NeighborSinkParticles;
+      std::unique_ptr<quokka_sinkparticle::NeighborSinkParticleContainer> NeighborSinkParticles(new NeighborSinkParticleContainer(gdb, R_merge));
+
+  //  NeighborSinkParticles = std::make_unique<NeighborSinkParticleContainer(gdb, R_merge)>;
 #endif
 
 	// external objects
@@ -1292,13 +1300,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::driftParticlesAllLe
 			}
 
 			if (lev==finest_level) {
+			  printf("create particles");
 			  createSinkParticles(finest_level);
-			}
-			for (quokka_sinkparticle::SinkParticleIterator pIter(*SinkParticles, lev); pIter.isValid(); ++pIter) {
+			  printf("done create particles");
+
+			  for (quokka_sinkparticle::SinkParticleIterator pIter(*SinkParticles, lev); pIter.isValid(); ++pIter) {
 				auto &particles = pIter.GetArrayOfStructs();
 				quokka_sinkparticle::SinkParticleContainer::ParticleType *pData = particles().data();
 				const amrex::Long np = pIter.numParticles();
 				printf("After adding: np = %d\n",np);
+			  }
+
+			  mergeSinkParticles(finest_level);
+			  
+			  for (quokka_sinkparticle::SinkParticleIterator pIter(*SinkParticles, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				quokka_sinkparticle::SinkParticleContainer::ParticleType *pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+				printf("After adding: np = %d\n",np);
+			  }
 			}
 		}
 	}	
@@ -1366,7 +1386,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createSinkParticles
 
 	       rho_J=rho_J * (1.0 + (0.74/beta));
 	     */
-	       // For cell violates Jeans condition, create sink aprticle and add to particle container.
+	       // For cell violates Jeans condition, create sink particle and add to particle container.
 	     if (rho > rho_J) {
 	       SinkBox(i,j,k) = 1;
 	       *pcount += 1;
@@ -1433,9 +1453,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::createSinkParticles
 		  rho_J=rho_J * (1.0 + (0.74/beta));
 		*/
 		
-		ip = ip + 1;
 		quokka_sinkparticle::SinkParticleContainer::ParticleType p = pstruct[ip];
 		p.id()      = ip + id_start;
+		ip = ip + 1;
 		p.cpu()   = my_cpu;
 		p.pos(0) = plo[0] + (i + 0.5) * dx[0];
 		p.pos(1) = plo[1] + (j + 0.5) * dx[1];
@@ -1470,71 +1490,241 @@ template <typename problem_t> void AMRSimulation<problem_t>::createSinkParticles
 	      }
 	    });
 	  }
-	  particles.Redistribute();
       }
+      SinkParticles->Redistribute();
   }
 
 template <typename problem_t> void AMRSimulation<problem_t>::mergeSinkParticles(int lev)
   {
       BL_PROFILE("createSinkParticles()")
       //PS: Get the particle list.
-      NeighborSinkParticles.fillNeighbors(SinkParticles,0.1);
+      const auto dx = geom[lev].CellSizeArray();
+
+      //PS: fill neighbor particles within a region of 2 times the accretion distance of 4 cells
+      //      around local grid to make sure if more massive particles in the neighbor grid
+      //      exists.
+      NeighborSinkParticles->fillNeighbors();
+      Real R_merge = 4*dx[0];
+      //      NeighborSinkParticles->fillNeighbors(SinkParticles,2*R_merge);
+    
+      //PS: get position from local particles into vectors
       for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
- 	  const amrex::Box &indexRange = mfi.validbox();
-	  amrex::FArrayBox tmp_fab(indexRange, 1);
-	  amrex::Elixir tmp_eli = tmp_fab.elixir();
-	  amrex::Array4<Real> const& SinkBox = tmp_fab.array();
-	  auto const &state = state_new_cc_[lev].array(mfi);
-	  const int nghost_cc = state_new_cc_[lev].nGrow();
 	  auto &particles = (*SinkParticles).DefineAndReturnParticleTile(lev, mfi);
-	  auto &aos = particles.GetArrayOfStructs();
-      	  auto &neighbor_particles = (*NeighborSinkParticles).DefineAndReturnParticleTile(lev, mfi);
-	  
-	  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
-	  
-	  // Use fillneighbors to manage particles near boundaries.
-	  //       	  Real boundary_threshold = nghost_cc*dx[0];
-	  //       	  neighbor_particles.fillNeighbors(particles,boundary_threshold);
-	  //       	  neighbor_particles.Redistribute();
-	  
-	  // Combine particles in two containers into a single list.
-	  std::vector<quokka_sinkparticle::SinkParticleContainer::ParticleType> combined_particles;
-	  quokka_sinkparticle::combine_particles(particles, neighbor_particles, combined_particles);
-				      
-	  // Convert combined particles to an array of structs.
-	  std::vector<quokka_sinkparticle::SinkParticleStruct> particle_array;
-	  convert_to_array_of_structs(combined_particles,particle_array);
+	  auto size = particles.GetArrayOfStructs().size();
+	  amrex::Long id_start = quokka_sinkparticle::SinkParticleContainer::ParticleType::NextID();
 
-	  // Separate particles into local and non-local lists
-	  std::vector<quokka_sinkparticle::SinkParticleStruct> local_particles;
-	  std::vector<quokka_sinkparticle::SinkParticleStruct> non_local_particles;
-	  int local_proc_id = amrex::ParallelDescriptor::MyProc();
-	  for (const auto& ps : particle_array)
-	    {
-	      if (ps.cpu == local_proc_id)
-		{
-		  local_particles.push_back(ps);
-		}
-	      else
-		{
-		  non_local_particles.push_back(ps);
-		}
-	    }
+	  if (size > 0) {
+	      auto & aos = particles.GetArrayOfStructs();
+	      auto &particle_attributes = particles.GetStructOfArrays();
+	      quokka_sinkparticle::SinkParticleContainer::RealVector &rho = particle_attributes.GetRealData(0);
+      	      quokka_sinkparticle::SinkParticleContainer::RealVector &vx = particle_attributes.GetRealData(1);
+      	      quokka_sinkparticle::SinkParticleContainer::RealVector &vy = particle_attributes.GetRealData(2);
+       	      quokka_sinkparticle::SinkParticleContainer::RealVector &vz = particle_attributes.GetRealData(3);
+	      quokka_sinkparticle::SinkParticleContainer::RealVector &amx = particle_attributes.GetRealData(4);
+	      quokka_sinkparticle::SinkParticleContainer::RealVector &amy = particle_attributes.GetRealData(5);
+	      quokka_sinkparticle::SinkParticleContainer::RealVector &amz = particle_attributes.GetRealData(6);
+	      std::vector<int> processed(rho.size(),0);
+	      std::vector<int> merged(rho.size(), 0);
+	      
+      	      auto &neighbor_particles = (*NeighborSinkParticles).DefineAndReturnParticleTile(lev, mfi);
+	      auto neighbor_size = neighbor_particles.GetArrayOfStructs().size();
+	      if (neighbor_size > 0) {
+		  auto & neighbor_aos = neighbor_particles.GetArrayOfStructs();
+		  auto &neighbor_particle_attributes = neighbor_particles.GetStructOfArrays();
+		  quokka_sinkparticle::SinkParticleContainer::RealVector &neighbor_rho = neighbor_particle_attributes.GetRealData(0);
+		  quokka_sinkparticle::SinkParticleContainer::RealVector &neighbor_vx = neighbor_particle_attributes.GetRealData(1);
+		  quokka_sinkparticle::SinkParticleContainer::RealVector &neighbor_vy = neighbor_particle_attributes.GetRealData(2);
+		  quokka_sinkparticle::SinkParticleContainer::RealVector &neighbor_vz = neighbor_particle_attributes.GetRealData(3);
+		  quokka_sinkparticle::SinkParticleContainer::RealVector &neighbor_amx = neighbor_particle_attributes.GetRealData(4);
+		  quokka_sinkparticle::SinkParticleContainer::RealVector &neighbor_amy = neighbor_particle_attributes.GetRealData(5);
+		  quokka_sinkparticle::SinkParticleContainer::RealVector &neighbor_amz = neighbor_particle_attributes.GetRealData(6);
+		  std::vector<int> neighbor_processed(neighbor_rho.size(), 0);
 
-	  // Initialize merged_map
-	  std::unordered_map<long, bool> merged_map;
-	  for (const auto& ps : local_particles)
-	    {
-	      merged_map[ps.id] = false;
-	    }
+		  //PS: If there are local and neighbor particles not processed yet, continue.
+		  bool hasParticles = std::any_of(processed.begin(), processed.end(), [] (int val)
+		    {
+		      return val == 0;
+		    });
 
-	  // Merge particles within 2 cells.
-	  Real merge_distance = 2*dx[0];
-	  merge_particles(particle_array, merge_distance, merged_map, local_particles);
+		  while (hasParticles) {
+		    double max_value = 0.0;
+		    int max_index = -1;
+		    for (int i = 0; i < size; ++i) {
+		      if (processed[i] == 0 && rho[i] > max_value) {
+			max_value = rho[i];
+			max_index = static_cast<int>(i);
+		      }
+		    }
+		  
+		    double neighbor_max_value = 0.0;
+		    int neighbor_max_index = -1;
+		    for (int i = 0; i < size; ++i) {
+		      if (neighbor_processed[i] == 0 && neighbor_rho[i] > max_value) {
+			neighbor_max_value = rho[i];
+			neighbor_max_index = static_cast<int>(i);
+		      }
+		    }
 
-	  // Update the ParticleContainer with the new local_particles
-	  update_particle_container(particles, local_particles);
-      }
+		    //PS: Merge to local particle
+		    if (max_value > neighbor_max_value) {
+		      //PS: Check local particles
+		      auto &aos = particles.GetArrayOfStructs();
+		      quokka_sinkparticle::SinkParticleContainer::ParticleType *pData = particles.GetArrayOfStructs()().data();
+		      quokka_sinkparticle::SinkParticleContainer::ParticleType &p = pData[max_index];
+
+		      for (int i = 0; i < size; ++i) {
+			quokka_sinkparticle::SinkParticleContainer::ParticleType &p1 = pData[i];
+			//PS: if the particle is not itself and not yet processed, merge with the most massive particle.
+			Real dist = sqrt(pow(p.pos(0)-p1.pos(0),2)+pow(p.pos(1)-p1.pos(1),2)+pow(p.pos(2)-p1.pos(2),2));
+			if (dist > 0.0 && dist <= R_merge && processed[i] == 0) {
+			  Real mrho = rho[max_index];
+			  rho[max_index] += rho[i];
+			  vx[max_index] = (vx[max_index]*mrho+vx[i]*rho[i])/rho[max_index];
+			  vy[max_index] = (vy[max_index]*mrho+vy[i]*rho[i])/rho[max_index];
+			  vz[max_index] = (vz[max_index]*mrho+vz[i]*rho[i])/rho[max_index];
+			  amx[max_index] += amx[i];
+			  amy[max_index] += amy[i];
+			  amz[max_index] += amz[i];
+			  processed[i] = 1;
+			  merged[i] = 1;
+			}
+		      }
+
+		      //PS: Check neighbor particles
+		      auto &neighbor_aos = neighbor_particles.GetArrayOfStructs();
+		      quokka_sinkparticle::NeighborSinkParticleContainer::ParticleType *npData = neighbor_particles.GetArrayOfStructs()().data();
+
+		      for (int i = 0; i < neighbor_size; ++i) {
+		      
+			quokka_sinkparticle::NeighborSinkParticleContainer::ParticleType &np1 = npData[i];
+			//PS: if the particle is not itself and not yet processed, do the merge.
+			Real dist = sqrt(pow(p.pos(0)-np1.pos(0),2)+pow(p.pos(1)-np1.pos(1),2)+pow(p.pos(2)-np1.pos(2),2));
+			if (dist > 0.0 && dist <= R_merge && neighbor_processed[i] == 0) {
+			  Real mrho = rho[max_index];
+			  rho[max_index] += neighbor_rho[i];
+			  vx[max_index] = (vx[max_index]*mrho+neighbor_vx[i]*neighbor_rho[i])/rho[max_index];
+			  vy[max_index] = (vy[max_index]*mrho+neighbor_vy[i]*neighbor_rho[i])/rho[max_index];
+			  vz[max_index] = (vz[max_index]*mrho+neighbor_vz[i]*neighbor_rho[i])/rho[max_index];
+			  amx[max_index] += neighbor_amx[i];
+			  amy[max_index] += neighbor_amy[i];
+			  amz[max_index] += neighbor_amz[i];
+			  neighbor_processed[i] = 1;
+			}
+		      }
+		    processed[max_index] = 1;
+		    }
+
+		    //PS: Merge to neighbor particles.
+		    if (max_value <= neighbor_max_value) {
+		      //PS: Check neighbor particles
+		      auto &neighbor_aos = neighbor_particles.GetArrayOfStructs();
+		      quokka_sinkparticle::NeighborSinkParticleContainer::ParticleType *npData = neighbor_particles.GetArrayOfStructs()().data();
+		      quokka_sinkparticle::NeighborSinkParticleContainer::ParticleType &np = npData[neighbor_max_index];
+
+		      for (int i = 0; i < neighbor_size; ++i) {
+			quokka_sinkparticle::NeighborSinkParticleContainer::ParticleType &np1 = npData[i];
+			//PS: if the particle is not itself and not yet processed, just mark it processed.
+			Real dist = sqrt(pow(np.pos(0)-np1.pos(0),2)+pow(np.pos(1)-np1.pos(1),2)+pow(np.pos(2)-np1.pos(2),2));
+			if (dist > 0.0 && dist <= R_merge && neighbor_processed[i] == 0) {
+			  processed[i] = 1;
+			}
+		      }
+
+		      //PS: Check local particles
+		      auto &aos = particles.GetArrayOfStructs();
+		      quokka_sinkparticle::SinkParticleContainer::ParticleType *pData = particles.GetArrayOfStructs()().data();
+
+		      for (int i = 0; i < size; ++i) {
+		      
+			quokka_sinkparticle::SinkParticleContainer::ParticleType &p1 = pData[i];
+			//PS: if the particle is not itself and not yet processed, do the merge.
+			Real dist = sqrt(pow(p1.pos(0)-np.pos(0),2)+pow(p1.pos(1)-np.pos(1),2)+pow(p1.pos(2)-np.pos(2),2));
+			if (dist > 0.0 && dist <= R_merge && processed[i] == 0) {
+			  processed[i] = 1;
+			}
+		      }
+		    neighbor_processed[neighbor_max_index] = 1;
+		    }
+		    
+		    //PS: If there are local and neighbor particles not processed yet, continue.
+		    bool hasParticles = std::any_of(processed.begin(), processed.end(), [] (int val)                      {
+			return val == 0;
+		      });
+		  }
+	      }
+	      
+	      else {
+		  //PS: If there are local not processed yet, continue.
+		  bool hasParticles = std::any_of(processed.begin(), processed.end(), [] (int val)                      {
+		      return val == 0;
+		    });
+
+		  while (hasParticles) {
+		    double max_value = 0.0;
+		    int max_index = -1;
+		    for (int i = 0; i < size; ++i) {
+		      if (processed[i] == 0 && rho[i] > max_value) {
+			max_value = rho[i];
+			max_index = static_cast<int>(i);
+		      }
+		    }
+		  
+		    //PS: Merge to local particle
+		    auto &aos = particles.GetArrayOfStructs();
+		    //		    quokka_sinkparticle::SinkParticleContainer::ParticleType *pData = particles.GetArrayOfStructs()().data();
+		    quokka_sinkparticle::SinkParticleContainer::ParticleType *pData = aos().data();
+		    quokka_sinkparticle::SinkParticleContainer::ParticleType &p = pData[max_index];
+
+		    for (int i = 0; i < size; ++i) {
+		      quokka_sinkparticle::SinkParticleContainer::ParticleType &p1 = pData[i];
+		      //PS: if the particle is not itself and not yet processed, merge with the most massive particle.
+		      Real dist = sqrt(pow(p.pos(0)-p1.pos(0),2)+pow(p.pos(1)-p1.pos(1),2)+pow(p.pos(2)-p1.pos(2),2));
+		      if (dist > 0.0 && dist <= R_merge && processed[i] == 0) {
+			Real mrho = rho[max_index];
+			rho[max_index] += rho[i];
+			vx[max_index] = (vx[max_index]*mrho+vx[i]*rho[i])/rho[max_index];
+			vy[max_index] = (vy[max_index]*mrho+vy[i]*rho[i])/rho[max_index];
+			vz[max_index] = (vz[max_index]*mrho+vz[i]*rho[i])/rho[max_index];
+			amx[max_index] += amx[i];
+			amy[max_index] += amy[i];
+			amz[max_index] += amz[i];
+			processed[i] = 1;
+			merged[i] = 1;
+		      }
+
+		    processed[max_index] = 1;
+		    }
+		    
+		    //PS: If there are particles not processed yet, continue.
+		    bool hasParticles = std::any_of(processed.begin(), processed.end(), [] (int val)                      {
+			return val == 0;
+		      });
+		  }
+	      }
+
+	      // Update the ParticleContainer with the new local_particles
+	      quokka_sinkparticle::SinkParticleContainer::ParticleType *pData = aos().data();
+	      amrex::Long id_start = quokka_sinkparticle::SinkParticleContainer::ParticleType::NextID();
+ 	      amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int64_t idx) {
+		    quokka_sinkparticle::SinkParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		    if (merged[idx] == 0) {
+		      p.rdata(0) = rho[idx];
+		      p.rdata(1) = vx[idx];
+		      p.rdata(2) = vy[idx];
+		      p.rdata(3) = vz[idx];
+		      p.rdata(4) = amx[idx];
+		      p.rdata(5) = amy[idx];
+		      p.rdata(6) = amz[idx];
+		    }
+		    else if (merged[idx] == 1) {
+		      p.id() = -1;
+		    }
+	      });
+	  }
+      }	    
+
+      // Redistribute particles to ensure correct placement
+      SinkParticles->Redistribute();
   }
       
 // N.B.: This function actually works for subcycled or not subcycled, as long as
