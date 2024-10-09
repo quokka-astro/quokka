@@ -31,13 +31,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 	const double cscale = c_light_ / c_hat_;
 
 	// compute cooling/heating terms
-	const auto cooling = DefineNetCoolingRate(T_gas, NAN);
-	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN);
+	const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
+	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
 
-	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) * dt;
+	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling);
 	result.Fg = Erad_diff - (Rvec + Src);
 	if constexpr (add_line_cooling_to_radiation) {
-		result.Fg -= (1.0/cscale) * cooling * dt;
+		result.Fg -= (1.0/cscale) * cooling;
 	}
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
@@ -54,13 +54,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 
 	auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
 
-	result.J00 = 1.0 + sum(cooling_derivative) * dt / c_v;
+	result.J00 = 1.0 + sum(cooling_derivative) / c_v;
 	result.J0g.fillin(cscale);
 	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 	dEg_dT *= d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-	result.Jg0 = 1.0 / c_v * dEg_dT - (1/cscale) * cooling_derivative * dt - 1.0 / cscale * rg * result.J00;
+	result.Jg0 = 1.0 / c_v * dEg_dT - (1/cscale) * cooling_derivative - 1.0 / cscale * rg * result.J00;
 	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	for (int g = 0; g < nGroups_; ++g) {
@@ -138,13 +138,13 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	const double cscale = c_light_ / c_hat_;
 
 	// compute cooling/heating terms
-	const auto cooling = DefineNetCoolingRate(T_gas, NAN);
-	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN);
+	const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
+	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
 
-	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) * dt - PE_heating_energy_derivative * Erad[nGroups_ - 1];
+	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1];
 	result.Fg = Erad - Erad0 - (Rvec + Src);
 	if constexpr (add_line_cooling_to_radiation) {
-		result.Fg -= (1.0/cscale) * cooling * dt;
+		result.Fg -= (1.0/cscale) * cooling;
 	}
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
@@ -171,14 +171,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 		}
 	}
 
-	result.J00 = 1.0 + sum(cooling_derivative) * dt / c_v;
+	result.J00 = 1.0 + sum(cooling_derivative) / c_v;
 	result.J0g.fillin(cscale);
 	result.J0g[nGroups_ - 1] -= PE_heating_energy_derivative * d_Eg_d_Rg[nGroups_ - 1];
 	const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 	const auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t * d_Td_d_T;
 	const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 	const auto rg = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg;
-	result.Jg0 = 1.0 / c_v * dEg_dT - (1/cscale) * cooling_derivative * dt - 1.0 / cscale * rg * result.J00;
+	result.Jg0 = 1.0 / c_v * dEg_dT - (1/cscale) * cooling_derivative - 1.0 / cscale * rg * result.J00;
 	// Note that Fg is modified here, but it does not change Fg_abs_sum, which is used to check the convergence.
 	result.Fg = result.Fg - 1.0 / cscale * rg * result.F0;
 	result.Jgg = d_Eg_d_Rg + (-1.0);
