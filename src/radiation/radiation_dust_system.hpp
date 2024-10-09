@@ -515,13 +515,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		// const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
 
 		Egas_guess = Egas0 - cscale * lambda_gd_times_dt - sum(cooling); // update Egas_guess once for all
-		if constexpr (!add_line_cooling_to_radiation) {
-			EradVec_guess += (1/cscale) * cooling;
-		}
-	} else {
-		if constexpr (!add_line_cooling_to_radiation) {
-			EradVec_guess += (1/cscale) * cooling;
-		}
+	}
+
+	if constexpr (!add_line_cooling_to_radiation) {
+		EradVec_guess += (1/cscale) * cooling;
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
@@ -851,13 +848,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
 
 		Egas_guess = Egas0 - cscale * lambda_gd_times_dt - sum(cooling) + PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
-		if constexpr (!add_line_cooling_to_radiation) {
-			EradVec_guess += (1/cscale) * cooling;
-		}
-	} else {
-		if constexpr (!add_line_cooling_to_radiation) {
-			EradVec_guess += (1/cscale) * cooling;
-		}
+	}
+
+	if constexpr (!add_line_cooling_to_radiation) {
+		EradVec_guess += (1/cscale) * cooling;
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
