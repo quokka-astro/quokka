@@ -660,10 +660,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
-	if (dust_model == 2) {
-		Egas_guess = Egas0 - cscale * lambda_gd_times_dt; // update Egas_guess once for all
-	}
-
 	// phtoelectric heating
 	const double num_den = rho / mean_molecular_mass_;
 	const double PE_heating_energy_derivative = dt * DefinePhotoelectricHeatingE1Derivative(T_gas, num_den);
@@ -848,7 +844,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	} // END NEWTON-RAPHSON LOOP
 
 	if (dust_model == 2) {
-		Egas_guess += PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
+		// compute cooling/heating terms
+		const auto cooling = DefineNetCoolingRate(T_gas, NAN) * dt;
+		// const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
+
+		Egas_guess = Egas0 - cscale * lambda_gd_times_dt - sum(cooling) + PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
