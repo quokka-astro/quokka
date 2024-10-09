@@ -17,13 +17,10 @@ struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int n_groups_ = 4;
-constexpr int line_index = 3; // last group
+constexpr int line_index = 0; // last group
 constexpr double CR_heating_rate = 1.0;
 constexpr double line_cooling_rate = CR_heating_rate;
 constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
-
-const double cooling_rate = 1.0e-1;
-// const double cooling_rate = 0.0;
 
 constexpr double c = 1.0;
 constexpr double chat = c;
@@ -39,9 +36,12 @@ constexpr double k_B = 1.0;
 constexpr double nu_unit = 1.0;
 constexpr double T_equilibrium = 0.768032502191;
 constexpr double Erad_bar = a_rad * T0 * T0 * T0 * T0;
-constexpr double erad_floor = a_rad * 1e-20;
+constexpr double Erad_floor_ = a_rad * 1e-20;
+constexpr double Erad_FUV = Erad_bar; // = 1.0
 
-const double max_time = 1.0;
+const double max_time = 30.0;
+const double cooling_rate = 1.0e-1;
+const double PE_rate = 0.05;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -64,7 +64,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double Erad_floor = erad_floor;
+	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = nu_unit;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
@@ -78,6 +78,13 @@ template <> struct ISM_Traits<PulseProblem> {
 	static constexpr bool enable_photoelectric_heating = true;
 	static constexpr bool enable_linear_cooling_heating = true;
 };
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
+											     amrex::Real const /*num_density*/) -> amrex::Real
+{
+	return PE_rate / Erad_FUV;
+}
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const temperature, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
@@ -123,7 +130,8 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < n_groups_; ++g) {
-			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad_floor;
+			const auto Erad = g == n_groups_ - 1 ? Erad_FUV : Erad_floor_;
+			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad;
 			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
 			state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
 			state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
@@ -206,16 +214,21 @@ auto problem_main() -> int
 			Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
 			if (g == line_index) {
 				Erad_line.push_back(Erad_t);
-				Erad_line_exact.push_back(erad_floor); // TODO
+				Erad_line_exact.push_back(Erad_floor_); // TODO
+			} else if (g == n_groups_ - 1) {
+				Erad_other_groups_error += std::abs(Erad_t - Erad_FUV);
 			} else {
-				Erad_other_groups_error += std::abs(Erad_t - erad_floor);
+				Erad_other_groups_error += std::abs(Erad_t - Erad_floor_);
 			}
 		}
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
-		// const double T_exact_solution = T0 - cooling_rate * max_time;
-		const double T_exact_solution = std::exp(-cooling_rate * t_end) * T0;
+		// OLD: cooling only; no PE heating
+		// const double T_exact_solution = std::exp(-cooling_rate * t_end) * T0;
+		// NEW: cooling and PE heating
+		// sol = exp(-a t) * (a * T0 - b + b * exp(a t)) / a, where a = cooling_rate, b = PE_rate
+		const double T_exact_solution = std::exp(-cooling_rate * t_end) * (cooling_rate * T0 - PE_rate + PE_rate * std::exp(cooling_rate * t_end)) / cooling_rate;
 		Tgas_exact.push_back(T_exact_solution);
 	}
 	// compare temperature with Tgas_exact
