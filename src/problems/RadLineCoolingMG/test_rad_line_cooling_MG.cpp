@@ -17,9 +17,6 @@ struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int n_groups_ = 4;
-constexpr int line_index = 0; // last group
-constexpr double CR_heating_rate = 1.0;
-constexpr double line_cooling_rate = CR_heating_rate;
 constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
 
 constexpr double c = 1.0;
@@ -31,6 +28,7 @@ constexpr double T0 = 1.0;   // temperature
 constexpr double rho0 = 1.0; // matter density
 constexpr double a_rad = 1.0;
 constexpr double mu = 1.5; // mean molecular weight; so that C_V = 1.0
+constexpr double C_V = 1.0;
 constexpr double k_B = 1.0;
 
 constexpr double nu_unit = 1.0;
@@ -40,6 +38,8 @@ constexpr double Erad_floor_ = a_rad * 1e-20;
 constexpr double Erad_FUV = Erad_bar; // = 1.0
 
 const double max_time = 10.0;
+const double CR_heating_rate = 1.0;
+const int line_index = 0; // last group
 const double cooling_rate = 1.0e-1;
 const double PE_rate = 0.05;
 
@@ -91,16 +91,16 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::
 {
 	quokka::valarray<double, nGroups_> cooling{};
 	cooling.fillin(0.0);
-	cooling[0] = cooling_rate * temperature;
+	cooling[line_index] = cooling_rate * temperature;
 	return cooling;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDerivative(amrex::Real const temperature, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
 	cooling.fillin(0.0);
-	cooling[0] = cooling_rate;
+	cooling[line_index] = cooling_rate;
 	return cooling;
 }
 
@@ -209,18 +209,6 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		double Erad_t = 0.0;
-		for (int g = 0; g < n_groups_; ++g) {
-			Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
-			if (g == line_index) {
-				Erad_line.push_back(Erad_t);
-				Erad_line_exact.push_back(Erad_floor_); // TODO
-			} else if (g == n_groups_ - 1) {
-				Erad_other_groups_error += std::abs(Erad_t - Erad_FUV);
-			} else {
-				Erad_other_groups_error += std::abs(Erad_t - Erad_floor_);
-			}
-		}
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
@@ -229,8 +217,21 @@ auto problem_main() -> int
 		// NEW: cooling and PE heating
 		// sol = exp(-a t) * (a * T0 - b + b * exp(a t)) / a, where a = cooling_rate, b = PE_rate
 		const double PE_rate_ = ISM_Traits<PulseProblem>::enable_photoelectric_heating ? PE_rate : 0.0;
-		const double T_exact_solution = std::exp(-cooling_rate * t_end) * (cooling_rate * T0 - PE_rate_ + PE_rate_ * std::exp(cooling_rate * t_end)) / cooling_rate;
+		const double Egas_exact_solution = std::exp(-cooling_rate * t_end) * (cooling_rate * T0 - PE_rate_ + PE_rate_ * std::exp(cooling_rate * t_end)) / cooling_rate;
+		const double T_exact_solution = Egas_exact_solution / C_V;
 		Tgas_exact.push_back(T_exact_solution);
+		const double Erad_line_exact_solution = - (Egas_exact_solution - C_V * T0 - PE_rate_ * t_end) * (chat / c);
+		for (int g = 0; g < n_groups_; ++g) {
+			const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+			if (g == line_index) {
+				Erad_line.push_back(Erad_t);
+				Erad_line_exact.push_back(Erad_line_exact_solution);
+			} else if (g == n_groups_ - 1) {
+				Erad_other_groups_error += std::abs(Erad_t - Erad_FUV);
+			} else {
+				Erad_other_groups_error += std::abs(Erad_t - Erad_floor_);
+			}
+		}
 	}
 	// compare temperature with Tgas_exact
 	double err_norm_T = 0.;
@@ -285,6 +286,7 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs, Erad_line_exact, Erad_exact_args);
 	matplotlibcpp::xlabel("x (dimensionless)");
 	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
+	matplotlibcpp::ylim(-0.05, 1.05);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
