@@ -332,10 +332,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    -> quokka::valarray<amrex::Real, nGroups_>;
 
 	template <typename RHSFunction, typename JacFunction>
-	AMREX_GPU_DEVICE static auto IntegratorOneVariable(RHSFunction rhs, JacFunction jac, double T0, double compare) -> double;
-
-	AMREX_GPU_DEVICE static auto RHS_dust_temperature(double T_gas, double T_d, double rho, quokka::valarray<double, nGroups_> const &Erad, 
-											double N_d, double dt, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double;
+	AMREX_GPU_DEVICE static auto BackwardEulerOneVariable(RHSFunction rhs, JacFunction jac, double x0, double compare) -> double;
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureBateKeto(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
@@ -382,8 +379,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									  amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
 									  quokka::valarray<double, nGroups_> const &fourPiBoverC,
 									  quokka::valarray<double, nGroups_> const &Erad, int n_iter,
-									  amrex::GpuArray<double, nGroups_> const &alpha_E,
-									  amrex::GpuArray<double, nGroups_> const &alpha_P) -> OpacityTerms<problem_t>;
+									  amrex::GpuArray<double, nGroups_> const &alpha_E = {},
+									  amrex::GpuArray<double, nGroups_> const &alpha_P = {}) -> OpacityTerms<problem_t>;
 
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustWithPE(
 	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0,
@@ -1380,24 +1377,24 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 
 template <typename problem_t>
 template <typename RHSFunction, typename JacFunction>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::IntegratorOneVariable(RHSFunction rhs, JacFunction jac, const double T0, const double compare) -> double
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction rhs, JacFunction jac, const double x0, const double compare) -> double
 {
-	double T = T0;
+	double x = x0;
 	const double rel_tol = 1.0e-8;
 	const double rel_change_tol = 1.0e-8; // TODO: set to 1e-6
 	const int max_iter_td = 100;
 	int iter_Td = 0;
 	for (; iter_Td < max_iter_td; ++iter_Td) {
-		const auto the_rhs = rhs(T);
+		const auto the_rhs = rhs(x);
 		if (std::abs(the_rhs) < rel_tol * compare) {
 			break;
 		}
 
-		const double dT = -the_rhs / jac(T);
-		T += dT;
+		const double dT = -the_rhs / jac(x);
+		x += dT;
 
 		if (iter_Td > 0) {
-			if (std::abs(dT) < rel_change_tol * std::abs(T)) {
+			if (std::abs(dT) < rel_change_tol * std::abs(x)) {
 				break;
 			}
 		}
@@ -1405,17 +1402,23 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::IntegratorOneVariable(RHSFunction rh
 
 	AMREX_ASSERT_WITH_MESSAGE(iter_Td < max_iter_td, "Newton iteration in IntegratorOneVariable failed to converge.");
 	if (iter_Td >= max_iter_td) {
-		T = -1.0;
+		x = -1.0;
 	}
 
-	return T;
+	return x;
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::RHS_dust_temperature(double const T_gas, double const T_d, double const rho,
-									   quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, 
-									   amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(double const T_gas, double const T_d_init, double const rho,
+									   quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
+									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
 {
+	if (n_step > 0) {
+		const auto T_d = T_gas - R_sum / (N_d * std::sqrt(T_gas));
+		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+		return T_d;
+	}
+
 	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
 
 	if constexpr (nGroups_ > 1 && opacity_model_ != OpacityModel::piecewise_constant_opacity) {
@@ -1424,229 +1427,50 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::RHS_dust_temperature(double const T_
 		}
 	}
 
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	quokka::valarray<double, nGroups_> kappaEVec{};
-
-	const double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
-
-	amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
-	for (int g = 0; g < nGroups_; ++g) {
-		alpha_quant_minus_one[g] = -1.0;
-	}
-
-	quokka::valarray<double, nGroups_> fourPiBoverC{};
-
-	if constexpr (nGroups_ == 1) {
-		fourPiBoverC[0] = ComputeThermalRadiationSingleGroup(T_d);
-	} else {
-		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
-	}
-
-	// TODO: replace the following with ComputeOpacity function
-	if constexpr (opacity_model_ == OpacityModel::single_group) {
-		kappaPVec[0] = ComputePlanckOpacity(rho, T_d);
-		kappaEVec[0] = ComputeEnergyMeanOpacity(rho, T_d);
-	} else {
-		const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
-		if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-			for (int g = 0; g < nGroups_; ++g) {
-				kappaPVec[g] = kappa_expo_and_lower_value[1][g];
-				kappaEVec[g] = kappa_expo_and_lower_value[1][g];
-			}
-		} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
-			kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
-			kappaEVec = kappaPVec;
-		} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-			const auto alpha_P = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
-			const auto alpha_E = ComputeRadQuantityExponents(Erad, rad_boundaries);
-			kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_P);
-			kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
-		}
-	}
-	AMREX_ASSERT(!kappaPVec.hasnan());
-	AMREX_ASSERT(!kappaEVec.hasnan());
-
-	const double LHS = c_hat_ * dt * rho * sum(kappaEVec * Erad - kappaPVec * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d);
-
-	return LHS;
-}
-
-#if 1
-template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(double const T_gas, double const T_d_init, double const rho,
-									   quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
-									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
-{
-	if (n_step > 0) {
-		return T_gas - R_sum / (N_d * std::sqrt(T_gas));
-	}
-
-	const double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
-
+	// the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d)
 	auto rhs = [=](double T_d) -> double {
-		return RHS_dust_temperature(T_gas, T_d, rho, Erad, N_d, dt, rad_boundaries);
+		double LHS = NAN;
+
+		if constexpr (nGroups_ == 1) {
+			const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+			const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d);
+			const auto kappaP = ComputePlanckOpacity(rho, T_d);
+			LHS = c_hat_ * dt * rho * (kappaE * Erad[0] - kappaP * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d);
+		} else {
+			const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+			const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
+			LHS = c_hat_ * dt * rho * sum(opacity_terms.kappaE * Erad - opacity_terms.kappaP * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d);
+		}
+
+		return LHS;
 	};
 
+	// the Jacobian of the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d)
 	auto jac = [=](double T_d) -> double {
-		quokka::valarray<double, nGroups_> fourPiBoverC{};
-		quokka::valarray<double, nGroups_> kappaPVec{};
-		quokka::valarray<double, nGroups_> kappaEVec{};
-
-		amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
-
-		if constexpr (nGroups_ > 1 && opacity_model_ != OpacityModel::piecewise_constant_opacity) {
-			for (int g = 0; g < nGroups_; ++g) {
-				rad_boundary_ratios[g] = rad_boundaries[g + 1] / rad_boundaries[g];
-			}
-		}
-
-		amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
-		for (int g = 0; g < nGroups_; ++g) {
-			alpha_quant_minus_one[g] = -1.0;
-		}
+		double dLHS_dTd = NAN;
 
 		if constexpr (nGroups_ == 1) {
-			fourPiBoverC[0] = ComputeThermalRadiationSingleGroup(T_d);
+			const auto kappaE = ComputeEnergyMeanOpacity(rho, T_d);
+			const auto kappaP = ComputePlanckOpacity(rho, T_d);
+			const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
+			dLHS_dTd = -c_hat_ * dt * rho * (kappaP * d_fourpib_over_c_d_t) - N_d * std::sqrt(T_gas);
 		} else {
-			fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+			const auto fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+			const auto opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, Erad, 0);
+			const auto d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
+			dLHS_dTd = -c_hat_ * dt * rho * sum(opacity_terms.kappaP * d_fourpib_over_c_d_t) - N_d * std::sqrt(T_gas);
 		}
 
-		if constexpr (opacity_model_ == OpacityModel::single_group) {
-			kappaPVec[0] = ComputePlanckOpacity(rho, T_d);
-			kappaEVec[0] = ComputeEnergyMeanOpacity(rho, T_d);
-		} else {
-			const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
-			if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-				for (int g = 0; g < nGroups_; ++g) {
-					kappaPVec[g] = kappa_expo_and_lower_value[1][g];
-					kappaEVec[g] = kappa_expo_and_lower_value[1][g];
-				}
-			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
-				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
-				kappaEVec = kappaPVec;
-			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-				const auto alpha_P = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
-				const auto alpha_E = ComputeRadQuantityExponents(Erad, rad_boundaries);
-				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_P);
-				kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
-			}
-		}
-		AMREX_ASSERT(!kappaPVec.hasnan());
-		AMREX_ASSERT(!kappaEVec.hasnan());
-
-		const double LHS = c_hat_ * dt * rho * sum(kappaEVec * Erad - kappaPVec * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d);
-
-		quokka::valarray<double, nGroups_> d_fourpib_over_c_d_t{};
-		if constexpr (nGroups_ == 1) {
-			d_fourpib_over_c_d_t[0] = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
-		} else {
-			d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
-		}
-		const double dLHS_dTd = -c_hat_ * dt * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - N_d * std::sqrt(T_gas);
 		return dLHS_dTd;
 	};
 
-	const auto T = IntegratorOneVariable(rhs, jac, T_d_init, Lambda_compare);
-
-	return T;
-}
-#endif
-
-#if 0
-template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(double const T_gas, double const T_d_init, double const rho,
-									   quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
-									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
-{
-	if (n_step > 0) {
-		return T_gas - R_sum / (N_d * std::sqrt(T_gas));
-	}
-
-	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
-
-	if constexpr (nGroups_ > 1 && opacity_model_ != OpacityModel::piecewise_constant_opacity) {
-		for (int g = 0; g < nGroups_; ++g) {
-			rad_boundary_ratios[g] = rad_boundaries[g + 1] / rad_boundaries[g];
-		}
-	}
-
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	quokka::valarray<double, nGroups_> kappaEVec{};
-
 	const double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
 
-	amrex::GpuArray<double, nGroups_> alpha_quant_minus_one{};
-	for (int g = 0; g < nGroups_; ++g) {
-		alpha_quant_minus_one[g] = -1.0;
-	}
+	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
+	AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 
-	// solve for dust temperature T_d using Newton iteration
-	double T_d = T_d_init;
-	const double lambda_rel_tol = 1.0e-8;
-	const int max_iter_td = 100;
-	int iter_Td = 0;
-	for (; iter_Td < max_iter_td; ++iter_Td) {
-		quokka::valarray<double, nGroups_> fourPiBoverC{};
-
-		if constexpr (nGroups_ == 1) {
-			fourPiBoverC[0] = ComputeThermalRadiationSingleGroup(T_d);
-		} else {
-			fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
-		}
-
-		if constexpr (opacity_model_ == OpacityModel::single_group) {
-			kappaPVec[0] = ComputePlanckOpacity(rho, T_d);
-			kappaEVec[0] = ComputeEnergyMeanOpacity(rho, T_d);
-		} else {
-			const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
-			if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
-				for (int g = 0; g < nGroups_; ++g) {
-					kappaPVec[g] = kappa_expo_and_lower_value[1][g];
-					kappaEVec[g] = kappa_expo_and_lower_value[1][g];
-				}
-			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {
-				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_quant_minus_one);
-				kappaEVec = kappaPVec;
-			} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_full_spectrum) {
-				const auto alpha_P = ComputeRadQuantityExponents(fourPiBoverC, rad_boundaries);
-				const auto alpha_E = ComputeRadQuantityExponents(Erad, rad_boundaries);
-				kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_P);
-				kappaEVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, rad_boundary_ratios, alpha_E);
-			}
-		}
-		AMREX_ASSERT(!kappaPVec.hasnan());
-		AMREX_ASSERT(!kappaEVec.hasnan());
-
-		const double LHS = c_hat_ * dt * rho * sum(kappaEVec * Erad - kappaPVec * fourPiBoverC) + N_d * std::sqrt(T_gas) * (T_gas - T_d);
-
-		if (std::abs(LHS) < lambda_rel_tol * std::abs(Lambda_compare)) {
-			break;
-		}
-
-		quokka::valarray<double, nGroups_> d_fourpib_over_c_d_t{};
-		if constexpr (nGroups_ == 1) {
-			d_fourpib_over_c_d_t[0] = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
-		} else {
-			d_fourpib_over_c_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
-		}
-		const double dLHS_dTd = -c_hat_ * dt * rho * sum(kappaPVec * d_fourpib_over_c_d_t) - N_d * std::sqrt(T_gas);
-		const double delta_T_d = LHS / dLHS_dTd;
-		T_d -= delta_T_d;
-
-		if (iter_Td > 0) {
-			if (std::abs(delta_T_d) < lambda_rel_tol * std::abs(T_d)) {
-				break;
-			}
-		}
-	}
-
-	AMREX_ASSERT_WITH_MESSAGE(iter_Td < max_iter_td, "Newton iteration for dust temperature failed to converge.");
-	if (iter_Td >= max_iter_td) {
-		T_d = -1.0;
-	}
 	return T_d;
 }
-#endif
 
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
