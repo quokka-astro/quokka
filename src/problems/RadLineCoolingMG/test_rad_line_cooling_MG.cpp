@@ -41,7 +41,7 @@ const double max_time = 10.0;
 const double CR_heating_rate = 1.0;
 const int line_index = 0; // last group
 const double cooling_rate = 0.1;
-const double PE_rate = 0.05;
+const double PE_rate = 0.02;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -75,7 +75,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 template <> struct ISM_Traits<PulseProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = 1;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_photoelectric_heating = 0;
+	static constexpr bool enable_photoelectric_heating = 1;
 	static constexpr bool enable_linear_cooling_heating = 1;
 };
 

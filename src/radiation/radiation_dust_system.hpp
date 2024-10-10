@@ -511,33 +511,33 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
-	const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
+	const auto cooling_t0 = DefineNetCoolingRate(T_gas, num_den) * dt;
 	if (dust_model == 2) {
 		// compute cooling/heating terms
 
-		const double compare = Egas_guess + sum(abs(cooling));
+		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_t0));
 
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
-		auto rhs = [=](double Egas) -> double {
-			const double T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas, massScalars);
-			const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
-			return Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling);
+		auto rhs = [=](double Egas_) -> double {
+			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const auto cooling_ = DefineNetCoolingRate(T_gas_, num_den) * dt;
+			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_);
 		};
 
 		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
-		auto jac = [=](double Egas) -> double {
-			const double T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas, massScalars);
-			const auto d_cooling_d_Tgas = DefineNetCoolingRateTempDerivative(T_gas, num_den) * dt;
-			return 1.0 + sum(d_cooling_d_Tgas);
+		auto jac = [=](double Egas_) -> double {
+			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, num_den) * dt;
+			return 1.0 + sum(d_cooling_d_Tgas_);
 		};
 
 		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
 	}
 
 	if constexpr (!add_line_cooling_to_radiation) {
-		AMREX_ASSERT_WITH_MESSAGE(min(cooling) >= 0., "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
+		AMREX_ASSERT_WITH_MESSAGE(min(cooling_t0) >= 0., "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
 		// TODO(CCH): potential GPU-related issue here.
-		EradVec_guess += (1/cscale) * cooling;
+		EradVec_guess += (1/cscale) * cooling_t0;
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
@@ -861,16 +861,29 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// }
 	} // END NEWTON-RAPHSON LOOP
 
-	const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
+	const auto cooling_t0 = DefineNetCoolingRate(T_gas, num_den) * dt;
 	if (dust_model == 2) {
-		// compute cooling/heating terms
-		// const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, NAN) * dt;
+		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_t0));
 
-		Egas_guess = Egas0 - cscale * lambda_gd_times_dt - sum(cooling) + PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
+		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) - PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
+		auto rhs = [=](double Egas_) -> double {
+			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const auto cooling_ = DefineNetCoolingRate(T_gas_, num_den) * dt;
+			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
+		};
+
+		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) + PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
+		auto jac = [=](double Egas_) -> double {
+			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, num_den) * dt;
+			return 1.0 + sum(d_cooling_d_Tgas_);
+		};
+
+		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
 	}
 
 	if constexpr (!add_line_cooling_to_radiation) {
-		EradVec_guess += (1/cscale) * cooling;
+		EradVec_guess += (1/cscale) * cooling_t0;
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
