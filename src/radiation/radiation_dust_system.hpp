@@ -24,15 +24,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
     double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
     quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/,
     quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t,
-		const double n, const double dt) -> JacobianResult<problem_t>
+		const double num_den, const double dt) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
 	const double cscale = c_light_ / c_hat_;
 
 	// compute cooling/heating terms
-	const auto cooling = DefineNetCoolingRate(T_gas, n) * dt;
-	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, n) * dt;
+	const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
+	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, num_den) * dt;
 
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling);
 	result.Fg = Erad_diff - (Rvec + Src);
@@ -131,15 +131,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
     double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0,
     double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
     quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/, quokka::valarray<double, nGroups_> const &kappaPoverE,
-    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const n, double const dt) -> JacobianResult<problem_t>
+    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const num_den, double const dt) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
 	const double cscale = c_light_ / c_hat_;
 
 	// compute cooling/heating terms
-	const auto cooling = DefineNetCoolingRate(T_gas, n) * dt;
-	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, n) * dt;
+	const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
+	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, num_den) * dt;
 
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1];
 	result.Fg = Erad - Erad0 - (Rvec + Src);
