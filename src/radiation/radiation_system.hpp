@@ -32,7 +32,7 @@
 using Real = amrex::Real;
 
 // Hyper parameters for the radiation solver
-static constexpr bool add_line_cooling_to_radiation = false;
+static constexpr bool add_line_cooling_to_radiation_in_jac = false;
 static constexpr bool include_delta_B = true;
 static constexpr bool use_diffuse_flux_mean_opacity = true;
 static constexpr bool special_edge_bin_slopes = false;	    // Use 2 and -4 as the slopes for the first and last bins, respectively

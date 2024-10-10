@@ -36,7 +36,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling);
 	result.Fg = Erad_diff - (Rvec + Src);
-	if constexpr (add_line_cooling_to_radiation) {
+	if constexpr (add_line_cooling_to_radiation_in_jac) {
 		result.Fg -= (1.0/cscale) * cooling;
 	}
 	result.Fg_abs_sum = 0.0;
@@ -143,7 +143,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 
 	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1];
 	result.Fg = Erad - Erad0 - (Rvec + Src);
-	if constexpr (add_line_cooling_to_radiation) {
+	if constexpr (add_line_cooling_to_radiation_in_jac) {
 		result.Fg -= (1.0/cscale) * cooling;
 	}
 	result.Fg_abs_sum = 0.0;
@@ -513,7 +513,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 	const auto cooling_t0 = DefineNetCoolingRate(T_gas, num_den) * dt;
 	if (dust_model == 2) {
-		// compute cooling/heating terms
+		// compute cooling/heating terms; implicitly update Egas_guess
 
 		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_t0));
 
@@ -534,7 +534,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
 	}
 
-	if constexpr (!add_line_cooling_to_radiation) {
+	if constexpr (!add_line_cooling_to_radiation_in_jac) {
 		AMREX_ASSERT_WITH_MESSAGE(min(cooling_t0) >= 0., "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
 		// TODO(CCH): potential GPU-related issue here.
 		EradVec_guess += (1/cscale) * cooling_t0;
@@ -863,6 +863,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 	const auto cooling_t0 = DefineNetCoolingRate(T_gas, num_den) * dt;
 	if (dust_model == 2) {
+		// compute cooling/heating terms; implicitly update Egas_guess
+
 		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_t0));
 
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) - PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
@@ -882,7 +884,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		Egas_guess = BackwardEulerOneVariable(rhs, jac, Egas0, compare);
 	}
 
-	if constexpr (!add_line_cooling_to_radiation) {
+	if constexpr (!add_line_cooling_to_radiation_in_jac) {
 		EradVec_guess += (1/cscale) * cooling_t0;
 	}
 

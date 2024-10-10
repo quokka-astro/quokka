@@ -237,7 +237,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt;
 					F_D = Erad_guess - Erad0 - (R + Src);
-					if constexpr (add_line_cooling_to_radiation) {
+					if constexpr (add_line_cooling_to_radiation_in_jac) {
 						F_D -= (1.0/cscale) * cooling * dt;
 					}
 					double F_D_abs = 0.0;
