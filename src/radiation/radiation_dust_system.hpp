@@ -33,8 +33,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 	// compute cooling/heating terms
 	const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
 	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, num_den) * dt;
+	const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
 
-	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling);
+	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - CR_heating;
 	result.Fg = Erad_diff - (Rvec + Src);
 	if constexpr (add_line_cooling_to_radiation_in_jac) {
 		result.Fg -= (1.0/cscale) * cooling;
@@ -140,8 +141,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	// compute cooling/heating terms
 	const auto cooling = DefineNetCoolingRate(T_gas, num_den) * dt;
 	const auto cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, num_den) * dt;
+	const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
 
-	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1];
+	result.F0 = Egas_diff + cscale * sum(Rvec) + sum(cooling) - PE_heating_energy_derivative * Erad[nGroups_ - 1] - CR_heating;
 	result.Fg = Erad - Erad0 - (Rvec + Src);
 	if constexpr (add_line_cooling_to_radiation_in_jac) {
 		result.Fg -= (1.0/cscale) * cooling;
@@ -513,15 +515,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 
 	const auto cooling_t0 = DefineNetCoolingRate(T_gas, num_den) * dt;
 	if (dust_model == 2) {
-		// compute cooling/heating terms; implicitly update Egas_guess
+		// include line cooling/heating, cosmic ray heating terms; implicitly update Egas_guess
 
-		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_t0));
+		const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
+
+		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_t0)) + CR_heating;
 
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
 		auto rhs = [=](double Egas_) -> double {
 			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto cooling_ = DefineNetCoolingRate(T_gas_, num_den) * dt;
-			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_);
+			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - CR_heating;
 		};
 
 		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
@@ -865,13 +869,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	if (dust_model == 2) {
 		// compute cooling/heating terms; implicitly update Egas_guess
 
-		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_t0));
+		const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
+		const double compare = Egas_guess + cscale * lambda_gd_times_dt + sum(abs(cooling_t0)) + CR_heating;
 
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) - PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
 		auto rhs = [=](double Egas_) -> double {
 			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto cooling_ = DefineNetCoolingRate(T_gas_, num_den) * dt;
-			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];
+			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1] - CR_heating;
 		};
 
 		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) + PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1];

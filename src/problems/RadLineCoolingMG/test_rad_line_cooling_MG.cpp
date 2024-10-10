@@ -38,9 +38,9 @@ constexpr double Erad_floor_ = a_rad * 1e-20;
 constexpr double Erad_FUV = Erad_bar; // = 1.0
 
 const double max_time = 10.0;
-const double CR_heating_rate = 1.0;
 const int line_index = 0; // last group
 const double cooling_rate = 0.1;
+const double CR_heating_rate = 0.03;
 const double PE_rate = 0.02;
 
 template <> struct SimulationData<PulseProblem> {
@@ -82,7 +82,6 @@ template <> struct ISM_Traits<PulseProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = 1;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = 1;
-	static constexpr bool enable_linear_cooling_heating = 1;
 };
 
 template <>
@@ -108,6 +107,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDeri
 	cooling.fillin(0.0);
 	cooling[line_index] = cooling_rate;
 	return cooling;
+}
+
+// CR heating
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
+{
+	return CR_heating_rate;
 }
 
 template <>
@@ -217,13 +223,15 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
+	const bool is_coupled = sim.dustGasInteractionCoeff_ > 1.0;
+
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
 	const auto t_end = sim.tNew_[0];
 
-	const double PE_rate_ = ISM_Traits<PulseProblem>::enable_photoelectric_heating ? PE_rate : 0.0;
+	const double heating_rate_ = ISM_Traits<PulseProblem>::enable_photoelectric_heating ? PE_rate + CR_heating_rate : CR_heating_rate;
 
 	// compute exact solution from t = 0 to t = t_end	
 	const double N_dt = 1000.;
@@ -232,10 +240,10 @@ auto problem_main() -> int
 	std::vector<double> Tgas_exact_vec{};
 	std::vector<double> Erad_line_exact_vec{};
 	while (true) {
-		const double Egas_exact_solution = std::exp(-cooling_rate * t_exact) * (cooling_rate * T0 - PE_rate_ + PE_rate_ * std::exp(cooling_rate * t_exact)) / cooling_rate;
+		const double Egas_exact_solution = std::exp(-cooling_rate * t_exact) * (cooling_rate * T0 - heating_rate_ + heating_rate_ * std::exp(cooling_rate * t_exact)) / cooling_rate;
 		const double T_exact_solution = Egas_exact_solution / C_V;
 		Tgas_exact_vec.push_back(T_exact_solution);
-		const double Erad_line_exact_solution = - (Egas_exact_solution - C_V * T0 - PE_rate_ * t_exact) * (chat / c);
+		const double Erad_line_exact_solution = - (Egas_exact_solution - C_V * T0 - heating_rate_ * t_exact) * (chat / c);
 		Erad_line_exact_vec.push_back(Erad_line_exact_solution);
 		t_exact_vec.push_back(t_exact);
 		t_exact += t_end / N_dt;
@@ -263,7 +271,11 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::ylim(-0.05, 2.05);
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./rad_line_cooling_MG_temperature.pdf");
+	if (is_coupled) {
+		matplotlibcpp::save("./rad_line_cooling_MG_coupled_temperature.pdf");
+	} else {
+		matplotlibcpp::save("./rad_line_cooling_MG_decoupled_temperature.pdf");
+	}
 
 	// plot Erad_line
 	matplotlibcpp::clf();
@@ -280,7 +292,11 @@ auto problem_main() -> int
 	matplotlibcpp::ylim(-0.05, 1.05);
 	matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./rad_line_cooling_MG_radiation_energy_density.pdf");
+	if (is_coupled) {
+		matplotlibcpp::save("./rad_line_cooling_MG_coupled_radiation_energy_density.pdf");
+	} else {
+		matplotlibcpp::save("./rad_line_cooling_MG_decoupled_radiation_energy_density.pdf");
+	}
 #endif
 
 	std::vector<double> Tgas_interp(t.size());
