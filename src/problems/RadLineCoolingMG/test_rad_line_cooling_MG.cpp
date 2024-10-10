@@ -40,7 +40,7 @@ constexpr double Erad_FUV = Erad_bar; // = 1.0
 const double max_time = 10.0;
 const double CR_heating_rate = 1.0;
 const int line_index = 0; // last group
-const double cooling_rate = 1.0e-1;
+const double cooling_rate = 0.1;
 const double PE_rate = 0.05;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
@@ -75,7 +75,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 template <> struct ISM_Traits<PulseProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = 1;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_photoelectric_heating = 1;
+	static constexpr bool enable_photoelectric_heating = 0;
 	static constexpr bool enable_linear_cooling_heating = 1;
 };
 
@@ -269,7 +269,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::ylim(0.0, 2.0);
+	matplotlibcpp::ylim(-0.05, 2.05);
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./rad_line_cooling_MG_temperature.pdf");
