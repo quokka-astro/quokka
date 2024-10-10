@@ -348,6 +348,13 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				AMREX_ASSERT(Egas_guess > 0.0);
 				AMREX_ASSERT(Erad_guess >= 0.0);
 
+				if constexpr (!add_line_cooling_to_radiation_in_jac) {
+					const auto cooling_tend = DefineNetCoolingRate(T_gas, num_den)[0] * dt;
+					AMREX_ASSERT_WITH_MESSAGE(cooling_tend >= 0., "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
+					// TODO(CCH): potential GPU-related issue here.
+					Erad_guess += (1/cscale) * cooling_tend;
+				}
+
 				if (n > 0) {
 					// calculate kappaF since the temperature has changed
 					kappaF = ComputeFluxMeanOpacity(rho, T_d);
