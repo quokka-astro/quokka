@@ -108,6 +108,9 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *ar
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
 
+	// check if x is within the range of arr_x
+	assert(x[0] >= arr_x[0] && x[len - 1] <= arr_x[arr_len - 1]);
+
 	int64_t j = 0;
 	for (int i = 0; i < len; i++) {
 		j = binary_search_with_guess(x[i], arr_x, arr_len, j);
