@@ -17,11 +17,10 @@ struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int n_groups_ = 1;
-constexpr double CR_heating_rate = 1.0;
-constexpr double line_cooling_rate = CR_heating_rate;
 constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
 
-const double cooling_rate = 1.0e-1;
+const double cooling_rate = 0.1;
+const double CR_heating_rate = 0.03;
 
 constexpr double c = 1.0;
 constexpr double chat = c;
@@ -32,6 +31,7 @@ constexpr double T0 = 1.0;   // temperature
 constexpr double rho0 = 1.0; // matter density
 constexpr double a_rad = 1.0;
 constexpr double mu = 1.5; // mean molecular weight; so that C_V = 1.0
+constexpr double C_V = 1.0;
 constexpr double k_B = 1.0;
 
 constexpr double nu_unit = 1.0;
@@ -90,6 +90,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDeri
 	cooling.fillin(0.0);
 	cooling[0] = cooling_rate;
 	return cooling;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
+{
+	return CR_heating_rate;
 }
 
 template <> 
@@ -207,12 +213,13 @@ auto problem_main() -> int
 		xs.at(i) = x;
 		const double Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
 		Erad_line.push_back(Erad_t);
-		Erad_line_exact.push_back(erad_floor); // TODO
+		Erad_line_exact.push_back(erad_floor);
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		// const double T_exact_solution = T0 - cooling_rate * max_time;
-		const double T_exact_solution = std::exp(-cooling_rate * t_end) * T0;
+		const double Egas_exact_solution = std::exp(-cooling_rate * t_end) * (cooling_rate * T0 - CR_heating_rate + CR_heating_rate * std::exp(cooling_rate * t_end)) / cooling_rate;
+		const double T_exact_solution = Egas_exact_solution / C_V;
 		Tgas_exact.push_back(T_exact_solution);
 	}
 	// compare temperature with Tgas_exact

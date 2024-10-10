@@ -109,7 +109,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDeri
 	return cooling;
 }
 
-// CR heating
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
 {

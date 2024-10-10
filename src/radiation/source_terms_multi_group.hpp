@@ -107,13 +107,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
 								  quokka::valarray<double, nGroups_> const &tau, double c_v,
 								  quokka::valarray<double, nGroups_> const &kappaPoverE,
-								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, 
+									double const num_den, double const dt) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
 	const double cscale = c_light_ / c_hat_;
 
-	result.F0 = Egas_diff + cscale * sum(Rvec);
+	// CR_heating term
+	const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
+
+	result.F0 = Egas_diff + cscale * sum(Rvec) - CR_heating;
 	result.Fg = Erad_diff - (Rvec + Src);
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {

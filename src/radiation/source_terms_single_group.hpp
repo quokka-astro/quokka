@@ -230,12 +230,13 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 		 			double cooling = 0.0;
 		 			double cooling_derivative = 0.0;
+					const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
 					if constexpr (enable_dust_gas_thermal_coupling_model_) {
 						cooling = DefineNetCoolingRate(T_gas, num_den)[0];
 						cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, num_den)[0];
 					}
 
-					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt;
+					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
 					if constexpr (add_line_cooling_to_radiation_in_jac) {
 						F_D -= (1.0/cscale) * cooling * dt;
