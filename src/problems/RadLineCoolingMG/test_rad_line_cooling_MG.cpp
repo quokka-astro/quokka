@@ -43,6 +43,12 @@ const int line_index = 0; // last group
 const double cooling_rate = 0.1;
 const double PE_rate = 0.02;
 
+template <> struct SimulationData<PulseProblem> {
+	std::vector<double> t_vec_;
+	std::vector<double> Tgas_vec_;
+	std::vector<double> Erad_line_vec_;
+};
+
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = k_B;
@@ -145,6 +151,25 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
+template <> void QuokkaSimulation<PulseProblem>::computeAfterTimestep()
+{
+	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); // NOLINT
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		userData_.t_vec_.push_back(tNew_[0]);
+
+		const amrex::Real Etot_i = values.at(RadSystem<PulseProblem>::gasEnergy_index)[0];
+		const amrex::Real x1GasMom = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[0];
+		const amrex::Real x2GasMom = values.at(RadSystem<PulseProblem>::x2GasMomentum_index)[0];
+		const amrex::Real x3GasMom = values.at(RadSystem<PulseProblem>::x3GasMomentum_index)[0];
+		const amrex::Real rho = values.at(RadSystem<PulseProblem>::gasDensity_index)[0];
+		const amrex::Real Egas_i = RadSystem<PulseProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
+		userData_.Tgas_vec_.push_back(quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho, Egas_i));
+		const double Erad_line_i = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * line_index)[0];
+		userData_.Erad_line_vec_.push_back(Erad_line_i);
+	}
+}
+
 auto problem_main() -> int
 {
 	// This problem is a *linear* radiation diffusion problem, i.e.
@@ -196,65 +221,32 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
-	std::vector<double> xs(nx);
-	std::vector<double> Tgas(nx);
-	std::vector<double> Tgas_exact{};
-	std::vector<double> Erad_line{};
-	std::vector<double> Erad_line_exact{};
-	double Erad_other_groups_error = 0.0;
-
 	const auto t_end = sim.tNew_[0];
 
-	// compute exact solution and error norm
-	for (int i = 0; i < nx; ++i) {
-		amrex::Real const x = position[i];
-		xs.at(i) = x;
-		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
-		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
-		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
-		// OLD: cooling only; no PE heating
-		// const double T_exact_solution = std::exp(-cooling_rate * t_end) * T0;
-		// NEW: cooling and PE heating
-		// sol = exp(-a t) * (a * T0 - b + b * exp(a t)) / a, where a = cooling_rate, b = PE_rate
-		const double PE_rate_ = ISM_Traits<PulseProblem>::enable_photoelectric_heating ? PE_rate : 0.0;
-		const double Egas_exact_solution = std::exp(-cooling_rate * t_end) * (cooling_rate * T0 - PE_rate_ + PE_rate_ * std::exp(cooling_rate * t_end)) / cooling_rate;
+	const double PE_rate_ = ISM_Traits<PulseProblem>::enable_photoelectric_heating ? PE_rate : 0.0;
+
+	// compute exact solution from t = 0 to t = t_end	
+	const double N_dt = 1000.;
+	double t_exact = 0.0;
+	std::vector<double> t_exact_vec{};
+	std::vector<double> Tgas_exact_vec{};
+	std::vector<double> Erad_line_exact_vec{};
+	while (true) {
+		const double Egas_exact_solution = std::exp(-cooling_rate * t_exact) * (cooling_rate * T0 - PE_rate_ + PE_rate_ * std::exp(cooling_rate * t_exact)) / cooling_rate;
 		const double T_exact_solution = Egas_exact_solution / C_V;
-		Tgas_exact.push_back(T_exact_solution);
-		const double Erad_line_exact_solution = - (Egas_exact_solution - C_V * T0 - PE_rate_ * t_end) * (chat / c);
-		for (int g = 0; g < n_groups_; ++g) {
-			const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
-			if (g == line_index) {
-				Erad_line.push_back(Erad_t);
-				Erad_line_exact.push_back(Erad_line_exact_solution);
-			} else if (g == n_groups_ - 1) {
-				Erad_other_groups_error += std::abs(Erad_t - Erad_FUV);
-			} else {
-				Erad_other_groups_error += std::abs(Erad_t - Erad_floor_);
-			}
+		Tgas_exact_vec.push_back(T_exact_solution);
+		const double Erad_line_exact_solution = - (Egas_exact_solution - C_V * T0 - PE_rate_ * t_exact) * (chat / c);
+		Erad_line_exact_vec.push_back(Erad_line_exact_solution);
+		t_exact_vec.push_back(t_exact);
+		t_exact += t_end / N_dt;
+		if (t_exact > 1.01 * t_end) {
+			break; // note that we need the last time to be greater than t_end
 		}
 	}
-	// compare temperature with Tgas_exact
-	double err_norm_T = 0.;
-	double sol_norm_T = 0.;
-	for (int i = 0; i < nx; ++i) {
-		err_norm_T += std::abs(Tgas[i] - Tgas_exact[i]);
-		sol_norm_T += std::abs(Tgas_exact[i]);
-	}
-	const double rel_error_T = err_norm_T / sol_norm_T;
-	// compute error norm for Erad_line 
-	double err_norm_Erad = 0.;
-	for (int i = 0; i < nx; ++i) {
-		err_norm_Erad += std::abs(Erad_line[i] - Erad_line_exact[i]);
-	}
-	const double rel_error_Erad = (err_norm_Erad + Erad_other_groups_error) / Erad_bar;
-	const double rel_error = std::max(rel_error_T, rel_error_Erad);
 
-	const double error_tol = 0.005;
-	amrex::Print() << "Relative L1 error norm for T_gas = " << rel_error << std::endl;
-	int status = 0;
-	if ((rel_error > error_tol) || std::isnan(rel_error)) {
-		status = 1;
-	}
+	std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
+	std::vector<double> &Erad_line = sim.userData_.Erad_line_vec_;
+	std::vector<double> &t = sim.userData_.t_vec_;
 
 #ifdef HAVE_PYTHON
 	// plot temperature
@@ -262,15 +254,14 @@ auto problem_main() -> int
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "T_gas (numerical)";
 	Tgas_args["linestyle"] = "-";
-	matplotlibcpp::plot(xs, Tgas, Tgas_args);
+	matplotlibcpp::plot(t, Tgas, Tgas_args);
 	Tgas_args["label"] = "T_gas (exact)";
 	Tgas_args["linestyle"] = "--";
-	matplotlibcpp::plot(xs, Tgas_exact, Tgas_args);
-	matplotlibcpp::xlabel("x (dimensionless)");
+	matplotlibcpp::plot(t_exact_vec, Tgas_exact_vec, Tgas_args);
+	matplotlibcpp::xlabel("t (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::ylim(-0.05, 2.05);
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./rad_line_cooling_MG_temperature.pdf");
 
@@ -282,34 +273,54 @@ auto problem_main() -> int
 	Erad_args["linestyle"] = "-";
 	Erad_exact_args["label"] = "E_rad (exact)";
 	Erad_exact_args["linestyle"] = "--";
-	matplotlibcpp::plot(xs, Erad_line, Erad_args);
-	matplotlibcpp::plot(xs, Erad_line_exact, Erad_exact_args);
-	matplotlibcpp::xlabel("x (dimensionless)");
+	matplotlibcpp::plot(t, Erad_line, Erad_args);
+	matplotlibcpp::plot(t_exact_vec, Erad_line_exact_vec, Erad_exact_args);
+	matplotlibcpp::xlabel("t (dimensionless)");
 	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
 	matplotlibcpp::ylim(-0.05, 1.05);
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./rad_line_cooling_MG_radiation_energy_density.pdf");
 #endif
 
+	std::vector<double> Tgas_interp(t.size());
+	std::vector<double> Erad_line_interp(t.size());
+	interpolate_arrays(t.data(), Tgas_interp.data(), static_cast<int>(t.size()), t_exact_vec.data(), Tgas_exact_vec.data(), static_cast<int>(t_exact_vec.size()));
+	interpolate_arrays(t.data(), Erad_line_interp.data(), static_cast<int>(t.size()), t_exact_vec.data(), Erad_line_exact_vec.data(), static_cast<int>(t_exact_vec.size()));
+
+	// compute error norm
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	for (size_t i = 0; i < t.size(); ++i) {
+		err_norm += std::abs(Tgas[i] - Tgas_interp[i]);
+		err_norm += std::abs(Erad_line[i] - Erad_line_interp[i]);
+		sol_norm += std::abs(Tgas_interp[i]) + std::abs(Erad_line_interp[i]);
+	}
+	const double rel_error = err_norm / sol_norm;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+
 	if (export_csv) {
 		std::ofstream file;
 		file.open("rad_line_cooling_temp.csv");
-		file << "xs,Tgas,Tgas_exact\n";
-		for (size_t i = 0; i < xs.size(); ++i) {
-			file << std::scientific << std::setprecision(12) << xs[i] << "," << Tgas[i] << "," << Tgas_exact[i] << "\n";
+		file << "t,Tgas,Tgas_exact\n";
+		for (size_t i = 0; i < t.size(); ++i) {
+			file << std::scientific << std::setprecision(12) << t[i] << "," << Tgas[i] << "," << Tgas_exact_vec[i] << "\n";
 		}
 		file.close();
 
 		file.open("rad_line_cooling_rad_energy_density.csv");
-		file << "xs,Erad_line,Erad_line_exact\n";
-		for (size_t i = 0; i < xs.size(); ++i) {
-			file << std::scientific << std::setprecision(12) << xs[i] << "," << Erad_line[i] << "," << Erad_line_exact[i] << "\n";
+		file << "t,Erad_line,Erad_line_exact\n";
+		for (size_t i = 0; i < t.size(); ++i) {
+			file << std::scientific << std::setprecision(12) << t[i] << "," << Erad_line[i] << "," << Erad_line_exact_vec[i] << "\n";
 		}
 		file.close();
 	}
 
 	// exit
+	int status = 0;
+	const double error_tol = 0.0005;
+	if (rel_error > error_tol) {
+		status = 1;
+	}
 	return status;
 }
