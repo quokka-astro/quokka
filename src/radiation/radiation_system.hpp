@@ -351,6 +351,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_HOST_DEVICE static auto DefineNetCoolingRateTempDerivative(amrex::Real temperature, amrex::Real num_density) -> quokka::valarray<double, nGroups_>;
 
+	AMREX_GPU_HOST_DEVICE static auto DefineCosmicRayHeatingRate(amrex::Real num_density) -> double;
+
 	AMREX_GPU_DEVICE static void ComputeModelDependentKappaFAndDeltaTerms(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
 									      quokka::valarray<double, nGroups_> const &fourPiBoverC,
 									      OpacityTerms<problem_t> &opacity_terms);
@@ -527,6 +529,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRateTempDerivat
 	quokka::valarray<double, nGroups_> cooling{};
 	cooling.fillin(0.0);
 	return cooling;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
+{
+	return 0.0;
 }
 
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
