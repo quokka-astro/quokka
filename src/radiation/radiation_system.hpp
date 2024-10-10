@@ -87,7 +87,7 @@ template <typename problem_t> struct ISM_Traits {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_linear_cooling_heating = false;
+	static constexpr bool enable_line_cooling_and_heating = false;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -202,7 +202,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr bool enable_dust_gas_thermal_coupling_model_ = ISM_Traits<problem_t>::enable_dust_gas_thermal_coupling_model;
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
-	static constexpr bool enable_linear_cooling_heating_ = ISM_Traits<problem_t>::enable_linear_cooling_heating;
+	static constexpr bool enable_line_cooling_heating_ = ISM_Traits<problem_t>::enable_line_cooling_and_heating;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
