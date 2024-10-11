@@ -95,8 +95,6 @@ constexpr double T_equilibrium = 0.768032502191;
 // constexpr double max_time = 1000.0 / (c * rho0 * kappa0); // dt >> 1 / (c * chi)
 constexpr double max_time = 10.0 / (1e-2 * c);
 
-constexpr double Erad0 = a_rad * T0 * T0 * T0 * T0;
-constexpr double Erad_beta2 = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad0;
 constexpr double erad_floor = a_rad * 1e-30;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {

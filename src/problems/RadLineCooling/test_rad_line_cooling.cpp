@@ -32,7 +32,6 @@ constexpr double C_V = 1.0;
 constexpr double k_B = 1.0;
 
 constexpr double nu_unit = 1.0;
-constexpr double Erad_bar = a_rad * T0 * T0 * T0 * T0;
 constexpr double erad_floor = a_rad * 1e-20;
 
 const double max_time = 10.0;
@@ -152,7 +151,7 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 
 template <> void QuokkaSimulation<PulseProblem>::computeAfterTimestep()
 {
-	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); // NOLINT
+	auto [_, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); // NOLINT
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		userData_.t_vec_.push_back(tNew_[0]);
@@ -217,7 +216,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// read output variables
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	auto [_, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 
 	std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
 	std::vector<double> &Erad = sim.userData_.Erad_vec_;

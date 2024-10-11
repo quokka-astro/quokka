@@ -158,7 +158,7 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 
 template <> void QuokkaSimulation<PulseProblem>::computeAfterTimestep()
 {
-	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); // NOLINT
+	auto [_, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); // NOLINT
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		userData_.t_vec_.push_back(tNew_[0]);
@@ -225,7 +225,7 @@ auto problem_main() -> int
 	const bool is_coupled = sim.dustGasInteractionCoeff_ > 1.0;
 
 	// read output variables
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	auto [_, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 
 	const auto t_end = sim.tNew_[0];
 

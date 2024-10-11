@@ -330,7 +330,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    -> quokka::valarray<amrex::Real, nGroups_>;
 
 	template <typename RHSFunction, typename JacFunction>
-	AMREX_GPU_DEVICE static auto BackwardEulerOneVariable(RHSFunction rhs, JacFunction jac, double x0, double compare) -> double;
+	AMREX_GPU_DEVICE static auto BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, double x0, double compare) -> double;
 
 	AMREX_GPU_DEVICE static auto
 	ComputeDustTemperatureBateKeto(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
@@ -1381,7 +1381,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 
 template <typename problem_t>
 template <typename RHSFunction, typename JacFunction>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction rhs, JacFunction jac, const double x0, const double compare) -> double
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, const double x0, const double compare) -> double
 {
 	double x = x0;
 	const double rel_tol = 1.0e-8;
