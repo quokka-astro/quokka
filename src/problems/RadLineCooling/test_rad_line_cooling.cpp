@@ -6,10 +6,10 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "util/fextract.hpp"
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
 #include "test_rad_line_cooling.hpp"
+#include "util/fextract.hpp"
 
 static constexpr bool export_csv = true;
 
@@ -81,7 +81,8 @@ template <> struct ISM_Traits<PulseProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const temperature, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const temperature, amrex::Real const /*num_density*/)
+    -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
 	cooling.fillin(0.0);
@@ -90,7 +91,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
+    -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
 	cooling.fillin(0.0);
@@ -98,13 +100,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDeri
 	return cooling;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
 {
 	return CR_heating_rate;
 }
 
-template <> 
+template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return kappa0;
@@ -161,7 +162,7 @@ template <> void QuokkaSimulation<PulseProblem>::computeAfterTimestep()
 		userData_.t_vec_.push_back(tNew_[0]);
 
 		const amrex::Real Etot_i = values.at(RadSystem<PulseProblem>::gasEnergy_index)[0];
-		const amrex::Real x1GasMom = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[0];	
+		const amrex::Real x1GasMom = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[0];
 		const amrex::Real x2GasMom = values.at(RadSystem<PulseProblem>::x2GasMomentum_index)[0];
 		const amrex::Real x3GasMom = values.at(RadSystem<PulseProblem>::x3GasMomentum_index)[0];
 		const amrex::Real rho = values.at(RadSystem<PulseProblem>::gasDensity_index)[0];
@@ -229,11 +230,12 @@ auto problem_main() -> int
 
 	std::vector<double> Tgas_exact_vec{};
 	std::vector<double> Erad_exact_vec{};
-	for (const auto& t_exact : t_sim) {
-		const double Egas_exact_solution = std::exp(-cooling_rate * t_exact) * (cooling_rate * T0 - CR_heating_rate + CR_heating_rate * std::exp(cooling_rate * t_exact)) / cooling_rate;
+	for (const auto &t_exact : t_sim) {
+		const double Egas_exact_solution = std::exp(-cooling_rate * t_exact) *
+						   (cooling_rate * T0 - CR_heating_rate + CR_heating_rate * std::exp(cooling_rate * t_exact)) / cooling_rate;
 		const double T_exact_solution = Egas_exact_solution / C_V;
 		Tgas_exact_vec.push_back(T_exact_solution);
-		const double Erad_exact_solution = - (Egas_exact_solution - C_V * T0 - CR_heating_rate * t_exact) * (chat / c);
+		const double Erad_exact_solution = -(Egas_exact_solution - C_V * T0 - CR_heating_rate * t_exact) * (chat / c);
 		Erad_exact_vec.push_back(Erad_exact_solution);
 	}
 

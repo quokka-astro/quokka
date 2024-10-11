@@ -228,8 +228,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						}
 					}
 
-		 			double cooling = 0.0;
-		 			double cooling_derivative = 0.0;
+					double cooling = 0.0;
+					double cooling_derivative = 0.0;
 					const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
 					if constexpr (enable_dust_gas_thermal_coupling_model_) {
 						cooling = DefineNetCoolingRate(T_gas, num_den)[0];
@@ -239,7 +239,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
 					if constexpr (add_line_cooling_to_radiation_in_jac) {
-						F_D -= (1.0/cscale) * cooling * dt;
+						F_D -= (1.0 / cscale) * cooling * dt;
 					}
 					double F_D_abs = 0.0;
 					if (tau > 0.0) {
@@ -284,7 +284,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 						J00 = 1.0 + cooling_derivative * dt / c_v;
 						J01 = cscale;
-						J10 = 1.0 / c_v * dEg_dT - (1/cscale) * cooling_derivative * dt;
+						J10 = 1.0 / c_v * dEg_dT - (1 / cscale) * cooling_derivative * dt;
 						if (tau <= 0.0) {
 							J11 = -std::numeric_limits<double>::infinity();
 						} else {
@@ -299,7 +299,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						J01 = cscale;
 						J10 = 1.0 / c_v * dEg_dT;
 						if (tau <= 0.0) {
-							J11 = - LARGE;
+							J11 = -LARGE;
 						} else {
 							J11 = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg - kappaPoverE / tau - 1.0;
 						}
@@ -350,9 +350,10 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 				if constexpr (!add_line_cooling_to_radiation_in_jac) {
 					const auto cooling_tend = DefineNetCoolingRate(T_gas, num_den)[0] * dt;
-					AMREX_ASSERT_WITH_MESSAGE(cooling_tend >= 0., "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
+					AMREX_ASSERT_WITH_MESSAGE(cooling_tend >= 0.,
+								  "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
 					// TODO(CCH): potential GPU-related issue here.
-					Erad_guess += (1/cscale) * cooling_tend;
+					Erad_guess += (1 / cscale) * cooling_tend;
 				}
 
 				if (n > 0) {

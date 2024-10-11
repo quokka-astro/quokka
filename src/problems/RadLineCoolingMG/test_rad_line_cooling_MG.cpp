@@ -6,10 +6,10 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "util/fextract.hpp"
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
 #include "test_rad_line_cooling_MG.hpp"
+#include "util/fextract.hpp"
 
 static constexpr bool export_csv = true;
 
@@ -85,14 +85,15 @@ template <> struct ISM_Traits<PulseProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
-											     amrex::Real const /*num_density*/) -> amrex::Real
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
+    -> amrex::Real
 {
 	return PE_rate / Erad_FUV;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const temperature, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const temperature, amrex::Real const /*num_density*/)
+    -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
 	cooling.fillin(0.0);
@@ -101,7 +102,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
+    -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
 	cooling.fillin(0.0);
@@ -109,8 +111,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDeri
 	return cooling;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
 {
 	return CR_heating_rate;
 }
@@ -232,17 +233,18 @@ auto problem_main() -> int
 
 	const double heating_rate_ = ISM_Traits<PulseProblem>::enable_photoelectric_heating ? PE_rate + CR_heating_rate : CR_heating_rate;
 
-	// compute exact solution from t = 0 to t = t_end	
+	// compute exact solution from t = 0 to t = t_end
 	const double N_dt = 1000.;
 	double t_exact = 0.0;
 	std::vector<double> t_exact_vec{};
 	std::vector<double> Tgas_exact_vec{};
 	std::vector<double> Erad_line_exact_vec{};
 	while (true) {
-		const double Egas_exact_solution = std::exp(-cooling_rate * t_exact) * (cooling_rate * T0 - heating_rate_ + heating_rate_ * std::exp(cooling_rate * t_exact)) / cooling_rate;
+		const double Egas_exact_solution =
+		    std::exp(-cooling_rate * t_exact) * (cooling_rate * T0 - heating_rate_ + heating_rate_ * std::exp(cooling_rate * t_exact)) / cooling_rate;
 		const double T_exact_solution = Egas_exact_solution / C_V;
 		Tgas_exact_vec.push_back(T_exact_solution);
-		const double Erad_line_exact_solution = - (Egas_exact_solution - C_V * T0 - heating_rate_ * t_exact) * (chat / c);
+		const double Erad_line_exact_solution = -(Egas_exact_solution - C_V * T0 - heating_rate_ * t_exact) * (chat / c);
 		Erad_line_exact_vec.push_back(Erad_line_exact_solution);
 		t_exact_vec.push_back(t_exact);
 		t_exact += t_end / N_dt;
@@ -300,8 +302,10 @@ auto problem_main() -> int
 
 	std::vector<double> Tgas_interp(t.size());
 	std::vector<double> Erad_line_interp(t.size());
-	interpolate_arrays(t.data(), Tgas_interp.data(), static_cast<int>(t.size()), t_exact_vec.data(), Tgas_exact_vec.data(), static_cast<int>(t_exact_vec.size()));
-	interpolate_arrays(t.data(), Erad_line_interp.data(), static_cast<int>(t.size()), t_exact_vec.data(), Erad_line_exact_vec.data(), static_cast<int>(t_exact_vec.size()));
+	interpolate_arrays(t.data(), Tgas_interp.data(), static_cast<int>(t.size()), t_exact_vec.data(), Tgas_exact_vec.data(),
+			   static_cast<int>(t_exact_vec.size()));
+	interpolate_arrays(t.data(), Erad_line_interp.data(), static_cast<int>(t.size()), t_exact_vec.data(), Erad_line_exact_vec.data(),
+			   static_cast<int>(t_exact_vec.size()));
 
 	// compute error norm
 	double err_norm = 0.;
