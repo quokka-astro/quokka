@@ -286,7 +286,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	double T_d = NAN;
 	double delta_x = NAN;
 	quokka::valarray<double, nGroups_> delta_R{};
-	quokka::valarray<double, nGroups_> F_D{};
 	quokka::valarray<double, nGroups_> Rvec{};
 	quokka::valarray<double, nGroups_> tau0{};	 // optical depth across c * dt at old state
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
@@ -636,7 +635,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	double T_d = NAN;
 	double delta_x = NAN;
 	quokka::valarray<double, nGroups_> delta_R{};
-	quokka::valarray<double, nGroups_> F_D{};
 	quokka::valarray<double, nGroups_> Rvec{};
 	quokka::valarray<double, nGroups_> tau0{};	 // optical depth across c * dt at old state
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state

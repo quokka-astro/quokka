@@ -16,9 +16,6 @@ static constexpr bool export_csv = true;
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr int n_groups_ = 1;
-constexpr amrex::GpuArray<double, 5> rad_boundaries_ = {1.00000000e-03, 1.77827941e-02, 3.16227766e-01, 5.62341325e+00, 1.00000000e+02};
-
 const double cooling_rate = 0.1;
 const double CR_heating_rate = 0.03;
 
@@ -35,7 +32,6 @@ constexpr double C_V = 1.0;
 constexpr double k_B = 1.0;
 
 constexpr double nu_unit = 1.0;
-constexpr double T_equilibrium = 0.768032502191;
 constexpr double Erad_bar = a_rad * T0 * T0 * T0 * T0;
 constexpr double erad_floor = a_rad * 1e-20;
 
@@ -222,7 +218,6 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	const int nx = static_cast<int>(position.size());
 
 	std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
 	std::vector<double> &Erad = sim.userData_.Erad_vec_;

@@ -32,7 +32,6 @@ constexpr double C_V = 1.0;
 constexpr double k_B = 1.0;
 
 constexpr double nu_unit = 1.0;
-constexpr double T_equilibrium = 0.768032502191;
 constexpr double Erad_bar = a_rad * T0 * T0 * T0 * T0;
 constexpr double Erad_floor_ = a_rad * 1e-20;
 constexpr double Erad_FUV = Erad_bar; // = 1.0
@@ -227,7 +226,6 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	const int nx = static_cast<int>(position.size());
 
 	const auto t_end = sim.tNew_[0];
 

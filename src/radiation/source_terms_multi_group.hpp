@@ -185,7 +185,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	double T_d = NAN; // a dummy dust temperature, T_d = T_gas for gas-only model
 	double delta_x = NAN;
 	quokka::valarray<double, nGroups_> delta_R{};
-	quokka::valarray<double, nGroups_> F_D{};
 	quokka::valarray<double, nGroups_> Rvec{};
 	quokka::valarray<double, nGroups_> tau0{};	 // optical depth across c * dt at old state
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
@@ -626,7 +625,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		double Ekin0 = NAN;
 		double Etot0 = NAN;
 		double Egas_guess = NAN;
-		quokka::valarray<double, nGroups_> EradVec_guess{};
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
 
