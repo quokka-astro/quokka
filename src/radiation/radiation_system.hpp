@@ -789,7 +789,7 @@ template <typename problem_t>
 template <typename ArrayType>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>
 {
-	amrex::GpuArray<Real, nmscalars_> massScalars;
+	amrex::GpuArray<Real, nmscalars_> massScalars{};
 	for (int n = 0; n < nmscalars_; ++n) {
 		massScalars[n] = arr(i, j, k, scalar0_index + n);
 	}
