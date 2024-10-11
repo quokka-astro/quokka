@@ -223,8 +223,6 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
-	double Erad_other_groups_error = 0.0;
-
 	std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
 	std::vector<double> &Erad = sim.userData_.Erad_vec_;
 	std::vector<double> &t_sim = sim.userData_.t_vec_;
