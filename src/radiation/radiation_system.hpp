@@ -1381,7 +1381,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 
 template <typename problem_t>
 template <typename RHSFunction, typename JacFunction>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, const double x0, const double compare) -> double
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, const double x0, const double compare)
+    -> double
 {
 	double x = x0;
 	const double rel_tol = 1.0e-8;
