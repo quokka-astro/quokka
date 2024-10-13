@@ -86,7 +86,14 @@ RadSystem<TubeProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<dou
 	return exponents_and_values;
 }
 
-template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> struct SimulationData<TubeProblem> {
+	amrex::Gpu::DeviceVector<double> x_arr_g;
+	amrex::Gpu::DeviceVector<double> rho_arr_g;
+	amrex::Gpu::DeviceVector<double> Pgas_arr_g;
+	amrex::Gpu::DeviceVector<double> Erad_arr_g;
+};
+
+template <> void QuokkaSimulation<TubeProblem>::preCalculateInitialConditions()
 {
 	// map initial conditions to the global variables
 	std::string filename = "../extern/pressure_tube/initial_conditions.txt";
@@ -95,8 +102,6 @@ template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokk
 	std::string header;
 	std::getline(fstream, header);
 
-	// declare global variables
-	// initial conditions read from file
 	std::vector<double> x_arr;
 	std::vector<double> rho_arr;
 	std::vector<double> Pgas_arr;
@@ -119,31 +124,32 @@ template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokk
 		Erad_arr.push_back(Erad);
 	}
 
-	fstream.close();
-
-	amrex::Gpu::DeviceVector<double> x_arr_g(x_arr.size());
-	amrex::Gpu::DeviceVector<double> rho_arr_g(rho_arr.size());
-	amrex::Gpu::DeviceVector<double> Pgas_arr_g(Pgas_arr.size());
-	amrex::Gpu::DeviceVector<double> Erad_arr_g(Erad_arr.size());
+	userData_.x_arr_g.resize(x_arr.size());
+	userData_.rho_arr_g.resize(rho_arr.size());
+	userData_.Pgas_arr_g.resize(Pgas_arr.size());
+	userData_.Erad_arr_g.resize(Erad_arr.size());
 
 	// copy to device
-	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
-	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), rho_arr_g.begin());
-	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Pgas_arr.begin(), Pgas_arr.end(), Pgas_arr_g.begin());
-	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Erad_arr.begin(), Erad_arr.end(), Erad_arr_g.begin());
+	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), userData_.x_arr_g.begin());
+	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), userData_.rho_arr_g.begin());
+	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Pgas_arr.begin(), Pgas_arr.end(), userData_.Pgas_arr_g.begin());
+	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Erad_arr.begin(), Erad_arr.end(), userData_.Erad_arr_g.begin());
 	amrex::Gpu::streamSynchronizeAll();
+}
 
+template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	auto const &x_ptr = x_arr_g.dataPtr();
-	auto const &rho_ptr = rho_arr_g.dataPtr();
-	auto const &Pgas_ptr = Pgas_arr_g.dataPtr();
-	auto const &Erad_ptr = Erad_arr_g.dataPtr();
-	int x_size = static_cast<int>(x_arr_g.size());
+	auto const &x_ptr = userData_.x_arr_g.dataPtr();
+	auto const &rho_ptr = userData_.rho_arr_g.dataPtr();
+	auto const &Pgas_ptr = userData_.Pgas_arr_g.dataPtr();
+	auto const &Erad_ptr = userData_.Erad_arr_g.dataPtr();
+	int x_size = static_cast<int>(userData_.x_arr_g.size());
 
 	const auto radBoundaries_g = RadSystem_Traits<TubeProblem>::radBoundaries;
 
