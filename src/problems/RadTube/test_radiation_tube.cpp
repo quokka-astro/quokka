@@ -97,10 +97,10 @@ template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokk
 
 	// declare global variables
 	// initial conditions read from file
-	amrex::Gpu::HostVector<double> x_arr;
-	amrex::Gpu::HostVector<double> rho_arr;
-	amrex::Gpu::HostVector<double> Pgas_arr;
-	amrex::Gpu::HostVector<double> Erad_arr;
+	std::vector<double> x_arr;
+	std::vector<double> rho_arr;
+	std::vector<double> Pgas_arr;
+	std::vector<double> Erad_arr;
 
 	for (std::string line; std::getline(fstream, line);) {
 		std::istringstream iss(line);
