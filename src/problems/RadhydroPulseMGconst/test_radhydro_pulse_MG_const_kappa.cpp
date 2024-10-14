@@ -17,7 +17,6 @@ struct SGProblem {
 struct MGproblem {
 };
 
-constexpr int isconst = 0;
 // constexpr int n_groups_ = 1;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
 // constexpr int n_groups_ = 2;
@@ -67,10 +66,6 @@ constexpr int64_t max_timesteps = 1e2; // for fast testing
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
 // constexpr double v0 = 1.0e8;    // advecting pulse
 // constexpr double max_time = 1.2e-4; // max_time = 2.0 * width / v1;
-
-constexpr double T_ref = T0;
-constexpr double nu_ref = 1.0e18; // Hz
-constexpr double coeff_ = h_planck * nu_ref / (k_B * T_ref);
 
 AMREX_GPU_HOST_DEVICE
 auto compute_initial_Tgas(const double x) -> double
