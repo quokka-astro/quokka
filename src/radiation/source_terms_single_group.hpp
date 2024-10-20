@@ -2,6 +2,7 @@
 #ifndef RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_
 
+#include "AMReX_BLassert.H"
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
 template <typename problem_t>
@@ -130,270 +131,276 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				}
 
 
+				if constexpr (use_VODE) {
 
+					// Use Microphysics to update the energy
 
-				// Use Microphysics to update the energy
+					burn_t burn_state;
+					// bool success = do_react(i, j, k, s, burn_state, n_rhs, vars);
 
-				burn_t burn_state;
-				// bool success = do_react(i, j, k, s, burn_state, n_rhs, vars);
+					//--- do_react ---
 
-				//--- do_react ---
-
-				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-				AMREX_ASSERT(T_gas >= 0.);
-
-				burn_state.rho = rho;
-				burn_state.T = T_gas;
-				// for (int n = 0; n < NumSpec; ++n) {
-				// 		burn_state.xn[n] = Erad0Vec[n];
-				// }
-				burn_state.xn[0] = Erad0; // assuming NumSpec = 1
-				// TODO(cch): make sure NumSpec == nGroups_
-
-				burn_state.T_fixed = -1.0_rt;
-				burn_state.e = 0.0_rt;
-
-				burn_state.i = i;
-				burn_state.j = j;
-				burn_state.k = k;
-
-				// amrex::Array1D<amrex::Real, 1, neqs> ydot;
-				// ArrayUtil::MathArray2D<1, neqs, 1, neqs> jac;
-				// actual_rhs(burn_state, ydot);
-				// // actual_jac(burn_state, jac);
-
-				burner(burn_state, dt);
-
-				if (!burn_state.success) {
-					// Handle integration failure
-					// amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
-				}
-
-				{
-#if 0
-				// 1. Compute energy exchange
-
-				// BEGIN NEWTON-RAPHSON LOOP (this is written for multi-group, but it's valid for single-group if we set i == 0)
-				// Define the source term: S = dt chat gamma rho (kappa_P B - kappa_E E) + dt chat c^-2 gamma rho kappa_F v * F_i, where gamma =
-				// 1 / sqrt(1 - v^2 / c^2) is the Lorentz factor. Solve for the new radiation energy and gas internal energy using a
-				// Newton-Raphson method using the base variables (Egas, D_0, D_1,
-				// ...), where D_i = R_i / tau_i^(t) and tau_i^(t) = dt * chat * gamma * rho * kappa_{P,i}^(t) is the optical depth across chat
-				// * dt for group i at time t. Compared with the old base (Egas, Erad_0, Erad_1, ...), this new base is more stable and
-				// converges faster. Furthermore, the PlanckOpacityTempDerivative term is not needed anymore since we assume d/dT (kappa_P /
-				// kappa_E) = 0 in the calculation of the Jacobian. Note that this assumption only affects the convergence rate of the
-				// Newton-Raphson iteration and does not affect the result at all once the iteration is converged.
-				//
-				// The Jacobian of F(E_g, D_i) is
-				//
-				// dF_G / dE_g = 1
-				// dF_G / dD_i = c / chat * tau0_i
-				// dF_{D,i} / dE_g = 1 / (chat * C_v) * (kappa_{P,i} / kappa_{E,i}) * d/dT (4 \pi B_i)
-				// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
-
-				double F_G = NAN;
-				double deltaEgas = NAN;
-				double deltaR = NAN;
-				double F_D = NAN;
-
-				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 100;
-				int n = 0;
-				for (; n < maxIter; ++n) {
 					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
 
-					// dust temperature
-					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
-						T_d = T_gas;
-					} else {
-						const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
-						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n);
-						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
-						if (T_d < 0.0) {
-							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[1], 1);
-						}
+					burn_state.rho = rho;
+					burn_state.T = T_gas;
+					// for (int n = 0; n < NumSpec; ++n) {
+					// 		burn_state.xn[n] = Erad0Vec[n];
+					// }
+					burn_state.xn[0] = Erad0; // assuming NumSpec = 1
+					// TODO(cch): make sure NumSpec == nGroups_
+
+					burn_state.T_fixed = -1.0_rt;
+					burn_state.e = 0.0_rt;
+
+					burn_state.i = i;
+					burn_state.j = j;
+					burn_state.k = k;
+
+					// amrex::Array1D<amrex::Real, 1, neqs> ydot;
+					// ArrayUtil::MathArray2D<1, neqs, 1, neqs> jac;
+					// actual_rhs(burn_state, ydot);
+					// // actual_jac(burn_state, jac);
+
+					burner(burn_state, dt);
+
+					AMREX_ASSERT(burn_state.success);
+
+					// check energy conservation
+					const double energy_error = (burn_state.e + burn_state.xn[0] - Erad0);
+					AMREX_ASSERT(std::abs(energy_error) < 1.0e-4 * Etot0);
+
+					if (!burn_state.success) {
+						// Handle integration failure
+						amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
 					}
 
-					fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+					Egas_guess += burn_state.e;
+					Erad_guess = burn_state.xn[0];
 
+					AMREX_ASSERT(Egas_guess > 0.0);
+					AMREX_ASSERT(Erad_guess >= 0.0);
+
+					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+					T_d = T_gas;
+					kappaF = ComputeFluxMeanOpacity(rho, T_d);
 					kappaP = ComputePlanckOpacity(rho, T_d);
 					kappaE = ComputeEnergyMeanOpacity(rho, T_d);
-					AMREX_ASSERT(!std::isnan(kappaP));
-					AMREX_ASSERT(!std::isnan(kappaE));
-					AMREX_ASSERT(kappaP >= 0.0);
-					AMREX_ASSERT(kappaE >= 0.0);
-					if (kappaE > 0.0) {
-						kappaPoverE = kappaP / kappaE;
-					} else {
-						kappaPoverE = 1.0;
-					}
+					fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
 
-					// In the first loop, calculate kappaF, work, tau0, R
-					if (n == 0) {
-						kappaF = ComputeFluxMeanOpacity(rho, T_d);
-						AMREX_ASSERT(!std::isnan(kappaF));
+				} else {
 
-						if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
-							// compute the work term at the old state
-							if (ite == 0) {
-								const double frad0 = consPrev(i, j, k, x1RadFlux_index);
-								const double frad1 = consPrev(i, j, k, x2RadFlux_index);
-								const double frad2 = consPrev(i, j, k, x3RadFlux_index);
-								// work = v * F * chi
-								work = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * (2.0 * kappaE - kappaF) *
-								       chat / (c * c) * lorentz_factor_v * dt;
+					// 1. Compute energy exchange
+
+					// BEGIN NEWTON-RAPHSON LOOP (this is written for multi-group, but it's valid for single-group if we set i == 0)
+					// Define the source term: S = dt chat gamma rho (kappa_P B - kappa_E E) + dt chat c^-2 gamma rho kappa_F v * F_i, where gamma =
+					// 1 / sqrt(1 - v^2 / c^2) is the Lorentz factor. Solve for the new radiation energy and gas internal energy using a
+					// Newton-Raphson method using the base variables (Egas, D_0, D_1,
+					// ...), where D_i = R_i / tau_i^(t) and tau_i^(t) = dt * chat * gamma * rho * kappa_{P,i}^(t) is the optical depth across chat
+					// * dt for group i at time t. Compared with the old base (Egas, Erad_0, Erad_1, ...), this new base is more stable and
+					// converges faster. Furthermore, the PlanckOpacityTempDerivative term is not needed anymore since we assume d/dT (kappa_P /
+					// kappa_E) = 0 in the calculation of the Jacobian. Note that this assumption only affects the convergence rate of the
+					// Newton-Raphson iteration and does not affect the result at all once the iteration is converged.
+					//
+					// The Jacobian of F(E_g, D_i) is
+					//
+					// dF_G / dE_g = 1
+					// dF_G / dD_i = c / chat * tau0_i
+					// dF_{D,i} / dE_g = 1 / (chat * C_v) * (kappa_{P,i} / kappa_{E,i}) * d/dT (4 \pi B_i)
+					// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
+
+					double F_G = NAN;
+					double deltaEgas = NAN;
+					double deltaR = NAN;
+					double F_D = NAN;
+
+					const double resid_tol = 1.0e-11; // 1.0e-15;
+					const int maxIter = 100;
+					int n = 0;
+					for (; n < maxIter; ++n) {
+						T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+						AMREX_ASSERT(T_gas >= 0.);
+
+						// dust temperature
+						if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+							T_d = T_gas;
+						} else {
+							const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
+							T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n);
+							AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+							if (T_d < 0.0) {
+								amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[1], 1);
 							}
 						}
 
-						tau0 = dt * rho * kappaP * chat * lorentz_factor;
-						tau = tau0;
-						R = (fourPiBoverC - Erad_guess / kappaPoverE) * tau0 + work;
-						// tau0 is used as a scaling factor for Rvec
-						tau0 = std::max(tau0, 1.0);
-					} else { // in the second and later loops, calculate tau and E (given R)
-						tau = dt * rho * kappaP * chat * lorentz_factor;
-						if (tau > 0.0) {
-							Erad_guess = kappaPoverE * (fourPiBoverC - (R - work) / tau);
-							if constexpr (force_rad_floor_in_iteration) {
-								if (Erad_guess <= 0.0) {
-									Egas_guess -= (c / chat) * (Erad_floor_ - Erad_guess);
-									Erad_guess = Erad_floor_;
+						fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
+
+						kappaP = ComputePlanckOpacity(rho, T_d);
+						kappaE = ComputeEnergyMeanOpacity(rho, T_d);
+						AMREX_ASSERT(!std::isnan(kappaP));
+						AMREX_ASSERT(!std::isnan(kappaE));
+						AMREX_ASSERT(kappaP >= 0.0);
+						AMREX_ASSERT(kappaE >= 0.0);
+						if (kappaE > 0.0) {
+							kappaPoverE = kappaP / kappaE;
+						} else {
+							kappaPoverE = 1.0;
+						}
+
+						// In the first loop, calculate kappaF, work, tau0, R
+						if (n == 0) {
+							kappaF = ComputeFluxMeanOpacity(rho, T_d);
+							AMREX_ASSERT(!std::isnan(kappaF));
+
+							if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
+								// compute the work term at the old state
+								if (ite == 0) {
+									const double frad0 = consPrev(i, j, k, x1RadFlux_index);
+									const double frad1 = consPrev(i, j, k, x2RadFlux_index);
+									const double frad2 = consPrev(i, j, k, x3RadFlux_index);
+									// work = v * F * chi
+									work = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * (2.0 * kappaE - kappaF) *
+												chat / (c * c) * lorentz_factor_v * dt;
 								}
 							}
-							// In general, Erad_guess is not guaranteed to be positive during the iteration steps.
-							// This is fine as long as it is positive at the end of the iteration. However, if Erad_guess
-							// is negative in the last iteration, we need to turn on force_rad_floor_in_iteration to
-							// correct it. This is a backup safety measure. For all the test problems I have tried, this
-							// is not necessary.
+
+							tau0 = dt * rho * kappaP * chat * lorentz_factor;
+							tau = tau0;
+							R = (fourPiBoverC - Erad_guess / kappaPoverE) * tau0 + work;
+							// tau0 is used as a scaling factor for Rvec
+							tau0 = std::max(tau0, 1.0);
+						} else { // in the second and later loops, calculate tau and E (given R)
+							tau = dt * rho * kappaP * chat * lorentz_factor;
+							if (tau > 0.0) {
+								Erad_guess = kappaPoverE * (fourPiBoverC - (R - work) / tau);
+								if constexpr (force_rad_floor_in_iteration) {
+									if (Erad_guess <= 0.0) {
+										Egas_guess -= (c / chat) * (Erad_floor_ - Erad_guess);
+										Erad_guess = Erad_floor_;
+									}
+								}
+								// In general, Erad_guess is not guaranteed to be positive during the iteration steps.
+								// This is fine as long as it is positive at the end of the iteration. However, if Erad_guess
+								// is negative in the last iteration, we need to turn on force_rad_floor_in_iteration to
+								// correct it. This is a backup safety measure. For all the test problems I have tried, this
+								// is not necessary.
+							}
 						}
-					}
 
-					F_G = Egas_guess - Egas0;
-					F_D = Erad_guess - Erad0 - (R + Src);
-					double F_D_abs = 0.0;
-					if (tau > 0.0) {
-						F_G += cscale * R;
-						F_D_abs = std::abs(F_D);
-					}
-
-					// check relative convergence of the residuals
-					if ((std::abs(F_G) < resid_tol * Etot0) && (cscale * F_D_abs < resid_tol * Etot0)) {
-						break;
-					}
-
-					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
-
-#if 0
-					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
-					if (n == maxIter - 10) {
-						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
-							  << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
-					} else if (n >= maxIter - 10) {
-						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
-							  << ", tau = " << tau;
-						std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
-					}
-#endif
-
-					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
-					AMREX_ASSERT(!std::isnan(d_fourpiboverc_d_t));
-
-					// compute Jacobian elements
-					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
-					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
-
-					auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
-
-					double J00 = NAN;
-					double J01 = NAN;
-					double J10 = NAN;
-					double J11 = NAN;
-
-					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
-						J00 = 1.0;
-						J01 = cscale;
-						J10 = 1.0 / c_v * dEg_dT;
-						if (tau <= 0.0) {
-							J11 = -std::numeric_limits<double>::infinity();
-						} else {
-							J11 = -1.0 * kappaPoverE / tau - 1.0;
+						F_G = Egas_guess - Egas0;
+						F_D = Erad_guess - Erad0 - (R + Src);
+						double F_D_abs = 0.0;
+						if (tau > 0.0) {
+							F_G += cscale * R;
+							F_D_abs = std::abs(F_D);
 						}
-					} else {
-						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
-						dEg_dT *= d_Td_d_T;
-						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
 
-						J00 = 1.0;
-						J01 = cscale;
-						J10 = 1.0 / c_v * dEg_dT;
-						if (tau <= 0.0) {
-							J11 = -std::numeric_limits<double>::infinity();
-						} else {
-							J11 = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg - kappaPoverE / tau - 1.0;
+						// check relative convergence of the residuals
+						if ((std::abs(F_G) < resid_tol * Etot0) && (cscale * F_D_abs < resid_tol * Etot0)) {
+							break;
 						}
-					}
 
-					AMREX_ASSERT(!std::isnan(J10));
-					AMREX_ASSERT(!std::isnan(J11));
+						const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
-					const double y0 = -F_G;
-					const auto y1 = -1. * F_D;
+	#if 0
+						// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
+						if (n == maxIter - 10) {
+							std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
+									<< "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+						} else if (n >= maxIter - 10) {
+							std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
+									<< ", tau = " << tau;
+							std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
+						}
+	#endif
 
-					// solve the linear system
-					const double det = J00 * J11 - J01 * J10;
-					AMREX_ASSERT(det != 0.0);
-					deltaEgas = (J11 * y0 - J01 * y1) / det;
-					deltaR = (J00 * y1 - J10 * y0) / det;
+						const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
+						AMREX_ASSERT(!std::isnan(d_fourpiboverc_d_t));
 
-					if (!enable_dE_constrain) {
-						Egas_guess += deltaEgas;
-						R += deltaR;
-					} else {
-						double T_rad = NAN;
-						AMREX_ASSERT(Erad_guess >= 0.0);
-						T_rad = std::sqrt(std::sqrt(Erad_guess / radiation_constant_));
-						if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
-							Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
-							// R = 0.0;
+						// compute Jacobian elements
+						// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
+						// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
+
+						auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
+
+						double J00 = NAN;
+						double J01 = NAN;
+						double J10 = NAN;
+						double J11 = NAN;
+
+						if constexpr (!enable_dust_gas_thermal_coupling_model_) {
+							J00 = 1.0;
+							J01 = cscale;
+							J10 = 1.0 / c_v * dEg_dT;
+							if (tau <= 0.0) {
+								J11 = -std::numeric_limits<double>::infinity();
+							} else {
+								J11 = -1.0 * kappaPoverE / tau - 1.0;
+							}
 						} else {
+							const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
+							dEg_dT *= d_Td_d_T;
+							const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
+
+							J00 = 1.0;
+							J01 = cscale;
+							J10 = 1.0 / c_v * dEg_dT;
+							if (tau <= 0.0) {
+								J11 = -std::numeric_limits<double>::infinity();
+							} else {
+								J11 = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg - kappaPoverE / tau - 1.0;
+							}
+						}
+
+						AMREX_ASSERT(!std::isnan(J10));
+						AMREX_ASSERT(!std::isnan(J11));
+
+						const double y0 = -F_G;
+						const auto y1 = -1. * F_D;
+
+						// solve the linear system
+						const double det = J00 * J11 - J01 * J10;
+						AMREX_ASSERT(det != 0.0);
+						deltaEgas = (J11 * y0 - J01 * y1) / det;
+						deltaR = (J00 * y1 - J10 * y0) / det;
+
+						if (!enable_dE_constrain) {
 							Egas_guess += deltaEgas;
 							R += deltaR;
+						} else {
+							double T_rad = NAN;
+							AMREX_ASSERT(Erad_guess >= 0.0);
+							T_rad = std::sqrt(std::sqrt(Erad_guess / radiation_constant_));
+							if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
+								Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+								// R = 0.0;
+							} else {
+								Egas_guess += deltaEgas;
+								R += deltaR;
+							}
 						}
+
+					} // END NEWTON-RAPHSON LOOP
+
+					AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
+					if (n >= maxIter) {
+						amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[0], 1);
 					}
 
-				} // END NEWTON-RAPHSON LOOP
+					// update iteration counter: (+1, +ite, max(self, ite))
+					amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);     // total number of radiation updates
+					amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations
+					amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations
 
-				AMREX_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
-				if (n >= maxIter) {
-					amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[0], 1);
+					AMREX_ASSERT(Egas_guess > 0.0);
+					AMREX_ASSERT(Erad_guess >= 0.0);
+
+					if (n > 0) {
+						// calculate kappaF since the temperature has changed
+						kappaF = ComputeFluxMeanOpacity(rho, T_d);
+					}
 				}
-
-				// update iteration counter: (+1, +ite, max(self, ite))
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[0], 1);     // total number of radiation updates
-				amrex::Gpu::Atomic::Add(&p_iteration_counter_local[1], n + 1); // total number of Newton-Raphson iterations
-				amrex::Gpu::Atomic::Max(&p_iteration_counter_local[2], n + 1); // maximum number of Newton-Raphson iterations
-
-				AMREX_ASSERT(Egas_guess > 0.0);
-				AMREX_ASSERT(Erad_guess >= 0.0);
-
-				if (n > 0) {
-					// calculate kappaF since the temperature has changed
-					kappaF = ComputeFluxMeanOpacity(rho, T_d);
-				}
-#endif
-				}
-
-				Egas_guess += burn_state.e;
-				Erad_guess = burn_state.xn[0];
-				AMREX_ASSERT(Egas_guess > 0.0);
-				AMREX_ASSERT(Erad_guess >= 0.0);
-
-				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-				T_d = T_gas;
-				kappaF = ComputeFluxMeanOpacity(rho, T_d);
-				kappaP = ComputePlanckOpacity(rho, T_d);
-				kappaE = ComputeEnergyMeanOpacity(rho, T_d);
-				fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
 
 			} else { // if constexpr gamma_ == 1.0
 				T_d = T_gas;

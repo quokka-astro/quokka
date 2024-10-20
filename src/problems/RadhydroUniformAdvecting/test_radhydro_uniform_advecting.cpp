@@ -9,10 +9,37 @@
 #include "physics_info.hpp"
 #include "util/fextract.hpp"
 
+// #include <test_react.H>
+#include <extern_parameters.H>
+#include <eos.H>
+#include <network.H>
+// #include <react_zones.H>
+// #include <AMReX_buildInfo.H>
+// #include <variables.H>
+// #include <unit_test.H>
+// #include <react_util.H>
+
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double T_exact = 0.768032502191; // equilibrium temperature
+// AMREX_GPU_MANAGED amrex::Real max_iter = 10;
+// AMREX_GPU_MANAGED amrex::Real tol = 1e-10;
+
+constexpr double T_exact = 0.768032502191; // equilibrium temperature, for C_V = 1.5
+constexpr double mu = 1.0;
+constexpr double max_time = 30.0;
+
+// constexpr double T_exact = 0.724492; // equilibrium temperature, for C_V = 1.0
+// constexpr double mu = 1.5;
+// constexpr double max_time = 30.0;
+
+// // at t = 0.5; L1 error norm = 0.06543095994 using original code; 0.004003968407 using microphysics
+// constexpr double T_exact = 0.785282; 
+// constexpr double mu = 1.5;
+// constexpr double max_time = 0.5;
+constexpr double fixed_dt = 0.1;
+
+
 constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 constexpr double v0 = 0.0;
 constexpr double kappa0 = 1.0;
@@ -21,10 +48,8 @@ constexpr double chat = 1.0;
 constexpr double T0 = 1.0;   // temperature
 constexpr double rho0 = 1.0; // matter density
 constexpr double a_rad = 1.0;
-constexpr double mu = 1.0;
 constexpr double k_B = 1.0;
 
-constexpr double max_time = 10.0;
 
 constexpr double erad_floor = 1.0e-20;
 
@@ -58,10 +83,15 @@ template <> struct Physics_Traits<PulseProblem> {
 
 
 
-
 // template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE
-void rhs_specie(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D<Real, 0, NumSpec-1>& X) {
+void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
+{
+	Array1D<Real, 0, NumSpec-1> X;
+	for (int i = 0; i < NumSpec; ++i) {
+		X(i) = state.xn[i];
+	}
+
 	Real const Tdust = state.T;
 	Real const rho = state.rho;
 
@@ -78,56 +108,35 @@ void rhs_specie(const burn_t& state, Array1D<Real, 1, neqs>& ydot, const Array1D
 	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
 
 	ydot(1) = chat * rho * kappa0 * (fourPiBoverc - X(0));
-}
-
-// template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE
-Real rhs_eint(const burn_t& state, const Array1D<Real, 0, NumSpec-1>& X) {
-	Real Tdust = state.T;
-	Real rho = state.rho;
-
-	// // Assuming NumSpec - 1 = neqs
-	// const amrex::GpuArray<Real, n_group_in_rhs> fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
-	// const amrex::GpuArray<Real, n_group_in_rhs> kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
-	// const amrex::GpuArray<Real, n_group_in_rhs> kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
-
-	// Real edot = 0.0;
-	// for (int g = 0; g < n_group_in_rhs; ++g) {
-	// 	edot += - RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
-	// }
-
-	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
-
 	const Real edot = - c * rho * kappa0 * (fourPiBoverc - X(0));
-
-  return edot;
-}
-
-// template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE
-void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
-{
-	Array1D<Real, 0, NumSpec-1> X;
-	for (int i = 0; i < NumSpec; ++i) {
-		X(i) = state.xn[i];
-	}
-
-	// YDOTS and Edot
-
-	rhs_specie(state, ydot, X);
-	Real edot = rhs_eint(state, X);
 
 	// Append the energy equation (this is erg/g/s)
 	ydot(net_ienuc) = edot;
 }
 
 
+template<class MatrixType>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void actual_jac(const burn_t& state, MatrixType& jac)
+{
+	const double T = state.T;
+	const double dEg_dT = 4.0 * a_rad * T * T * T;
+	const double rho = state.rho;
+	const double tau = kappa0 * rho * chat;
 
+	// jac(1,1) = 1.0;
+	// jac(1,2) = c / chat;
+	// jac(2,1) = 1.0/ C_V * dEg_dT;
+	// jac(2,2) = -1.0 / tau - 1.0;
 
-
-
-
-
+	// Jacobian: 
+	// 11 = - c * rho * kappa0 * dEg_dt, 12 = c * rho * kappa0
+	// 21 = c * rho * kappa0 * dEg_dt, 22 = - c * rho * kappa0
+	jac(1,1) = - tau * dEg_dT;
+	jac(1,2) = tau;
+	jac(2,1) = tau * dEg_dT;
+	jac(2,2) = - tau;
+}
 
 
 
@@ -185,9 +194,10 @@ auto problem_main() -> int
 	// Problem parameters
 	const int max_timesteps = 1e6;
 	const double CFL_number_gas = 0.8;
-	const double CFL_number_rad = 8.0;
+	// const double CFL_number_rad = 8.0;
+	const double CFL_number_rad = 0.8;
 
-	const double max_dt = 1.0;
+	// const double max_dt = 1.0;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
@@ -206,7 +216,9 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number_rad;
 	sim.cflNumber_ = CFL_number_gas;
-	sim.maxDt_ = max_dt;
+	sim.initDt_ = fixed_dt;
+	sim.maxDt_ = fixed_dt;
+	// sim.maxDt_ = 1.0;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
@@ -256,7 +268,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
 		sol_norm += std::abs(Tgas_exact[i]);
 	}
-	const double error_tol = 1.0e-4; // This is a very very stringent test (to machine accuracy!)
+	const double error_tol = 1.0e-4;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 

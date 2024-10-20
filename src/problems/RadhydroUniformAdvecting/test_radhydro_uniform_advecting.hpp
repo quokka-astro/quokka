@@ -21,6 +21,14 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 
+#include <radiation/variables.H>
+#include <network.H>
+#include <eos_type.H>
+#include <eos.H>
+#include <burn_type.H>
+#include <burner.H>
+#include <extern_parameters.H>
+
 // function definitions
 
 #endif // TEST_RADHYDRO_UNIFORM_ADVECTING_HPP_

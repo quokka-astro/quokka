@@ -13,7 +13,7 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 4 4
+amr.n_cell          = 4 4 4
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 4     # grid size must be divisible by this
 amr.max_grid_size   = 64
@@ -24,7 +24,17 @@ suppress_output = 1
 
 radiation.print_iteration_counts = 1
 
-integrator.jacobian = 2
-integrator.burner_verbose = 1
+integrator.jacobian = 1
+integrator.burner_verbose = 1					# Should we print out diagnostic output after the solve?
 integrator.ode_max_steps = 1000
 integrator.use_number_densities = 1 	# treat Erad as species number density. If set to 0, it will be clipped to [0, 1]
+
+integrator.rtol_spec = 1e1 					# Tolerances for the solver (relative and absolute), for the species and energy equations.
+integrator.rtol_enuc = 1e1
+integrator.atol_spec = 1e1
+integrator.atol_enuc = 1e1
+
+integrator.max_iter = 10
+integrator.tol = 1e-1
+
+#integrator.retry_swap_jacobian = 0		# do we swap the Jacobian (from analytic to numerical or vice versa) on a retry?
