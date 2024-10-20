@@ -9,16 +9,6 @@
 #include "physics_info.hpp"
 #include "util/fextract.hpp"
 
-// #include <test_react.H>
-#include <extern_parameters.H>
-#include <eos.H>
-#include <network.H>
-// #include <react_zones.H>
-// #include <AMReX_buildInfo.H>
-// #include <variables.H>
-// #include <unit_test.H>
-// #include <react_util.H>
-
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 

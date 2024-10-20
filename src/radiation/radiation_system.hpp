@@ -42,7 +42,6 @@
 #include <network.H>
 #include <extern_parameters.H>
 
-
 using Real = amrex::Real;
 
 static constexpr bool use_VODE = 1;
