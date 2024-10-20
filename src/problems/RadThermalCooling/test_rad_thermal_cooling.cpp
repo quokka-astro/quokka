@@ -72,6 +72,51 @@ template <> struct ISM_Traits<PulseProblem> {
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 };
 
+// template <typename problem_t>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
+{
+	Array1D<Real, 0, NumSpec-1> X;
+	for (int i = 0; i < NumSpec; ++i) {
+		X(i) = state.xn[i];
+	}
+
+	Real const Tdust = state.T;
+	Real const rho = state.rho;
+
+	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+
+	ydot(1) = chat * rho * kappa0 * (fourPiBoverc - X(0));
+	const Real edot = - c * rho * kappa0 * (fourPiBoverc - X(0));
+
+	// Append the energy equation (this is erg/g/s)
+	ydot(net_ienuc) = edot;
+}
+
+
+template<class MatrixType>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void actual_jac(const burn_t& state, MatrixType& jac)
+{
+	const double T = state.T;
+	const double dEg_dT = 4.0 * a_rad * T * T * T;
+	const double rho = state.rho;
+	const double tau = kappa0 * rho * chat;
+
+	// jac(1,1) = 1.0;
+	// jac(1,2) = c / chat;
+	// jac(2,1) = 1.0/ C_V * dEg_dT;
+	// jac(2,2) = -1.0 / tau - 1.0;
+
+	// Jacobian: 
+	// 11 = - c * rho * kappa0 * dEg_dt, 12 = c * rho * kappa0
+	// 21 = c * rho * kappa0 * dEg_dt, 22 = - c * rho * kappa0
+	jac(1,1) = - tau * dEg_dT;
+	jac(1,2) = tau;
+	jac(2,1) = tau * dEg_dT;
+	jac(2,2) = - tau;
+}
+
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
