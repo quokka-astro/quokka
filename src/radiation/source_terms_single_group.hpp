@@ -169,7 +169,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					// check energy conservation
 					const double energy_error = (burn_state.e + burn_state.xn[0] - Erad0);
-					AMREX_ASSERT(std::abs(energy_error) < 1.0e-4 * Etot0);
+					AMREX_ASSERT(std::abs(energy_error) < 1.0e-8 * Etot0);
 
 					if (!burn_state.success) {
 						// Handle integration failure
