@@ -7,6 +7,7 @@
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
+#include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "test_rad_thermal_cooling.hpp"
 #include "util/fextract.hpp"
@@ -16,23 +17,46 @@ static constexpr bool export_csv = true;
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+// dimensionless
+
+// // const double sim_dt = 0.01;
+// const double sim_dt = 0.1;
+// const double max_time = 5.0;
+
+// constexpr double c = 1.0;
+// constexpr double chat = c;
+// constexpr double v0 = 0.0;
+// constexpr double kappa0 = 1.0;
+
+// constexpr double T0 = 1.0;   // temperature
+// constexpr double rho0 = 1.0; // matter density
+// constexpr double a_rad = 1.0;
+// constexpr double mu = 1.5; // mean molecular weight; so that C_V = 1.0
+// constexpr double C_V = 1.0;
+// constexpr double k_B = 1.0;
+
+// constexpr double erad_floor = a_rad * 1e-20;
+
+
+// cgs units
+
 // const double sim_dt = 0.01;
 const double sim_dt = 0.1;
 const double max_time = 5.0;
 
-constexpr double c = 1.0;
+constexpr double c = C::c_light;
 constexpr double chat = c;
 constexpr double v0 = 0.0;
-constexpr double kappa0 = 1.0;
 
 constexpr double T0 = 1.0;   // temperature
-constexpr double rho0 = 1.0; // matter density
-constexpr double a_rad = 1.0;
-constexpr double mu = 1.5; // mean molecular weight; so that C_V = 1.0
-constexpr double C_V = 1.0;
-constexpr double k_B = 1.0;
+constexpr double a_rad = C::a_rad;
+constexpr double mu = C::m_u;
+constexpr double k_B = C::k_B;
+constexpr double C_V = 1.5 * k_B / mu;
+constexpr double rho0 = a_rad * T0 * T0 * T0 / C_V;
+constexpr double dx = 2.997924580e+10; // cm
+constexpr double kappa0 = 1.0 / dx / rho0;
 
-constexpr double nu_unit = 1.0;
 constexpr double erad_floor = a_rad * 1e-20;
 
 template <> struct SimulationData<PulseProblem> {
@@ -64,13 +88,19 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
-	static constexpr double energy_unit = nu_unit;
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
 template <> struct ISM_Traits<PulseProblem> {
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 };
+
+template <typename I, typename T>
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+void actual_eos_in_iteration (I input, T& state)
+{
+	state.e = C_V * state.rho * state.T;
+}
 
 // template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE
@@ -81,8 +111,9 @@ void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
 		X(i) = state.xn[i];
 	}
 
-	Real const Tdust = state.T;
+	// Real const Tdust = state.T;
 	Real const rho = state.rho;
+	Real const Tdust = state.e / (rho * C_V);
 
 	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
 
@@ -98,9 +129,9 @@ template<class MatrixType>
 AMREX_GPU_HOST_DEVICE AMREX_INLINE
 void actual_jac(const burn_t& state, MatrixType& jac)
 {
-	const double T = state.T;
-	const double dEg_dT = 4.0 * a_rad * T * T * T;
 	const double rho = state.rho;
+	Real const T = state.e / (rho * C_V);
+	const double dEg_dT = 4.0 * a_rad * T * T * T;
 	const double tau = kappa0 * rho * chat;
 
 	// jac(1,1) = 1.0;
