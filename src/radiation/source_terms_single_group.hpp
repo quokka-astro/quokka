@@ -148,11 +148,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					// for (int n = 0; n < NumSpec; ++n) {
 					// 		burn_state.xn[n] = Erad0Vec[n];
 					// }
-					burn_state.xn[0] = Erad0; // assuming NumSpec = 1
+					burn_state.xn[0] = Erad0 / rho; // assuming NumSpec = 1
 					// TODO(cch): make sure NumSpec == nGroups_
 
 					burn_state.T_fixed = -1.0_rt;
-					burn_state.e = 0.0_rt;
+					burn_state.e = Egas0 / rho;
 
 					burn_state.i = i;
 					burn_state.j = j;
@@ -168,7 +168,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					AMREX_ASSERT(burn_state.success);
 
 					// check energy conservation
-					const double energy_error = (burn_state.e + burn_state.xn[0] - Erad0);
+					const double energy_error = (rho * burn_state.e - Egas0 + cscale * (rho * burn_state.xn[0] - Erad0));
 					AMREX_ASSERT(std::abs(energy_error) < 1.0e-8 * Etot0);
 
 					if (!burn_state.success) {
@@ -176,7 +176,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
 					}
 
-					Egas_guess += burn_state.e;
+					Egas_guess += rho * burn_state.e;
 					Erad_guess = burn_state.xn[0];
 
 					AMREX_ASSERT(Egas_guess > 0.0);
