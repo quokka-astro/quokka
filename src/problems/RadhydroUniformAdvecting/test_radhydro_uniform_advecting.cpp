@@ -12,36 +12,43 @@
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-// AMREX_GPU_MANAGED amrex::Real max_iter = 10;
-// AMREX_GPU_MANAGED amrex::Real tol = 1e-10;
+constexpr double c = 1.0e8;
+// model 0
+// constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+// constexpr double v0 = 1e-4 * c;
+// constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
+// constexpr double chat = 1.0e7;
+// model 1
+// constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+// constexpr double v0 = 1e-4 * c;
+// constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
+// constexpr double chat = 1.0e8;
+// model 2
+// constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+// constexpr double v0 = 1e-2 * c;
+// constexpr double kappa0 = 1.0e5;
+// constexpr double chat = 1.0e8;
+// model 3
+constexpr int beta_order_ = 2; // order of beta in the radiation four-force
+constexpr double v0 = 1e-2 * c;
+constexpr double kappa0 = 1.0e5;
+constexpr double chat = 1.0e8;
 
-constexpr double T_exact = 0.768032502191; // equilibrium temperature, for C_V = 1.5
-constexpr double mu = 1.0;
-constexpr double max_time = 30.0;
-
-// constexpr double T_exact = 0.724492; // equilibrium temperature, for C_V = 1.0
-// constexpr double mu = 1.5;
-// constexpr double max_time = 30.0;
-
-// // at t = 0.5; L1 error norm = 0.06543095994 using original code; 0.004003968407 using microphysics
-// constexpr double T_exact = 0.785282; 
-// constexpr double mu = 1.5;
-// constexpr double max_time = 0.5;
-constexpr double fixed_dt = 0.1;
-
-
-constexpr int beta_order_ = 1; // order of beta in the radiation four-force
-constexpr double v0 = 0.0;
-constexpr double kappa0 = 1.0;
-constexpr double c = 1.0;
-constexpr double chat = 1.0;
 constexpr double T0 = 1.0;   // temperature
 constexpr double rho0 = 1.0; // matter density
 constexpr double a_rad = 1.0;
+constexpr double mu = 1.0;
 constexpr double k_B = 1.0;
 
+// static diffusion, beta = 1e-4, tau_cell = kappa0 * dx = 100, beta tau_cell = 1e-2
+// constexpr double kappa0 = 100.; // cm^2 g^-1
+// constexpr double v0 = 1.0e-4 * c; // advecting pulse
 
-constexpr double erad_floor = 1.0e-20;
+// dynamic diffusion, beta = 1e-3, tau = kappa0 * dx = 1e5, beta tau = 100
+constexpr double max_time = 10.0 / v0;
+
+constexpr double Erad0 = a_rad * T0 * T0 * T0 * T0;
+constexpr double Erad_beta2 = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad0;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -53,7 +60,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double Erad_floor = erad_floor;
+	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = beta_order_;
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
@@ -68,68 +75,6 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1;
 };
-
-
-
-
-
-// template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE
-void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
-{
-	Array1D<Real, 0, NumSpec-1> X;
-	for (int i = 0; i < NumSpec; ++i) {
-		X(i) = state.xn[i];
-	}
-
-	Real const Tdust = state.T;
-	Real const rho = state.rho;
-
-	// // Radiation
-	// const auto fourPiBoverc = RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Tdust);
-	// const auto kappa_B = RadSystem<problem_t>::ComputePlanckOpacity(rho, Tdust);
-	// const auto kappa_E = RadSystem<problem_t>::ComputeEnergyMeanOpacity(rho, Tdust);
-
-	// // <ydot>
-	// for (int g = 0; g < n_group_in_rhs; ++g) {
-	// 	ydot(g + 1) = RadSystem<problem_t>::c_hat_ * rho * (kappa_B[g] * fourPiBoverc[g] - kappa_E[g] * X(g)); // X = Erad
-	// }
-
-	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
-
-	ydot(1) = chat * rho * kappa0 * (fourPiBoverc - X(0));
-	const Real edot = - c * rho * kappa0 * (fourPiBoverc - X(0));
-
-	// Append the energy equation (this is erg/g/s)
-	ydot(net_ienuc) = edot;
-}
-
-
-template<class MatrixType>
-AMREX_GPU_HOST_DEVICE AMREX_INLINE
-void actual_jac(const burn_t& state, MatrixType& jac)
-{
-	const double T = state.T;
-	const double dEg_dT = 4.0 * a_rad * T * T * T;
-	const double rho = state.rho;
-	const double tau = kappa0 * rho * chat;
-
-	// jac(1,1) = 1.0;
-	// jac(1,2) = c / chat;
-	// jac(2,1) = 1.0/ C_V * dEg_dT;
-	// jac(2,2) = -1.0 / tau - 1.0;
-
-	// Jacobian: 
-	// 11 = - c * rho * kappa0 * dEg_dt, 12 = c * rho * kappa0
-	// 21 = c * rho * kappa0 * dEg_dt, 22 = - c * rho * kappa0
-	jac(1,1) = - tau * dEg_dT;
-	jac(1,2) = tau;
-	jac(2,1) = tau * dEg_dT;
-	jac(2,2) = - tau;
-}
-
-
-
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
@@ -151,8 +96,19 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 
 	double erad = NAN;
 	double frad = NAN;
-	erad = erad_floor;
-	frad = 0.0;
+	if constexpr (beta_order_ == 0) {
+		erad = Erad0;
+		frad = 0.0;
+	} else if constexpr (beta_order_ == 1) {
+		erad = Erad0;
+		frad = 4. / 3. * v0 * Erad0;
+	} else if constexpr (beta_order_ == 2) {
+		erad = Erad_beta2;
+		frad = 4. / 3. * v0 * Erad0;
+	} else { // beta_order_ == 3
+		erad = Erad_beta2;
+		frad = 4. / 3. * v0 * Erad0 * (1. + (v0 * v0) / (c * c));
+	}
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -184,10 +140,9 @@ auto problem_main() -> int
 	// Problem parameters
 	const int max_timesteps = 1e6;
 	const double CFL_number_gas = 0.8;
-	// const double CFL_number_rad = 8.0;
-	const double CFL_number_rad = 0.8;
+	const double CFL_number_rad = 8.0;
 
-	// const double max_dt = 1.0;
+	const double max_dt = 1.0;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
@@ -206,9 +161,7 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number_rad;
 	sim.cflNumber_ = CFL_number_gas;
-	sim.initDt_ = fixed_dt;
-	sim.maxDt_ = fixed_dt;
-	// sim.maxDt_ = 1.0;
+	sim.maxDt_ = max_dt;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
@@ -243,12 +196,22 @@ auto problem_main() -> int
 		const auto v_t = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
 		rhogas.at(i) = rho_t;
 		Erad.at(i) = Erad_t;
-		Trad.at(i) = Trad_t;
+		Trad.at(i) = Trad_t / T0;
 		Egas.at(i) = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
-		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i));
-		Tgas_exact.push_back(T_exact);
-		Vgas.at(i) = v_t;
-		Vgas_exact.at(i) = 0.0;
+		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i)) / T0;
+		Tgas_exact.push_back(1.0);
+		Vgas.at(i) = v_t / v0;
+		Vgas_exact.at(i) = 1.0;
+
+		auto Erad_val = a_rad * std::pow(T0, 4);
+		double trad_exact = NAN;
+		if constexpr (beta_order_ <= 1) {
+			trad_exact = std::pow(Erad0 / a_rad, 1. / 4.);
+		} else { // beta_order_ == 2 or 3
+			trad_exact = std::pow(Erad_beta2 / a_rad, 1. / 4.);
+		}
+		Trad_exact.push_back(trad_exact);
+		Erad_exact.push_back(Erad_val);
 	}
 
 	// compute error norm
@@ -258,7 +221,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
 		sol_norm += std::abs(Tgas_exact[i]);
 	}
-	const double error_tol = 1.0e-4;
+	const double error_tol = 1.0e-10; // This is a very very stringent test (to machine accuracy!)
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
@@ -270,21 +233,26 @@ auto problem_main() -> int
 	std::map<std::string, std::string> Texact_args;
 	std::map<std::string, std::string> Tradexact_args;
 	Trad_args["label"] = "radiation (numerical)";
-	Trad_args["linestyle"] = "--";
+	Trad_args["linestyle"] = "-";
+	Tradexact_args["label"] = "radiation (exact)";
+	Tradexact_args["linestyle"] = "--";
 	Tgas_args["label"] = "gas (numerical)";
-	Tgas_args["linestyle"] = "--";
-	Texact_args["label"] = "radiation/gas (exact)";
-	Texact_args["linestyle"] = "-";
-	matplotlibcpp::plot(xs, Tgas_exact, Texact_args);
+	Tgas_args["linestyle"] = "-";
+	Texact_args["label"] = "gas (exact)";
+	Texact_args["linestyle"] = "--";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
+	matplotlibcpp::plot(xs, Trad_exact, Tradexact_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
+	matplotlibcpp::plot(xs, Tgas_exact, Texact_args);
 	matplotlibcpp::xlabel("x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
-	matplotlibcpp::ylim(-0.1, 1.1);
+	if constexpr (beta_order_ == 1) {
+		matplotlibcpp::ylim(1.0 - 1.0e-7, 1.0 + 1.0e-7);
+	}
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./gas-cooling-down-T.pdf");
+	matplotlibcpp::save("./radhydro_uniform_advecting_temperature_dimensionless.pdf");
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -296,11 +264,11 @@ auto problem_main() -> int
 	vgas_args["linestyle"] = "-";
 	matplotlibcpp::plot(xs, Vgas_exact, vgas_args);
 	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("v (dimensionless)");
+	matplotlibcpp::ylabel("v / v0 (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./gas-cooling-down-velocity.pdf");
+	matplotlibcpp::save("./radhydro_uniform_advecting_velocity_dimensionless.pdf");
 #endif
 
 	// Cleanup and exit
