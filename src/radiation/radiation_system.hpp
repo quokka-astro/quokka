@@ -462,7 +462,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityAtomicH(double rho, amrex::GpuArray<Real, nmscalars_> const &/*massScalars*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityAtomicH(double rho, amrex::GpuArray<Real, nmscalars_> const & /*massScalars*/) -> double
 {
 	return rho / mean_molecular_mass_;
 }
