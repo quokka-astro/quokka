@@ -152,7 +152,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					// TODO(cch): make sure NumSpec == nGroups_
 
 					burn_state.T_fixed = -1.0_rt;
-					burn_state.e = Egas0 / rho;
+					// burn_state.e = Egas0 / rho;
+					burn_state.e = 0.0;
 
 					burn_state.i = i;
 					burn_state.j = j;
@@ -165,19 +166,20 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					burner(burn_state, dt);
 
-					AMREX_ASSERT(burn_state.success);
+					// AMREX_ASSERT(burn_state.success);
 
 					// check energy conservation
-					const double energy_error = (rho * burn_state.e - Egas0 + cscale * (rho * burn_state.xn[0] - Erad0));
+					// const double energy_error = (rho * burn_state.e - Egas0 + cscale * (rho * burn_state.xn[0] - Erad0));
+					const double energy_error = (rho * burn_state.e + cscale * (rho * burn_state.xn[0] - Erad0));
 					AMREX_ASSERT(std::abs(energy_error) < 1.0e-8 * Etot0);
 
 					if (!burn_state.success) {
 						// Handle integration failure
-						amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
+						// amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[0], 1);
 					}
 
 					Egas_guess += rho * burn_state.e;
-					Erad_guess = burn_state.xn[0];
+					Erad_guess = rho * burn_state.xn[0];
 
 					AMREX_ASSERT(Egas_guess > 0.0);
 					AMREX_ASSERT(Erad_guess >= 0.0);

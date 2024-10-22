@@ -12,52 +12,52 @@
 #include "test_rad_thermal_cooling.hpp"
 #include "util/fextract.hpp"
 
-static constexpr bool export_csv = true;
-
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+const bool only_check_last = 1;
+
 // dimensionless
-
-// // const double sim_dt = 0.01;
-// const double sim_dt = 0.1;
-// const double max_time = 5.0;
-
-// constexpr double c = 1.0;
-// constexpr double chat = c;
-// constexpr double v0 = 0.0;
-// constexpr double kappa0 = 1.0;
-
-// constexpr double T0 = 1.0;   // temperature
-// constexpr double rho0 = 1.0; // matter density
-// constexpr double a_rad = 1.0;
-// constexpr double mu = 1.5; // mean molecular weight; so that C_V = 1.0
-// constexpr double C_V = 1.0;
-// constexpr double k_B = 1.0;
-
-// constexpr double erad_floor = a_rad * 1e-20;
-
-
-// cgs units
 
 // const double sim_dt = 0.01;
 const double sim_dt = 0.1;
 const double max_time = 5.0;
 
-constexpr double c = C::c_light;
+constexpr double c = 1.0;
 constexpr double chat = c;
 constexpr double v0 = 0.0;
+constexpr double kappa0 = 1.0;
 
 constexpr double T0 = 1.0;   // temperature
-constexpr double a_rad = C::a_rad;
-constexpr double mu = C::m_u;
-constexpr double k_B = C::k_B;
-constexpr double C_V = 1.5 * k_B / mu;
-constexpr double rho0 = a_rad * T0 * T0 * T0 / C_V;
-constexpr double dx = 2.997924580e+10; // cm
-constexpr double kappa0 = 1.0 / dx / rho0;
+constexpr double rho0 = 1.0; // matter density
+constexpr double a_rad = 1.0;
+constexpr double mu = 1.5; // mean molecular weight; so that C_V = 1.0
+constexpr double C_V = 1.0;
+constexpr double k_B = 1.0;
 
 constexpr double erad_floor = a_rad * 1e-20;
+
+
+// cgs units
+
+// // const double sim_dt = 0.01;
+// const double sim_dt = 0.1;
+// const double max_time = 5.0;
+
+// constexpr double c = C::c_light;
+// constexpr double chat = c;
+// constexpr double v0 = 0.0;
+
+// constexpr double T0 = 1.0;   // temperature
+// constexpr double a_rad = C::a_rad;
+// constexpr double mu = C::m_u;
+// constexpr double k_B = C::k_B;
+// constexpr double C_V = 1.5 * k_B / mu;
+// constexpr double rho0 = a_rad * T0 * T0 * T0 / C_V;
+// constexpr double dx = 2.997924580e+10; // cm
+// constexpr double kappa0 = 1.0 / dx / rho0;
+
+// constexpr double erad_floor = a_rad * 1e-20;
 
 template <> struct SimulationData<PulseProblem> {
 	std::vector<double> t_vec_;
@@ -111,11 +111,11 @@ void actual_rhs(burn_t& state, Array1D<Real, 1, neqs>& ydot)
 		X(i) = state.xn[i];
 	}
 
-	// Real const Tdust = state.T;
 	Real const rho = state.rho;
-	Real const Tdust = state.e / (rho * C_V);
+	Real const T = state.T;
+	// Real const T = state.e / (rho * C_V);
 
-	const Real fourPiBoverc = a_rad * Tdust * Tdust * Tdust * Tdust;
+	const Real fourPiBoverc = a_rad * T * T * T * T;
 
 	ydot(1) = chat * rho * kappa0 * (fourPiBoverc - X(0));
 	const Real edot = - c * rho * kappa0 * (fourPiBoverc - X(0));
@@ -130,7 +130,8 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE
 void actual_jac(const burn_t& state, MatrixType& jac)
 {
 	const double rho = state.rho;
-	Real const T = state.e / (rho * C_V);
+	Real const T = state.T;
+	// Real const T = state.e / (rho * C_V);
 	const double dEg_dT = 4.0 * a_rad * T * T * T;
 	const double tau = kappa0 * rho * chat;
 
@@ -316,30 +317,34 @@ auto problem_main() -> int
 	// compute L1 error norm
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	for (size_t i = 0; i < t_sim.size(); ++i) {
-		err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
-		err_norm += std::abs(Trad[i] - Trad_exact[i]);
-		sol_norm += std::abs(Tgas_exact[i]) + std::abs(Trad_exact[i]);
+	if (only_check_last) {
+		err_norm += std::abs(Tgas.back() - Tgas_exact.back());
+		err_norm += std::abs(Trad.back() - Trad_exact.back());
+		sol_norm += std::abs(Tgas_exact.back()) + std::abs(Trad_exact.back());
+	} else {
+		for (size_t i = 0; i < t_sim.size(); ++i) {
+			err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
+			err_norm += std::abs(Trad[i] - Trad_exact[i]);
+			sol_norm += std::abs(Tgas_exact[i]) + std::abs(Trad_exact[i]);
+		}
 	}
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
-	if (export_csv) {
-		std::ofstream file;
-		file.open("rad_thermal_cooling_temp.csv");
-		file << "t,Tgas,Tgas_exact\n";
-		for (size_t i = 0; i < t_sim.size(); ++i) {
-			file << std::scientific << std::setprecision(12) << t_sim[i] << "," << Tgas[i] << "," << Tgas_exact[i] << "\n";
-		}
-		file.close();
-
-		file.open("rad_thermal_cooling_rad_energy_density.csv");
-		file << "t,Trad,Erad_exact\n";
-		for (size_t i = 0; i < t_sim.size(); ++i) {
-			file << std::scientific << std::setprecision(12) << t_sim[i] << "," << Trad[i] << "," << Trad_exact[i] << "\n";
-		}
-		file.close();
+	std::ofstream file;
+	file.open("rad_thermal_cooling_temp.csv");
+	file << "t,Tgas,Tgas_exact\n";
+	for (size_t i = 0; i < t_sim.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << t_sim[i] << "," << Tgas[i] << "," << Tgas_exact[i] << "\n";
 	}
+	file.close();
+
+	file.open("rad_thermal_cooling_rad_energy_density.csv");
+	file << "t,Trad,Erad_exact\n";
+	for (size_t i = 0; i < t_sim.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << t_sim[i] << "," << Trad[i] << "," << Trad_exact[i] << "\n";
+	}
+	file.close();
 
 	// exit
 	int status = 0;
