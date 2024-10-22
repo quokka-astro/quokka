@@ -787,9 +787,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		JacobianResult<problem_t> jacobian;
 
 		if (dust_model == 1) {
-			jacobian = ComputeJacobianForGasAndDustWithPE(T_gas, T_d, Egas_diff, EradVec_guess, Erad0Vec, PE_heating_energy_derivative, Rvec, Src,
-								      coeff_n, tau, c_v, lambda_gd_times_dt, opacity_terms.kappaPoverE, d_fourpiboverc_d_t,
-								      H_num_den, dt);
+			jacobian =
+			    ComputeJacobianForGasAndDustWithPE(T_gas, T_d, Egas_diff, EradVec_guess, Erad0Vec, PE_heating_energy_derivative, Rvec, Src, coeff_n,
+							       tau, c_v, lambda_gd_times_dt, opacity_terms.kappaPoverE, d_fourpiboverc_d_t, H_num_den, dt);
 		} else {
 			jacobian = ComputeJacobianForGasAndDustDecoupled(T_gas, T_d, Egas_diff, Erad_diff, Rvec, Src, coeff_n, tau, c_v, lambda_gd_times_dt,
 									 opacity_terms.kappaPoverE, d_fourpiboverc_d_t);
