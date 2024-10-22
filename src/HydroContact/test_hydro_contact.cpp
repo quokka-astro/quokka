@@ -83,7 +83,7 @@ template <> void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid_
 }
 
 template <>
-void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void RadhydroSimulation<ContactProblem>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {

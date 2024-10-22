@@ -183,8 +183,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
-	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+	void computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
+  void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir);
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
@@ -567,8 +569,15 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::ErrorEst(int l
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void RadhydroSimulation<problem_t>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+{
+	// user should implement
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	// user should implement
 }
@@ -610,11 +619,12 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	amrex::Print() << '\n';
 
 	if (computeReferenceSolution_) {
-		// compute reference solution
+		// compute cc-reference solution
+    amrex::Print() << "Checking cc-quantities\n";
 		const int ncomp = state_new_cc_[0].nComp();
 		const int nghost = state_new_cc_[0].nGrow();
 		amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
-		computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
+		computeReferenceSolution_cc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
 
 		// compute error norm
 		amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
@@ -634,6 +644,36 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 		const double rel_error = err_norm / sol_norm;
 		errorNorm_ = rel_error;
 		amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
+
+    // compute fc-reference solution
+    if constexpr(Physics_Traits<problem_t>::is_mhd_enabled) {
+      for (int idim = 0; idim < 3; ++idim) {
+        amrex::Print() << "Checking fc-quantities in the " << idim << " direction\n";
+        const int ncomp = state_new_fc_[idim][0].nComp();
+        const int nghost = state_new_fc_[idim][0].nGrow();
+        amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
+        computeReferenceSolution_fc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
+
+        // compute error norm
+        amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
+        amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
+        amrex::MultiFab::Saxpy(residual, -1., state_new_fc_[idim][0], 0, 0, ncomp, nghost);
+
+        amrex::Real sol_norm = 0.;
+        amrex::Real err_norm = 0.;
+        // compute rms of each component
+        for (int n = 0; n < ncomp; ++n) {
+          sol_norm += std::pow(state_ref_level0.norm1(n), 2);
+          err_norm += std::pow(residual.norm1(n), 2);
+        }
+        sol_norm = std::sqrt(sol_norm);
+        err_norm = std::sqrt(err_norm);
+
+        const double rel_error = err_norm / sol_norm;
+        errorNorm_ = rel_error;
+        amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
+      }
+    }
 	}
 	amrex::Print() << '\n';
 
@@ -1150,7 +1190,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
         auto mask = ec_emf_components[idim].OverlapMask(geom[lev].periodicity());
         ec_emf_components[idim].WeightedSync(*mask, geom[lev].periodicity());
       }
-		}
+      MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateNew_fc, ec_emf_components, dt_lev);
+    }
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, ncompHydro_, redoFlag);
@@ -1250,11 +1291,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		auto const &stateOld_cc = state_old_cc_tmp;
 		auto const &stateInter_cc = state_inter_cc_;
+		auto &stateFinal_cc = state_new_cc_[lev];
 
 		auto const &stateOld_fc = state_old_fc_tmp;
 		auto const &stateInter_fc = state_inter_fc_;
+    auto &stateFinal_fc = state_new_fc_[lev];
 
-		auto &stateFinal_cc = state_new_cc_[lev];
 
     int nvars = ncompHydro_;
     if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1272,6 +1314,20 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
 
+    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components;
+      for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(1,1,1) - amrex::IntVect::TheDimensionVector(2-idim));
+        ec_emf_components[idim].define(ba_ec, dm, 2, nghost_fc_);
+        fast_mhd_wavespeeds[idim].FillBoundary(geom[lev].periodicity());
+      }
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, nghost_fc_);
+      for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        auto mask = ec_emf_components[idim].OverlapMask(geom[lev].periodicity());
+        ec_emf_components[idim].WeightedSync(*mask, geom[lev].periodicity());
+      }
+      MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components, dt_lev);
+    }
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, avgFaceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, ncompHydro_, redoFlag);

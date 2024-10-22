@@ -157,6 +157,40 @@ template <> void RadhydroSimulation<AlfvenWave>::setInitialConditionsOnGrid_fc(q
 	});
 }
 
+template <>
+void RadhydroSimulation<AlfvenWave>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+{
+	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateExact = ref.array(iter);
+		auto const ncomp = ref.nComp();
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < ncomp; ++n) {
+				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
+			}
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, 0);
+		});
+	}
+}
+
+template <>
+void RadhydroSimulation<AlfvenWave>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+{
+	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateExact = ref.array(iter);
+		auto const ncomp = ref.nComp();
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < ncomp; ++n) {
+				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
+			}
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, 0);
+		});
+	}
+}
+
 auto problem_main() -> int
 {
 	const int ncomp_cc = Physics_Indices<AlfvenWave>::nvarTotal_cc;

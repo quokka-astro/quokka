@@ -170,7 +170,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::
 }
 
 template <>
-void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 

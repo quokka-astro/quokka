@@ -81,7 +81,7 @@ template <> void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid
 }
 
 template <>
-void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+void RadhydroSimulation<HighMachProblem>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
 								   amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo)
 {
 

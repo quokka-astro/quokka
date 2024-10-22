@@ -72,6 +72,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		pressure_index,
 		primEint_index,	  // auxiliary internal energy (rho * e)
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
+    // TODO: = check what is enabled
     x2Magnetic_index, // when magnetic fields exist, then we also store cc-ave of the two orthogonal b-fields, so they can be reconstructed to the solving face
     x3Magnetic_index,
 	};

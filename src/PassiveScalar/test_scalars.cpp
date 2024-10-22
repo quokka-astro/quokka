@@ -84,7 +84,7 @@ template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid_c
 }
 
 template <>
-void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+void RadhydroSimulation<ScalarProblem>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
 								 amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {

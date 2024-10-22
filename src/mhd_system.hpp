@@ -37,6 +37,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &reconstructRange,
 				  int reconstructionOrder);
+
+  static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, const double dt);
 };
 
 template <typename problem_t>
@@ -316,6 +318,47 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
+}
+
+template <typename problem_t>
+void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, const double dt)
+{
+	// compute the total right-hand-side for the MOL integration
+
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
+
+
+  // loop over faces pointing in the w0-direction
+  for (int w0 = 0; w0 < 3; ++w0) {
+    int w1 = (w0 + 1) % 3;
+    int w2 = (w0 + 2) % 3;
+    std::array<int, 3> delta_w1 = {0, 0, 0};
+    std::array<int, 3> delta_w2 = {0, 0, 0};
+    if (w0 == 0) {
+      delta_w1[1] = 1;
+      delta_w2[2] = 1;
+    } else if (w0 == 1) {
+      delta_w1[2] = 1;
+      delta_w2[0] = 1;
+    } else if (w0 == 2) {
+      delta_w1[0] = 1;
+      delta_w2[1] = 1;
+    }
+    auto const ec_emf_w1 = ec_emf_mf[w1].const_arrays();
+    auto const ec_emf_w2 = ec_emf_mf[w2].const_arrays();
+    auto fc_consVarNew = fc_consVarNew_mf[w0].arrays();
+    auto fc_consVarOld = fc_consVarOld_mf[w0].const_arrays();
+    amrex::ParallelFor(fc_consVarNew_mf[w0], amrex::IntVect::TheDimensionVector(w0), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+      double db_dt = ec_emf_w1[bx](i, j, k) + \
+              ec_emf_w2[bx](i, j, k) + \
+              ec_emf_w1[bx](i+delta_w1[0], j+delta_w1[1], k+delta_w1[2]) + \
+              ec_emf_w2[bx](i+delta_w2[0], j+delta_w2[1], k+delta_w2[2]);
+      fc_consVarNew[bx](i, j, k) = fc_consVarOld[bx](i, j, k) + dt * db_dt;
+    });
+  }
 }
 
 #endif // HYDRO_SYSTEM_HPP_
