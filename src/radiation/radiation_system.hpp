@@ -270,7 +270,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeNumberDensityAtomicH(double rho, amrex::GpuArray<Real, nmscalars_> const &massScalars) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeNumberDensityH(double rho, amrex::GpuArray<Real, nmscalars_> const &massScalars) -> double;
 
 	// Used for single-group RHD only. Not used for multi-group RHD.
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> Real;
@@ -462,7 +462,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityAtomicH(double rho, amrex::GpuArray<Real, nmscalars_> const & /*massScalars*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(double rho, amrex::GpuArray<Real, nmscalars_> const & /*massScalars*/) -> double
 {
 	return rho / mean_molecular_mass_;
 }
