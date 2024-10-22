@@ -176,7 +176,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	const double chat = c_hat_;
 	const double cscale = c / chat;
 
-	const double num_den = rho / mean_molecular_mass_;
+	const double atomic_H_num_den = ComputeNumberDensityAtomicH(rho, massScalars);
 
 	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 	double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
@@ -311,7 +311,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
 
 		auto jacobian =
-		    ComputeJacobianForGas(T_d, Egas_diff, Erad_diff, Rvec, Src, tau, c_v, opacity_terms.kappaPoverE, d_fourpiboverc_d_t, num_den, dt);
+		    ComputeJacobianForGas(T_d, Egas_diff, Erad_diff, Rvec, Src, tau, c_v, opacity_terms.kappaPoverE, d_fourpiboverc_d_t, atomic_H_num_den, dt);
 
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
@@ -666,11 +666,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			gas_update_factor = IMEX_a32;
 		}
 
-		const double num_den = rho / mean_molecular_mass_;
+		const double atomic_H_num_den = ComputeNumberDensityAtomicH(rho, massScalars);
 		const double cscale = c / chat;
 		double coeff_n = NAN;
 		if constexpr (enable_dust_gas_thermal_coupling_model_) {
-			coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
+			coeff_n = dt * dustGasCoeff_local * atomic_H_num_den * atomic_H_num_den / cscale;
 		}
 
 		// Outer iteration loop to update the work term until it converges

@@ -88,12 +88,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		}
 
 		double coeff_n = NAN;
-		const double num_den = rho / mean_molecular_mass_;
+		const double atomic_H_num_den = ComputeNumberDensityAtomicH(rho, massScalars);
 		if constexpr (enable_dust_gas_thermal_coupling_model_) {
-			coeff_n = dt * dustGasCoeff_ * num_den * num_den / cscale;
+			coeff_n = dt * dustGasCoeff_ * atomic_H_num_den * atomic_H_num_den / cscale;
 		} else {
 			amrex::ignore_unused(coeff_n);
-			amrex::ignore_unused(num_den);
+			amrex::ignore_unused(atomic_H_num_den);
 			amrex::ignore_unused(dustGasCoeff_);
 		}
 
@@ -230,10 +230,10 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					double cooling = 0.0;
 					double cooling_derivative = 0.0;
-					const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
+					const double CR_heating = DefineCosmicRayHeatingRate(atomic_H_num_den) * dt;
 					if constexpr (enable_dust_gas_thermal_coupling_model_) {
-						cooling = DefineNetCoolingRate(T_gas, num_den)[0];
-						cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, num_den)[0];
+						cooling = DefineNetCoolingRate(T_gas, atomic_H_num_den)[0];
+						cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, atomic_H_num_den)[0];
 					}
 
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
@@ -349,7 +349,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				AMREX_ASSERT(Erad_guess >= 0.0);
 
 				if constexpr (!add_line_cooling_to_radiation_in_jac) {
-					const auto cooling_tend = DefineNetCoolingRate(T_gas, num_den)[0] * dt;
+					const auto cooling_tend = DefineNetCoolingRate(T_gas, atomic_H_num_den)[0] * dt;
 					AMREX_ASSERT_WITH_MESSAGE(cooling_tend >= 0.,
 								  "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
 					// TODO(CCH): potential GPU-related issue here.
