@@ -84,8 +84,8 @@ template <> struct ISM_Traits<CoolingProblemMG> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
-    -> amrex::Real
+AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
+											       amrex::Real const /*num_density*/) -> amrex::Real
 {
 	return PE_rate / Erad_FUV;
 }
@@ -118,7 +118,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefineCosmic
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<CoolingProblemMG>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+								  const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -177,9 +177,11 @@ template <> void QuokkaSimulation<CoolingProblemMG>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
-	// This problem is a test of photoelectric heating, line cooling, and cosmic-ray heating in a uniform medium with multigroup radiation. The gas/dust opacity is set to zero, so that the radiation does not interact with matter. The initial conditions are set to a constant temperature and radiation energy density Erad_FUV = 1. The gas cools at a rate of 0.1 per unit time, and is heated by cosmic rays at a rate of 0.03 per unit time. The photoelectric heating rate is 0.02 * Erad_FUV per unit time. The exact solution is given by the following system of equations:
-	// dTgas/dt = -0.1 * Tgas + 0.03 + 0.02 * Erad_FUV
-	// where Erad_FUV = 1.0 is constant over time.
+	// This problem is a test of photoelectric heating, line cooling, and cosmic-ray heating in a uniform medium with multigroup radiation. The gas/dust
+	// opacity is set to zero, so that the radiation does not interact with matter. The initial conditions are set to a constant temperature and radiation
+	// energy density Erad_FUV = 1. The gas cools at a rate of 0.1 per unit time, and is heated by cosmic rays at a rate of 0.03 per unit time. The
+	// photoelectric heating rate is 0.02 * Erad_FUV per unit time. The exact solution is given by the following system of equations: dTgas/dt = -0.1 * Tgas
+	// + 0.03 + 0.02 * Erad_FUV where Erad_FUV = 1.0 is constant over time.
 
 	// Problem parameters
 	const int max_timesteps = 1e6;

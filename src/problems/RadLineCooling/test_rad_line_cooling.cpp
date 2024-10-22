@@ -114,7 +114,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblem>::ComputeFluxMea
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<CoolingProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+								const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
@@ -170,8 +170,10 @@ template <> void QuokkaSimulation<CoolingProblem>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
-	// This problem is a test of line cooling and cosmic-ray heating in a uniform medium. The gas/dust opacity is set to zero, so that the radiation does not interact with matter. The initial conditions are set to a constant temperature and zero radiation energy density. The gas cools at a rate of 0.1 per unit time, and is heated by cosmic rays at a rate of 0.03 per unit time. The exact solution is given by the following system of equations:
-	// dTgas/dt = -0.1 * Tgas + 0.03, 
+	// This problem is a test of line cooling and cosmic-ray heating in a uniform medium. The gas/dust opacity is set to zero, so that the radiation does
+	// not interact with matter. The initial conditions are set to a constant temperature and zero radiation energy density. The gas cools at a rate of 0.1
+	// per unit time, and is heated by cosmic rays at a rate of 0.03 per unit time. The exact solution is given by the following system of equations:
+	// dTgas/dt = -0.1 * Tgas + 0.03,
 
 	// Problem parameters
 	const int max_timesteps = 1e6;
