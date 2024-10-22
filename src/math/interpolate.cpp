@@ -2,6 +2,7 @@
 #include <cmath>
 
 #include "math/interpolate.hpp"
+#include "AMReX_BLassert.H"
 
 #define LIKELY_IN_CACHE_SIZE 8
 
@@ -109,7 +110,7 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *ar
 		and arr_len must be >= 3. */
 
 	// check if x is within the range of arr_x
-	assert(x[0] >= arr_x[0] && x[len - 1] <= arr_x[arr_len - 1]);
+	AMREX_ASSERT(x[0] >= arr_x[0] && x[len - 1] <= arr_x[arr_len - 1]);
 
 	int64_t j = 0;
 	for (int i = 0; i < len; i++) {
@@ -127,7 +128,7 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *ar
 			const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
 			y[i] = slope * (x[i] - arr_x[j]) + arr_y[j];
 		}
-		assert(!std::isnan(y[i]));
+		AMREX_ASSERT(!std::isnan(y[i]));
 	}
 }
 
@@ -153,6 +154,6 @@ double interpolate_value(double x, double const *arr_x, double const *arr_y, int
 		const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
 		y = slope * (x - arr_x[j]) + arr_y[j];
 	}
-	assert(!std::isnan(y));
+	AMREX_ASSERT(!std::isnan(y));
 	return y;
 }

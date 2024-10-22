@@ -13,7 +13,7 @@
 
 static constexpr bool export_csv = true;
 
-struct PulseProblem {
+struct CoolingProblemMG {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int n_groups_ = 4;
@@ -42,19 +42,19 @@ const double cooling_rate = 0.1;
 const double CR_heating_rate = 0.03;
 const double PE_rate = 0.02;
 
-template <> struct SimulationData<PulseProblem> {
+template <> struct SimulationData<CoolingProblemMG> {
 	std::vector<double> t_vec_;
 	std::vector<double> Tgas_vec_;
 	std::vector<double> Erad_line_vec_;
 };
 
-template <> struct quokka::EOS_Traits<PulseProblem> {
+template <> struct quokka::EOS_Traits<CoolingProblemMG> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<PulseProblem> {
+template <> struct Physics_Traits<CoolingProblemMG> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -65,7 +65,7 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr int nGroups = n_groups_;
 };
 
-template <> struct RadSystem_Traits<PulseProblem> {
+template <> struct RadSystem_Traits<CoolingProblemMG> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
@@ -77,21 +77,21 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 };
 
-template <> struct ISM_Traits<PulseProblem> {
+template <> struct ISM_Traits<CoolingProblemMG> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = 1;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
 	static constexpr bool enable_photoelectric_heating = 1;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
     -> amrex::Real
 {
 	return PE_rate / Erad_FUV;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::Real const temperature, amrex::Real const /*num_density*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefineNetCoolingRate(amrex::Real const temperature, amrex::Real const /*num_density*/)
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
@@ -101,7 +101,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRate(amrex::
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
@@ -110,14 +110,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineNetCoolingRateTempDeri
 	return cooling;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CoolingProblemMG>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
 {
 	return CR_heating_rate;
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+RadSystem<CoolingProblemMG>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
 							      const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
@@ -130,62 +130,56 @@ RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<do
 	return exponents_and_values;
 }
 
-template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<CoolingProblemMG>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, T0);
+	const double Egas = quokka::EOS<CoolingProblemMG>::ComputeEintFromTgas(rho0, T0);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < n_groups_; ++g) {
 			const auto Erad = g == n_groups_ - 1 ? Erad_FUV : Erad_floor_;
-			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad;
-			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			state_cc(i, j, k, RadSystem<CoolingProblemMG>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad;
+			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
 		}
-		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = v0 * rho0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<CoolingProblemMG>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
+		state_cc(i, j, k, RadSystem<CoolingProblemMG>::gasDensity_index) = rho0;
+		state_cc(i, j, k, RadSystem<CoolingProblemMG>::gasInternalEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<CoolingProblemMG>::x1GasMomentum_index) = v0 * rho0;
+		state_cc(i, j, k, RadSystem<CoolingProblemMG>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<CoolingProblemMG>::x3GasMomentum_index) = 0.;
 	});
 }
 
-template <> void QuokkaSimulation<PulseProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<CoolingProblemMG>::computeAfterTimestep()
 {
-	auto [_, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); // NOLINT
+	auto [_, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); // NOLINT [[maybe_unused]]
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		userData_.t_vec_.push_back(tNew_[0]);
 
-		const amrex::Real Etot_i = values.at(RadSystem<PulseProblem>::gasEnergy_index)[0];
-		const amrex::Real x1GasMom = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[0];
-		const amrex::Real x2GasMom = values.at(RadSystem<PulseProblem>::x2GasMomentum_index)[0];
-		const amrex::Real x3GasMom = values.at(RadSystem<PulseProblem>::x3GasMomentum_index)[0];
-		const amrex::Real rho = values.at(RadSystem<PulseProblem>::gasDensity_index)[0];
-		const amrex::Real Egas_i = RadSystem<PulseProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
-		userData_.Tgas_vec_.push_back(quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho, Egas_i));
-		const double Erad_line_i = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * line_index)[0];
+		const amrex::Real Etot_i = values.at(RadSystem<CoolingProblemMG>::gasEnergy_index)[0];
+		const amrex::Real x1GasMom = values.at(RadSystem<CoolingProblemMG>::x1GasMomentum_index)[0];
+		const amrex::Real x2GasMom = values.at(RadSystem<CoolingProblemMG>::x2GasMomentum_index)[0];
+		const amrex::Real x3GasMom = values.at(RadSystem<CoolingProblemMG>::x3GasMomentum_index)[0];
+		const amrex::Real rho = values.at(RadSystem<CoolingProblemMG>::gasDensity_index)[0];
+		const amrex::Real Egas_i = RadSystem<CoolingProblemMG>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
+		userData_.Tgas_vec_.push_back(quokka::EOS<CoolingProblemMG>::ComputeTgasFromEint(rho, Egas_i));
+		const double Erad_line_i = values.at(RadSystem<CoolingProblemMG>::radEnergy_index + Physics_NumVars::numRadVars * line_index)[0];
 		userData_.Erad_line_vec_.push_back(Erad_line_i);
 	}
 }
 
 auto problem_main() -> int
 {
-	// This problem is a *linear* radiation diffusion problem, i.e.
-	// parameters are chosen such that the radiation and gas temperatures
-	// should be near equilibrium, and the opacity is chosen to go as
-	// T^3, such that the radiation diffusion equation becomes linear in T.
-
-	// This makes this problem a stringent test of the asymptotic-
-	// preserving property of the computational method, since the
-	// optical depth per cell at the peak of the temperature profile is
-	// of order 10^5.
+	// This problem is a test of photoelectric heating, line cooling, and cosmic-ray heating in a uniform medium with multigroup radiation. The gas/dust opacity is set to zero, so that the radiation does not interact with matter. The initial conditions are set to a constant temperature and radiation energy density Erad_FUV = 1. The gas cools at a rate of 0.1 per unit time, and is heated by cosmic rays at a rate of 0.03 per unit time. The photoelectric heating rate is 0.02 * Erad_FUV per unit time. The exact solution is given by the following system of equations:
+	// dTgas/dt = -0.1 * Tgas + 0.03 + 0.02 * Erad_FUV
+	// where Erad_FUV = 1.0 is constant over time.
 
 	// Problem parameters
 	const int max_timesteps = 1e6;
@@ -195,7 +189,7 @@ auto problem_main() -> int
 	const double the_dt = 1.0e-2;
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
+	constexpr int nvars = RadSystem<CoolingProblemMG>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -205,7 +199,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<PulseProblem> sim(BCs_cc);
+	QuokkaSimulation<CoolingProblemMG> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
@@ -224,12 +218,9 @@ auto problem_main() -> int
 
 	const bool is_coupled = sim.dustGasInteractionCoeff_ > 1.0;
 
-	// read output variables
-	auto [_, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-
 	const auto t_end = sim.tNew_[0];
 
-	const double heating_rate_ = ISM_Traits<PulseProblem>::enable_photoelectric_heating ? PE_rate + CR_heating_rate : CR_heating_rate;
+	const double heating_rate_ = ISM_Traits<CoolingProblemMG>::enable_photoelectric_heating ? PE_rate + CR_heating_rate : CR_heating_rate;
 
 	// compute exact solution from t = 0 to t = t_end
 	const double N_dt = 1000.;

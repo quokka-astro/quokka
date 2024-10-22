@@ -139,10 +139,6 @@ template <typename problem_t> struct FluxUpdateResult {
 	amrex::GpuArray<amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nGroups>, 3> Frad; // radiation flux
 };
 
-// template <typename problem_t> struct SingleVariableState {
-// 	double T; // temperature
-// }
-
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
 {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
