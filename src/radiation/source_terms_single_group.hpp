@@ -4,6 +4,8 @@
 
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
+#define LARGE 1.0e100
+
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
 						     const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter)
@@ -86,12 +88,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		}
 
 		double coeff_n = NAN;
-		const double num_den = rho / mean_molecular_mass_;
+		const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 		if constexpr (enable_dust_gas_thermal_coupling_model_) {
-			coeff_n = dt * dustGasCoeff_ * num_den * num_den / cscale;
+			coeff_n = dt * dustGasCoeff_ * H_num_den * H_num_den / cscale;
 		} else {
 			amrex::ignore_unused(coeff_n);
-			amrex::ignore_unused(num_den);
+			amrex::ignore_unused(H_num_den);
 			amrex::ignore_unused(dustGasCoeff_);
 		}
 
@@ -226,12 +228,24 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						}
 					}
 
-					F_G = Egas_guess - Egas0;
+					double cooling = 0.0;
+					double cooling_derivative = 0.0;
+					const double CR_heating = DefineCosmicRayHeatingRate(H_num_den) * dt;
+					if constexpr (enable_dust_gas_thermal_coupling_model_) {
+						cooling = DefineNetCoolingRate(T_gas, H_num_den)[0];
+						cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, H_num_den)[0];
+					}
+
+					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
+					if constexpr (add_line_cooling_to_radiation_in_jac) {
+						F_D -= (1.0 / cscale) * cooling * dt;
+					}
 					double F_D_abs = 0.0;
 					if (tau > 0.0) {
-						F_G += cscale * R;
 						F_D_abs = std::abs(F_D);
+					} else {
+						F_D_abs = std::abs(F_D + R);
 					}
 
 					// check relative convergence of the residuals
@@ -268,9 +282,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					double J11 = NAN;
 
 					if constexpr (!enable_dust_gas_thermal_coupling_model_) {
-						J00 = 1.0;
+						J00 = 1.0 + cooling_derivative * dt / c_v;
 						J01 = cscale;
-						J10 = 1.0 / c_v * dEg_dT;
+						J10 = 1.0 / c_v * dEg_dT - (1 / cscale) * cooling_derivative * dt;
 						if (tau <= 0.0) {
 							J11 = -std::numeric_limits<double>::infinity();
 						} else {
@@ -285,7 +299,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						J01 = cscale;
 						J10 = 1.0 / c_v * dEg_dT;
 						if (tau <= 0.0) {
-							J11 = -std::numeric_limits<double>::infinity();
+							J11 = -LARGE;
 						} else {
 							J11 = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg - kappaPoverE / tau - 1.0;
 						}
@@ -333,6 +347,14 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 				AMREX_ASSERT(Egas_guess > 0.0);
 				AMREX_ASSERT(Erad_guess >= 0.0);
+
+				if constexpr (!add_line_cooling_to_radiation_in_jac) {
+					const auto cooling_tend = DefineNetCoolingRate(T_gas, H_num_den)[0] * dt;
+					AMREX_ASSERT_WITH_MESSAGE(cooling_tend >= 0.,
+								  "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
+					// TODO(CCH): potential GPU-related issue here.
+					Erad_guess += (1 / cscale) * cooling_tend;
+				}
 
 				if (n > 0) {
 					// calculate kappaF since the temperature has changed

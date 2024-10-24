@@ -107,19 +107,22 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
 								  quokka::valarray<double, nGroups_> const &tau, double c_v,
 								  quokka::valarray<double, nGroups_> const &kappaPoverE,
-								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
+								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const num_den,
+								  double const dt) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
 	const double cscale = c_light_ / c_hat_;
 
-	result.F0 = Egas_diff;
+	// CR_heating term
+	const double CR_heating = DefineCosmicRayHeatingRate(num_den) * dt;
+
+	result.F0 = Egas_diff + cscale * sum(Rvec) - CR_heating;
 	result.Fg = Erad_diff - (Rvec + Src);
 	result.Fg_abs_sum = 0.0;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] > 0.0) {
 			result.Fg_abs_sum += std::abs(result.Fg[g]);
-			result.F0 += cscale * Rvec[g];
 		}
 	}
 
@@ -173,6 +176,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	const double chat = c_hat_;
 	const double cscale = c / chat;
 
+	const double H_num_den = ComputeNumberDensityH(rho, massScalars);
+
 	// const double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 	double Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
 
@@ -180,7 +185,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	double T_d = NAN; // a dummy dust temperature, T_d = T_gas for gas-only model
 	double delta_x = NAN;
 	quokka::valarray<double, nGroups_> delta_R{};
-	quokka::valarray<double, nGroups_> F_D{};
 	quokka::valarray<double, nGroups_> Rvec{};
 	quokka::valarray<double, nGroups_> tau0{};	 // optical depth across c * dt at old state
 	quokka::valarray<double, nGroups_> tau{};	 // optical depth across c * dt at new state
@@ -306,7 +310,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
 
-		auto jacobian = ComputeJacobianForGas(T_d, Egas_diff, Erad_diff, Rvec, Src, tau, c_v, opacity_terms.kappaPoverE, d_fourpiboverc_d_t);
+		auto jacobian =
+		    ComputeJacobianForGas(T_d, Egas_diff, Erad_diff, Rvec, Src, tau, c_v, opacity_terms.kappaPoverE, d_fourpiboverc_d_t, H_num_den, dt);
 
 		if constexpr (use_D_as_base) {
 			jacobian.J0g = jacobian.J0g * tau0;
@@ -620,7 +625,6 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		double Ekin0 = NAN;
 		double Etot0 = NAN;
 		double Egas_guess = NAN;
-		quokka::valarray<double, nGroups_> EradVec_guess{};
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
 
@@ -662,11 +666,11 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			gas_update_factor = IMEX_a32;
 		}
 
-		const double num_den = rho / mean_molecular_mass_;
+		const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 		const double cscale = c / chat;
 		double coeff_n = NAN;
 		if constexpr (enable_dust_gas_thermal_coupling_model_) {
-			coeff_n = dt * dustGasCoeff_local * num_den * num_den / cscale;
+			coeff_n = dt * dustGasCoeff_local * H_num_den * H_num_den / cscale;
 		}
 
 		// Outer iteration loop to update the work term until it converges
