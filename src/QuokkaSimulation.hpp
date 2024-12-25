@@ -190,7 +190,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
-	[[nodiscard]] auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
+	[[nodiscard]] auto ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
 	// compute statistics
 	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
@@ -311,7 +311,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 
 	// add face-centered velocities
 	for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-		componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-velocity"});
+		componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});
 	}
 	// add mhd state variables
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -600,7 +600,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 }
 
 template <typename problem_t>
-auto QuokkaSimulation<problem_t>::ComputeProjections(int /*dir*/) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+auto QuokkaSimulation<problem_t>::ComputeProjections(const amrex::Direction /*dir*/) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute projections and return as unordered_map -- user should implement
 	return std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>{};
@@ -692,9 +692,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 	amrex::Print() << '\n';
 
 	// compute average number of radiation subcycles per timestep
-	double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
-	amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << '\n';
-	amrex::Print() << '\n';
+	if (cellUpdates_ > 0) {
+		double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
+		amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << '\n';
+		amrex::Print() << '\n';
+	} else {
+		amrex::Print() << "No cell updates performed!\n";
+		amrex::Print() << '\n';
+	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)

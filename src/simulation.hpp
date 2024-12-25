@@ -51,6 +51,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_IntVect.H"
 #include "AMReX_Interpolater.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_Orientation.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
@@ -85,6 +86,7 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "io/DiagBase.H"
+#include "io/projection.hpp"
 #include "physics_info.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
@@ -154,6 +156,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Long cycleCount_ = 0;
+	int printCycleTiming_ = 0;		    // default: don't print
 	amrex::Long maxTimesteps_ = 1e4;	    // default
 	amrex::Long maxWalltime_ = 0;		    // default: no limit
 	int ascentInterval_ = -1;		    // -1 == no in-situ renders with Ascent
@@ -214,8 +217,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void computeTimestep();
 	auto computeTimestepAtLevel(int lev) -> amrex::Real;
 
-	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total,
-			   int nGrow) const;
+	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total) const;
 
 	virtual void computeMaxSignalLocal(int level) = 0;
 	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
@@ -234,7 +236,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
 
 	// compute projected vars
-	[[nodiscard]] virtual auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
+	[[nodiscard]] virtual auto ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
 
 	// compute statistics
 	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
@@ -304,8 +306,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 									int bcomp,
 									int orig_comp); // template specialized by problem generator
 
-	template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) const -> amrex::BaseFab<amrex::Real>;
-
 	// compute volume integrals
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
 
@@ -327,6 +327,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void ReadCheckpointFile();
 	auto getWalltime() -> amrex::Real;
+	auto getCycleWalltime() -> amrex::Real;
 	void setChkFile(std::string const &chkfile_number);
 	[[nodiscard]] auto getOldMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
@@ -586,11 +587,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 	}
 
 #ifdef QUOKKA_USE_OPENPMD
-	// warning about face-centered variables and OpenPMD outputs
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		amrex::Print() << "\n[Warning] [I/O] Plotfiles will ONLY contain cell-centered averages of face-centered variables!"
-			       << " Support for outputting face-centered variables for openPMD is not yet implemented.\n";
-	}
+	// warning about particles and OpenPMD outputs
+	amrex::Print() << "\n[Warning] [I/O] OpenPMD outputs currently do NOT include particles!"
+		       << " Support for outputting particles for openPMD is not yet implemented.\n";
 #endif
 }
 
@@ -654,6 +653,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
+
+	// Default print_cycle_timing = 0
+	pp.query("print_cycle_timing", printCycleTiming_);
 
 	// specify this on the command-line in order to restart from a checkpoint
 	// file
@@ -874,6 +876,15 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getWalltime() -> am
 	return time - start_time;
 }
 
+template <typename problem_t> auto AMRSimulation<problem_t>::getCycleWalltime() -> amrex::Real
+{
+	static amrex::Real start_time = amrex::ParallelDescriptor::second(); // initialized on first call
+	const amrex::Real current_time = amrex::ParallelDescriptor::second();
+	const amrex::Real elapsed_time = current_time - start_time;
+	start_time = current_time;
+	return elapsed_time;
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 {
 	BL_PROFILE("AMRSimulation::evolve()");
@@ -903,14 +914,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	getWalltime(); // initialize start_time
 
 	// Main time loop
-	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
+	int step = istep[0];
+	for (; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
 
 		if (suppress_output == 0) {
-			amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time << " (" << (cur_time / stopTime_) * 100. << "%) starts ..."
-				       << '\n';
+			amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time << " (" << (cur_time / stopTime_) * 100. << "%) starts ";
 		}
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
+
+		// output per-cycle timing
+		if (printCycleTiming_ == 1) {
+			amrex::Real elapsed_sec = getCycleWalltime();
+			amrex::Print() << "(cycle time: " << elapsed_sec << " s) ...\n";
+		} else {
+			amrex::Print() << "...\n";
+		}
+
 		computeTimestep();
 
 		// do user-specified calculations before the level update
@@ -999,6 +1019,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			// we have exceeded 90% of maxWalltime_
 			break;
 		}
+	}
+
+	if (step == 0) {
+		amrex::Print() << "No cell updates performed!\n";
+#ifdef AMREX_USE_ASCENT
+		// close Ascent
+		ascent_.close();
+#endif
+		return;
 	}
 
 	amrex::Real elapsed_sec = getWalltime();
@@ -2079,7 +2108,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::CustomPlotFileName(
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start,
-					     int srccomp_total, int nGrow) const
+					     int srccomp_total) const
 {
 	int di = 0;
 	int dj = 0;
@@ -2094,7 +2123,10 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 	// iterate over the domain
 	auto const &state_cc = mf_cc.arrays();
 	auto const &state_fc = mf_fc.const_arrays();
-	amrex::ParallelFor(mf_cc, amrex::IntVect(AMREX_D_DECL(nGrow, nGrow, nGrow)), [=] AMREX_GPU_DEVICE(int boxidx, int i, int j, int k) {
+	int const ng_cc = mf_cc.nGrow();
+	int const ng_fc = mf_fc.nGrow();
+	AMREX_ALWAYS_ASSERT(ng_cc <= ng_fc); // if this is false, we can't fill the ghost cells!
+	amrex::ParallelFor(mf_cc, amrex::IntVect(AMREX_D_DECL(ng_cc, ng_cc, ng_cc)), [=] AMREX_GPU_DEVICE(int boxidx, int i, int j, int k) {
 		for (int icomp = 0; icomp < srccomp_total; ++icomp) {
 			state_cc[boxidx](i, j, k, dstcomp_start + icomp) =
 			    0.5 * (state_fc[boxidx](i, j, k, srccomp_start + icomp) + state_fc[boxidx](i + di, j + dj, k + dk, srccomp_start + icomp));
@@ -2143,7 +2175,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 	// compute cell-center averaged face-centred data
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc, nghost_fc);
+			AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc);
 			comp += ncomp_per_dim_fc;
 		}
 	}
@@ -2230,7 +2262,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	if (computeVars) {
 		for (int lev{0}; lev <= finestLevel(); ++lev) {
 			diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
-			amrex::MultiFab const mf = PlotFileMFAtLevel(lev, nghost_cc_);
+			amrex::MultiFab const mf = PlotFileMFAtLevel(lev, std::min(nghost_cc_, nghost_fc_));
 			auto const varnames = GetPlotfileVarNames();
 
 			for (int v{0}; v < m_diagVars.size(); ++v) {
@@ -2291,7 +2323,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 	BL_PROFILE("AMRSimulation::RenderAscent()");
 
 	// combine multifabs
-	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(nghost_cc_);
+	const int included_ghosts = std::min(nghost_cc_, nghost_fc_);
+	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(included_ghosts);
 	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
 	amrex::Vector<std::string> varnames;
 	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
@@ -2354,7 +2387,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #ifdef QUOKKA_USE_OPENPMD
 	int included_ghosts = 0;
 #else
-	int included_ghosts = nghost_cc_;
+	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
 #endif
 	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(included_ghosts);
 	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
@@ -2441,61 +2474,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 	}
 }
 
-template <typename problem_t>
-template <typename ReduceOp, typename F>
-auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int dir) const -> amrex::BaseFab<amrex::Real>
-{
-	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
-	BL_PROFILE("AMRSimulation::computePlaneProjection()");
-
-	// allocate temporary multifabs
-	amrex::Vector<amrex::MultiFab> q;
-	q.resize(finest_level + 1);
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
-	}
-
-	// evaluate user_f on all levels
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto const &result = q[lev].arrays();
-		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
-	}
-	amrex::Gpu::streamSynchronize();
-
-	// average down
-	for (int lev = finest_level; lev < 0; --lev) {
-		amrex::average_down(q[lev], q[lev - 1], geom[lev], geom[lev - 1], 0, 1, ref_ratio[lev - 1]);
-	}
-
-	auto const &domain_box = geom[0].Domain();
-	auto const &dx = geom[0].CellSizeArray();
-	auto const &arr = q[0].const_arrays();
-	amrex::BaseFab<amrex::Real> proj =
-	    amrex::ReduceToPlane<ReduceOp, amrex::Real>(dir, domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-		    return dx[dir] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
-	    });
-	amrex::Gpu::streamSynchronize();
-
-	// copy to host pinned memory to work around AMReX bug
-	amrex::BaseFab<amrex::Real> proj_host(proj.box(), 1, amrex::The_Pinned_Arena());
-	proj_host.copy<amrex::RunOn::Device>(proj);
-	amrex::Gpu::streamSynchronize();
-
-	if constexpr (std::is_same<ReduceOp, amrex::ReduceOpSum>::value) {
-		amrex::ParallelReduce::Sum(proj_host.dataPtr(), static_cast<int>(proj_host.size()), amrex::ParallelDescriptor::ioProcessor,
-					   amrex::ParallelDescriptor::Communicator());
-	} else if constexpr (std::is_same<ReduceOp, amrex::ReduceOpMin>::value) {
-		amrex::ParallelReduce::Min(proj_host.dataPtr(), static_cast<int>(proj_host.size()), amrex::ParallelDescriptor::ioProcessor,
-					   amrex::ParallelDescriptor::Communicator());
-	} else {
-		amrex::Abort("invalid reduce op!");
-	}
-
-	// return BaseFab in host memory
-	return proj_host;
-}
-
 template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlotfile() const
 {
 	std::vector<std::string> dirs{};
@@ -2504,50 +2482,27 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlot
 
 	auto dir_from_string = [=](const std::string &dir_str) {
 		if (dir_str == "x") {
-			return 0;
+			return amrex::Direction::x;
 		}
+#if AMREX_SPACEDIM >= 2
 		if (dir_str == "y") {
-			return 1;
+			return amrex::Direction::y;
 		}
+#endif
+#if AMREX_SPACEDIM == 3
 		if (dir_str == "z") {
-			return 2;
+			return amrex::Direction::z;
 		}
-		return -1;
+#endif
+		amrex::Error("invalid direction for projection!");
+		return amrex::Direction::x;
 	};
 
 	for (auto &dir_str : dirs) {
 		// compute projections along axis 'dir'
-		int dir = dir_from_string(dir_str);
+		amrex::Direction dir = dir_from_string(dir_str);
 		std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-
-		auto const &firstFab = proj.begin()->second;
-		const amrex::BoxArray ba(firstFab.box());
-		const amrex::DistributionMapping dm(amrex::Vector<int>{0});
-		amrex::MultiFab mf_all(ba, dm, static_cast<int>(proj.size()), 0);
-		amrex::Vector<std::string> varnames;
-
-		// write 2D plotfiles
-		auto iter = proj.begin();
-		for (int icomp = 0; icomp < static_cast<int>(proj.size()); ++icomp) {
-			const std::string &varname = iter->first;
-			const amrex::BaseFab<amrex::Real> &baseFab = iter->second;
-
-			const amrex::BoxArray ba(baseFab.box());
-			const amrex::DistributionMapping dm(amrex::Vector<int>{0});
-			amrex::MultiFab mf(ba, dm, 1, 0, amrex::MFInfo().SetAlloc(false));
-			if (amrex::ParallelDescriptor::IOProcessor()) {
-				mf.setFab(0, amrex::FArrayBox(baseFab.array()));
-			}
-			amrex::MultiFab::Copy(mf_all, mf, 0, icomp, 1, 0);
-			varnames.push_back(varname);
-			++iter;
-		}
-
-		const std::string basename = "proj_" + dir_str + "_plt";
-		const std::string filename = amrex::Concatenate(basename, istep[0], 5);
-		amrex::Print() << "Writing projection " << filename << "\n";
-		const amrex::Geometry mygeom(firstFab.box());
-		amrex::WriteSingleLevelPlotfile(filename, mf_all, varnames, mygeom, tNew_[0], istep[0]);
+		quokka::diagnostics::WriteProjection(dir, proj, tNew_[0], istep[0]);
 	}
 }
 
