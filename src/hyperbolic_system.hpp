@@ -24,8 +24,8 @@
 #include "AMReX_SPACE.H"
 
 // internal headers
-#include "ArrayView.hpp"
-#include "math_impl.hpp"
+#include "math/math_impl.hpp"
+#include "util/ArrayView.hpp"
 
 // #define MULTIDIM_EXTREMA_CHECK
 
@@ -65,8 +65,8 @@ template <typename problem_t> class HyperbolicSystem
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 	}
 
-	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto GetMinmaxSurroundingCell(arrayconst_t &q, int i, int j, int k,
-											       int n) -> std::pair<double, double>;
+	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto GetMinmaxSurroundingCell(arrayconst_t &q, int i, int j, int k, int n)
+	    -> std::pair<double, double>;
 
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);

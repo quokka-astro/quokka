@@ -3,9 +3,10 @@ pr: none
 trigger: none
 
 # run on timed schedule, like a cron job
+# NOTE: all times are in UTC!
 schedules:
-- cron: '0 0 * * *'
-  displayName: Daily midnight build
+- cron: '0 14 * * *'
+  displayName: Daily 1am build (AEDT)
   branches:
     include:
     - development
@@ -19,10 +20,12 @@ jobs:
     pool: avatar
     timeoutInMinutes: 300
     steps:
-    - script: ./extern/regression_testing/regtest.py regression/quokka-tests.ini
+    - script: ./extern/regression_testing/regtest.py --clean_testdir regression/quokka-tests.ini
       displayName: 'Run regression testing'
     - publish: /home/bwibking/regression-tests/web
+      condition: succeededOrFailed()
       artifact: regressionHTMLOutput
       displayName: 'Upload results to Azure Pipelines'
     - script: cd /home/bwibking/regression-tests/web && git add . && git commit -m 'updated results' && git push
+      condition: succeededOrFailed()
       displayName: 'Upload results to GitHub Pages'
