@@ -60,11 +60,8 @@ jobs:
             -DCMAKE_C_COMPILER=$(which clang)             \
             -DCMAKE_CXX_COMPILER=$(which clang++)         \
             -DCMAKE_CXX_STANDARD=17                       \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        #    -DCMAKE_CXX_FLAGS=-D_GLIBCXX_NO_ASSERTIONS    \
-        #    -DCMAKE_HIP_FLAGS=-D_GLIBCXX_NO_ASSERTIONS
-        # this is disabled, but may be re-enabled in the future:
-        #   -DCMAKE_CXX_FLAGS=-stdlib=libc++
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache          \
+            -DCMAKE_CXX_FLAGS=-stdlib=libc++
         cmake --build build -j 2
 
         ccache -s
