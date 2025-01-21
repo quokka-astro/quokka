@@ -6,10 +6,6 @@
 /// \file test_primordial_chem.cpp
 /// \brief Defines a test problem for primordial chemistry (microphysics).
 ///
-#ifdef __HIP_DEVICE_COMPILE__
-#undef _GLIBCXX_ASSERTIONS
-#endif
-
 #include <array>
 #include <random>
 #include <vector>
