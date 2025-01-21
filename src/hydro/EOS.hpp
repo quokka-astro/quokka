@@ -7,6 +7,10 @@
 /// \file EOS.hpp
 /// \brief A class for equation of state calculations.
 
+// this is required to workaround libstdc++ compatibility issues with HIP
+#ifdef __HIP_DEVICE_COMPILE__
+#undef _GLIBCXX_ASSERTIONS
+#endif
 #include <cmath>
 #include <optional>
 #include <tuple>
