@@ -6,6 +6,11 @@
 /// \file test_primordial_chem.cpp
 /// \brief Defines a test problem for primordial chemistry (microphysics).
 ///
+// workaround for libstdc++ incompatibility with HIP device code
+#undef _GLIBCXX_DEBUG
+#undef _GLIBCXX_ASSERTIONS
+#define _GLIBCXX_NO_ASSERTIONS 1
+
 #include <array>
 #include <random>
 #include <vector>
