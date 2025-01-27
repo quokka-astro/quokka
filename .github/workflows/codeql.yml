@@ -64,14 +64,14 @@ jobs:
               -DCMAKE_CXX_COMPILER="/usr/local/bin/g++"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@d68b2d4edb4189fd2a5366ac14e72027bd4b37dd # v3.28.2
+        uses: github/codeql-action/init@f6091c0113d1dcf9b98e269ee48e8a7e51b7bdd4 # v3.28.5
         with:
           languages: ${{ matrix.language }}
           queries: +security-and-quality
           config-file: ./.github/workflows/codeql/codeql-config.yml
 
       - name: Build (py)
-        uses: github/codeql-action/autobuild@d68b2d4edb4189fd2a5366ac14e72027bd4b37dd # v3.28.2
+        uses: github/codeql-action/autobuild@f6091c0113d1dcf9b98e269ee48e8a7e51b7bdd4 # v3.28.5
         if: ${{ matrix.language == 'python' }}
 
       - name: Build (C++)
@@ -94,7 +94,7 @@ jobs:
           make -j 4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@d68b2d4edb4189fd2a5366ac14e72027bd4b37dd # v3.28.2
+        uses: github/codeql-action/analyze@f6091c0113d1dcf9b98e269ee48e8a7e51b7bdd4 # v3.28.5
         with:
           category: "/language:${{ matrix.language }}"
 
