@@ -5,4 +5,4 @@ mkdocs-macros-plugin>=1.0.4
 pymdown-extensions
 mkdocs-awesome-pages-plugin
 mkdocs-material
-mkdocs-bibtex==2.15.0
+mkdocs-bibtex==4.1.0
