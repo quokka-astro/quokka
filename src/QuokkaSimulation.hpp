@@ -749,7 +749,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	CHECK_HYDRO_STATES(state_new_cc_[lev]);
 
 	// Real dens_max = state_new_cc_[0].norm0(4);
- 	// printf("Before AddSN--1 egas_max=%.2e\n", dens_max);
+	// printf("Before AddSN--1 egas_max=%.2e\n", dens_max);
 
 	// compute any operator-split terms here (user-defined)
 	computeAfterLevelAdvance(lev, time, dt_lev, ncycle);
@@ -1238,51 +1238,46 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		}
 
-
-
-				for (amrex::MFIter iter(stateNew); iter.isValid(); ++iter) {
-        const amrex::Box &indexRange = iter.validbox();
-		auto const state = stateNew.const_array(iter);
-       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-				   double eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-				   if(i==82 && j==74 && k==505){
+		for (amrex::MFIter iter(stateNew); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const state = stateNew.const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				double eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+				if (i == 82 && j == 74 && k == 505) {
 					// printf("1. Before EnforceLimits Eint i,j,k=%d, %d, %d, %.2e\n", i,j,k, eint);
-				   }
-                });
-			}
+				}
+			});
+		}
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew);
 
-
-				for (amrex::MFIter iter(stateNew); iter.isValid(); ++iter) {
-        const amrex::Box &indexRange = iter.validbox();
-		auto const state = stateNew.const_array(iter);
-       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-				   double eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-				   if(i==82 && j==74 && k==505){
+		for (amrex::MFIter iter(stateNew); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const state = stateNew.const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				double eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+				if (i == 82 && j == 74 && k == 505) {
 					// printf("2. Before SyncDual Eint i,j,k=%d, %d, %d, %.2e\n", i,j,k, eint);
-				   }
-                });
-			}
+				}
+			});
+		}
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
 			HydroSystem<problem_t>::SyncDualEnergy(stateNew);
 		}
 
-
 		for (amrex::MFIter iter(stateNew); iter.isValid(); ++iter) {
-        const amrex::Box &indexRange = iter.validbox();
-		auto const state = stateNew.const_array(iter);
-       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-				   double eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-				   if(i==82 && j==74 && k==505){
+			const amrex::Box &indexRange = iter.validbox();
+			auto const state = stateNew.const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				double eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+				if (i == 82 && j == 74 && k == 505) {
 					// printf("3. After SyncDual Eint i,j,k=%d, %d, %d, %.2e\n", i,j,k, eint);
-				   }
-                });
-			}
-
+				}
+			});
+		}
 
 		if (do_reflux == 1) {
 			// increment flux registers
@@ -1317,22 +1312,21 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
-		
 
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, avgFaceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld, stateFinal, rhs, dt_lev, ncompHydro_, redoFlag);
 
-	// 	for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
-    //     const amrex::Box &indexRange = iter.validbox();
-	// 	auto const state = stateFinal.const_array(iter);
-    //    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-	// 			   double eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-	// 			   if(i==82 && j==74 && k==505){
-	// 				printf("After PredictStep in FOFC-2, Eint i,j,k=%d, %d, %d, %.2e\n", i,j,k, eint);
-	// 			   }
-    //             });
-	// 		}
+		// 	for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
+		//     const amrex::Box &indexRange = iter.validbox();
+		// 	auto const state = stateFinal.const_array(iter);
+		//    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
+		// 			   double eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+		// 			   if(i==82 && j==74 && k==505){
+		// 				printf("After PredictStep in FOFC-2, Eint i,j,k=%d, %d, %d, %.2e\n", i,j,k, eint);
+		// 			   }
+		//             });
+		// 		}
 
 		// do first-order flux correction (FOFC)
 		amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -1375,35 +1369,34 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		}
 
-// 		for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
-//         const amrex::Box &indexRange = iter.validbox();
-//         auto const stateNew = stateFinal.const_array(iter);
-// amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-// 				   double rho = stateNew(i, j, k, HydroSystem<problem_t>::density_index);
-//                    double eint = stateNew(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-// 				   double egas = stateNew(i, j, k, HydroSystem<problem_t>::energy_index);
-// 				   if(i==82 && j==74 && k==505){
-// 					printf("2. Eint, Egas, rho before RK2 EnforceLimits=%.2e, %.2e, %.2e\n",eint, egas, rho);
-// 					}
-//                 });
-// 			}
+		// 		for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
+		//         const amrex::Box &indexRange = iter.validbox();
+		//         auto const stateNew = stateFinal.const_array(iter);
+		// amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
+		// 				   double rho = stateNew(i, j, k, HydroSystem<problem_t>::density_index);
+		//                    double eint = stateNew(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+		// 				   double egas = stateNew(i, j, k, HydroSystem<problem_t>::energy_index);
+		// 				   if(i==82 && j==74 && k==505){
+		// 					printf("2. Eint, Egas, rho before RK2 EnforceLimits=%.2e, %.2e, %.2e\n",eint, egas, rho);
+		// 					}
+		//                 });
+		// 			}
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal);
 
-
-// 						for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
-//         const amrex::Box &indexRange = iter.validbox();
-//         auto const stateNew = stateFinal.const_array(iter);
-// amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-// 				   double rho = stateNew(i, j, k, HydroSystem<problem_t>::density_index);
-//                    double eint = stateNew(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-// 				   double egas = stateNew(i, j, k, HydroSystem<problem_t>::energy_index);
-// 				   if(i==82 && j==74 && k==505){
-// 					printf("3. Eint, Egas, rho after RK2 EnforceLimits=%.2e, %.2e, %.2e\n",eint, egas, rho);
-// 					}
-//                 });
-// 			}
+		// 						for (amrex::MFIter iter(stateFinal); iter.isValid(); ++iter) {
+		//         const amrex::Box &indexRange = iter.validbox();
+		//         auto const stateNew = stateFinal.const_array(iter);
+		// amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
+		// 				   double rho = stateNew(i, j, k, HydroSystem<problem_t>::density_index);
+		//                    double eint = stateNew(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+		// 				   double egas = stateNew(i, j, k, HydroSystem<problem_t>::energy_index);
+		// 				   if(i==82 && j==74 && k==505){
+		// 					printf("3. Eint, Egas, rho after RK2 EnforceLimits=%.2e, %.2e, %.2e\n",eint, egas, rho);
+		// 					}
+		//                 });
+		// 			}
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -1580,16 +1573,16 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 						      reconstructGhost, nvars);)
 
 	auto &facevelz1 = flux[2];
-		for (amrex::MFIter iter(facevelz1); iter.isValid(); ++iter) {
-        const amrex::Box &indexRange = iter.validbox();
+	for (amrex::MFIter iter(facevelz1); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
 		auto const velz = facevelz1.const_array(iter);
-       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-				   double vel_z = velz(i,j,k);
-				   if(vel_z!=vel_z){
-					// printf("Nan in flux at i,j,k after hydroflux=%d, %d, %d\n", i,j,k);
-				   }
-                });
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			double vel_z = velz(i, j, k);
+			if (vel_z != vel_z) {
+				// printf("Nan in flux at i,j,k after hydroflux=%d, %d, %d\n", i,j,k);
 			}
+		});
+	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -1659,30 +1652,29 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primV
 
 		auto &facevelz1 = flux;
 		for (amrex::MFIter iter(facevelz1); iter.isValid(); ++iter) {
-        const amrex::Box &indexRange = iter.validbox();
-		auto const velz = facevelz1.const_array(iter);
-       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-				   double vel_z = velz(i,j,k);
-				   if(vel_z!=vel_z){
+			const amrex::Box &indexRange = iter.validbox();
+			auto const velz = facevelz1.const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				double vel_z = velz(i, j, k);
+				if (vel_z != vel_z) {
 					// printf("Nan in flux at i,j,k in before RiemannSolver=%d, %d, %d\n", i,j,k);
-				   }
-                });
-			}
+				}
+			});
+		}
 
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 
 		auto &facevelz = flux;
 		for (amrex::MFIter iter(facevelz); iter.isValid(); ++iter) {
-        const amrex::Box &indexRange = iter.validbox();
-		auto const velz = facevelz.const_array(iter);
-       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE( int i, int j, int k) noexcept {
-				   double vel_z = velz(i,j,k);
-				   if(vel_z!=vel_z){
+			const amrex::Box &indexRange = iter.validbox();
+			auto const velz = facevelz.const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				double vel_z = velz(i, j, k);
+				if (vel_z != vel_z) {
 					// printf("Nan in flux at i,j,k in after RiemannSolver=%d, %d, %d\n", i,j,k);
-				   }
-                });
-			}
-
+				}
+			});
+		}
 	}
 }
 
