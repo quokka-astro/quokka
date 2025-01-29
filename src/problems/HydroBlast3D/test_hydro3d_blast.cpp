@@ -172,11 +172,11 @@ template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vecto
 			auto const &ekin = Ekin_mf.array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 				// compute kinetic energy
-				Real rho = state(i, j, k, HydroSystem<SedovProblem>::density_index);
-				Real px = state(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index);
-				Real py = state(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index);
-				Real pz = state(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index);
-				Real psq = px * px + py * py + pz * pz;
+				Real const rho = state(i, j, k, HydroSystem<SedovProblem>::density_index);
+				Real const px = state(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index);
+				Real const py = state(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index);
+				Real const pz = state(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index);
+				Real const psq = px * px + py * py + pz * pz;
 				ekin(i, j, k) = psq / (2.0 * rho) * vol;
 			});
 		}
