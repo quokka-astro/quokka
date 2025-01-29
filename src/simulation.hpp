@@ -157,7 +157,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;		    // default: don't print
-	amrex::Long maxTimesteps_ = 1e4;	    // default
+	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max();	    // default: no limit
 	amrex::Long maxWalltime_ = 0;		    // default: no limit
 	int ascentInterval_ = -1;		    // -1 == no in-situ renders with Ascent
 	int plotfileInterval_ = -1;		    // -1 == no output
@@ -600,7 +600,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// ParmParse reads inputs from the *.inputs file
 	amrex::ParmParse pp;
 
-	// Default nsteps = 1e4
+	// Default nsteps = std::numeric_limits<int>::max()
 	pp.query("max_timesteps", maxTimesteps_);
 
 	// Default CFL number == 0.3, set to whatever is in the file
