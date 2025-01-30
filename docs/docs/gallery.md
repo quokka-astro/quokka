@@ -1,6 +1,6 @@
 # Gallery
 
-## QED 
+## QED III 
 
 QED is suite of simulations follow supernova-driven outflows in varying galactic environment. The simulations follow outflows from a 1 kpc$^2$ patch of galaxy upto a vertical height of $\sim$ few kpc in three galactic environments - Solar neighbourhood, inner and outer galaxy. 
 
