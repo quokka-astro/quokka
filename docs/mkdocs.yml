@@ -32,7 +32,7 @@ nav:
     - Performance tips: performance.md
     - How to use clang-tidy: howto_clang_tidy.md
   - GALLERY:
-    - QEDIII: gallery.md
+    - Hydro Tall Box: gallery.md
 
 plugins:
   - search
