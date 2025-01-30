@@ -8,8 +8,12 @@ QED is suite of simulations follow supernova-driven outflows in varying galactic
 The initial gas density and temperature profiles are derived using Solar neighbourhood gas surface density, 13 Msun/pc/pc. The SN-rate is 6e-5/yr and the gas cools with Solar (top) and sub-Solar (bottom) metallicity. Though box height (8 kpc) and the resolution (2 pc, uniform) for both the metallicities, the nature of outflows in these two cases is qutie different. 
 
 
+The Solar metallicity case - 
+
 <div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1051348948?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="QED III - Solar Neighbourhood"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
 
+
+The sub-Solar metallicity case - 
 
 <div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1051353575?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="QED III - Solar Neighbourhood, sub-Solar metallicity"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
 
@@ -19,8 +23,12 @@ The initial gas density and temperature profiles are derived using Solar neighbo
 The initial gas surface density is $$50 M_{\odot}$$ pc$$^{-2}$$ and the SN-rate is commensurately higher, 3e-4/yr. The domain size and resolution are identical to the Solar neighbourhood case but note how the evolution for gas cooling at Solar (top) and sub-Solar (bottom) metallicities are closer in nature than the for the Solar neighbourhood case. 
 
 
+The Solar metallicity case - 
+
 <div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1051352748?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="QED III - Inner Galaxy"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
 
+
+The sub-Solar metallicity case - 
 
 <div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1051356179?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="QED III - Inner Galaxy, sub-Solar Metallicity"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
 
@@ -38,3 +46,14 @@ The sub-Solar metallicity outflows are here-
 <div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1051358462?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="QED III - Outer Galaxy, sub-Solar Metallicity"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
 
 
+
+## Zoom-in
+
+1 kpc Zoom-in of the Solar neighbourhood case show the spectacular rise and fall of clouds in the Solar-neighbourhood! 
+
+<div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1051357669?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="QED III - zoomed in Solar Neighbourhood"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
+
+
+In the Inner galaxy, the zoom-in shows how the disc seems to be breathing in and out! 
+
+<div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1051358716?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="QED III - zoomed in Inner Galaxy"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
