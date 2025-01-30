@@ -33,6 +33,8 @@ nav:
     - Assertions and error checking: error_checking.md
     - Performance tips: performance.md
     - How to use clang-tidy: howto_clang_tidy.md
+  - GALLERY:
+    - QEDIII: gallery.md
 
 plugins:
   - search
