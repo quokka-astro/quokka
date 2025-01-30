@@ -5,7 +5,7 @@ QED is suite of simulations follow supernova-driven outflows in varying galactic
 
 ## Solar Neighbourhood 
 
-The initial gas density and temperature profiles are derived using Solar neighbourhood gas surface density, $13 M_{\odot}$ pc$^{-2}$. The SN-rate is 6e-5/yr and the gas cools with Solar (top) and sub-Solar (bottom) metallicity. Though box height (8 kpc) and the resolution (2 pc, uniform) for both the metallicities, the nature of outflows in these two cases is qutie different. 
+The initial gas density and temperature profiles are derived using Solar neighbourhood gas surface density, $13 M_{\odot}$ pc$^{-2}$. The SN-rate is $6\times 10^{-5}$ yr$^{-1}$ and the gas cools with Solar (top) and sub-Solar (bottom) metallicity. Though box height (8 kpc) and the resolution (2 pc, uniform) for both the metallicities, the nature of outflows in these two cases is qutie different. 
 
 
 The Solar metallicity case - 
