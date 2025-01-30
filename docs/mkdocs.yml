@@ -10,6 +10,8 @@ nav:
   - About: about.md
   - Equations: equations.md
   - Citation: citation.md
+  - Simulation gallery:
+    - Hydro : gallery.md
   - User guide:
     - Installation: installation.md
     - Running on HPC clusters: running_on_hpc_clusters.md
@@ -31,8 +33,6 @@ nav:
     - Assertions and error checking: error_checking.md
     - Performance tips: performance.md
     - How to use clang-tidy: howto_clang_tidy.md
-  - SIMULATION GALLERY:
-    - Hydro : gallery.md
 
 plugins:
   - search
