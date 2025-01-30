@@ -34,7 +34,7 @@ nav:
     - Performance tips: performance.md
     - How to use clang-tidy: howto_clang_tidy.md
   - GALLERY:
-    - Hydro Tall Box: gallery.md
+    - Hydro : gallery.md
 
 plugins:
   - search
