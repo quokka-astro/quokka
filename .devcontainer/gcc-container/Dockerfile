@@ -35,7 +35,7 @@ RUN mkdir /tmp/build-adios2 && cd /tmp/build-adios2 && \
  cd / && \
  rm -rf /tmp/build-adios2
 
-WORKDIR /home/ubuntu
-USER ubuntu
+WORKDIR /home/vscode
+USER vscode
 
 CMD [ "/bin/bash" ]
