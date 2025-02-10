@@ -97,7 +97,7 @@ execute_process(COMMAND git rev-parse HEAD
 
 # Check if the working directory is dirty
 execute_process(
-    COMMAND git status --porcelain
+    COMMAND git status --porcelain -uno
     WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_STATUS_OUTPUT
     OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -111,7 +111,7 @@ else()
     set(GIT_DIRTY 0)
 endif()
 
-# add preprocessor macro for git commits
+# add preprocessor macros for git commits
 add_compile_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
 add_compile_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
 add_definitions(-DQUOKKA_GIT_DIRTY=${GIT_DIRTY})
