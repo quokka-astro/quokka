@@ -79,6 +79,46 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options(-Wno-psabi)
 endif()
 
+execute_process(COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
+    OUTPUT_VARIABLE QUOKKA_GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
+    OUTPUT_VARIABLE QUOKKA_GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/amrex
+    OUTPUT_VARIABLE AMREX_GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Check if the working directory is dirty
+execute_process(
+    COMMAND git status --porcelain
+    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_STATUS_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Set a flag if the working directory is dirty
+if(NOT GIT_STATUS_OUTPUT STREQUAL "")
+    set(GIT_DIRTY 1)
+    message(WARNING "This Quokka repository has untracked changes not reflected in its git history! That means that the exact provenance of the simulation outputs CANNOT be inferred from the output files.\nIt is STRONGLY recommended that you commit your changes to the repo, then re-run CMake and recompile Quokka in order to obtain reproducible simulation outputs.")
+else()
+    set(GIT_DIRTY 0)
+endif()
+
+# add preprocessor macro for git commits
+add_compile_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
+add_compile_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
+add_definitions(-DQUOKKA_GIT_DIRTY=${GIT_DIRTY})
+message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
+message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
+message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
+
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
