@@ -106,7 +106,9 @@ execute_process(
 # Set a flag if the working directory is dirty
 if(NOT GIT_STATUS_OUTPUT STREQUAL "")
     set(GIT_DIRTY 1)
-    message(WARNING "This Quokka repository has untracked changes not reflected in its git history! That means that the exact provenance of the simulation outputs CANNOT be inferred from the output files.\nIt is STRONGLY recommended that you commit your changes to the repo, then re-run CMake and recompile Quokka in order to obtain reproducible simulation outputs.")
+    message(WARNING "This Quokka repository has untracked changes not reflected in its git history! That means that the exact provenance of plotfiles and checkpoints CANNOT be inferred from their metadata.\nIt is STRONGLY recommended that you commit your changes to the repo, then re-run CMake and recompile Quokka in order to obtain reproducible simulation outputs.")
+    # Append "-dirty" to the commit hash
+    string(APPEND QUOKKA_GIT_HASH "-dirty")
 else()
     set(GIT_DIRTY 0)
 endif()
@@ -114,7 +116,6 @@ endif()
 # add preprocessor macros for git commits
 add_compile_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
 add_compile_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
-add_definitions(-DQUOKKA_GIT_DIRTY=${GIT_DIRTY})
 message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
 message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
