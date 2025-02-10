@@ -106,7 +106,7 @@ execute_process(
 # Set a flag if the working directory is dirty
 if(NOT GIT_STATUS_OUTPUT STREQUAL "")
     set(GIT_DIRTY 1)
-    message(WARNING "This Quokka repository has untracked changes not reflected in its git history! That means that the exact provenance of plotfiles and checkpoints CANNOT be inferred from their metadata.\nIt is STRONGLY recommended that you commit your changes to the repo, then re-run CMake and recompile Quokka in order to obtain reproducible simulation outputs.")
+    message(WARNING "This Quokka repository has untracked changes not reflected in its git history! That means that the exact provenance of plotfiles and checkpoints CANNOT be inferred from their metadata.\nIt is STRONGLY recommended that you commit your changes to a branch locally, then re-run CMake and recompile Quokka in order to obtain reproducible simulation outputs.")
     # Append "-dirty" to the commit hash
     string(APPEND QUOKKA_GIT_HASH "-dirty")
 else()
