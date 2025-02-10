@@ -114,8 +114,8 @@ else()
 endif()
 
 # add preprocessor macros for git commits
-add_compile_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
-add_compile_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
+add_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
+add_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
 message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
 message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
