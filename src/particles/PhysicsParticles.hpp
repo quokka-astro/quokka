@@ -173,10 +173,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Run WritePlotFile(plotfilename, name) on all particles in particleRegistry_
 	void writePlotFile(const std::string &plotfilename)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			auto *container = static_cast<RadParticleContainer<problem_t> *>(descriptor->neighborParticleContainer_);
+		for (const auto &[name, container] : particleRegistry_) {
 			if (container != nullptr) {
-				container->WritePlotFile(plotfilename, name);
+				container->neighborParticleContainer_->WritePlotFile(plotfilename, name);
 			}
 		}
 	}
@@ -184,10 +183,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Run Checkpoint(checkpointname, name, true) on all particles in particleRegistry_
 	void writeCheckpoint(const std::string &checkpointname, bool include_header)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			auto *container = static_cast<RadParticleContainer<problem_t> *>(descriptor->neighborParticleContainer_);
+		for (const auto &[name, container] : particleRegistry_) {
 			if (container != nullptr) {
-				container->Checkpoint(checkpointname, name, include_header);
+				container->neighborParticleContainer_->Checkpoint(checkpointname, name, include_header);
 			}
 		}
 	}
