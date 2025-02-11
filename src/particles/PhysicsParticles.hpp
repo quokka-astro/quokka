@@ -153,10 +153,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Run Redistribute(lev) on all particles in particleRegistry_
 	void redistribute(int lev)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			auto *container = static_cast<RadParticleContainer<problem_t> *>(descriptor->neighborParticleContainer_);
+		for (const auto &[name, container] : particleRegistry_) {
 			if (container != nullptr) {
-				container->Redistribute(lev);
+				container->neighborParticleContainer_->Redistribute(lev);
 			}
 		}
 	}
@@ -164,10 +163,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Run Redistribute(lev, ngrow) on all particles in particleRegistry_
 	void redistribute(int lev, int ngrow)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			auto *container = static_cast<RadParticleContainer<problem_t> *>(descriptor->neighborParticleContainer_);
+		for (const auto &[name, container] : particleRegistry_) {
 			if (container != nullptr) {
-				container->Redistribute(lev, container->finestLevel(), ngrow);
+				container->neighborParticleContainer_->Redistribute(lev, container->neighborParticleContainer_->finestLevel(), ngrow);
 			}
 		}
 	}
