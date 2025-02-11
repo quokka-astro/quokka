@@ -244,7 +244,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Run Checkpoint(checkpointname, name, true) on all particles in particleRegistry_
-	void writeCheckpoint(const std::string &checkpointname, bool include_header)
+	void writeCheckpoint(const std::string &checkpointname, bool include_header) const
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
 			descriptor->writeCheckpoint(checkpointname, name, include_header);

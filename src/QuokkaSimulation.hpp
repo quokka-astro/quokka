@@ -41,7 +41,6 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_YAFluxRegister.H"
-#include "particles/PhysicsParticles.hpp"
 
 #ifdef AMREX_USE_ASCENT
 #include "AMReX_Conduit_Blueprint.H"
@@ -159,7 +158,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	inline void initialize()
 	{
 		// Initialize particle register
-		particleRegister_ = std::make_unique<quokka::PhysicsParticleRegister<problem_t>>();
+		// particleRegister_ = std::make_unique<quokka::PhysicsParticleRegister<problem_t>>();
 
 		// Read parameters
 		readParmParse();
@@ -1727,7 +1726,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// PrintRadEnergySource(radEnergySource);
 
 			// Deposit radiation from all particles that have luminosity. When there are no particles with luminosity, this will do nothing.
-			particleRegister_->depositRadiation(radEnergySource, lev, time_subcycle);
+			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
 
 			// for debugging, print the radEnergySource array
 			// amrex::Print() << "after ParticleToMesh, ";
@@ -1761,7 +1760,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 #ifdef AMREX_PARTICLES
 		// Deposit radiation from particles into radEnergySource. When there are no particles with luminosity, this will do nothing.
-		particleRegister_->depositRadiation(radEnergySource, lev, time_subcycle);
+		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
 #endif
 
 		// Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
