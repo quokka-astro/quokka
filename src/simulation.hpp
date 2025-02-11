@@ -326,6 +326,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void ReadCheckpointFile();
+	auto getGitHashForQuokka() const -> std::string;
+	auto getGitHashForAmrex() const -> std::string;
 	auto getWalltime() -> amrex::Real;
 	auto getCycleWalltime() -> amrex::Real;
 	void setChkFile(std::string const &chkfile_number);
@@ -460,6 +462,18 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #endif
 };
 
+template <typename problem_t> auto AMRSimulation<problem_t>::getGitHashForQuokka() const -> std::string
+{
+	// NOTE: this is defined by a preprocessor macro in CMakeLists.txt
+	return QUOKKA_GIT_HASH;
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getGitHashForAmrex() const -> std::string
+{
+	// NOTE: this is defined by a preprocessor macro in CMakeLists.txt
+	return AMREX_GIT_HASH;
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number) { restart_chkfile = chkfile_number; }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_fc() const -> const amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &
@@ -528,6 +542,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 		}
 	}
 
+	// add git commit to metadata
+	simulationMetadata_["git_hash_quokka"] = getGitHashForQuokka();
+	simulationMetadata_["git_hash_amrex"] = getGitHashForAmrex();
+
+	// add units and physics-specific metadata
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		initializeSimulationMetadata();
 	}
