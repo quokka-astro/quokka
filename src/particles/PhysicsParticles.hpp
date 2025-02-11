@@ -153,9 +153,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Run Redistribute(lev) on all particles in particleRegistry_
 	void redistribute(int lev)
 	{
-		for (const auto &[name, container] : particleRegistry_) {
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			auto *container = descriptor->neighborParticleContainer_;
 			if (container != nullptr) {
-				container->neighborParticleContainer_->Redistribute(lev);
+				container->Redistribute(lev);
 			}
 		}
 	}
@@ -163,9 +164,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Run Redistribute(lev, ngrow) on all particles in particleRegistry_
 	void redistribute(int lev, int ngrow)
 	{
-		for (const auto &[name, container] : particleRegistry_) {
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			auto *container = descriptor->neighborParticleContainer_;
 			if (container != nullptr) {
-				container->neighborParticleContainer_->Redistribute(lev, container->neighborParticleContainer_->finestLevel(), ngrow);
+				container->Redistribute(lev, container->finestLevel(), ngrow);
 			}
 		}
 	}
@@ -173,9 +175,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Run WritePlotFile(plotfilename, name) on all particles in particleRegistry_
 	void writePlotFile(const std::string &plotfilename)
 	{
-		for (const auto &[name, container] : particleRegistry_) {
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			auto *container = descriptor->neighborParticleContainer_;
 			if (container != nullptr) {
-				container->neighborParticleContainer_->WritePlotFile(plotfilename, name);
+				container->WritePlotFile(plotfilename, name);
 			}
 		}
 	}
@@ -183,9 +186,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Run Checkpoint(checkpointname, name, true) on all particles in particleRegistry_
 	void writeCheckpoint(const std::string &checkpointname, bool include_header)
 	{
-		for (const auto &[name, container] : particleRegistry_) {
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			auto *container = descriptor->neighborParticleContainer_;
 			if (container != nullptr) {
-				container->neighborParticleContainer_->Checkpoint(checkpointname, name, include_header);
+				container->Checkpoint(checkpointname, name, include_header);
 			}
 		}
 	}
