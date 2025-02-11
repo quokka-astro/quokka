@@ -144,6 +144,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
+	// Particle register for physics particles
+	std::unique_ptr<quokka::PhysicsParticleRegister<problem_t>> particleRegister_;
+
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -154,9 +157,15 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	inline void initialize()
 	{
-		defineComponentNames();
-		// read in runtime parameters
+		// Initialize particle register
+		particleRegister_ = std::make_unique<quokka::PhysicsParticleRegister<problem_t>>();
+
+		// Read parameters
 		readParmParse();
+
+		// Define component names
+		defineComponentNames();
+
 		// set gamma
 		amrex::ParmParse eos("eos");
 		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);

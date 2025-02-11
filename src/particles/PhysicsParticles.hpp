@@ -63,7 +63,7 @@ struct RadDeposition {
 template <typename problem_t> class PhysicsParticleRegister;
 
 // Base class for physics particle descriptors
-class PhysicsParticleDescriptor
+class PhysicsParticleDescriptorBase
 {
       protected:
 	int massIndex_{-1};		 // index for gravity mass, -1 if not used
@@ -71,46 +71,111 @@ class PhysicsParticleDescriptor
 	bool interactsWithHydro_{false}; // whether particles interact with hydro
 
       public:
-	PhysicsParticleDescriptor(int mass_idx, int lum_idx, bool hydro_interact)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, bool hydro_interact)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), interactsWithHydro_(hydro_interact)
 	{
 	}
-	virtual ~PhysicsParticleDescriptor() = default;
-	amrex::ParticleContainerBase *neighborParticleContainer_{}; // pointer to particle container, type-erased
+	virtual ~PhysicsParticleDescriptorBase() = default;
 
 	// Getters
 	[[nodiscard]] auto getMassIndex() const -> int { return massIndex_; }
 	[[nodiscard]] auto getLumIndex() const -> int { return lumIndex_; }
 	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 
-	// Virtual methods that can be overridden
-	virtual void hydroInteract() {} // Default no-op
+	// Virtual methods for particle operations
+	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
+	virtual void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst) = 0;
+	virtual void redistribute(int lev) = 0;
+	virtual void redistribute(int lev, int ngrow) = 0;
+	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
+	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
 
 	// Delete copy/move constructors/assignments
-	PhysicsParticleDescriptor(const PhysicsParticleDescriptor &) = delete;
-	PhysicsParticleDescriptor &operator=(const PhysicsParticleDescriptor &) = delete;
-	PhysicsParticleDescriptor(PhysicsParticleDescriptor &&) = delete;
-	PhysicsParticleDescriptor &operator=(PhysicsParticleDescriptor &&) = delete;
+	PhysicsParticleDescriptorBase(const PhysicsParticleDescriptorBase &) = delete;
+	PhysicsParticleDescriptorBase &operator=(const PhysicsParticleDescriptorBase &) = delete;
+	PhysicsParticleDescriptorBase(PhysicsParticleDescriptorBase &&) = delete;
+	PhysicsParticleDescriptorBase &operator=(PhysicsParticleDescriptorBase &&) = delete;
+};
+
+// Templated derived class that holds the actual particle container
+template <typename ContainerType>
+class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
+{
+      private:
+	ContainerType *container_{};
+
+      public:
+	PhysicsParticleDescriptor(int mass_idx, int lum_idx, bool hydro_interact, ContainerType *container)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, hydro_interact), container_(container)
+	{
+	}
+
+	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
+	{
+		if (container_ != nullptr && this->getLumIndex() >= 0) {
+			amrex::ParticleToMesh(*container_, radEnergySource, lev,
+					      RadDeposition{current_time, this->getLumIndex(), 0, nGroups},
+					      false);
+		}
+	}
+
+	void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst) override
+	{
+		if (container_ != nullptr && this->getMassIndex() >= 0) {
+			amrex::ParticleToMesh(*container_, amrex::GetVecOfPtrs(rhs), 0, finest_lev,
+					      MassDeposition{Gconst, this->getMassIndex(), 0, 1}, true);
+		}
+	}
+
+	void redistribute(int lev) override
+	{
+		if (container_ != nullptr) {
+			container_->Redistribute(lev);
+		}
+	}
+
+	void redistribute(int lev, int ngrow) override
+	{
+		if (container_ != nullptr) {
+			container_->Redistribute(lev, container_->finestLevel(), ngrow);
+		}
+	}
+
+	void writePlotFile(const std::string &plotfilename, const std::string &name) override
+	{
+		if (container_ != nullptr) {
+			container_->WritePlotFile(plotfilename, name);
+		}
+	}
+
+	void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) override
+	{
+		if (container_ != nullptr) {
+			container_->Checkpoint(checkpointname, name, include_header);
+		}
+	}
 };
 
 // Registry for physics particles
 template <typename problem_t> class PhysicsParticleRegister
 {
       private:
-	std::map<std::string, std::unique_ptr<PhysicsParticleDescriptor>> particleRegistry_;
+	std::map<std::string, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
       public:
 	PhysicsParticleRegister() = default;
 	~PhysicsParticleRegister() = default;
 
 	// Register a new particle type
-	template <typename ParticleDescriptor> void registerParticleType(const std::string &name, std::unique_ptr<ParticleDescriptor> descriptor)
+	template <typename ContainerType>
+	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, bool hydro_interact, ContainerType *container)
 	{
+		auto descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType>>(mass_idx, lum_idx, hydro_interact, container);
 		particleRegistry_[name] = std::move(descriptor);
 	}
 
 	// Get a particle descriptor
-	[[nodiscard]] auto getParticleDescriptor(const std::string &name) const -> const PhysicsParticleDescriptor *
+	[[nodiscard]] auto getParticleDescriptor(const std::string &name) const -> const PhysicsParticleDescriptorBase *
 	{
 		auto it = particleRegistry_.find(name);
 		if (it != particleRegistry_.end()) {
@@ -124,13 +189,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
 			if (descriptor->getLumIndex() >= 0) {
-				// Get particle container and deposit luminosity
-				auto *container = static_cast<RadParticleContainer<problem_t> *>(descriptor->neighborParticleContainer_);
-				if (container != nullptr) {
-					amrex::ParticleToMesh(*container, radEnergySource, lev,
-							      RadDeposition{current_time, descriptor->getLumIndex(), 0, Physics_Traits<problem_t>::nGroups},
-							      false);
-				}
+				descriptor->depositRadiation(radEnergySource, lev, current_time, Physics_Traits<problem_t>::nGroups);
 			}
 		}
 	}
@@ -140,12 +199,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				// Get particle container and deposit mass
-				auto *container = static_cast<RadParticleContainer<problem_t> *>(descriptor->neighborParticleContainer_);
-				if (container != nullptr) {
-					amrex::ParticleToMesh(*container, amrex::GetVecOfPtrs(rhs), 0, finest_lev,
-							      MassDeposition{Gconst, descriptor->getMassIndex(), 0, 1}, true);
-				}
+				descriptor->depositMass(rhs, finest_lev, Gconst);
 			}
 		}
 	}
@@ -154,10 +208,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void redistribute(int lev)
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
-			auto *container = descriptor->neighborParticleContainer_;
-			if (container != nullptr) {
-				container->Redistribute(lev);
-			}
+			descriptor->redistribute(lev);
 		}
 	}
 
@@ -165,10 +216,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void redistribute(int lev, int ngrow)
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
-			auto *container = descriptor->neighborParticleContainer_;
-			if (container != nullptr) {
-				container->Redistribute(lev, container->finestLevel(), ngrow);
-			}
+			descriptor->redistribute(lev, ngrow);
 		}
 	}
 
@@ -176,10 +224,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void writePlotFile(const std::string &plotfilename)
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
-			auto *container = descriptor->neighborParticleContainer_;
-			if (container != nullptr) {
-				container->WritePlotFile(plotfilename, name);
-			}
+			descriptor->writePlotFile(plotfilename, name);
 		}
 	}
 
@@ -187,16 +232,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	void writeCheckpoint(const std::string &checkpointname, bool include_header)
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
-			auto *container = descriptor->neighborParticleContainer_;
-			if (container != nullptr) {
-				container->Checkpoint(checkpointname, name, include_header);
-			}
+			descriptor->writeCheckpoint(checkpointname, name, include_header);
 		}
 	}
 
-	// Delete copy/move constructors/assignments to prevent accidental copying or moving of objects.
-	// The class has a raw pointer member, neighborParticleContainer_. Copying would be dangerous as multiple objects could end up pointing to the same
-	// memory. The class is meant to be a base class for particle descriptors, and copying base classes can lead to slicing problems
+	// Delete copy/move constructors/assignments
 	PhysicsParticleRegister(const PhysicsParticleRegister &) = delete;
 	PhysicsParticleRegister &operator=(const PhysicsParticleRegister &) = delete;
 	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
