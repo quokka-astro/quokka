@@ -20,6 +20,28 @@ template <typename problem_t> constexpr int RadParticleRealComps = 2 + Physics_T
 template <typename problem_t> using RadParticleContainer = amrex::AmrParticleContainer<RadParticleRealComps<problem_t>>;
 template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadParticleRealComps<problem_t>>;
 
+// CICRad particles
+enum CICRadParticleDataIdx {
+	CICRadParticleMassIdx = 0,
+	CICRadParticleVxIdx,
+	CICRadParticleVyIdx,
+	CICRadParticleVzIdx,
+	CICRadParticleBirthTimeIdx,
+	CICRadParticleDeathTimeIdx,
+	CICRadParticleLumIdx
+};
+template <typename problem_t>
+constexpr int CICRadParticleRealComps = []() constexpr {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 6 + Physics_Traits<problem_t>::nGroups; // mass vx vy vz birth_time
+							       // death_time lum1 ... lumN
+	} else {
+		return 6; // mass vx vy vz birth_time death_time
+	}
+}();
+template <typename problem_t> using CICRadParticleContainer = amrex::AmrParticleContainer<CICRadParticleRealComps<problem_t>>;
+template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICRadParticleRealComps<problem_t>>;
+
 struct MassDeposition {
 	amrex::Real Gconst{};
 	int start_part_comp{};
