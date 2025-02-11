@@ -62,9 +62,8 @@ struct RadDeposition {
 // Forward declarations
 template <typename problem_t> class PhysicsParticleRegister;
 
-// Base class for physics particle descriptors
-class PhysicsParticleDescriptorBase
-{
+// Non-templated base class for type erasure
+class PhysicsParticleDescriptorBase {
       protected:
 	int massIndex_{-1};		 // index for gravity mass, -1 if not used
 	int lumIndex_{-1};		 // index for radiation luminosity, -1 if not used
@@ -82,19 +81,13 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] auto getLumIndex() const -> int { return lumIndex_; }
 	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 
-	// Virtual methods for particle operations
+	// Pure virtual interface for particle operations
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 	virtual void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void redistribute(int lev) = 0;
 	virtual void redistribute(int lev, int ngrow) = 0;
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
-
-	// Delete copy/move constructors/assignments
-	PhysicsParticleDescriptorBase(const PhysicsParticleDescriptorBase &) = delete;
-	PhysicsParticleDescriptorBase &operator=(const PhysicsParticleDescriptorBase &) = delete;
-	PhysicsParticleDescriptorBase(PhysicsParticleDescriptorBase &&) = delete;
-	PhysicsParticleDescriptorBase &operator=(PhysicsParticleDescriptorBase &&) = delete;
 };
 
 // Templated derived class that holds the actual particle container
