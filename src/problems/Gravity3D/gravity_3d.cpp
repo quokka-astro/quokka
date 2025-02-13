@@ -120,9 +120,9 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// exact solution
-	// x, y = 0.9689124217106447, 0.24740395925452294
-	const double exact_x = 0.9689124217106447;
-	const double exact_y = 0.24740395925452294;
+	const double theta = 0.5 * sim.tNew_[0];
+	const double exact_x = 1.0 * std::cos(theta);
+	const double exact_y = 1.0 * std::sin(theta);
 	const double exact_z = 0.0;
 
 	auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions();
@@ -132,7 +132,7 @@ auto problem_main() -> int
 
 	// assume the first particle is in the first plane quadrant
 	for (auto& position : positions) {
-		if (position[0] > 0.0) {
+		if (position[0] * exact_x > 0.0) {
 			position_error += std::abs(position[0] - exact_x);
 			position_error += std::abs(position[1] - exact_y);
 			position_error += std::abs(position[2] - exact_z);
@@ -157,6 +157,12 @@ auto problem_main() -> int
 	const double max_err_tol = 0.001; // max error tol in cell widths
 	if (relative_error < max_err_tol) {
 		status = 0;
+	} else {
+		amrex::Print() << "Exact positions should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+		amrex::Print() << "Real positions are: \n";
+		for (auto& position : positions) {
+			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
+		}
 	}
 	return status;
 }
