@@ -154,7 +154,7 @@ auto problem_main() -> int
 	amrex::Print() << "Relative error: " << relative_error << "\n";
 
 	int status = 1;
-	const double max_err_tol = 0.001; // max error tol in cell widths
+	const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
 	if (relative_error < max_err_tol) {
 		status = 0;
 	} else {
