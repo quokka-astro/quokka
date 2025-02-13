@@ -296,15 +296,18 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void PrintRadEnergySource(amrex::MultiFab const &radEnergySource);
 };
 
+// For debugging only; will be removed on release
 template <typename problem_t> void QuokkaSimulation<problem_t>::PrintRadEnergySource(amrex::MultiFab const &radEnergySource)
 {
 	amrex::Print() << "radEnergySource_arr.data() = ";
 	for (amrex::MFIter iter(radEnergySource); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
 		auto const &radEnergySource_arr = radEnergySource.array(iter);
-		for (int i = 0; i <= 63; ++i) {
-			amrex::Print() << radEnergySource_arr(i, 0, 0) << ", ";
-		}
-		amrex::Print() << "\n";
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			if (j == 16) {
+				amrex::Print() << radEnergySource_arr(i, j, k) << ", ";
+			}
+		});
 	}
 }
 
@@ -1723,15 +1726,15 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 #ifdef AMREX_PARTICLES
 			// for debugging, print the radEnergySource array
-			// amrex::Print() << "Initial, ";
-			// PrintRadEnergySource(radEnergySource);
+			amrex::Print() << "Initial, ";
+			PrintRadEnergySource(radEnergySource);
 
 			// Deposit radiation from all particles that have luminosity. When there are no particles with luminosity, this will do nothing.
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
 
 			// for debugging, print the radEnergySource array
-			// amrex::Print() << "after ParticleToMesh, ";
-			// PrintRadEnergySource(radEnergySource);
+			amrex::Print() << "after ParticleToMesh, ";
+			PrintRadEnergySource(radEnergySource);
 #endif
 
 			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
