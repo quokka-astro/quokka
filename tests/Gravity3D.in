@@ -26,12 +26,12 @@ suppress_output = 0
 
 cfl = 0.3
 do_cic_particles = 1    # turns on CIC particles
-stop_time = 5.5
+stop_time = 0.5
 #plottime_interval = 0.1
 plot_interval = 1000000
 checkpoint_interval = 100000
 
-#max_timesteps = 5
+max_timesteps = 50000
 
-max_timesteps = 10
-restartfile = chk00005
+#max_timesteps = 10
+#restartfile = chk00005
