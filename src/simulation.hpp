@@ -1181,87 +1181,64 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 {
 	// kick particles (do: vel[i] += 0.5 * dt * accel[i])
 
-	if (do_cic_particles != 0) {
-		// gravitational acceleration multifabs
-		amrex::Vector<amrex::MultiFab> accel(finest_level + 1);
+	// Create acceleration MultiFabs for each level
+	amrex::Vector<amrex::MultiFab> accel(finest_level + 1);
 
-		// self-gravity in Quokka requires open boundary conditions,
-		// so we extrapolate the gravitational accelerations at physical boundaries
-		amrex::Vector<amrex::BCRec> accelBC(AMREX_SPACEDIM);
-		for (int j = 0; j < AMREX_SPACEDIM; ++j) {
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				accelBC[j].setLo(i, amrex::BCType::foextrap);
-				accelBC[j].setHi(i, amrex::BCType::foextrap);
+	// self-gravity in Quokka requires open boundary conditions,
+	// so we extrapolate the gravitational accelerations at physical boundaries
+	amrex::Vector<amrex::BCRec> accelBC(AMREX_SPACEDIM);
+	for (int j = 0; j < AMREX_SPACEDIM; ++j) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			accelBC[j].setLo(i, amrex::BCType::foextrap);
+			accelBC[j].setHi(i, amrex::BCType::foextrap);
+		}
+	}
+
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		// compute accelerations
+		accel[lev].define(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 1);
+		accel[lev].setVal(0.);
+		auto accel_arr = accel[lev].arrays();
+		const auto &phi_arr = phi[lev].const_arrays();
+		const auto dx_inv = geom[lev].InvCellSizeArray();
+		const amrex::IntVect ng(0);
+
+		// check for NaN
+		AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
+
+		amrex::ParallelFor(accel[lev], ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
+			// compute cell-centered acceleration -grad(phi)
+			if (n == 0) {
+				accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
 			}
+			if (n == 1) {
+				accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j - 1, k));
+			}
+			if (n == 2) {
+				accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k - 1));
+			}
+		});
+		amrex::Gpu::streamSynchronizeAll();
+
+		// fill ghost cells for accel[lev]
+		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
+
+		if (lev == 0) {
+			accel[lev].FillBoundary(geom[lev].periodicity());
+			fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
+		} else {
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
+			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0, 
+								fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
 		}
 
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			// compute accelerations
-			accel[lev].define(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 1);
-			accel[lev].setVal(0.);
-			auto accel_arr = accel[lev].arrays();
-			const auto &phi_arr = phi[lev].const_arrays();
-			const auto dx_inv = geom[lev].InvCellSizeArray();
-			const amrex::IntVect ng(0);
+		// check for NaN
+		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
+		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
 
-			// check for NaN
-			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
-
-			amrex::ParallelFor(accel[lev], ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
-				// compute cell-centered acceleration -grad(phi)
-				if (n == 0) {
-					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
-				}
-				if (n == 1) {
-					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j - 1, k));
-				}
-				if (n == 2) {
-					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k - 1));
-				}
-			});
-			amrex::Gpu::streamSynchronizeAll();
-
-			// fill ghost cells for accel[lev]
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
-
-			if (lev == 0) {
-				accel[lev].FillBoundary(geom[lev].periodicity());
-				fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
-			} else {
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
-				amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
-							     fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
-			}
-
-			// check for NaN
-			AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
-			AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
-
-			// loop over boxes of particles on this level
-			for (quokka::CICParticleIterator pIter(*CICParticles, lev); pIter.isValid(); ++pIter) {
-				auto &particles = pIter.GetArrayOfStructs();
-				quokka::CICParticleContainer::ParticleType *pData = particles().data();
-				const amrex::Long np = pIter.numParticles();
-
-				amrex::Array4<const amrex::Real> const &accel_arr = accel[lev].array(pIter);
-				const auto plo = geom[lev].ProbLoArray();
-
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-					quokka::CICParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
-					interp.MeshToParticle(
-					    p, accel_arr, 0, quokka::CICParticleVxIdx, AMREX_SPACEDIM,
-					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
-						    return acc(i, j, k, comp); // no weighting
-					    },
-					    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int comp, amrex::Real acc_comp) {
-						    // kick particle by updating its velocity
-						    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
-					    });
-				});
-			}
-		}
+		// Kick particles using the acceleration field
+		particleRegister_.kickParticlesAllLevels(dt, accel);
 	}
 }
 

@@ -114,6 +114,7 @@ class PhysicsParticleDescriptorBase {
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) = 0;
+	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const& acceleration) = 0;
 };
 
 // Templated derived class that holds the actual particle container
@@ -161,6 +162,35 @@ class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 							p.pos(i) += dt * p.rdata(this->getMassIndex() + 1 + i);
 						}
 					}
+				});
+			}
+		}
+	}
+
+	void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const& accel) override {
+		if (container_ != nullptr && this->getMassIndex() >= 0) {
+			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+				auto& particles = pIter.GetArrayOfStructs();
+				auto* pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+
+				const auto& accel_arr = accel.array(pIter);
+				const auto& geom = container_->Geom(lev);
+				const auto plo = geom.ProbLoArray();
+				const auto dx_inv = geom.InvCellSizeArray();
+
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					auto& p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
+					
+					interp.MeshToParticle(p, accel_arr, 0, this->getMassIndex() + 1, AMREX_SPACEDIM,
+						[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const& acc, int i, int j, int k, int comp) {
+							return acc(i, j, k, comp); // no weighting
+						},
+						[=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType& p, int comp, amrex::Real acc_comp) {
+							// kick particle by updating its velocity
+							p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+						});
 				});
 			}
 		}
@@ -304,6 +334,16 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getMassIndex() >= 0) {  // Only drift particles that have mass
 				for (int lev = 0; lev <= finest_level; ++lev) {
 					descriptor->driftParticles(lev, dt);
+				}
+			}
+		}
+	}
+
+	void kickParticlesAllLevels(amrex::Real dt, amrex::Vector<amrex::MultiFab>& acceleration) {
+		for (const auto& [name, descriptor] : particleRegistry_) {
+			if (descriptor->getMassIndex() >= 0) {  // Only kick particles that have mass
+				for (int lev = 0; lev <= acceleration.size()-1; ++lev) {
+					descriptor->kickParticles(lev, dt, acceleration[lev]);
 				}
 			}
 		}
