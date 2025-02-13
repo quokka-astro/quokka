@@ -65,6 +65,7 @@ struct RadDeposition {
 	int start_part_comp{};
 	int start_mesh_comp{};
 	int num_comp{};
+	int birthTimeIndex{};
 
 	template <typename ParticleType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ParticleType &p, amrex::Array4<amrex::Real> const &radEnergySource,
@@ -73,7 +74,7 @@ struct RadDeposition {
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ParticleType &part, int comp) {
-			if (current_time < part.rdata(RadParticleBirthTimeIdx) || current_time >= part.rdata(RadParticleDeathTimeIdx)) {
+			if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
 				return 0.0;
 			}
 			return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
@@ -89,11 +90,12 @@ class PhysicsParticleDescriptorBase {
       protected:
 	int massIndex_{-1};		 // index for gravity mass, -1 if not used
 	int lumIndex_{-1};		 // index for radiation luminosity, -1 if not used
+	int birthTimeIndex_{-1}; // index for birth time, -1 if not used
 	bool interactsWithHydro_{false}; // whether particles interact with hydro
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, bool hydro_interact)
-	    : massIndex_(mass_idx), lumIndex_(lum_idx), interactsWithHydro_(hydro_interact)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact)
+	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact)
 	{
 	}
 	virtual ~PhysicsParticleDescriptorBase() = default;
@@ -101,6 +103,7 @@ class PhysicsParticleDescriptorBase {
 	// Getters
 	[[nodiscard]] auto getMassIndex() const -> int { return massIndex_; }
 	[[nodiscard]] auto getLumIndex() const -> int { return lumIndex_; }
+	[[nodiscard]] auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
 	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 
 	// Add virtual method for getting particle positions
@@ -125,8 +128,8 @@ class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 	ContainerType *container_{};
 
       public:
-	PhysicsParticleDescriptor(int mass_idx, int lum_idx, bool hydro_interact, ContainerType *container)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, hydro_interact), container_(container)
+	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, ContainerType *container)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact), container_(container)
 	{
 	}
 
@@ -200,7 +203,7 @@ class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 	{
 		if (container_ != nullptr && this->getLumIndex() >= 0) {
 			amrex::ParticleToMesh(*container_, radEnergySource, lev,
-					      RadDeposition{current_time, this->getLumIndex(), 0, nGroups},
+					      RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()},
 					      false);
 		}
 	}
@@ -254,9 +257,9 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Register a new particle type
 	template <typename ContainerType>
-	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, bool hydro_interact, ContainerType *container)
+	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, ContainerType *container)
 	{
-		auto descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType>>(mass_idx, lum_idx, hydro_interact, container);
+		auto descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType>>(mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
 		particleRegistry_[name] = std::move(descriptor);
 	}
 
