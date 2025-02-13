@@ -5,3 +5,4 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 add_test(NAME RadiationStreaming COMMAND test_radiation_streaming RadStreaming.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME RadiationStreamingRestart COMMAND test_radiation_streaming RadStreamingRestart.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
