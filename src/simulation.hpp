@@ -946,6 +946,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// N.B.: MUST be done *before* Poisson solve at new time!
 		driftParticlesAllLevels(dt_[0]);
 
+		// Redistribute particles after movement. This ensures particles are in the correct cells/processors for radiation deposition
+		// TODO(cch): I believe this is needed and missing this in the original code was a bug, but I don't understand why this was not caught earlier.
+		// Maybe the binary_orbit test was the only test for gravity and there was no multiple boxes in that test?
+		// for (int lev = 0; lev <= finest_level; ++lev) {
+		// 	// Use ngrow=0 since we only need particles in valid cells for radiation
+		// 	particleRegister_.redistribute(lev, 0);
+		// }
+
 		// elliptic solve over entire AMR grid (post-timestep)
 		ellipticSolveAllLevels(dt_[0]);
 
@@ -1409,14 +1417,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-						      std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
+						      std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev)
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
 
 	if (fr_as_crse != nullptr) {
-		AMREX_ASSERT(lev < finestLevel());
-		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, // NOLINT(readability-container-data-pointer)
+			AMREX_ASSERT(lev < finestLevel());
+			AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
+			fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, // NOLINT(readability-container-data-pointer)
 				    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 	}
 
@@ -1430,7 +1438,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex:
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
+						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev)
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
 
@@ -2083,8 +2091,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Initialize particles through derived class
 		createInitialRadParticles();
-
-		RadParticles->Redistribute();
 	}
 
 	if (do_cic_particles != 0) {
@@ -2099,8 +2105,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Initialize particles through derived class
 		createInitialCICParticles();
-
-		CICParticles->Redistribute();
 	}
 
 	if (do_cic_rad_particles != 0) {
@@ -2115,8 +2119,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Initialize particles through derived class
 		createInitialCICRadParticles();
-
-		CICRadParticles->Redistribute();
 	}
 
 	particleRegister_.redistribute(0);
