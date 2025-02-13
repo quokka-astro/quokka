@@ -103,6 +103,9 @@ class PhysicsParticleDescriptorBase {
 	[[nodiscard]] auto getLumIndex() const -> int { return lumIndex_; }
 	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 
+	// Add virtual method for getting particle positions
+	[[nodiscard]] virtual auto getParticlePositions(int lev = 0) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
+
 	// Pure virtual interface for particle operations
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 	virtual void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst) = 0;
@@ -123,6 +126,22 @@ class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 	PhysicsParticleDescriptor(int mass_idx, int lum_idx, bool hydro_interact, ContainerType *container)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, hydro_interact), container_(container)
 	{
+	}
+
+	[[nodiscard]] auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> override {
+		std::vector<std::array<double, AMREX_SPACEDIM>> positions;
+		if (container_ != nullptr) {
+			const auto& particles = container_->GetParticles(lev);
+			for (const auto& kv : particles) {
+				const auto& pbox = kv.second;
+				const auto& aos = pbox.GetArrayOfStructs();
+				for (int i = 0; i < pbox.numParticles(); ++i) {
+					const auto& p = aos[i];
+					positions.push_back({p.pos(0), p.pos(1), p.pos(2)});
+				}
+			}
+		}
+		return positions;
 	}
 
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
