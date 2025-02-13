@@ -113,6 +113,7 @@ class PhysicsParticleDescriptorBase {
 	virtual void redistribute(int lev, int ngrow) = 0;
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
+	virtual void driftParticles(int lev, amrex::Real dt) = 0;
 };
 
 // Templated derived class that holds the actual particle container
@@ -142,6 +143,27 @@ class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 			}
 		}
 		return positions;
+	}
+
+	void driftParticles(int lev, amrex::Real dt) override {
+		if (container_ != nullptr) {
+			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+				auto& particles = pIter.GetArrayOfStructs();
+				auto* pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					auto& p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					// update particle position based on velocity components
+					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+						if (this->getMassIndex() >= 0) {
+							// For CIC particles, velocity components start after mass
+							p.pos(i) += dt * p.rdata(this->getMassIndex() + 1 + i);
+						}
+					}
+				});
+			}
+		}
 	}
 
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
@@ -275,6 +297,17 @@ template <typename problem_t> class PhysicsParticleRegister
 	PhysicsParticleRegister &operator=(const PhysicsParticleRegister &) = delete;
 	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
 	PhysicsParticleRegister &operator=(PhysicsParticleRegister &&) = delete;
+
+	// In PhysicsParticleRegister class, after depositMass
+	void driftParticlesAllLevels(amrex::Real dt, int finest_level) {
+		for (const auto& [name, descriptor] : particleRegistry_) {
+			if (descriptor->getMassIndex() >= 0) {  // Only drift particles that have mass
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					descriptor->driftParticles(lev, dt);
+				}
+			}
+		}
+	}
 };
 
 } // namespace quokka

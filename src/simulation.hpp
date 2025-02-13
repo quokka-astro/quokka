@@ -944,7 +944,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// drift particles from t to (t + dt)
 		// N.B.: MUST be done *before* Poisson solve at new time!
-		driftParticlesAllLevels(dt_[0]);
+		particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
 
 		// Redistribute particles after movement. This ensures particles are in the correct cells/processors for radiation deposition
 		// TODO(cch): I believe this is needed and missing this in the original code was a bug, but I don't understand why this was not caught earlier.
