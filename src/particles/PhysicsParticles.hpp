@@ -137,7 +137,7 @@ class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 				const auto& aos = pbox.GetArrayOfStructs();
 				for (int i = 0; i < pbox.numParticles(); ++i) {
 					const auto& p = aos[i];
-					positions.push_back({p.pos(0), p.pos(1), p.pos(2)});
+					positions.push_back({AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))});
 				}
 			}
 		}
