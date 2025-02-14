@@ -58,19 +58,19 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
-#include <AMReX_Geometry.H>
-#include <AMReX_MultiFab.H>
-#include <AMReX_ParmParse.H>
-#include <AMReX_PlotFileUtil.H>
-#include <AMReX_Print.H>
-#include <AMReX_Utility.H>
+#include "AMReX_Geometry.H"
+#include "AMReX_MultiFab.H"
+#include "AMReX_ParmParse.H"
+#include "AMReX_PlotFileUtil.H"
+#include "AMReX_Print.H"
+#include "AMReX_Utility.H"
 #include <fmt/core.h>
 #include <yaml-cpp/yaml.h>
 
 #ifdef AMREX_PARTICLES
 #include "particles/PhysicsParticles.hpp"
-#include <AMReX_AmrParticles.H>
-#include <AMReX_Particles.H>
+#include "AMReX_AmrParticles.H"
+#include "AMReX_Particles.H"
 #endif
 
 #if AMREX_SPACEDIM == 3
@@ -545,9 +545,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	ascent_options["mpi_comm"] = MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
 	ascent_.open(ascent_options);
 #endif
-
-	// Update constructor to initialize particleRegister_
-	// particleRegister_ = std::make_unique<quokka::PhysicsParticleRegister<problem_t>>();
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
