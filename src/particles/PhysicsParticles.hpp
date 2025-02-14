@@ -255,6 +255,16 @@ template <typename problem_t> class PhysicsParticleRegister
 	PhysicsParticleRegister() = default;
 	~PhysicsParticleRegister() = default;
 
+	// Check if there are any particle types with mass
+	[[nodiscard]] auto HasMassiveParticles() const -> bool {
+		for (const auto& [name, descriptor] : particleRegistry_) {
+			if (descriptor->getMassIndex() >= 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// Register a new particle type
 	template <typename ContainerType>
 	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, ContainerType *container)

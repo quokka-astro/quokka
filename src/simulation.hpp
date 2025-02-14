@@ -1180,6 +1180,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 {
 	// kick particles (do: vel[i] += 0.5 * dt * accel[i])
 
+	// TODO(cch): add a routine to skip this function if there are no particles with mass
+	if (!particleRegister_.HasMassiveParticles()) {
+		return;
+	}
+
 	// Create acceleration MultiFabs for each level
 	amrex::Vector<amrex::MultiFab> accel(finest_level + 1);
 
