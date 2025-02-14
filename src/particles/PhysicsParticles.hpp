@@ -1,10 +1,20 @@
 #ifndef PHYSICS_PARTICLES_HPP_
 #define PHYSICS_PARTICLES_HPP_
 
-#include <AMReX_AmrParticles.H>
-#include <AMReX_ParIter.H>
-#include <AMReX_ParticleInterpolators.H>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <string>
 
+#include "AMReX_AmrParticles.H"
+#include "AMReX_Array.H"
+#include "AMReX_Array4.H"
+#include "AMReX_Extension.H"
+#include "AMReX_ParIter.H"
+#include "AMReX_ParticleInterpolators.H"
+#include "AMReX_REAL.H"
+#include "AMReX_SPACE.H"
+#include "AMReX_Vector.H"
 #include "physics_info.hpp"
 
 // Assumptions for any particle type:
