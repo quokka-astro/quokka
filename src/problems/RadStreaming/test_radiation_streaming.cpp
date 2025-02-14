@@ -162,6 +162,8 @@ auto problem_main() -> int
 	// const double Lx = 1.0;
 	const double CFL_number = 0.8;
 	const double dt_max = 1e-2;
+	const double tmax = 1.0;
+	const int max_timesteps = 5000;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
@@ -179,8 +181,10 @@ auto problem_main() -> int
 	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
+	sim.stopTime_ = tmax;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxDt_ = dt_max;
+	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
 	// initialize
@@ -200,7 +204,7 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		erad_exact.at(i) = (x <= chat * sim.tNew_[0]) ? 1.0 : 0.0;
+		erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
 		double erad_sim = 0.0;
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 			erad_sim += values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];

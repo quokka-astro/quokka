@@ -20,9 +20,3 @@ amr.blocking_factor = 4     # grid size must be divisible by this
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
-
-stop_time = 2.0
-checkpoint_prefix = "chk_streaming"
-checkpoint_interval = 1000000
-
-max_timesteps = 500
