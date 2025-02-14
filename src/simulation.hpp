@@ -335,7 +335,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// particle functions
 	void kickParticlesAllLevels(amrex::Real dt);
-	void driftParticlesAllLevels(amrex::Real dt);
 
 	// simulation metadata
 	void initializeSimulationMetadata();
@@ -1242,29 +1241,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 	}
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::driftParticlesAllLevels(const amrex::Real dt)
-{
-	// drift all particles (do: pos[i] += dt * vel[i])
-
-	if (do_cic_particles != 0) {
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			for (quokka::CICParticleIterator pIter(*CICParticles, lev); pIter.isValid(); ++pIter) {
-				auto &particles = pIter.GetArrayOfStructs();
-				quokka::CICParticleContainer::ParticleType *pData = particles().data();
-				const amrex::Long np = pIter.numParticles();
-
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-					quokka::CICParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					// update particle position
-					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-						p.pos(i) += dt * p.rdata(quokka::CICParticleVxIdx + i);
-					}
-				});
-			}
-		}
-	}
-}
-
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
 template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
@@ -1394,14 +1370,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-						      std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev)
+						      std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
 
 	if (fr_as_crse != nullptr) {
-			AMREX_ASSERT(lev < finestLevel());
-			AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-			fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, // NOLINT(readability-container-data-pointer)
+		AMREX_ASSERT(lev < finestLevel());
+		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
+		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, // NOLINT(readability-container-data-pointer)
 				    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 	}
 
@@ -1415,7 +1391,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex:
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev)
+						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
 
@@ -2830,22 +2806,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 		TracerPC->Restart(restart_chkfile, "tracer_particles");
 	}
+
+	// Initialize and register particle containers from checkpoint file
 	if (do_cic_particles != 0) {
 		AMREX_ASSERT(CICParticles == nullptr);
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		particleRegister_.registerParticleType("CIC_particles", quokka::CICParticleMassIdx, -1, -1, false, CICParticles.get());
 		CICParticles->Restart(restart_chkfile, "CIC_particles");
 	}
-
-	// read all particles in particleRegister_ from checkpoint file
 	if (do_rad_particles != 0) {
 		AMREX_ASSERT(RadParticles == nullptr);
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
 		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, RadParticles.get());
 		RadParticles->Restart(restart_chkfile, "Rad_particles");
 	}
-
-	// read all CICRadParticles in particleRegister_ from checkpoint file
 	if (do_cic_rad_particles != 0) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
