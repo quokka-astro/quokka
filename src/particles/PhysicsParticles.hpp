@@ -335,12 +335,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Delete copy/move constructors/assignments
-	PhysicsParticleRegister(const PhysicsParticleRegister &) = delete;
-	PhysicsParticleRegister &operator=(const PhysicsParticleRegister &) = delete;
-	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
-	PhysicsParticleRegister &operator=(PhysicsParticleRegister &&) = delete;
-
 	// In PhysicsParticleRegister class, after depositMass
 	void driftParticlesAllLevels(amrex::Real dt, int finest_level) {
 		for (const auto& [name, descriptor] : particleRegistry_) {
@@ -361,6 +355,12 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 	}
+
+	// Delete copy/move constructors/assignments
+	PhysicsParticleRegister(const PhysicsParticleRegister &) = delete;
+	PhysicsParticleRegister &operator=(const PhysicsParticleRegister &) = delete;
+	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
+	PhysicsParticleRegister &operator=(PhysicsParticleRegister &&) = delete;
 };
 
 } // namespace quokka
