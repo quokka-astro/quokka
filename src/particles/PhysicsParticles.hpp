@@ -19,7 +19,7 @@
 
 // Assumptions for any particle type:
 // 1. For massive particles, velocity components start after mass
-// 2. For radiation particles, birth time and death time are followed by luminosity components ???
+// 2. Birth time, if existing, is always followed by death time
 
 namespace quokka
 {
@@ -143,13 +143,16 @@ protected:
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 
 public:
-	// Constructor initializing particle properties
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact)
-	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact)
-	{
-	}
+	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact) {}
 	
 	virtual ~PhysicsParticleDescriptorBase() = default;
+
+	// Copy and move constructors and assignment operators
+	PhysicsParticleDescriptorBase(const PhysicsParticleDescriptorBase&) = default;
+	PhysicsParticleDescriptorBase& operator=(const PhysicsParticleDescriptorBase&) = default;
+	PhysicsParticleDescriptorBase(PhysicsParticleDescriptorBase&&) = default;
+	PhysicsParticleDescriptorBase& operator=(PhysicsParticleDescriptorBase&&) = default;
 
 	// Getter methods for particle properties
 	[[nodiscard]] auto getMassIndex() const -> int { return massIndex_; }
