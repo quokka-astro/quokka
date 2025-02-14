@@ -161,7 +161,7 @@ public:
 	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 
 	// Virtual interface for particle operations
-	[[nodiscard]] virtual auto getParticlePositions(int lev = 0) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
+	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
 	
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;

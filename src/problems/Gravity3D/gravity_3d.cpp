@@ -125,7 +125,7 @@ auto problem_main() -> int
 	const double exact_y = 1.0 * std::sin(theta);
 	const double exact_z = 0.0;
 
-	auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions();
+	auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
 	
 	double position_error = 0.0;
 	double position_norm = 0.0;
