@@ -1726,15 +1726,15 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 #ifdef AMREX_PARTICLES
 			// for debugging, print the radEnergySource array
-			amrex::Print() << "Initial, ";
-			PrintRadEnergySource(radEnergySource);
+			// amrex::Print() << "Initial, ";
+			// PrintRadEnergySource(radEnergySource);
 
 			// Deposit radiation from all particles that have luminosity. When there are no particles with luminosity, this will do nothing.
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
 
 			// for debugging, print the radEnergySource array
-			amrex::Print() << "after ParticleToMesh, ";
-			PrintRadEnergySource(radEnergySource);
+			// amrex::Print() << "after ParticleToMesh, ";
+			// PrintRadEnergySource(radEnergySource);
 #endif
 
 			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
