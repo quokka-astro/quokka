@@ -60,6 +60,8 @@
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 
+static constexpr bool is_print_rad_energy_source = true;
+
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
 {
@@ -144,9 +146,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
-	// Particle register for physics particles
-	// std::unique_ptr<quokka::PhysicsParticleRegister<problem_t>> particleRegister_;
-
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -157,15 +156,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	inline void initialize()
 	{
-		// Initialize particle register
-		// particleRegister_ = std::make_unique<quokka::PhysicsParticleRegister<problem_t>>();
-
-		// Read parameters
-		readParmParse();
-
-		// Define component names
 		defineComponentNames();
-
+		// read in runtime parameters
+		readParmParse();
 		// set gamma
 		amrex::ParmParse eos("eos");
 		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
@@ -1726,15 +1719,25 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 #ifdef AMREX_PARTICLES
 			// for debugging, print the radEnergySource array
-			// amrex::Print() << "Initial, ";
-			// PrintRadEnergySource(radEnergySource);
+			if constexpr (is_print_rad_energy_source) {
+				if (i == 0) {
+					amrex::Print() << "Initial,              ";
+					PrintRadEnergySource(radEnergySource);
+					amrex::Print() << "\n";
+				}
+			}
 
 			// Deposit radiation from all particles that have luminosity. When there are no particles with luminosity, this will do nothing.
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
 
 			// for debugging, print the radEnergySource array
-			// amrex::Print() << "after ParticleToMesh, ";
-			// PrintRadEnergySource(radEnergySource);
+			if constexpr (is_print_rad_energy_source) {
+				if (i == 0) {
+					amrex::Print() << "after ParticleToMesh: ";
+					PrintRadEnergySource(radEnergySource);
+					amrex::Print() << "\n";
+				}
+			}
 #endif
 
 			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
