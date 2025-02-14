@@ -23,7 +23,7 @@ struct ParticleProblem {
 constexpr int nGroups_ = 1;
 
 constexpr double erad_floor = 1.0e-15;
-constexpr double initial_Erad = erad_floor;
+constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
 constexpr double c = 1.0;	   // speed of light
 constexpr double chat = 0.1;	   // reduced speed of light
@@ -65,6 +65,22 @@ template <> void QuokkaSimulation<ParticleProblem>::createInitialCICRadParticles
 	const int nreal_extra = 6 + nGroups_; // mass vx vy vz birth_time death_time lum1
 	CICRadParticles->SetVerbose(1);
 	CICRadParticles->InitFromAsciiFile("GravRadParticles3D.txt", nreal_extra, nullptr);
+}
+
+template <> void QuokkaSimulation<ParticleProblem>::createInitialCICParticles()
+{
+	// read particles from ASCII file - same as CICRadParticles but only mass and velocity components
+	const int nreal_extra = 4; // mass vx vy vz
+	CICParticles->SetVerbose(1);
+	CICParticles->InitFromAsciiFile("GravRadParticles3D_cic_only.txt", nreal_extra, nullptr);
+}
+
+template <> void QuokkaSimulation<ParticleProblem>::createInitialRadParticles()
+{
+	// read particles from ASCII file - same as CICRadParticles but only birth_time, death_time, and luminosity
+	const int nreal_extra = 2 + nGroups_; // birth_time death_time lum1
+	RadParticles->SetVerbose(1);
+	RadParticles->InitFromAsciiFile("GravRadParticles3D_rad_only.txt", nreal_extra, nullptr);
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -153,6 +169,8 @@ auto problem_main() -> int
 	sim.maxDt_ = dt_max;
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.do_cic_rad_particles = 1;
+	sim.do_cic_particles = 1; // enable CIC particles
+	sim.do_rad_particles = 1; // enable radiation particles
 
 	// initialize
 	sim.setInitialConditions();
@@ -160,7 +178,7 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	// compute total radiation energy of the third radiation group
+	// compute total radiation energy
 	const double total_Erad_over_vol = sim.state_new_cc_[0].sum(RadSystem<ParticleProblem>::radEnergy_index);
 	const double dx = sim.Geom(0).CellSize(0);
 	const double dy = sim.Geom(0).CellSize(1);
@@ -168,61 +186,127 @@ auto problem_main() -> int
 	const double dvol = dx * dy * dz;
 	const double total_Erad = total_Erad_over_vol * dvol;
 	const double t_alive = std::min(0.5, sim.tNew_[0]);		   // particles only live for 0.5 time units
-	const double total_Erad_exact = 2.0 * lum1 * t_alive * (chat / c); // two particles with luminosity lum1
+	double total_Erad_exact = 2.0 * lum1 * t_alive * (chat / c); // two particles with luminosity lum1
+	total_Erad_exact *= 2.0; // two particle system (Rad + CICRad)
+	const double total_num_of_cells = sim.Geom(0).Domain().volume();
+	total_Erad_exact += total_num_of_cells * dvol * initial_Erad;
+
 	const double rel_err = std::abs(total_Erad - total_Erad_exact) / total_Erad_exact;
 
-	// Compute exact location of the particles
+	// Compute exact location of the CICRad particles
 	// The particles are originally at (-0.5, 0) and (0.5, 0) and they move with
 	// velocity 1/sqrt(2) in the y/-y direction. The problem is designed such that
 	// the particles will move in a circle with radius 0.5
-	const double velocity = 1.0 / std::sqrt(2.0);
-	const double radius = 0.5;
+	const double velocity = std::sqrt(5.0) / 2.; // v^2 / 1^2 = 1 / 1^2 + 1 / 2^2 -> v = sqrt(5) / 2
+	const double radius = 1.;
 	const double theta = velocity * sim.tNew_[0] / radius;
 	const double exact_x = radius * std::cos(theta);
 	const double exact_y = radius * std::sin(theta);
 	const double exact_z = 0.0;
 
-	// get particle positions
-	auto positions = sim.particleRegister_.getParticleDescriptor("CICRad_particles")->getParticlePositions();
+	// Exact location of the CIC particles
+	const double exact_x_cic = 0.0;
+	const double exact_y_cic = 0.0;
+	const double exact_z_cic = 0.0;
 
-	double position_error = 0.0;
-	double position_norm = 0.0;
+	// Exact location of the Rad particles
+	const double exact_x_rad = 0.3;
+	const double exact_y_rad = 0.0;
+	const double exact_z_rad = 0.0;
 
-	// assume the first particle is in the first plane quadrant
-	for (auto& position : positions) {
+	// Test CICRad particles
+	auto positions_cicrad = sim.particleRegister_.getParticleDescriptor("CICRad_particles")->getParticlePositions();
+	double position_error_cicrad = 0.0;
+	double position_norm_cicrad = 0.0;
+
+	// Test CIC particles
+	auto positions_cic = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions();
+	double position_error_cic = 0.0;
+	const double position_norm_cic = 1.0; // set to 1.0 since the particles are exactly at the origin
+
+	// Test Rad particles
+	auto positions_rad = sim.particleRegister_.getParticleDescriptor("Rad_particles")->getParticlePositions();
+	double position_error_rad = 0.0;
+	double position_norm_rad = 0.0;
+
+	// Test both particle types against exact solution
+	for (auto& position : positions_cicrad) {
 		if (position[0] * exact_x > 0.0) {
-			position_error += std::abs(position[0] - exact_x);
-			position_error += std::abs(position[1] - exact_y);
-			position_error += std::abs(position[2] - exact_z);
+			position_error_cicrad += std::abs(position[0] - exact_x);
+			position_error_cicrad += std::abs(position[1] - exact_y);
+			position_error_cicrad += std::abs(position[2] - exact_z);
 		} else {
-			position_error += std::abs(position[0] - (-exact_x));
-			position_error += std::abs(position[1] - (-exact_y));
-			position_error += std::abs(position[2] - (-exact_z));
+			position_error_cicrad += std::abs(position[0] - (-exact_x));
+			position_error_cicrad += std::abs(position[1] - (-exact_y));
+			position_error_cicrad += std::abs(position[2] - (-exact_z));
 		}
-		position_norm += std::abs(position[0]);
-		position_norm += std::abs(position[1]);
-		position_norm += std::abs(position[2]);
+		position_norm_cicrad += std::abs(exact_x);
+		position_norm_cicrad += std::abs(exact_y);
+		position_norm_cicrad += std::abs(exact_z);
 	}
 
-	const double rel_position_error = position_error / position_norm;
+	for (auto& position : positions_cic) {
+		if (position[0] * exact_x > 0.0) {
+			position_error_cic += std::abs(position[0] - exact_x_cic);
+			position_error_cic += std::abs(position[1] - exact_y_cic);
+			position_error_cic += std::abs(position[2] - exact_z_cic);
+		} else {
+			position_error_cic += std::abs(position[0] - (-exact_x_cic));
+			position_error_cic += std::abs(position[1] - (-exact_y_cic));
+			position_error_cic += std::abs(position[2] - (-exact_z_cic));
+		}
+	}
+
+	for (auto& position : positions_rad) {
+		if (position[0] * exact_x_rad > 0.0) {
+			position_error_rad += std::abs(position[0] - exact_x_rad);
+			position_error_rad += std::abs(position[1] - exact_y_rad);
+			position_error_rad += std::abs(position[2] - exact_z_rad);
+		} else {
+			position_error_rad += std::abs(position[0] - (-exact_x_rad));
+			position_error_rad += std::abs(position[1] - (-exact_y_rad));
+			position_error_rad += std::abs(position[2] - (-exact_z_rad));
+		}
+		position_norm_rad += std::abs(exact_x_rad);
+		position_norm_rad += std::abs(exact_y_rad);
+		position_norm_rad += std::abs(exact_z_rad);
+	}
+
+	const double rel_position_error_cicrad = position_error_cicrad / position_norm_cicrad;
+	const double rel_position_error_cic = position_error_cic / position_norm_cic;
+	const double rel_position_error_rad = position_error_rad / position_norm_rad;
 
 	int status = 1;
 	const double rel_err_tol = 1.0e-7;
 	const double rel_position_error_tol = 1.0e-3;
-	if (rel_err < rel_err_tol && rel_position_error < rel_position_error_tol) {
+	if (rel_err < rel_err_tol && 
+	    rel_position_error_cicrad < rel_position_error_tol &&
+	    rel_position_error_cic < rel_position_error_tol &&
+	    rel_position_error_rad < rel_position_error_tol) {
 		status = 0;
 	}
 
-	amrex::Print() << "Exact positions should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+	amrex::Print() << "Exact positions of the CICRad particles should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
 	amrex::Print() << "Real positions are: \n";
-	for (auto& position : positions) {
+	for (auto& position : positions_cicrad) {
+		amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
+	}
+	amrex::Print() << "Exact positions of the CIC particles should be: " << exact_x_cic << ", " << exact_y_cic << ", " << exact_z_cic << "\n";
+	amrex::Print() << "Real positions are: \n";
+	for (auto& position : positions_cic) {
+		amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
+	}
+	amrex::Print() << "Exact positions of the Rad particles should be: " << exact_x_rad << ", " << exact_y_rad << ", " << exact_z_rad << "\n";
+	amrex::Print() << "Real positions are: \n";
+	for (auto& position : positions_rad) {
 		amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 	}
 	amrex::Print() << "Relative L1 norm on radiation energy = " << rel_err << "\n";
-	amrex::Print() << "Relative L1 norm on particle positions = " << rel_position_error << "\n";
+	amrex::Print() << "Relative L1 norm on CICRad particle positions = " << rel_position_error_cicrad << "\n";
+	amrex::Print() << "Relative L1 norm on CIC particle positions = " << rel_position_error_cic << "\n";
+	amrex::Print() << "Relative L1 norm on Rad particle positions = " << rel_position_error_rad << "\n";
 
 	// Cleanup and exit
-	amrex::Print() << "Finished."
-		       << "\n";
+	amrex::Print() << "Finished." << "\n";
 	return status;
 }
