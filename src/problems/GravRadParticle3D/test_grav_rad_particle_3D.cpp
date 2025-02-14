@@ -185,9 +185,9 @@ auto problem_main() -> int
 	const double dz = sim.Geom(0).CellSize(2);
 	const double dvol = dx * dy * dz;
 	const double total_Erad = total_Erad_over_vol * dvol;
-	const double t_alive = std::min(0.5, sim.tNew_[0]);		   // particles only live for 0.5 time units
+	const double t_alive = std::min(0.5, sim.tNew_[0]);	     // particles only live for 0.5 time units
 	double total_Erad_exact = 2.0 * lum1 * t_alive * (chat / c); // two particles with luminosity lum1
-	total_Erad_exact *= 2.0; // two particle system (Rad + CICRad)
+	total_Erad_exact *= 2.0;				     // two particle system (Rad + CICRad)
 	const double total_num_of_cells = sim.Geom(0).Domain().volume();
 	total_Erad_exact += total_num_of_cells * dvol * initial_Erad;
 
@@ -230,7 +230,7 @@ auto problem_main() -> int
 	double position_norm_rad = 0.0;
 
 	// Test both particle types against exact solution
-	for (auto& position : positions_cicrad) {
+	for (auto &position : positions_cicrad) {
 		if (position[0] * exact_x > 0.0) {
 			position_error_cicrad += std::abs(position[0] - exact_x);
 			position_error_cicrad += std::abs(position[1] - exact_y);
@@ -245,7 +245,7 @@ auto problem_main() -> int
 		position_norm_cicrad += std::abs(exact_z);
 	}
 
-	for (auto& position : positions_cic) {
+	for (auto &position : positions_cic) {
 		if (position[0] * exact_x > 0.0) {
 			position_error_cic += std::abs(position[0] - exact_x_cic);
 			position_error_cic += std::abs(position[1] - exact_y_cic);
@@ -257,7 +257,7 @@ auto problem_main() -> int
 		}
 	}
 
-	for (auto& position : positions_rad) {
+	for (auto &position : positions_rad) {
 		if (position[0] * exact_x_rad > 0.0) {
 			position_error_rad += std::abs(position[0] - exact_x_rad);
 			position_error_rad += std::abs(position[1] - exact_y_rad);
@@ -279,26 +279,24 @@ auto problem_main() -> int
 	int status = 1;
 	const double rel_err_tol = 1.0e-7;
 	const double rel_position_error_tol = 1.0e-3;
-	if (rel_err < rel_err_tol && 
-	    rel_position_error_cicrad < rel_position_error_tol &&
-	    rel_position_error_cic < rel_position_error_tol &&
+	if (rel_err < rel_err_tol && rel_position_error_cicrad < rel_position_error_tol && rel_position_error_cic < rel_position_error_tol &&
 	    rel_position_error_rad < rel_position_error_tol) {
 		status = 0;
 	}
 
 	amrex::Print() << "Exact positions of the CICRad particles should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
 	amrex::Print() << "Real positions are: \n";
-	for (auto& position : positions_cicrad) {
+	for (auto &position : positions_cicrad) {
 		amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 	}
 	amrex::Print() << "Exact positions of the CIC particles should be: " << exact_x_cic << ", " << exact_y_cic << ", " << exact_z_cic << "\n";
 	amrex::Print() << "Real positions are: \n";
-	for (auto& position : positions_cic) {
+	for (auto &position : positions_cic) {
 		amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 	}
 	amrex::Print() << "Exact positions of the Rad particles should be: " << exact_x_rad << ", " << exact_y_rad << ", " << exact_z_rad << "\n";
 	amrex::Print() << "Real positions are: \n";
-	for (auto& position : positions_rad) {
+	for (auto &position : positions_rad) {
 		amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 	}
 	amrex::Print() << "Relative L1 norm on radiation energy = " << rel_err << "\n";

@@ -45,32 +45,32 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
 #include "AMReX_FillPatcher.H"
+#include "AMReX_Geometry.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_Interpolater.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Orientation.H"
 #include "AMReX_ParallelDescriptor.H"
-#include "AMReX_REAL.H"
-#include "AMReX_SPACE.H"
-#include "AMReX_Vector.H"
-#include "AMReX_VisMF.H"
-#include "AMReX_YAFluxRegister.H"
-#include "AMReX_Geometry.H"
-#include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
+#include "AMReX_REAL.H"
+#include "AMReX_SPACE.H"
 #include "AMReX_Utility.H"
+#include "AMReX_Vector.H"
+#include "AMReX_VisMF.H"
+#include "AMReX_YAFluxRegister.H"
 #include <fmt/core.h>
 #include <yaml-cpp/yaml.h>
 
 #ifdef AMREX_PARTICLES
-#include "particles/PhysicsParticles.hpp"
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Particles.H"
+#include "particles/PhysicsParticles.hpp"
 #endif
 
 #if AMREX_SPACEDIM == 3
@@ -446,13 +446,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// tracer particles
 #ifdef AMREX_PARTICLES
-			public:
+      public:
 	int do_tracers = 0;
 	int do_cic_particles = 0;
 	int do_rad_particles = 0;
 	int do_cic_rad_particles = 0;
 
-			protected:
+      protected:
 	void InitParticles();	 // create tracer particles
 	void InitPhyParticles(); // create PhysicsParticles
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
@@ -1233,8 +1233,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
 		} else {
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
-			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0, 
-								fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
+			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
+						     fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
 		}
 
 		// check for NaN
@@ -2045,7 +2045,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		RadParticles->SetVerbose(0);
 
 		// Register with particle register
-		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, RadParticles.get());
+		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false,
+						       RadParticles.get());
 
 		// Initialize particles through derived class
 		createInitialRadParticles();
@@ -2073,7 +2074,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICRadParticles->SetVerbose(0);
 
 		// Register with particle register
-		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx, quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
+		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
+						       quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
 
 		// Initialize particles through derived class
 		createInitialCICRadParticles();
@@ -2822,13 +2824,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if (do_rad_particles != 0) {
 		AMREX_ASSERT(RadParticles == nullptr);
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, RadParticles.get());
+		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false,
+						       RadParticles.get());
 		RadParticles->Restart(restart_chkfile, "Rad_particles");
 	}
 	if (do_cic_rad_particles != 0) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx, quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
+		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
+						       quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
 		CICRadParticles->Restart(restart_chkfile, "CICRad_particles");
 	}
 #endif

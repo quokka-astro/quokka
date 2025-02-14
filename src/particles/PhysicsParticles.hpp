@@ -25,11 +25,11 @@ namespace quokka
 {
 
 // Indices for gravitating particles (CIC_particles), mass + 3 velocity components
-enum CICParticleDataIdx { 
-	CICParticleMassIdx = 0,  // Mass of the particle
-	CICParticleVxIdx,        // Velocity in x direction
-	CICParticleVyIdx,        // Velocity in y direction
-	CICParticleVzIdx         // Velocity in z direction
+enum CICParticleDataIdx {
+	CICParticleMassIdx = 0, // Mass of the particle
+	CICParticleVxIdx,	// Velocity in x direction
+	CICParticleVyIdx,	// Velocity in y direction
+	CICParticleVzIdx	// Velocity in z direction
 };
 
 // Number of real components for CIC_particles, mass + 3 velocity components
@@ -40,31 +40,28 @@ using CICParticleContainer = amrex::AmrParticleContainer<CICParticleRealComps>;
 using CICParticleIterator = amrex::ParIter<CICParticleRealComps>;
 
 // Indices for radiation particles (Rad_particles), birth time + death time + radiation groups
-enum RadParticleDataIdx { 
-	RadParticleBirthTimeIdx = 0,  // Time when particle becomes active
-	RadParticleDeathTimeIdx,      // Time when particle becomes inactive
-	RadParticleLumIdx             // Base index for luminosity components
+enum RadParticleDataIdx {
+	RadParticleBirthTimeIdx = 0, // Time when particle becomes active
+	RadParticleDeathTimeIdx,     // Time when particle becomes inactive
+	RadParticleLumIdx	     // Base index for luminosity components
 };
 
 // Number of real components for Rad_particles, birth time + death time + radiation groups
-template <typename problem_t> 
-constexpr int RadParticleRealComps = 2 + Physics_Traits<problem_t>::nGroups;
+template <typename problem_t> constexpr int RadParticleRealComps = 2 + Physics_Traits<problem_t>::nGroups;
 
 // Type definitions for Rad_particles container and iterator
-template <typename problem_t> 
-using RadParticleContainer = amrex::AmrParticleContainer<RadParticleRealComps<problem_t>>;
-template <typename problem_t> 
-using RadParticleIterator = amrex::ParIter<RadParticleRealComps<problem_t>>;
+template <typename problem_t> using RadParticleContainer = amrex::AmrParticleContainer<RadParticleRealComps<problem_t>>;
+template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadParticleRealComps<problem_t>>;
 
 // Indices for gravitating radiation particles (CICRad_particles), mass + 3 velocity components + birth time + death time + radiation groups
 enum CICRadParticleDataIdx {
-	CICRadParticleMassIdx = 0,        // Mass of the particle
-	CICRadParticleVxIdx,              // Velocity in x direction
-	CICRadParticleVyIdx,              // Velocity in y direction
-	CICRadParticleVzIdx,              // Velocity in z direction
-	CICRadParticleBirthTimeIdx,       // Time when particle becomes active
-	CICRadParticleDeathTimeIdx,       // Time when particle becomes inactive
-	CICRadParticleLumIdx              // Base index for luminosity components
+	CICRadParticleMassIdx = 0,  // Mass of the particle
+	CICRadParticleVxIdx,	    // Velocity in x direction
+	CICRadParticleVyIdx,	    // Velocity in y direction
+	CICRadParticleVzIdx,	    // Velocity in z direction
+	CICRadParticleBirthTimeIdx, // Time when particle becomes active
+	CICRadParticleDeathTimeIdx, // Time when particle becomes inactive
+	CICRadParticleLumIdx	    // Base index for luminosity components
 };
 
 // Number of real components for CICRad_particles, mass + 3 velocity components + birth time + death time + radiation groups
@@ -78,17 +75,15 @@ constexpr int CICRadParticleRealComps = []() constexpr {
 }();
 
 // Type definitions for CICRad_particles container and iterator
-template <typename problem_t> 
-using CICRadParticleContainer = amrex::AmrParticleContainer<CICRadParticleRealComps<problem_t>>;
-template <typename problem_t> 
-using CICRadParticleIterator = amrex::ParIter<CICRadParticleRealComps<problem_t>>;
+template <typename problem_t> using CICRadParticleContainer = amrex::AmrParticleContainer<CICRadParticleRealComps<problem_t>>;
+template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICRadParticleRealComps<problem_t>>;
 
 // Functor for depositing particle mass onto the grid
 struct MassDeposition {
-	amrex::Real Gconst{};     // Gravitational constant
-	int start_part_comp{};    // Starting component in particle data
-	int start_mesh_comp{};    // Starting component in mesh data
-	int num_comp{};           // Number of components to deposit
+	amrex::Real Gconst{};  // Gravitational constant
+	int start_part_comp{}; // Starting component in particle data
+	int start_mesh_comp{}; // Starting component in mesh data
+	int num_comp{};	       // Number of components to deposit
 
 	// Operator to perform mass deposition using linear interpolation
 	template <typename ParticleType>
@@ -98,20 +93,18 @@ struct MassDeposition {
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit mass weighted by 4πG
-		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp, 
-			[=] AMREX_GPU_DEVICE(const ParticleType &part, int comp) {
-				return 4.0 * M_PI * Gconst * part.rdata(comp);
-			});
+		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp,
+				      [=] AMREX_GPU_DEVICE(const ParticleType &part, int comp) { return 4.0 * M_PI * Gconst * part.rdata(comp); });
 	}
 };
 
 // Functor for depositing radiation energy from particles onto the grid
 struct RadDeposition {
-	double current_time{};    // Current simulation time
-	int start_part_comp{};    // Starting component in particle data
-	int start_mesh_comp{};    // Starting component in mesh data
-	int num_comp{};           // Number of components to deposit
-	int birthTimeIndex{};     // Index for particle birth time
+	double current_time{}; // Current simulation time
+	int start_part_comp{}; // Starting component in particle data
+	int start_mesh_comp{}; // Starting component in mesh data
+	int num_comp{};	       // Number of components to deposit
+	int birthTimeIndex{};  // Index for particle birth time
 
 	// Operator to perform radiation deposition using linear interpolation
 	template <typename ParticleType>
@@ -121,13 +114,12 @@ struct RadDeposition {
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit radiation energy only if particle is active
-		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
-			[=] AMREX_GPU_DEVICE(const ParticleType &part, int comp) {
-				if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
-					return 0.0;
-				}
-				return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-			});
+		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ParticleType &part, int comp) {
+			if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
+				return 0.0;
+			}
+			return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
 	}
 };
 
@@ -135,24 +127,27 @@ struct RadDeposition {
 template <typename problem_t> class PhysicsParticleRegister;
 
 // Base class for particle descriptors using type erasure pattern
-class PhysicsParticleDescriptorBase {
-protected:
-	int massIndex_{-1};           // Index for particle mass (-1 if not used)
-	int lumIndex_{-1};            // Index for radiation luminosity (-1 if not used)
-	int birthTimeIndex_{-1};      // Index for birth time (-1 if not used)
+class PhysicsParticleDescriptorBase
+{
+      protected:
+	int massIndex_{-1};		 // Index for particle mass (-1 if not used)
+	int lumIndex_{-1};		 // Index for radiation luminosity (-1 if not used)
+	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 
-public:
+      public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact)
-	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact) {}
-	
+	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact)
+	{
+	}
+
 	virtual ~PhysicsParticleDescriptorBase() = default;
 
 	// Copy and move constructors and assignment operators
-	PhysicsParticleDescriptorBase(const PhysicsParticleDescriptorBase&) = default;
-	PhysicsParticleDescriptorBase& operator=(const PhysicsParticleDescriptorBase&) = default;
-	PhysicsParticleDescriptorBase(PhysicsParticleDescriptorBase&&) = default;
-	PhysicsParticleDescriptorBase& operator=(PhysicsParticleDescriptorBase&&) = default;
+	PhysicsParticleDescriptorBase(const PhysicsParticleDescriptorBase &) = default;
+	PhysicsParticleDescriptorBase &operator=(const PhysicsParticleDescriptorBase &) = default;
+	PhysicsParticleDescriptorBase(PhysicsParticleDescriptorBase &&) = default;
+	PhysicsParticleDescriptorBase &operator=(PhysicsParticleDescriptorBase &&) = default;
 
 	// Getter methods for particle properties
 	[[nodiscard]] auto getMassIndex() const -> int { return massIndex_; }
@@ -162,7 +157,7 @@ public:
 
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
-	
+
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 	virtual void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst) = 0;
@@ -171,17 +166,16 @@ public:
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) = 0;
-	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const& acceleration) = 0;
+	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
 };
 
 // Concrete implementation of particle descriptor for specific container types
-template <typename ContainerType>
-class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
+template <typename ContainerType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 {
-private:
-	ContainerType *container_{};  // Pointer to the actual particle container
+      private:
+	ContainerType *container_{}; // Pointer to the actual particle container
 
-public:
+      public:
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, ContainerType *container)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact), container_(container)
@@ -189,16 +183,16 @@ public:
 	}
 
 	// Implementation of particle position retrieval
-	[[nodiscard]] auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> override 
+	[[nodiscard]] auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> override
 	{
 		std::vector<std::array<double, AMREX_SPACEDIM>> positions;
 		if (container_ != nullptr) {
-			const auto& particles = container_->GetParticles(lev);
-			for (const auto& kv : particles) {
-				const auto& pbox = kv.second;
-				const auto& aos = pbox.GetArrayOfStructs();
+			const auto &particles = container_->GetParticles(lev);
+			for (const auto &kv : particles) {
+				const auto &pbox = kv.second;
+				const auto &aos = pbox.GetArrayOfStructs();
 				for (int i = 0; i < pbox.numParticles(); ++i) {
-					const auto& p = aos[i];
+					const auto &p = aos[i];
 					positions.push_back({AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))});
 				}
 			}
@@ -207,15 +201,16 @@ public:
 	}
 
 	// Implementation of particle drift (position update based on velocity)
-	void driftParticles(int lev, amrex::Real dt) override {
+	void driftParticles(int lev, amrex::Real dt) override
+	{
 		if (container_ != nullptr) {
 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-				auto& particles = pIter.GetArrayOfStructs();
-				auto* pData = particles().data();
+				auto &particles = pIter.GetArrayOfStructs();
+				auto *pData = particles().data();
 				const amrex::Long np = pIter.numParticles();
 
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-					auto& p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					// update particle position based on velocity components
 					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 						if (this->getMassIndex() >= 0) {
@@ -229,31 +224,33 @@ public:
 	}
 
 	// Implementation of particle kick (velocity update based on acceleration)
-	void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const& accel) override {
+	void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) override
+	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-				auto& particles = pIter.GetArrayOfStructs();
-				auto* pData = particles().data();
+				auto &particles = pIter.GetArrayOfStructs();
+				auto *pData = particles().data();
 				const amrex::Long np = pIter.numParticles();
 
-				const auto& accel_arr = accel.array(pIter);
-				const auto& geom = container_->Geom(lev);
+				const auto &accel_arr = accel.array(pIter);
+				const auto &geom = container_->Geom(lev);
 				const auto plo = geom.ProbLoArray();
 				const auto dx_inv = geom.InvCellSizeArray();
 
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-					auto& p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
-					
+
 					// Interpolate acceleration from grid to particle and update velocity
-					interp.MeshToParticle(p, accel_arr, 0, this->getMassIndex() + 1, AMREX_SPACEDIM,
-						[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const& acc, int i, int j, int k, int comp) {
-							return acc(i, j, k, comp); // no weighting
-						},
-						[=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType& p, int comp, amrex::Real acc_comp) {
-							// kick particle by updating its velocity
-							p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
-						});
+					interp.MeshToParticle(
+					    p, accel_arr, 0, this->getMassIndex() + 1, AMREX_SPACEDIM,
+					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
+						    return acc(i, j, k, comp); // no weighting
+					    },
+					    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+						    // kick particle by updating its velocity
+						    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+					    });
 				});
 			}
 		}
@@ -263,7 +260,8 @@ public:
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
 	{
 		if (container_ != nullptr && this->getLumIndex() >= 0) {
-			amrex::ParticleToMesh(*container_, radEnergySource, lev, RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
+			amrex::ParticleToMesh(*container_, radEnergySource, lev,
+					      RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
 		}
 	}
 
@@ -271,8 +269,7 @@ public:
 	void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
-			amrex::ParticleToMesh(*container_, amrex::GetVecOfPtrs(rhs), 0, finest_lev,
-				MassDeposition{Gconst, this->getMassIndex(), 0, 1}, true);
+			amrex::ParticleToMesh(*container_, amrex::GetVecOfPtrs(rhs), 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, true);
 		}
 	}
 
@@ -312,19 +309,20 @@ public:
 // Registry managing different types of physics particles
 template <typename problem_t> class PhysicsParticleRegister
 {
-private:
+      private:
 	// Map storing particle descriptors, indexed by particle type name
 	std::map<std::string, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
-public:
+      public:
 	// Constructor
 	PhysicsParticleRegister() = default;
 	// Destructor
 	~PhysicsParticleRegister() = default;
 
 	// Check if registry contains any massive particles
-	[[nodiscard]] auto HasMassiveParticles() const -> bool {
-		for (const auto& [name, descriptor] : particleRegistry_) {
+	[[nodiscard]] auto HasMassiveParticles() const -> bool
+	{
+		for (const auto &[name, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				return true;
 			}
@@ -403,8 +401,9 @@ public:
 	}
 
 	// Update positions of all massive particles
-	void driftParticlesAllLevels(amrex::Real dt, int finest_level) {
-		for (const auto& [name, descriptor] : particleRegistry_) {
+	void driftParticlesAllLevels(amrex::Real dt, int finest_level)
+	{
+		for (const auto &[name, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				for (int lev = 0; lev <= finest_level; ++lev) {
 					descriptor->driftParticles(lev, dt);
@@ -414,10 +413,11 @@ public:
 	}
 
 	// Update velocities of all massive particles
-	void kickParticlesAllLevels(amrex::Real dt, amrex::Vector<amrex::MultiFab>& acceleration) {
-		for (const auto& [name, descriptor] : particleRegistry_) {
+	void kickParticlesAllLevels(amrex::Real dt, amrex::Vector<amrex::MultiFab> &acceleration)
+	{
+		for (const auto &[name, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				for (int lev = 0; lev <= acceleration.size()-1; ++lev) {
+				for (int lev = 0; lev <= acceleration.size() - 1; ++lev) {
 					descriptor->kickParticles(lev, dt, acceleration[lev]);
 				}
 			}

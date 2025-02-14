@@ -27,8 +27,8 @@ struct BinaryOrbit {
 };
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
-	static constexpr double gamma = 1.0;	       // isothermal
-	static constexpr double cs_isothermal = 3.0; // 
+	static constexpr double gamma = 1.0;	     // isothermal
+	static constexpr double cs_isothermal = 3.0; //
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
@@ -48,7 +48,6 @@ template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr double gravitational_constant = 1.0;
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
-
 };
 
 template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -67,9 +66,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
-{
-}
+template <> void QuokkaSimulation<BinaryOrbit>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
 
 template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 {
@@ -126,12 +123,12 @@ auto problem_main() -> int
 	const double exact_z = 0.0;
 
 	auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
-	
+
 	double position_error = 0.0;
 	double position_norm = 0.0;
 
 	// assume the first particle is in the first plane quadrant
-	for (auto& position : positions) {
+	for (auto &position : positions) {
 		if (position[0] * exact_x > 0.0) {
 			position_error += std::abs(position[0] - exact_x);
 			position_error += std::abs(position[1] - exact_y);
@@ -160,7 +157,7 @@ auto problem_main() -> int
 	} else {
 		amrex::Print() << "Exact positions should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
 		amrex::Print() << "Real positions are: \n";
-		for (auto& position : positions) {
+		for (auto &position : positions) {
 			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 		}
 	}
