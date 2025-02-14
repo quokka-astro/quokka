@@ -152,6 +152,7 @@ auto problem_main() -> int
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxDt_ = dt_max;
 	sim.doPoissonSolve_ = 1; // enable self-gravity
+	sim.do_cic_rad_particles = 1;
 
 	// initialize
 	sim.setInitialConditions();
@@ -170,9 +171,9 @@ auto problem_main() -> int
 	const double total_Erad_exact = 2.0 * lum1 * t_alive * (chat / c); // two particles with luminosity lum1
 	const double rel_err = std::abs(total_Erad - total_Erad_exact) / total_Erad_exact;
 
-	// compute exact location of the particles
-	// the particles are originally at (-0.5, 0) and (0.5, 0) and they move with
-	// velocity 1/sqrt(2) in the y/-y direction the problem is designed such that
+	// Compute exact location of the particles
+	// The particles are originally at (-0.5, 0) and (0.5, 0) and they move with
+	// velocity 1/sqrt(2) in the y/-y direction. The problem is designed such that
 	// the particles will move in a circle with radius 0.5
 	const double velocity = 1.0 / std::sqrt(2.0);
 	const double radius = 0.5;

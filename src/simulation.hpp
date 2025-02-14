@@ -446,12 +446,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// tracer particles
 #ifdef AMREX_PARTICLES
-	void InitParticles();	 // create tracer particles
-	void InitPhyParticles(); // create PhysicsParticles
+			public:
 	int do_tracers = 0;
 	int do_cic_particles = 0;
 	int do_rad_particles = 0;
 	int do_cic_rad_particles = 0;
+
+			protected:
+	void InitParticles();	 // create tracer particles
+	void InitPhyParticles(); // create PhysicsParticles
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::RadParticleContainer<problem_t>> RadParticles;
