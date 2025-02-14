@@ -211,12 +211,12 @@ auto problem_main() -> int
 	const double rel_position_error_tol = 1.0e-3;
 	if (rel_err < rel_err_tol && rel_position_error < rel_position_error_tol) {
 		status = 0;
-	} else {
-		amrex::Print() << "Exact positions should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
-		amrex::Print() << "Real positions are: \n";
-		for (auto& position : positions) {
-			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
-		}
+	}
+
+	amrex::Print() << "Exact positions should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+	amrex::Print() << "Real positions are: \n";
+	for (auto& position : positions) {
+		amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 	}
 	amrex::Print() << "Relative L1 norm on radiation energy = " << rel_err << "\n";
 	amrex::Print() << "Relative L1 norm on particle positions = " << rel_position_error << "\n";
