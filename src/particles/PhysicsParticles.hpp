@@ -121,12 +121,13 @@ struct RadDeposition {
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit radiation energy only if particle is active
-		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp, [this, dxi] AMREX_GPU_DEVICE(const ParticleType &part, int comp) {
-			if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
-				return 0.0;
-			}
-			return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-		});
+		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
+				      [this, dxi] AMREX_GPU_DEVICE(const ParticleType &part, int comp) {
+					      if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
+						      return 0.0;
+					      }
+					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+				      });
 	}
 };
 
