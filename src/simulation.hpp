@@ -1139,7 +1139,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_) {
+	if (doPoissonSolve_ != 0) {
 		if (do_subcycle == 1) { // not supported
 			amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
 		}
@@ -1197,7 +1197,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(const amrex::Real dt)
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_) {
+	if (doPoissonSolve_ != 0) {
 
 		BL_PROFILE_REGION("GravitySolver");
 
@@ -1212,7 +1212,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(
 template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_) {
+	if (doPoissonSolve_ != 0) {
 
 		calculateGpotAllLevels();
 

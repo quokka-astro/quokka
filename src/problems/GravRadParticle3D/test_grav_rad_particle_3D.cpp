@@ -188,8 +188,8 @@ auto problem_main() -> int
 	const double t_alive = std::min(0.5, sim.tNew_[0]);	     // particles only live for 0.5 time units
 	double total_Erad_exact = 2.0 * lum1 * t_alive * (chat / c); // two particles with luminosity lum1
 	total_Erad_exact *= 2.0;				     // two particle system (Rad + CICRad)
-	const double total_num_of_cells = sim.Geom(0).Domain().volume();
-	total_Erad_exact += total_num_of_cells * dvol * initial_Erad;
+	const auto total_num_of_cells = sim.Geom(0).Domain().volume();
+	total_Erad_exact += static_cast<double>(total_num_of_cells) * dvol * initial_Erad;
 
 	const double rel_err = std::abs(total_Erad - total_Erad_exact) / total_Erad_exact;
 
