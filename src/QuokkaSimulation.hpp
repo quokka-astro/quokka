@@ -1992,9 +1992,9 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew, amrex::Array4<amrex::Real> const &radEnergySource,
 							   const amrex::Box &indexRange, const amrex::Real /*time*/, const double dt, const int stage,
-							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &/*dx*/,
-							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &/*prob_lo*/,
-							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &/*prob_hi*/, int *p_iteration_counter,
+							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
+							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
+							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, int *p_iteration_counter,
 							   int *p_iteration_failure_counter)
 {
 	// cell-centered source terms
