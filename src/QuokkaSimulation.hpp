@@ -60,7 +60,7 @@
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 
-static constexpr bool is_print_rad_energy_source = true;
+static constexpr bool is_print_rad_energy_source = false;
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
@@ -298,7 +298,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PrintRadEnergySo
 		auto const &radEnergySource_arr = radEnergySource.array(iter);
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			if (j == 16) {
-				amrex::Print() << radEnergySource_arr(i, j, k) << ", ";
+				std::cout << radEnergySource_arr(i, j, k) << ", ";
 			}
 		});
 	}

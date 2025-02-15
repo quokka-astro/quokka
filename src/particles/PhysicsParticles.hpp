@@ -157,9 +157,9 @@ class PhysicsParticleDescriptorBase
 	PhysicsParticleDescriptorBase &operator=(PhysicsParticleDescriptorBase &&) = default;
 
 	// Getter methods for particle properties
-	[[nodiscard]] auto getMassIndex() const -> int { return massIndex_; }
-	[[nodiscard]] auto getLumIndex() const -> int { return lumIndex_; }
-	[[nodiscard]] auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getMassIndex() const -> int { return massIndex_; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getLumIndex() const -> int { return lumIndex_; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
 	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 
 	// Virtual interface for particle operations
