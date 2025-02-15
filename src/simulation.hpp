@@ -932,8 +932,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// do user-specified calculations before the level update
 		computeBeforeTimestep();
 
+#if AMREX_SPACEDIM == 3
 		// do particle leapfrog (first kick at time t)
 		kickParticlesAllLevels(dt_[0]);
+#endif
 
 		// hyperbolic advance over all levels
 		// (N.B. when AMR is enabled, regridding may happen during this function!)
@@ -941,9 +943,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		const int iteration = 1; // this is the first call to advance level 'lev'
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
+#if AMREX_SPACEDIM == 3
 		// drift particles from t to (t + dt)
 		// N.B.: MUST be done *before* Poisson solve at new time!
 		particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
+#endif
 
 		// Redistribute particles after movement. This ensures particles are in the correct cells/processors for radiation deposition
 		// TODO(cch): I believe this is needed and missing this in the original code was a bug, but I don't understand why this was not caught earlier.
@@ -957,7 +961,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		ellipticSolveAllLevels(dt_[0]);
 
 		// do particle leapfrog (second kick at t + dt)
+#if AMREX_SPACEDIM == 3
 		kickParticlesAllLevels(dt_[0]);
+#endif
 
 		cur_time += dt_[0];
 		++cycleCount_;
