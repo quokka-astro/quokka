@@ -101,7 +101,7 @@ struct MassDeposition {
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit mass weighted by 4πG
 		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ParticleType &part, int comp) { return 4.0 * M_PI * Gconst * part.rdata(comp); });
+				      [this] AMREX_GPU_DEVICE(const ParticleType &part, int comp) { return 4.0 * M_PI * Gconst * part.rdata(comp); });
 	}
 };
 
@@ -121,12 +121,13 @@ struct RadDeposition {
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit radiation energy only if particle is active
-		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ParticleType &part, int comp) {
-			if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
-				return 0.0;
-			}
-			return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-		});
+		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
+				      [this, dxi] AMREX_GPU_DEVICE(const ParticleType &part, int comp) {
+					      if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
+						      return 0.0;
+					      }
+					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+				      });
 	}
 };
 
@@ -216,7 +217,7 @@ template <typename ContainerType> class PhysicsParticleDescriptor : public Physi
 				auto *pData = particles().data();
 				const amrex::Long np = pIter.numParticles();
 
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+				amrex::ParallelFor(np, [this, dt] AMREX_GPU_DEVICE(int64_t idx) {
 					auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					// update particle position based on velocity components
 					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -244,17 +245,17 @@ template <typename ContainerType> class PhysicsParticleDescriptor : public Physi
 				const auto plo = geom.ProbLoArray();
 				const auto dx_inv = geom.InvCellSizeArray();
 
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+				amrex::ParallelFor(np, [this, dt] AMREX_GPU_DEVICE(int64_t idx) {
 					auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 
 					// Interpolate acceleration from grid to particle and update velocity
 					interp.MeshToParticle(
 					    p, accel_arr, 0, this->getMassIndex() + 1, AMREX_SPACEDIM,
-					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
+					    [this] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
 						    return acc(i, j, k, comp); // no weighting
 					    },
-					    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+					    [this, dt] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
 						    // kick particle by updating its velocity
 						    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
 					    });
