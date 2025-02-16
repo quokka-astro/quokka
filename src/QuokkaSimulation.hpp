@@ -1751,6 +1751,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
 				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
 				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
+				// TODO(cch): simplify by removing this function
 				operatorSplitSourceTerms(stateNew, radEnergySource_arr, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi,
 							 p_iteration_counter, p_iteration_failure_counter);
 			}
