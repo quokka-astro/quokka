@@ -237,7 +237,15 @@ class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 						for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 							if (mass_idx >= 0) { // use captured value instead of this->getMassIndex()
 								// For massive particles, velocity components start after mass
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
 								p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 							}
 						}
 					});
@@ -275,7 +283,15 @@ class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 						    },
 						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
 							    // kick particle by updating its velocity
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
 							    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 						    });
 					});
 				}
