@@ -282,7 +282,7 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 							    return acc(i, j, k, comp); // no weighting
 						    },
 						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
-							    // kick particle by updating its velocity
+						// kick particle by updating its velocity
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
