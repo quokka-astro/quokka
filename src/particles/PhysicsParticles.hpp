@@ -150,11 +150,11 @@ class PhysicsParticleDescriptorBase
 
 	virtual ~PhysicsParticleDescriptorBase() = default;
 
-	// Copy and move constructors and assignment operators
+	// Copy and move constructors and assignment operators with trailing return types
 	PhysicsParticleDescriptorBase(const PhysicsParticleDescriptorBase &) = default;
-	PhysicsParticleDescriptorBase &operator=(const PhysicsParticleDescriptorBase &) = default;
+	auto operator=(const PhysicsParticleDescriptorBase &) -> PhysicsParticleDescriptorBase & = default;
 	PhysicsParticleDescriptorBase(PhysicsParticleDescriptorBase &&) = default;
-	PhysicsParticleDescriptorBase &operator=(PhysicsParticleDescriptorBase &&) = default;
+	auto operator=(PhysicsParticleDescriptorBase &&) -> PhysicsParticleDescriptorBase & = default;
 
 	// Getter methods for particle properties
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getMassIndex() const -> int { return massIndex_; }
@@ -441,9 +441,9 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Prevent copying or moving of the registry to ensure single ownership
 	PhysicsParticleRegister(const PhysicsParticleRegister &) = delete;
-	PhysicsParticleRegister &operator=(const PhysicsParticleRegister &) = delete;
+	auto operator=(const PhysicsParticleRegister &) -> PhysicsParticleRegister & = delete;
 	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
-	PhysicsParticleRegister &operator=(PhysicsParticleRegister &&) = delete;
+	auto operator=(PhysicsParticleRegister &&) -> PhysicsParticleRegister & = delete;
 };
 
 } // namespace quokka
