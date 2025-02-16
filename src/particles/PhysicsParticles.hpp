@@ -26,9 +26,9 @@ namespace quokka
 
 // Enum class to identify different particle types
 enum class ParticleType {
-	CIC,      // Gravitating particles
-	Rad,      // Radiation particles
-	CICRad    // Gravitating radiation particles
+	CIC,   // Gravitating particles
+	Rad,   // Radiation particles
+	CICRad // Gravitating radiation particles
 };
 
 // Indices for gravitating particles (CIC_particles), mass + 3 velocity components
@@ -128,12 +128,13 @@ struct RadDeposition {
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit radiation energy only if particle is active
-		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
-				return 0.0;
-			}
-			return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-		});
+		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
+				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+					      if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
+						      return 0.0;
+					      }
+					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+				      });
 	}
 };
 
@@ -184,8 +185,7 @@ class PhysicsParticleDescriptorBase
 };
 
 // Concrete implementation of particle descriptor for specific container types
-template <typename ContainerType, ParticleType particleType>
-class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
+template <typename ContainerType, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 {
       private:
 	ContainerType *container_{}; // Pointer to the actual particle container
@@ -380,16 +380,16 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		if (name == "CIC_particles") {
-				descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CIC>>(
-						mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
+														   hydro_interact, container);
 		} else if (name == "Rad_particles") {
-				descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::Rad>>(
-						mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
+														   hydro_interact, container);
 		} else if (name == "CICRad_particles") {
-				descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CICRad>>(
-						mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CICRad>>(mass_idx, lum_idx, birth_time_idx,
+														      hydro_interact, container);
 		} else {
-				amrex::Abort("Unknown particle type: " + name);
+			amrex::Abort("Unknown particle type: " + name);
 		}
 		particleRegistry_[name] = std::move(descriptor);
 	}
