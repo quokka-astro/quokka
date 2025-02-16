@@ -211,21 +211,25 @@ template <typename ContainerType> class PhysicsParticleDescriptor : public Physi
 	void driftParticles(int lev, amrex::Real dt) override
 	{
 		if (container_ != nullptr) {
-			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-				auto &particles = pIter.GetArrayOfStructs();
-				auto *pData = particles().data();
-				const amrex::Long np = pIter.numParticles();
+			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
+			
+			if (mass_idx >= 0) {
+				for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+					auto &particles = pIter.GetArrayOfStructs();
+					auto *pData = particles().data();
+					const amrex::Long np = pIter.numParticles();
 
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-					auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					// update particle position based on velocity components
-					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-						if (this->getMassIndex() >= 0) {
-							// For massive particles, velocity components start after mass
-							p.pos(i) += dt * p.rdata(this->getMassIndex() + 1 + i);
+					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+						// update particle position based on velocity components
+						for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+							if (mass_idx >= 0) { // use captured value instead of this->getMassIndex()
+								// For massive particles, velocity components start after mass
+								p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+							}
 						}
-					}
-				});
+					});
+				}
 			}
 		}
 	}
@@ -233,32 +237,36 @@ template <typename ContainerType> class PhysicsParticleDescriptor : public Physi
 	// Implementation of particle kick (velocity update based on acceleration)
 	void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) override
 	{
-		if (container_ != nullptr && this->getMassIndex() >= 0) {
-			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-				auto &particles = pIter.GetArrayOfStructs();
-				auto *pData = particles().data();
-				const amrex::Long np = pIter.numParticles();
+		if (container_ != nullptr) {
+			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
+			
+			if (mass_idx >= 0) {
+				for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+					auto &particles = pIter.GetArrayOfStructs();
+					auto *pData = particles().data();
+					const amrex::Long np = pIter.numParticles();
 
-				const auto &accel_arr = accel.array(pIter);
-				const auto &geom = container_->Geom(lev);
-				const auto plo = geom.ProbLoArray();
-				const auto dx_inv = geom.InvCellSizeArray();
+					const auto &accel_arr = accel.array(pIter);
+					const auto &geom = container_->Geom(lev);
+					const auto plo = geom.ProbLoArray();
+					const auto dx_inv = geom.InvCellSizeArray();
 
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-					auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
+					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+						amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 
-					// Interpolate acceleration from grid to particle and update velocity
-					interp.MeshToParticle(
-					    p, accel_arr, 0, this->getMassIndex() + 1, AMREX_SPACEDIM,
-					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
-						    return acc(i, j, k, comp); // no weighting
-					    },
-					    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
-						    // kick particle by updating its velocity
-						    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
-					    });
-				});
+						// Interpolate acceleration from grid to particle and update velocity
+						interp.MeshToParticle(
+							p, accel_arr, 0, mass_idx + 1, AMREX_SPACEDIM,
+							[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
+								return acc(i, j, k, comp); // no weighting
+							},
+							[=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+								// kick particle by updating its velocity
+								p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+							});
+					});
+				}
 			}
 		}
 	}
