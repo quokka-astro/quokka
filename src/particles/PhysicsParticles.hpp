@@ -469,13 +469,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Update velocities of all massive particles
-	void kickParticlesAllLevels(amrex::Real dt, amrex::Vector<amrex::MultiFab> &acceleration)
+	void kickParticlesAtLevel(amrex::Real dt, amrex::MultiFab &acceleration, int lev)
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				for (int lev = 0; lev <= acceleration.size() - 1; ++lev) {
-					descriptor->kickParticles(lev, dt, acceleration[lev]);
-				}
+				descriptor->kickParticles(lev, dt, acceleration);
 			}
 		}
 	}

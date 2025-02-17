@@ -1296,7 +1296,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
 
 		// Kick particles using the acceleration field
-		particleRegister_.kickParticlesAllLevels(dt, accel);
+		particleRegister_.kickParticlesAtLevel(dt, accel[lev], lev);
 	}
 }
 
