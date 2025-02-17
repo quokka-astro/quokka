@@ -23,7 +23,7 @@ struct ParticleProblem {
 constexpr int nGroups_ = 1;
 
 constexpr double erad_floor = 1.0e-15;
-constexpr double initial_Erad = 1.0e-5;
+constexpr double initial_Erad = erad_floor;
 constexpr double initial_Egas = 1.0e-5;
 constexpr double c = 100.0;	   // speed of light
 constexpr double chat = 10.0;	   // reduced speed of light
