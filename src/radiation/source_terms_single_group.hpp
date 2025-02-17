@@ -239,14 +239,19 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
+					double F_D_abs = 0.0;
+					// Check for convergence. We need to take care of a special situation where tau is very small, in which case the source
+					// term won't be able to cancel the residual no matter how many iterations we run. We set the criterion to be that: tau
+					// * (cscale * (a_rad * T_gas^4 + E_rad) + E_gas) < resid_tol * Etot0.
+					if (tau * (cscale * (radiation_constant_ * std::pow(T_gas, 4) + Erad0) + Egas0) < resid_tol * Etot0) {
+						Erad_guess = Erad0 + Src;
+						F_D = 0.0;
+						F_D_abs = 0.0;
+					} else {
+						F_D_abs = std::abs(F_D);
+					}
 					if constexpr (add_line_cooling_to_radiation_in_jac) {
 						F_D -= (1.0 / cscale) * cooling * dt;
-					}
-					double F_D_abs = 0.0;
-					if (tau > 0.0) {
-						F_D_abs = std::abs(F_D);
-					} else {
-						F_D_abs = std::abs(F_D + R);
 					}
 
 					// check relative convergence of the residuals
@@ -259,8 +264,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 #if 0
 					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 					if (n == maxIter - 10) {
-						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
-							  << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0 << "; C_V = " << c_v
+							  << ", a_rad = " << radiation_constant_ << std::endl;
 					} else if (n >= maxIter - 10) {
 						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
 							  << ", tau = " << tau;
