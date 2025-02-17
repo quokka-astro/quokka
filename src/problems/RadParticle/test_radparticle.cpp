@@ -22,8 +22,8 @@ constexpr int nGroups_ = 3;
 constexpr double erad_floor = 1.0e-15;
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 1.0;	   // speed of light
-constexpr double chat = 1.0;	   // reduced speed of light
+constexpr double c = 100.0;	   // speed of light
+constexpr double chat = 10.0;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double rho0 = 1.0;
 
@@ -183,9 +183,9 @@ auto problem_main() -> int
 	}
 
 	const double tmax = sim.tNew_[0];
-	const double lum_exact_group0 = lum1 * tmax;
-	const double lum_exact_group1 = lum2 * tmax;
-	const double lum_exact_group2 = lum3 * tmax;
+	const double lum_exact_group0 = lum1 * tmax * (chat / c);
+	const double lum_exact_group1 = lum2 * tmax * (chat / c);
+	const double lum_exact_group2 = lum3 * tmax * (chat / c);
 
 	const double err_norm =
 	    std::abs(tot_lum_group0 - lum_exact_group0) + std::abs(tot_lum_group1 - lum_exact_group1) + std::abs(tot_lum_group2 - lum_exact_group2);
