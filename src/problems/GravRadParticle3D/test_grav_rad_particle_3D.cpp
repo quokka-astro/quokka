@@ -163,7 +163,7 @@ auto problem_main() -> int
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.doPoissonSolve_ = 1; // enable self-gravity
+	sim.doPoissonSolve_ = 1;	       // enable self-gravity
 	sim.do_cic_rad_particles = 1;
 	sim.do_cic_particles = 1; // enable CIC particles
 	sim.do_rad_particles = 1; // enable radiation particles
