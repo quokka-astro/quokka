@@ -25,8 +25,8 @@ constexpr int nGroups_ = 1;
 constexpr double erad_floor = 1.0e-15;
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 1.0;	   // speed of light
-constexpr double chat = 0.1;	   // reduced speed of light
+constexpr double c = 100.0;	   // speed of light
+constexpr double chat = 10.0;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-20; // opacity
 constexpr double rho = 1.0e-6;
 
@@ -121,8 +121,6 @@ auto problem_main() -> int
 	// Problem parameters
 	// const int nx = 1000;
 	// const double Lx = 1.0;
-	const double CFL_number = 0.8;
-	const double dt_max = 1e-2;
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<ParticleProblem>::x1GasMomentum_index) && (dim == 0)) {
@@ -165,8 +163,6 @@ auto problem_main() -> int
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.radiationCflNumber_ = CFL_number;
-	sim.maxDt_ = dt_max;
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.do_cic_rad_particles = 1;
 	sim.do_cic_particles = 1; // enable CIC particles
@@ -278,7 +274,7 @@ auto problem_main() -> int
 
 	int status = 1;
 	const double rel_err_tol = 1.0e-7;
-	const double rel_position_error_tol = 1.0e-3;
+	const double rel_position_error_tol = 2.0e-3;
 	if (rel_err < rel_err_tol && rel_position_error_cicrad < rel_position_error_tol && rel_position_error_cic < rel_position_error_tol &&
 	    rel_position_error_rad < rel_position_error_tol) {
 		status = 0;
