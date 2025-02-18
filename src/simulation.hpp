@@ -1179,23 +1179,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
 #endif
 
-#if 0
-		// For debugging: print rhs at nz = 16 and lev = 0
-		amrex::Print() << "rhs[0].data() =";
-		for (amrex::MFIter iter(rhs[0]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &rhs_arr = rhs[0].array(iter);
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-				if (k == 8) {
-					if (i == 0) {
-						std::cout << "\n";
-					}
-					std::cout << rhs_arr(i, j, k) << ", ";
-				}
-			});
-			std::cout << "\n";
-		}
-#endif
+		// // For debugging: print rhs at nz = 16 and lev = 0
+		// amrex::Print() << "rhs[0].data() =";
+		// for (amrex::MFIter iter(rhs[0]); iter.isValid(); ++iter) {
+		// 	const amrex::Box &indexRange = iter.validbox();
+		// 	auto const &rhs_arr = rhs[0].array(iter);
+		// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// 		if (k == 8) {
+		// 			if (i == 0) {
+		// 				std::cout << "\n";
+		// 			}
+		// 			std::cout << rhs_arr(i, j, k) << ", ";
+		// 		}
+		// 	});
+		// 	std::cout << "\n";
+		// }
 
 		amrex::Real abstol = abstolPoisson_ * rhs_min;
 		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
