@@ -108,7 +108,7 @@ struct MassDeposition {
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit mass weighted by 4 pi G
 		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) { return 4.0 * M_PI * Gconst * part.rdata(comp); });
+				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) { return 4.0 * M_PI * Gconst * part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])); });
 	}
 };
 
@@ -175,7 +175,7 @@ class PhysicsParticleDescriptorBase
 
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
-	virtual void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst) = 0;
+	virtual void depositMass(const amrex::Vector<amrex::MultiFab*> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void redistribute(int lev) = 0;
 	virtual void redistribute(int lev, int ngrow) = 0;
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
@@ -307,10 +307,12 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 	}
 
 	// Implementation of mass deposition from particles to grid
-	void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst) override
+	void depositMass(const amrex::Vector<amrex::MultiFab*> &rhs, int finest_lev, amrex::Real Gconst) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
-			amrex::ParticleToMesh(*container_, amrex::GetVecOfPtrs(rhs), 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, true);
+			// zero_out_input is false because we want to accumulate mass
+			// vol_weight is false because MassDeposition does the volume weighting
+			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
 		}
 	}
 
@@ -387,7 +389,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CICRad>>(mass_idx, lum_idx, birth_time_idx,
 														      hydro_interact, container);
 		} else {
-			amrex::Abort("Unknown particle type: " + name);
+			amrex::Abort("Particle type " + name + " not found");
 		}
 		particleRegistry_[name] = std::move(descriptor);
 	}
@@ -399,6 +401,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		if (it != particleRegistry_.end()) {
 			return it->second.get();
 		}
+		amrex::Abort("Particle type " + name + " not found");
 		return nullptr;
 	}
 
@@ -413,7 +416,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit mass from all massive particles
-	void depositMass(amrex::Vector<amrex::MultiFab> &rhs, int finest_lev, amrex::Real Gconst)
+	void depositMass(const amrex::Vector<amrex::MultiFab*> &rhs, int finest_lev, amrex::Real Gconst)
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
