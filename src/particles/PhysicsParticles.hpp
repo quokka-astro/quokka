@@ -106,7 +106,7 @@ struct MassDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-		// Deposit mass weighted by 4πG
+		// Deposit mass weighted by 4 pi G
 		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp,
 				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) { return 4.0 * M_PI * Gconst * part.rdata(comp); });
 	}
@@ -235,18 +235,16 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 						// update particle position based on velocity components
 						for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-							if (mass_idx >= 0) { // use captured value instead of this->getMassIndex()
-								// For massive particles, velocity components start after mass
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
-								p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+							// For massive particles, velocity components start after mass
+							p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
-							}
 						}
 					});
 				}
