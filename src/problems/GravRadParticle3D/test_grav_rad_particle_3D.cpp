@@ -26,9 +26,9 @@ constexpr double erad_floor = 1.0e-15;
 constexpr double initial_Erad = erad_floor;
 constexpr double initial_Egas = 1.0e-5;
 constexpr double c = 100.0;	   // speed of light
-constexpr double chat = 10.0;	   // reduced speed of light
+constexpr double chat = 2.0;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-20; // opacity
-constexpr double rho = 1.0e-6;
+constexpr double rho0 = 1.0e-8;
 
 const double lum1 = 1.0;
 
@@ -108,7 +108,7 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, RadSystem<ParticleProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::x3RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::gasEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<ParticleProblem>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<ParticleProblem>::gasDensity_index) = rho0;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::gasInternalEnergy_index) = Egas0;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::x1GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::x2GasMomentum_index) = 0.;
@@ -164,9 +164,9 @@ auto problem_main() -> int
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.doPoissonSolve_ = 1;	       // enable self-gravity
-	sim.do_cic_rad_particles = 1;
-	sim.do_cic_particles = 1; // enable CIC particles
-	sim.do_rad_particles = 1; // enable radiation particles
+	sim.do_cic_rad_particles = 1;	       // enable CICRad particles
+	sim.do_cic_particles = 1;	       // enable CIC particles
+	sim.do_rad_particles = 1;	       // enable radiation particles
 
 	// initialize
 	sim.setInitialConditions();
@@ -181,7 +181,8 @@ auto problem_main() -> int
 	const double dz = sim.Geom(0).CellSize(2);
 	const double dvol = dx * dy * dz;
 	const double total_Erad = total_Erad_over_vol * dvol;
-	const double t_alive = std::min(0.5, sim.tNew_[0]);	     // particles only live for 0.5 time units
+	const double t_sim = sim.tNew_[0];
+	const double t_alive = std::min(0.5, t_sim);	     // particles only live for 0.5 time units
 	double total_Erad_exact = 2.0 * lum1 * t_alive * (chat / c); // two particles with luminosity lum1
 	total_Erad_exact *= 2.0;				     // two particle system (Rad + CICRad)
 	const auto total_num_of_cells = sim.Geom(0).Domain().volume();
@@ -193,9 +194,9 @@ auto problem_main() -> int
 	// The particles are originally at (-0.5, 0) and (0.5, 0) and they move with
 	// velocity 1/sqrt(2) in the y/-y direction. The problem is designed such that
 	// the particles will move in a circle with radius 0.5
-	const double velocity = std::sqrt(5.0) / 2.; // v^2 / 1^2 = 1 / 1^2 + 1 / 2^2 -> v = sqrt(5) / 2
-	const double radius = 1.;
-	const double theta = velocity * sim.tNew_[0] / radius;
+	const double velocity = 0.5;
+	const double radius = 1.0;
+	const double theta = velocity * t_sim / radius;
 	const double exact_x = radius * std::cos(theta);
 	const double exact_y = radius * std::sin(theta);
 	const double exact_z = 0.0;
@@ -274,7 +275,7 @@ auto problem_main() -> int
 
 	int status = 1;
 	const double rel_err_tol = 1.0e-7;
-	const double rel_position_error_tol = 2.0e-3;
+	const double rel_position_error_tol = t_sim < 1.0 ? 2.0e-4 : 2.0e-3;
 	if (rel_err < rel_err_tol && rel_position_error_cicrad < rel_position_error_tol && rel_position_error_cic < rel_position_error_tol &&
 	    rel_position_error_rad < rel_position_error_tol) {
 		status = 0;
@@ -301,6 +302,7 @@ auto problem_main() -> int
 	amrex::Print() << "Relative L1 norm on Rad particle positions = " << rel_position_error_rad << "\n";
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << "\n";
+	amrex::Print() << "Finished."
+		       << "\n";
 	return status;
 }
