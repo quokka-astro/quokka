@@ -269,7 +269,6 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
-#pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
 							// For massive particles, velocity components start after mass
 							p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
@@ -315,7 +314,6 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
-#pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
 							    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
 #if defined(__GNUC__) && !defined(__clang__)
