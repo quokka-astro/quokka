@@ -225,9 +225,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) = 0;
-	virtual void createInitialCICParticles() = 0;
 	virtual void createInitialRadParticles() = 0;
+#if AMREX_SPACEDIM == 3
+	virtual void createInitialCICParticles() = 0;
 	virtual void createInitialCICRadParticles() = 0;
+#endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
@@ -337,7 +339,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 
 	// particle functions
+#if AMREX_SPACEDIM == 3
 	void kickParticlesAllLevels(amrex::Real dt);
+#endif // AMREX_SPACEDIM == 3
 
 	// simulation metadata
 	void initializeSimulationMetadata();
@@ -459,9 +463,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void InitParticles();	 // create tracer particles
 	void InitPhyParticles(); // create PhysicsParticles
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
-	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::RadParticleContainer<problem_t>> RadParticles;
+#if AMREX_SPACEDIM == 3
+	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
+#endif // AMREX_SPACEDIM == 3
 #endif
 
 	// external objects
@@ -1245,6 +1251,7 @@ struct setFunctorParticleAccel {
 	}
 };
 
+#if AMREX_SPACEDIM == 3
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
 	// kick particles (do: vel[i] += 0.5 * dt * accel[i])
@@ -1314,6 +1321,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		particleRegister_.kickParticlesAtLevel(dt, accel[lev], lev);
 	}
 }
+#endif // AMREX_SPACEDIM == 3
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
@@ -2121,6 +2129,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		createInitialRadParticles();
 	}
 
+#if AMREX_SPACEDIM == 3
 	if (do_cic_particles != 0) {
 		AMREX_ASSERT(CICParticles == nullptr);
 
@@ -2149,6 +2158,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		// Initialize particles through derived class
 		createInitialCICRadParticles();
 	}
+#endif // AMREX_SPACEDIM == 3
 
 	particleRegister_.redistribute(0);
 }
@@ -2888,12 +2898,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 	// Initialize and register particle containers from checkpoint file
-	if (do_cic_particles != 0) {
-		AMREX_ASSERT(CICParticles == nullptr);
-		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
-		particleRegister_.registerParticleType("CIC_particles", quokka::CICParticleMassIdx, -1, -1, false, CICParticles.get());
-		CICParticles->Restart(restart_chkfile, "CIC_particles");
-	}
+
 	if (do_rad_particles != 0) {
 		AMREX_ASSERT(RadParticles == nullptr);
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
@@ -2901,6 +2906,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 						       RadParticles.get());
 		RadParticles->Restart(restart_chkfile, "Rad_particles");
 	}
+
+#if AMREX_SPACEDIM == 3
+	if (do_cic_particles != 0) {
+		AMREX_ASSERT(CICParticles == nullptr);
+		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
+		particleRegister_.registerParticleType("CIC_particles", quokka::CICParticleMassIdx, -1, -1, false, CICParticles.get());
+		CICParticles->Restart(restart_chkfile, "CIC_particles");
+	}
+
 	if (do_cic_rad_particles != 0) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
@@ -2908,6 +2922,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 						       quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
 		CICRadParticles->Restart(restart_chkfile, "CICRad_particles");
 	}
+#endif // AMREX_SPACEDIM == 3
 #endif
 
 	areInitialConditionsDefined_ = true;

@@ -178,9 +178,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
-	void createInitialCICParticles() override;
 	void createInitialRadParticles() override;
+#if AMREX_SPACEDIM == 3
+	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
+#endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
@@ -556,18 +558,20 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialCondit
 	// note: an implementation is only required if face-centered vars are used
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICParticles()
-{
-	// default empty implementation
-	// user should implement using problem-specific template specialization
-	// note: an implementation is only required if CIC_particles are used
-}
-
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRadParticles()
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if Rad_particles are used
+}
+
+#if AMREX_SPACEDIM == 3
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICParticles()
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if CIC_particles are used
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICRadParticles()
@@ -576,6 +580,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCIC
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if CICRad_particles are used
 }
+
+#endif // AMREX_SPACEDIM == 3
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeBeforeTimestep()
 {
