@@ -85,20 +85,20 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
   const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
 
   const double omega = std::sqrt(std::pow(alfven_speed,2) * std::pow(k_amplitude,2) * std::pow(cos_theta,2));
-
-  const double cos_wave_C = std::cos(omega * t - k_amplitude * x1_C);
-  const double cos_wave_L = std::cos(omega * t - k_amplitude * x1_L);
-
-  const double x1mag = bg_mag_x1;
-  const double x2mag = bg_mag_x2;
-  const double x3mag = bg_mag_amplitude * delta_b * cos_wave_L;
-
+  
   if (cen == quokka::centering::cc) {
+    const double cos_wave_C = std::cos(omega * t - k_amplitude * x1_C);
+
     const double density = bg_density;
     const double pressure = bg_pressure;
     const double x1vel = 0;
     const double x2vel = 0;
     const double x3vel = -omega * delta_b / (sound_speed * k_amplitude * cos_theta) * cos_wave_C;
+
+    // magnetic field at the center of the cell
+    const double x1mag = bg_mag_x1;
+    const double x2mag = bg_mag_x2;
+    const double x3mag = bg_mag_amplitude * delta_b * cos_wave_C;
   
     const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
     const double momentum = density * velocity_magnitude;
@@ -114,6 +114,16 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
     state(i, j, k, HydroSystem<AlfvenWave>::energy_index) = Etot;
     state(i, j, k, HydroSystem<AlfvenWave>::internalEnergy_index) = Eint;
   } else if (cen == quokka::centering::fc) {
+    // // magnetic field at the center of the cell-face
+    // const double x1mag = bg_mag_x1;
+    // const double x2mag = bg_mag_x2;
+    // const double x3mag = bg_mag_amplitude * delta_b * std::cos(omega * t - k_amplitude * x1_L);
+    // average magnetic field across the cell-face
+    const double x1mag = bg_mag_x1;
+    const double x2mag = bg_mag_x2;
+    const double x3mag = bg_mag_amplitude * delta_b / (k_amplitude * dx[0]) * (
+      std::sin(omega * t - k_amplitude * x1_L) - std::sin(omega * t - k_amplitude * (x1_L + dx[0]))
+    );
     if      (dir == quokka::direction::x) {state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x1mag;}
     else if (dir == quokka::direction::y) {state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x2mag;}
     else if (dir == quokka::direction::z) {state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x3mag;}
