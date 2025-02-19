@@ -491,14 +491,30 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 #if AMREX_SPACEDIM == 3
-	// Update positions of all massive particles
+	/**
+	 * \brief Update positions of all massive particles that have velocity components
+	 *
+	 * Note: We explicitly handle only CIC and CICRad particles to avoid compile-time array bounds
+	 * warnings. This is necessary because the particle base class allows accessing rdata[0] through
+	 * rdata[NReal-1], and Rad particles have only 3 real components (birth_time, death_time, luminosity)
+	 * while velocity components would require accessing rdata[1] through rdata[3].
+	 *
+	 * \param dt Time step size
+	 * \param finest_level Index of the finest AMR level
+	 */
 	void driftParticlesAllLevels(amrex::Real dt, int finest_level)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			if (descriptor->getMassIndex() >= 0) {
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					descriptor->driftParticles(lev, dt);
-				}
+		// Drift CIC particles
+		if (const auto *cic_descriptor = getParticleDescriptor("CIC_particles"); cic_descriptor->getMassIndex() >= 0) {
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				cic_descriptor->driftParticles(lev, dt);
+			}
+		}
+
+		// Drift CICRad particles
+		if (const auto *cicrad_descriptor = getParticleDescriptor("CICRad_particles"); cicrad_descriptor->getMassIndex() >= 0) {
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				cicrad_descriptor->driftParticles(lev, dt);
 			}
 		}
 	}
