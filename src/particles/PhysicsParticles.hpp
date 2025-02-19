@@ -198,7 +198,7 @@ class PhysicsParticleDescriptorBase
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
-	virtual void driftParticles(int lev, amrex::Real dt) = 0;
+	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
 #endif // AMREX_SPACEDIM == 3
 };
@@ -259,7 +259,7 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 	}
 
 	// Implementation of particle drift (position update based on velocity)
-	void driftParticles(int lev, amrex::Real dt) override
+	void driftParticles(int lev, amrex::Real dt) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
