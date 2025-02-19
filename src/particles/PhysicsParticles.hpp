@@ -225,13 +225,21 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 	{
 		std::vector<std::array<double, AMREX_SPACEDIM>> positions;
 		if (container_ != nullptr) {
-			const auto &particles = container_->GetParticles(lev);
-			for (const auto &kv : particles) {
-				const auto &pbox = kv.second;
-				const auto &aos = pbox.GetArrayOfStructs();
-				for (int i = 0; i < pbox.numParticles(); ++i) {
-					const auto &p = aos[i];
-					positions.push_back({AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))});
+			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+				if (pIter.isValid()) {
+					const amrex::Long np = pIter.numParticles();
+					auto &particles = pIter.GetArrayOfStructs();
+
+					// Copy particles from device to host
+					typename ContainerType::ParticleType *pData = particles().data();
+					amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
+					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
+
+					// Extract positions from host data
+					for (int i = 0; i < np; ++i) {
+						const auto &p = pData_h[i];
+						positions.push_back({AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))});
+					}
 				}
 			}
 		}
