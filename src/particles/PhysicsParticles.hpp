@@ -198,7 +198,7 @@ class PhysicsParticleDescriptorBase
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
-	virtual void driftParticles(int lev, amrex::Real dt) = 0;
+	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
 #endif // AMREX_SPACEDIM == 3
 };
@@ -259,7 +259,7 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 	}
 
 	// Implementation of particle drift (position update based on velocity)
-	void driftParticles(int lev, amrex::Real dt) override
+	void driftParticles(int lev, amrex::Real dt) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
@@ -491,14 +491,32 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 #if AMREX_SPACEDIM == 3
-	// Update positions of all massive particles
+	/**
+	 * \brief Update positions of all massive particles that have velocity components
+	 * 
+	 * Note: We explicitly handle only CIC and CICRad particles to avoid compile-time array bounds
+	 * warnings. This is necessary because the particle base class allows accessing rdata[0] through
+	 * rdata[NReal-1], and Rad particles have only 3 real components (birth_time, death_time, luminosity)
+	 * while velocity components would require accessing rdata[1] through rdata[3].
+	 *
+	 * \param dt Time step size
+	 * \param finest_level Index of the finest AMR level
+	 */
 	void driftParticlesAllLevels(amrex::Real dt, int finest_level)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			if (descriptor->getMassIndex() >= 0) {
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					descriptor->driftParticles(lev, dt);
-				}
+		// Drift CIC particles
+		if (const auto* cic_descriptor = getParticleDescriptor("CIC_particles"); 
+			cic_descriptor->getMassIndex() >= 0) {
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				cic_descriptor->driftParticles(lev, dt);
+			}
+		}
+
+		// Drift CICRad particles
+		if (const auto* cicrad_descriptor = getParticleDescriptor("CICRad_particles"); 
+			cicrad_descriptor->getMassIndex() >= 0) {
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				cicrad_descriptor->driftParticles(lev, dt);
 			}
 		}
 	}
