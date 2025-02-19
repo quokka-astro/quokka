@@ -77,7 +77,8 @@ endif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 # this is necessary to prevent GCC from warning about ARM64 ABI changes in GCC 10.1
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options(-Wno-psabi)
-  add_compile_options(-Wno-array-bounds)
+  # this prevents the array-bounds warning in AMReX_ParticleContainer.H, but we don't want to disable it globally
+  # add_compile_options(-Wno-array-bounds)
 endif()
 
 execute_process(COMMAND git rev-parse --abbrev-ref HEAD
