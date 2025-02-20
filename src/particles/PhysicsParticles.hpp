@@ -312,15 +312,10 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 							    return acc(i, j, k, comp); // no weighting
 						    },
 						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
-						// kick particle by updating its velocity
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
-#endif
-							    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
+									// kick particle by updating its velocity
+									if (comp < ContainerType::ParticleType::NReal) {
+										p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+									}
 						    });
 					});
 				}
