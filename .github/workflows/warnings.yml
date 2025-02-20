@@ -43,7 +43,7 @@ jobs:
       # access regardless of the host operating system
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DWARNINGS_AS_ERRORS=ON -DAMReX_SPACEDIM=3
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DWARNINGS_AS_ERRORS=ON -DAMReX_SPACEDIM=3
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
