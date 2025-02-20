@@ -49,6 +49,26 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
   endif(CMAKE_VERSION VERSION_LESS 3.20)
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
+if(AMReX_GPU_BACKEND MATCHES "HIP")
+  execute_process(
+      COMMAND hipcc --version
+      RESULT_VARIABLE hipcc_result
+      OUTPUT_VARIABLE hipcc_version
+      ERROR_VARIABLE hipcc_error
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if(NOT hipcc_result EQUAL 0)
+      message(FATAL_ERROR "Failed to detect HIP compiler version: ${hipcc_error}")
+  endif()
+
+  string(REPLACE "HIP version: " "" hipcc_version ${hipcc_version})
+  message(STATUS "HIP compiler version: ${hipcc_version}")
+
+  if(hipcc_version VERSION_LESS 6.3)
+    message(FATAL_ERROR "You must use ROCm version >= 6.3 to compile Quokka. All previous ROCm versions have compiler bugs that may cause Quokka to produce incorrect results.")
+  endif()
+endif(AMReX_GPU_BACKEND MATCHES "HIP")
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
   # abort! Intel Compiler Classic cannot compile Quokka!
   message(FATAL_ERROR "You have configured CMake to use the 'classic' Intel compilers (icc/icpc), which are the old Intel compilers. They cannot compile Quokka correctly! You must use the new LLVM-based Intel compilers (icx/icpx) instead by adding the following CMake command-line options: -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx")
@@ -58,6 +78,47 @@ endif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options(-Wno-psabi)
 endif()
+
+execute_process(COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
+    OUTPUT_VARIABLE QUOKKA_GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
+    OUTPUT_VARIABLE QUOKKA_GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/amrex
+    OUTPUT_VARIABLE AMREX_GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Check if the working directory is dirty
+execute_process(
+    COMMAND git status --porcelain -uno
+    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_STATUS_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Set a flag if the working directory is dirty
+if(NOT GIT_STATUS_OUTPUT STREQUAL "")
+    set(GIT_DIRTY 1)
+    message(WARNING "This Quokka repository has untracked changes not reflected in its git history! That means that the exact provenance of plotfiles and checkpoints CANNOT be inferred from their metadata.\nIt is STRONGLY recommended that you commit your changes to a branch locally, then re-run CMake and recompile Quokka in order to obtain reproducible simulation outputs.")
+    # Append "-dirty" to the commit hash
+    string(APPEND QUOKKA_GIT_HASH "-dirty")
+else()
+    set(GIT_DIRTY 0)
+endif()
+
+# add preprocessor macros for git commits
+add_definitions(-DAMREX_GIT_HASH="${AMREX_GIT_HASH}")
+add_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
+message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
+message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
+message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)

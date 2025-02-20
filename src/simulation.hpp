@@ -156,20 +156,20 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Long cycleCount_ = 0;
-	int printCycleTiming_ = 0;		    // default: don't print
-	amrex::Long maxTimesteps_ = 1e4;	    // default
-	amrex::Long maxWalltime_ = 0;		    // default: no limit
-	int ascentInterval_ = -1;		    // -1 == no in-situ renders with Ascent
-	int plotfileInterval_ = -1;		    // -1 == no output
-	int projectionInterval_ = -1;		    // -1 == no output
-	int statisticsInterval_ = -1;		    // -1 == no output
-	amrex::Real plotTimeInterval_ = -1.0;	    // time interval for plt file
-	amrex::Real checkpointTimeInterval_ = -1.0; // time interval for checkpoints
-	int checkpointInterval_ = -1;		    // -1 == no output
-	int amrInterpMethod_ = 1;		    // 0 == piecewise constant, 1 == lincc_interp
-	amrex::Real reltolPoisson_ = 1.0e-5;	    // default
-	amrex::Real abstolPoisson_ = 1.0e-5;	    // default (scaled by minimum RHS value)
-	int doPoissonSolve_ = 0;		    // 1 == self-gravity enabled, 0 == disabled
+	int printCycleTiming_ = 0;				     // default: don't print
+	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
+	amrex::Long maxWalltime_ = 0;				     // default: no limit
+	int ascentInterval_ = -1;				     // -1 == no in-situ renders with Ascent
+	int plotfileInterval_ = -1;				     // -1 == no output
+	int projectionInterval_ = -1;				     // -1 == no output
+	int statisticsInterval_ = -1;				     // -1 == no output
+	amrex::Real plotTimeInterval_ = -1.0;			     // time interval for plt file
+	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
+	int checkpointInterval_ = -1;				     // -1 == no output
+	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
+	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
+	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
+	int doPoissonSolve_ = 0;				     // 1 == self-gravity enabled, 0 == disabled
 	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -326,6 +326,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void ReadCheckpointFile();
+	auto getGitHashForQuokka() const -> std::string;
+	auto getGitHashForAmrex() const -> std::string;
 	auto getWalltime() -> amrex::Real;
 	auto getCycleWalltime() -> amrex::Real;
 	void setChkFile(std::string const &chkfile_number);
@@ -460,6 +462,18 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #endif
 };
 
+template <typename problem_t> auto AMRSimulation<problem_t>::getGitHashForQuokka() const -> std::string
+{
+	// NOTE: this is defined by a preprocessor macro in CMakeLists.txt
+	return QUOKKA_GIT_HASH;
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getGitHashForAmrex() const -> std::string
+{
+	// NOTE: this is defined by a preprocessor macro in CMakeLists.txt
+	return AMREX_GIT_HASH;
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number) { restart_chkfile = chkfile_number; }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_fc() const -> const amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &
@@ -528,6 +542,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 		}
 	}
 
+	// add git commit to metadata
+	simulationMetadata_["git_hash_quokka"] = getGitHashForQuokka();
+	simulationMetadata_["git_hash_amrex"] = getGitHashForAmrex();
+
+	// add units and physics-specific metadata
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		initializeSimulationMetadata();
 	}
@@ -600,7 +619,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// ParmParse reads inputs from the *.inputs file
 	amrex::ParmParse pp;
 
-	// Default nsteps = 1e4
+	// Default nsteps == INT_MAX
 	pp.query("max_timesteps", maxTimesteps_);
 
 	// Default CFL number == 0.3, set to whatever is in the file
