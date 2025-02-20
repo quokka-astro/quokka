@@ -274,17 +274,9 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 						// update particle position based on velocity components
 						for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
-#endif
-							// For massive particles, velocity components start after mass
-							if (p.rdata.size() > mass_idx + AMREX_SPACEDIM) {
+							if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
 								p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
 							}
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 						}
 					});
 				}
