@@ -44,9 +44,9 @@ enum RadParticleDataIdx {
 template <typename problem_t>
 constexpr int RadParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return std::max(4, 2 + Physics_Traits<problem_t>::nGroups); // birth_time death_time lum1 ... lumN
+		return 2 + Physics_Traits<problem_t>::nGroups; // birth_time death_time lum1 ... lumN
 	} else {
-		return 4; // birth_time death_time placeholder placeholder
+		return 2; // birth_time death_time
 	}
 }();
 
@@ -279,7 +279,9 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 #pragma GCC diagnostic ignored "-Waggressive-loop-optimizations"
 #endif
 							// For massive particles, velocity components start after mass
-							p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+							if (p.rdata.size() > mass_idx + AMREX_SPACEDIM) {
+								p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+							}
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
