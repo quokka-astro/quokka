@@ -46,7 +46,7 @@ constexpr int RadParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		return 2 + Physics_Traits<problem_t>::nGroups; // birth_time death_time lum1 ... lumN
 	} else {
-		return 2; // birth_time death_time
+		return 3; // birth_time death_time placeholder
 	}
 }();
 
