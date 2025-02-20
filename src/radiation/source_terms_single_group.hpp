@@ -238,8 +238,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					}
 
 					// Check for convergence. We need to take care of a special situation when tau is very small, in which case the source
-					// term won't be able to cancel the residual no matter how many iterations we try. This could happen when Src is non-zero or when the opacity is a sharp function of temperature. We set the criterion to be that: 
-					// tau * std::max(a_rad * T_gas^4, E_tot0) < resid_tol * Etot0.
+					// term won't be able to cancel the residual no matter how many iterations we try. This could happen when Src is
+					// non-zero or when the opacity is a sharp function of temperature. We set the criterion to be that: tau *
+					// std::max(a_rad * T_gas^4, E_tot0) < resid_tol * Etot0.
 
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
