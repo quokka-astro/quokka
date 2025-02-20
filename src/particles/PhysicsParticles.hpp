@@ -44,9 +44,9 @@ enum RadParticleDataIdx {
 template <typename problem_t>
 constexpr int RadParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 2 + Physics_Traits<problem_t>::nGroups; // birth_time death_time lum1 ... lumN
+		return std::max(4, 2 + Physics_Traits<problem_t>::nGroups); // birth_time death_time lum1 ... lumN
 	} else {
-		return 4; // birth_time death_time placeholder
+		return 4; // birth_time death_time placeholder placeholder
 	}
 }();
 
