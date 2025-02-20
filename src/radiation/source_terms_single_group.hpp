@@ -237,13 +237,14 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, H_num_den)[0];
 					}
 
+					// Check for convergence. We need to take care of a special situation when tau is very small, in which case the source
+					// term won't be able to cancel the residual no matter how many iterations we try. This could happen when Src is non-zero or when the opacity is a sharp function of temperature. We set the criterion to be that: 
+					// tau * std::max(a_rad * T_gas^4, E_tot0) < resid_tol * Etot0.
+
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
 					double F_D_abs = 0.0;
-					// Check for convergence. We need to take care of a special situation where tau is very small, in which case the source
-					// term won't be able to cancel the residual no matter how many iterations we run. We set the criterion to be that: tau
-					// * (cscale * (a_rad * T_gas^4 + E_rad) + E_gas) < resid_tol * Etot0.
-					if (tau * (cscale * (radiation_constant_ * std::pow(T_gas, 4) + Erad0) + Egas0) < resid_tol * Etot0) {
+					if (tau * std::max(radiation_constant_ * std::pow(T_gas, 4), Etot0) < resid_tol * Etot0) {
 						Erad_guess = Erad0 + Src;
 						F_D = 0.0;
 						F_D_abs = 0.0;
