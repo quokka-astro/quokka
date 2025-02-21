@@ -65,7 +65,11 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
-	void createInitialParticles() override;
+	void createInitialRadParticles() override;
+#if AMREX_SPACEDIM == 3
+	void createInitialCICParticles() override;
+	void createInitialCICRadParticles() override;
+#endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
 	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
@@ -150,12 +154,30 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialCon
 	// note: an implementation is only required if face-centered vars are used
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialParticles()
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialRadParticles()
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if particles are used
 }
+
+#if AMREX_SPACEDIM == 3
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialCICParticles()
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if particles are used
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialCICRadParticles()
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if particles are used
+}
+
+#endif // AMREX_SPACEDIM == 3
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeBeforeTimestep()
 {
