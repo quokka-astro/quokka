@@ -280,7 +280,7 @@ auto problem_main() -> int
 		const double rel_position_error_tol = t_sim < 1.0 ? 2.0e-4 : 2.0e-3;
 		status = 1;
 		if (rel_err < rel_err_tol && rel_position_error_cicrad < rel_position_error_tol && rel_position_error_cic < rel_position_error_tol &&
-				rel_position_error_rad < rel_position_error_tol) {
+		    rel_position_error_rad < rel_position_error_tol) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}
@@ -307,7 +307,7 @@ auto problem_main() -> int
 
 		// Cleanup and exit
 		amrex::Print() << "Finished."
-						<< "\n";
+			       << "\n";
 	}
 
 	return status;
