@@ -1010,6 +1010,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		kickParticlesAllLevels(dt_[0]);
 #endif
 
+		if (do_cic_particles != 0) {
+			particleRegister_.createCICParticles(state_new_cc_[0], 0, cur_time, dt_[0]);
+		}
+
 		cur_time += dt_[0];
 		++cycleCount_;
 		computeAfterTimestep();
