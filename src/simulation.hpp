@@ -454,6 +454,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// tracer particles
 #ifdef AMREX_PARTICLES
       public:
+      public:
 	int do_tracers = 0;
 	int do_cic_particles = 0;
 	int do_rad_particles = 0;
@@ -467,7 +468,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
 	std::unique_ptr<quokka::RadParticleContainer<problem_t>> RadParticles;
 #if AMREX_SPACEDIM == 3
+	std::unique_ptr<quokka::RadParticleContainer<problem_t>> RadParticles;
+#if AMREX_SPACEDIM == 3
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
+	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
+#endif // AMREX_SPACEDIM == 3
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 #endif // AMREX_SPACEDIM == 3
 #endif
@@ -476,6 +481,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #ifdef AMREX_USE_ASCENT
 	Ascent ascent_;
 #endif
+
+	// Add PhysicsParticleRegister member
+	quokka::PhysicsParticleRegister<problem_t> particleRegister_;
 
 	// Add PhysicsParticleRegister member
 	quokka::PhysicsParticleRegister<problem_t> particleRegister_;
