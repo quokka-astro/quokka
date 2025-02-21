@@ -68,26 +68,11 @@ template <> void QuokkaSimulation<SedovProblem>::setInitialConditionsOnGrid(quok
 
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 	double rho_copy = rho;
 	double E_blast_copy = E_blast;
-
-	amrex::Real x0 = NAN;
-	amrex::Real y0 = NAN;
-	amrex::Real z0 = NAN;
-	if constexpr (simulate_full_box) {
-		x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-		y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-		z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
-	} else {
-		x0 = 0.;
-		y0 = 0.;
-		z0 = 0.;
-	}
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
