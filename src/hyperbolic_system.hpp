@@ -35,7 +35,7 @@ enum redoFlag { none = 0, redo = 1 };
 } // namespace quokka
 
 // Define enum for slope limiter type
-enum SlopeLimiter { minmod = 0, MC };
+enum SlopeLimiter { minmod = 0, MC, VanLeer };
 
 using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
@@ -46,12 +46,15 @@ template <typename problem_t> class HyperbolicSystem
       public:
 	template <SlopeLimiter limiter> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real
 	{
-		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC, "Invalid slope limiter specified.");
+		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC || limiter == SlopeLimiter::VanLeer, "Invalid slope limiter specified.");
 		if constexpr (limiter == SlopeLimiter::minmod) {
 			return minmod(x, y);
 		}
 		if constexpr (limiter == SlopeLimiter::MC) {
 			return MC(x, y);
+		}
+    if constexpr (limiter == SlopeLimiter::VanLeer) {
+			return VanLeer(x, y);
 		}
 	}
 
@@ -63,6 +66,11 @@ template <typename problem_t> class HyperbolicSystem
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod(double a, double b) -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
+	}
+
+  [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto VanLeer(double a, double b) -> double
+	{
+		return (a * b > 0) ? 2.0 * a * b / (a + b) : 0.0;
 	}
 
 	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto GetMinmaxSurroundingCell(arrayconst_t &q, int i, int j, int k, int n)
