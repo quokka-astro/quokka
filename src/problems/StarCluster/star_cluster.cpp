@@ -234,6 +234,7 @@ auto problem_main() -> int
 	QuokkaSimulation<StarCluster> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.densityFloor_ = 0.01;
+	sim.do_cic_particles = 1;
 
 	sim.userData_.R_sphere = R_sphere;
 	sim.userData_.rho_sphere = rho_sphere;
@@ -244,6 +245,18 @@ auto problem_main() -> int
 
 	// evolve
 	sim.evolve();
+
+	// print particle positions
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
+
+		// assume the first particle is in the first plane quadrant
+		amrex::Print() << "Particle positions are: \n";
+		for (auto &position : positions) {
+			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
+		}
+		amrex::Print() << "\n";
+	}
 
 	int const status = 0;
 	return status;
