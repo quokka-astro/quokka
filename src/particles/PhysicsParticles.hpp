@@ -15,6 +15,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 
 // Assumptions for any particle type:
@@ -327,7 +328,68 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Implementation of CIC particle creation
 	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time) override
 	{
-		// Implementation for CIC particles
+		if (container_ != nullptr) {
+			const int mass_idx = this->getMassIndex();
+			if (mass_idx >= 0) {
+				for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
+					const auto &box = pti.validbox();
+					const auto &state_arr = state.array(pti);
+					const auto &geom = container_->Geom(lev);
+					const auto dx = geom.CellSizeArray();
+					const auto plo = geom.ProbLoArray();
+
+					// Create temporary buffer for this tile's particles
+					amrex::Gpu::DeviceVector<typename ContainerType::ParticleType> new_particles;
+
+					// Fill the buffer with new particles
+					amrex::ParallelFor(box, [=, &new_particles] AMREX_GPU_DEVICE(int i, int j, int k) {
+						if ((i % 8 == 0) && (j % 8 == 0) && (k % 8 == 0)) {
+							// Get cell mass and velocities
+							const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+							const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+							const amrex::Real cell_mass = cell_density * cell_volume;
+							const amrex::Real px = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+							const amrex::Real py = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+							const amrex::Real pz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+
+							// Calculate particle position at cell center
+							const amrex::Real x = plo[0] + (i + 0.5) * dx[0];
+							const amrex::Real y = plo[1] + (j + 0.5) * dx[1];
+							const amrex::Real z = plo[2] + (k + 0.5) * dx[2];
+
+							// Create particle
+							typename ContainerType::ParticleType p;
+							p.id() = ContainerType::ParticleType::NextID();
+							p.cpu() = amrex::ParallelDescriptor::MyProc();
+							p.pos(0) = x;
+							p.pos(1) = y;
+							p.pos(2) = z;
+							p.rdata(mass_idx) = 0.5 * cell_mass;	   // Half the cell's mass
+							p.rdata(mass_idx + 1) = px / cell_density; // Cell's velocity
+							p.rdata(mass_idx + 2) = py / cell_density;
+							p.rdata(mass_idx + 3) = pz / cell_density;
+
+							// Add particle to buffer
+							new_particles.push_back(p);
+
+							// Update cell mass
+							state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density; // Remaining half
+						}
+					});
+
+					// Add particles to this tile
+					auto& aos = pti.GetArrayOfStructs();
+					const int num_new_particles = new_particles.size();
+					if (num_new_particles > 0) {
+						const int old_size = aos.size();
+						aos.resize(old_size + num_new_particles);
+						amrex::Gpu::copy(amrex::Gpu::deviceToDevice,
+							new_particles.begin(), new_particles.end(),
+							aos.begin() + old_size);
+					}
+				}
+			}
+		}
 	}
 
 #endif // AMREX_SPACEDIM == 3
@@ -406,16 +468,16 @@ template <typename problem_t> class PhysicsParticleRegister
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		if (name == "Rad_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
-														   hydro_interact, container);
+															      hydro_interact, container);
 		}
 #if AMREX_SPACEDIM == 3
 		if (name == "CIC_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
-														   hydro_interact, container);
+															      hydro_interact, container);
 		}
 		if (name == "CICRad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(mass_idx, lum_idx, birth_time_idx,
-														      hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
 		}
 #endif // AMREX_SPACEDIM == 3
 		particleRegistry_[name] = std::move(descriptor);
