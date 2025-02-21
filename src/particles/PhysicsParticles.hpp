@@ -167,8 +167,8 @@ class PhysicsParticleDescriptorBase
 	int massIndex_{-1};		 // Index for particle mass (-1 if not used)
 	int lumIndex_{-1};		 // Index for radiation luminosity (-1 if not used)
 	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
-	double param1_{-1.0};            // First particle parameter
-	double param2_{-1.0};            // Second particle parameter
+	double param1_{-1.0};		 // First particle parameter
+	double param2_{-1.0};		 // Second particle parameter
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 
       public:
@@ -350,18 +350,18 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 					// Fill the buffer with new particles
 					amrex::ParallelFor(box, [=, &new_particles] AMREX_GPU_DEVICE(int i, int j, int k) {
-						create_cic_particle_at_cell(state_arr, i, j, k, plo, dx, current_time, dt, new_particles, mass_idx, particle_creation_time_1, particle_creation_time_2);
+						create_cic_particle_at_cell(state_arr, i, j, k, plo, dx, current_time, dt, new_particles, mass_idx,
+									    particle_creation_time_1, particle_creation_time_2);
 					});
 
 					// Add particles to this tile
 					const int num_new_particles = new_particles.size();
 					if (num_new_particles > 0) {
-						auto& aos = container_->DefineAndReturnParticleTile(lev, mfi).GetArrayOfStructs();
+						auto &aos = container_->DefineAndReturnParticleTile(lev, mfi).GetArrayOfStructs();
 						const int old_size = aos.size();
 						aos.resize(old_size + num_new_particles);
-						amrex::Gpu::copy(amrex::Gpu::deviceToDevice,
-							new_particles.begin(), new_particles.end(),
-							aos.begin() + old_size);
+						amrex::Gpu::copy(amrex::Gpu::deviceToDevice, new_particles.begin(), new_particles.end(),
+								 aos.begin() + old_size);
 					}
 				}
 			}
@@ -369,12 +369,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Helper function to create a CIC particle at a specific cell
-	AMREX_GPU_DEVICE void create_cic_particle_at_cell(array_t &state_arr, int i, int j, int k,
-							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& plo,
-							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dx,
-							 amrex::Real current_time, amrex::Real dt,
-							 amrex::Gpu::DeviceVector<typename ContainerType::ParticleType>& new_particles,
-							 int mass_idx, const double particle_creation_time_1, const double particle_creation_time_2) const
+	AMREX_GPU_DEVICE void create_cic_particle_at_cell(array_t &state_arr, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt,
+							  amrex::Gpu::DeviceVector<typename ContainerType::ParticleType> &new_particles, int mass_idx,
+							  const double particle_creation_time_1, const double particle_creation_time_2) const
 	{
 		const bool is_create_particle_1 = current_time <= particle_creation_time_1 && current_time + dt > particle_creation_time_1;
 		const bool is_create_particle_2 = current_time <= particle_creation_time_2 && current_time + dt > particle_creation_time_2;
@@ -484,15 +482,18 @@ template <typename problem_t> class PhysicsParticleRegister
 	// TODO(cch): replace name with particleType to get rid of the string comparison
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
-	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, double param1, double param2, bool hydro_interact, ContainerType *container)
+	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, double param1, double param2, bool hydro_interact,
+				  ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		if (name == "Rad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx, param1, param2, hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
+			    mass_idx, lum_idx, birth_time_idx, param1, param2, hydro_interact, container);
 		}
 #if AMREX_SPACEDIM == 3
 		if (name == "CIC_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx, param1, param2, hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
+			    mass_idx, lum_idx, birth_time_idx, param1, param2, hydro_interact, container);
 		}
 		if (name == "CICRad_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
