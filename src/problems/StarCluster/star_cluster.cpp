@@ -251,6 +251,7 @@ auto problem_main() -> int
 		auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
 
 		// assume the first particle is in the first plane quadrant
+		amrex::Print() << "Particle count: " << positions.size() << "\n";
 		amrex::Print() << "Particle positions are: \n";
 		for (auto &position : positions) {
 			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
