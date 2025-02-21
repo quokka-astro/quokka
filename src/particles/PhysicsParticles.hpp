@@ -200,11 +200,12 @@ class PhysicsParticleDescriptorBase
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
+	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time) = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
 // Concrete implementation of particle descriptor for specific container types
-template <typename ContainerType, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
+template <typename ContainerType, typename problem_t, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 {
       private:
 	ContainerType *container_{}; // Pointer to the actual particle container
@@ -323,6 +324,12 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 		}
 	}
 
+	// Implementation of CIC particle creation
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time) override
+	{
+		// Implementation for CIC particles
+	}
+
 #endif // AMREX_SPACEDIM == 3
 
 	// Implementation of radiation deposition from particles to grid
@@ -398,16 +405,16 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		if (name == "Rad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
 														   hydro_interact, container);
 		}
 #if AMREX_SPACEDIM == 3
 		if (name == "CIC_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
 														   hydro_interact, container);
 		}
 		if (name == "CICRad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CICRad>>(mass_idx, lum_idx, birth_time_idx,
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(mass_idx, lum_idx, birth_time_idx,
 														      hydro_interact, container);
 		}
 #endif // AMREX_SPACEDIM == 3
@@ -499,6 +506,15 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->kickParticles(lev, dt, acceleration);
 			}
+		}
+	}
+
+	// Create CIC particles
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time)
+	{
+		auto descriptor = getParticleDescriptor("CIC_particles");
+		if (descriptor != nullptr) {
+			descriptor->createCICParticles(state, lev, current_time);
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
