@@ -201,7 +201,7 @@ class PhysicsParticleDescriptorBase
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
-	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time) = 0;
+	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -326,14 +326,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Implementation of CIC particle creation
-	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time) override
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex();
 			if (mass_idx >= 0) {
-				for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
-					const auto &box = pti.validbox();
-					const auto &state_arr = state.array(pti);
+				for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
+					const auto &box = mfi.validbox();
+					const auto &state_arr = state.array(mfi);
 					const auto &geom = container_->Geom(lev);
 					const auto dx = geom.CellSizeArray();
 					const auto plo = geom.ProbLoArray();
@@ -343,7 +343,11 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 					// Fill the buffer with new particles
 					amrex::ParallelFor(box, [=, &new_particles] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if ((i % 8 == 0) && (j % 8 == 0) && (k % 8 == 0)) {
+						const double particle_creation_time_1 = 0.01;
+						const bool is_create_particle_1 = current_time <= particle_creation_time_1 && current_time + dt > particle_creation_time_1;
+						const double particle_creation_time_2 = 0.02999;
+						const bool is_create_particle_2 = current_time <= particle_creation_time_2 && current_time + dt > particle_creation_time_2;
+						if ((is_create_particle_1 || is_create_particle_2) && (i != 0 && i % 8 == 0) && (j != 0 && j % 8 == 0) && (k != 0 && k % 8 == 0)) {
 							// Get cell mass and velocities
 							const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 							const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
@@ -378,9 +382,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					});
 
 					// Add particles to this tile
-					auto& aos = pti.GetArrayOfStructs();
 					const int num_new_particles = new_particles.size();
 					if (num_new_particles > 0) {
+						auto& aos = container_->DefineAndReturnParticleTile(lev, mfi).GetArrayOfStructs();
 						const int old_size = aos.size();
 						aos.resize(old_size + num_new_particles);
 						amrex::Gpu::copy(amrex::Gpu::deviceToDevice,
@@ -572,11 +576,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Create CIC particles
-	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time)
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
 	{
 		auto descriptor = getParticleDescriptor("CIC_particles");
 		if (descriptor != nullptr) {
-			descriptor->createCICParticles(state, lev, current_time);
+			descriptor->createCICParticles(state, lev, current_time, dt);
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
