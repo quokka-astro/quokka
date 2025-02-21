@@ -1016,11 +1016,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
 		kickParticlesAllLevels(dt_[0]);
-#endif
 
 		if (do_cic_particles != 0) {
 			particleRegister_.createCICParticles(state_new_cc_[0], 0, cur_time, dt_[0]);
 		}
+#endif
 
 		cur_time += dt_[0];
 		++cycleCount_;
