@@ -123,44 +123,50 @@ auto problem_main() -> int
 	const double exact_y = 1.0 * std::sin(theta);
 	const double exact_z = 0.0;
 
-	auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
-
 	double position_error = 0.0;
 	double position_norm = 0.0;
 
-	// assume the first particle is in the first plane quadrant
-	for (auto &position : positions) {
-		if (position[0] * exact_x > 0.0) {
-			position_error += std::abs(position[0] - exact_x);
-			position_error += std::abs(position[1] - exact_y);
-			position_error += std::abs(position[2] - exact_z);
-		} else {
-			position_error += std::abs(position[0] - (-exact_x));
-			position_error += std::abs(position[1] - (-exact_y));
-			position_error += std::abs(position[2] - (-exact_z));
+	int status = 0;  // Initialize to success
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
+
+		// assume the first particle is in the first plane quadrant
+		for (auto &position : positions) {
+			if (position[0] * exact_x > 0.0) {
+				position_error += std::abs(position[0] - exact_x);
+				position_error += std::abs(position[1] - exact_y);
+				position_error += std::abs(position[2] - exact_z);
+			} else {
+				position_error += std::abs(position[0] - (-exact_x));
+				position_error += std::abs(position[1] - (-exact_y));
+				position_error += std::abs(position[2] - (-exact_z));
+			}
+			position_norm += std::abs(position[0]);
+			position_norm += std::abs(position[1]);
+			position_norm += std::abs(position[2]);
 		}
-		position_norm += std::abs(position[0]);
-		position_norm += std::abs(position[1]);
-		position_norm += std::abs(position[2]);
-	}
 
-	// compute relative error
-	const double relative_error = position_error / position_norm;
-
-	amrex::Print() << "Position error: " << position_error << "\n";
-	amrex::Print() << "Position norm: " << position_norm << "\n";
-	amrex::Print() << "Relative error: " << relative_error << "\n";
-
-	int status = 1;
-	const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
-	if (relative_error < max_err_tol) {
-		status = 0;
-	} else {
-		amrex::Print() << "Exact positions should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
-		amrex::Print() << "Real positions are: \n";
+		amrex::Print() << "Particle positions are: \n";
 		for (auto &position : positions) {
 			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 		}
+		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+
+		// compute relative error
+		const double relative_error = position_error / position_norm;
+
+		amrex::Print() << "Position error: " << position_error << "\n";
+		amrex::Print() << "Position norm: " << position_norm << "\n";
+		amrex::Print() << "Relative error: " << relative_error << "\n";
+
+		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
+		status = 1;
+		if (relative_error < max_err_tol) {
+			status = 0;
+			amrex::Print() << "Relative error within tolerance.\n";
+		}
 	}
+
 	return status;
 }

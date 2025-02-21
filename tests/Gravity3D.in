@@ -25,7 +25,5 @@ do_subcycle = 0
 suppress_output = 0
 
 stop_time = 5.0
-plot_interval = -1
+plotfile_interval = -1
 checkpoint_interval = -1
-
-max_timesteps = 1000000
