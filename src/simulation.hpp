@@ -1723,7 +1723,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 				       geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
 		// set initial conditions defined by the user
-		setInitialConditionsOnGrid_cc(grid_elem);
+		setInitialConditionsOnGrid(grid_elem);
 	}
 	// check that the valid state_new_cc_[level] is properly filled
 	AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
@@ -1747,7 +1747,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 			quokka::grid grid_elem(state_new_fc_[level][idim].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 					       geom[level].ProbHiArray(), quokka::centering::fc, static_cast<quokka::direction>(idim));
 			// set initial conditions defined by the user
-			setInitialConditionsOnGrid_fc(grid_elem);
+			setInitialConditionsOnGridFaceVars(grid_elem);
 		}
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));

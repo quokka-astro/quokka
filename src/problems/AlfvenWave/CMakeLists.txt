@@ -1,4 +1,4 @@
-add_executable(test_alfven_wave test_alfven_wave.cpp ../interpolate.cpp ${QuokkaObjSources})
+add_executable(test_alfven_wave test_alfven_wave.cpp ../../math/interpolate.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_alfven_wave)
