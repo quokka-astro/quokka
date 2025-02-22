@@ -34,3 +34,4 @@ max_timesteps = 100000
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 2
+hydro.use_dual_energy = 0
