@@ -75,7 +75,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
@@ -219,8 +220,8 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::FixupState(in
 
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-							      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+								 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+								 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
 	// user implemented
 }

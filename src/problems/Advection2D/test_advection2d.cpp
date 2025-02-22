@@ -73,8 +73,8 @@ template <> void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid(
 
 template <>
 void AdvectionSimulation<SquareProblem>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
 	// compute exact solution
 

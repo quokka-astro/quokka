@@ -35,7 +35,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quo
 	double b_sq = SQUARE(bx) + byz_sq;
 	double b_plus_gamma_pressure = b_sq + gamma_pressure;
 	double b_minus_gamma_pressure = b_sq - gamma_pressure;
-	return std::sqrt(0.5 * (b_plus_gamma_pressure + std::sqrt(b_minus_gamma_pressure * b_minus_gamma_pressure + 4.0 * gamma_pressure * byz_sq)) / state.rho);
+	return std::sqrt(0.5 * (b_plus_gamma_pressure + std::sqrt(b_minus_gamma_pressure * b_minus_gamma_pressure + 4.0 * gamma_pressure * byz_sq)) /
+			 state.rho);
 }
 
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
@@ -96,7 +97,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	spds[0] = std::min(sL.u - fspd_L, sR.u - fspd_R);
 	spds[4] = std::max(sL.u + fspd_L, sR.u + fspd_R);
 	const double fspd_m = -std::min(0.0, spds[0]);
-	const double fspd_p =  std::max(0.0, spds[4]);
+	const double fspd_p = std::max(0.0, spds[4]);
 
 	//--- Step 3. Compute L/R fluxes
 
