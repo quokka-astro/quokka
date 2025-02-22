@@ -191,7 +191,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
-	void computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
   void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir);
@@ -672,7 +672,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	// user should implement
@@ -722,7 +722,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
     amrex::Print() << "Checking cc-quantities\n";
 		const int ncomp = state_new_cc_[0].nComp();
 		amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
-		computeReferenceSolution_cc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
+		computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
 
 		// compute error norm
 		amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, 0);

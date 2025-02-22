@@ -199,7 +199,7 @@ template <> void QuokkaSimulation<AlfvenWave>::setInitialConditionsOnGridFaceVar
 }
 
 template <>
-void QuokkaSimulation<AlfvenWave>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<AlfvenWave>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
