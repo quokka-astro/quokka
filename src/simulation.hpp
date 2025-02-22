@@ -2210,11 +2210,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 	int comp = 0;
 	int ncomp_per_dim_fc = 0;
 	int ncomp_tot_fc = 0;
-	int nghost_fc = 0;
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
 		ncomp_tot_fc = Physics_Indices<problem_t>::nvarTotal_fc;
-		nghost_fc = state_new_fc_[lev][0].nGrow();
 	}
 	const int ncomp_deriv = derivedNames_.size();
 	const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
