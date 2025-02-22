@@ -357,7 +357,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::MultiFab> state_new_cc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_old_fc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_new_fc_;
-	const double *p_debug;
 	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
 
 	// flux registers: store fluxes at coarse-fine interface for synchronization
@@ -1757,7 +1756,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 		state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0, ncomp_per_dim_fc, nghost_fc, nghost_fc);
 	}
-	p_debug = tNew_.dataPtr();
 }
 
 // Make a new level from scratch using provided BoxArray and
