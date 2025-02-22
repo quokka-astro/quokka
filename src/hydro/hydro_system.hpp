@@ -150,20 +150,24 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 						  amrex::MultiFab &primVar_mf, const int nghost)
 {
 	// convert conserved to primitive variables
-	auto const &cons_cc = cons_cc_mf.const_arrays();
 	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >=2
 	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
 	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
+#endif
+	auto const &cons_cc = cons_cc_mf.const_arrays();
 	auto const &primVar = primVar_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		const auto rho = cons_cc[bx](i, j, k, density_index);
-		const auto px = cons_cc[bx](i, j, k, x1Momentum_index);
-		const auto py = cons_cc[bx](i, j, k, x2Momentum_index);
-		const auto pz = cons_cc[bx](i, j, k, x3Momentum_index);
-		const auto E = cons_cc[bx](i, j, k, energy_index); // *total* gas energy per unit volume
-		const auto Eint_aux = cons_cc[bx](i, j, k, internalEnergy_index);
+		const amrex::Real rho = cons_cc[bx](i, j, k, density_index);
+		const amrex::Real px = cons_cc[bx](i, j, k, x1Momentum_index);
+		const amrex::Real py = cons_cc[bx](i, j, k, x2Momentum_index);
+		const amrex::Real pz = cons_cc[bx](i, j, k, x3Momentum_index);
+		const amrex::Real E = cons_cc[bx](i, j, k, energy_index); // *total* gas energy per unit volume
+		const amrex::Real Eint_aux = cons_cc[bx](i, j, k, internalEnergy_index);
 
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(px));
@@ -171,25 +175,30 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 		AMREX_ASSERT(!std::isnan(pz));
 		AMREX_ASSERT(!std::isnan(E));
 
-		const auto vx = px / rho;
-		const auto vy = py / rho;
-		const auto vz = pz / rho;
-		const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-		auto magnetic_energy = 0;
+		const amrex::Real vx = px / rho;
+		const amrex::Real vy = py / rho;
+		const amrex::Real vz = pz / rho;
+		const amrex::Real kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+		amrex::Real magnetic_energy = 0.;
+
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			// note, bx is the box, and bxi is the magnetic-field component
-			const auto b_x0_m = cons_fc_x0[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto b_x1_m = cons_fc_x1[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto b_x2_m = cons_fc_x2[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto b_x0_p = cons_fc_x0[bx](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto b_x1_p = cons_fc_x1[bx](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto b_x2_p = cons_fc_x2[bx](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto b_x0 = 0.5 * (b_x0_m + b_x0_p);
-			const auto b_x1 = 0.5 * (b_x1_m + b_x1_p);
-			const auto b_x2 = 0.5 * (b_x2_m + b_x2_p);
-			magnetic_energy = 0.5 * (b_x0 * b_x0 + b_x1 * b_x1 + b_x2 * b_x2);
+			const amrex::Real b_x0_m = cons_fc_x0[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x0_p = cons_fc_x0[bx](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x0 = 0.5 * (b_x0_m + b_x0_p);
+#if AMREX_SPACEDIM >= 2
+			const amrex::Real b_x1_m = cons_fc_x1[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x1_p = cons_fc_x1[bx](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x1 = 0.5 * (b_x1_m + b_x1_p);
+#endif
+#if AMREX_SPACEDIM == 3
+			const amrex::Real b_x2_m = cons_fc_x2[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x2_p = cons_fc_x2[bx](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x2 = 0.5 * (b_x2_m + b_x2_p);
+#endif
+			magnetic_energy = 0.5 * (AMREX_D_TERM(b_x0 * b_x0, + b_x1 * b_x1, + b_x2 * b_x2));
 		}
-		const auto Eint_cons = E - kinetic_energy - magnetic_energy;
+		const amrex::Real Eint_cons = E - kinetic_energy - magnetic_energy;
 
 		const amrex::Real Pgas = ComputePressure(cons_cc[bx], i, j, k);
 		const amrex::Real eint_cons = Eint_cons / rho;
