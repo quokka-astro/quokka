@@ -58,7 +58,7 @@ constexpr double k_amplitude = 2 * M_PI * num_modes;
 // background states
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma;
-constexpr double bg_mag_amplitude = 10.0;
+constexpr double bg_mag_amplitude = 1.0;
 
 // input perturbation: remember, the linear regime is only valid when this perturbation is small
 constexpr double delta_b = 1e-6;
