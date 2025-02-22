@@ -151,7 +151,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 {
 	// convert conserved to primitive variables
 	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
-#if AMREX_SPACEDIM >=2
+#if AMREX_SPACEDIM >= 2
 	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
 #endif
 #if AMREX_SPACEDIM == 3
@@ -196,7 +196,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 			const amrex::Real b_x2_p = cons_fc_x2[bx](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
 			const amrex::Real b_x2 = 0.5 * (b_x2_m + b_x2_p);
 #endif
-			magnetic_energy = 0.5 * (AMREX_D_TERM(b_x0 * b_x0, + b_x1 * b_x1, + b_x2 * b_x2));
+			magnetic_energy = 0.5 * (AMREX_D_TERM(b_x0 * b_x0, +b_x1 * b_x1, +b_x2 * b_x2));
 		}
 		const amrex::Real Eint_cons = E - kinetic_energy - magnetic_energy;
 
