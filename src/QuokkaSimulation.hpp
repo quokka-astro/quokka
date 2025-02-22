@@ -680,6 +680,7 @@ void QuokkaSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref,
 	// user should implement
 }
 
+template <typename problem_t>
 void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
