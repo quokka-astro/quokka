@@ -60,9 +60,9 @@ template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOn
 }
 
 template <>
-void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution_cc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+									  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+									  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
 
 	// fill reference solution multifab

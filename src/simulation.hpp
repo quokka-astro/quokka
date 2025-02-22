@@ -357,6 +357,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::MultiFab> state_new_cc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_old_fc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_new_fc_;
+	const double *p_debug;
 	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
 
 	// flux registers: store fluxes at coarse-fine interface for synchronization
@@ -371,8 +372,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_cc_ = 4;						    // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
-	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
+	int nghost_cc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 5 : 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
+	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 5 : 2; // 5 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_;
 	amrex::Vector<std::string> derivedNames_;
@@ -1756,6 +1757,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 		state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0, ncomp_per_dim_fc, nghost_fc, nghost_fc);
 	}
+	p_debug = tNew_.dataPtr();
 }
 
 // Make a new level from scratch using provided BoxArray and
@@ -2224,14 +2226,14 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 		// Fill ghost zones for state_new_cc_
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
 				       InterpHookNone, FillPatchType::fillpatch_function);
-	}
 
-	// Fill ghost zones for state_new_fc_
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
-		}
+		// // Fill ghost zones for state_new_fc_
+		// if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		//   for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		//     fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+		//               static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		//   }
+		// }
 	}
 
 	// copy data from cell-centred state variables

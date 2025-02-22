@@ -30,19 +30,19 @@ struct ConsHydro1D {
 template <int N_scalars, int N_mscalars>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quokka::HydroState<N_scalars, N_mscalars> const state, const double bx) -> double
 {
-	double gp = gamma * state.P;
-	double bx_sq = bx * bx;
-	double byz_sq = state.by * state.by + state.bz * state.bz;
-	double b_sq = bx_sq + byz_sq;
-	double bgp_p = b_sq + gp;
-	double bgp_m = b_sq - gp;
-	return std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * byz_sq)) / state.rho);
+	double gamma_pressure = gamma * state.P;
+	double byz_sq = SQUARE(state.by) + SQUARE(state.bz);
+	double b_sq = SQUARE(bx) + byz_sq;
+	double b_plus_gamma_pressure = b_sq + gamma_pressure;
+	double b_minus_gamma_pressure = b_sq - gamma_pressure;
+	return std::sqrt(0.5 * (b_plus_gamma_pressure + std::sqrt(b_minus_gamma_pressure * b_minus_gamma_pressure + 4.0 * gamma_pressure * byz_sq)) /
+			 state.rho);
 }
 
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
-					      const double gamma, const double bx) -> quokka::valarray<double, fluxdim>
+					      const double gamma, const double bx) -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
 {
 	//--- Step 1. Compute L/R states
 
@@ -92,10 +92,12 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	//--- Step 2. Compute L & R wave speeds according to MK5, eqn. (67)
 
-	const double cfs_L = FastMagnetoSonicSpeed(gamma, sL, bx);
-	const double cfs_R = FastMagnetoSonicSpeed(gamma, sR, bx);
-	spds[0] = std::min(sL.u - cfs_L, sR.u - cfs_R);
-	spds[4] = std::max(sL.u + cfs_L, sR.u + cfs_R);
+	const double fspd_L = FastMagnetoSonicSpeed(gamma, sL, bx);
+	const double fspd_R = FastMagnetoSonicSpeed(gamma, sR, bx);
+	spds[0] = std::min(sL.u - fspd_L, sR.u - fspd_R);
+	spds[4] = std::max(sL.u + fspd_L, sR.u + fspd_R);
+	const double fspd_m = -std::min(0.0, spds[0]);
+	const double fspd_p = std::max(0.0, spds[4]);
 
 	//--- Step 3. Compute L/R fluxes
 
@@ -105,16 +107,16 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// fluxes on the left side of the interface
 	f_L.rho = u_L.mx;
 	f_L.mx = u_L.mx * sL.u + ptot_L - bx_sq;
-	f_L.my = u_L.my * sL.u + bx * u_L.by;
-	f_L.mz = u_L.mz * sL.u + bx * u_L.bz;
+	f_L.my = u_L.my * sL.u - bx * u_L.by;
+	f_L.mz = u_L.mz * sL.u - bx * u_L.bz;
 	f_L.E = sL.u * (u_L.E + ptot_L - bx_sq) - bx * (sL.v * u_L.by + sL.w * u_L.bz);
 	f_L.by = u_L.by * sL.u - bx * sL.v;
 	f_L.bz = u_L.bz * sL.u - bx * sL.w;
 	// fluxes on the right side of the interface
 	f_R.rho = u_R.mx;
 	f_R.mx = u_R.mx * sR.u + ptot_R - bx_sq;
-	f_R.my = u_R.my * sR.u + bx * u_R.by;
-	f_R.mz = u_R.mz * sR.u + bx * u_R.bz;
+	f_R.my = u_R.my * sR.u - bx * u_R.by;
+	f_R.mz = u_R.mz * sR.u - bx * u_R.bz;
 	f_R.E = sR.u * (u_R.E + ptot_R - bx_sq) - bx * (sR.v * u_R.by + sR.w * u_R.bz);
 	f_R.by = u_R.by * sR.u - bx * sR.v;
 	f_R.bz = u_R.bz * sR.u - bx * sR.w;
@@ -147,13 +149,13 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	// compute total pressure
 	// MK5: eqn (41) can be calculated (more explicitly) via eqn (23)
-	double ptot_star_L = ptot_L - u_L.rho * siui_L * (spds[2] - sL.u);
-	double ptot_star_R = ptot_R - u_R.rho * siui_R * (spds[2] - sR.u);
+	double ptot_star_L = ptot_L + u_L.rho * siui_L * (spds[2] - sL.u);
+	double ptot_star_R = ptot_R + u_R.rho * siui_R * (spds[2] - sR.u);
 	double ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
 
 	// MK5: u_L^(star, dstar) from, eqn (39)
 	u_star_L.mx = u_star_L.rho * spds[2];
-	if (std::abs(u_L.rho * siui_L * sism_L - bx_sq) < (DELTA)*ptot_star) {
+	if (std::abs(u_L.rho * siui_L * sism_L - bx_sq) < DELTA * ptot_star) {
 		// degenerate case
 		u_star_L.my = u_star_L.rho * sL.v;
 		u_star_L.mz = u_star_L.rho * sL.w;
@@ -177,7 +179,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	// MK5: u_R^(star, dstar) from, eqn (39)
 	u_star_R.mx = u_star_R.rho * spds[2];
-	if (std::abs(u_R.rho * siui_R * sism_R - bx_sq) < (DELTA)*ptot_star) {
+	if (std::abs(u_R.rho * siui_R * sism_R - bx_sq) < DELTA * ptot_star) {
 		// degenerate case
 		u_star_R.my = u_star_R.rho * sR.v;
 		u_star_R.mz = u_star_R.rho * sR.w;
@@ -200,7 +202,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	u_star_R.E = (siui_R * u_R.E - ptot_R * sR.u + ptot_star * spds[2] + bx * (sR.u * bx + (sR.v * u_R.by + sR.w * u_R.bz) - vb_star_R)) * sism_inv_R;
 
 	// if Bx is near zero, then u_i^dstar = u_i^star
-	if (0.5 * bx_sq < (DELTA)*ptot_star) {
+	if (0.5 * bx_sq < DELTA * ptot_star) {
 		u_dstar_L = u_star_L;
 		u_dstar_R = u_star_R;
 	} else {
@@ -328,7 +330,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	// TODO(neco): Eint=0 for now; pscalars will also be needed in the future.
 	quokka::valarray<double, fluxdim> F_hydro = {f_x.rho, f_x.mx, f_x.my, f_x.mz, f_x.E, 0.0};
-	return F_hydro;
+	return std::make_tuple(std::move(F_hydro), fspd_m, fspd_p);
 }
 } // namespace quokka::Riemann
 
