@@ -524,15 +524,6 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::
 	auto rhs = rhs_mf.arrays();
 
 	amrex::ParallelFor(rhs_mf, amrex::IntVect{0}, nvars, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
-		if (n == 3) {
-			double flux_x_lo = x1Flux[bx](i, j, k, n);
-			double flux_y_lo = x2Flux[bx](i, j, k, n);
-			double flux_z_lo = x3Flux[bx](i, j, k, n);
-			double flux_x_hi = x1Flux[bx](i + 1, j, k, n);
-			double flux_y_hi = x2Flux[bx](i, j + 1, k, n);
-			double flux_z_hi = x3Flux[bx](i, j, k + 1, n);
-			int tmp = 0;
-		}
 		rhs[bx](i, j, k, n) = AMREX_D_TERM((1.0 / dx[0]) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
 						   +(1.0 / dx[1]) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
 						   +(1.0 / dx[2]) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n)));

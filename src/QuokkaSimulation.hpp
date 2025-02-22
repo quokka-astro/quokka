@@ -40,6 +40,7 @@
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "AMReX_SPACE.H"
 #include "AMReX_YAFluxRegister.H"
 
 #ifdef AMREX_USE_ASCENT
@@ -1239,7 +1240,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_rk_ave;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(1, 1, 1) - amrex::IntVect::TheDimensionVector(idim));
+			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_rk_ave[idim].define(ba_ec, dm, 1, 0);
 			ec_emf_components_rk_ave[idim].setVal(0.0);
 		}
@@ -1298,7 +1299,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				fast_mhd_wavespeeds[idim].FillBoundary(geom[lev].periodicity());
-				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(1, 1, 1) - amrex::IntVect::TheDimensionVector(idim));
+				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, nghost_fc_,
@@ -1449,7 +1450,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				fast_mhd_wavespeeds[idim].FillBoundary(geom[lev].periodicity());
-				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(1, 1, 1) - amrex::IntVect::TheDimensionVector(idim));
+				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, nghost_fc_,
