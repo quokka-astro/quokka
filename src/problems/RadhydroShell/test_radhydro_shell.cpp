@@ -224,7 +224,7 @@ template <> void QuokkaSimulation<ShellProblem>::setInitialConditionsOnGrid(quok
 
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(Erad));
-		AMREX_ASSERT(!std::isnan(Frad_r));
+		AMREX_ASSERT(!std::isnan(Frad));
 
 		state_cc(i, j, k, HydroSystem<ShellProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ShellProblem>::x1Momentum_index) = 0;

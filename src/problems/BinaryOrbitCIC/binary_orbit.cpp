@@ -8,8 +8,12 @@
 ///
 
 #include "AMReX.H"
+#include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_BLassert.H"
+#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
+#include "AMReX_FabArrayUtility.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFab.H"
@@ -68,7 +72,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
+template <> void QuokkaSimulation<BinaryOrbit>::createInitialParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
