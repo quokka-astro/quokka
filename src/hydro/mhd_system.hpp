@@ -549,9 +549,10 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 		auto const ec_emf_w2 = ec_emf_mf[w2].const_arrays();
 		auto const fc_consVarOld = fc_consVarOld_mf[w0].const_arrays();
 		auto fc_consVarNew = fc_consVarNew_mf[w0].arrays();
-		//std::cout << w0 << ", " << w1 << ", " << w2 << ", " << delta_w1[0] << ", " << delta_w1[1] << ", " << delta_w1[2] << ", " << delta_w2[0] << ", "
+		// std::cout << w0 << ", " << w1 << ", " << w2 << ", " << delta_w1[0] << ", " << delta_w1[1] << ", " << delta_w1[2] << ", " << delta_w2[0] << ",
+		// "
 		//	  << delta_w2[1] << ", " << delta_w2[2] << std::endl;
-		
+
 		amrex::ParallelFor(fc_consVarNew_mf[w0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// the ec emfs sit in the opposite fc directions relative to the face
 			double emf_w1_m = ec_emf_w1[bx](i, j, k);
