@@ -69,21 +69,6 @@ template <> void QuokkaSimulation<ParticleProblem>::createInitialRadParticles()
 	RadParticles->InitFromAsciiFile("RadParticles1D.txt", nreal_extra, nullptr);
 }
 
-// template <>
-// void RadSystem<StreamingProblem>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange,
-// 						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & dx,
-// 						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
-// 						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
-// {
-// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-// 		if (i == 32) {
-// 			// src = lum / c / (dx[0] * dx[1]);
-// 			const double src = lum1 / c / (dx[0]);
-// 			radEnergySource(i, j, k, 0) += src;
-// 		}
-// 	});
-// }
-
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<ParticleProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double rho,
