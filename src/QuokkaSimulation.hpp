@@ -1287,7 +1287,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// Stage 1 of RK2-SSP
 	{
-		std::cout << "rk2-stage 1" << std::endl;
+		//std::cout << "rk2-stage 1" << std::endl;
 		// advance all grids on local processor (Stage 1 of integrator)
 		auto const &stateOld_cc = state_old_cc_tmp;
 		auto &stateNew_cc = state_inter_cc_;
@@ -1423,7 +1423,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// Stage 2 of RK2-SSP
 	if (integratorOrder_ == 2) {
-		std::cout << "rk2-stage 2" << std::endl;
+		//std::cout << "rk2-stage 2" << std::endl;
 		// update ghost zones [intermediate stage stored in state_inter_cc_]
 		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, quokka::centering::cc, quokka::direction::na, PreInterpState,
 				       PostInterpState);
