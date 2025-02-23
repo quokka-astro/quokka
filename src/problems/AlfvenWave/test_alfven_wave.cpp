@@ -47,7 +47,7 @@ constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWave>::gamma;
 
 // k = 2 pi / wave_length. note: wave_length should be an integer, because of periodic BCs + the requirement that the magnetic field be continuous. also, the
 // box length = 1, so |k| in [1, inf)
-constexpr double num_modes = 2;
+constexpr double num_modes = 1;
 constexpr double k_amplitude = 2 * M_PI * num_modes;
 
 // background states

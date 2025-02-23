@@ -26,11 +26,11 @@ amr.blocking_factor_z = 4
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = 20
+plotfile_interval = 5000
 checkpoint_interval = -1
 cfl = 0.8
-stop_time = 20.0
-max_timesteps = 100000
+stop_time = 1.0
+max_timesteps = 10000
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 2
