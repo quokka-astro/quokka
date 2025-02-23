@@ -13,6 +13,7 @@
 // library headers
 
 // internal headers
+#include "AMReX_GpuControl.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "hydro_system.hpp"
@@ -184,7 +185,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				ec_fabs_Bi_ieside[icomp][1].resize(box_ec_r, 1);
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					ec_fabs_Ui_q[icomp][iquad].resize(box_ec_r, 1);
-					ec_fabs_Ui_q[icomp][iquad].setVal(0.0);
+					ec_fabs_Ui_q[icomp][iquad].setVal<amrex::RunOn::Device>(0.0);
 				}
 			}
 
@@ -222,8 +223,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 					// extrapolate face-centered velocity components to the cell-edge
 					for (int iface = 0; iface < 2; ++iface) {
 						// reset values in temporary FArrayBox
-						ec_fabs_U_ieside[0].setVal(0.0);
-						ec_fabs_U_ieside[1].setVal(0.0);
+						ec_fabs_U_ieside[0].setVal<amrex::RunOn::Device>(0.0);
+						ec_fabs_U_ieside[1].setVal<amrex::RunOn::Device>(0.0);
 						// extrapolate face-centered velocity component to the cell-edge
 						MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ui_ifside[icomp][iface].array(),
 										    ec_fabs_U_ieside[0].array(), ec_fabs_U_ieside[1].array(), box_fc,
