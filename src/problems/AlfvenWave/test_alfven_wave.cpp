@@ -15,6 +15,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
+#include "hydro/EOS.hpp"
 #include "physics_info.hpp"
 
 struct AlfvenWave {
@@ -38,7 +39,7 @@ template <> struct Physics_Traits<AlfvenWave> {
 
 // constants
 constexpr double sound_speed = 1.0;
-constexpr double gamma = 5. / 3.;
+constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWave>::gamma;
 
 // we have set up the problem so that:
 // the direction of wave propogation, vec(k), is aligned with the x1-direction
@@ -51,7 +52,7 @@ constexpr double k_amplitude = 2 * M_PI * num_modes;
 
 // background states
 constexpr double bg_density = 1.0;
-constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma;
+constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double bg_mag_amplitude = 1.0;
 
 // input perturbation: remember, the linear regime is only valid when this perturbation is small
@@ -109,7 +110,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		const double momentum = density * velocity_magnitude;
 		const double Ekin = 0.5 * std::pow(momentum, 2) / density;
 		const double Emag = 0.5 * (x1mag * x1mag + x2mag * x2mag + x3mag * x3mag);
-		const double Eint = pressure / (gamma - 1);
+		const double Eint = pressure / (gamma_gas - 1);
 		const double Etot = Ekin + Emag + Eint;
 
 		state(i, j, k, HydroSystem<AlfvenWave>::density_index) = density;
