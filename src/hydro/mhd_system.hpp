@@ -245,15 +245,15 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 							iquad0 = (iface == 0) ? 0 : 1;
 							iquad1 = (iface == 0) ? 3 : 2;
 						}
-						ec_fabs_Ui_q[icomp][iquad0].plus(ec_fabs_U_ieside[0], 0, 0, 1);
-						ec_fabs_Ui_q[icomp][iquad1].plus(ec_fabs_U_ieside[1], 0, 0, 1);
+						ec_fabs_Ui_q[icomp][iquad0].plus<amrex::RunOn::Device>(ec_fabs_U_ieside[0], 0, 0, 1);
+						ec_fabs_Ui_q[icomp][iquad1].plus<amrex::RunOn::Device>(ec_fabs_U_ieside[1], 0, 0, 1);
 					}
 				}
 			}
 			// finish averaging the two different ways for extrapolating velocity fields: cc->fc->ec
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				for (int iquad = 0; iquad < 4; ++iquad) {
-					ec_fabs_Ui_q[icomp][iquad].mult(0.5, 0, 1);
+					ec_fabs_Ui_q[icomp][iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 				}
 			}
 
