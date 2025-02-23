@@ -10,7 +10,7 @@ on:
     branches: [ development ]
 
 concurrency:
-  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-linux
+  group: ${{ github.ref }}-${{ github.head_ref }}-mhd-alfvenwave
   cancel-in-progress: true
 
 env:
