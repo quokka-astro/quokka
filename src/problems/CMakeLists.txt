@@ -56,6 +56,7 @@ add_subdirectory(RadhydroPulseMGint)
 add_subdirectory(RadhydroBB)
 
 add_subdirectory(AlfvenWave)
+add_subdirectory(CurrentSheet)
 
 add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(Cooling)
