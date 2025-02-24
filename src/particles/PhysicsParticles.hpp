@@ -335,7 +335,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex();
-			if (mass_idx >= 0) {
+			if (mass_idx >= 0 && mass_idx + 3 < ContainerType::ParticleType::NReal) {
 				const double particle_creation_time_1 = this->getParam1();
 				const double particle_creation_time_2 = this->getParam2();
 
