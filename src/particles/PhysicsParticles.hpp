@@ -347,8 +347,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const auto plo = geom.ProbLoArray();
 
 					// Count particles to be created in this box
-					amrex::Gpu::DeviceVector<amrex::Long> counts(box.numPts(), 0);
-					amrex::Gpu::DeviceVector<amrex::Long> offset(box.numPts());
+					amrex::Gpu::DeviceVector<amrex::Long> counts(box.numPts(), 0);  // 1 if cell creates particle, 0 if not
+					amrex::Gpu::DeviceVector<amrex::Long> offset(box.numPts());     // Will store starting index for each cell's particle
 					auto *pcounts = counts.data();
 
 					// Count potential particles per cell
@@ -360,10 +360,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						const bool should_create = is_create_particle(state_arr, i, j, k, plo, dx, 
 							current_time, dt, particle_creation_time_1, particle_creation_time_2);
 						
-						pcounts[index] = should_create ? 1 : 0;
+						pcounts[index] = should_create ? 1 : 0; // NOLINT
 					});
 
-					// Calculate total number of new particles using exclusive sum
+					// Calculate exclusive prefix sum to get unique position for each particle
+					// Example: counts  = [1, 0, 1, 0, 1] 
+					//         offset  = [0, 1, 1, 2, 2]
 					const amrex::Long max_new_particles = amrex::Scan::ExclusiveSum(
 						counts.size(), counts.data(), offset.data());
 
@@ -386,9 +388,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 						const auto index = box.index(iv);
 						
-						if (pcounts[index] > 0) {
-							const amrex::Long pid_offset = pid + poffset[index];
-							auto& p = pdata[poffset[index]];
+						if (pcounts[index] > 0) { // NOLINT
+							const amrex::Long pid_offset = pid + poffset[index]; // NOLINT
+							auto& p = pdata[poffset[index]]; // NOLINT
 							
 							// Set particle position at cell center
 							p.pos(0) = plo[0] + (i + 0.5) * dx[0];
