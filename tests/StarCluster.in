@@ -49,3 +49,4 @@ derived_vars = log_density
 
 amrex.throw_exception = 0
 amrex.signal_handling = 1
+amrex.disable_logs = true

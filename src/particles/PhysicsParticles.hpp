@@ -368,14 +368,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						counts.size(), counts.data(), offset.data());
 
 					// Update NextID to include particles that will be created
-					amrex::Long pid;
-#ifdef AMREX_USE_OMP
-#pragma omp critical (add_cic_nextid)
-#endif
-					{
-						pid = ContainerType::ParticleType::NextID();
-						ContainerType::ParticleType::NextID(pid + max_new_particles);
-					}
+					const amrex::Long pid = ContainerType::ParticleType::NextID();
+					ContainerType::ParticleType::NextID(pid + max_new_particles);
 
 					// Get the particle tile and prepare for new particles
 					auto& particle_tile = container_->DefineAndReturnParticleTile(lev, mfi);
