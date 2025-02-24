@@ -346,75 +346,74 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const auto dx = geom.CellSizeArray();
 					const auto plo = geom.ProbLoArray();
 
-					// Count particles to be created in this box
-					amrex::Gpu::DeviceVector<amrex::Long> counts(box.numPts(), 0);  // 1 if cell creates particle, 0 if not
-					amrex::Gpu::DeviceVector<amrex::Long> offset(box.numPts());     // Will store starting index for each cell's particle
-					auto *pcounts = counts.data();
-
-					// Count potential particles per cell
-					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
-						const auto index = box.index(iv);
-						
-						// Check if we should create a particle at this location and time
-						const bool should_create = is_create_particle(state_arr, i, j, k, plo, dx, 
-							current_time, dt, particle_creation_time_1, particle_creation_time_2);
-						
-						pcounts[index] = should_create ? 1 : 0; // NOLINT
-					});
-
-					// Calculate exclusive prefix sum to get unique position for each particle
-					// Example: counts  = [1, 0, 1, 0, 1] 
-					//         offset  = [0, 1, 1, 2, 2]
-					const amrex::Long max_new_particles = amrex::Scan::ExclusiveSum(
-						counts.size(), counts.data(), offset.data());
-
-					// Update NextID to include particles that will be created
-					const amrex::Long pid = ContainerType::ParticleType::NextID();
-					ContainerType::ParticleType::NextID(pid + max_new_particles);
-
-					// Get the particle tile and prepare for new particles
-					auto& particle_tile = container_->DefineAndReturnParticleTile(lev, mfi);
-					auto& aos = particle_tile.GetArrayOfStructs();
-					const int old_size = aos.size();
-					aos.resize(old_size + max_new_particles);
-
-					// Create the particles
-					auto* poffset = offset.data();
-					auto* pdata = aos.data() + old_size;
-					const int cpu_id = amrex::ParallelDescriptor::MyProc();
+					// count particles in this box
+					amrex::Gpu::Buffer<amrex::Long> num_new_particles({0});
+					amrex::Long* p_num_new_particles = num_new_particles.data();
 
 					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
-						const auto index = box.index(iv);
-						
-						if (pcounts[index] > 0) { // NOLINT
-							const amrex::Long pid_offset = pid + poffset[index]; // NOLINT
-							auto& p = pdata[poffset[index]]; // NOLINT
-							
-							// Set particle position at cell center
-							p.pos(0) = plo[0] + (i + 0.5) * dx[0];
-							p.pos(1) = plo[1] + (j + 0.5) * dx[1];
-							p.pos(2) = plo[2] + (k + 0.5) * dx[2];
-							
-							// Set particle ID and CPU
-							p.id() = pid_offset;
-							p.cpu() = cpu_id;
-							
-							// Set particle mass and velocities
-							const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-							const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-							const amrex::Real cell_mass = cell_density * cell_volume;
-							
-							p.rdata(mass_idx) = 0.5 * cell_mass;
-							p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
-							p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
-							p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
-							
-							// Update cell density
-							state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+						if (is_create_particle(state_arr, i, j, k, plo, dx,
+							current_time, dt, particle_creation_time_1, particle_creation_time_2)) {
+							amrex::Gpu::Atomic::Add(&p_num_new_particles[0], 1L); // NOLINT
 						}
 					});
+
+					// Get final count from device
+					auto *h_num_new_particles = num_new_particles.copyToHost();
+					const amrex::Long total_new_particles = h_num_new_particles[0]; // NOLINT
+
+					if (total_new_particles > 0) {
+						// Update NextID to include particles that will be created
+						const amrex::Long pid = ContainerType::ParticleType::NextID();
+						ContainerType::ParticleType::NextID(pid + total_new_particles);
+
+						// Get the particle tile and prepare for new particles
+						auto& particle_tile = container_->DefineAndReturnParticleTile(lev, mfi);
+						auto& aos = particle_tile.GetArrayOfStructs();
+						const int old_size = aos.size();
+						// resize the particle array to include the new particles
+						aos.resize(old_size + total_new_particles);
+
+						// Create the particles
+						// Get pointer to the first new particle slot (after existing particles)
+						auto* pdata = aos.data() + old_size;
+						// Get current processor ID 
+						const int cpu_id = amrex::ParallelDescriptor::MyProc();
+						// Create GPU buffer for atomic particle counting, initialized to 0
+						amrex::Gpu::Buffer<int> particle_count({0});
+						// Get raw pointer to GPU counter for use in device code
+						int *p_particle_count = particle_count.data();
+
+						amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+							if (is_create_particle(state_arr, i, j, k, plo, dx,
+								current_time, dt, particle_creation_time_1, particle_creation_time_2)) {
+								
+								// Get particle index using atomic add
+								const int idx = amrex::Gpu::Atomic::Add(&p_particle_count[0], 1); // NOLINT
+								auto& p = pdata[idx]; // NOLINT
+								
+								// Set particle position at cell center
+								p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+								p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+								p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+								
+								// Set particle ID and CPU
+								p.id() = pid + idx;
+								p.cpu() = cpu_id;
+								
+								// Set particle mass and velocities
+								const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+								const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+								
+								p.rdata(mass_idx) = 0.5 * cell_density * cell_volume; // mass
+								p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density; // vx
+								p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density; // vy
+								p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density; // vz
+								
+								// Update cell density
+								state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+							}
+						});
+					}
 				}
 			}
 		}
