@@ -63,7 +63,7 @@ template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGrid(quok
 		const double vx = A * std::sin(2.0 * M_PI * y);
 		const double vy = 0;
 
-		const double Ekin = 0.5 * rho0 * (vx*vx + vy*vy);
+		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
 		const double Eint = P0 / (gamma_gas - 1.0);
 		const double Emag = 0.5;
 
