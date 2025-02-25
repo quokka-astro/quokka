@@ -246,19 +246,18 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	// print particle positions
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
+	// // print particle positions
+	// if (amrex::ParallelDescriptor::IOProcessor()) {
+	// 	auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
 
-		// assume the first particle is in the first plane quadrant
-		amrex::Print() << "Particle count: " << positions.size() << "\n";
-		amrex::Print() << "Particle positions are: \n";
-		for (auto &position : positions) {
-			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
-		}
-		amrex::Print() << "\n";
-	}
+	// 	// assume the first particle is in the first plane quadrant
+	// 	amrex::Print() << "Particle count: " << positions.size() << "\n";
+	// 	amrex::Print() << "Particle positions are: \n";
+	// 	for (auto &position : positions) {
+	// 		amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
+	// 	}
+	// 	amrex::Print() << "\n";
+	// }
 
-	int const status = 0;
-	return status;
+	return 0;
 }
