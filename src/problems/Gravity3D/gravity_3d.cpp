@@ -128,29 +128,34 @@ auto problem_main() -> int
 
 	int status = 0; // Initialize to success
 
-	auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
+	auto particle_data = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticleData(0);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
 		// assume the first particle is in the first plane quadrant
-		for (auto &position : positions) {
-			if (position[0] * exact_x > 0.0) {
-				position_error += std::abs(position[0] - exact_x);
-				position_error += std::abs(position[1] - exact_y);
-				position_error += std::abs(position[2] - exact_z);
+		for (const auto &data : particle_data) {
+			// First 3 elements are positions (x,y,z)
+			if (data[0] * exact_x > 0.0) {
+				position_error += std::abs(data[0] - exact_x);
+				position_error += std::abs(data[1] - exact_y);
+				position_error += std::abs(data[2] - exact_z);
 			} else {
-				position_error += std::abs(position[0] - (-exact_x));
-				position_error += std::abs(position[1] - (-exact_y));
-				position_error += std::abs(position[2] - (-exact_z));
+				position_error += std::abs(data[0] - (-exact_x));
+				position_error += std::abs(data[1] - (-exact_y));
+				position_error += std::abs(data[2] - (-exact_z));
 			}
-			position_norm += std::abs(position[0]);
-			position_norm += std::abs(position[1]);
-			position_norm += std::abs(position[2]);
+			position_norm += std::abs(data[0]);
+			position_norm += std::abs(data[1]);
+			position_norm += std::abs(data[2]);
 		}
 
-		amrex::Print() << "Particle positions are: \n";
-		for (auto &position : positions) {
-			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
+		amrex::Print() << "Particle positions and data are: \n";
+		for (const auto &data : particle_data) {
+			// Print positions
+			amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
+			// Print additional data (mass, velocities)
+			amrex::Print() << " | Mass: " << data[3];
+			amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
 		}
 		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
 
