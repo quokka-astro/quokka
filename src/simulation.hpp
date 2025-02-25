@@ -2240,9 +2240,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 
 	// compute cell-center averaged face-centred data
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc);
-			comp += ncomp_per_dim_fc;
+		for (int src_comp = 0; src_comp < ncomp_per_dim_fc; ++src_comp) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, src_comp, 1);
+				comp++;
+			}
 		}
 	}
 
