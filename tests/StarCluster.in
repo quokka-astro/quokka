@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -16.5  -16.5  -16.5
-geometry.prob_hi     =  15.5  15.5  15.5
+geometry.prob_lo     =  -10.  -10.  -10.
+geometry.prob_hi     =  10.  10.  10.
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -13,20 +13,17 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 32 32 32
+amr.n_cell          = 128 128 128
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 16    # grid size must be divisible by this
-amr.max_grid_size   = 32    # at least 128 for GPUs
+amr.max_grid_size   = 64    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.2
 max_timesteps = 300
-stop_time = 0.03             # t_ff = 0.55
-
-particle_param1 = 0.01
-particle_param2 = 0.02999999
+stop_time = 0.5             # t_ff = 0.55
 
 gravity.Gconst = 1.0    #gravitational constant
 
@@ -49,4 +46,3 @@ derived_vars = log_density
 
 amrex.throw_exception = 0
 amrex.signal_handling = 1
-amrex.disable_logs = true
