@@ -340,6 +340,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const double particle_creation_time_2 = this->getParam2();
 
 				for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
+					// TODO(cch): I don't know whether this is needed. WarpX has this. 
+					amrex::Gpu::synchronize();
+
 					const auto &box = mfi.validbox();
 					const auto &state_arr = state.array(mfi);
 					const auto &geom = container_->Geom(lev);
@@ -414,6 +417,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
 						}
 					});
+
+					// TODO(cch): I don't know whether this is needed. WarpX has this. 
+					amrex::Gpu::synchronize();
 				}
 			}
 		}
