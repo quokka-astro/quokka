@@ -234,8 +234,26 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> override
 	{
 		std::vector<std::array<double, AMREX_SPACEDIM>> positions;
+		
+		// Create single-box particle container for analysis on all ranks
+		ContainerType analysisPC{};
+		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, 
+							amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
+		amrex::Geometry const geom(box);
+		amrex::BoxArray const boxArray(box);
+		amrex::Vector<int> const ranks({0}); // Force all particles to rank 0
+		amrex::DistributionMapping const dmap(ranks);
+		
+		// Initialize the analysis container on all ranks
+		analysisPC.Define(geom, dmap, boxArray);
+		
+		// All ranks must participate in copyParticles
 		if (container_ != nullptr) {
-			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+			analysisPC.copyParticles(*container_);
+
+			// Only rank 0 processes the particles
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				typename ContainerType::ParIterType const pIter(analysisPC, lev);
 				if (pIter.isValid()) {
 					const amrex::Long np = pIter.numParticles();
 					auto &particles = pIter.GetArrayOfStructs();
@@ -253,6 +271,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 			}
 		}
+
 		return positions;
 	}
 

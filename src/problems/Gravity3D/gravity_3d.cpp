@@ -128,8 +128,9 @@ auto problem_main() -> int
 
 	int status = 0; // Initialize to success
 
+	auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
 
 		// assume the first particle is in the first plane quadrant
 		for (auto &position : positions) {
