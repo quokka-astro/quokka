@@ -343,26 +343,17 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				const double E2_q1_ = E2_q1(i, j, k);
 				const double E2_q2_ = E2_q2(i, j, k);
 				const double E2_q3_ = E2_q3(i, j, k);
-				E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
+				// Balsara & Spicer scheme:
+				//E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
 
-				// if (
-				//   (
-				//     (
-				//       (i == 0) // || (i == 128)
-				//     ) && (
-				//       (j == 0) && (k == 0)
-				//     )
-				//   ) // && (iedge == 1)
-				// ) {
-				//   int tmp = 0;
-				// }
+				// GS05 E^0_c scheme:
+				const double E2_cc_0 = E2_cc(i, j, k);
+				const double E2_cc_1 = E2_cc(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]);
+				const double E2_cc_2 = E2_cc(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]);
+				const double E2_cc_3 = E2_cc(i-delta_w0[0]-delta_w1[0], j-delta_w0[1]-delta_w1[1], k-delta_w0[2]-delta_w1[2]);
+				E2_ave(i,j,k) = 0.5 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_) - 0.25 * (E2_cc_0 + E2_cc_1 + E2_cc_2 + E2_cc_3);
 
-				// const double E2_cc_0 = E2_cc(i, j, k);
-				// const double E2_cc_1 = E2_cc(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]);
-				// const double E2_cc_2 = E2_cc(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]);
-				// const double E2_cc_3 = E2_cc(i-delta_w0[0]-delta_w1[0], j-delta_w0[1]-delta_w1[1], k-delta_w0[2]-delta_w1[2]);
-				// E2_ave(i,j,k) = 0.5 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_) - 0.25 * (E2_cc_0 + E2_cc_1 + E2_cc_2 + E2_cc_3);
-
+				// LD04 scheme:
 				// const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2], 0));
 				// const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2], 1));
 				// const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2], 0));
