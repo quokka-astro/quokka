@@ -347,33 +347,30 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				// E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
 
 				// GS05 E^0_c scheme:
-				const double E2_cc_0 = E2_cc(i, j, k);
-				const double E2_cc_1 = E2_cc(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
-				const double E2_cc_2 = E2_cc(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
-				const double E2_cc_3 = E2_cc(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2]);
-				E2_ave(i, j, k) = 0.5 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_) - 0.25 * (E2_cc_0 + E2_cc_1 + E2_cc_2 + E2_cc_3);
+				//const double E2_cc_0 = E2_cc(i, j, k);
+				//const double E2_cc_1 = E2_cc(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+				//const double E2_cc_2 = E2_cc(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
+				//const double E2_cc_3 = E2_cc(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2]);
+				//E2_ave(i, j, k) = 0.5 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_) - 0.25 * (E2_cc_0 + E2_cc_1 + E2_cc_2 + E2_cc_3);
 
 				// LD04 scheme:
-				// const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2], 0));
-				// const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2], 1));
-				// const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2], 0));
-				// const double fspd_x1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2], 1));
-				// const double B0_p_ = B0_p(i, j, k);
-				// const double B0_m_ = B0_m(i, j, k);
-				// const double B1_p_ = B1_p(i, j, k);
-				// const double B1_m_ = B1_m(i, j, k);
-				// const double denominator = (fspd_x0_m + fspd_x0_p) * (fspd_x1_m + fspd_x1_p);
-				// (
-				//   (
-				//     fspd_x0_p * fspd_x1_p * E2_q0_ +
-				//     fspd_x0_p * fspd_x1_m * E2_q1_ +
-				//     fspd_x0_m * fspd_x1_m * E2_q2_ +
-				//     fspd_x0_m * fspd_x1_p * E2_q3_
-				//   ) / denominator
-				//   // -
-				//   // fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
-				//   // fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_)
-				// );
+				const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2], 0));
+				const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2], 1));
+				const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2], 0));
+				const double fspd_x1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2], 1));
+				const double B0_p_ = B0_p(i, j, k);
+				const double B0_m_ = B0_m(i, j, k);
+				const double B1_p_ = B1_p(i, j, k);
+				const double B1_m_ = B1_m(i, j, k);
+				const double denominator = (fspd_x0_m + fspd_x0_p) * (fspd_x1_m + fspd_x1_p);
+				E2_ave(i, j, k) = (
+						   (fspd_x0_p * fspd_x1_p * E2_q0_ +
+							fspd_x0_p * fspd_x1_m * E2_q1_ +
+							fspd_x0_m * fspd_x1_m * E2_q2_ +
+						    fspd_x0_m * fspd_x1_p * E2_q3_) /
+						       denominator -
+						   fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
+						   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
 
 				// if (emf_index == 1) {
 				//   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = geom.CellSizeArray();
