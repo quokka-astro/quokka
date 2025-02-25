@@ -58,7 +58,9 @@ template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double y = prob_lo[1] + (i + 0.5) * dx[1]; // NOLINT(readability-math-missing-parentheses)
+		//const double x = prob_lo[0] + (i + 0.5) * dx[0]; // NOLINT(readability-math-missing-parentheses)
+		const double y = prob_lo[1] + (j + 0.5) * dx[1]; // NOLINT(readability-math-missing-parentheses)
+		//const double z = prob_lo[2] + (k + 0.5) * dx[2]; // NOLINT(readability-math-missing-parentheses)
 
 		const double vx = A * std::sin(2.0 * M_PI * y);
 		const double vy = 0;
