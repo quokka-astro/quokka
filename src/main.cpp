@@ -19,9 +19,7 @@ auto main(int argc, char **argv) -> int
 {
 	// Initialization (copied from ExaWind)
 
-	bool disable_logs = false;
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, [&disable_logs]() {
+	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
 		amrex::ParmParse pp("amrex");
 		// Set GPU memory handling defaults:
 		// since performance is terrible if we have to swap pages between device and
@@ -45,8 +43,6 @@ auto main(int argc, char **argv) -> int
 		if (!pp.contains("use_gpu_aware_mpi")) {
 			pp.add("use_gpu_aware_mpi", 1);
 		}
-
-		pp.query("disable_logs", disable_logs);
 	});
 
 	amrex::Real start_time = amrex::ParallelDescriptor::second();
@@ -58,10 +54,6 @@ auto main(int argc, char **argv) -> int
 		result = problem_main();
 
 	} // destructors must be called before amrex::Finalize()
-
-	if (disable_logs) {
-		return result;
-	}
 
 	// compute elapsed time
 	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
