@@ -196,6 +196,9 @@ class PhysicsParticleDescriptorBase
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
 
+	// New method to get particle positions and data
+	[[nodiscard]] virtual auto getParticleData(int lev) const -> std::vector<std::vector<double>> = 0;
+
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 	virtual void redistribute(int lev) = 0;
@@ -251,6 +254,45 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 		return positions;
+	}
+
+	// Implementation of particle data retrieval
+	[[nodiscard]] auto getParticleData(int lev) const -> std::vector<std::vector<double>> override
+	{
+		std::vector<std::vector<double>> particle_data;
+		if (container_ != nullptr) {
+			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+				if (pIter.isValid()) {
+					const amrex::Long np = pIter.numParticles();
+					auto &particles = pIter.GetArrayOfStructs();
+
+					// Copy particles from device to host
+					typename ContainerType::ParticleType *pData = particles().data();
+					amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
+					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
+
+					// Extract positions and real components from host data
+					for (int i = 0; i < np; ++i) {
+						const auto &p = pData_h[i];
+						std::vector<double> data;
+						data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
+						
+						// Copy positions
+						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+							data.push_back(p.pos(d));
+						}
+						
+						// Copy real components
+						for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
+							data.push_back(p.rdata(d));
+						}
+						
+						particle_data.push_back(std::move(data));
+					}
+				}
+			}
+		}
+		return particle_data;
 	}
 
 #if AMREX_SPACEDIM == 3
