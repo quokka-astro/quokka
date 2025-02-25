@@ -529,7 +529,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		const bool is_create_particle_1 = current_time <= particle_creation_time_1 && current_time + dt > particle_creation_time_1;
 		const bool is_create_particle_2 = current_time <= particle_creation_time_2 && current_time + dt > particle_creation_time_2;
 
-		return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % 8 == 0) && (j != 0 && j % 8 == 0) && (k != 0 && k % 8 == 0);
+		const int n_loc = 16;
+
+		return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % n_loc == 0) && (j != 0 && j % n_loc == 0) && (k != 0 && k % n_loc == 0);
 	}
 
 #endif // AMREX_SPACEDIM == 3
