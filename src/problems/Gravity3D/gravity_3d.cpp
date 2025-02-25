@@ -134,7 +134,7 @@ auto problem_main() -> int
 
 		// assume the first particle is in the first plane quadrant
 		for (const auto &data : particle_data) {
-			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation. 
+			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
 			if (data[3] < 0.1) {
 				continue;
 			}

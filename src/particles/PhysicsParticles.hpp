@@ -238,20 +238,19 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> override
 	{
 		std::vector<std::array<double, AMREX_SPACEDIM>> positions;
-		
+
 		// All ranks must participate in copyParticles
 		if (container_ != nullptr) {
 			// Create single-box particle container for analysis on all ranks
 			ContainerType analysisPC{};
 			// Define a single box [0,1]^3 that will hold all particles on rank 0
-			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, 
-								amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
+			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
 			amrex::Geometry const geom(box);
 			amrex::BoxArray const boxArray(box);
 			// Force all particles to rank 0 by using a single-rank distribution
-			amrex::Vector<int> const ranks({0}); 
+			amrex::Vector<int> const ranks({0});
 			amrex::DistributionMapping const dmap(ranks);
-			
+
 			// Initialize the analysis container and gather all particles to rank 0
 			analysisPC.Define(geom, dmap, boxArray);
 			analysisPC.copyParticles(*container_); // MPI communication happens here
@@ -292,20 +291,19 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] auto getParticleData(int lev) const -> std::vector<std::vector<double>> override
 	{
 		std::vector<std::vector<double>> particle_data;
-		
+
 		// All ranks must participate in copyParticles
 		if (container_ != nullptr) {
 			// Create single-box particle container for analysis on all ranks
 			ContainerType analysisPC{};
 			// Define a single box [0,1]^3 that will hold all particles on rank 0
-			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, 
-								amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
+			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
 			amrex::Geometry const geom(box);
 			amrex::BoxArray const boxArray(box);
 			// Force all particles to rank 0 by using a single-rank distribution
-			amrex::Vector<int> const ranks({0}); 
+			amrex::Vector<int> const ranks({0});
 			amrex::DistributionMapping const dmap(ranks);
-			
+
 			// Initialize the analysis container and gather all particles to rank 0
 			analysisPC.Define(geom, dmap, boxArray);
 			analysisPC.copyParticles(*container_); // MPI communication happens here
@@ -329,17 +327,17 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						std::vector<double> data;
 						// Pre-allocate to avoid reallocations
 						data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
-						
+
 						// First add position components
 						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 							data.push_back(p.pos(d));
 						}
-						
+
 						// Then add all real components (mass, velocities, etc)
 						for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
 							data.push_back(p.rdata(d));
 						}
-						
+
 						particle_data.push_back(std::move(data));
 					}
 				}
@@ -436,7 +434,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const double particle_creation_time_2 = this->getParam2();
 
 				for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
-					// TODO(cch): I don't know whether this is needed. WarpX has this. 
+					// TODO(cch): I don't know whether this is needed. WarpX has this.
 					amrex::Gpu::synchronize();
 
 					const auto &box = mfi.validbox();
@@ -514,7 +512,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						}
 					});
 
-					// TODO(cch): I don't know whether this is needed. WarpX has this. 
+					// TODO(cch): I don't know whether this is needed. WarpX has this.
 					amrex::Gpu::synchronize();
 				}
 			}
