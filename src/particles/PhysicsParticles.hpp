@@ -520,9 +520,11 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Helper function to create a CIC particle at a specific cell
-	AMREX_GPU_DEVICE [[nodiscard]] auto is_create_particle(array_t &/*state_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &/*plo*/,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &/*dx*/, amrex::Real current_time, amrex::Real dt,
-						 const double particle_creation_time_1, const double particle_creation_time_2) const -> bool
+	AMREX_GPU_DEVICE [[nodiscard]] auto is_create_particle(array_t & /*state_arr*/, int i, int j, int k,
+							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*plo*/,
+							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/, amrex::Real current_time,
+							       amrex::Real dt, const double particle_creation_time_1,
+							       const double particle_creation_time_2) const -> bool
 	{
 		const bool is_create_particle_1 = current_time <= particle_creation_time_1 && current_time + dt > particle_creation_time_1;
 		const bool is_create_particle_2 = current_time <= particle_creation_time_2 && current_time + dt > particle_creation_time_2;
