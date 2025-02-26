@@ -241,6 +241,49 @@ struct CICParticleChecker {
 	}
 };
 
+// Functor for creating and initializing CIC particles
+template <typename problem_t>
+struct CICParticleCreator {
+	const int mass_idx;
+	const int cpu_id;
+	const amrex::Long pid_start;
+
+	AMREX_GPU_HOST_DEVICE
+	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start) 
+		: mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start) {}
+
+	template <typename ParticleType, typename StateArray>
+	AMREX_GPU_DEVICE void operator()(ParticleType& p,
+					StateArray const& state_arr,
+					int i, int j, int k,
+					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dx,
+					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& plo,
+					amrex::Long particle_offset) const {
+		// Set particle position at cell center
+		p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+		p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+		p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+
+		// Set particle ID and CPU
+		p.id() = pid_start + particle_offset;
+		p.cpu() = cpu_id;
+
+		// Set particle mass and velocities
+		const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+		const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+		const amrex::Real cell_mass = cell_density * cell_volume;
+
+		// Initialize particle properties
+		p.rdata(mass_idx) = 0.5 * cell_mass;
+		p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+		p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+		p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+
+		// Update cell density (remove mass that was given to particle)
+		state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+	}
+};
+
 // Concrete implementation of particle descriptor for specific container types
 template <typename ContainerType, typename problem_t, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 {
@@ -500,35 +543,16 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					auto *pdata = aos.data() + old_size;
 					const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
+					// Initialize particle creator functor
+					CICParticleCreator<problem_t> particle_creator(mass_idx, cpu_id, pid);
+
 					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 						const auto index = box.index(iv);
 
 						if (pcounts[index] > 0) {				     // NOLINT
-							const amrex::Long pid_offset = pid + poffset[index]; // NOLINT
 							auto &p = pdata[poffset[index]];		     // NOLINT
-
-							// Set particle position at cell center
-							p.pos(0) = plo[0] + (i + 0.5) * dx[0];
-							p.pos(1) = plo[1] + (j + 0.5) * dx[1];
-							p.pos(2) = plo[2] + (k + 0.5) * dx[2];
-
-							// Set particle ID and CPU
-							p.id() = pid_offset;
-							p.cpu() = cpu_id;
-
-							// Set particle mass and velocities
-							const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-							const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-							const amrex::Real cell_mass = cell_density * cell_volume;
-
-							p.rdata(mass_idx) = 0.5 * cell_mass;
-							p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
-							p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
-							p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
-
-							// Update cell density
-							state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+							particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]);
 						}
 					});
 				}
