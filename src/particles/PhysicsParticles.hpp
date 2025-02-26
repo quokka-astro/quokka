@@ -214,19 +214,17 @@ class PhysicsParticleDescriptorBase
 };
 
 // Functor for checking whether to create a CIC particle at a given location and time
-template <typename problem_t>
-struct CICParticleChecker {
+template <typename problem_t> struct CICParticleChecker {
 	const double creation_time_1;
 	const double creation_time_2;
 	const int spacing;
 
 	AMREX_GPU_HOST_DEVICE
-	CICParticleChecker(double t1, double t2, int space = 16) 
-		: creation_time_1(t1), creation_time_2(t2), spacing(space) {}
+	CICParticleChecker(double t1, double t2, int space = 16) : creation_time_1(t1), creation_time_2(t2), spacing(space) {}
 
-	AMREX_GPU_DEVICE bool operator()(array_t const& /*state_arr*/, int i, int j, int k, 
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& /*dx*/,
-					amrex::Real current_time, amrex::Real dt) const {
+	AMREX_GPU_DEVICE bool operator()(array_t const & /*state_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
+					 amrex::Real current_time, amrex::Real dt) const
+	{
 		const bool is_create_particle_1 = current_time <= creation_time_1 && current_time + dt > creation_time_1;
 		const bool is_create_particle_2 = current_time <= creation_time_2 && current_time + dt > creation_time_2;
 
@@ -234,31 +232,28 @@ struct CICParticleChecker {
 		// const amrex::Real density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 		// const bool density_condition = density > some_threshold;
 
-		return (is_create_particle_1 || is_create_particle_2) && 
-		       (i != 0 && i % spacing == 0) && 
-		       (j != 0 && j % spacing == 0) && 
+		return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
 		       (k != 0 && k % spacing == 0);
 	}
 };
 
 // Functor for creating and initializing CIC particles
-template <typename problem_t>
-struct CICParticleCreator {
+template <typename problem_t> struct CICParticleCreator {
 	const int mass_idx;
 	const int cpu_id;
 	const amrex::Long pid_start;
 
 	AMREX_GPU_HOST_DEVICE
-	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start) 
-		: mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start) {}
+	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start)
+	    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start)
+	{
+	}
 
 	template <typename ParticleType, typename StateArray>
-	AMREX_GPU_DEVICE void operator()(ParticleType& p,
-					StateArray const& state_arr,
-					int i, int j, int k,
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dx,
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& plo,
-					amrex::Long particle_offset) const {
+	AMREX_GPU_DEVICE void operator()(ParticleType &p, StateArray const &state_arr, int i, int j, int k,
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+					 amrex::Long particle_offset) const
+	{
 		// Set particle position at cell center
 		p.pos(0) = plo[0] + (i + 0.5) * dx[0];
 		p.pos(1) = plo[1] + (j + 0.5) * dx[1];
@@ -512,7 +507,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 					// Count particles to be created in this box
 					amrex::Gpu::DeviceVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
-					amrex::Gpu::DeviceVector<unsigned int> offset(box.numPts());    // Will store starting index for each cell's particle
+					amrex::Gpu::DeviceVector<unsigned int> offset(box.numPts()); // Will store starting index for each cell's particle
 					auto *pcounts = counts.data();
 
 					// Count potential particles per cell
@@ -550,8 +545,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 						const auto index = box.index(iv);
 
-						if (pcounts[index] > 0) {				     // NOLINT
-							auto &p = pdata[poffset[index]];		     // NOLINT
+						if (pcounts[index] > 0) {		 // NOLINT
+							auto &p = pdata[poffset[index]]; // NOLINT
 							particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]);
 						}
 					});
