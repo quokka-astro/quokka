@@ -13,6 +13,7 @@
 // library headers
 
 // internal headers
+#include "AMReX_GpuControl.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "hydro_system.hpp"
@@ -184,7 +185,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				ec_fabs_Bi_ieside[icomp][1].resize(box_ec_r, 1);
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					ec_fabs_Ui_q[icomp][iquad].resize(box_ec_r, 1);
-					ec_fabs_Ui_q[icomp][iquad].setVal(0.0);
+					ec_fabs_Ui_q[icomp][iquad].setVal<amrex::RunOn::Device>(0.0);
 				}
 			}
 
@@ -222,8 +223,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 					// extrapolate face-centered velocity components to the cell-edge
 					for (int iface = 0; iface < 2; ++iface) {
 						// reset values in temporary FArrayBox
-						ec_fabs_U_ieside[0].setVal(0.0);
-						ec_fabs_U_ieside[1].setVal(0.0);
+						ec_fabs_U_ieside[0].setVal<amrex::RunOn::Device>(0.0);
+						ec_fabs_U_ieside[1].setVal<amrex::RunOn::Device>(0.0);
 						// extrapolate face-centered velocity component to the cell-edge
 						MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ui_ifside[icomp][iface].array(),
 										    ec_fabs_U_ieside[0].array(), ec_fabs_U_ieside[1].array(), box_fc,
@@ -244,15 +245,15 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 							iquad0 = (iface == 0) ? 0 : 1;
 							iquad1 = (iface == 0) ? 3 : 2;
 						}
-						ec_fabs_Ui_q[icomp][iquad0].plus(ec_fabs_U_ieside[0], 0, 0, 1);
-						ec_fabs_Ui_q[icomp][iquad1].plus(ec_fabs_U_ieside[1], 0, 0, 1);
+						ec_fabs_Ui_q[icomp][iquad0].plus<amrex::RunOn::Device>(ec_fabs_U_ieside[0], 0, 0, 1);
+						ec_fabs_Ui_q[icomp][iquad1].plus<amrex::RunOn::Device>(ec_fabs_U_ieside[1], 0, 0, 1);
 					}
 				}
 			}
 			// finish averaging the two different ways for extrapolating velocity fields: cc->fc->ec
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				for (int iquad = 0; iquad < 4; ++iquad) {
-					ec_fabs_Ui_q[icomp][iquad].mult(0.5, 0, 1);
+					ec_fabs_Ui_q[icomp][iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 				}
 			}
 
@@ -342,46 +343,31 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				const double E2_q1_ = E2_q1(i, j, k);
 				const double E2_q2_ = E2_q2(i, j, k);
 				const double E2_q3_ = E2_q3(i, j, k);
-				E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
+				// Balsara & Spicer scheme:
+				// E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
 
-				// if (
-				//   (
-				//     (
-				//       (i == 0) // || (i == 128)
-				//     ) && (
-				//       (j == 0) && (k == 0)
-				//     )
-				//   ) // && (iedge == 1)
-				// ) {
-				//   int tmp = 0;
-				// }
-
+				// GS05 E^0_c scheme:
 				// const double E2_cc_0 = E2_cc(i, j, k);
-				// const double E2_cc_1 = E2_cc(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]);
-				// const double E2_cc_2 = E2_cc(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]);
-				// const double E2_cc_3 = E2_cc(i-delta_w0[0]-delta_w1[0], j-delta_w0[1]-delta_w1[1], k-delta_w0[2]-delta_w1[2]);
-				// E2_ave(i,j,k) = 0.5 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_) - 0.25 * (E2_cc_0 + E2_cc_1 + E2_cc_2 + E2_cc_3);
+				// const double E2_cc_1 = E2_cc(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+				// const double E2_cc_2 = E2_cc(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
+				// const double E2_cc_3 = E2_cc(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2]);
+				// E2_ave(i, j, k) = 0.5 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_) - 0.25 * (E2_cc_0 + E2_cc_1 + E2_cc_2 + E2_cc_3);
 
-				// const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2], 0));
-				// const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2], 1));
-				// const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2], 0));
-				// const double fspd_x1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2], 1));
-				// const double B0_p_ = B0_p(i, j, k);
-				// const double B0_m_ = B0_m(i, j, k);
-				// const double B1_p_ = B1_p(i, j, k);
-				// const double B1_m_ = B1_m(i, j, k);
-				// const double denominator = (fspd_x0_m + fspd_x0_p) * (fspd_x1_m + fspd_x1_p);
-				// (
-				//   (
-				//     fspd_x0_p * fspd_x1_p * E2_q0_ +
-				//     fspd_x0_p * fspd_x1_m * E2_q1_ +
-				//     fspd_x0_m * fspd_x1_m * E2_q2_ +
-				//     fspd_x0_m * fspd_x1_p * E2_q3_
-				//   ) / denominator
-				//   // -
-				//   // fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
-				//   // fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_)
-				// );
+				// LD04 scheme:
+				const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
+				const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
+				const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
+				const double fspd_x1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+				const double B0_p_ = B0_p(i, j, k);
+				const double B0_m_ = B0_m(i, j, k);
+				const double B1_p_ = B1_p(i, j, k);
+				const double B1_m_ = B1_m(i, j, k);
+				const double denominator = (fspd_x0_m + fspd_x0_p) * (fspd_x1_m + fspd_x1_p);
+				E2_ave(i, j, k) = ((fspd_x0_p * fspd_x1_p * E2_q0_ + fspd_x0_p * fspd_x1_m * E2_q1_ + fspd_x0_m * fspd_x1_m * E2_q2_ +
+						    fspd_x0_m * fspd_x1_p * E2_q3_) /
+						       denominator -
+						   fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
+						   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
 
 				// if (emf_index == 1) {
 				//   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = geom.CellSizeArray();
@@ -548,8 +534,10 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 		auto const ec_emf_w2 = ec_emf_mf[w2].const_arrays();
 		auto const fc_consVarOld = fc_consVarOld_mf[w0].const_arrays();
 		auto fc_consVarNew = fc_consVarNew_mf[w0].arrays();
-		std::cout << w0 << ", " << w1 << ", " << w2 << ", " << delta_w1[0] << ", " << delta_w1[1] << ", " << delta_w1[2] << ", " << delta_w2[0] << ", "
-			  << delta_w2[1] << ", " << delta_w2[2] << std::endl;
+		// std::cout << w0 << ", " << w1 << ", " << w2 << ", " << delta_w1[0] << ", " << delta_w1[1] << ", " << delta_w1[2] << ", " << delta_w2[0] << ",
+		// "
+		//	  << delta_w2[1] << ", " << delta_w2[2] << std::endl;
+
 		amrex::ParallelFor(fc_consVarNew_mf[w0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// the ec emfs sit in the opposite fc directions relative to the face
 			double emf_w1_m = ec_emf_w1[bx](i, j, k);

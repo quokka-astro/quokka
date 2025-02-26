@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  1.0  1.0  1.0
+geometry.prob_lo     =  -0.5  -0.5  -0.5
+geometry.prob_hi     =  0.5   0.5   0.5
 geometry.is_periodic =  1    1    1
 
 # *****************************************************************
@@ -13,25 +13,26 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 12 8
+amr.n_cell          = 128 128 4
 amr.max_level       = 0 # number of levels = max_level + 1
 
-amr.max_grid_size_x = 128
-amr.max_grid_size_y = 12
-amr.max_grid_size_z = 8
-amr.blocking_factor_x = 64
-amr.blocking_factor_y = 4
+amr.max_grid_size_x = 64
+amr.max_grid_size_y = 64
+amr.max_grid_size_z = 4
+amr.blocking_factor_x = 32
+amr.blocking_factor_y = 32
 amr.blocking_factor_z = 4
 
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = 5000
+plotfile_interval = 100
 checkpoint_interval = -1
-cfl = 0.8
-stop_time = 1.0
+cfl = 0.3
+stop_time = 10.0
 max_timesteps = 10000
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 2
 hydro.use_dual_energy = 0
+density_floor = 1e-2
