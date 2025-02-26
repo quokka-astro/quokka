@@ -1787,9 +1787,14 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			auto const &radEnergySource_arr = radEnergySource.array(iter);
 			RadSystem<problem_t>::SetRadEnergySource(radEnergySource_arr, indexRange, dx, prob_lo, prob_hi, time_subcycle + dt_radiation);
 
-			// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
-			operatorSplitSourceTerms(stateNew, radEnergySource_arr, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi,
-						 p_iteration_counter, p_iteration_failure_counter);
+			// include cell-centered source terms; will update state_new_cc_[lev] in place (updates both radiation and hydro vars)
+			if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
+				RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew, radEnergySource_arr, indexRange, dt_radiation, 2,
+										dustGasInteractionCoeff_, p_iteration_counter, p_iteration_failure_counter);
+			} else {
+				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew, radEnergySource_arr, indexRange, dt_radiation, 2,
+									       dustGasInteractionCoeff_, p_iteration_counter, p_iteration_failure_counter);
+			}
 		}
 
 		if (print_rad_counter_) {
