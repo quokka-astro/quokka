@@ -216,9 +216,9 @@ class PhysicsParticleDescriptorBase
 // Functor for checking whether to create a CIC particle at a given location and time
 template <typename problem_t>
 struct CICParticleChecker {
-	const double creation_time_1;
-	const double creation_time_2;
-	const int spacing;
+	double creation_time_1;
+	double creation_time_2;
+	int spacing;
 
 	AMREX_GPU_HOST_DEVICE
 	CICParticleChecker(double t1, double t2, int space = 16) 
@@ -244,9 +244,9 @@ struct CICParticleChecker {
 // Functor for creating and initializing CIC particles
 template <typename problem_t>
 struct CICParticleCreator {
-	const int mass_idx;
-	const int cpu_id;
-	const amrex::Long pid_start;
+	int mass_idx;
+	int cpu_id;
+	amrex::Long pid_start;
 
 	AMREX_GPU_HOST_DEVICE
 	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start) 
