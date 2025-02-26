@@ -205,7 +205,8 @@ class PhysicsParticleDescriptorBase
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
-	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2) const = 0;
+	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
+					amrex::Real param2) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -213,23 +214,29 @@ class PhysicsParticleDescriptorBase
 template <typename problem_t> struct CICParticleChecker {
 	double param1;
 	double param2;
-	int spacing;
+	AMREX_GPU_HOST_DEVICE CICParticleChecker(double t1, double t2) : param1(t1), param2(t2) {}
 
-	AMREX_GPU_HOST_DEVICE
-	CICParticleChecker(double t1, double t2, int space = 16) : param1(t1), param2(t2), spacing(space) {}
-
-	AMREX_GPU_DEVICE bool operator()(array_t const & /*state_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
+	AMREX_GPU_DEVICE bool operator()(array_t const &state_arr, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					 amrex::Real current_time, amrex::Real dt) const
 	{
-		const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
-		const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
+		// return false for now. To be implemented in the future.
+		// Could also check density threshold or other state-based conditions
+		amrex::ignore_unused(state_arr);
+		amrex::ignore_unused(i);
+		amrex::ignore_unused(j);
+		amrex::ignore_unused(k);
+		amrex::ignore_unused(dx);
+		amrex::ignore_unused(current_time);
+		amrex::ignore_unused(dt);
+		return false;
 
-		// Example: Could also check density threshold or other state-based conditions
-		// const amrex::Real density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-		// const bool density_condition = density > some_threshold;
+		// An example implementation is given below.
 
-		return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
-		       (k != 0 && k % spacing == 0);
+		// const int spacing = 16;
+		// const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
+		// const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
+		// return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
+		//        (k != 0 && k % spacing == 0);
 	}
 };
 
@@ -252,28 +259,41 @@ template <typename problem_t> struct CICParticleCreator {
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 					 amrex::Long particle_offset) const
 	{
-		// Set particle position at cell center
-		p.pos(0) = plo[0] + (i + 0.5) * dx[0];
-		p.pos(1) = plo[1] + (j + 0.5) * dx[1];
-		p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+		// Does nothing. To be implemented in the future.
 
-		// Set particle ID and CPU
-		p.id() = pid_start + particle_offset;
-		p.cpu() = cpu_id;
+		amrex::ignore_unused(p);
+		amrex::ignore_unused(state_arr);
+		amrex::ignore_unused(i);
+		amrex::ignore_unused(j);
+		amrex::ignore_unused(k);
+		amrex::ignore_unused(dx);
+		amrex::ignore_unused(plo);
+		amrex::ignore_unused(particle_offset);
 
-		// Set particle mass and velocities
-		const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-		const amrex::Real cell_mass = cell_density * cell_volume;
+		// An example implementation is given below.
 
-		// Initialize particle properties
-		p.rdata(mass_idx) = 0.5 * cell_mass;
-		p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
-		p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
-		p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+		// // Set particle position at cell center
+		// p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+		// p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+		// p.pos(2) = plo[2] + (k + 0.5) * dx[2];
 
-		// Update cell density (remove mass that was given to particle)
-		state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+		// // Set particle ID and CPU
+		// p.id() = pid_start + particle_offset;
+		// p.cpu() = cpu_id;
+
+		// // Set particle mass and velocities
+		// const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+		// const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+		// const amrex::Real cell_mass = cell_density * cell_volume;
+
+		// // Initialize particle properties
+		// p.rdata(mass_idx) = 0.5 * cell_mass;
+		// p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+		// p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+		// p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+
+		// // Update cell density (remove mass that was given to particle)
+		// state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
 	}
 };
 
@@ -489,7 +509,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Implementation of CIC particle creation
-	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2) const override
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
+				amrex::Real param2) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex();
@@ -543,8 +564,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 						const auto index = box.index(iv);
 
-						if (pcounts[index] > 0) {		 // NOLINT
-							auto &p = pdata[poffset[index]]; // NOLINT
+						if (pcounts[index] > 0) {						  // NOLINT
+							auto &p = pdata[poffset[index]];				  // NOLINT
 							particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
 						}
 					});
@@ -628,13 +649,13 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		if (name == "Rad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
+															      hydro_interact, container);
 		}
 #if AMREX_SPACEDIM == 3
 		if (name == "CIC_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
+															      hydro_interact, container);
 		}
 		if (name == "CICRad_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
