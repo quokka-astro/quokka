@@ -994,23 +994,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
 #endif
 
-		// Redistribute particles after movement. This ensures particles are in the correct cells/processors for radiation deposition
-		// TODO(cch): I believe this is needed and missing this in the original code was a bug, but I don't understand why this was not caught earlier.
-		// Maybe the binary_orbit test was the only test for gravity and there was no multiple boxes in that test?
-		// for (int lev = 0; lev <= finest_level; ++lev) {
-		// 	// Use ngrow=0 since we only need particles in valid cells for radiation
-		// 	particleRegister_.redistribute(lev, 0);
-		// }
-
 #ifdef AMREX_PARTICLES
 		// Redistribute particles at all levels after movement. This ensures particles are in the correct cells/processors for mass deposition in
 		// ellipticSolveAllLevels()
-		if (do_tracers != 0) {
-			TracerPC->Redistribute(0);
-		}
-		if (do_cic_particles != 0) {
-			CICParticles->Redistribute(0);
-		}
+		// Use ngrow=0 since we only need particles in valid cells for radiation
+		particleRegister_.redistribute(0, 0);
 #endif
 
 		// elliptic solve over entire AMR grid (post-timestep)
