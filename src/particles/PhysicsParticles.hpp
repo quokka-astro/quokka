@@ -167,13 +167,11 @@ class PhysicsParticleDescriptorBase
 	int massIndex_{-1};		 // Index for particle mass (-1 if not used)
 	int lumIndex_{-1};		 // Index for radiation luminosity (-1 if not used)
 	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
-	double param1_{-1.0};		 // First particle parameter
-	double param2_{-1.0};		 // Second particle parameter
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, double param1, double param2, bool hydro_interact)
-	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), param1_(param1), param2_(param2), interactsWithHydro_(hydro_interact)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact)
+	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact)
 	{
 	}
 
@@ -189,8 +187,6 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getMassIndex() const -> int { return massIndex_; }
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getLumIndex() const -> int { return lumIndex_; }
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getParam1() const -> double { return param1_; }
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getParam2() const -> double { return param2_; }
 	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 
 	// Virtual interface for particle operations
@@ -209,24 +205,24 @@ class PhysicsParticleDescriptorBase
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
-	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
+	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
 // Functor for checking whether to create a CIC particle at a given location and time
 template <typename problem_t> struct CICParticleChecker {
-	double creation_time_1;
-	double creation_time_2;
+	double param1;
+	double param2;
 	int spacing;
 
 	AMREX_GPU_HOST_DEVICE
-	CICParticleChecker(double t1, double t2, int space = 16) : creation_time_1(t1), creation_time_2(t2), spacing(space) {}
+	CICParticleChecker(double t1, double t2, int space = 16) : param1(t1), param2(t2), spacing(space) {}
 
 	AMREX_GPU_DEVICE bool operator()(array_t const & /*state_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
 					 amrex::Real current_time, amrex::Real dt) const
 	{
-		const bool is_create_particle_1 = current_time <= creation_time_1 && current_time + dt > creation_time_1;
-		const bool is_create_particle_2 = current_time <= creation_time_2 && current_time + dt > creation_time_2;
+		const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
+		const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
 
 		// Example: Could also check density threshold or other state-based conditions
 		// const amrex::Real density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
@@ -242,10 +238,12 @@ template <typename problem_t> struct CICParticleCreator {
 	int mass_idx;
 	int cpu_id;
 	amrex::Long pid_start;
+	amrex::Real param1;
+	amrex::Real param2;
 
 	AMREX_GPU_HOST_DEVICE
-	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start)
-	    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start)
+	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start, amrex::Real param1, amrex::Real param2)
+	    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), param1(param1), param2(param2)
 	{
 	}
 
@@ -291,8 +289,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
 	// Constructor initializing descriptor with container and particle properties
-	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, double param1, double param2, bool hydro_interact, ContainerType *container)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, param1, param2, hydro_interact), container_(container)
+	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, ContainerType *container)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact), container_(container)
 	{
 	}
 
@@ -491,12 +489,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Implementation of CIC particle creation
-	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const override
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex();
 			if (mass_idx >= 0 && mass_idx + 3 < ContainerType::ParticleType::NReal) {
-				CICParticleChecker<problem_t> particle_checker(this->getParam1(), this->getParam2());
+				CICParticleChecker<problem_t> particle_checker(param1, param2);
 
 				for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
 					const auto &box = mfi.validbox();
@@ -539,7 +537,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
 					// Initialize particle creator functor
-					CICParticleCreator<problem_t> particle_creator(mass_idx, cpu_id, pid);
+					CICParticleCreator<problem_t> particle_creator(mass_idx, cpu_id, pid, param1, param2);
 
 					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
@@ -547,7 +545,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 						if (pcounts[index] > 0) {		 // NOLINT
 							auto &p = pdata[poffset[index]]; // NOLINT
-							particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]);
+							particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
 						}
 					});
 				}
@@ -626,22 +624,21 @@ template <typename problem_t> class PhysicsParticleRegister
 	// TODO(cch): replace name with particleType to get rid of the string comparison
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
-	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, double param1, double param2, bool hydro_interact,
-				  ContainerType *container)
+	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		if (name == "Rad_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    mass_idx, lum_idx, birth_time_idx, param1, param2, hydro_interact, container);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
 		}
 #if AMREX_SPACEDIM == 3
 		if (name == "CIC_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    mass_idx, lum_idx, birth_time_idx, param1, param2, hydro_interact, container);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
 		}
 		if (name == "CICRad_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    mass_idx, lum_idx, birth_time_idx, param1, param2, hydro_interact, container);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
 		}
 #endif // AMREX_SPACEDIM == 3
 		particleRegistry_[name] = std::move(descriptor);
@@ -736,11 +733,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Create CIC particles
-	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2)
 	{
 		auto descriptor = getParticleDescriptor("CIC_particles");
 		if (descriptor != nullptr) {
-			descriptor->createCICParticles(state, lev, current_time, dt);
+			descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
