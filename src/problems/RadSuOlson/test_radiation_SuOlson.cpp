@@ -38,8 +38,8 @@ constexpr double a_rad = 1.0;
 constexpr double c = 1.0;
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
-constexpr double Q = (1.0 / (2.0 * x0));						// do NOT change this
-constexpr double S = Q * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum)); // erg cm^{-3}
+constexpr double Q = (1.0 / (2.0 * x0));						    // do NOT change this
+constexpr double S = c * Q * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum)); // erg cm^{-3}
 
 template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double c_hat_over_c = 1.0;
