@@ -2136,7 +2136,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		RadParticles->SetVerbose(0);
 
 		// Register with particle register
-		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, RadParticles.get());
+		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false,
+						       RadParticles.get());
 
 		// Initialize particles through derived class
 		createInitialRadParticles();
@@ -2915,7 +2916,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if (do_rad_particles != 0) {
 		AMREX_ASSERT(RadParticles == nullptr);
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, RadParticles.get());
+		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false,
+						       RadParticles.get());
 		RadParticles->Restart(restart_chkfile, "Rad_particles");
 	}
 
