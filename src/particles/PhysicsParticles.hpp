@@ -334,19 +334,19 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 		}
 	}
 
-	// Implementation of particle redistribution within a level
+	// Implementation of particle redistribution for level lev and above
 	void redistribute(int lev) override
 	{
 		if (container_ != nullptr) {
-			container_->Redistribute(lev);
+			container_->Redistribute(lev); // will redistribute all levels from lev and above
 		}
 	}
 
-	// Implementation of particle redistribution with ghost cells
+	// Implementation of particle redistribution with ghost cells for level lev and above
 	void redistribute(int lev, int ngrow) override
 	{
 		if (container_ != nullptr) {
-			container_->Redistribute(lev, container_->finestLevel(), ngrow);
+			container_->Redistribute(lev, -1, ngrow); // will redistribute all levels from lev and above
 		}
 	}
 
