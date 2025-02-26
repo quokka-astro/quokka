@@ -434,8 +434,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const double particle_creation_time_2 = this->getParam2();
 
 				for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
-					// TODO(cch): I don't know whether this is needed. WarpX has this.
-					amrex::Gpu::synchronize();
 
 					const auto &box = mfi.validbox();
 					const auto &state_arr = state.array(mfi);
@@ -444,8 +442,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const auto plo = geom.ProbLoArray();
 
 					// Count particles to be created in this box
-					amrex::Gpu::DeviceVector<amrex::Long> counts(box.numPts(), 0); // 1 if cell creates particle, 0 if not
-					amrex::Gpu::DeviceVector<amrex::Long> offset(box.numPts());    // Will store starting index for each cell's particle
+					amrex::Gpu::DeviceVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
+					amrex::Gpu::DeviceVector<unsigned int> offset(box.numPts());    // Will store starting index for each cell's particle
 					auto *pcounts = counts.data();
 
 					// Count potential particles per cell
@@ -463,7 +461,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					// Calculate exclusive prefix sum to get unique position for each particle
 					// Example: counts  = [1, 0, 1, 0, 1]
 					//         offset  = [0, 1, 1, 2, 2]
-					const amrex::Long max_new_particles = amrex::Scan::ExclusiveSum(counts.size(), counts.data(), offset.data());
+					const unsigned int max_new_particles = amrex::Scan::ExclusiveSum(counts.size(), counts.data(), offset.data());
 
 					// Update NextID to include particles that will be created
 					const amrex::Long pid = ContainerType::ParticleType::NextID();
@@ -512,8 +510,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						}
 					});
 
-					// TODO(cch): I don't know whether this is needed. WarpX has this.
-					amrex::Gpu::synchronize();
 				}
 			}
 		}

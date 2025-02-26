@@ -33,3 +33,5 @@ checkpoint_interval = -1
 
 particle_param1 = 0.007 # create particles at this time, which is step 1
 particle_param2 = 1. # create particles at this time, which is step 3
+
+max_timesteps = 2
