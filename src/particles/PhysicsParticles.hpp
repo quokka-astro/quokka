@@ -214,8 +214,7 @@ class PhysicsParticleDescriptorBase
 };
 
 // Functor for checking whether to create a CIC particle at a given location and time
-template <typename problem_t>
-struct CICParticleChecker {
+template <typename problem_t> struct CICParticleChecker {
 	double creation_time_1;
 	double creation_time_2;
 	int spacing;
@@ -239,8 +238,7 @@ struct CICParticleChecker {
 };
 
 // Functor for creating and initializing CIC particles
-template <typename problem_t>
-struct CICParticleCreator {
+template <typename problem_t> struct CICParticleCreator {
 	int mass_idx;
 	int cpu_id;
 	amrex::Long pid_start;
