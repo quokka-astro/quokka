@@ -213,6 +213,34 @@ class PhysicsParticleDescriptorBase
 #endif // AMREX_SPACEDIM == 3
 };
 
+// Functor for checking whether to create a CIC particle at a given location and time
+template <typename problem_t>
+struct CICParticleChecker {
+	const double creation_time_1;
+	const double creation_time_2;
+	const int spacing;
+
+	AMREX_GPU_HOST_DEVICE
+	CICParticleChecker(double t1, double t2, int space = 16) 
+		: creation_time_1(t1), creation_time_2(t2), spacing(space) {}
+
+	AMREX_GPU_DEVICE bool operator()(array_t const& /*state_arr*/, int i, int j, int k, 
+					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& /*dx*/,
+					amrex::Real current_time, amrex::Real dt) const {
+		const bool is_create_particle_1 = current_time <= creation_time_1 && current_time + dt > creation_time_1;
+		const bool is_create_particle_2 = current_time <= creation_time_2 && current_time + dt > creation_time_2;
+
+		// Example: Could also check density threshold or other state-based conditions
+		// const amrex::Real density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+		// const bool density_condition = density > some_threshold;
+
+		return (is_create_particle_1 || is_create_particle_2) && 
+		       (i != 0 && i % spacing == 0) && 
+		       (j != 0 && j % spacing == 0) && 
+		       (k != 0 && k % spacing == 0);
+	}
+};
+
 // Concrete implementation of particle descriptor for specific container types
 template <typename ContainerType, typename problem_t, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 {
@@ -430,11 +458,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex();
 			if (mass_idx >= 0 && mass_idx + 3 < ContainerType::ParticleType::NReal) {
-				const double particle_creation_time_1 = this->getParam1();
-				const double particle_creation_time_2 = this->getParam2();
+				CICParticleChecker<problem_t> particle_checker(this->getParam1(), this->getParam2());
 
 				for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
-
 					const auto &box = mfi.validbox();
 					const auto &state_arr = state.array(mfi);
 					const auto &geom = container_->Geom(lev);
@@ -450,12 +476,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 						const auto index = box.index(iv);
-
 						// Check if we should create a particle at this location and time
-						const bool should_create = is_create_particle(state_arr, i, j, k, plo, dx, current_time, dt,
-											      particle_creation_time_1, particle_creation_time_2);
-
-						pcounts[index] = should_create ? 1 : 0; // NOLINT
+						pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt) ? 1 : 0; // NOLINT
 					});
 
 					// Calculate exclusive prefix sum to get unique position for each particle
@@ -509,25 +531,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
 						}
 					});
-
 				}
 			}
 		}
-	}
-
-	// Helper function to create a CIC particle at a specific cell
-	AMREX_GPU_DEVICE [[nodiscard]] auto is_create_particle(array_t & /*state_arr*/, int i, int j, int k,
-							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*plo*/,
-							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/, amrex::Real current_time,
-							       amrex::Real dt, const double particle_creation_time_1,
-							       const double particle_creation_time_2) const -> bool
-	{
-		const bool is_create_particle_1 = current_time <= particle_creation_time_1 && current_time + dt > particle_creation_time_1;
-		const bool is_create_particle_2 = current_time <= particle_creation_time_2 && current_time + dt > particle_creation_time_2;
-
-		const int n_loc = 16;
-
-		return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % n_loc == 0) && (j != 0 && j % n_loc == 0) && (k != 0 && k % n_loc == 0);
 	}
 
 #endif // AMREX_SPACEDIM == 3
