@@ -1017,8 +1017,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #if AMREX_SPACEDIM == 3
 		kickParticlesAllLevels(dt_[0]);
 
-		if (do_cic_particles != 0) {
-			particleRegister_.createCICParticles(state_new_cc_[0], 0, cur_time, dt_[0]);
+		if constexpr (Particle_Traits<problem_t>::is_particle_creation_enabled) {
+			if (do_cic_particles != 0) {
+				particleRegister_.createCICParticles(state_new_cc_[0], 0, cur_time, dt_[0]);
+			}
 		}
 #endif
 

@@ -32,6 +32,10 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
+template <> struct Particle_Traits<BinaryOrbit> {
+	static constexpr bool is_particle_creation_enabled = true;
+};
+
 template <> struct HydroSystem_Traits<BinaryOrbit> {
 	static constexpr bool reconstruct_eint = false;
 };
