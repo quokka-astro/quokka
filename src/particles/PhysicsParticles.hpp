@@ -216,8 +216,8 @@ template <typename problem_t> struct CICParticleChecker {
 	double param2;
 	AMREX_GPU_HOST_DEVICE CICParticleChecker(double t1, double t2) : param1(t1), param2(t2) {}
 
-	AMREX_GPU_DEVICE bool operator()(array_t const &state_arr, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					 amrex::Real current_time, amrex::Real dt) const
+	AMREX_GPU_DEVICE auto operator()(array_t const &state_arr, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					 amrex::Real current_time, amrex::Real dt) const -> bool
 	{
 		// return false for now. To be implemented in the future.
 		// Could check density threshold or other state-based conditions
