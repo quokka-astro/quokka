@@ -37,6 +37,11 @@ template <> struct quokka::EOS_Traits<ParticleProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+template <> struct Particle_Traits<ParticleProblem> {
+	static constexpr int particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad | ParticleSwitch::CICRad;
+	static constexpr bool is_particle_creation_enabled = true;
+};
+
 template <> struct Physics_Traits<ParticleProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
@@ -164,9 +169,6 @@ auto problem_main() -> int
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.doPoissonSolve_ = 1;	       // enable self-gravity
-	sim.do_cic_rad_particles = 1;	       // enable CICRad particles
-	sim.do_cic_particles = 1;	       // enable CIC particles
-	sim.do_rad_particles = 1;	       // enable radiation particles
 
 	// initialize
 	sim.setInitialConditions();

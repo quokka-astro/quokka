@@ -28,10 +28,10 @@
 //   particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad  (= 0b00000011)
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
-enum ParticleSwitch {
-	CIC = 1,   // 0b00000001: Cloud-In-Cell (gravitating) particles
-	Rad = 2,   // 0b00000010: Radiation particles
-	CICRad = 4 // 0b00000100: Combined gravitating-radiating particles
+enum ParticleSwitch : unsigned int {
+	CIC    = 0b00000001U,  // Cloud-In-Cell (gravitating) particles
+	Rad    = 0b00000010U,  // Radiation particles
+	CICRad = 0b00000100U   // Combined gravitating-radiating particles
 };
 
 // This struct should be specialized by the user application code to configure particle behavior.
