@@ -458,6 +458,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int do_cic_particles = 0;
 	int do_rad_particles = 0;
 	int do_cic_rad_particles = 0;
+	double particle_creator_param1 = -1.0;
+	double particle_creator_param2 = -1.0;
 
       protected:
 	void InitParticles();	 // create tracer particles
@@ -692,6 +694,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default do_cic_rad_particles = 0 (turns on/off CIC radiating particles)
 	pp.query("do_cic_rad_particles", do_cic_rad_particles);
+
+	// Default particle_creator_param1 = -1.0
+	pp.query("particle_creator_param1", particle_creator_param1);
+
+	// Default particle_creator_param2 = -1.0
+	pp.query("particle_creator_param2", particle_creator_param2);
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
@@ -1008,6 +1016,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
 		kickParticlesAllLevels(dt_[0]);
+
+		if constexpr (Particle_Traits<problem_t>::is_particle_creation_enabled) {
+			if (do_cic_particles != 0) {
+				particleRegister_.createCICParticles(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
+			}
+		}
 #endif
 
 		cur_time += dt_[0];

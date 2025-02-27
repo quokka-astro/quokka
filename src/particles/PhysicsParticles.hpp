@@ -10,11 +10,13 @@
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_Extension.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_ParIter.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 
 // Assumptions for any particle type:
@@ -190,6 +192,9 @@ class PhysicsParticleDescriptorBase
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
 
+	// New method to get particle positions and data
+	[[nodiscard]] virtual auto getParticleData(int lev) const -> std::vector<std::vector<double>> = 0;
+
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 	virtual void redistribute(int lev) = 0;
@@ -200,11 +205,100 @@ class PhysicsParticleDescriptorBase
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
+	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
+					amrex::Real param2) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
+// Functor for checking whether to create a CIC particle at a given location and time
+template <typename problem_t> struct CICParticleChecker {
+	double param1;
+	double param2;
+	AMREX_GPU_HOST_DEVICE CICParticleChecker(double t1, double t2) : param1(t1), param2(t2) {}
+
+	AMREX_GPU_DEVICE auto operator()(array_t const &state_arr, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					 amrex::Real current_time, amrex::Real dt) const -> bool
+	{
+		// return false for now. To be implemented in the future.
+		// Could check density threshold or other state-based conditions
+		amrex::ignore_unused(state_arr);
+		amrex::ignore_unused(i);
+		amrex::ignore_unused(j);
+		amrex::ignore_unused(k);
+		amrex::ignore_unused(dx);
+		amrex::ignore_unused(current_time);
+		amrex::ignore_unused(dt);
+		return false;
+
+		// An example implementation is given below.
+
+		// const int spacing = 16;
+		// const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
+		// const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
+		// return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
+		//        (k != 0 && k % spacing == 0);
+	}
+};
+
+// Functor for creating and initializing CIC particles
+template <typename problem_t> struct CICParticleCreator {
+	int mass_idx;
+	int cpu_id;
+	amrex::Long pid_start;
+	amrex::Real param1;
+	amrex::Real param2;
+
+	AMREX_GPU_HOST_DEVICE
+	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start, amrex::Real param1, amrex::Real param2)
+	    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), param1(param1), param2(param2)
+	{
+	}
+
+	template <typename ParticleType, typename StateArray>
+	AMREX_GPU_DEVICE void operator()(ParticleType &p, StateArray const &state_arr, int i, int j, int k,
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+					 amrex::Long particle_offset) const
+	{
+		// Does nothing. To be implemented in the future.
+
+		amrex::ignore_unused(p);
+		amrex::ignore_unused(state_arr);
+		amrex::ignore_unused(i);
+		amrex::ignore_unused(j);
+		amrex::ignore_unused(k);
+		amrex::ignore_unused(dx);
+		amrex::ignore_unused(plo);
+		amrex::ignore_unused(particle_offset);
+
+		// An example implementation is given below.
+
+		// // Set particle position at cell center
+		// p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+		// p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+		// p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+
+		// // Set particle ID and CPU
+		// p.id() = pid_start + particle_offset;
+		// p.cpu() = cpu_id;
+
+		// // Set particle mass and velocities
+		// const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+		// const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+		// const amrex::Real cell_mass = cell_density * cell_volume;
+
+		// // Initialize particle properties
+		// p.rdata(mass_idx) = 0.5 * cell_mass;
+		// p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+		// p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+		// p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+
+		// // Update cell density (remove mass that was given to particle)
+		// state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+	}
+};
+
 // Concrete implementation of particle descriptor for specific container types
-template <typename ContainerType, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
+template <typename ContainerType, typename problem_t, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 {
       private:
 	ContainerType *container_{}; // Pointer to the actual particle container
@@ -220,22 +314,45 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 	{
 	}
 
-	// Implementation of particle position retrieval
+	// Get particle positions from all ranks and gather them on rank 0.
+	// This method creates a temporary particle container on rank 0 and copies all particles to it.
+	// Only rank 0 will return the actual particle positions, other ranks return an empty vector.
+	// @param lev: level from which to get particles
+	// @return: vector of particle positions [x,y,z] on rank 0, empty vector on other ranks
 	[[nodiscard]] auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> override
 	{
 		std::vector<std::array<double, AMREX_SPACEDIM>> positions;
+
+		// All ranks must participate in copyParticles
 		if (container_ != nullptr) {
-			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+			// Create single-box particle container for analysis on all ranks
+			ContainerType analysisPC{};
+			// Define a single box [0,1]^3 that will hold all particles on rank 0
+			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
+			amrex::Geometry const geom(box);
+			amrex::BoxArray const boxArray(box);
+			// Force all particles to rank 0 by using a single-rank distribution
+			amrex::Vector<int> const ranks({0});
+			amrex::DistributionMapping const dmap(ranks);
+
+			// Initialize the analysis container and gather all particles to rank 0
+			analysisPC.Define(geom, dmap, boxArray);
+			analysisPC.copyParticles(*container_); // MPI communication happens here
+
+			// Only rank 0 processes the particles since they're all gathered there
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				// Get iterator for the single box on rank 0
+				typename ContainerType::ParIterType const pIter(analysisPC, lev);
 				if (pIter.isValid()) {
 					const amrex::Long np = pIter.numParticles();
 					auto &particles = pIter.GetArrayOfStructs();
 
-					// Copy particles from device to host
+					// Transfer particle data from GPU to CPU for analysis
 					typename ContainerType::ParticleType *pData = particles().data();
 					amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
 					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
 
-					// Extract positions from host data
+					// Extract just the positions into the return vector
 					for (int i = 0; i < np; ++i) {
 						const auto &p = pData_h[i];
 						positions.push_back({AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))});
@@ -243,7 +360,75 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 				}
 			}
 		}
-		return positions;
+
+		return positions; // Empty vector on non-root ranks
+	}
+
+	// Get particle positions and data from all ranks and gather them on rank 0.
+	// This method creates a temporary particle container on rank 0 and copies all particles to it.
+	// The returned data for each particle contains:
+	// - First AMREX_SPACEDIM elements are positions [x,y,z]
+	// - Remaining elements are particle data (e.g., mass, velocities, etc.)
+	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
+	// @param lev: level from which to get particles
+	// @return: vector of particle data on rank 0, empty vector on other ranks
+	[[nodiscard]] auto getParticleData(int lev) const -> std::vector<std::vector<double>> override
+	{
+		std::vector<std::vector<double>> particle_data;
+
+		// All ranks must participate in copyParticles
+		if (container_ != nullptr) {
+			// Create single-box particle container for analysis on all ranks
+			ContainerType analysisPC{};
+			// Define a single box [0,1]^3 that will hold all particles on rank 0
+			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
+			amrex::Geometry const geom(box);
+			amrex::BoxArray const boxArray(box);
+			// Force all particles to rank 0 by using a single-rank distribution
+			amrex::Vector<int> const ranks({0});
+			amrex::DistributionMapping const dmap(ranks);
+
+			// Initialize the analysis container and gather all particles to rank 0
+			analysisPC.Define(geom, dmap, boxArray);
+			analysisPC.copyParticles(*container_); // MPI communication happens here
+
+			// Only rank 0 processes the particles since they're all gathered there
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				// Get iterator for the single box on rank 0
+				typename ContainerType::ParIterType const pIter(analysisPC, lev);
+				if (pIter.isValid()) {
+					const amrex::Long np = pIter.numParticles();
+					auto &particles = pIter.GetArrayOfStructs();
+
+					// Transfer particle data from GPU to CPU for analysis
+					typename ContainerType::ParticleType *pData = particles().data();
+					amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
+					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
+
+					// Extract positions and real components from host data
+					for (int i = 0; i < np; ++i) {
+						const auto &p = pData_h[i];
+						std::vector<double> data;
+						// Pre-allocate to avoid reallocations
+						data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
+
+						// First add position components
+						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+							data.push_back(p.pos(d));
+						}
+
+						// Then add all real components (mass, velocities, etc)
+						for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
+							data.push_back(p.rdata(d));
+						}
+
+						particle_data.push_back(std::move(data));
+					}
+				}
+			}
+		}
+
+		return particle_data; // Empty vector on non-root ranks
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -317,6 +502,72 @@ template <typename ContainerType, ParticleType particleType> class PhysicsPartic
 								    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
 							    }
 						    });
+					});
+				}
+			}
+		}
+	}
+
+	// Implementation of CIC particle creation
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
+				amrex::Real param2) const override
+	{
+		if (container_ != nullptr) {
+			const int mass_idx = this->getMassIndex();
+			if (mass_idx >= 0 && mass_idx + 3 < ContainerType::ParticleType::NReal) {
+				CICParticleChecker<problem_t> particle_checker(param1, param2);
+
+				for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
+					const auto &box = mfi.validbox();
+					const auto &state_arr = state.array(mfi);
+					const auto &geom = container_->Geom(lev);
+					const auto dx = geom.CellSizeArray();
+					const auto plo = geom.ProbLoArray();
+
+					// Count particles to be created in this box
+					amrex::Gpu::DeviceVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
+					amrex::Gpu::DeviceVector<unsigned int> offset(box.numPts()); // Will store starting index for each cell's particle
+					auto *pcounts = counts.data();
+
+					// Count potential particles per cell
+					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+						const auto index = box.index(iv);
+						// Check if we should create a particle at this location and time
+						pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt) ? 1 : 0; // NOLINT
+					});
+
+					// Calculate exclusive prefix sum to get unique position for each particle
+					// Example: counts  = [1, 0, 1, 0, 1]
+					//         offset  = [0, 1, 1, 2, 2]
+					const unsigned int max_new_particles = amrex::Scan::ExclusiveSum(counts.size(), counts.data(), offset.data());
+
+					// Update NextID to include particles that will be created
+					const amrex::Long pid = ContainerType::ParticleType::NextID();
+					ContainerType::ParticleType::NextID(pid + max_new_particles);
+
+					// Get the particle tile and prepare for new particles
+					auto &particle_tile = container_->DefineAndReturnParticleTile(lev, mfi);
+					auto &aos = particle_tile.GetArrayOfStructs();
+					const int old_size = aos.size();
+					aos.resize(old_size + max_new_particles);
+
+					// Create the particles
+					auto *poffset = offset.data();
+					auto *pdata = aos.data() + old_size;
+					const int cpu_id = amrex::ParallelDescriptor::MyProc();
+
+					// Initialize particle creator functor
+					CICParticleCreator<problem_t> particle_creator(mass_idx, cpu_id, pid, param1, param2);
+
+					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+						const auto index = box.index(iv);
+
+						if (pcounts[index] > 0) {						  // NOLINT
+							auto &p = pdata[poffset[index]];				  // NOLINT
+							particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
+						}
 					});
 				}
 			}
@@ -398,17 +649,17 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		if (name == "Rad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
-														   hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
+															      hydro_interact, container);
 		}
 #if AMREX_SPACEDIM == 3
 		if (name == "CIC_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
-														   hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
+															      hydro_interact, container);
 		}
 		if (name == "CICRad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, ParticleType::CICRad>>(mass_idx, lum_idx, birth_time_idx,
-														      hydro_interact, container);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
 		}
 #endif // AMREX_SPACEDIM == 3
 		particleRegistry_[name] = std::move(descriptor);
@@ -499,6 +750,15 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->kickParticles(lev, dt, acceleration);
 			}
+		}
+	}
+
+	// Create CIC particles
+	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2)
+	{
+		auto descriptor = getParticleDescriptor("CIC_particles");
+		if (descriptor != nullptr) {
+			descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
 		}
 	}
 #endif // AMREX_SPACEDIM == 3

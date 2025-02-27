@@ -32,6 +32,10 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
+template <> struct Particle_Traits<BinaryOrbit> {
+	static constexpr bool is_particle_creation_enabled = true;
+};
+
 template <> struct HydroSystem_Traits<BinaryOrbit> {
 	static constexpr bool reconstruct_eint = false;
 };
@@ -49,6 +53,71 @@ template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
+
+namespace quokka
+{
+// Functor for checking whether to create a CIC particle at a given location and time
+// Template specialization for BinaryOrbit
+template <> struct CICParticleChecker<BinaryOrbit> {
+	double param1;
+	double param2;
+	AMREX_GPU_HOST_DEVICE CICParticleChecker(double t1, double t2) : param1(t1), param2(t2) {}
+
+	AMREX_GPU_DEVICE auto operator()(array_t const & /*state_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
+					 amrex::Real current_time, amrex::Real dt) const -> bool
+	{
+		const int spacing = 16;
+		const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
+		const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
+		return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
+		       (k != 0 && k % spacing == 0);
+	}
+};
+
+// Functor for creating and initializing CIC particles
+template <> struct CICParticleCreator<BinaryOrbit> {
+	int mass_idx;
+	int cpu_id;
+	amrex::Long pid_start;
+	amrex::Real param1;
+	amrex::Real param2;
+
+	AMREX_GPU_HOST_DEVICE
+	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start, amrex::Real param1, amrex::Real param2)
+	    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), param1(param1), param2(param2)
+	{
+	}
+
+	template <typename ParticleType, typename StateArray>
+	AMREX_GPU_DEVICE void operator()(ParticleType &p, StateArray const &state_arr, int i, int j, int k,
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+					 amrex::Long particle_offset) const
+	{
+		// Set particle position at cell center
+		p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+		p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+		p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+
+		// Set particle ID and CPU
+		p.id() = pid_start + particle_offset;
+		p.cpu() = cpu_id;
+
+		// Set particle mass and velocities
+		const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+		const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<BinaryOrbit>::density_index);
+		const amrex::Real cell_mass = cell_density * cell_volume;
+
+		// Initialize particle properties
+		p.rdata(mass_idx) = 0.5 * cell_mass;
+		p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) / cell_density;
+		p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) / cell_density;
+		p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) / cell_density;
+
+		// Update cell density (remove mass that was given to particle)
+		state_arr(i, j, k, HydroSystem<BinaryOrbit>::density_index) = 0.5 * cell_density;
+	}
+};
+} // namespace quokka
 
 template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -128,28 +197,38 @@ auto problem_main() -> int
 
 	int status = 0; // Initialize to success
 
+	auto particle_data = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticleData(0);
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto positions = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
 
 		// assume the first particle is in the first plane quadrant
-		for (auto &position : positions) {
-			if (position[0] * exact_x > 0.0) {
-				position_error += std::abs(position[0] - exact_x);
-				position_error += std::abs(position[1] - exact_y);
-				position_error += std::abs(position[2] - exact_z);
-			} else {
-				position_error += std::abs(position[0] - (-exact_x));
-				position_error += std::abs(position[1] - (-exact_y));
-				position_error += std::abs(position[2] - (-exact_z));
+		for (const auto &data : particle_data) {
+			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
+			if (data[3] < 0.1) {
+				continue;
 			}
-			position_norm += std::abs(position[0]);
-			position_norm += std::abs(position[1]);
-			position_norm += std::abs(position[2]);
+			// First 3 elements are positions (x,y,z)
+			if (data[0] * exact_x > 0.0) {
+				position_error += std::abs(data[0] - exact_x);
+				position_error += std::abs(data[1] - exact_y);
+				position_error += std::abs(data[2] - exact_z);
+			} else {
+				position_error += std::abs(data[0] - (-exact_x));
+				position_error += std::abs(data[1] - (-exact_y));
+				position_error += std::abs(data[2] - (-exact_z));
+			}
+			position_norm += std::abs(data[0]);
+			position_norm += std::abs(data[1]);
+			position_norm += std::abs(data[2]);
 		}
 
-		amrex::Print() << "Particle positions are: \n";
-		for (auto &position : positions) {
-			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
+		amrex::Print() << "Particle positions and data are: \n";
+		for (const auto &data : particle_data) {
+			// Print positions
+			amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
+			// Print additional data (mass, velocities)
+			amrex::Print() << " | Mass: " << data[3];
+			amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
 		}
 		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
 
