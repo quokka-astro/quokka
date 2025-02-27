@@ -452,29 +452,39 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					auto *pData = particles().data();
 					const amrex::Long np = pti.numParticles();
 
-					// Compute maximum speed on GPU
-					amrex::Real local_max = 0.0;
-					amrex::Gpu::AsyncArray<amrex::Real> local_max_aa(&local_max, 1);
-					amrex::Real *p_local_max = local_max_aa.data();
+					if (np > 0) {
+						// Allocate temporary array for per-particle speeds
+						amrex::Gpu::DeviceVector<amrex::Real> particle_speeds(np);
+						amrex::Real* p_speeds = particle_speeds.data();
 
-					amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) {
-						amrex::Real thread_max = 0.0;
-						// Loop over particles
-						for (amrex::Long i = 0; i < np; ++i) {
+						// Compute speed for each particle in parallel
+						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(amrex::Long i) {
 							const auto &p = pData[i]; // NOLINT
 							// Compute velocity magnitude
 							amrex::Real v2 = 0.0;
 							for (int j = 0; j < nvels; ++j) {
 								v2 += p.rdata(mass_idx + 1 + j) * p.rdata(mass_idx + 1 + j);
 							}
-							thread_max = std::max(thread_max, std::sqrt(v2));
-						}
-						p_local_max[0] = thread_max;
-					});
+							p_speeds[i] = std::sqrt(v2);
+						});
 
-					// Copy result back to CPU
-					local_max_aa.copyToHost(&local_max, 1);
-					max_speed = std::max(max_speed, local_max);
+						// Reduce to find maximum speed
+						amrex::Real tile_max = 0.0;
+						amrex::Gpu::AsyncArray<amrex::Real> local_max_aa(&tile_max, 1);
+						amrex::Real* p_tile_max = local_max_aa.data();
+
+						amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) {
+							amrex::Real thread_max = 0.0;
+							for (amrex::Long i = 0; i < np; ++i) {
+								thread_max = std::max(thread_max, p_speeds[i]);
+							}
+							p_tile_max[0] = thread_max;
+						});
+
+						// Copy result back to CPU
+						local_max_aa.copyToHost(&tile_max, 1);
+						max_speed = std::max(max_speed, tile_max);
+					}
 				}
 			}
 		}
