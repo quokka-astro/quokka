@@ -23,13 +23,16 @@
 // 1. For massive particles, velocity components start after mass
 // 2. Birth time, if existing, is always followed by death time
 
-namespace quokka
-{
-
 // this struct is specialized by the user application code.
 template <typename problem_t> struct Particle_Traits {
+	static constexpr bool do_cic_particles = false;
+	static constexpr bool do_rad_particles = false;
+	static constexpr bool do_cic_rad_particles = false;
 	static constexpr bool is_particle_creation_enabled = false;
 };
+
+namespace quokka
+{
 
 // Enum class to identify different particle types
 enum class ParticleType {
