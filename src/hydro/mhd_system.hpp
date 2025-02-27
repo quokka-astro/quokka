@@ -39,8 +39,6 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &reconstructRange,
 				  int reconstructionOrder);
 
-	static std::array<const double, 3> computeWaveSolution(double x1, int itype, double time);
-
 	static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, const double dt,
@@ -292,20 +290,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 					const double b0 = B0_qi(i, j, k);
 					const double b1 = B1_qi(i, j, k);
 					double uxb = u0 * b1 - u1 * b0;
-
-					// amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = geom.CellSizeArray();
-					// amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = geom.ProbLoArray();
-					// amrex::Real x1 = prob_lo[0] + i * dx[0];
-					// if ((w0_comp != 0) && (w1_comp != 0)) { x1 = x1 + static_cast<amrex::Real>(0.5) * dx[0]; }
-					// std::array<const double, 3> vel = computeWaveSolution(x1, 0, time);
-					// std::array<const double, 3> mag = computeWaveSolution(x1, 1, time);
-					// const double u0_exact = vel[w0_comp];
-					// const double u1_exact = vel[w1_comp];
-					// const double b0_exact = mag[w0_comp];
-					// const double b1_exact = mag[w1_comp];
-					// const double uxb_exact = u0_exact * b1_exact - u1_exact * b0_exact;
-					// const double uxb_mix = u0_exact * b1 - u1_exact * b0;
-
 					E2_qi(i, j, k) = uxb;
 
 					int tmp = 0;
@@ -343,108 +327,36 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				const double E2_q1_ = E2_q1(i, j, k);
 				const double E2_q2_ = E2_q2(i, j, k);
 				const double E2_q3_ = E2_q3(i, j, k);
-				// Balsara & Spicer scheme:
+        
+        // // Balsara & Spicer scheme:
 				// E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
 
 				// GS05 E^0_c scheme:
-				// const double E2_cc_0 = E2_cc(i, j, k);
-				// const double E2_cc_1 = E2_cc(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
-				// const double E2_cc_2 = E2_cc(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
-				// const double E2_cc_3 = E2_cc(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2]);
-				// E2_ave(i, j, k) = 0.5 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_) - 0.25 * (E2_cc_0 + E2_cc_1 + E2_cc_2 + E2_cc_3);
+				const double E2_cc_0 = E2_cc(i, j, k);
+				const double E2_cc_1 = E2_cc(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+				const double E2_cc_2 = E2_cc(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
+				const double E2_cc_3 = E2_cc(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2]);
+				E2_ave(i, j, k) = 0.5 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_) - 0.25 * (E2_cc_0 + E2_cc_1 + E2_cc_2 + E2_cc_3);
 
-				// LD04 scheme:
-				const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-				const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-				const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-				const double fspd_x1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
-				const double B0_p_ = B0_p(i, j, k);
-				const double B0_m_ = B0_m(i, j, k);
-				const double B1_p_ = B1_p(i, j, k);
-				const double B1_m_ = B1_m(i, j, k);
-				const double denominator = (fspd_x0_m + fspd_x0_p) * (fspd_x1_m + fspd_x1_p);
-				E2_ave(i, j, k) = ((fspd_x0_p * fspd_x1_p * E2_q0_ + fspd_x0_p * fspd_x1_m * E2_q1_ + fspd_x0_m * fspd_x1_m * E2_q2_ +
-						    fspd_x0_m * fspd_x1_p * E2_q3_) /
-						       denominator -
-						   fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
-						   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
-
-				// if (emf_index == 1) {
-				//   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = geom.CellSizeArray();
-				//   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = geom.ProbLoArray();
-				//   amrex::Real x1 = prob_lo[0] + i * dx[0];
-				//   constexpr double sound_speed = 1.0;
-				//   constexpr double gamma = 5. / 3.;
-				//   constexpr double bg_density = 1.0;
-				//   constexpr double bg_pressure = 1.0;
-				//   constexpr double bg_mag_amplitude = 10.0;
-				//   constexpr double theta_degrees = 0.0; // degrees
-				//   constexpr double num_modes = 2;
-				//   constexpr double k_amplitude = 2 * M_PI * num_modes;
-				//   constexpr double delta_b = 1e-6;
-				//   const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
-				//   const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
-				//   const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
-				//   const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
-				//   const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
-				//   const double omega = std::sqrt(std::pow(alfven_speed,2) * std::pow(k_amplitude,2) * std::pow(cos_theta,2));
-				//   const double cos_wave = std::cos(omega * time - k_amplitude * x1);
-				//   E2_ave(i,j,k) = -bg_mag_amplitude * omega * delta_b / (sound_speed * k_amplitude * cos_theta) * cos_wave;
-				// } else {
-				//   E2_ave(i,j,k) = 0;
-				// }
+				// // LD04 scheme:
+				// const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
+				// const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
+				// const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
+				// const double fspd_x1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+				// const double B0_p_ = B0_p(i, j, k);
+				// const double B0_m_ = B0_m(i, j, k);
+				// const double B1_p_ = B1_p(i, j, k);
+				// const double B1_m_ = B1_m(i, j, k);
+				// const double denominator = (fspd_x0_m + fspd_x0_p) * (fspd_x1_m + fspd_x1_p);
+				// E2_ave(i, j, k) = ((fspd_x0_p * fspd_x1_p * E2_q0_ + fspd_x0_p * fspd_x1_m * E2_q1_ + fspd_x0_m * fspd_x1_m * E2_q2_ +
+				// 		    fspd_x0_m * fspd_x1_p * E2_q3_) /
+				// 		       denominator -
+				// 		   fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
+				// 		   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
 			});
-
-			// std::ofstream ofs("fab-emf-e"+std::to_string((wsolve+2)%3)+"-"+std::to_string(mfi.index()));
-			// ec_mf_emf_comps[3-w0_comp-w1_comp][mfi].writeOn(ofs, 0, 1);
 
 			int tmp = 0; // TODO: for debuging. remove
 		}
-	}
-}
-
-template <typename problem_t> std::array<const double, 3> MHDSystem<problem_t>::computeWaveSolution(double x1, int itype, double time)
-{
-	// constants
-	constexpr double sound_speed = 1.0;
-	constexpr double gamma = 5. / 3.;
-	// background states
-	constexpr double bg_density = 1.0;
-	constexpr double bg_pressure = 1.0;
-	constexpr double bg_mag_amplitude = 10.0;
-	// alignment of magnetic field with the direction of wave propogation (in the x1-x2 plane). recall that hat(k) = (1, 0, 0) and hat(delta_u) = (0, 1, 0)
-	constexpr double theta_degrees = 0.0; // degrees
-	// k = 2 pi / wave length; box length = 1, so |k| in [1, inf)
-	constexpr double num_modes = 2;
-	constexpr double k_amplitude = 2 * M_PI * num_modes;
-	// input perturbation: choose to do this via the relative denisty field in [0, 1]. remember, the linear regime is valid when this perturbation is small
-	constexpr double delta_b = 1e-6;
-
-	const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
-	const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
-
-	const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
-	const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
-	const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
-
-	const double omega = std::sqrt(std::pow(alfven_speed, 2) * std::pow(k_amplitude, 2) * std::pow(cos_theta, 2));
-
-	const double cos_wave = std::cos(omega * time - k_amplitude * x1);
-
-	const double x1mag = bg_mag_x1;
-	const double x2mag = bg_mag_x2;
-	const double x3mag = bg_mag_amplitude * delta_b * cos_wave;
-
-	const double x1vel = 0;
-	const double x2vel = 0;
-	const double x3vel = -omega * delta_b / (sound_speed * k_amplitude * cos_theta) * cos_wave;
-
-	if (itype == 0) {
-		std::array<const double, 3> array = {x1vel, x2vel, x3vel};
-		return array;
-	} else {
-		std::array<const double, 3> array = {x1mag, x2mag, x3mag};
-		return array;
 	}
 }
 
@@ -534,9 +446,6 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 		auto const ec_emf_w2 = ec_emf_mf[w2].const_arrays();
 		auto const fc_consVarOld = fc_consVarOld_mf[w0].const_arrays();
 		auto fc_consVarNew = fc_consVarNew_mf[w0].arrays();
-		// std::cout << w0 << ", " << w1 << ", " << w2 << ", " << delta_w1[0] << ", " << delta_w1[1] << ", " << delta_w1[2] << ", " << delta_w2[0] << ",
-		// "
-		//	  << delta_w2[1] << ", " << delta_w2[2] << std::endl;
 
 		amrex::ParallelFor(fc_consVarNew_mf[w0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// the ec emfs sit in the opposite fc directions relative to the face
@@ -545,92 +454,9 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 			double emf_w1_p = ec_emf_w1[bx](i + delta_w2[0], j + delta_w2[1], k + delta_w2[2]);
 			double emf_w2_p = ec_emf_w2[bx](i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
 			double db_dt = (dx1 * (emf_w1_m - emf_w1_p) + dx2 * (emf_w2_p - emf_w2_m)) / (dx1 * dx2);
-			if (w0 == 2) {
-				amrex::Real x1 = prob_lo[0] + i * dx[0] + static_cast<amrex::Real>(0.5) * dx[0];
-				constexpr double sound_speed = 1.0;
-				constexpr double gamma = 5. / 3.;
-				constexpr double bg_density = 1.0;
-				constexpr double bg_pressure = 1.0;
-				constexpr double bg_mag_amplitude = 10.0;
-				constexpr double theta_degrees = 0.0;
-				constexpr double num_modes = 2;
-				constexpr double k_amplitude = 2 * M_PI * num_modes;
-				constexpr double delta_b = 1e-6;
-				const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
-				const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
-				const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
-				const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
-				const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
-				const double omega = std::sqrt(std::pow(alfven_speed, 2) * std::pow(k_amplitude, 2) * std::pow(cos_theta, 2));
-				const double cos_wave = std::cos(omega * time - k_amplitude * x1);
-				const double x1mag = bg_mag_x1;
-				const double x2mag = bg_mag_x2;
-				const double x3mag = delta_b * cos_wave;
-				const double x1vel = 0;
-				const double x2vel = 0;
-				const double x3vel = -omega * delta_b / (sound_speed * k_amplitude * cos_theta) * cos_wave;
-				double db_dt_exact = -bg_mag_amplitude * omega * delta_b / cos_theta * std::sin(omega * time - k_amplitude * x1);
-				// const double y_new = fc_consVarOld(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + dt * db_dt;
-				// const double y_exact = delta_b * std::cos(omega * time - k_amplitude * x1);
-				int tmp = 0; // for debug
-			}
 			fc_consVarNew[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) =
 			    fc_consVarOld[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + dt * db_dt;
 		});
-
-		// for (amrex::MFIter mfi(fc_consVarNew_mf[w0]); mfi.isValid(); ++mfi) {
-		//   const amrex::Box &box_fc = mfi.validbox();
-		//   amrex::FArrayBox fab_bnew(box_fc, 1, amrex::The_Async_Arena());
-		//   auto const &ec_emf_w1 = ec_emf_mf[w1].const_array(mfi);
-		//   auto const &ec_emf_w2 = ec_emf_mf[w2].const_array(mfi);
-		//   auto const &fc_consVarOld = fc_consVarOld_mf[w0].const_array(mfi);
-		//   auto fc_consVarNew = fc_consVarNew_mf[w0].array(mfi);
-		//   auto array_bnew = fab_bnew.array();
-		//   auto const dx1 = dx[w1];
-		//   auto const dx2 = dx[w2];
-		//   amrex::ParallelFor(box_fc, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		//     double emf_w1_m = ec_emf_w1(i, j, k);
-		//     double emf_w2_m = ec_emf_w2(i, j, k);
-		//     double emf_w1_p = ec_emf_w1(i+delta_w2[0], j+delta_w2[1], k+delta_w2[2]);
-		//     double emf_w2_p = ec_emf_w2(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2]);
-		//     double db_dt = 0; //(dx1 * (emf_w1_m - emf_w1_p) + dx2 * (emf_w2_p - emf_w2_m)) / (dx1 * dx2);
-		//     if (w0 == 2) {
-		//       amrex::Real x1 = prob_lo[0] + i * dx[0] + static_cast<amrex::Real>(0.5) * dx[0];
-		//       constexpr double sound_speed = 1.0;
-		//       constexpr double gamma = 5. / 3.;
-		//       constexpr double bg_density = 1.0;
-		//       constexpr double bg_pressure = 1.0;
-		//       constexpr double bg_mag_amplitude = 10.0;
-		//       constexpr double theta_degrees = 0.0;
-		//       constexpr double num_modes = 2;
-		//       constexpr double k_amplitude = 2 * M_PI * num_modes;
-		//       constexpr double delta_b = 1e-6;
-		//       const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
-		//       const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
-		//       const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
-		//       const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
-		//       const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
-		//       const double omega = std::sqrt(std::pow(alfven_speed,2) * std::pow(k_amplitude,2) * std::pow(cos_theta,2));
-		//       const double cos_wave = std::cos(omega * time - k_amplitude * x1);
-		//       const double x1mag = bg_mag_x1;
-		//       const double x2mag = bg_mag_x2;
-		//       const double x3mag = delta_b * cos_wave;
-		//       const double x1vel = 0;
-		//       const double x2vel = 0;
-		//       const double x3vel = -omega * delta_b / (sound_speed * k_amplitude * cos_theta) * cos_wave;
-		//       db_dt = -omega * delta_b / cos_theta * std::sin(omega * time - k_amplitude * x1);
-		//       const double y_new = fc_consVarOld(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + dt * db_dt;
-		//       const double y_exact = delta_b * std::cos(omega * time - k_amplitude * x1);
-		//       if (((i == 0) && (j == 0)) && (k == 0)) {
-		//         std::cout << y_new - y_exact << std::endl;
-		//       }
-		//     }
-		//     fc_consVarNew(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) = fc_consVarOld(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-		//     dt * db_dt;
-		//   });
-		//   std::ofstream ofs("fab-bnew-f"+std::to_string(w0));
-		//   fab_bnew.writeOn(ofs, 0, 1);
-		// }
 
 		int tmp = 0; // TODO: for debuging. remove
 	}
