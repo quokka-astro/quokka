@@ -1005,7 +1005,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #if AMREX_SPACEDIM == 3
 		kickParticlesAllLevels(dt_[0]);
 
-		if constexpr (Particle_Traits<problem_t>::do_cic_particles && Particle_Traits<problem_t>::is_particle_creation_enabled) {
+		if constexpr ((Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) && Particle_Traits<problem_t>::is_particle_creation_enabled) {
 			particleRegister_.createCICParticles(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
 		}
 #endif
@@ -2114,7 +2114,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 
 template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 {
-	if constexpr (Particle_Traits<problem_t>::do_rad_particles) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
 
 		// Create particle container
@@ -2130,7 +2130,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 	}
 
 #if AMREX_SPACEDIM == 3
-	if constexpr (Particle_Traits<problem_t>::do_cic_particles) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
 		AMREX_ASSERT(CICParticles == nullptr);
 
 		// Create particle container
@@ -2144,7 +2144,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		createInitialCICParticles();
 	}
 
-	if constexpr (Particle_Traits<problem_t>::do_cic_rad_particles) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
 
 		// Create particle container
@@ -2899,7 +2899,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// Initialize and register particle containers from checkpoint file
 
-	if constexpr (Particle_Traits<problem_t>::do_rad_particles) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
 		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false,
@@ -2908,14 +2908,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 #if AMREX_SPACEDIM == 3
-	if constexpr (Particle_Traits<problem_t>::do_cic_particles) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
 		AMREX_ASSERT(CICParticles == nullptr);
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		particleRegister_.registerParticleType("CIC_particles", quokka::CICParticleMassIdx, -1, -1, false, CICParticles.get());
 		CICParticles->Restart(restart_chkfile, "CIC_particles");
 	}
 
-	if constexpr (Particle_Traits<problem_t>::do_cic_rad_particles) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
 		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,

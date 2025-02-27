@@ -23,12 +23,26 @@
 // 1. For massive particles, velocity components start after mass
 // 2. Birth time, if existing, is always followed by death time
 
-// this struct is specialized by the user application code.
+// Particle type flags that can be combined using bitwise OR operation (|).
+// Example: To enable both CIC and Rad particles, use:
+//   particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad  (= 0b00000011)
+// To check if CIC particles are enabled:
+//   if (particle_switch & ParticleSwitch::CIC) { ... }
+enum ParticleSwitch {
+	CIC = 1,   // 0b00000001: Cloud-In-Cell (gravitating) particles
+	Rad = 2,   // 0b00000010: Radiation particles
+	CICRad = 4 // 0b00000100: Combined gravitating-radiating particles
+};
+
+// This struct should be specialized by the user application code to configure particle behavior.
+// Determines which particle types are enabled using bitwise flags.
+// Examples:
+// - particle_switch = 0                     -> No particles enabled
+// - particle_switch = ParticleSwitch::CIC   -> Only CIC particles
+// - particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad -> Both CIC and Rad particles
 template <typename problem_t> struct Particle_Traits {
-	static constexpr bool do_cic_particles = false;
-	static constexpr bool do_rad_particles = false;
-	static constexpr bool do_cic_rad_particles = false;
-	static constexpr bool is_particle_creation_enabled = false;
+	static constexpr int particle_switch = 0;		    // Determines which particle types are enabled using bitwise flags.
+	static constexpr bool is_particle_creation_enabled = false; // Controls whether particles can be created during simulation
 };
 
 namespace quokka
