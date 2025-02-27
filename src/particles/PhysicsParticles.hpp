@@ -195,6 +195,9 @@ class PhysicsParticleDescriptorBase
 	// New method to get particle positions and data
 	[[nodiscard]] virtual auto getParticleData(int lev) const -> std::vector<std::vector<double>> = 0;
 
+	// Virtual method to compute maximum particle speed at a given level
+	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
+
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 	virtual void redistribute(int lev) = 0;
@@ -429,6 +432,56 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 
 		return particle_data; // Empty vector on non-root ranks
+	}
+
+	// Compute maximum particle speed at a given level
+	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::Real override
+	{
+		amrex::Real max_speed = 0.0;
+
+		if (container_ != nullptr && this->getMassIndex() >= 0) {
+			// Only compute for particles that have velocity components
+			const int mass_idx = this->getMassIndex();
+			const int nvels = AMREX_SPACEDIM;
+
+			// Check if we have enough components for velocities
+			if (mass_idx + nvels < ContainerType::ParticleType::NReal) {
+				// Compute local maximum speed
+				for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
+					auto &particles = pti.GetArrayOfStructs();
+					auto *pData = particles().data();
+					const amrex::Long np = pti.numParticles();
+
+					// Compute maximum speed on GPU
+					amrex::Real local_max = 0.0;
+					amrex::Gpu::AsyncArray<amrex::Real> local_max_aa(&local_max, 1);
+					amrex::Real *p_local_max = local_max_aa.data();
+
+					amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) {
+						amrex::Real thread_max = 0.0;
+						// Loop over particles
+						for (amrex::Long i = 0; i < np; ++i) {
+							const auto &p = pData[i]; // NOLINT
+							// Compute velocity magnitude
+							amrex::Real v2 = 0.0;
+							for (int j = 0; j < nvels; ++j) {
+								v2 += p.rdata(mass_idx + 1 + j) * p.rdata(mass_idx + 1 + j);
+							}
+							thread_max = std::max(thread_max, std::sqrt(v2));
+						}
+						p_local_max[0] = thread_max;
+					});
+
+					// Copy result back to CPU
+					local_max_aa.copyToHost(&local_max, 1);
+					max_speed = std::max(max_speed, local_max);
+				}
+			}
+		}
+
+		// Reduce across all MPI ranks to get global maximum
+		amrex::ParallelDescriptor::ReduceRealMax(max_speed);
+		return max_speed;
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -760,6 +813,18 @@ template <typename problem_t> class PhysicsParticleRegister
 		if (descriptor != nullptr) {
 			descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
 		}
+	}
+
+	// Compute maximum particle speed at a given level
+	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::Real
+	{
+		amrex::Real max_speed = 0.0;
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			if (descriptor->getMassIndex() >= 0) {
+				max_speed = std::max(max_speed, descriptor->computeMaxParticleSpeed(lev));
+			}
+		}
+		return max_speed;
 	}
 #endif // AMREX_SPACEDIM == 3
 
