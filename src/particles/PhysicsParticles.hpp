@@ -583,10 +583,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			// Only compute for particles that have velocity components
 			const int mass_idx = this->getMassIndex();
-			const int nvels = AMREX_SPACEDIM;
 
 			// Check if we have enough components for velocities
-			if (mass_idx + nvels < ContainerType::ParticleType::NReal) {
+			if (mass_idx + 3 < ContainerType::ParticleType::NReal) {
 				// Compute local maximum speed
 				for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
 					auto &particles = pti.GetArrayOfStructs();
@@ -602,11 +601,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(amrex::Long i) {
 							const auto &p = pData[i]; // NOLINT
 							// Compute velocity magnitude
-							amrex::Real v2 = 0.0;
-							for (int j = 0; j < nvels; ++j) {
-								v2 += p.rdata(mass_idx + 1 + j) * p.rdata(mass_idx + 1 + j);
-							}
-							amrex::Real speed = std::sqrt(v2);
+							const amrex::Real v2 = p.rdata(mass_idx + 1) * p.rdata(mass_idx + 1) + p.rdata(mass_idx + 2) * p.rdata(mass_idx + 2) + p.rdata(mass_idx + 3) * p.rdata(mass_idx + 3);
+							const amrex::Real speed = std::sqrt(v2);
 							amrex::Gpu::Atomic::Max(p_tile_max, speed);
 						});
 
