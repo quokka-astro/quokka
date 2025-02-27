@@ -40,7 +40,8 @@ template <> struct Physics_Traits<AlfvenWaveCircular> {
 constexpr double sound_speed = 1.0;
 constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveCircular>::gamma;
 
-// we have set up the problem so that the direction of wave propogation, vec(k), is aligned with the x1-direction, and the background magnetic field sits in the x1-x2 plane
+// we have set up the problem so that the direction of wave propogation, vec(k), is aligned with the x1-direction, and the background magnetic field sits in the
+// x1-x2 plane
 
 // k = 2 pi / wave_length. note: wave_length should be an integer, because of periodic BCs + the requirement that the magnetic field be continuous. also, the
 // box length = 1, so |k| in [1, inf)
@@ -68,9 +69,7 @@ AMREX_GPU_DEVICE double computeMagneticVectorPotential_y(double x1, double x2, d
 	return -bg_mag_amplitude * delta_b / k_amplitude * std::sin(omega * time - k_amplitude * x1);
 }
 
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_z(double x1, double x2, double x3, double time) {
-  return bg_mag_amplitude * x2;
-}
+AMREX_GPU_DEVICE double computeMagneticVectorPotential_z(double x1, double x2, double x3, double time) { return bg_mag_amplitude * x2; }
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
@@ -85,7 +84,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
 
 	if (cen == quokka::centering::cc) {
-    const double sin_wave_C = std::sin(omega * time - k_amplitude * x1_C);
+		const double sin_wave_C = std::sin(omega * time - k_amplitude * x1_C);
 		const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
 
 		const double density = bg_density;
@@ -113,27 +112,24 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		state(i, j, k, HydroSystem<AlfvenWaveCircular>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<AlfvenWaveCircular>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		const double x1mag = (
-      computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) -
-      computeMagneticVectorPotential_z(x1_L, x2_L,         x3_L + dx[2] / 2.0, time)
-    ) / dx[1] - (
-      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) -
-      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L,         time)
-    ) / dx[2];
-  const double x2mag = (
-      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) -
-      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L,         time)
-    ) / dx[2] - (
-      computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) -
-      computeMagneticVectorPotential_z(x1_L,         x2_L, x3_L + dx[2] / 2.0, time)
-    ) / dx[0];
-  const double x3mag = (
-      computeMagneticVectorPotential_y(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) -
-      computeMagneticVectorPotential_y(x1_L,         x2_L + dx[1] / 2.0, x3_L, time)
-    ) / dx[0] - (
-      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) -
-      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L,         x3_L, time)
-    ) / dx[1];
+		const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) -
+				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) /
+					 dx[1] -
+				     (computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) -
+				      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) /
+					 dx[2];
+		const double x2mag = (computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) -
+				      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) /
+					 dx[2] -
+				     (computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) -
+				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) /
+					 dx[0];
+		const double x3mag = (computeMagneticVectorPotential_y(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) -
+				      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) /
+					 dx[0] -
+				     (computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) -
+				      computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) /
+					 dx[1];
 		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<AlfvenWaveCircular>::bfield_index) = x1mag;
 		} else if (dir == quokka::direction::y) {
@@ -186,7 +182,7 @@ template <> void QuokkaSimulation<AlfvenWaveCircular>::setInitialConditionsOnGri
 
 template <>
 void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -204,7 +200,7 @@ void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution(amrex::Multi
 
 template <>
 void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();

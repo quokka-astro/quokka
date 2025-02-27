@@ -327,8 +327,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				const double E2_q1_ = E2_q1(i, j, k);
 				const double E2_q2_ = E2_q2(i, j, k);
 				const double E2_q3_ = E2_q3(i, j, k);
-        
-        // // Balsara & Spicer scheme:
+
+				// // Balsara & Spicer scheme:
 				// E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
 
 				// GS05 E^0_c scheme:
