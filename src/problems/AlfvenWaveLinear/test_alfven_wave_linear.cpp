@@ -15,18 +15,19 @@
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
+#include "hydro/EOS.hpp"
 #include "physics_info.hpp"
 
-struct AlfvenWave {
+struct AlfvenWaveLinear {
 };
 
-template <> struct quokka::EOS_Traits<AlfvenWave> {
+template <> struct quokka::EOS_Traits<AlfvenWaveLinear> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<AlfvenWave> {
+template <> struct Physics_Traits<AlfvenWaveLinear> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
@@ -38,22 +39,16 @@ template <> struct Physics_Traits<AlfvenWave> {
 
 // constants
 constexpr double sound_speed = 1.0;
-constexpr double gamma = 5.0 / 3.0;
+constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveLinear>::gamma;
 
-// we have set up the problem so that the direction of wave propogation, vec(k), is aligned with the x1-direction, and the background magnetic field sits in the x1-x2 plane
+// we have set up the problem so that:
+// the direction of wave propogation, vec(k), is aligned with the x1-direction
+// the background magnetic field sits in the x1-x2 plane
 
 // k = 2 pi / wave_length. note: wave_length should be an integer, because of periodic BCs + the requirement that the magnetic field be continuous. also, the
 // box length = 1, so |k| in [1, inf)
-constexpr double num_modes = 2.0;
+constexpr double num_modes = 1;
 constexpr double k_amplitude = 2.0 * M_PI * num_modes;
-
-// background states
-constexpr double bg_density = 1.0 / 6.0;
-constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma;
-constexpr double bg_mag_amplitude = 1.0;
-
-// input perturbation: remember, the linear regime is only valid when this perturbation is small
-constexpr double delta_b = 1e-6;
 
 // alignment between the background magnetic field and the direction of wave propogation (in the x1-x2 plane). recall that hat(k) = (1, 0, 0) and hat(delta_u) =
 // (0, 1, 0)
@@ -61,12 +56,18 @@ constexpr double theta_degrees = 0.0; // degrees
 const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
 const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
 
+// background states
+constexpr double bg_density = 1.0;
+constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
+constexpr double bg_mag_amplitude = 1.0;
+
 // magnetic field properties
+constexpr double delta_b = 1e-6;
 const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
 const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
 const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
 
-const double omega = std::sqrt(std::pow(alfven_speed, 2.0) * std::pow(k_amplitude, 2.0) * std::pow(cos_theta, 2.0));
+const double omega = std::sqrt(std::pow(alfven_speed, 2) * std::pow(k_amplitude, 2) * std::pow(cos_theta, 2));
 
 AMREX_GPU_DEVICE double computeMagneticVectorPotential_x(double x1, double x2, double x3, double time) { return 0.0; }
 
@@ -103,63 +104,52 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		const double x2mag = bg_mag_x2;
 		const double x3mag = bg_mag_amplitude * delta_b * cos_wave_C;
 
-		const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2.0) + std::pow(x2vel, 2.0) + std::pow(x3vel, 2.0));
+		const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
 		const double momentum = density * velocity_magnitude;
-		const double Ekin = 0.5 * std::pow(momentum, 2.0) / density;
+		const double Ekin = 0.5 * std::pow(momentum, 2) / density;
 		const double Emag = 0.5 * (x1mag * x1mag + x2mag * x2mag + x3mag * x3mag);
-		const double Eint = pressure / (gamma - 1.0);
+		const double Eint = pressure / (gamma_gas - 1);
 		const double Etot = Ekin + Emag + Eint;
 
-		state(i, j, k, HydroSystem<AlfvenWave>::density_index) = density;
-		state(i, j, k, HydroSystem<AlfvenWave>::x1Momentum_index) = x1vel * density;
-		state(i, j, k, HydroSystem<AlfvenWave>::x2Momentum_index) = x2vel * density;
-		state(i, j, k, HydroSystem<AlfvenWave>::x3Momentum_index) = x3vel * density;
-		state(i, j, k, HydroSystem<AlfvenWave>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<AlfvenWave>::internalEnergy_index) = Eint;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::density_index) = density;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x1Momentum_index) = x1vel * density;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x2Momentum_index) = x2vel * density;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x3Momentum_index) = x3vel * density;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		// // method 1: magnetic field at the center of the cell-face
-		// const double x1mag = bg_mag_x1;
-		// const double x2mag = bg_mag_x2;
-		// const double x3mag = bg_mag_amplitude * delta_b * std::cos(omega * time - k_amplitude * x1_L);
-		// method 2: average magnetic field across the cell-face
-		// const double x1mag = bg_mag_x1;
-		// const double x2mag = bg_mag_x2;
-		// const double x3mag = bg_mag_amplitude * delta_b / (k_amplitude * dx[0]) * (
-		//   std::sin(omega * time - k_amplitude * x1_L) - std::sin(omega * time - k_amplitude * (x1_L + dx[0]))
-		// );
-		// method 3: vector potential
 		const double x1mag = (
         computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) -
-				computeMagneticVectorPotential_z(x1_L, x2_L,         x3_L + dx[2] / 2.0, time)
+        computeMagneticVectorPotential_z(x1_L, x2_L,         x3_L + dx[2] / 2.0, time)
       ) / dx[1] - (
         computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) -
-				computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L,         time)
+        computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2.0, x3_L,         time)
       ) / dx[2];
-		const double x2mag = (
+    const double x2mag = (
         computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) -
-			  computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L,         time)
+        computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L, x3_L,         time)
       ) / dx[2] - (
         computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) -
-			  computeMagneticVectorPotential_z(x1_L,         x2_L, x3_L + dx[2] / 2.0, time)
+        computeMagneticVectorPotential_z(x1_L,         x2_L, x3_L + dx[2] / 2.0, time)
       ) / dx[0];
-		const double x3mag = (
+    const double x3mag = (
         computeMagneticVectorPotential_y(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) -
-			  computeMagneticVectorPotential_y(x1_L,         x2_L + dx[1] / 2.0, x3_L, time)
+        computeMagneticVectorPotential_y(x1_L,         x2_L + dx[1] / 2.0, x3_L, time)
       ) / dx[0] - (
-        computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L + dx[2], x3_L, time) -
-				computeMagneticVectorPotential_x(x1_L + dx[2] / 2.0, x2_L,         x3_L, time)
+        computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) -
+        computeMagneticVectorPotential_x(x1_L + dx[0] / 2.0, x2_L,         x3_L, time)
       ) / dx[1];
 		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x1mag;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = x1mag;
 		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x2mag;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = x2mag;
 		} else if (dir == quokka::direction::z) {
-			state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = x3mag;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = x3mag;
 		}
 	}
 }
 
-template <> void QuokkaSimulation<AlfvenWave>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -169,7 +159,7 @@ template <> void QuokkaSimulation<AlfvenWave>::setInitialConditionsOnGrid(quokka
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_cc = Physics_Indices<AlfvenWave>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
@@ -179,7 +169,7 @@ template <> void QuokkaSimulation<AlfvenWave>::setInitialConditionsOnGrid(quokka
 	});
 }
 
-template <> void QuokkaSimulation<AlfvenWave>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -189,7 +179,7 @@ template <> void QuokkaSimulation<AlfvenWave>::setInitialConditionsOnGridFaceVar
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_fc = Physics_Indices<AlfvenWave>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<AlfvenWaveLinear>::nvarPerDim_fc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
@@ -200,7 +190,7 @@ template <> void QuokkaSimulation<AlfvenWave>::setInitialConditionsOnGridFaceVar
 }
 
 template <>
-void QuokkaSimulation<AlfvenWave>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -218,7 +208,7 @@ void QuokkaSimulation<AlfvenWave>::computeReferenceSolution(amrex::MultiFab &ref
 }
 
 template <>
-void QuokkaSimulation<AlfvenWave>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -237,7 +227,7 @@ void QuokkaSimulation<AlfvenWave>::computeReferenceSolution_fc(amrex::MultiFab &
 
 auto problem_main() -> int
 {
-	const int nvars_cc = Physics_Indices<AlfvenWave>::nvarTotal_cc;
+	const int nvars_cc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
 	for (int icomp = 0; icomp < nvars_cc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -246,7 +236,7 @@ auto problem_main() -> int
 		}
 	}
 
-	const int nvars_fc = Physics_Indices<AlfvenWave>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -255,7 +245,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<AlfvenWave> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
 	sim.computeReferenceSolution_ = true;
 	sim.setInitialConditions();
 	sim.evolve();
