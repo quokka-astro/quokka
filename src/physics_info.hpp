@@ -59,9 +59,4 @@ template <typename problem_t> struct Physics_Indices {
 	static const int mhdFirstIndex = velFirstIndex + Physics_NumVars::numVelVars_per_dim;
 };
 
-// this struct is specialized by the user application code.
-template <typename problem_t> struct Particle_Traits {
-	static constexpr bool is_particle_creation_enabled = false;
-};
-
 #endif // PHYSICS_INFO_HPP_

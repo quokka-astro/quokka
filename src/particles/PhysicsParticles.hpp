@@ -26,6 +26,11 @@
 namespace quokka
 {
 
+// this struct is specialized by the user application code.
+template <typename problem_t> struct Particle_Traits {
+	static constexpr bool is_particle_creation_enabled = false;
+};
+
 // Enum class to identify different particle types
 enum class ParticleType {
 	Rad,   // Radiation particles
