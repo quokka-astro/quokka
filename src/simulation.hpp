@@ -811,7 +811,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
 
 	// compute maximum particle speed on level 'lev'
-	const amrex::Real max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
+	amrex::Real max_particle_speed = 0.0;
+#if AMREX_SPACEDIM == 3
+	max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
+#endif
 
 	// Optionally print max particle speed for debugging
 	// amrex::Print() << "max_particle_speed: " << max_particle_speed << "\n";
