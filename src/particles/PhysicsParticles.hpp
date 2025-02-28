@@ -595,15 +595,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					if (np > 0) {
 						// Allocate device memory for reduction
 						amrex::Gpu::DeviceScalar<amrex::Real> ds_max(0.0);
-						amrex::Real* p_max = ds_max.dataPtr();
+						amrex::Real *p_max = ds_max.dataPtr();
 
 						// Compute maximum speed in parallel using reduction
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(amrex::Long i) {
 							const auto &p = pData[i]; // NOLINT
 							// Compute velocity magnitude
-							const amrex::Real v2 = p.rdata(mass_idx + 1) * p.rdata(mass_idx + 1) + 
-									     p.rdata(mass_idx + 2) * p.rdata(mass_idx + 2) + 
-									     p.rdata(mass_idx + 3) * p.rdata(mass_idx + 3);
+							const amrex::Real v2 = p.rdata(mass_idx + 1) * p.rdata(mass_idx + 1) +
+									       p.rdata(mass_idx + 2) * p.rdata(mass_idx + 2) +
+									       p.rdata(mass_idx + 3) * p.rdata(mass_idx + 3);
 							const amrex::Real speed = std::sqrt(v2);
 							amrex::Gpu::Atomic::Max(p_max, speed);
 						});
