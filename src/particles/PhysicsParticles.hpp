@@ -580,42 +580,43 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		amrex::Real max_speed = 0.0;
 
-		if (container_ != nullptr && this->getMassIndex() >= 0) {
-			// Only compute for particles that have velocity components
-			const int mass_idx = this->getMassIndex();
+		// if (container_ != nullptr && this->getMassIndex() >= 0) {
+		// 	// Only compute for particles that have velocity components
+		// 	const int mass_idx = this->getMassIndex();
 
-			// Check if we have enough components for velocities
-			if (mass_idx + 3 < ContainerType::ParticleType::NReal) {
-				// Compute local maximum speed
-				for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
-					auto &particles = pti.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pti.numParticles();
+		// 	// Check if we have enough components for velocities
+		// 	if (mass_idx + 3 < ContainerType::ParticleType::NReal) {
+		// 		// Compute local maximum speed
+		// 		for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
+		// 			auto &particles = pti.GetArrayOfStructs();
+		// 			auto *pData = particles().data();
+		// 			const amrex::Long np = pti.numParticles();
 
-					if (np > 0) {
-						amrex::Real tile_max = 0.0;
-						amrex::Gpu::AsyncArray<amrex::Real> local_max_aa(&tile_max, 1);
-						amrex::Real* p_tile_max = local_max_aa.data();
+		// 			if (np > 0) {
+		// 				// Allocate device memory for reduction
+		// 				amrex::Gpu::DeviceScalar<amrex::Real> ds_max(0.0);
+		// 				amrex::Real* p_max = ds_max.dataPtr();
 
-						// Compute maximum speed in parallel using reduction
-						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(amrex::Long i) {
-							const auto &p = pData[i]; // NOLINT
-							// Compute velocity magnitude
-							const amrex::Real v2 = p.rdata(mass_idx + 1) * p.rdata(mass_idx + 1) + p.rdata(mass_idx + 2) * p.rdata(mass_idx + 2) + p.rdata(mass_idx + 3) * p.rdata(mass_idx + 3);
-							const amrex::Real speed = std::sqrt(v2);
-							amrex::Gpu::Atomic::Max(p_tile_max, speed);
-						});
+		// 				// Compute maximum speed in parallel using reduction
+		// 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(amrex::Long i) {
+		// 					const auto &p = pData[i]; // NOLINT
+		// 					// Compute velocity magnitude
+		// 					const amrex::Real v2 = p.rdata(mass_idx + 1) * p.rdata(mass_idx + 1) + 
+		// 							     p.rdata(mass_idx + 2) * p.rdata(mass_idx + 2) + 
+		// 							     p.rdata(mass_idx + 3) * p.rdata(mass_idx + 3);
+		// 					const amrex::Real speed = std::sqrt(v2);
+		// 					amrex::Gpu::Atomic::Max(p_max, speed);
+		// 				});
 
-						// Copy result back to CPU
-						local_max_aa.copyToHost(&tile_max, 1);
-						max_speed = std::max(max_speed, tile_max);
-					}
-				}
-			}
-		}
+		// 				// Copy result back to host
+		// 				max_speed = std::max(max_speed, ds_max.dataValue());
+		// 			}
+		// 		}
+		// 	}
+		// }
 
-		// Reduce across all MPI ranks to get global maximum
-		amrex::ParallelDescriptor::ReduceRealMax(max_speed);
+		// // Reduce across all MPI ranks to get global maximum
+		// amrex::ParallelAllReduce::Max(max_speed, amrex::ParallelContext::CommunicatorSub());
 		return max_speed;
 	}
 
