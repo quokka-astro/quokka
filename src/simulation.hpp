@@ -811,9 +811,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
 
 	// compute maximum particle speed on level 'lev'
-	// const amrex::Real max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
-	// amrex::Print() << "max_particle_speed: " << max_particle_speed << std::endl;
-	const amrex::Real max_particle_speed = 0.0;
+	const amrex::Real max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
+	amrex::Print() << "max_particle_speed: " << max_particle_speed << std::endl;
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
