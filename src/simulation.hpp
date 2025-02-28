@@ -154,6 +154,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<int> reductionFactor_;  // timestep reduction factor for each level
 	amrex::Real stopTime_ = 1.0;	      // default
 	amrex::Real cflNumber_ = 0.3;	      // default
+	amrex::Real particleCflNumber_ = 0.99;	      // default
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
@@ -644,6 +645,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default CFL number == 0.3, set to whatever is in the file
 	pp.query("cfl", cflNumber_);
 
+	// Default CFL number for particles == 0.99, set to whatever is in the file
+	pp.query("particle_cfl", particleCflNumber_);
+
 	// Default AMR interpolation method == lincc_interp
 	pp.query("amr_interpolation_method", amrInterpMethod_);
 
@@ -816,18 +820,16 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
 #endif
 
-	// Optionally print max particle speed for debugging
-	// amrex::Print() << "max_particle_speed: " << max_particle_speed << "\n";
-
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-	const amrex::Real hydro_dt = cflNumber_ * (dx_min / std::max(domain_signal_max, max_particle_speed));
+	const amrex::Real hydro_dt = cflNumber_ * (dx_min / domain_signal_max);
+	const amrex::Real particle_dt = particleCflNumber_ * (dx_min / max_particle_speed);
 
 	// compute timestep due to extra physics on level 'lev'
 	const amrex::Real extra_physics_dt = computeExtraPhysicsTimestep(lev);
 
 	// return minimum timestep
-	return std::min(hydro_dt, extra_physics_dt);
+	return std::min({hydro_dt, particle_dt, extra_physics_dt});
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
