@@ -38,7 +38,7 @@ template <> struct quokka::EOS_Traits<ParticleProblem> {
 };
 
 template <> struct Particle_Traits<ParticleProblem> {
-	static constexpr int particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad | ParticleSwitch::CICRad;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::FromValue(ParticleSwitch::CIC | ParticleSwitch::Rad | ParticleSwitch::CICRad);
 	static constexpr bool is_particle_creation_enabled = true;
 };
 

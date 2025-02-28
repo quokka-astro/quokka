@@ -28,20 +28,60 @@
 //   particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad  (= 0b00000011)
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
-enum ParticleSwitch : unsigned int {
-	CIC = 0b00000001U,   // Cloud-In-Cell (gravitating) particles
-	Rad = 0b00000010U,   // Radiation particles
-	CICRad = 0b00000100U // Combined gravitating-radiating particles
+class ParticleSwitch {
+public:
+	using UnderlyingType = unsigned int;
+	static constexpr UnderlyingType CIC = 0b00000001U;    // Cloud-In-Cell (gravitating) particles
+	static constexpr UnderlyingType Rad = 0b00000010U;    // Radiation particles
+	static constexpr UnderlyingType CICRad = 0b00000100U; // Combined gravitating-radiating particles
+
+private:
+	UnderlyingType value_;
+
+public:
+	constexpr ParticleSwitch() noexcept : value_(0) {}
+	constexpr explicit ParticleSwitch(UnderlyingType value) noexcept : value_(value) {}
+
+	// Allow implicit conversion to UnderlyingType for compatibility with existing code
+	constexpr operator UnderlyingType() const noexcept { return value_; }
+
+	// Bitwise operations that return ParticleSwitch
+	constexpr auto operator|(ParticleSwitch other) const noexcept -> ParticleSwitch { return ParticleSwitch(value_ | other.value_); }
+	constexpr auto operator&(ParticleSwitch other) const noexcept -> ParticleSwitch { return ParticleSwitch(value_ & other.value_); }
+	constexpr auto operator^(ParticleSwitch other) const noexcept -> ParticleSwitch { return ParticleSwitch(value_ ^ other.value_); }
+	constexpr auto operator~() const noexcept -> ParticleSwitch { return ParticleSwitch(~value_); }
+
+	// Assignment operators
+	constexpr auto operator|=(ParticleSwitch other) noexcept -> ParticleSwitch& {
+		value_ |= other.value_;
+		return *this;
+	}
+	constexpr auto operator&=(ParticleSwitch other) noexcept -> ParticleSwitch& {
+		value_ &= other.value_;
+		return *this;
+	}
+	constexpr auto operator^=(ParticleSwitch other) noexcept -> ParticleSwitch& {
+		value_ ^= other.value_;
+		return *this;
+	}
+
+	// Comparison operators
+	constexpr auto operator==(ParticleSwitch other) const noexcept -> bool { return value_ == other.value_; }
+	constexpr auto operator!=(ParticleSwitch other) const noexcept -> bool { return value_ != other.value_; }
+
+	// Factory methods for creating particle switches
+	static constexpr auto None() noexcept -> ParticleSwitch { return ParticleSwitch(0); }
+	static constexpr auto FromValue(UnderlyingType value) noexcept -> ParticleSwitch { return ParticleSwitch(value); }
 };
 
 // This struct should be specialized by the user application code to configure particle behavior.
 // Determines which particle types are enabled using bitwise flags.
 // Examples:
-// - particle_switch = 0                     -> No particles enabled
-// - particle_switch = ParticleSwitch::CIC   -> Only CIC particles
-// - particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad -> Both CIC and Rad particles
+// - particle_switch = ParticleSwitch::None()                     -> No particles enabled
+// - particle_switch = ParticleSwitch::FromValue(ParticleSwitch::CIC)   -> Only CIC particles
+// - particle_switch = ParticleSwitch::FromValue(ParticleSwitch::CIC | ParticleSwitch::Rad) -> Both CIC and Rad particles
 template <typename problem_t> struct Particle_Traits {
-	static constexpr int particle_switch = 0;		    // Determines which particle types are enabled using bitwise flags.
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None();  // Determines which particle types are enabled using bitwise flags.
 	static constexpr bool is_particle_creation_enabled = false; // Controls whether particles can be created during simulation
 };
 
