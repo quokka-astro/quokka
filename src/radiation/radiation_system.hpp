@@ -920,8 +920,18 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// terms.
 	std::array<amrex::Real, 3> n{};
 
+	AMREX_ASSERT(!std::isnan(fx));
+	AMREX_ASSERT(!std::isnan(fy));
+	AMREX_ASSERT(!std::isnan(fz));
+	AMREX_ASSERT(!std::isnan(f));
 	for (int ii = 0; ii < 3; ++ii) {
-		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
+		const double f_small = 1.0e-10;
+		f += 0.0;
+		if (f > f_small) {
+			n[ii] = fvec[ii] / f;
+		} else {
+			n[ii] = 0.;
+		}
 	}
 
 	// compute radiation pressure tensors
@@ -958,6 +968,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
+
+	AMREX_ASSERT(!std::isnan(fx));
+	AMREX_ASSERT(!std::isnan(fy));
+	AMREX_ASSERT(!std::isnan(fz));
 
 	// Compute the Eddington tensor
 	auto T = ComputeEddingtonTensor(fx, fy, fz);
