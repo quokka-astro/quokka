@@ -217,17 +217,17 @@ auto problem_main() -> int
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Test CICRad particles
-		auto positions_cicrad = sim.particleRegister_.getParticleDescriptor("CICRad_particles")->getParticlePositions(0);
+		auto positions_cicrad = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CICRad)->getParticlePositions(0);
 		double position_error_cicrad = 0.0;
 		double position_norm_cicrad = 0.0;
 
 		// Test CIC particles
-		auto positions_cic = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
+		auto positions_cic = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticlePositions(0);
 		double position_error_cic = 0.0;
 		const double position_norm_cic = 1.0; // set to 1.0 since the particles are exactly at the origin
 
 		// Test Rad particles
-		auto positions_rad = sim.particleRegister_.getParticleDescriptor("Rad_particles")->getParticlePositions(0);
+		auto positions_rad = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Rad)->getParticlePositions(0);
 		double position_error_rad = 0.0;
 		double position_norm_rad = 0.0;
 

@@ -676,16 +676,16 @@ template <typename problem_t> class PhysicsParticleRegister
 {
       private:
 	// Map storing particle descriptors, indexed by particle type enum
-	std::map<quokka::ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
+	std::map<ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
 	// Utility method to convert particle type to string name (for writing plotfiles/checkpoints)
-	static std::string particleTypeToName(quokka::ParticleType type) {
+	static std::string particleTypeToName(ParticleType type) {
 		switch (type) {
-		case quokka::ParticleType::Rad:
+		case ParticleType::Rad:
 			return "Rad_particles";
-		case quokka::ParticleType::CIC:
+		case ParticleType::CIC:
 			return "CIC_particles";
-		case quokka::ParticleType::CICRad:
+		case ParticleType::CICRad:
 			return "CICRad_particles";
 		default:
 			return "Unknown_particles";
@@ -711,23 +711,23 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
-	void registerParticleType(quokka::ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container)
+	void registerParticleType(ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		
 		// Create the appropriate descriptor based on the particle type
 		switch (type) {
-		case quokka::ParticleType::Rad:
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, quokka::ParticleType::Rad>>(
+		case ParticleType::Rad:
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
 				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
 			break;
 #if AMREX_SPACEDIM == 3
-		case quokka::ParticleType::CIC:
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, quokka::ParticleType::CIC>>(
+		case ParticleType::CIC:
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
 				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
 			break;
-		case quokka::ParticleType::CICRad:
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, quokka::ParticleType::CICRad>>(
+		case ParticleType::CICRad:
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
 			break;
 #endif // AMREX_SPACEDIM == 3
@@ -740,7 +740,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Retrieve a particle descriptor by type
-	[[nodiscard]] auto getParticleDescriptor(quokka::ParticleType type) const -> const PhysicsParticleDescriptorBase *
+	[[nodiscard]] auto getParticleDescriptor(ParticleType type) const -> const PhysicsParticleDescriptorBase *
 	{
 		auto it = particleRegistry_.find(type);
 		if (it != particleRegistry_.end()) {
@@ -835,11 +835,11 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getAllowsCreation()) {
 				// Dispatch to the appropriate particle type based on the particle type
 				switch (type) { // NOLINT
-				case quokka::ParticleType::CIC:
+				case ParticleType::CIC:
 					descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
 					break;
 				// Add more particle types here as needed in the future
-				// case quokka::ParticleType::NewType:
+				// case ParticleType::NewType:
 				//     descriptor->createNewTypeParticles(state, lev, current_time, dt, param1, param2);
 				//     break;
 				default:
