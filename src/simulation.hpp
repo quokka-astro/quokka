@@ -1005,10 +1005,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #if AMREX_SPACEDIM == 3
 		kickParticlesAllLevels(dt_[0]);
 
-		if constexpr ((Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) && Particle_Traits<problem_t>::is_particle_creation_enabled) {
-			// Use the new type-aware particle creation method
-			particleRegister_.createParticles(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
-		}
+		// Use the new type-aware particle creation method
+		particleRegister_.createParticles(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
 #endif
 
 		cur_time += dt_[0];
@@ -2908,7 +2906,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
 		particleRegister_.registerParticleType(quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, false,
 						       RadParticles.get());
-		RadParticles->Restart(restart_chkfile, particleRegister_.particleTypeToName(quokka::ParticleType::Rad));
+		RadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Rad));
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -2916,7 +2914,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		AMREX_ASSERT(CICParticles == nullptr);
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		particleRegister_.registerParticleType(quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1, -1, false, true, CICParticles.get());
-		CICParticles->Restart(restart_chkfile, particleRegister_.particleTypeToName(quokka::ParticleType::CIC));
+		CICParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
@@ -2924,7 +2922,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
 		particleRegister_.registerParticleType(quokka::ParticleType::CICRad, quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
 						       quokka::CICRadParticleBirthTimeIdx, false, false, CICRadParticles.get());
-		CICRadParticles->Restart(restart_chkfile, particleRegister_.particleTypeToName(quokka::ParticleType::CICRad));
+		CICRadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CICRad));
 	}
 #endif // AMREX_SPACEDIM == 3
 #endif

@@ -27,7 +27,6 @@ template <> struct quokka::EOS_Traits<ParticleProblem> {
 
 template <> struct Particle_Traits<ParticleProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Rad;
-	static constexpr bool is_particle_creation_enabled = false;
 };
 
 template <> struct Physics_Traits<ParticleProblem> {

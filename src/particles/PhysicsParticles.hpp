@@ -41,7 +41,6 @@ constexpr bool operator&(ParticleSwitch flags, ParticleSwitch flag) { return (st
 
 // This struct should be specialized by the user application code to configure particle behavior.
 // The particle_switch member determines which particle types are enabled using bitwise flags.
-// The is_particle_creation_enabled member controls whether particles can be created during simulation.
 // Examples:
 // - static constexpr ParticleSwitch particle_switch = ParticleSwitch::None             -> No particles enabled
 // - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC              -> Only CIC particles
@@ -55,7 +54,6 @@ constexpr bool operator&(ParticleSwitch flags, ParticleSwitch flag) { return (st
 // - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
 template <typename problem_t> struct Particle_Traits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None; // Determines which particle types are enabled using bitwise flags.
-	static constexpr bool is_particle_creation_enabled = false;		// Controls whether particles can be created during simulation
 };
 
 // Static assertion helper to verify that particle_switch is of the correct type
@@ -678,20 +676,6 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Map storing particle descriptors, indexed by particle type enum
 	std::map<ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
-	// Utility method to convert particle type to string name (for writing plotfiles/checkpoints)
-	static std::string particleTypeToName(ParticleType type) {
-		switch (type) {
-		case ParticleType::Rad:
-			return "Rad_particles";
-		case ParticleType::CIC:
-			return "CIC_particles";
-		case ParticleType::CICRad:
-			return "CICRad_particles";
-		default:
-			return "Unknown_particles";
-		}
-	}
-
       public:
 	// Constructor
 	PhysicsParticleRegister() = default;
@@ -707,6 +691,20 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 		return false;
+	}
+
+	// Utility method to convert particle type to string name (for writing plotfiles/checkpoints)
+	[[nodiscard]] static auto getParticleTypeName(ParticleType type) -> std::string {
+		switch (type) {
+		case ParticleType::Rad:
+			return "Rad_particles";
+		case ParticleType::CIC:
+			return "CIC_particles";
+		case ParticleType::CICRad:
+			return "CICRad_particles";
+		default:
+			return "Unknown_particles";
+		}
 	}
 
 	// Register a new particle type with specified properties
@@ -792,7 +790,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void writePlotFile(const std::string &plotfilename)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->writePlotFile(plotfilename, particleTypeToName(type));
+			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 		}
 	}
 
@@ -800,7 +798,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void writeCheckpoint(const std::string &checkpointname, bool include_header) const
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->writeCheckpoint(checkpointname, particleTypeToName(type), include_header);
+			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
 		}
 	}
 

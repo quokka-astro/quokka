@@ -43,7 +43,6 @@ template <> struct Particle_Traits<BinaryOrbit> {
 	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
-	static constexpr bool is_particle_creation_enabled = true;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {

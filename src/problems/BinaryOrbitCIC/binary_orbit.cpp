@@ -35,7 +35,6 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 
 template <> struct Particle_Traits<BinaryOrbit> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
-	static constexpr bool is_particle_creation_enabled = false;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {
