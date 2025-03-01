@@ -19,71 +19,60 @@
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 
-// Assumptions for any particle type:
-// 1. For massive particles, velocity components start after mass
-// 2. Birth time, if existing, is always followed by death time
-
 // Particle type flags that can be combined using bitwise OR operation (|).
 // Example: To enable both CIC and Rad particles, use:
 //   particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad  (= 0b00000011)
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
-class ParticleSwitch {
-public:
-	using UnderlyingType = unsigned int;
-	static constexpr UnderlyingType CIC = 0b00000001U;    // Cloud-In-Cell (gravitating) particles
-	static constexpr UnderlyingType Rad = 0b00000010U;    // Radiation particles
-	static constexpr UnderlyingType CICRad = 0b00000100U; // Combined gravitating-radiating particles
-
-private:
-	UnderlyingType value_;
-
-public:
-	constexpr ParticleSwitch() noexcept : value_(0) {}
-	constexpr explicit ParticleSwitch(UnderlyingType value) noexcept : value_(value) {}
-
-	// Allow implicit conversion to UnderlyingType for compatibility with existing code
-	constexpr operator UnderlyingType() const noexcept { return value_; }
-
-	// Bitwise operations that return ParticleSwitch
-	constexpr auto operator|(ParticleSwitch other) const noexcept -> ParticleSwitch { return ParticleSwitch(value_ | other.value_); }
-	constexpr auto operator&(ParticleSwitch other) const noexcept -> ParticleSwitch { return ParticleSwitch(value_ & other.value_); }
-	constexpr auto operator^(ParticleSwitch other) const noexcept -> ParticleSwitch { return ParticleSwitch(value_ ^ other.value_); }
-	constexpr auto operator~() const noexcept -> ParticleSwitch { return ParticleSwitch(~value_); }
-
-	// Assignment operators
-	constexpr auto operator|=(ParticleSwitch other) noexcept -> ParticleSwitch& {
-		value_ |= other.value_;
-		return *this;
-	}
-	constexpr auto operator&=(ParticleSwitch other) noexcept -> ParticleSwitch& {
-		value_ &= other.value_;
-		return *this;
-	}
-	constexpr auto operator^=(ParticleSwitch other) noexcept -> ParticleSwitch& {
-		value_ ^= other.value_;
-		return *this;
-	}
-
-	// Comparison operators
-	constexpr auto operator==(ParticleSwitch other) const noexcept -> bool { return value_ == other.value_; }
-	constexpr auto operator!=(ParticleSwitch other) const noexcept -> bool { return value_ != other.value_; }
-
-	// Factory methods for creating particle switches
-	static constexpr auto None() noexcept -> ParticleSwitch { return ParticleSwitch(0); }
-	static constexpr auto FromValue(UnderlyingType value) noexcept -> ParticleSwitch { return ParticleSwitch(value); }
+enum class ParticleSwitch : unsigned int {
+	None = 0U,	     // No particles
+	CIC = 0b00000001U,   // Cloud-In-Cell (gravitating) particles
+	Rad = 0b00000010U,   // Radiation particles
+	CICRad = 0b00000100U // Combined gravitating-radiating particles
 };
+
+// Enable bitwise operations on the enum class
+constexpr ParticleSwitch operator|(ParticleSwitch a, ParticleSwitch b)
+{
+	return static_cast<ParticleSwitch>(static_cast<unsigned int>(a) | static_cast<unsigned int>(b));
+}
+
+constexpr bool operator&(ParticleSwitch flags, ParticleSwitch flag) { return (static_cast<unsigned int>(flags) & static_cast<unsigned int>(flag)) != 0; }
 
 // This struct should be specialized by the user application code to configure particle behavior.
-// Determines which particle types are enabled using bitwise flags.
+// The particle_switch member determines which particle types are enabled using bitwise flags.
+// The is_particle_creation_enabled member controls whether particles can be created during simulation.
 // Examples:
-// - particle_switch = ParticleSwitch::None()                     -> No particles enabled
-// - particle_switch = ParticleSwitch::FromValue(ParticleSwitch::CIC)   -> Only CIC particles
-// - particle_switch = ParticleSwitch::FromValue(ParticleSwitch::CIC | ParticleSwitch::Rad) -> Both CIC and Rad particles
+// - static constexpr ParticleSwitch particle_switch = ParticleSwitch::None             -> No particles enabled
+// - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC              -> Only CIC particles
+// - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad -> Both CIC and Rad particles
+// Examples that will cause a compile error:
+// - static constexpr int particle_switch = 1;
+// enum class TestEnum : unsigned int {
+// 	MISTAKE = 0b00000100U,   
+// };
+// - static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
+// - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
 template <typename problem_t> struct Particle_Traits {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None();  // Determines which particle types are enabled using bitwise flags.
-	static constexpr bool is_particle_creation_enabled = false; // Controls whether particles can be created during simulation
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None; // Determines which particle types are enabled using bitwise flags.
+	static constexpr bool is_particle_creation_enabled = false;		// Controls whether particles can be created during simulation
 };
+
+// Static assertion helper to verify that particle_switch is of the correct type
+namespace detail
+{
+template <typename problem_t> constexpr void verify_particle_switch_type()
+{
+	// This will fail to compile if particle_switch is not of type ParticleSwitch
+	static_assert(std::is_same_v<decltype(Particle_Traits<problem_t>::particle_switch), const ParticleSwitch>,
+		      "ERROR: Particle_Traits::particle_switch must be of type ParticleSwitch. "
+		      "Use any of the members of ParticleSwitch enum class, or combinations with '|'");
+}
+} // namespace detail
+
+// Assumptions for any particle type:
+// 1. For massive particles, velocity components start after mass
+// 2. Birth time, if existing, is always followed by death time
 
 namespace quokka
 {

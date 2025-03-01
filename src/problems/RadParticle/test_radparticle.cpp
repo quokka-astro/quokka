@@ -10,6 +10,7 @@
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
+#include "particles/PhysicsParticles.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
@@ -37,7 +38,7 @@ template <> struct quokka::EOS_Traits<ParticleProblem> {
 };
 
 template <> struct Particle_Traits<ParticleProblem> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::FromValue(ParticleSwitch::Rad);
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Rad;
 	static constexpr bool is_particle_creation_enabled = false;
 };
 

@@ -32,8 +32,17 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
+// Test enum to demonstrate type checking of particle_switch
+enum class TestEnum : unsigned int {
+	MISTAKE = 0b00000100U,   
+};
+
 template <> struct Particle_Traits<BinaryOrbit> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::FromValue(ParticleSwitch::CIC);
+	// The following will cause a compile error
+	// static constexpr int particle_switch = 1;
+	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 	static constexpr bool is_particle_creation_enabled = true;
 };
 

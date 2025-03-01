@@ -2114,7 +2114,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 
 template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 {
-	if constexpr ((Particle_Traits<problem_t>::particle_switch & ParticleSwitch::FromValue(ParticleSwitch::Rad)).operator ParticleSwitch::UnderlyingType() != 0) {
+	// Verify that particle_switch is of the correct type
+	detail::verify_particle_switch_type<problem_t>();
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
 
 		// Create particle container
@@ -2130,7 +2133,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 	}
 
 #if AMREX_SPACEDIM == 3
-	if constexpr ((Particle_Traits<problem_t>::particle_switch & ParticleSwitch::FromValue(ParticleSwitch::CIC)).operator ParticleSwitch::UnderlyingType() != 0) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
 		AMREX_ASSERT(CICParticles == nullptr);
 
 		// Create particle container
@@ -2144,5 +2147,788 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		createInitialCICParticles();
 	}
 
-	if constexpr ((Particle_Traits<problem_t>::particle_switch & ParticleSwitch::FromValue(ParticleSwitch::CICRad)).operator ParticleSwitch::UnderlyingType() != 0) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
+
+		// Create particle container
+		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
+		CICRadParticles->SetVerbose(0);
+
+		// Register with particle register
+		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
+						       quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
+
+		// Initialize particles through derived class
+		createInitialCICRadParticles();
+	}
+#endif // AMREX_SPACEDIM == 3
+
+	particleRegister_.redistribute(0);
+}
+#endif
+
+// get plotfile name
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 5); }
+
+// get plotfile name
+template <typename problem_t> auto AMRSimulation<problem_t>::CustomPlotFileName(const char *base, int lev) const -> std::string
+{
+	const std::string base_str(base);
+	return amrex::Concatenate(base_str, lev, 5);
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start,
+					     int srccomp_total) const
+{
+	int di = 0;
+	int dj = 0;
+	int dk = 0;
+	if (idim == 0) {
+		di = 1;
+	} else if (idim == 1) {
+		dj = 1;
+	} else if (idim == 2) {
+		dk = 1;
+	}
+	// iterate over the domain
+	auto const &state_cc = mf_cc.arrays();
+	auto const &state_fc = mf_fc.const_arrays();
+	int const ng_cc = mf_cc.nGrow();
+	int const ng_fc = mf_fc.nGrow();
+	AMREX_ALWAYS_ASSERT(ng_cc <= ng_fc); // if this is false, we can't fill the ghost cells!
+	amrex::ParallelFor(mf_cc, amrex::IntVect(AMREX_D_DECL(ng_cc, ng_cc, ng_cc)), [=] AMREX_GPU_DEVICE(int boxidx, int i, int j, int k) {
+		for (int icomp = 0; icomp < srccomp_total; ++icomp) {
+			state_cc[boxidx](i, j, k, dstcomp_start + icomp) =
+			    0.5 * (state_fc[boxidx](i, j, k, srccomp_start + icomp) + state_fc[boxidx](i + di, j + dj, k + dk, srccomp_start + icomp));
+		}
+	});
+	amrex::Gpu::streamSynchronize();
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(const int lev, const int included_ghosts) -> amrex::MultiFab
+{
+	// Combine state_new_cc_[lev] and derived variables in a new MF
+	const int ncomp_cc = state_new_cc_[lev].nComp();
+	int comp = 0;
+	int ncomp_per_dim_fc = 0;
+	int ncomp_tot_fc = 0;
+	int nghost_fc = 0;
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
+		ncomp_tot_fc = Physics_Indices<problem_t>::nvarTotal_fc;
+		nghost_fc = state_new_fc_[lev][0].nGrow();
+	}
+	const int ncomp_deriv = derivedNames_.size();
+	const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
+	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
+
+	if (included_ghosts > 0) {
+		// Fill ghost zones for state_new_cc_
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
+				       InterpHookNone, FillPatchType::fillpatch_function);
+	}
+
+	// Fill ghost zones for state_new_fc_
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		}
+	}
+
+	// copy data from cell-centred state variables
+	for (int i = 0; i < ncomp_cc; i++) {
+		amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], i, comp, 1, included_ghosts);
+		comp++;
+	}
+
+	// compute cell-center averaged face-centred data
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc);
+			comp += ncomp_per_dim_fc;
+		}
+	}
+
+	// compute derived vars
+	for (auto const &dname : derivedNames_) {
+		ComputeDerivedVar(lev, dname, plotMF, comp);
+		comp++;
+	}
+
+	return plotMF;
+}
+
+// put together an array of multifabs for writing
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF(const int included_ghosts) -> amrex::Vector<amrex::MultiFab>
+{
+	amrex::Vector<amrex::MultiFab> r;
+	for (int i = 0; i <= finest_level; ++i) {
+		r.push_back(PlotFileMFAtLevel(i, included_ghosts));
+	}
+	return r;
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
+{
+	std::string const code_prefix = "quokka";
+	amrex::ParmParse const pp(code_prefix);
+	amrex::Vector<std::string> diags;
+
+	int const n_diags = pp.countval("diagnostics");
+	if (n_diags > 0) {
+		m_diagnostics.resize(n_diags);
+		diags.resize(n_diags);
+	}
+
+	for (int n = 0; n < n_diags; ++n) {
+		pp.get("diagnostics", diags[n], n);
+		std::string const diag_prefix = code_prefix + "." + diags[n];
+		amrex::ParmParse const ppd(diag_prefix);
+		std::string diag_type;
+		ppd.get("type", diag_type);
+		m_diagnostics[n] = DiagBase::create(diag_type);
+		m_diagnostics[n]->init(diag_prefix, diags[n]);
+		m_diagnostics[n]->addVars(m_diagVars);
+	}
+
+	// Remove duplicates from m_diagVars and check that all the variables exist
+	std::sort(m_diagVars.begin(), m_diagVars.end());
+	auto last = std::unique(m_diagVars.begin(), m_diagVars.end());
+	m_diagVars.erase(last, m_diagVars.end());
+
+	auto isVarName = [this](std::string const &v) {
+		auto const varnames = GetPlotfileVarNames();
+		return std::any_of(varnames.cbegin(), varnames.cend(), [v](std::string const &var) { return v == var; });
+	};
+
+	for (auto &v : m_diagVars) {
+		if (!isVarName(v)) {
+			amrex::Abort("[Diagnostics] Field " + v + " is not available!");
+		}
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::updateDiagnostics()
+{
+	// Might need to update some internal data as the grid changes
+	for (const auto &m_diagnostic : m_diagnostics) {
+		if (m_diagnostic->needUpdate()) {
+			m_diagnostic->prepare(finestLevel() + 1, Geom(0, finestLevel()), boxArray(0, finestLevel()), dmap, m_diagVars);
+		}
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
+{
+	// Assemble a vector of MF containing the requested data
+	const BL_PROFILE("AMRSimulation::doDiagnostics()");
+	updateDiagnostics();
+
+	bool const computeVars =
+	    std::any_of(m_diagnostics.cbegin(), m_diagnostics.cend(), [this](const auto &diag) { return diag->doDiag(tNew_[0], istep[0]); });
+
+	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
+	if (computeVars) {
+		for (int lev{0}; lev <= finestLevel(); ++lev) {
+			diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
+			amrex::MultiFab const mf = PlotFileMFAtLevel(lev, std::min(nghost_cc_, nghost_fc_));
+			auto const varnames = GetPlotfileVarNames();
+
+			for (int v{0}; v < m_diagVars.size(); ++v) {
+				// get component index for the 'mf' multifab
+				int mf_idx = -1;
+				for (int i = 0; i < varnames.size(); ++i) {
+					if (m_diagVars[v] == varnames[i]) {
+						mf_idx = i;
+					}
+				}
+				AMREX_ALWAYS_ASSERT(mf_idx != -1);
+				amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
+			}
+		}
+	}
+
+	for (const auto &diag : m_diagnostics) {
+		if (diag->doDiag(tNew_[0], istep[0])) {
+			diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars);
+		}
+	}
+}
+
+// do in-situ rendering with Ascent
+#ifdef AMREX_USE_ASCENT
+template <typename problem_t> void AMRSimulation<problem_t>::AscentCustomActions(conduit::Node const &blueprintMesh)
+{
+	BL_PROFILE("AMRSimulation::AscentCustomActions()");
+
+	// add a scene with a pseudocolor plot
+	Node scenes;
+	scenes["s1/plots/p1/type"] = "pseudocolor";
+	scenes["s1/plots/p1/field"] = "gasDensity";
+
+	// set the output file name (ascent will add ".png")
+	scenes["s1/renders/r1/image_prefix"] = "render_density%05d";
+
+	// set camera position
+	amrex::Array<double, 3> position = {-0.6, -0.6, -0.8};
+	scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
+
+	// setup actions
+	Node actions;
+	Node &add_plots = actions.append();
+	add_plots["action"] = "add_scenes";
+	add_plots["scenes"] = scenes;
+	actions.append()["action"] = "execute";
+	actions.append()["action"] = "reset";
+
+	// send AMR mesh to ascent, do render
+	ascent_.publish(blueprintMesh);
+	ascent_.execute(actions); // will be replaced by ascent_actions.yml if present
+}
+
+// do Ascent render
+template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
+{
+	BL_PROFILE("AMRSimulation::RenderAscent()");
+
+	// combine multifabs
+	const int included_ghosts = std::min(nghost_cc_, nghost_fc_);
+	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(included_ghosts);
+	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+	amrex::Vector<std::string> varnames;
+	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
+	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
+
+	// rescale geometry
+	// (Ascent fails to render if you use parsec-size boxes in units of cm...)
+	amrex::Vector<amrex::Geometry> rescaledGeom = Geom();
+	const amrex::Real length = geom[0].ProbLength(0);
+	for (int i = 0; i < rescaledGeom.size(); ++i) {
+		auto const &dlo = rescaledGeom[i].ProbLoArray();
+		auto const &dhi = rescaledGeom[i].ProbHiArray();
+		std::array<amrex::Real, AMREX_SPACEDIM> new_dlo{};
+		std::array<amrex::Real, AMREX_SPACEDIM> new_dhi{};
+		for (int k = 0; k < AMREX_SPACEDIM; ++k) {
+			new_dlo[k] = dlo[k] / length;
+			new_dhi[k] = dhi[k] / length;
+		}
+		amrex::RealBox rescaledRealBox(new_dlo, new_dhi);
+		rescaledGeom[i].ProbDomain(rescaledRealBox);
+	}
+
+	// wrap MultiFabs into a Blueprint mesh
+	conduit::Node blueprintMesh;
+	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
+
+	// copy to host mem (needed for DataBinning)
+	conduit::Node bpMeshHost;
+	bpMeshHost.set(blueprintMesh);
+
+	// pass Blueprint mesh to Ascent, run actions
+	AscentCustomActions(bpMeshHost);
+}
+#endif // AMREX_USE_ASCENT
+
+template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames() const -> amrex::Vector<std::string>
+{
+	amrex::Vector<std::string> varnames;
+	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
+			varnames.push_back(componentNames_fc_[icomp]);
+		}
+	}
+	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
+	return varnames;
+}
+
+// write plotfile to disk
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
+{
+	BL_PROFILE("AMRSimulation::WritePlotFile()");
+
+	if (amrex::AsyncOut::UseAsyncOut()) {
+		// ensure that we flush any plotfiles that are currently being written
+		amrex::AsyncOut::Finish();
+	}
+
+	// now construct output and submit to async write queue
+#ifdef QUOKKA_USE_OPENPMD
+	int included_ghosts = 0;
+#else
+	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
+#endif
+	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(included_ghosts);
+	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+
+	const std::string &plotfilename = PlotFileName(istep[0]);
+	auto varnames = GetPlotfileVarNames();
+
+	// write plotfile
+	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
+
+#ifdef QUOKKA_USE_OPENPMD
+	// TODO(bwibking): write particles using openPMD
+	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plot_file, tNew_[0], istep[0]);
+	WriteMetadataFile(plotfilename + ".yaml");
+#else
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
+	WriteMetadataFile(plotfilename + "/metadata.yaml");
+#ifdef AMREX_PARTICLES
+	// write particles
+	if (do_tracers != 0) {
+		TracerPC->WritePlotFile(plotfilename, "tracer_particles");
+	}
+
+	// write all particles in particleRegister_ to plotfile
+	particleRegister_.writePlotFile(plotfilename);
+#endif // AMREX_PARTICLES
+#endif
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &MetadataFileName) const
+{
+	// write metadata file
+	// (this is written for both checkpoints and plotfiles)
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream MetadataFile;
+		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		MetadataFile.open(MetadataFileName.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!MetadataFile.good()) {
+			amrex::FileOpenFailed(MetadataFileName);
+		}
+
+		// construct YAML from each (key, value) of simulationMetadata_
+		YAML::Emitter out;
+		out << YAML::BeginMap;
+		auto PrintVisitor = [&out](const auto &t) { out << YAML::Value << t; };
+		for (auto const &[key, value] : simulationMetadata_) {
+			out << YAML::Key << key;
+			std::visit(PrintVisitor, value);
+		}
+		out << YAML::EndMap;
+
+		// write YAML to MetadataFile
+		// (N.B. yaml-cpp is smart enough to emit sufficient digits for
+		//  floating-point types to represent their values to machine precision!)
+		MetadataFile << out.c_str() << '\n';
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
+{
+	// read metadata file in on all ranks (needed when restarting from checkpoint)
+	const std::string MetadataFileName(chkfilename + "/metadata.yaml");
+
+	// read YAML file into simulationMetadata_ std::map
+	const YAML::Node metadata = YAML::LoadFile(MetadataFileName);
+	amrex::Print() << "Reading " << MetadataFileName << "...\n";
+
+	for (YAML::const_iterator it = metadata.begin(); it != metadata.end(); ++it) {
+		const auto key = it->first.as<std::string>();
+		const std::optional<amrex::Real> value_real = YAML::as_if<amrex::Real, std::optional<amrex::Real>>(it->second)();
+		const std::optional<std::string> value_string = YAML::as_if<std::string, std::optional<std::string>>(it->second)();
+
+		if (value_real) {
+			simulationMetadata_[key] = value_real.value();
+			amrex::Print() << fmt::format("\t{} = {}\n", key, value_real.value());
+		} else if (value_string) {
+			simulationMetadata_[key] = value_string.value();
+			amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
+		} else {
+			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
+		}
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlotfile() const
+{
+	std::vector<std::string> dirs{};
+	const amrex::ParmParse pp;
+	pp.queryarr("projection.dirs", dirs);
+
+	auto dir_from_string = [=](const std::string &dir_str) {
+		if (dir_str == "x") {
+			return amrex::Direction::x;
+		}
+#if AMREX_SPACEDIM >= 2
+		if (dir_str == "y") {
+			return amrex::Direction::y;
+		}
+#endif
+#if AMREX_SPACEDIM == 3
+		if (dir_str == "z") {
+			return amrex::Direction::z;
+		}
+#endif
+		amrex::Error("invalid direction for projection!");
+		return amrex::Direction::x;
+	};
+
+	for (auto &dir_str : dirs) {
+		// compute projections along axis 'dir'
+		amrex::Direction dir = dir_from_string(dir_str);
+		std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
+		quokka::diagnostics::WriteProjection(dir, proj, tNew_[0], istep[0]);
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::WriteStatisticsFile()
+{
+	// append to statistics file
+	static bool isHeaderWritten = false;
+
+	// compute statistics
+	// IMPORTANT: the user is responsible for performing any necessary MPI reductions inside ComputeStatistics
+	std::map<std::string, amrex::Real> statistics = ComputeStatistics();
+
+	// write to file
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream StatisticsFile;
+		StatisticsFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		StatisticsFile.open(stats_file.c_str(), std::ofstream::out | std::ofstream::app);
+		if (!StatisticsFile.good()) {
+			amrex::FileOpenFailed(stats_file);
+		}
+
+		// write header
+		if (!isHeaderWritten) {
+			const std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+			const std::tm now = *std::localtime(&t); // NOLINT(concurrency-mt-unsafe)
+			StatisticsFile << "## Simulation restarted at: " << std::put_time(&now, "%c %Z") << "\n";
+			StatisticsFile << "# cycle time ";
+			for (auto const &[key, value] : statistics) {
+				StatisticsFile << key << " ";
+			}
+			StatisticsFile << "\n";
+			isHeaderWritten = true;
+		}
+
+		// save statistics to file
+		StatisticsFile << istep[0] << " "; // cycle
+		StatisticsFile << tNew_[0] << " "; // time
+		for (auto const &[key, value] : statistics) {
+			StatisticsFile << value << " ";
+		}
+		StatisticsFile << "\n";
+
+		// file closed automatically by destructor
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::SetLastCheckpointSymlink(std::string const &checkpointname) const
+{
+	// creates a symlink pointing to the most recent checkpoint
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::string lastSymlinkName = "last_chk";
+
+		// remove previous symlink, if it exists
+		if (std::filesystem::is_symlink(lastSymlinkName)) {
+			std::filesystem::remove(lastSymlinkName);
+		}
+		// create symlink
+		std::filesystem::create_directory_symlink(checkpointname, lastSymlinkName);
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile() const
+{
+	BL_PROFILE("AMRSimulation::WriteCheckpointFile()");
+
+	// chk00010            write a checkpoint file with this root directory
+	// chk00010/Header     this contains information you need to save (e.g.,
+	// finest_level, t_new, etc.) and also
+	//                     the BoxArrays at each level
+	// chk00010/Level_0/
+	// chk00010/Level_1/
+	// etc.                these subdirectories will hold the MultiFab data at
+	// each level of refinement
+
+	// checkpoint file name, e.g., chk00010
+	const std::string &checkpointname = amrex::Concatenate(chk_file, istep[0]);
+
+	amrex::Print() << "Writing checkpoint " << checkpointname << "\n";
+
+	const int nlevels = finest_level + 1;
+
+	// ---- prebuild a hierarchy of directories
+	// ---- dirName is built first.  if dirName exists, it is renamed.  then build
+	// ---- dirName/subDirPrefix_0 .. dirName/subDirPrefix_nlevels-1
+	// ---- if callBarrier is true, call ParallelDescriptor::Barrier()
+	// ---- after all directories are built
+	// ---- ParallelDescriptor::IOProcessor() creates the directories
+	amrex::PreBuildDirectorHierarchy(checkpointname, "Level_", nlevels, true);
+
+	// write Header file
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+
+		std::string HeaderFileName(checkpointname + "/Header");
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream HeaderFile;
+		HeaderFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		HeaderFile.open(HeaderFileName.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!HeaderFile.good()) {
+			amrex::FileOpenFailed(HeaderFileName);
+		}
+
+		HeaderFile.precision(17);
+
+		// write out title line
+		HeaderFile << "Checkpoint file for QuokkaCode\n";
+
+		// write out finest_level
+		HeaderFile << finest_level << "\n";
+
+		// write out array of istep
+		for (int i = 0; i < istep.size(); ++i) {
+			HeaderFile << istep[i] << " ";
+		}
+		HeaderFile << "\n";
+
+		// write out array of dt
+		for (int i = 0; i < dt_.size(); ++i) {
+			HeaderFile << dt_[i] << " ";
+		}
+		HeaderFile << "\n";
+
+		// write out array of t_new
+		for (int i = 0; i < tNew_.size(); ++i) {
+			HeaderFile << tNew_[i] << " ";
+		}
+		HeaderFile << "\n";
+
+		// write the BoxArray at each level
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			boxArray(lev).writeOn(HeaderFile);
+			HeaderFile << '\n';
+		}
+	}
+
+	// write Metadata file
+	WriteMetadataFile(checkpointname + "/metadata.yaml");
+
+	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		amrex::VisMF::Write(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
+	}
+
+	// write the face-centred MultiFab data to, e.g., chk00010/Level_0/
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				amrex::VisMF::Write(state_new_fc_[lev][idim], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_",
+													    std::string("Face_") + quokka::face_dir_str[idim]));
+			}
+		}
+	}
+
+	// write particle data
+#ifdef AMREX_PARTICLES
+	if (do_tracers != 0) {
+		TracerPC->Checkpoint(checkpointname, "tracer_particles", true);
+	}
+
+	// write all particles in particleRegister_ to checkpoint file
+	particleRegister_.writeCheckpoint(checkpointname, true);
+#endif
+
+	// create symlink and point it at this checkpoint dir
+	SetLastCheckpointSymlink(checkpointname);
+}
+
+// utility to skip to next line in Header
+inline void GotoNextLine(std::istream &is)
+{
+	constexpr std::streamsize bl_ignore_max{100000};
+	is.ignore(bl_ignore_max, '\n');
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
+{
+	BL_PROFILE("AMRSimulation::ReadCheckpointFile()");
+
+	amrex::Print() << "Restart from checkpoint " << restart_chkfile << "\n";
+
+	// Header
+	std::string File(restart_chkfile + "/Header");
+
+	amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::GetIOBufferSize());
+
+	amrex::Vector<char> fileCharPtr;
+	amrex::ParallelDescriptor::ReadAndBcastFile(File, fileCharPtr);
+	std::string fileCharPtrString(fileCharPtr.dataPtr());
+	std::istringstream is(fileCharPtrString, std::istringstream::in);
+
+	std::string line;
+	std::string word;
+
+	// read in title line
+	std::getline(is, line);
+
+	// read in finest_level
+	is >> finest_level;
+	GotoNextLine(is);
+
+	// read in array of istep
+	std::getline(is, line);
+	{
+		std::istringstream lis(line);
+		int i = 0;
+		while (lis >> word) {
+			istep[i++] = std::stoi(word);
+		}
+	}
+
+	// read in array of dt
+	std::getline(is, line);
+	{
+		std::istringstream lis(line);
+		int i = 0;
+		while (lis >> word) {
+			dt_[i++] = std::stod(word);
+		}
+	}
+
+	// read in array of t_new
+	std::getline(is, line);
+	{
+		std::istringstream lis(line);
+		int i = 0;
+		while (lis >> word) {
+			tNew_[i++] = std::stod(word);
+		}
+	}
+
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		// read in level 'lev' BoxArray from Header
+		amrex::BoxArray ba;
+		ba.readFrom(is);
+		GotoNextLine(is);
+
+		/*Create New BoxArray at Level 0 for optimum load distribution*/
+		if (lev == 0) {
+			amrex::IntVect fac(2);
+			const amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
+			const amrex::IntVect domhi{AMREX_D_DECL(ba[ba.size() - 1].bigEnd(0), ba[ba.size() - 1].bigEnd(1), ba[ba.size() - 1].bigEnd(2))};
+			const amrex::Box dom(domlo, domhi);
+			const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (dom.length(idim) != dom2.length(idim)) {
+					fac[idim] = 1;
+				}
+			}
+			amrex::BoxArray ba_lev0(amrex::coarsen(dom, fac));
+			ba_lev0.maxSize(max_grid_size[0] / fac);
+			ba_lev0.refine(fac);
+			// Boxes in ba have even number of cells in each direction
+			// unless the domain has odd number of cells in that direction.
+			ChopGrids(0, ba_lev0, amrex::ParallelDescriptor::NProcs());
+			ba = ba_lev0;
+		}
+
+		// create a distribution mapping
+		amrex::DistributionMapping dm{ba, amrex::ParallelDescriptor::NProcs()};
+
+		// set BoxArray grids and DistributionMapping dmap in AMReX_AmrMesh.H class
+		SetBoxArray(lev, ba);
+		SetDistributionMap(lev, dm);
+
+		// build MultiFab and FluxRegister data
+		const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
+		const int nghost_cc = nghost_cc_;
+		state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
+		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
+		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
+
+		if (lev > 0 && (do_reflux != 0)) {
+			flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev), Geom(lev - 1),
+										 refRatio(lev - 1), lev, ncomp_cc);
+		}
+
+		const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
+		const int nghost_fc = nghost_fc_;
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				state_new_fc_[lev][idim] =
+				    amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
+				state_old_fc_[lev][idim] =
+				    amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
+			}
+		}
+	}
+
+	ReadMetadataFile(restart_chkfile);
+
+	// read in the MultiFab data
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		// cell-centred
+		if (lev == 0) {
+			amrex::MultiFab tmp;
+			amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+			state_new_cc_[0].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_, nghost_cc_);
+		} else {
+			amrex::VisMF::Read(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		}
+		// face-centred
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (lev == 0) {
+					amrex::MultiFab tmp;
+					amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
+											      std::string("Face_") + quokka::face_dir_str[idim]));
+					state_new_fc_[0][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+				} else {
+					amrex::VisMF::Read(
+					    state_new_fc_[lev][idim],
+					    amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+				}
+			}
+		}
+	}
+
+#ifdef AMREX_PARTICLES
+	// read particle data
+	if (do_tracers != 0) {
+		AMREX_ASSERT(TracerPC == nullptr);
+		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
+		TracerPC->Restart(restart_chkfile, "tracer_particles");
+	}
+
+	// Initialize and register particle containers from checkpoint file
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
+		AMREX_ASSERT(RadParticles == nullptr);
+		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
+		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false,
+						       RadParticles.get());
+		RadParticles->Restart(restart_chkfile, "Rad_particles");
+	}
+
+#if AMREX_SPACEDIM == 3
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
+		AMREX_ASSERT(CICParticles == nullptr);
+		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
+		particleRegister_.registerParticleType("CIC_particles", quokka::CICParticleMassIdx, -1, -1, false, CICParticles.get());
+		CICParticles->Restart(restart_chkfile, "CIC_particles");
+	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
+		AMREX_ASSERT(CICRadParticles == nullptr);
+		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
+		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
+						       quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
+		CICRadParticles->Restart(restart_chkfile, "CICRad_particles");
+	}
+#endif // AMREX_SPACEDIM == 3
+#endif
+
+	areInitialConditionsDefined_ = true;
+}
+
+#endif // SIMULATION_HPP_
