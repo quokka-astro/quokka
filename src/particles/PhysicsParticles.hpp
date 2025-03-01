@@ -219,10 +219,11 @@ class PhysicsParticleDescriptorBase
 	int lumIndex_{-1};		 // Index for radiation luminosity (-1 if not used)
 	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
+	bool allowsCreation_{false};     // Whether particles can be created during simulation
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact)
-	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation)
+	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact), allowsCreation_(allows_creation)
 	{
 	}
 
@@ -239,6 +240,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getLumIndex() const -> int { return lumIndex_; }
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
 	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
+	[[nodiscard]] auto getAllowsCreation() const -> bool { return allowsCreation_; }
 
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
@@ -360,8 +362,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
 	// Constructor initializing descriptor with container and particle properties
-	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, ContainerType *container)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact), container_(container)
+	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation), container_(container)
 	{
 	}
 
@@ -696,21 +698,21 @@ template <typename problem_t> class PhysicsParticleRegister
 	// TODO(cch): replace name with particleType to get rid of the string comparison
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
-	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, ContainerType *container)
+	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 		if (name == "Rad_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
-															      hydro_interact, container);
+															  hydro_interact, allows_creation, container);
 		}
 #if AMREX_SPACEDIM == 3
 		if (name == "CIC_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
-															      hydro_interact, container);
+															  hydro_interact, allows_creation, container);
 		}
 		if (name == "CICRad_particles") {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, container);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
 		}
 #endif // AMREX_SPACEDIM == 3
 		particleRegistry_[name] = std::move(descriptor);
@@ -807,9 +809,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Create CIC particles
 	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2)
 	{
-		auto descriptor = getParticleDescriptor("CIC_particles");
-		if (descriptor != nullptr) {
-			descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			if (descriptor->getAllowsCreation()) {
+				descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
+			}
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
