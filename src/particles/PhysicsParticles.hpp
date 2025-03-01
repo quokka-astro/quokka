@@ -610,7 +610,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 
-		// Reduce across all MPI ranks to get global maximum. Use ParallelContext::CommunicatorSub() for current level and avoid using the default communicator.
+		// Reduce across all MPI ranks to get global maximum. Use ParallelContext::CommunicatorSub() for current level and avoid using the default
+		// communicator.
 		amrex::ParallelAllReduce::Max(max_speed, amrex::ParallelContext::CommunicatorSub());
 		return max_speed;
 	}
