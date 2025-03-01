@@ -806,12 +806,25 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Create CIC particles
-	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2)
+	// Create particles based on particle type
+	void createParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2)
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
+			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
-				descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
+				// Dispatch to the appropriate particle type based on the particle type
+				switch (name) { // NOLINT
+				case "CIC_particles":
+					descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
+					break;
+				// Add more particle types here as needed in the future
+				// case "New_particles":
+				//     descriptor->createNewTypeParticles(state, lev, current_time, dt, param1, param2);
+				//     break;
+				default:
+					// Do nothing for other particle types
+					break;
+				}
 			}
 		}
 	}

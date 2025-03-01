@@ -1006,7 +1006,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		kickParticlesAllLevels(dt_[0]);
 
 		if constexpr ((Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) && Particle_Traits<problem_t>::is_particle_creation_enabled) {
-			particleRegister_.createCICParticles(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
+			// Use the new type-aware particle creation method
+			particleRegister_.createParticles(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
 		}
 #endif
 
@@ -2124,7 +2125,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
 		RadParticles->SetVerbose(0);
 
-		// Register with particle register
+		// Register with particle register - Rad particles do not allow creation
 		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, false,
 						       RadParticles.get());
 
@@ -2140,7 +2141,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		CICParticles->SetVerbose(0);
 
-		// Register with particle register
+		// Register with particle register - CIC particles allow creation
 		particleRegister_.registerParticleType("CIC_particles", quokka::CICParticleMassIdx, -1, -1, false, true, CICParticles.get());
 
 		// Initialize particles through derived class
@@ -2154,7 +2155,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
 		CICRadParticles->SetVerbose(0);
 
-		// Register with particle register
+		// Register with particle register - CICRad particles do not allow creation
 		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
 						       quokka::CICRadParticleBirthTimeIdx, false, false, CICRadParticles.get());
 
