@@ -206,7 +206,7 @@ auto problem_main() -> int
 
 	int status = 0; // Initialize to success
 
-	auto particle_data = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticleData(0);
+	auto particle_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 

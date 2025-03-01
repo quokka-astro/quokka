@@ -675,8 +675,22 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 template <typename problem_t> class PhysicsParticleRegister
 {
       private:
-	// Map storing particle descriptors, indexed by particle type name
-	std::map<std::string, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
+	// Map storing particle descriptors, indexed by particle type enum
+	std::map<quokka::ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
+
+	// Utility method to convert particle type to string name (for writing plotfiles/checkpoints)
+	static std::string particleTypeToName(quokka::ParticleType type) {
+		switch (type) {
+		case quokka::ParticleType::Rad:
+			return "Rad_particles";
+		case quokka::ParticleType::CIC:
+			return "CIC_particles";
+		case quokka::ParticleType::CICRad:
+			return "CICRad_particles";
+		default:
+			return "Unknown_particles";
+		}
+	}
 
       public:
 	// Constructor
@@ -695,44 +709,51 @@ template <typename problem_t> class PhysicsParticleRegister
 		return false;
 	}
 
-	// TODO(cch): replace name with particleType to get rid of the string comparison
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
-	void registerParticleType(const std::string &name, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container)
+	void registerParticleType(quokka::ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
-		if (name == "Rad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(mass_idx, lum_idx, birth_time_idx,
-															  hydro_interact, allows_creation, container);
-		}
+		
+		// Create the appropriate descriptor based on the particle type
+		switch (type) {
+		case quokka::ParticleType::Rad:
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, quokka::ParticleType::Rad>>(
+				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+			break;
 #if AMREX_SPACEDIM == 3
-		if (name == "CIC_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(mass_idx, lum_idx, birth_time_idx,
-															  hydro_interact, allows_creation, container);
-		}
-		if (name == "CICRad_particles") {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
-		}
+		case quokka::ParticleType::CIC:
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, quokka::ParticleType::CIC>>(
+				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+			break;
+		case quokka::ParticleType::CICRad:
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, quokka::ParticleType::CICRad>>(
+				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+			break;
 #endif // AMREX_SPACEDIM == 3
-		particleRegistry_[name] = std::move(descriptor);
+		default:
+			amrex::Abort("Unknown particle type");
+			break;
+		}
+		
+		particleRegistry_[type] = std::move(descriptor);
 	}
 
-	// Retrieve a particle descriptor by name
-	[[nodiscard]] auto getParticleDescriptor(const std::string &name) const -> const PhysicsParticleDescriptorBase *
+	// Retrieve a particle descriptor by type
+	[[nodiscard]] auto getParticleDescriptor(quokka::ParticleType type) const -> const PhysicsParticleDescriptorBase *
 	{
-		auto it = particleRegistry_.find(name);
+		auto it = particleRegistry_.find(type);
 		if (it != particleRegistry_.end()) {
 			return it->second.get();
 		}
-		amrex::Abort("Particle type " + name + " not found");
+		amrex::Abort("Particle type not found");
 		return nullptr;
 	}
 
 	// Deposit radiation from all luminous particles
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getLumIndex() >= 0) {
 				descriptor->depositRadiation(radEnergySource, lev, current_time, Physics_Traits<problem_t>::nGroups);
 			}
@@ -743,7 +764,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Deposit mass from all massive particles
 	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->depositMass(rhs, finest_lev, Gconst);
 			}
@@ -754,7 +775,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Redistribute all particles within a level
 	void redistribute(int lev)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->redistribute(lev);
 		}
 	}
@@ -762,7 +783,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Redistribute all particles with ghost cells
 	void redistribute(int lev, int ngrow)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->redistribute(lev, ngrow);
 		}
 	}
@@ -770,16 +791,16 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Write all particle data to plot file
 	void writePlotFile(const std::string &plotfilename)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			descriptor->writePlotFile(plotfilename, name);
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->writePlotFile(plotfilename, particleTypeToName(type));
 		}
 	}
 
 	// Write all particle data to checkpoint file
 	void writeCheckpoint(const std::string &checkpointname, bool include_header) const
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			descriptor->writeCheckpoint(checkpointname, name, include_header);
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->writeCheckpoint(checkpointname, particleTypeToName(type), include_header);
 		}
 	}
 
@@ -787,7 +808,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Update positions of all massive particles
 	void driftParticlesAllLevels(amrex::Real dt, int finest_level)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				for (int lev = 0; lev <= finest_level; ++lev) {
 					descriptor->driftParticles(lev, dt);
@@ -799,7 +820,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Update velocities of all massive particles
 	void kickParticlesAtLevel(amrex::Real dt, amrex::MultiFab &acceleration, int lev)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->kickParticles(lev, dt, acceleration);
 			}
@@ -809,16 +830,16 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Create particles based on particle type
 	void createParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2)
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
 				// Dispatch to the appropriate particle type based on the particle type
-				switch (name) { // NOLINT
-				case "CIC_particles":
+				switch (type) { // NOLINT
+				case quokka::ParticleType::CIC:
 					descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
 					break;
 				// Add more particle types here as needed in the future
-				// case "New_particles":
+				// case quokka::ParticleType::NewType:
 				//     descriptor->createNewTypeParticles(state, lev, current_time, dt, param1, param2);
 				//     break;
 				default:
