@@ -34,7 +34,7 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 
 // Test enum to demonstrate type checking of particle_switch
 enum class TestEnum : unsigned int {
-	MISTAKE = 0b00000100U,   
+	MISTAKE = 0b00000100U,
 };
 
 template <> struct Particle_Traits<BinaryOrbit> {

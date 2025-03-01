@@ -49,7 +49,7 @@ constexpr bool operator&(ParticleSwitch flags, ParticleSwitch flag) { return (st
 // Examples that will cause a compile error:
 // - static constexpr int particle_switch = 1;
 // enum class TestEnum : unsigned int {
-// 	MISTAKE = 0b00000100U,   
+// 	MISTAKE = 0b00000100U,
 // };
 // - static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 // - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
