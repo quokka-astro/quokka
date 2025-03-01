@@ -590,21 +590,21 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				amrex::ReduceOps<amrex::ReduceOpMax> reduce_ops;
 				using ReduceDataType = amrex::ReduceData<amrex::Real>;
 				ReduceDataType reduce_data(reduce_ops);
-				
+
 				// Perform the reduction over all particles at this level
 				using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
 				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
-					*container_, lev,
-					[=] AMREX_GPU_DEVICE (const PTDType& ptd, const int i) noexcept -> amrex::Real
-					{
-						// Compute velocity magnitude
-						const amrex::Real vx = ptd.m_aos[i].rdata(mass_idx + 1);
-						const amrex::Real vy = ptd.m_aos[i].rdata(mass_idx + 2);
-						const amrex::Real vz = ptd.m_aos[i].rdata(mass_idx + 3);
-						const amrex::Real v2 = vx*vx + vy*vy + vz*vz;
-						return std::sqrt(v2);
-					}, reduce_ops);
-				
+				    *container_, lev,
+				    [=] AMREX_GPU_DEVICE(const PTDType &ptd, const int i) noexcept -> amrex::Real {
+					    // Compute velocity magnitude
+					    const amrex::Real vx = ptd.m_aos[i].rdata(mass_idx + 1);
+					    const amrex::Real vy = ptd.m_aos[i].rdata(mass_idx + 2);
+					    const amrex::Real vz = ptd.m_aos[i].rdata(mass_idx + 3);
+					    const amrex::Real v2 = vx * vx + vy * vy + vz * vz;
+					    return std::sqrt(v2);
+				    },
+				    reduce_ops);
+
 				// Extract the value from the tuple
 				max_speed = amrex::get<0>(result_tuple);
 			}

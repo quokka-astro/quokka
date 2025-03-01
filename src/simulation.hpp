@@ -146,16 +146,16 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
 	amrex::Real constantDt_ = 0.0;
-	amrex::Vector<int> istep;	       // which step?
-	amrex::Vector<int> nsubsteps;	       // how many substeps on each level?
-	amrex::Vector<amrex::Real> tNew_;      // for state_new_cc_
-	amrex::Vector<amrex::Real> tOld_;      // for state_old_cc_
-	amrex::Vector<amrex::Real> dt_;	       // timestep for each level
-	amrex::Vector<int> reductionFactor_;   // timestep reduction factor for each level
-	amrex::Real stopTime_ = 1.0;	       // default
-	amrex::Real cflNumber_ = 0.3;	       // default
+	amrex::Vector<int> istep;	      // which step?
+	amrex::Vector<int> nsubsteps;	      // how many substeps on each level?
+	amrex::Vector<amrex::Real> tNew_;     // for state_new_cc_
+	amrex::Vector<amrex::Real> tOld_;     // for state_old_cc_
+	amrex::Vector<amrex::Real> dt_;	      // timestep for each level
+	amrex::Vector<int> reductionFactor_;  // timestep reduction factor for each level
+	amrex::Real stopTime_ = 1.0;	      // default
+	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real particleCflNumber_ = 0.5; // default
-	amrex::Real dtToleranceFactor_ = 1.1;  // default
+	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
 	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
