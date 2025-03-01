@@ -217,7 +217,7 @@ class PhysicsParticleDescriptorBase
 	int lumIndex_{-1};		 // Index for radiation luminosity (-1 if not used)
 	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
-	bool allowsCreation_{false};     // Whether particles can be created during simulation
+	bool allowsCreation_{false};	 // Whether particles can be created during simulation
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation)
@@ -694,46 +694,48 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Utility method to convert particle type to string name (for writing plotfiles/checkpoints)
-	[[nodiscard]] static auto getParticleTypeName(ParticleType type) -> std::string {
+	[[nodiscard]] static auto getParticleTypeName(ParticleType type) -> std::string
+	{
 		switch (type) {
-		case ParticleType::Rad:
-			return "Rad_particles";
-		case ParticleType::CIC:
-			return "CIC_particles";
-		case ParticleType::CICRad:
-			return "CICRad_particles";
-		default:
-			return "Unknown_particles";
+			case ParticleType::Rad:
+				return "Rad_particles";
+			case ParticleType::CIC:
+				return "CIC_particles";
+			case ParticleType::CICRad:
+				return "CICRad_particles";
+			default:
+				return "Unknown_particles";
 		}
 	}
 
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
-	void registerParticleType(ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container)
+	void registerParticleType(ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation,
+				  ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
-		
+
 		// Create the appropriate descriptor based on the particle type
 		switch (type) {
-		case ParticleType::Rad:
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
-			break;
+			case ParticleType::Rad:
+				descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
+				    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+				break;
 #if AMREX_SPACEDIM == 3
-		case ParticleType::CIC:
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
-			break;
-		case ParticleType::CICRad:
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-				mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
-			break;
+			case ParticleType::CIC:
+				descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
+				    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+				break;
+			case ParticleType::CICRad:
+				descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
+				    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+				break;
 #endif // AMREX_SPACEDIM == 3
-		default:
-			amrex::Abort("Unknown particle type");
-			break;
+			default:
+				amrex::Abort("Unknown particle type");
+				break;
 		}
-		
+
 		particleRegistry_[type] = std::move(descriptor);
 	}
 
@@ -833,16 +835,16 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getAllowsCreation()) {
 				// Dispatch to the appropriate particle type based on the particle type
 				switch (type) { // NOLINT
-				case ParticleType::CIC:
-					descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
-					break;
-				// Add more particle types here as needed in the future
-				// case ParticleType::NewType:
-				//     descriptor->createNewTypeParticles(state, lev, current_time, dt, param1, param2);
-				//     break;
-				default:
-					// Do nothing for other particle types
-					break;
+					case ParticleType::CIC:
+						descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
+						break;
+					// Add more particle types here as needed in the future
+					// case ParticleType::NewType:
+					//     descriptor->createNewTypeParticles(state, lev, current_time, dt, param1, param2);
+					//     break;
+					default:
+						// Do nothing for other particle types
+						break;
 				}
 			}
 		}
