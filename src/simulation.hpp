@@ -154,7 +154,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<int> reductionFactor_;   // timestep reduction factor for each level
 	amrex::Real stopTime_ = 1.0;	       // default
 	amrex::Real cflNumber_ = 0.3;	       // default
-	amrex::Real particleCflNumber_ = 0.99; // default
+	amrex::Real particleCflNumber_ = 0.5; // default
 	amrex::Real dtToleranceFactor_ = 1.1;  // default
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
