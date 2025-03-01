@@ -589,7 +589,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				// Use ParticleReduce with ReduceOpMax for efficient parallel reduction
 				amrex::ReduceOps<amrex::ReduceOpMax> reduce_ops;
 				using ReduceDataType = amrex::ReduceData<amrex::Real>;
-				ReduceDataType reduce_data(reduce_ops);
 
 				// Perform the reduction over all particles at this level
 				using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
