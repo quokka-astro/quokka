@@ -36,7 +36,10 @@ constexpr auto operator|(ParticleSwitch a, ParticleSwitch b) -> ParticleSwitch
 	return static_cast<ParticleSwitch>(static_cast<unsigned int>(a) | static_cast<unsigned int>(b));
 }
 
-constexpr auto operator&(ParticleSwitch flags, ParticleSwitch flag) -> bool { return (static_cast<unsigned int>(flags) & static_cast<unsigned int>(flag)) != 0; }
+constexpr auto operator&(ParticleSwitch flags, ParticleSwitch flag) -> bool
+{
+	return (static_cast<unsigned int>(flags) & static_cast<unsigned int>(flag)) != 0;
+}
 
 // This struct should be specialized by the user application code to configure particle behavior.
 // The particle_switch member determines which particle types are enabled using bitwise flags.
