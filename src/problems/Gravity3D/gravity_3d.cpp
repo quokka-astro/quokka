@@ -110,7 +110,7 @@ template <> struct CICParticleCreator<BinaryOrbit> {
 		// Initialize particle properties
 		p.rdata(mass_idx) = 0.5 * cell_mass;
 		p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) / cell_density;
-		p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) / cell_density;
+		p.rdata(mass_idx + 2) = 10.0;
 		p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) / cell_density;
 
 		// Update cell density (remove mass that was given to particle)

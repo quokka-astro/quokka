@@ -821,6 +821,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::Real particle_dt = std::numeric_limits<amrex::Real>::max();
 #if AMREX_SPACEDIM == 3
 	const amrex::Real max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
+	amrex::Print() << "max_particle_speed = " << max_particle_speed << "\n";
 	if (max_particle_speed > 0.0) {
 		particle_dt = particleCflNumber_ * (dx_min / max_particle_speed);
 	}
