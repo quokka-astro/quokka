@@ -600,7 +600,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					    const amrex::Real vx = ptd.m_aos[i].rdata(mass_idx + 1);
 					    const amrex::Real vy = ptd.m_aos[i].rdata(mass_idx + 2);
 					    const amrex::Real vz = ptd.m_aos[i].rdata(mass_idx + 3);
-					    const amrex::Real v2 = vx * vx + vy * vy + vz * vz;
+					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
 					    return std::sqrt(v2);
 				    },
 				    reduce_ops);
@@ -610,7 +610,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 
-		// Reduce across all MPI ranks to get global maximum
+		// Reduce across all MPI ranks to get global maximum. Use ParallelContext::CommunicatorSub() for current level and avoid using the default communicator.
 		amrex::ParallelAllReduce::Max(max_speed, amrex::ParallelContext::CommunicatorSub());
 		return max_speed;
 	}
