@@ -586,32 +586,27 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 			// Check if we have enough components for velocities
 			if (mass_idx + 3 < ContainerType::ParticleType::NReal) {
-				// Compute local maximum speed
-				for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
-					auto &particles = pti.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pti.numParticles();
-
-					if (np > 0) {
-						// Allocate device memory for reduction
-						amrex::Gpu::DeviceScalar<amrex::Real> ds_max(0.0);
-						amrex::Real *p_max = ds_max.dataPtr();
-
-						// Compute maximum speed in parallel using reduction
-						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(amrex::Long i) {
-							const auto &p = pData[i]; // NOLINT
-							// Compute velocity magnitude
-							const amrex::Real v2 = p.rdata(mass_idx + 1) * p.rdata(mass_idx + 1) +
-									       p.rdata(mass_idx + 2) * p.rdata(mass_idx + 2) +
-									       p.rdata(mass_idx + 3) * p.rdata(mass_idx + 3);
-							const amrex::Real speed = std::sqrt(v2);
-							amrex::Gpu::Atomic::Max(p_max, speed);
-						});
-
-						// Copy result back to host
-						max_speed = std::max(max_speed, ds_max.dataValue());
-					}
-				}
+				// Use ParticleReduce with ReduceOpMax for efficient parallel reduction
+				amrex::ReduceOps<amrex::ReduceOpMax> reduce_ops;
+				using ReduceDataType = amrex::ReduceData<amrex::Real>;
+				ReduceDataType reduce_data(reduce_ops);
+				
+				// Perform the reduction over all particles at this level
+				using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
+				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
+					*container_, lev,
+					[=] AMREX_GPU_DEVICE (const PTDType& ptd, const int i) noexcept -> amrex::Real
+					{
+						// Compute velocity magnitude
+						const amrex::Real vx = ptd.m_aos[i].rdata(mass_idx + 1);
+						const amrex::Real vy = ptd.m_aos[i].rdata(mass_idx + 2);
+						const amrex::Real vz = ptd.m_aos[i].rdata(mass_idx + 3);
+						const amrex::Real v2 = vx*vx + vy*vy + vz*vz;
+						return std::sqrt(v2);
+					}, reduce_ops);
+				
+				// Extract the value from the tuple
+				max_speed = amrex::get<0>(result_tuple);
 			}
 		}
 
