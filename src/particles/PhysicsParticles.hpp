@@ -262,8 +262,8 @@ class PhysicsParticleDescriptorBase
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
-	virtual void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
-					amrex::Real param2) const = 0;
+	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
+					      amrex::Real param2) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -354,8 +354,8 @@ template <typename problem_t> struct CICParticleCreator {
 	}
 };
 
-// Traits class for specializing CIC particle creation behavior
-template <ParticleType particleType> struct CICParticleCreationTraits {
+// Traits class for specializing particle creation behavior
+template <ParticleType particleType> struct ParticleCreationTraits {
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
 				    amrex::Real param1, amrex::Real param2)
@@ -365,7 +365,7 @@ template <ParticleType particleType> struct CICParticleCreationTraits {
 };
 
 // Specialization for CIC particles
-template <> struct CICParticleCreationTraits<ParticleType::CIC> {
+template <> struct ParticleCreationTraits<ParticleType::CIC> {
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
 				    amrex::Real param1, amrex::Real param2)
@@ -431,6 +431,19 @@ template <> struct CICParticleCreationTraits<ParticleType::CIC> {
 		}
 	}
 };
+
+// Example: specialization for Radiation particles
+// template <> struct ParticleCreationTraits<ParticleType::Rad> {
+// 	template <typename problem_t, typename ContainerType>
+// 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+// 				    amrex::Real param1, amrex::Real param2)
+// 	{
+// 		Implement particle creation for radiation particles
+// 		You should define and use RadiationParticleChecker<problem_t> and RadiationParticleCreator<problem_t> here
+//    If the MPI and parallelization routines are the same, we can simplify the code by moving everything in createParticles to createParticlesFromState and
+//    use particle_checker and particle_creator as trait classes.
+// 	}
+// };
 
 // Concrete implementation of particle descriptor for specific container types
 template <typename ContainerType, typename problem_t, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
@@ -643,12 +656,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
-				amrex::Real param2) const override
+	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
+				      amrex::Real param2) const override
 	{
 		// Use the traits class to implement the specialized behavior
-		CICParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(container_, this->getMassIndex(), state, lev,
-													     current_time, dt, param1, param2);
+		ParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(container_, this->getMassIndex(), state, lev,
+													  current_time, dt, param1, param2);
 	}
 
 #endif // AMREX_SPACEDIM == 3
@@ -857,7 +870,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
-				descriptor->createCICParticles(state, lev, current_time, dt, param1, param2);
+				descriptor->createParticlesFromState(state, lev, current_time, dt, param1, param2);
 				// The traits-based implementation in each descriptor will handle the specialization
 			}
 		}
