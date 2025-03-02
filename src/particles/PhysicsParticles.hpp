@@ -20,7 +20,7 @@
 
 // Macro to create bit flags: BITFLAG(position) = 2^(position - 1)
 // Example: BITFLAG(1) = 1, BITFLAG(2) = 2, BITFLAG(3) = 4, ...
-#define BITFLAG(position) (1U << ((position) - 1U))
+#define BITFLAG(position) (1U << ((position)-1U))
 
 // Particle type flags that can be combined using bitwise OR operation (|).
 // Example: To enable both CIC and Rad particles, use:
@@ -355,81 +355,81 @@ template <typename problem_t> struct CICParticleCreator {
 };
 
 // Traits class for specializing CIC particle creation behavior
-template <ParticleType particleType>
-struct CICParticleCreationTraits {
-    template <typename problem_t, typename ContainerType>
-    static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, 
-                               amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2) {
-        // Default implementation does nothing
-    }
+template <ParticleType particleType> struct CICParticleCreationTraits {
+	template <typename problem_t, typename ContainerType>
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+				    amrex::Real param1, amrex::Real param2)
+	{
+		// Default implementation does nothing
+	}
 };
 
 // Specialization for CIC particles
-template <>
-struct CICParticleCreationTraits<ParticleType::CIC> {
-    template <typename problem_t, typename ContainerType>
-    static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, 
-                               amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2) {
-        if (container != nullptr) {
-            if (mass_idx >= 0 && mass_idx + 3 < ContainerType::ParticleType::NReal) {
-                CICParticleChecker<problem_t> particle_checker(param1, param2);
+template <> struct CICParticleCreationTraits<ParticleType::CIC> {
+	template <typename problem_t, typename ContainerType>
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+				    amrex::Real param1, amrex::Real param2)
+	{
+		if (container != nullptr) {
+			if (mass_idx >= 0 && mass_idx + 3 < ContainerType::ParticleType::NReal) {
+				CICParticleChecker<problem_t> particle_checker(param1, param2);
 
-                for (amrex::MFIter mfi = container->MakeMFIter(lev); mfi.isValid(); ++mfi) {
-                    const auto &box = mfi.validbox();
-                    const auto &state_arr = state.array(mfi);
-                    const auto &geom = container->Geom(lev);
-                    const auto dx = geom.CellSizeArray();
-                    const auto plo = geom.ProbLoArray();
+				for (amrex::MFIter mfi = container->MakeMFIter(lev); mfi.isValid(); ++mfi) {
+					const auto &box = mfi.validbox();
+					const auto &state_arr = state.array(mfi);
+					const auto &geom = container->Geom(lev);
+					const auto dx = geom.CellSizeArray();
+					const auto plo = geom.ProbLoArray();
 
-                    // Count particles to be created in this box
-                    amrex::Gpu::DeviceVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
-                    amrex::Gpu::DeviceVector<unsigned int> offset(box.numPts()); // Will store starting index for each cell's particle
-                    auto *pcounts = counts.data();
+					// Count particles to be created in this box
+					amrex::Gpu::DeviceVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
+					amrex::Gpu::DeviceVector<unsigned int> offset(box.numPts()); // Will store starting index for each cell's particle
+					auto *pcounts = counts.data();
 
-                    // Count potential particles per cell
-                    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-                        const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
-                        const auto index = box.index(iv);
-                        // Check if we should create a particle at this location and time
-                        pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt) ? 1 : 0; // NOLINT
-                    });
+					// Count potential particles per cell
+					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+						const auto index = box.index(iv);
+						// Check if we should create a particle at this location and time
+						pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt) ? 1 : 0; // NOLINT
+					});
 
-                    // Calculate exclusive prefix sum to get unique position for each particle
-                    // Example: counts  = [1, 0, 1, 0, 1]
-                    //         offset  = [0, 1, 1, 2, 2]
-                    const unsigned int max_new_particles = amrex::Scan::ExclusiveSum(counts.size(), counts.data(), offset.data());
+					// Calculate exclusive prefix sum to get unique position for each particle
+					// Example: counts  = [1, 0, 1, 0, 1]
+					//         offset  = [0, 1, 1, 2, 2]
+					const unsigned int max_new_particles = amrex::Scan::ExclusiveSum(counts.size(), counts.data(), offset.data());
 
-                    // Update NextID to include particles that will be created
-                    const amrex::Long pid = ContainerType::ParticleType::NextID();
-                    ContainerType::ParticleType::NextID(pid + max_new_particles);
+					// Update NextID to include particles that will be created
+					const amrex::Long pid = ContainerType::ParticleType::NextID();
+					ContainerType::ParticleType::NextID(pid + max_new_particles);
 
-                    // Get the particle tile and prepare for new particles
-                    auto &particle_tile = container->DefineAndReturnParticleTile(lev, mfi);
-                    auto &aos = particle_tile.GetArrayOfStructs();
-                    const int old_size = aos.size();
-                    aos.resize(old_size + max_new_particles);
+					// Get the particle tile and prepare for new particles
+					auto &particle_tile = container->DefineAndReturnParticleTile(lev, mfi);
+					auto &aos = particle_tile.GetArrayOfStructs();
+					const int old_size = aos.size();
+					aos.resize(old_size + max_new_particles);
 
-                    // Create the particles
-                    auto *poffset = offset.data();
-                    auto *pdata = aos.data() + old_size;
-                    const int cpu_id = amrex::ParallelDescriptor::MyProc();
+					// Create the particles
+					auto *poffset = offset.data();
+					auto *pdata = aos.data() + old_size;
+					const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
-                    // Initialize particle creator functor
-                    CICParticleCreator<problem_t> particle_creator(mass_idx, cpu_id, pid, param1, param2);
+					// Initialize particle creator functor
+					CICParticleCreator<problem_t> particle_creator(mass_idx, cpu_id, pid, param1, param2);
 
-                    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-                        const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
-                        const auto index = box.index(iv);
+					amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+						const auto index = box.index(iv);
 
-                        if (pcounts[index] > 0) {                          // NOLINT
-                            auto &p = pdata[poffset[index]];               // NOLINT
-                            particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
-                        }
-                    });
-                }
-            }
-        }
-    }
+						if (pcounts[index] > 0) {						  // NOLINT
+							auto &p = pdata[poffset[index]];				  // NOLINT
+							particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
+						}
+					});
+				}
+			}
+		}
+	}
 };
 
 // Concrete implementation of particle descriptor for specific container types
@@ -644,11 +644,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
-				amrex::Real param2) const override {
-			// Use the traits class to implement the specialized behavior
-			CICParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(
-				container_, this->getMassIndex(), state, lev, current_time, dt, param1, param2);
-		}
+				amrex::Real param2) const override
+	{
+		// Use the traits class to implement the specialized behavior
+		CICParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(container_, this->getMassIndex(), state, lev,
+													     current_time, dt, param1, param2);
+	}
 
 #endif // AMREX_SPACEDIM == 3
 
@@ -749,8 +750,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		else if (type == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
 			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
-		}
-		else if (type == ParticleType::CICRad) {
+		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
 		}
