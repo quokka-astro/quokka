@@ -1006,7 +1006,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		kickParticlesAllLevels(dt_[0]);
 
 		// Use the new type-aware particle creation method
-		particleRegister_.createParticles(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
+		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
 #endif
 
 		cur_time += dt_[0];
