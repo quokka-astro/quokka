@@ -18,16 +18,20 @@
 #include "AMReX_Vector.H"
 #include "physics_info.hpp"
 
+// Macro to create bit flags: BITFLAG(position) = 2^(position - 1)
+// Example: BITFLAG(1) = 1, BITFLAG(2) = 2, BITFLAG(3) = 4, ...
+#define BITFLAG(position) (1U << ((position)-1U))
+
 // Particle type flags that can be combined using bitwise OR operation (|).
 // Example: To enable both CIC and Rad particles, use:
 //   particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad  (= 0b00000011)
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
 enum class ParticleSwitch : unsigned int {
-	None = 0U,	     // No particles
-	CIC = 0b00000001U,   // Cloud-In-Cell (gravitating) particles
-	Rad = 0b00000010U,   // Radiation particles
-	CICRad = 0b00000100U // Combined gravitating-radiating particles
+	None = 0U,	     // No particles, = 0b0000
+	CIC = BITFLAG(1),    // Cloud-In-Cell (gravitating) particles, = 0b0001
+	Rad = BITFLAG(2),    // Radiation particles, = 0b0010
+	CICRad = BITFLAG(3)  // Combined gravitating-radiating particles, = 0b0100
 };
 
 // Enable bitwise operations on the enum class
