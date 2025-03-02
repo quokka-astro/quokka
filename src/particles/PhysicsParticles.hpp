@@ -355,9 +355,9 @@ template <typename problem_t> struct CICParticleCreator {
 };
 
 // Traits class for specializing CIC particle creation behavior
-template <typename problem_t, ParticleType particleType>
+template <ParticleType particleType>
 struct CICParticleCreationTraits {
-    template <typename ContainerType>
+    template <typename problem_t, typename ContainerType>
     static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, 
                                amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2) {
         // Default implementation does nothing
@@ -365,13 +365,13 @@ struct CICParticleCreationTraits {
 };
 
 // Specialization for CIC particles
-template <typename problem_t>
-struct CICParticleCreationTraits<problem_t, ParticleType::CIC> {
-    template <typename ContainerType>
+template <>
+struct CICParticleCreationTraits<ParticleType::CIC> {
+    template <typename problem_t, typename ContainerType>
     static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, 
                                amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2) {
         if (container != nullptr) {
-            if (mass_idx >= 0 && mass_idx + 3 < CICParticleContainer::ParticleType::NReal) {
+            if (mass_idx >= 0 && mass_idx + 3 < ContainerType::ParticleType::NReal) {
                 CICParticleChecker<problem_t> particle_checker(param1, param2);
 
                 for (amrex::MFIter mfi = container->MakeMFIter(lev); mfi.isValid(); ++mfi) {
@@ -400,8 +400,8 @@ struct CICParticleCreationTraits<problem_t, ParticleType::CIC> {
                     const unsigned int max_new_particles = amrex::Scan::ExclusiveSum(counts.size(), counts.data(), offset.data());
 
                     // Update NextID to include particles that will be created
-                    const amrex::Long pid = CICParticleContainer::ParticleType::NextID();
-                    CICParticleContainer::ParticleType::NextID(pid + max_new_particles);
+                    const amrex::Long pid = ContainerType::ParticleType::NextID();
+                    ContainerType::ParticleType::NextID(pid + max_new_particles);
 
                     // Get the particle tile and prepare for new particles
                     auto &particle_tile = container->DefineAndReturnParticleTile(lev, mfi);
@@ -646,7 +646,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void createCICParticles(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
 				amrex::Real param2) const override {
 			// Use the traits class to implement the specialized behavior
-			CICParticleCreationTraits<problem_t, particleType_>::template createParticles<ContainerType>(
+			CICParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(
 				container_, this->getMassIndex(), state, lev, current_time, dt, param1, param2);
 		}
 
