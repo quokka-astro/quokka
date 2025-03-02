@@ -66,4 +66,4 @@ struct MassDeposition {
 
 } // namespace quokka
 
-#endif // PARTICLE_DEPOSITION_HPP_ 
+#endif // PARTICLE_DEPOSITION_HPP_

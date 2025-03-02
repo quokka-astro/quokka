@@ -7,11 +7,7 @@
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
-template <unsigned int position>
-constexpr auto bitflag() -> unsigned int
-{
-	return 1U << (position - 1U);
-}
+template <unsigned int position> constexpr auto bitflag() -> unsigned int { return 1U << (position - 1U); }
 
 // Particle type flags that can be combined using bitwise OR operation (|).
 // Example: To enable both CIC and Rad particles, use:
@@ -19,7 +15,7 @@ constexpr auto bitflag() -> unsigned int
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
 enum class ParticleSwitch : unsigned int {
-	None = 0U,	    // No particles, = 0b0000
+	None = 0U,	      // No particles, = 0b0000
 	CIC = bitflag<1>(),   // Cloud-In-Cell (gravitating) particles, = 0b0001
 	Rad = bitflag<2>(),   // Radiation particles, = 0b0010
 	CICRad = bitflag<3>() // Combined gravitating-radiating particles, = 0b0100
@@ -152,4 +148,4 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 
 } // namespace quokka
 
-#endif // PARTICLE_TYPES_HPP_ 
+#endif // PARTICLE_TYPES_HPP_

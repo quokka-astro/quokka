@@ -213,4 +213,4 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 
 } // namespace quokka
 
-#endif // PARTICLE_CREATION_HPP_ 
+#endif // PARTICLE_CREATION_HPP_
