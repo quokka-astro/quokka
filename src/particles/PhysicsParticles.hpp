@@ -19,9 +19,13 @@
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 
-// Macro to create bit flags: BITFLAG(position) = 2^(position - 1)
-// Example: BITFLAG(1) = 1, BITFLAG(2) = 2, BITFLAG(3) = 4, ...
-#define BITFLAG(position) (1U << ((position) - 1U))
+// Function to create bit flags: bitflag(position) = 2^(position - 1)
+// Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
+template <unsigned int position>
+constexpr auto bitflag() -> unsigned int
+{
+	return 1U << (position - 1U);
+}
 
 // Particle type flags that can be combined using bitwise OR operation (|).
 // Example: To enable both CIC and Rad particles, use:
@@ -30,9 +34,9 @@
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
 enum class ParticleSwitch : unsigned int {
 	None = 0U,	    // No particles, = 0b0000
-	CIC = BITFLAG(1),   // Cloud-In-Cell (gravitating) particles, = 0b0001
-	Rad = BITFLAG(2),   // Radiation particles, = 0b0010
-	CICRad = BITFLAG(3) // Combined gravitating-radiating particles, = 0b0100
+	CIC = bitflag<1>(),   // Cloud-In-Cell (gravitating) particles, = 0b0001
+	Rad = bitflag<2>(),   // Radiation particles, = 0b0010
+	CICRad = bitflag<3>() // Combined gravitating-radiating particles, = 0b0100
 };
 
 // Enable bitwise operations on the enum class
@@ -949,7 +953,6 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
 				descriptor->createParticlesFromState(state, lev, current_time, dt, param1, param2);
-				// The traits-based implementation in each descriptor will handle the specialization
 			}
 		}
 	}
