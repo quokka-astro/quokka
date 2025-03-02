@@ -1,0 +1,155 @@
+#ifndef PARTICLE_TYPES_HPP_
+#define PARTICLE_TYPES_HPP_
+
+#include "AMReX_AmrParticles.H"
+#include "AMReX_ParIter.H"
+#include "physics_info.hpp"
+
+// Function to create bit flags: bitflag(position) = 2^(position - 1)
+// Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
+template <unsigned int position>
+constexpr auto bitflag() -> unsigned int
+{
+	return 1U << (position - 1U);
+}
+
+// Particle type flags that can be combined using bitwise OR operation (|).
+// Example: To enable both CIC and Rad particles, use:
+//   particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad  (= 0b00000011)
+// To check if CIC particles are enabled:
+//   if (particle_switch & ParticleSwitch::CIC) { ... }
+enum class ParticleSwitch : unsigned int {
+	None = 0U,	    // No particles, = 0b0000
+	CIC = bitflag<1>(),   // Cloud-In-Cell (gravitating) particles, = 0b0001
+	Rad = bitflag<2>(),   // Radiation particles, = 0b0010
+	CICRad = bitflag<3>() // Combined gravitating-radiating particles, = 0b0100
+};
+
+// Enable bitwise operations on the enum class
+constexpr auto operator|(ParticleSwitch a, ParticleSwitch b) -> ParticleSwitch
+{
+	return static_cast<ParticleSwitch>(static_cast<unsigned int>(a) | static_cast<unsigned int>(b));
+}
+
+constexpr auto operator&(ParticleSwitch flags, ParticleSwitch flag) -> bool
+{
+	return (static_cast<unsigned int>(flags) & static_cast<unsigned int>(flag)) != 0;
+}
+
+// This struct should be specialized by the user application code to configure particle behavior.
+// The particle_switch member determines which particle types are enabled using bitwise flags.
+// Examples:
+// - static constexpr ParticleSwitch particle_switch = ParticleSwitch::None             -> No particles enabled
+// - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC              -> Only CIC particles
+// - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad -> Both CIC and Rad particles
+// Examples that will cause a compile error:
+// - static constexpr int particle_switch = 1;
+// enum class TestEnum : unsigned int {
+// 	MISTAKE = 0b00000100U,
+// };
+// - static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
+// - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
+template <typename problem_t> struct Particle_Traits {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None; // Determines which particle types are enabled using bitwise flags.
+};
+
+// Static assertion helper to verify that particle_switch is of the correct type
+namespace detail
+{
+template <typename problem_t> constexpr void verify_particle_switch_type()
+{
+	// This will fail to compile if particle_switch is not of type ParticleSwitch
+	static_assert(std::is_same_v<decltype(Particle_Traits<problem_t>::particle_switch), const ParticleSwitch>,
+		      "ERROR: Particle_Traits::particle_switch must be of type ParticleSwitch. "
+		      "Use any of the members of ParticleSwitch enum class, or combinations with '|'");
+}
+} // namespace detail
+
+namespace quokka
+{
+
+// Enum class to identify different particle types
+enum class ParticleType {
+	Rad,   // Radiation particles
+	CIC,   // Gravitating particles
+	CICRad // Gravitating radiation particles
+};
+
+//-------------------- Radiation particles --------------------
+
+// Indices for radiation particles (Rad_particles), birth time + death time + radiation groups
+enum RadParticleDataIdx {
+	RadParticleBirthTimeIdx = 0, // Time when particle becomes active
+	RadParticleDeathTimeIdx,     // Time when particle becomes inactive
+	RadParticleLumIdx	     // Base index for luminosity components
+};
+
+// Number of real components for Rad_particles, birth time + death time + radiation groups
+template <typename problem_t>
+constexpr int RadParticleRealComps = []() constexpr {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 2 + Physics_Traits<problem_t>::nGroups; // birth_time death_time lum1 ... lumN
+	} else {
+		return 2; // birth_time death_time
+	}
+}();
+
+// Type definitions for Rad_particles container and iterator
+template <typename problem_t> using RadParticleContainer = amrex::AmrParticleContainer<RadParticleRealComps<problem_t>>;
+template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadParticleRealComps<problem_t>>;
+
+#if AMREX_SPACEDIM == 3
+
+//-------------------- Gravitating particles --------------------
+
+// Indices for gravitating particles (CIC_particles), mass + 3 velocity components
+enum CICParticleDataIdx {
+	CICParticleMassIdx = 0, // Mass of the particle
+	CICParticleVxIdx,	// Velocity in x direction
+	CICParticleVyIdx,	// Velocity in y direction
+	CICParticleVzIdx	// Velocity in z direction
+};
+
+// Number of real components for CIC_particles, mass + 3 velocity components
+constexpr int CICParticleRealComps = 4;
+
+// Type definitions for CIC_particles container and iterator
+using CICParticleContainer = amrex::AmrParticleContainer<CICParticleRealComps>;
+using CICParticleIterator = amrex::ParIter<CICParticleRealComps>;
+
+//-------------------- Gravitating radiation particles --------------------
+
+// Indices for gravitating radiation particles (CICRad_particles), mass + 3 velocity components + birth time + death time + radiation groups
+enum CICRadParticleDataIdx {
+	CICRadParticleMassIdx = 0,  // Mass of the particle
+	CICRadParticleVxIdx,	    // Velocity in x direction
+	CICRadParticleVyIdx,	    // Velocity in y direction
+	CICRadParticleVzIdx,	    // Velocity in z direction
+	CICRadParticleBirthTimeIdx, // Time when particle becomes active
+	CICRadParticleDeathTimeIdx, // Time when particle becomes inactive
+	CICRadParticleLumIdx	    // Base index for luminosity components
+};
+
+// Number of real components for CICRad_particles, mass + 3 velocity components + birth time + death time + radiation groups
+template <typename problem_t>
+constexpr int CICRadParticleRealComps = []() constexpr {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, lum[nGroups]
+	} else {
+		return 6; // mass, vx, vy, vz, birth_time, death_time
+	}
+}();
+
+// Type definitions for CICRad_particles container and iterator
+template <typename problem_t> using CICRadParticleContainer = amrex::AmrParticleContainer<CICRadParticleRealComps<problem_t>>;
+template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICRadParticleRealComps<problem_t>>;
+
+#endif // AMREX_SPACEDIM == 3
+
+// Assumptions for any particle type:
+// 1. For massive particles, velocity components start after mass
+// 2. Birth time, if existing, is always followed by death time
+
+} // namespace quokka
+
+#endif // PARTICLE_TYPES_HPP_ 
