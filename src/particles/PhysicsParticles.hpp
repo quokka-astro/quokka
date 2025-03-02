@@ -20,7 +20,7 @@
 
 // Macro to create bit flags: BITFLAG(position) = 2^(position - 1)
 // Example: BITFLAG(1) = 1, BITFLAG(2) = 2, BITFLAG(3) = 4, ...
-#define BITFLAG(position) (1U << ((position)-1U))
+#define BITFLAG(position) (1U << ((position) - 1U))
 
 // Particle type flags that can be combined using bitwise OR operation (|).
 // Example: To enable both CIC and Rad particles, use:
@@ -28,10 +28,10 @@
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
 enum class ParticleSwitch : unsigned int {
-	None = 0U,	     // No particles, = 0b0000
-	CIC = BITFLAG(1),    // Cloud-In-Cell (gravitating) particles, = 0b0001
-	Rad = BITFLAG(2),    // Radiation particles, = 0b0010
-	CICRad = BITFLAG(3)  // Combined gravitating-radiating particles, = 0b0100
+	None = 0U,	    // No particles, = 0b0000
+	CIC = BITFLAG(1),   // Cloud-In-Cell (gravitating) particles, = 0b0001
+	Rad = BITFLAG(2),   // Radiation particles, = 0b0010
+	CICRad = BITFLAG(3) // Combined gravitating-radiating particles, = 0b0100
 };
 
 // Enable bitwise operations on the enum class
@@ -273,8 +273,8 @@ template <typename problem_t> struct CICParticleChecker {
 	double param2;
 	AMREX_GPU_HOST_DEVICE CICParticleChecker(double t1, double t2) : param1(t1), param2(t2) {}
 
-	AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					 amrex::Real current_time, amrex::Real dt) const -> bool
+	AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> bool
 	{
 		// return false for now. To be implemented in the future.
 		// Could check density threshold or other state-based conditions
