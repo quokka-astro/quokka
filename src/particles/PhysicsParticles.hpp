@@ -21,7 +21,7 @@
 
 // Macro to create bit flags: BITFLAG(position) = 2^(position - 1)
 // Example: BITFLAG(1) = 1, BITFLAG(2) = 2, BITFLAG(3) = 4, ...
-#define BITFLAG(position) (1U << ((position)-1U))
+#define BITFLAG(position) (1U << ((position) - 1U))
 
 // Particle type flags that can be combined using bitwise OR operation (|).
 // Example: To enable both CIC and Rad particles, use:
