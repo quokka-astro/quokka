@@ -269,7 +269,7 @@ template <typename problem_t> struct CICParticleChecker {
 	double param2;
 	AMREX_GPU_HOST_DEVICE CICParticleChecker(double t1, double t2) : param1(t1), param2(t2) {}
 
-	AMREX_GPU_DEVICE auto operator()(array_t const &state_arr, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+	AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					 amrex::Real current_time, amrex::Real dt) const -> bool
 	{
 		// return false for now. To be implemented in the future.
