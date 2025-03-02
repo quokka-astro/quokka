@@ -71,6 +71,14 @@ enum class ParticleType {
 	CICRad // Gravitating radiation particles
 };
 
+// Global particle parameters
+// The 'inline' keyword is used here to avoid multiple definition errors when this header
+// is included in multiple source files. It ensures that all translation units that include
+// this header will refer to the same instance of these variables, rather than creating
+// their own copies.
+inline amrex::Real particle_param1 = -1.0; // NOLINT
+inline amrex::Real particle_param2 = -1.0; // NOLINT
+
 //-------------------- Radiation particles --------------------
 
 // Indices for radiation particles (Rad_particles), birth time + death time + radiation groups
@@ -145,6 +153,20 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 // Assumptions for any particle type:
 // 1. For massive particles, velocity components start after mass
 // 2. Birth time, if existing, is always followed by death time
+
+// Function to parse particle parameters from input file
+// The 'inline' keyword allows this function to be defined in a header file without
+// causing multiple definition errors when the header is included in multiple source files.
+// It tells the linker that all instances of this function across different translation units
+// should be treated as the same function. This is a common pattern for small utility
+// functions defined in header files.
+inline void particleParmParse()
+{
+	// Parse particle parameters
+	amrex::ParmParse pp("particles");
+	pp.query("param1", particle_param1);
+	pp.query("param2", particle_param2);
+}
 
 } // namespace quokka
 

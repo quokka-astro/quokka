@@ -70,8 +70,7 @@ class PhysicsParticleDescriptorBase
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
-	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
-					      amrex::Real param2) const = 0;
+	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -286,12 +285,11 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1,
-				      amrex::Real param2) const override
+	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const override
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(container_, this->getMassIndex(), state, lev,
-													  current_time, dt, param1, param2);
+													  current_time, dt);
 	}
 
 #endif // AMREX_SPACEDIM == 3
@@ -494,13 +492,13 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Create particles based on particle type
-	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, amrex::Real param1, amrex::Real param2)
+	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
-				descriptor->createParticlesFromState(state, lev, current_time, dt, param1, param2);
+				descriptor->createParticlesFromState(state, lev, current_time, dt);
 			}
 		}
 	}

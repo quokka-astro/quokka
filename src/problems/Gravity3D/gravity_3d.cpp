@@ -138,11 +138,15 @@ auto problem_main() -> int
 	double position_error = 0.0;
 	double position_norm = 0.0;
 
+	const int n_particle_expect = 2 + 3 * 3 * 3; // 2 particles from the initial condition, 3*3*3 particles from the creator
+
 	int status = 0; // Initialize to success
 
 	auto particle_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+
+		const auto n_particle_actual = particle_data.size();
 
 		// assume the first particle is in the first plane quadrant
 		for (const auto &data : particle_data) {
@@ -174,6 +178,8 @@ auto problem_main() -> int
 			amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
 		}
 		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+		amrex::Print() << "Expected number of particles: " << n_particle_expect << "\n";
+		amrex::Print() << "Actual number of particles: " << n_particle_actual << "\n";
 
 		// compute relative error
 		const double relative_error = position_error / position_norm;
@@ -184,7 +190,7 @@ auto problem_main() -> int
 
 		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
 		status = 1;
-		if (relative_error < max_err_tol) {
+		if (relative_error < max_err_tol && n_particle_actual == n_particle_expect) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}

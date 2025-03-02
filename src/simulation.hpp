@@ -455,8 +455,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #ifdef AMREX_PARTICLES
       public:
 	int do_tracers = 0;
-	double particle_creator_param1 = -1.0;
-	double particle_creator_param2 = -1.0;
 
       protected:
 	void InitParticles();	 // create tracer particles
@@ -682,12 +680,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
-
-	// Default particle_creator_param1 = -1.0
-	pp.query("particle_creator_param1", particle_creator_param1);
-
-	// Default particle_creator_param2 = -1.0
-	pp.query("particle_creator_param2", particle_creator_param2);
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
@@ -1006,7 +998,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		kickParticlesAllLevels(dt_[0]);
 
 		// Use the new type-aware particle creation method
-		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
+		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0]);
 #endif
 
 		cur_time += dt_[0];
@@ -2115,6 +2107,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 {
 	// Verify that particle_switch is of the correct type
 	detail::verify_particle_switch_type<problem_t>();
+
+	// Read particle parameters from input file
+	quokka::particleParmParse();
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
