@@ -817,17 +817,20 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 
+	// compute hydro timestep first
+	const amrex::Real hydro_dt = cflNumber_ * (dx_min / domain_signal_max);
+
 	// compute maximum particle speed on level 'lev'
 	amrex::Real particle_dt = std::numeric_limits<amrex::Real>::max();
 #if AMREX_SPACEDIM == 3
-	const amrex::Real max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
-	amrex::Print() << "max_particle_speed = " << max_particle_speed << "\n";
-	if (max_particle_speed > 0.0) {
-		particle_dt = particleCflNumber_ * (dx_min / max_particle_speed);
+	if (particleRegister_.HasMassiveParticles()) {
+		const amrex::Real max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
+		amrex::Print() << "max_particle_speed = " << max_particle_speed << "\n";
+		if (max_particle_speed > 1e-5 * (dx_min / hydro_dt)) {
+			particle_dt = particleCflNumber_ * (dx_min / max_particle_speed);
+		}
 	}
 #endif
-
-	const amrex::Real hydro_dt = cflNumber_ * (dx_min / domain_signal_max);
 
 	// compute timestep due to extra physics on level 'lev'
 	const amrex::Real extra_physics_dt = computeExtraPhysicsTimestep(lev);
