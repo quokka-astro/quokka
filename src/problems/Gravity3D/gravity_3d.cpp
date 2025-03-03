@@ -63,7 +63,8 @@ template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr double radiation_constant = 1.0;
 };
 
-namespace quokka {
+namespace quokka
+{
 // Specialization for CIC particles
 template <> struct ParticleCreationTraits<ParticleType::CIC> {
 	// Specialized nested ParticleChecker for CIC particles
