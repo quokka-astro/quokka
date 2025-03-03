@@ -912,27 +912,41 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
-	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
+	const double f = std::sqrt((fx * fx) + (fy * fy) + (fz * fz));
 	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
 
-	// angle between interface and radiation flux \hat{n}
-	// If direction is undefined, just drop direction-dependent
-	// terms.
-	std::array<amrex::Real, 3> n{};
-
-	AMREX_ASSERT(!std::isnan(fx));
-	AMREX_ASSERT(!std::isnan(fy));
-	AMREX_ASSERT(!std::isnan(fz));
 	AMREX_ASSERT(!std::isnan(f));
+	AMREX_ASSERT(!std::isnan(fx) && !std::isnan(fy) && !std::isnan(fz));
+
+	// angle between interface and radiation flux \hat{n}
+	// If direction is undefined, just drop direction-dependent terms.
+	std::array<amrex::Real, 3> n{};
+	int inf_count = 0;
+
 	for (int ii = 0; ii < 3; ++ii) {
-		const double f_small = 1.0e-10;
-		f += 0.0;
-		if (f > f_small) {
+		if (std::isinf(fvec[ii])) {
+			n[ii] = 1.0;
+			inf_count++;
+		} else if (f > 0.0) {
 			n[ii] = fvec[ii] / f;
 		} else {
-			n[ii] = 0.;
+			n[ii] = 0.0;
 		}
 	}
+
+	// If we have multiple infinite components, normalize them
+	if (inf_count > 1) {
+		const double scale = 1.0 / std::sqrt(static_cast<double>(inf_count));
+		for (int ii = 0; ii < 3; ++ii) {
+			if (std::isinf(fvec[ii])) {
+				n[ii] = scale;
+			}
+		}
+	}
+
+	// Verify n is a unit vector (within numerical precision)
+	const double n_norm = std::sqrt((n[0] * n[0]) + (n[1] * n[1]) + (n[2] * n[2]));
+	AMREX_ASSERT(std::abs(n_norm - 1.0) < 1e-10 || n_norm < 1e-10);
 
 	// compute radiation pressure tensors
 	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
@@ -968,10 +982,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
-
-	AMREX_ASSERT(!std::isnan(fx));
-	AMREX_ASSERT(!std::isnan(fy));
-	AMREX_ASSERT(!std::isnan(fz));
 
 	// Compute the Eddington tensor
 	auto T = ComputeEddingtonTensor(fx, fy, fz);
