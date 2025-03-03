@@ -912,32 +912,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
-	const double f = std::sqrt(fx * fx + fy * fy + fz * fz);
+	const double f = std::sqrt((fx * fx) + (fy * fy) + (fz * fz));
 	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
 
 	AMREX_ASSERT(!std::isnan(f));
-	// AMREX_ASSERT(!std::isinf(f));
 	AMREX_ASSERT(!std::isnan(fx) && !std::isnan(fy) && !std::isnan(fz));
-	// AMREX_ASSERT(!std::isinf(fx) && !std::isinf(fy) && !std::isinf(fz));
 
-	// angle between interface and radiation flux \hat{n}
-	// If direction is undefined, just drop direction-dependent
-	// terms.
+	// angle between interface and radiation flux \hat{n} If direction is undefined, just drop direction-dependent terms.
 	std::array<amrex::Real, 3> n{};
-	const double f_threshold = 1e-12; // small threshold to prevent division by very small numbers
-
-	// Check if any component is NaN or Inf before division
-	// for (int ii = 0; ii < 3; ++ii) {
-	// 	if (std::isnan(fvec[ii]) || std::isinf(fvec[ii])) {
-	// 		n[ii] = 0.;
-	// 	} else if (f > f_threshold) {
-	// 		n[ii] = fvec[ii] / f;
-	// 	} else {
-	// 		n[ii] = 0.;
-	// 	}
-	// 	AMREX_ASSERT(!std::isnan(n[ii]));
-	// 	AMREX_ASSERT(!std::isinf(n[ii]));
-	// }
 
 	for (int ii = 0; ii < 3; ++ii) {
 		if (std::isinf(fvec[ii])) {
@@ -947,8 +929,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 		} else {
 			n[ii] = 0.;
 		}
-		// AMREX_ASSERT(!std::isnan(n[ii]));
-		// AMREX_ASSERT(!std::isinf(n[ii]));
 	}
 
 	// compute radiation pressure tensors
