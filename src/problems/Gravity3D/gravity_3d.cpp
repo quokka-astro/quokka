@@ -17,7 +17,6 @@
 #include "AMReX_Print.H"
 
 #include "AMReX_REAL.H"
-#include "AMReX_ccse-mpi.H"
 #include "QuokkaSimulation.hpp"
 #include "gravity_3d.hpp"
 #include "hydro/hydro_system.hpp"
