@@ -921,32 +921,37 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// angle between interface and radiation flux \hat{n}
 	// If direction is undefined, just drop direction-dependent terms.
 	std::array<amrex::Real, 3> n{};
-	int inf_count = 0;
 
+	// Count infinite components
+	int inf_count = 0;
 	for (int ii = 0; ii < 3; ++ii) {
 		if (std::isinf(fvec[ii])) {
-			n[ii] = 1.0;
 			inf_count++;
-		} else if (f > 0.0) {
+		}
+	}
+
+	if (inf_count > 0) {
+		// If we have infinite components, set them to 1/sqrt(inf_count) and others to 0
+		// This ensures n remains a unit vector
+		const double inf_value = 1.0 / std::sqrt(static_cast<double>(inf_count));
+		for (int ii = 0; ii < 3; ++ii) {
+			n[ii] = std::isinf(fvec[ii]) ? inf_value : 0.0;
+		}
+	} else if (f > 0.0) {
+		// Normal case: normalize the vector
+		for (int ii = 0; ii < 3; ++ii) {
 			n[ii] = fvec[ii] / f;
-		} else {
+		}
+	} else {
+		// Zero flux case: set to zero vector
+		for (int ii = 0; ii < 3; ++ii) {
 			n[ii] = 0.0;
 		}
 	}
 
-	// If we have multiple infinite components, normalize them
-	if (inf_count > 1) {
-		const double scale = 1.0 / std::sqrt(static_cast<double>(inf_count));
-		for (int ii = 0; ii < 3; ++ii) {
-			if (std::isinf(fvec[ii])) {
-				n[ii] = scale;
-			}
-		}
-	}
-
 	// Verify n is a unit vector (within numerical precision)
-	const double n_norm = std::sqrt((n[0] * n[0]) + (n[1] * n[1]) + (n[2] * n[2]));
-	AMREX_ASSERT(std::abs(n_norm - 1.0) < 1e-10 || n_norm < 1e-10);
+	AMREX_ASSERT(std::abs(std::sqrt((n[0] * n[0]) + (n[1] * n[1]) + (n[2] * n[2])) - 1.0) < 1e-10 ||
+		     std::sqrt((n[0] * n[0]) + (n[1] * n[1]) + (n[2] * n[2])) < 1e-10);
 
 	// compute radiation pressure tensors
 	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
