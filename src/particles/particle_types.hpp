@@ -163,7 +163,7 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 inline void particleParmParse()
 {
 	// Parse particle parameters
-	amrex::ParmParse pp("particles");
+	const amrex::ParmParse pp("particles");
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
 }
