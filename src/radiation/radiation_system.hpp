@@ -913,42 +913,62 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
 	const double f = std::sqrt((fx * fx) + (fy * fy) + (fz * fz));
-	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
-
-	AMREX_ASSERT(!std::isnan(f));
-	AMREX_ASSERT(!std::isnan(fx) && !std::isnan(fy) && !std::isnan(fz));
+	const std::array<amrex::Real, 3> fvec = {fx, fy, fz};
+	const double f_floor = 1e-8;
 
 	// angle between interface and radiation flux \hat{n}
 	// If direction is undefined, just drop direction-dependent terms.
 	std::array<amrex::Real, 3> n{};
 
-	// Count infinite components
-	int inf_count = 0;
+	// if fvec has a inf component, set n to zero
+	bool has_inf = false;
 	for (int ii = 0; ii < 3; ++ii) {
-		if (std::isinf(fvec[ii])) {
-			inf_count++;
+		if (fvec[ii] > 1.1) {
+			has_inf = true;
+			break;
 		}
 	}
 
-	const double f_floor = 1e-8;
-	if (inf_count > 0) {
-		// If we have infinite components, set them to 1/sqrt(inf_count) and others to 0
-		// This ensures n remains a unit vector
-		const double inf_value = 1.0 / std::sqrt(static_cast<double>(inf_count));
-		for (int ii = 0; ii < 3; ++ii) {
-			n[ii] = std::isinf(fvec[ii]) ? inf_value : 0.0;
-		}
+	if (has_inf) {
+		n = {0.0, 0.0, 0.0};
 	} else if (f > f_floor) {
-		// Normal case: normalize the vector
 		for (int ii = 0; ii < 3; ++ii) {
 			n[ii] = fvec[ii] / f;
 		}
 	} else {
-		// Zero flux case: set to zero vector
-		for (int ii = 0; ii < 3; ++ii) {
-			n[ii] = 0.0;
-		}
+		n = {0.0, 0.0, 0.0};
 	}
+
+
+	// AMREX_ASSERT(!std::isnan(f));
+	// AMREX_ASSERT(!std::isnan(fx) && !std::isnan(fy) && !std::isnan(fz));
+
+	// // Count infinite components
+	// int inf_count = 0;
+	// for (int ii = 0; ii < 3; ++ii) {
+	// 	if (std::isinf(fvec[ii])) {
+	// 		inf_count++;
+	// 	}
+	// }
+
+	// if (inf_count > 0) {
+	// 	// If we have infinite components, set them to 1/sqrt(inf_count) and others to 0
+	// 	// This ensures n remains a unit vector
+	// 	const double inf_value = 1.0 / std::sqrt(static_cast<double>(inf_count));
+	// 	for (int ii = 0; ii < 3; ++ii) {
+	// 		n[ii] = std::isinf(fvec[ii]) ? inf_value : 0.0;
+	// 	}
+	// } else if (f > f_floor) {
+	// 	// Normal case: normalize the vector
+	// 	for (int ii = 0; ii < 3; ++ii) {
+	// 		n[ii] = fvec[ii] / f;
+	// 	}
+	// } else {
+	// 	// Zero flux case: set to zero vector
+	// 	for (int ii = 0; ii < 3; ++ii) {
+	// 		n[ii] = 0.0;
+	// 	}
+	// }
 
 	// Verify n is a unit vector (within numerical precision)
 	AMREX_ASSERT(std::abs(std::sqrt((n[0] * n[0]) + (n[1] * n[1]) + (n[2] * n[2])) - 1.0) < 1e-10 ||
@@ -1137,6 +1157,9 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 				fz_L = Fz_L / (c_light_ * erad_L);
 				fz_R = Fz_R / (c_light_ * erad_R);
+
+				AMREX_ASSERT(!std::isnan(fx_L) && !std::isnan(fy_L) && !std::isnan(fz_L) && !std::isnan(fx_R) && !std::isnan(fy_R) && !std::isnan(fz_R));
+				AMREX_ASSERT(!std::isinf(fx_L) && !std::isinf(fy_L) && !std::isinf(fz_L) && !std::isinf(fx_R) && !std::isinf(fy_R) && !std::isinf(fz_R));
 
 				f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
 				f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
