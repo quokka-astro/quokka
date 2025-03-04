@@ -11,6 +11,9 @@
 ##SBATCH --core-spec=8
 #SBATCH -N 8
 
+# *MUST* load environment modules setup script inside the SLURM script, otherwise job will fail
+. scripts/setonix-gpu.profile
+
 # multi-node MPI communication will hang without this (memhooks does NOT work)
 export FI_MR_CACHE_MAX_COUNT=0  # libfabric disable caching
 
