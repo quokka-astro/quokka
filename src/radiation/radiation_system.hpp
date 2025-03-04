@@ -506,8 +506,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(double rh
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> Real
 {
 	double power = radiation_constant_ * std::pow(temperature, 4);
-	// set floor
-	power = std::max(power, Erad_floor_);
 	return power;
 }
 
