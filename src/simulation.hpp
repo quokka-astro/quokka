@@ -825,13 +825,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 #if AMREX_SPACEDIM == 3
 	if (particleRegister_.HasMassiveParticles()) {
 		const amrex::Real max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
-		// Add safety checks
-		AMREX_ASSERT(std::isnan(max_particle_speed));
-		if (std::isfinite(max_particle_speed)) {
-			amrex::Print() << "max_particle_speed = " << max_particle_speed << "\n";
-		} else {
-			amrex::Print() << "max_particle_speed is not finite (NaN or Inf)\n";
-		}
+		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed));
+		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed));
+		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		if (max_particle_speed > 1e-5 * (dx_min / hydro_dt)) {
 			particle_dt = particleCflNumber_ * (dx_min / max_particle_speed);
 		}
