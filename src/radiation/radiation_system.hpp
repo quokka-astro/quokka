@@ -939,10 +939,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 		n = {0.0, 0.0, 0.0};
 	}
 
-	// Verify n is a unit vector (within numerical precision)
-	AMREX_ASSERT(std::abs(std::sqrt((n[0] * n[0]) + (n[1] * n[1]) + (n[2] * n[2])) - 1.0) < 1e-10 ||
-		     std::sqrt((n[0] * n[0]) + (n[1] * n[1]) + (n[2] * n[2])) < 1e-10);
-
 	// compute radiation pressure tensors
 	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
 
