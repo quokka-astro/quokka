@@ -920,16 +920,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// If direction is undefined, just drop direction-dependent terms.
 	std::array<amrex::Real, 3> n{};
 
-	// if fvec has a inf component, set n to zero
-	bool has_inf = false;
+	// if fvec has a component with a large flux limiting violation, set n to zero
+	bool has_flux_limiting_violation = false;
+	const double large_flux_limiting_violation_threshold = 1.1;
 	for (int ii = 0; ii < 3; ++ii) {
-		if (fvec[ii] > 1.1) {
-			has_inf = true;
+		if (fvec[ii] > large_flux_limiting_violation_threshold) {
+			has_flux_limiting_violation = true;
 			break;
 		}
 	}
 
-	if (has_inf || (f <= f_floor)) {
+	if (has_flux_limiting_violation || (f <= f_floor)) {
 		n = {0.0, 0.0, 0.0};
 	} else {
 		for (int ii = 0; ii < 3; ++ii) {
