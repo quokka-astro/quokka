@@ -912,16 +912,29 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
-	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
-	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
+	const double f = std::sqrt((fx * fx) + (fy * fy) + (fz * fz));
+	const std::array<amrex::Real, 3> fvec = {fx, fy, fz};
+	const double f_floor = 1e-10;
 
 	// angle between interface and radiation flux \hat{n}
-	// If direction is undefined, just drop direction-dependent
-	// terms.
+	// If direction is undefined, just drop direction-dependent terms.
 	std::array<amrex::Real, 3> n{};
 
+	// if fvec has a inf component, set n to zero
+	bool has_inf = false;
 	for (int ii = 0; ii < 3; ++ii) {
-		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
+		if (fvec[ii] > 1.1) {
+			has_inf = true;
+			break;
+		}
+	}
+
+	if (has_inf || (f <= f_floor)) {
+		n = {0.0, 0.0, 0.0};
+	} else {
+		for (int ii = 0; ii < 3; ++ii) {
+			n[ii] = fvec[ii] / f;
+		}
 	}
 
 	// compute radiation pressure tensors
