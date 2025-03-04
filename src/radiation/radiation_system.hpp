@@ -930,6 +930,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 		}
 	}
 
+	const double f_floor = 1e-8;
 	if (inf_count > 0) {
 		// If we have infinite components, set them to 1/sqrt(inf_count) and others to 0
 		// This ensures n remains a unit vector
@@ -937,7 +938,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 		for (int ii = 0; ii < 3; ++ii) {
 			n[ii] = std::isinf(fvec[ii]) ? inf_value : 0.0;
 		}
-	} else if (f > 0.0) {
+	} else if (f > f_floor) {
 		// Normal case: normalize the vector
 		for (int ii = 0; ii < 3; ++ii) {
 			n[ii] = fvec[ii] / f;
