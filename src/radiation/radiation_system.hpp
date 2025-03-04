@@ -914,7 +914,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 
 	const double f = std::sqrt((fx * fx) + (fy * fy) + (fz * fz));
 	const std::array<amrex::Real, 3> fvec = {fx, fy, fz};
-	const double f_floor = 1e-8;
+	const double f_floor = 1e-10;
 
 	// angle between interface and radiation flux \hat{n}
 	// If direction is undefined, just drop direction-dependent terms.

@@ -184,10 +184,10 @@ class PhysicsParticleDescriptorBase
 	auto operator=(PhysicsParticleDescriptorBase &&) -> PhysicsParticleDescriptorBase & = default;
 
 	// Getter methods for particle properties
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getMassIndex() const -> int { return massIndex_; }
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getLumIndex() const -> int { return lumIndex_; }
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
-	[[nodiscard]] auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getMassIndex() const -> int { return massIndex_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getLumIndex() const -> int { return lumIndex_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
@@ -605,13 +605,17 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				    reduce_ops);
 
 				// Extract the value from the tuple
-				max_speed = amrex::get<0>(result_tuple);
+				max_speed = std::max(0.0, amrex::get<0>(result_tuple));
+
+				AMREX_ASSERT(!std::isnan(max_speed));
+				AMREX_ASSERT(!std::isinf(max_speed));
 			}
 		}
 
 		// Reduce across all MPI ranks to get global maximum. Use ParallelContext::CommunicatorSub() for current level and avoid using the default
 		// communicator.
 		amrex::ParallelAllReduce::Max(max_speed, amrex::ParallelContext::CommunicatorSub());
+		AMREX_ASSERT(!std::isnan(max_speed));
 		return max_speed;
 	}
 
@@ -808,10 +812,46 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		amrex::Real max_speed = 0.0;
 		for (const auto &[name, descriptor] : particleRegistry_) {
+			// Add null check and validity check
+			if (descriptor == nullptr) {
+				amrex::Print() << "Warning: Null descriptor found in particle registry for type: " << name << "\n";
+				continue;
+			}
+			
+			// Add debug info about the descriptor
+			amrex::Print() << "Processing particle type: " << name << "\n";
+			amrex::Print() << "Mass index: " << descriptor->getMassIndex() << "\n";
+			
 			if (descriptor->getMassIndex() >= 0) {
-				max_speed = std::max(max_speed, descriptor->computeMaxParticleSpeed(lev));
+				// Add try-catch to handle potential memory corruption
+				try {
+					amrex::Print() << "Calling computeMaxParticleSpeed for " << name << "\n";
+					const amrex::Real speed = descriptor->computeMaxParticleSpeed(lev);
+					amrex::Print() << "Speed value: " << speed << "\n";
+					
+					if (std::isfinite(speed)) {
+						// More defensive max operation
+						amrex::Print() << "Current max_speed before update: " << max_speed << "\n";
+						if (speed > max_speed) {
+							max_speed = speed;
+							amrex::Print() << "Updated max_speed to: " << max_speed << "\n";
+						}
+						// Verify max_speed is still valid
+						if (!std::isfinite(max_speed)) {
+							amrex::Print() << "Warning: max_speed became invalid after update!\n";
+							max_speed = 0.0;  // Reset to safe value
+						}
+					} else {
+						amrex::Print() << "Warning: Invalid speed value returned for particle type: " << name << "\n";
+					}
+				} catch (const std::exception& e) {
+					amrex::Print() << "Error computing max speed for particle type " << name << ": " << e.what() << "\n";
+				} catch (...) {
+					amrex::Print() << "Unknown error computing max speed for particle type: " << name << "\n";
+				}
 			}
 		}
+		AMREX_ASSERT(!std::isnan(max_speed));
 		return max_speed;
 	}
 #endif // AMREX_SPACEDIM == 3
