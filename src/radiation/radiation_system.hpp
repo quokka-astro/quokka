@@ -505,8 +505,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(double rh
 // define ComputeThermalRadiation for single-group, returns the thermal radiation power = a_r * T^4
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> Real
 {
-	double power = radiation_constant_ * std::pow(temperature, 4);
-	return power;
+	return radiation_constant_ * std::pow(temperature, 4);
 }
 
 // define ComputeThermalRadiationMultiGroup, returns the thermal radiation power for each photon group. = a_r * T^4 * radEnergyFractions
