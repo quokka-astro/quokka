@@ -11,7 +11,6 @@
 
 // c++ headers
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -505,7 +504,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(double rh
 // define ComputeThermalRadiation for single-group, returns the thermal radiation power = a_r * T^4
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> Real
 {
-	return radiation_constant_ * std::pow(temperature, 4);
+	double power = radiation_constant_ * std::pow(temperature, 4);
+	// set floor
+	if (power < Erad_floor_) {
+		power = Erad_floor_;
+	}
+	return power;
 }
 
 // define ComputeThermalRadiationMultiGroup, returns the thermal radiation power for each photon group. = a_r * T^4 * radEnergyFractions
@@ -595,12 +599,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00
 	// Solve the 3x3 matrix equation: C * X = Y under the assumption that only the diagonal terms
 	// are guaranteed to be non-zero and are thus allowed to be divided by.
 
-	auto E11 = C11 - (C01 * C10 / C00);
-	auto E12 = C12 - (C02 * C10 / C00);
-	auto E21 = C21 - (C01 * C20 / C00);
-	auto E22 = C22 - (C02 * C20 / C00);
-	auto Z1 = Y1 - (Y0 * C10 / C00);
-	auto Z2 = Y2 - (Y0 * C20 / C00);
+	auto E11 = C11 - C01 * C10 / C00;
+	auto E12 = C12 - C02 * C10 / C00;
+	auto E21 = C21 - C01 * C20 / C00;
+	auto E22 = C22 - C02 * C20 / C00;
+	auto Z1 = Y1 - Y0 * C10 / C00;
+	auto Z2 = Y2 - Y0 * C20 / C00;
 	auto X2 = (Z2 - Z1 * E21 / E11) / (E22 - E12 * E21 / E11);
 	auto X1 = (Z1 - E12 * X2) / E11;
 	auto X0 = (Y0 - C01 * X1 - C02 * X2) / C00;
@@ -806,7 +810,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 	// compute Levermore (1984) closure [Eq. 25]
 	// the is the M1 closure that is derived from Lorentz invariance
 	const double f = clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
-	const double f_fac = std::sqrt(4.0 - (3.0 * (f * f)));
+	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
 	const double chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
 
 #if 0 // NOLINT
@@ -908,29 +912,16 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
-	const double f = std::sqrt((fx * fx) + (fy * fy) + (fz * fz));
-	const std::array<amrex::Real, 3> fvec = {fx, fy, fz};
-	const double f_floor = 1e-10;
+	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
+	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
 
 	// angle between interface and radiation flux \hat{n}
-	// If direction is undefined, just drop direction-dependent terms.
+	// If direction is undefined, just drop direction-dependent
+	// terms.
 	std::array<amrex::Real, 3> n{};
 
-	// if fvec has a inf component, set n to zero
-	bool has_inf = false;
 	for (int ii = 0; ii < 3; ++ii) {
-		if (fvec[ii] > 1.1) {
-			has_inf = true;
-			break;
-		}
-	}
-
-	if (has_inf || (f <= f_floor)) {
-		n = {0.0, 0.0, 0.0};
-	} else {
-		for (int ii = 0; ii < 3; ++ii) {
-			n[ii] = fvec[ii] / f;
-		}
+		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
 	}
 
 	// compute radiation pressure tensors
@@ -1079,8 +1070,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			double fz_R = x1RightState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
 
 			// compute scalar reduced flux f
-			double f_L = std::sqrt((fx_L * fx_L) + (fy_L * fy_L) + (fz_L * fz_L));
-			double f_R = std::sqrt((fx_R * fx_R) + (fy_R * fy_R) + (fz_R * fz_R));
+			double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+			double f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
 
 			// Compute "un-reduced" Fx, Fy, Fz
 			double Fx_L = fx_L * (c_light_ * erad_L);
@@ -1117,13 +1108,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 				fz_L = Fz_L / (c_light_ * erad_L);
 				fz_R = Fz_R / (c_light_ * erad_R);
 
-				AMREX_ASSERT(!std::isnan(fx_L) && !std::isnan(fy_L) && !std::isnan(fz_L) && !std::isnan(fx_R) && !std::isnan(fy_R) &&
-					     !std::isnan(fz_R));
-				AMREX_ASSERT(!std::isinf(fx_L) && !std::isinf(fy_L) && !std::isinf(fz_L) && !std::isinf(fx_R) && !std::isinf(fy_R) &&
-					     !std::isinf(fz_R));
-
-				f_L = std::sqrt((fx_L * fx_L) + (fy_L * fy_L) + (fz_L * fz_L));
-				f_R = std::sqrt((fx_R * fx_R) + (fy_R * fy_R) + (fz_R * fz_R));
+				f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+				f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
 			}
 
 			// ComputeRadPressure returns F_L_and_S_L or F_R_and_S_R
@@ -1338,7 +1324,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
 								     const double Etot) -> double
 {
-	const double p_sq = (X1GasMom * X1GasMom) + (X2GasMom * X2GasMom) + (X3GasMom * X3GasMom);
+	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
 	const double Ekin = p_sq / (2.0 * density);
 	const double Eint = Etot - Ekin;
 	AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
@@ -1349,7 +1335,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
 								     const double Eint) -> double
 {
-	const double p_sq = (X1GasMom * X1GasMom) + (X2GasMom * X2GasMom) + (X3GasMom * X3GasMom);
+	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
 	const double Ekin = p_sq / (2.0 * density);
 	const double Etot = Eint + Ekin;
 	return Etot;
@@ -1471,7 +1457,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
 {
 	if (n_step > 0) {
-		const auto T_d = T_gas - (R_sum / (N_d * std::sqrt(T_gas)));
+		const auto T_d = T_gas - R_sum / (N_d * std::sqrt(T_gas));
 		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
 		return T_d;
 	}
