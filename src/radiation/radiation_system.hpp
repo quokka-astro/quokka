@@ -1123,8 +1123,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 				fz_L = Fz_L / (c_light_ * erad_L);
 				fz_R = Fz_R / (c_light_ * erad_R);
 
-				AMREX_ASSERT(!std::isnan(fx_L) && !std::isnan(fy_L) && !std::isnan(fz_L) && !std::isnan(fx_R) && !std::isnan(fy_R) && !std::isnan(fz_R));
-				AMREX_ASSERT(!std::isinf(fx_L) && !std::isinf(fy_L) && !std::isinf(fz_L) && !std::isinf(fx_R) && !std::isinf(fy_R) && !std::isinf(fz_R));
+				AMREX_ASSERT(!std::isnan(fx_L) && !std::isnan(fy_L) && !std::isnan(fz_L) && !std::isnan(fx_R) && !std::isnan(fy_R) &&
+					     !std::isnan(fz_R));
+				AMREX_ASSERT(!std::isinf(fx_L) && !std::isinf(fy_L) && !std::isinf(fz_L) && !std::isinf(fx_R) && !std::isinf(fy_R) &&
+					     !std::isinf(fz_R));
 
 				f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
 				f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
