@@ -10,13 +10,10 @@
 }}%%
 
 flowchart TB
-    %% Define styles
-    classDef lightBlue fill:#B0FFFF,stroke:#000,stroke-width:2px
-    
     %% Main flow
-    A["AMRSimulation::setInitialConditions()"]:::lightBlue
-    B["AMRSimulation::evolve()"]:::lightBlue
-    C["AMRSimulation::computeTimestep()"]:::lightBlue
+    A["AMRSimulation::setInitialConditions()"]
+    B["AMRSimulation::evolve()"]
+    C["AMRSimulation::computeTimestep()"]
     
     %% Create the flow
     A --> B --> C
@@ -24,7 +21,7 @@ flowchart TB
     %% Main timeStep subgraph
     subgraph timeStep ["AMRSimulation::timeStepWithSubcycling()"]
         direction TB
-        D["AMRCore::regrid()"]:::lightBlue
+        D["AMRCore::regrid()"]
         
         %% advanceSingleTimestep subgraph
         subgraph advanceSingle ["RadhydroSimulation::advanceSingleTimestepAtLevel()"]
@@ -36,33 +33,33 @@ flowchart TB
                 
                 subgraph innerAdvance ["advanceHydroAtLevel()"]
                     direction TB
-                    H1["addStrangSplitSourcesWithBuiltin()"]:::lightBlue
-                    H2["fillBoundaryConditions()"]:::lightBlue
-                    H3["Stage 1 of RK2-SSP"]:::lightBlue
-                    H4["fillBoundaryConditions()"]:::lightBlue
-                    H5["Stage 1 of RK2-SSP"]:::lightBlue
-                    H6["addStrangSplitSourcesWithBuiltin()"]:::lightBlue
+                    H1["addStrangSplitSourcesWithBuiltin()"]
+                    H2["fillBoundaryConditions()"]
+                    H3["Stage 1 of RK2-SSP"]
+                    H4["fillBoundaryConditions()"]
+                    H5["Stage 1 of RK2-SSP"]
+                    H6["addStrangSplitSourcesWithBuiltin()"]
                     
                     H1 --> H2 --> H3 --> H4 --> H5 --> H6
                 end
             end
             
-            E["CHECK_HYDRO_STATES"]:::lightBlue
+            E["CHECK_HYDRO_STATES"]
             
             %% Subcycle radiation subgraph
             subgraph subcycle ["subcycleRadiationAtLevel()"]
                 direction TB
-                F1["computeNumberOfRadiationSubsteps()"]:::lightBlue
+                F1["computeNumberOfRadiationSubsteps()"]
                 
                 subgraph forLoop ["for i in range(nsubSteps):"]
                     direction TB
-                    G1["swapRadiationState()"]:::lightBlue
-                    G2["advanceRadiationSubstepAtLevel()"]:::lightBlue
+                    G1["swapRadiationState()"]
+                    G2["advanceRadiationSubstepAtLevel()"]
                     
                     subgraph operator ["operatorSplitSourceTerms()"]
                         direction TB
-                        K1["SetRadEnergySource()"]:::lightBlue
-                        K2["AddSourceTerms()"]:::lightBlue
+                        K1["SetRadEnergySource()"]
+                        K2["AddSourceTerms()"]
                         
                         K1 --> K2
                     end
@@ -73,9 +70,9 @@ flowchart TB
                 F1 --> forLoop
             end
             
-            I["CHECK_HYDRO_STATES"]:::lightBlue
-            J["computeAfterLevelAdvance()"]:::lightBlue
-            K["CHECK_HYDRO_STATES"]:::lightBlue
+            I["CHECK_HYDRO_STATES"]
+            J["computeAfterLevelAdvance()"]
+            K["CHECK_HYDRO_STATES"]
             
             advanceHydro --> E --> subcycle --> I --> J --> K
         end
