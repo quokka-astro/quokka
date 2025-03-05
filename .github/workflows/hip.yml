@@ -64,7 +64,7 @@ jobs:
             -DCMAKE_CXX_COMPILER=$(which clang++)         \
             -DCMAKE_CXX_STANDARD=17                       \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache          \
-            -DCMAKE_CXX_FLAGS=-stdlib=libc++
+            -DCMAKE_CXX_FLAGS="-ffp-exception-behavior=strict -stdlib=libc++"
         cmake --build build -j 2
 
         ccache -s
