@@ -1,0 +1,143 @@
+name: CUDA-register-usage
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    branches: [ development ]
+
+jobs:
+  # Job to generate and cache development branch output - only runs on development
+  cache-development-branch:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout development branch
+      uses: actions/checkout@v3
+    
+    - name: Set up build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential  # Add any other dependencies you need
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'  # Specify your Python version
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Add any Python dependencies your script needs
+        # pip install -r requirements.txt
+    
+    - name: Compile development branch code
+      run: |
+        # Replace with your actual build commands
+        make
+    
+    - name: Run Python script on development branch
+      run: |
+        # Replace with your actual Python script and arguments
+        python ./your_script.py ./your-executable-name > development_output.txt
+    
+    - name: Upload development branch output as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: development-branch-output
+        path: development_output.txt
+        retention-days: 90  # Keep the artifact for 90 days
+  
+  # Job to build PR branch and compare with cached development output
+  build-and-compare:
+    runs-on: ubuntu-latest
+    if: (github.ref != 'refs/heads/development' && github.event_name == 'pull_request') || (github.event_name == 'pull_request')
+    
+    steps:
+    - name: Checkout current code
+      uses: actions/checkout@v3
+    
+    - name: Download development branch output
+      uses: actions/download-artifact@v3
+      with:
+        name: development-branch-output
+        path: ./
+      continue-on-error: true  # Continue even if the artifact doesn't exist yet
+    
+    - name: Check if development output exists
+      id: check_files
+      run: |
+        if [ -f "development_output.txt" ]; then
+          echo "development_output_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "development_output_exists=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Set up build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # pip install -r requirements.txt
+    
+    - name: Compile current code
+      run: |
+        # Replace with your actual build commands
+        make
+    
+    - name: Run Python script on current code
+      run: |
+        # Replace with your actual Python script and arguments
+        python ./your_script.py ./your-executable-name > current_output.txt
+    
+    - name: Fallback - Checkout development branch
+      if: steps.check_files.outputs.development_output_exists != 'true'
+      uses: actions/checkout@v3
+      with:
+        ref: development
+        path: development-branch
+    
+    - name: Fallback - Compile development branch code
+      if: steps.check_files.outputs.development_output_exists != 'true'
+      run: |
+        cd development-branch
+        # Replace with your actual build commands
+        make
+    
+    - name: Fallback - Run Python script on development branch
+      if: steps.check_files.outputs.development_output_exists != 'true'
+      run: |
+        cd development-branch
+        # Replace with your actual Python script and arguments
+        python ./your_script.py ./your-executable-name > ../development_output.txt
+    
+    - name: Compare outputs
+      run: |
+        echo "Comparing outputs between current branch and development..."
+        diff -u development_output.txt current_output.txt > diff_result.txt || true
+        
+        if [ -s diff_result.txt ]; then
+          echo "Differences found between current branch and development:"
+          cat diff_result.txt
+          echo "::warning::Output differences detected between branches"
+        else
+          echo "No differences found between current branch and development."
+        fi
+    
+    - name: Upload comparison results as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: comparison-results
+        path: |
+          current_output.txt
+          development_output.txt
+          diff_result.txt
