@@ -112,6 +112,10 @@ template <> struct CICParticleCreator<BinaryOrbit> {
 		p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) / cell_density;
 		p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) / cell_density;
 		p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) / cell_density;
+		// set a random cell to a large velocity to test the CFL timestep calculation
+		if (i == 16 && j == 32 && k == 48) {
+			p.rdata(mass_idx + 2) = 10.0;
+		}
 
 		// Update cell density (remove mass that was given to particle)
 		state_arr(i, j, k, HydroSystem<BinaryOrbit>::density_index) = 0.5 * cell_density;
