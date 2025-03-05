@@ -1,4 +1,4 @@
-name: Compile and Compare
+name: CUDA
 
 on:
   push:

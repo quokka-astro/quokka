@@ -1,6 +1,4 @@
-import numpy as np
 import cxxfilt
-
 import re
 
 def exclude_matching_functions(function_names, exclusion_patterns):
