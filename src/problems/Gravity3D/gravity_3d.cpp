@@ -17,7 +17,6 @@
 #include "AMReX_Print.H"
 
 #include "AMReX_REAL.H"
-#include "AMReX_ccse-mpi.H"
 #include "QuokkaSimulation.hpp"
 #include "gravity_3d.hpp"
 #include "hydro/hydro_system.hpp"
@@ -32,8 +31,17 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
+// Test enum to demonstrate type checking of particle_switch
+enum class TestEnum : unsigned int {
+	MISTAKE = 0b00000100U,
+};
+
 template <> struct Particle_Traits<BinaryOrbit> {
-	static constexpr bool is_particle_creation_enabled = true;
+	// The following will cause a compile error
+	// static constexpr int particle_switch = 1;
+	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {
@@ -56,69 +64,81 @@ template <> struct Physics_Traits<BinaryOrbit> {
 
 namespace quokka
 {
-// Functor for checking whether to create a CIC particle at a given location and time
-// Template specialization for BinaryOrbit
-template <> struct CICParticleChecker<BinaryOrbit> {
-	double param1;
-	double param2;
-	AMREX_GPU_HOST_DEVICE CICParticleChecker(double t1, double t2) : param1(t1), param2(t2) {}
+// Specialization for CIC particles
+template <> struct ParticleCreationTraits<ParticleType::CIC> {
+	// Specialized nested ParticleChecker for CIC particles
+	template <typename problem_t> struct ParticleChecker {
+		amrex::Real param1 = particle_param1;
+		amrex::Real param2 = particle_param2;
 
-	AMREX_GPU_DEVICE auto operator()(array_t const & /*state_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*dx*/,
-					 amrex::Real current_time, amrex::Real dt) const -> bool
-	{
-		const int spacing = 16;
-		const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
-		const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
-		return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
-		       (k != 0 && k % spacing == 0);
-	}
-};
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> bool
+		{
+			// A simple demonstration of particle creation
+			// Could check density threshold or other state-based conditions
+			amrex::ignore_unused(state_arr, dx);
+			const int spacing = 16;
+			const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
+			const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
+			return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
+			       (k != 0 && k % spacing == 0);
+		}
+	};
 
-// Functor for creating and initializing CIC particles
-template <> struct CICParticleCreator<BinaryOrbit> {
-	int mass_idx;
-	int cpu_id;
-	amrex::Long pid_start;
-	amrex::Real param1;
-	amrex::Real param2;
+	// Specialized nested ParticleCreator for CIC particles
+	template <typename problem_t> struct ParticleCreator {
+		int mass_idx;
+		int cpu_id;
+		amrex::Long pid_start;
+		amrex::Real param1 = particle_param1;
+		amrex::Real param2 = particle_param2;
 
-	AMREX_GPU_HOST_DEVICE
-	CICParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start, amrex::Real param1, amrex::Real param2)
-	    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), param1(param1), param2(param2)
-	{
-	}
-
-	template <typename ParticleType, typename StateArray>
-	AMREX_GPU_DEVICE void operator()(ParticleType &p, StateArray const &state_arr, int i, int j, int k,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-					 amrex::Long particle_offset) const
-	{
-		// Set particle position at cell center
-		p.pos(0) = plo[0] + (i + 0.5) * dx[0];
-		p.pos(1) = plo[1] + (j + 0.5) * dx[1];
-		p.pos(2) = plo[2] + (k + 0.5) * dx[2];
-
-		// Set particle ID and CPU
-		p.id() = pid_start + particle_offset;
-		p.cpu() = cpu_id;
-
-		// Set particle mass and velocities
-		const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<BinaryOrbit>::density_index);
-		const amrex::Real cell_mass = cell_density * cell_volume;
-
-		// Initialize particle properties
-		p.rdata(mass_idx) = 0.5 * cell_mass;
-		p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) / cell_density;
-		p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) / cell_density;
-		p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) / cell_density;
-		// set a random cell to a large velocity to test the CFL timestep calculation
-		if (i == 16 && j == 32 && k == 48) {
-			p.rdata(mass_idx + 2) = 10.0;
+		AMREX_GPU_HOST_DEVICE
+		ParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start)
+		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start)
+		{
 		}
 
-		// Update cell density (remove mass that was given to particle)
-		state_arr(i, j, k, HydroSystem<BinaryOrbit>::density_index) = 0.5 * cell_density;
+		template <typename ParticleType, typename StateArray>
+		AMREX_GPU_DEVICE void operator()(ParticleType &p, StateArray const &state_arr, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long particle_offset) const
+		{
+			// A simple demonstration of particle creation
+			if (mass_idx + 3 < ParticleType::NReal) {
+				p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+				p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+				p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+
+				// Set particle ID and CPU
+				p.id() = pid_start + particle_offset;
+				p.cpu() = cpu_id;
+
+				// Set particle mass and velocities
+				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+				const amrex::Real cell_mass = cell_density * cell_volume;
+
+				// Initialize particle properties
+				p.rdata(mass_idx) = 0.5 * cell_mass;
+				p.rdata(mass_idx + 1) = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+				p.rdata(mass_idx + 2) = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+				p.rdata(mass_idx + 3) = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+
+				// Update cell density (remove mass that was given to particle)
+				state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+			}
+		}
+	};
+
+	// Main method to create particles - uses the helper implementation
+	template <typename problem_t, typename ContainerType>
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	{
+		// Use the common implementation with our checker and creator types
+		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::CIC>::template ParticleChecker,
+							  ParticleCreationTraits<ParticleType::CIC>::template ParticleCreator>(container, mass_idx, state, lev,
+															       current_time, dt);
 	}
 };
 } // namespace quokka
@@ -182,7 +202,6 @@ auto problem_main() -> int
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	// sim.initDt_ = 1.0e-2;	 // s
-	sim.do_cic_particles = 1;
 
 	// initialize
 	sim.setInitialConditions();
@@ -199,11 +218,15 @@ auto problem_main() -> int
 	double position_error = 0.0;
 	double position_norm = 0.0;
 
+	const int n_particle_expect = 2 + (3 * 3 * 3) * 2; // 2 particles from the initial condition, (3*3*3)*2 particles from the creator
+
 	int status = 0; // Initialize to success
 
-	auto particle_data = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticleData(0);
+	auto particle_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+
+		const auto n_particle_actual = particle_data.size();
 
 		// assume the first particle is in the first plane quadrant
 		for (const auto &data : particle_data) {
@@ -235,6 +258,8 @@ auto problem_main() -> int
 			amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
 		}
 		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+		amrex::Print() << "Expected number of particles: " << n_particle_expect << "\n";
+		amrex::Print() << "Actual number of particles: " << n_particle_actual << "\n";
 
 		// compute relative error
 		const double relative_error = position_error / position_norm;
@@ -245,7 +270,7 @@ auto problem_main() -> int
 
 		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
 		status = 1;
-		if (relative_error < max_err_tol) {
+		if (relative_error < max_err_tol && n_particle_actual == n_particle_expect) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}

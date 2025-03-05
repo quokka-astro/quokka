@@ -37,6 +37,10 @@ template <> struct quokka::EOS_Traits<ParticleProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+template <> struct Particle_Traits<ParticleProblem> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad | ParticleSwitch::CICRad;
+};
+
 template <> struct Physics_Traits<ParticleProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
@@ -164,9 +168,6 @@ auto problem_main() -> int
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.doPoissonSolve_ = 1;	       // enable self-gravity
-	sim.do_cic_rad_particles = 1;	       // enable CICRad particles
-	sim.do_cic_particles = 1;	       // enable CIC particles
-	sim.do_rad_particles = 1;	       // enable radiation particles
 
 	// initialize
 	sim.setInitialConditions();
@@ -215,17 +216,17 @@ auto problem_main() -> int
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Test CICRad particles
-		auto positions_cicrad = sim.particleRegister_.getParticleDescriptor("CICRad_particles")->getParticlePositions(0);
+		auto positions_cicrad = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CICRad)->getParticlePositions(0);
 		double position_error_cicrad = 0.0;
 		double position_norm_cicrad = 0.0;
 
 		// Test CIC particles
-		auto positions_cic = sim.particleRegister_.getParticleDescriptor("CIC_particles")->getParticlePositions(0);
+		auto positions_cic = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticlePositions(0);
 		double position_error_cic = 0.0;
 		const double position_norm_cic = 1.0; // set to 1.0 since the particles are exactly at the origin
 
 		// Test Rad particles
-		auto positions_rad = sim.particleRegister_.getParticleDescriptor("Rad_particles")->getParticlePositions(0);
+		auto positions_rad = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Rad)->getParticlePositions(0);
 		double position_error_rad = 0.0;
 		double position_norm_rad = 0.0;
 

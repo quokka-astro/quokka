@@ -456,11 +456,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #ifdef AMREX_PARTICLES
       public:
 	int do_tracers = 0;
-	int do_cic_particles = 0;
-	int do_rad_particles = 0;
-	int do_cic_rad_particles = 0;
-	double particle_creator_param1 = -1.0;
-	double particle_creator_param2 = -1.0;
 
       protected:
 	void InitParticles();	 // create tracer particles
@@ -689,21 +684,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
-
-	// Default do_cic_particles = 0 (turns on/off CIC particles)
-	pp.query("do_cic_particles", do_cic_particles);
-
-	// Default do_rad_particles = 0 (turns on/off radiating particles)
-	pp.query("do_rad_particles", do_rad_particles);
-
-	// Default do_cic_rad_particles = 0 (turns on/off CIC radiating particles)
-	pp.query("do_cic_rad_particles", do_cic_rad_particles);
-
-	// Default particle_creator_param1 = -1.0
-	pp.query("particle_creator_param1", particle_creator_param1);
-
-	// Default particle_creator_param2 = -1.0
-	pp.query("particle_creator_param2", particle_creator_param2);
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
@@ -1030,11 +1010,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #if AMREX_SPACEDIM == 3
 		kickParticlesAllLevels(dt_[0]);
 
-		if constexpr (Particle_Traits<problem_t>::is_particle_creation_enabled) {
-			if (do_cic_particles != 0) {
-				particleRegister_.createCICParticles(state_new_cc_[0], 0, cur_time, dt_[0], particle_creator_param1, particle_creator_param2);
-			}
-		}
+		// Use the new type-aware particle creation method
+		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0]);
 #endif
 
 		cur_time += dt_[0];
@@ -2141,15 +2118,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 
 template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 {
-	if (do_rad_particles != 0) {
+	// Verify that particle_switch is of the correct type
+	detail::verify_particle_switch_type<problem_t>();
+
+	// Read particle parameters from input file
+	quokka::particleParmParse();
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
 
 		// Create particle container
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
 		RadParticles->SetVerbose(0);
 
-		// Register with particle register
-		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false,
+		// Register with particle register - Rad particles do not allow creation
+		particleRegister_.registerParticleType(quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, false,
 						       RadParticles.get());
 
 		// Initialize particles through derived class
@@ -2157,30 +2140,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 	}
 
 #if AMREX_SPACEDIM == 3
-	if (do_cic_particles != 0) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
 		AMREX_ASSERT(CICParticles == nullptr);
 
 		// Create particle container
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		CICParticles->SetVerbose(0);
 
-		// Register with particle register
-		particleRegister_.registerParticleType("CIC_particles", quokka::CICParticleMassIdx, -1, -1, false, CICParticles.get());
+		// Register with particle register - CIC particles allow creation
+		particleRegister_.registerParticleType(quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1, -1, false, true, CICParticles.get());
 
 		// Initialize particles through derived class
 		createInitialCICParticles();
 	}
 
-	if (do_cic_rad_particles != 0) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
 
 		// Create particle container
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
 		CICRadParticles->SetVerbose(0);
 
-		// Register with particle register
-		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
-						       quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
+		// Register with particle register - CICRad particles do not allow creation
+		particleRegister_.registerParticleType(quokka::ParticleType::CICRad, quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
+						       quokka::CICRadParticleBirthTimeIdx, false, false, CICRadParticles.get());
 
 		// Initialize particles through derived class
 		createInitialCICRadParticles();
@@ -2926,28 +2909,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// Initialize and register particle containers from checkpoint file
 
-	if (do_rad_particles != 0) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType("Rad_particles", -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false,
+		particleRegister_.registerParticleType(quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, quokka::RadParticleBirthTimeIdx, false, false,
 						       RadParticles.get());
-		RadParticles->Restart(restart_chkfile, "Rad_particles");
+		RadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Rad));
 	}
 
 #if AMREX_SPACEDIM == 3
-	if (do_cic_particles != 0) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
 		AMREX_ASSERT(CICParticles == nullptr);
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
-		particleRegister_.registerParticleType("CIC_particles", quokka::CICParticleMassIdx, -1, -1, false, CICParticles.get());
-		CICParticles->Restart(restart_chkfile, "CIC_particles");
+		particleRegister_.registerParticleType(quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1, -1, false, true, CICParticles.get());
+		CICParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
 	}
 
-	if (do_cic_rad_particles != 0) {
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType("CICRad_particles", quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
-						       quokka::CICRadParticleBirthTimeIdx, false, CICRadParticles.get());
-		CICRadParticles->Restart(restart_chkfile, "CICRad_particles");
+		particleRegister_.registerParticleType(quokka::ParticleType::CICRad, quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
+						       quokka::CICRadParticleBirthTimeIdx, false, false, CICRadParticles.get());
+		CICRadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CICRad));
 	}
 #endif // AMREX_SPACEDIM == 3
 #endif
