@@ -43,7 +43,7 @@ jobs:
         python ./your_script.py ./your-executable-name > development_output.txt
     
     - name: Upload development branch output as artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: development-branch-output
         path: development_output.txt
@@ -155,7 +155,7 @@ jobs:
         gh pr comment $PR_NUMBER -F pr_comment.md
     
     - name: Upload comparison results as artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: comparison-results
         path: |
