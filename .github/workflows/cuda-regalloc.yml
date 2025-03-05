@@ -1,4 +1,4 @@
-name: CUDA-register-usage
+name: Compile and Compare
 
 on:
   push:
@@ -59,7 +59,7 @@ jobs:
       uses: actions/checkout@v3
     
     - name: Download development branch output
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: development-branch-output
         path: ./
@@ -121,17 +121,38 @@ jobs:
         python ./your_script.py ./your-executable-name > ../development_output.txt
     
     - name: Compare outputs
+      id: compare_outputs
       run: |
-        echo "Comparing outputs between current branch and development..."
-        diff -u development_output.txt current_output.txt > diff_result.txt || true
-        
-        if [ -s diff_result.txt ]; then
-          echo "Differences found between current branch and development:"
+        set +e
+        diff -u development_output.txt current_output.txt > diff_result.txt
+        DIFF_EXIT_CODE=$?
+        set -e
+
+        if [ $DIFF_EXIT_CODE -ne 0 ]; then
+          echo "differences_found=true" >> $GITHUB_OUTPUT
+          echo "Differences found between current branch and development."
           cat diff_result.txt
-          echo "::warning::Output differences detected between branches"
         else
+          echo "differences_found=false" >> $GITHUB_OUTPUT
           echo "No differences found between current branch and development."
         fi
+    
+    - name: Create PR Comment
+      if: steps.compare_outputs.outputs.differences_found == 'true' && github.event_name == 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        # Prepare the diff comment
+        {
+          echo "## 🔍 Output Comparison Results"
+          echo "\`\`\`diff"
+          cat diff_result.txt
+          echo "\`\`\`"
+        } > pr_comment.md
+
+        # Post the comment to the PR
+        gh pr comment $PR_NUMBER -F pr_comment.md
     
     - name: Upload comparison results as artifact
       uses: actions/upload-artifact@v3
@@ -141,3 +162,4 @@ jobs:
           current_output.txt
           development_output.txt
           diff_result.txt
+          pr_comment.md
