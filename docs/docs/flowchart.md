@@ -37,7 +37,7 @@ flowchart TB
                     H2["fillBoundaryConditions()"]
                     H3["Stage 1 of RK2-SSP"]
                     H4["fillBoundaryConditions()"]
-                    H5["Stage 1 of RK2-SSP"]
+                    H5["Stage 2 of RK2-SSP"]
                     H6["addStrangSplitSourcesWithBuiltin()"]
                     
                     H1 --> H2 --> H3 --> H4 --> H5 --> H6
@@ -82,5 +82,3 @@ flowchart TB
     
     C --> timeStep
 ```
-
-Download the flowchart as a PDF: [quokka-flowchart.pdf](flowchart-v2.pdf)
