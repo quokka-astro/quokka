@@ -121,7 +121,7 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 
 				// Create all particles
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
-					auto &p = particles[p_idx];
+					auto &p = particles[p_idx]; // NOLINT
 
 					// Set particle position (all at cell center for now)
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
