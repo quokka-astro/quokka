@@ -63,6 +63,6 @@ In the Inner galaxy, the zoom-in shows how the disc seems to be breathing in and
 
 ### QED I
 
-The first QED paper [link here](https://ui.adsabs.harvard.edu/abs/2024MNRAS.52710095V/abstract) focuses on the metal loading properties of galactic winds launched from the Solar Neighbourhood. Initially, the galaxy is metal-free. As supernovae feedback launches outflows from the galaxy, the multiphase outflows are loaded differentially with metals. The hot phase carries most of the metals while the cooler gas, which is entrained from the disc, is metal-poor. 
+The first QED paper, [link here](https://ui.adsabs.harvard.edu/abs/2024MNRAS.52710095V/abstract), focuses on the metal loading properties of galactic winds launched from the Solar Neighbourhood. Initially, the galaxy is metal-free. As supernovae feedback launches outflows from the galaxy, the multiphase outflows are loaded differentially with metals. The hot phase carries most of the metals while the cooler gas, which is entrained from the disc, is metal-poor. 
 
 <div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1052834630?h=ac2488dffe&amp;badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="QED I"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
