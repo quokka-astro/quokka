@@ -55,24 +55,15 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 template <ParticleType particleType> struct ParticleDestructionTraits {
 	// Default nested ParticleChecker - determines if a particle should be destroyed
 	template <typename problem_t> struct ParticleChecker {
-		// amrex::Real param1 = ;
-
-		// AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real param1) : param1(param1) {}
 
 		template <typename ParticleType>
 		AMREX_GPU_DEVICE auto operator()(ParticleType& p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
 		{
 			// Default implementation: destroy particles with mass < 1.0
-			amrex::ignore_unused(current_time, dt);
-			
-			// Check if mass is below threshold
-			// return (p.rdata(mass_idx) < 1.0); // Destroy this particle
-
-			const double t_destroy = 0.0015;
-			const bool is_small_mass = (p.rdata(mass_idx) < 2.0e-20);
-			const bool is_time = (current_time <= t_destroy && current_time + dt > t_destroy);
-			return is_small_mass && is_time;
+			amrex::ignore_unused(p, mass_idx, current_time, dt);
+			return false;
 		}
+
 	};
 
 	// Main method to destroy particles - uses the helper implementation

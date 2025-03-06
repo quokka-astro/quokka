@@ -29,6 +29,7 @@ constexpr int particle_per_cell = 2;
 constexpr int particle_spacing = 30;
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
+constexpr int n_particle_last = 26; // initial 2, 2^3 * 2 * 2 created, 8 destroyed
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -69,7 +70,7 @@ template <> struct Physics_Traits<BinaryOrbit> {
 
 namespace quokka
 {
-// Specialization for CIC particles
+// Specialization for CIC particle creation
 template <> struct ParticleCreationTraits<ParticleType::CIC> {
 	// Specialized nested ParticleChecker for CIC particles
 	template <typename problem_t> struct ParticleChecker {
@@ -164,6 +165,42 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 															       current_time, dt);
 	}
 };
+
+// Specialization for CIC particles destruction
+template <> struct ParticleDestructionTraits<ParticleType::CIC> {
+	// Default nested ParticleChecker - determines if a particle should be destroyed
+	template <typename problem_t> struct ParticleChecker {
+		// amrex::Real param1 = ;
+
+		// AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real param1) : param1(param1) {}
+
+		template <typename ParticleType>
+		AMREX_GPU_DEVICE auto operator()(ParticleType& p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
+		{
+			// Default implementation: destroy particles with mass < 1.0
+			amrex::ignore_unused(current_time, dt);
+			
+			// Check if mass is below threshold
+			// return (p.rdata(mass_idx) < 1.0); // Destroy this particle
+
+			const double t_destroy = 0.0015;
+			const bool is_small_mass = (p.rdata(mass_idx) < 2.0e-20);
+			const bool is_time = (current_time <= t_destroy && current_time + dt > t_destroy);
+			return is_small_mass && is_time;
+		}
+	};
+
+	// Main method to destroy particles - uses the helper implementation
+	template <typename problem_t, typename ContainerType>
+	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
+	{
+		// Use the common implementation with our checker type
+		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, 
+			ParticleDestructionTraits<ParticleType::CIC>::template ParticleChecker>(
+				container, mass_idx, lev, current_time, dt);
+	}
+};
+
 } // namespace quokka
 
 template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -242,7 +279,7 @@ auto problem_main() -> int
 	double position_error = 0.0;
 	double position_norm = 0.0;
 
-	const int n_particle_expect = 2 + (2 * 2 * 2) * 2 * particle_per_cell; // 2 particles from the initial condition, (3*3*3)*2 particles from the creator
+	const int n_particle_expect = n_particle_last;
 
 	int status = 0; // Initialize to success
 
