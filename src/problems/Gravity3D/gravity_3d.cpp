@@ -26,6 +26,9 @@ struct BinaryOrbit {
 };
 
 constexpr int particle_per_cell = 2;
+constexpr int particle_spacing = 30;
+constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
+constexpr double dt_ = 0.001;
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -79,13 +82,14 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
 			amrex::ignore_unused(state_arr, dx);
-			const int spacing = 16;
+			const int spacing = particle_spacing;
 			const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
 			const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
-			return ((is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
-				(k != 0 && k % spacing == 0))
-				   ? particle_per_cell
-				   : 0;
+			if ((is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
+				(k != 0 && k % spacing == 0)) {
+				return particle_per_cell;
+			}
+			return 0;
 		}
 	};
 
@@ -113,7 +117,12 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_mass = cell_density * cell_volume;
-				const amrex::Real particle_mass = 0.5 * cell_mass / num_particles; // Divide mass among particles
+				amrex::Real particle_mass = 0.5 * cell_mass / num_particles; // Divide mass among particles
+				
+				// mark half of the particles as low-mass particles which will be destroyed in the next time step
+				if (i <= particle_spacing) {
+					particle_mass = particle_low_mass;
+				}
 
 				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
@@ -215,7 +224,8 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
-	// sim.initDt_ = 1.0e-2;	 // s
+	sim.initDt_ = dt_;
+	sim.maxDt_ = dt_;
 
 	// initialize
 	sim.setInitialConditions();
@@ -232,7 +242,7 @@ auto problem_main() -> int
 	double position_error = 0.0;
 	double position_norm = 0.0;
 
-	const int n_particle_expect = 2 + (3 * 3 * 3) * 2 * particle_per_cell; // 2 particles from the initial condition, (3*3*3)*2 particles from the creator
+	const int n_particle_expect = 2 + (2 * 2 * 2) * 2 * particle_per_cell; // 2 particles from the initial condition, (3*3*3)*2 particles from the creator
 
 	int status = 0; // Initialize to success
 

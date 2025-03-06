@@ -1013,6 +1013,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// Use the new type-aware particle creation method
 		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0]);
+
+		// Use the new type-aware particle destruction method
+		particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 #endif
 
 		cur_time += dt_[0];
@@ -2154,7 +2157,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICParticles->SetVerbose(0);
 
 		// Register with particle register - CIC particles allow creation
-		particleRegister_.registerParticleType(quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1, -1, false, true, CICParticles.get());
+		particleRegister_.registerParticleType(quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1, -1, false, true, CICParticles.get(), true);
 
 		// Initialize particles through derived class
 		createInitialCICParticles();

@@ -28,7 +28,8 @@ stop_time = 5.0
 plotfile_interval = -1
 checkpoint_interval = -1
 
-particles.param1 = 0.007 # create particles at this time, which is step 2
-particles.param2 = 0.012 # create particles at this time, which is step 3
+particles.param1 = 0.0005 # create particles at this time, which is step 0
+particles.param2 = 0.0025 # create particles at this time, which is step 2
+particles.verbose = 1
 
 max_timesteps = 3
