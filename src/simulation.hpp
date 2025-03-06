@@ -2373,10 +2373,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	}
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::printParticleStatistics()
-{
-	particleRegister_.printParticleStatistics();
-}
+template <typename problem_t> void AMRSimulation<problem_t>::printParticleStatistics() { particleRegister_.printParticleStatistics(); }
 
 // do in-situ rendering with Ascent
 #ifdef AMREX_USE_ASCENT
