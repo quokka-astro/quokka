@@ -323,6 +323,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void createDiagnostics();
 	void updateDiagnostics();
 	void doDiagnostics();
+	void printParticleStatistics();
 	void WriteMetadataFile(std::string const &MetadataFileName) const;
 	void ReadMetadataFile(std::string const &chkfilename);
 	void WriteStatisticsFile();
@@ -1044,6 +1045,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		if (projectionInterval_ > 0 && (step + 1) % projectionInterval_ == 0) {
 			last_projection_step = step + 1;
 			WriteProjectionPlotfile();
+		}
+
+		// print particle statistics
+		if (quokka::particle_verbose > 0) {
+			printParticleStatistics();
 		}
 
 		// write diagnostics
@@ -2362,6 +2368,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars);
 		}
 	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::printParticleStatistics()
+{
+	particleRegister_.printParticleStatistics();
 }
 
 // do in-situ rendering with Ascent

@@ -78,6 +78,7 @@ enum class ParticleType {
 // their own copies.
 inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
+inline int particle_verbose = 0; // NOLINT print particle logistics
 
 //-------------------- Radiation particles --------------------
 
@@ -166,6 +167,7 @@ inline void particleParmParse()
 	const amrex::ParmParse pp("particles");
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
+	pp.query("verbose", particle_verbose);
 }
 
 } // namespace quokka

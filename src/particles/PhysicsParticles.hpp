@@ -70,6 +70,7 @@ class PhysicsParticleDescriptorBase
 	virtual void redistribute(int lev, int ngrow) = 0;
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
+	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
@@ -212,6 +213,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 
 		return particle_data; // Empty vector on non-root ranks
+	}
+
+	// Get the number of particles in the container
+	[[nodiscard]] auto getNumParticles() const -> int override
+	{
+		if (container_ != nullptr) {
+			return static_cast<int>(container_->TotalNumberOfParticles(true, false));
+		}
+		return 0;
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -586,6 +596,15 @@ template <typename problem_t> class PhysicsParticleRegister
 		return max_speed;
 	}
 #endif // AMREX_SPACEDIM == 3
+
+	// Print particle statistics
+	void printParticleStatistics() const
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			amrex::Print() << "Particle type: " << getParticleTypeName(type);
+			amrex::Print() << ", Number of particles: " << descriptor->getNumParticles() << "\n";
+		}
+	}
 
 	// Prevent copying or moving of the registry to ensure single ownership
 	PhysicsParticleRegister(const PhysicsParticleRegister &) = delete;
