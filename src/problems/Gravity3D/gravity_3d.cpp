@@ -83,7 +83,9 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 			const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
 			const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
 			return ((is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
-			       (k != 0 && k % spacing == 0)) ? particle_per_cell : 0;
+				(k != 0 && k % spacing == 0))
+				   ? particle_per_cell
+				   : 0;
 		}
 	};
 
@@ -112,31 +114,31 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_mass = cell_density * cell_volume;
 				const amrex::Real particle_mass = 0.5 * cell_mass / num_particles; // Divide mass among particles
-				
+
 				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
-				
+
 				// Create all particles
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
 					auto &p = particles[p_idx];
-					
+
 					// Set particle position (all at cell center for now)
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
 					p.pos(1) = plo[1] + (j + 0.5) * dx[1];
 					p.pos(2) = plo[2] + (k + 0.5) * dx[2];
-					
+
 					// Set particle ID and CPU
 					p.id() = pid_start + base_offset + p_idx;
 					p.cpu() = cpu_id;
-					
+
 					// Initialize particle properties
 					p.rdata(mass_idx) = particle_mass;
 					p.rdata(mass_idx + 1) = vx;
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
 				}
-				
+
 				// Update cell density (remove mass that was given to particles)
 				state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
 			}

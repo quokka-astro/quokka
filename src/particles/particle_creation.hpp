@@ -65,9 +65,9 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 
-					if (pcounts[index] > 0) {						  // NOLINT
-						const int num_particles = pcounts[index];                          // NOLINT
-						auto *particles = &pdata[poffset[index]];                          // NOLINT
+					if (pcounts[index] > 0) {									 // NOLINT
+						const int num_particles = pcounts[index];						 // NOLINT
+						auto *particles = &pdata[poffset[index]];						 // NOLINT
 						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
 					}
 				});
