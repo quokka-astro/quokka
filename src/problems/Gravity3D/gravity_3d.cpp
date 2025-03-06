@@ -25,6 +25,13 @@
 struct BinaryOrbit {
 };
 
+// This is an ad-hoc test of particle creation and destruction.
+// The initial condition consists of 2 particles with a mass of 1.0.
+// In the first time step, 2^3 * 2 particles are created. Half of them are low-mass particles
+// marked for destruction. In the next time step, low-mass particles are destroyed. There
+// are 8 of them. Finally, in the third and last step, 2^3 * 2 particles are created.
+// The final number of particles is 26
+
 constexpr int particle_per_cell = 2;
 constexpr int particle_spacing = 30;
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
@@ -87,7 +94,7 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 			const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
 			const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
 			if ((is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
-				(k != 0 && k % spacing == 0)) {
+			    (k != 0 && k % spacing == 0)) {
 				return particle_per_cell;
 			}
 			return 0;
@@ -119,7 +126,7 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_mass = cell_density * cell_volume;
 				amrex::Real particle_mass = 0.5 * cell_mass / num_particles; // Divide mass among particles
-				
+
 				// mark half of the particles as low-mass particles which will be destroyed in the next time step
 				if (i <= particle_spacing) {
 					particle_mass = particle_low_mass;
@@ -170,21 +177,17 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 template <> struct ParticleDestructionTraits<ParticleType::CIC> {
 	// Default nested ParticleChecker - determines if a particle should be destroyed
 	template <typename problem_t> struct ParticleChecker {
-		// amrex::Real param1 = ;
+		amrex::Real t_destroy = particle_param3;
 
 		// AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real param1) : param1(param1) {}
 
 		template <typename ParticleType>
-		AMREX_GPU_DEVICE auto operator()(ParticleType& p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
+		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
 		{
 			// Default implementation: destroy particles with mass < 1.0
 			amrex::ignore_unused(current_time, dt);
-			
-			// Check if mass is below threshold
-			// return (p.rdata(mass_idx) < 1.0); // Destroy this particle
 
-			const double t_destroy = 0.0015;
-			const bool is_small_mass = (p.rdata(mass_idx) < 2.0e-20);
+			const bool is_small_mass = (p.rdata(mass_idx) < 2.0 * particle_low_mass);
 			const bool is_time = (current_time <= t_destroy && current_time + dt > t_destroy);
 			return is_small_mass && is_time;
 		}
@@ -195,9 +198,8 @@ template <> struct ParticleDestructionTraits<ParticleType::CIC> {
 	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
 	{
 		// Use the common implementation with our checker type
-		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, 
-			ParticleDestructionTraits<ParticleType::CIC>::template ParticleChecker>(
-				container, mass_idx, lev, current_time, dt);
+		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<ParticleType::CIC>::template ParticleChecker>(
+		    container, mass_idx, lev, current_time, dt);
 	}
 };
 
