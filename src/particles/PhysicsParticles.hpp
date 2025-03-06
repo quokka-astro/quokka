@@ -600,9 +600,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Print particle statistics
 	void printParticleStatistics() const
 	{
+		amrex::Print() << "Particle statistics:\n";
+		amrex::Print() << "Particle type, Number of particles\n";
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			amrex::Print() << "Particle type: " << getParticleTypeName(type);
-			amrex::Print() << ", Number of particles: " << descriptor->getNumParticles() << "\n";
+			amrex::Print() << getParticleTypeName(type) << ", " << descriptor->getNumParticles() << "\n";
 		}
 	}
 
