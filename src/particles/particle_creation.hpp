@@ -35,7 +35,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
-					pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt) ? 1 : 0; // NOLINT
+					pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt); // NOLINT
 				});
 
 				// Calculate exclusive prefix sum to get unique position for each particle
@@ -65,9 +65,10 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 
-					if (pcounts[index] > 0) {						  // NOLINT
-						auto &p = pdata[poffset[index]];				  // NOLINT
-						particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
+					if (pcounts[index] > 0) {									 // NOLINT
+						const int num_particles = pcounts[index];						 // NOLINT
+						auto *particles = &pdata[poffset[index]];						 // NOLINT
+						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
 					}
 				});
 			}
@@ -83,11 +84,11 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		AMREX_GPU_HOST_DEVICE ParticleChecker() = default;
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> bool
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> int
 		{
 			// Default implementation creates no particles
 			amrex::ignore_unused(state_arr, i, j, k, dx, current_time, dt);
-			return false;
+			return 0;
 		}
 	};
 
@@ -104,12 +105,12 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		}
 
 		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(ParticleType &p, StateArray const &state_arr, int i, int j, int k,
+		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long particle_offset) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
 		{
 			// Default implementation does nothing
-			amrex::ignore_unused(p, state_arr, i, j, k, dx, plo, particle_offset);
+			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset);
 		}
 	};
 
