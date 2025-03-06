@@ -72,7 +72,7 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 		amrex::Real param2 = particle_param2;
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> bool
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
@@ -80,8 +80,8 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 			const int spacing = 16;
 			const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
 			const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
-			return (is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
-			       (k != 0 && k % spacing == 0);
+			return ((is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
+			       (k != 0 && k % spacing == 0)) ? 1 : 0;
 		}
 	};
 

@@ -35,7 +35,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
-					pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt) ? 1 : 0; // NOLINT
+					pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt); // NOLINT
 				});
 
 				// Calculate exclusive prefix sum to get unique position for each particle
@@ -83,11 +83,11 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		AMREX_GPU_HOST_DEVICE ParticleChecker() = default;
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> bool
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> int
 		{
 			// Default implementation creates no particles
 			amrex::ignore_unused(state_arr, i, j, k, dx, current_time, dt);
-			return false;
+			return 0;
 		}
 	};
 
