@@ -33,7 +33,7 @@ class PhysicsParticleDescriptorBase
 	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 	bool allowsCreation_{false};	 // Whether particles can be created during simulation
-	bool allowsDestruction_{false};  // Whether particles can be destroyed during simulation
+	bool allowsDestruction_{false};	 // Whether particles can be destroyed during simulation
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false)
@@ -93,7 +93,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
 	// Constructor initializing descriptor with container and particle properties
-	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container, bool allows_destruction = false)
+	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container,
+				  bool allows_destruction = false)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction), container_(container)
 	{
 	}
@@ -311,8 +312,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) override
 	{
 		if (container_ != nullptr) {
-			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
-				container_, this->getMassIndex(), lev, current_time, dt);
+			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(container_, this->getMassIndex(), lev,
+														      current_time, dt);
 		}
 	}
 

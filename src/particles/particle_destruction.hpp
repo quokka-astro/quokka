@@ -20,20 +20,20 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 
 			// Iterate through all particles at this level
 			for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-				auto& particles = pti.GetArrayOfStructs();
+				auto &particles = pti.GetArrayOfStructs();
 				const int np = particles.numParticles();
-				
+
 				// Skip if no particles in this tile
 				if (np == 0) {
 					continue;
 				}
-				
+
 				// Process particles on the device
-				auto* parray = particles().data();
-				
+				auto *parray = particles().data();
+
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-					auto& p = parray[i]; // NOLINT
-					
+					auto &p = parray[i]; // NOLINT
+
 					// Check if this particle should be destroyed
 					if (particle_checker(p, mass_idx, current_time, dt)) {
 						// Mark particle as invalid by negating its ID
@@ -43,7 +43,7 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 					}
 				});
 			}
-			
+
 			// Redistribute particles to actually remove the invalid particles
 			container->Redistribute(lev);
 		}
@@ -57,13 +57,12 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 	template <typename problem_t> struct ParticleChecker {
 
 		template <typename ParticleType>
-		AMREX_GPU_DEVICE auto operator()(ParticleType& p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
+		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
 		{
 			// Default implementation: destroy particles with mass < 1.0
 			amrex::ignore_unused(p, mass_idx, current_time, dt);
 			return false;
 		}
-
 	};
 
 	// Main method to destroy particles - uses the helper implementation
@@ -71,9 +70,8 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
 	{
 		// Use the common implementation with our checker type
-		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, 
-			ParticleDestructionTraits<particleType>::template ParticleChecker>(
-				container, mass_idx, lev, current_time, dt);
+		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<particleType>::template ParticleChecker>(
+		    container, mass_idx, lev, current_time, dt);
 	}
 };
 
