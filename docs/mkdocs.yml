@@ -44,13 +44,19 @@ plugins:
       csl_file: apa-6th-edition.csl
       # csl_file: https://raw.githubusercontent.com/citation-style-language/styles/master/apa-5th-edition.csl
       cite_inline: true
+  - mermaid2:
+      version: 10.6.1
 
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
   - admonition
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid
   - footnotes
 
 extra_javascript:
