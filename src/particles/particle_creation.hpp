@@ -66,8 +66,9 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const auto index = box.index(iv);
 
 					if (pcounts[index] > 0) {						  // NOLINT
-						auto &p = pdata[poffset[index]];				  // NOLINT
-						particle_creator(p, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
+						const int num_particles = pcounts[index];                          // NOLINT
+						auto *particles = &pdata[poffset[index]];                          // NOLINT
+						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
 					}
 				});
 			}
@@ -104,12 +105,12 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		}
 
 		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(ParticleType &p, StateArray const &state_arr, int i, int j, int k,
+		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long particle_offset) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
 		{
 			// Default implementation does nothing
-			amrex::ignore_unused(p, state_arr, i, j, k, dx, plo, particle_offset);
+			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset);
 		}
 	};
 
