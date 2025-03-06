@@ -1012,9 +1012,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		kickParticlesAllLevels(dt_[0]);
 
 		// Use the new type-aware particle creation method
+		// TODO(cch): Need to take care of AMR subscycling
 		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0]);
 
 		// Use the new type-aware particle destruction method
+		// TODO(cch): Need to take care of AMR subscycling
 		particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 #endif
 
