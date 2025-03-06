@@ -14,6 +14,7 @@
 #include "AMReX_Vector.H"
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
+#include "particle_destruction.hpp"
 #include "particle_types.hpp"
 #include "physics_info.hpp"
 
@@ -32,10 +33,12 @@ class PhysicsParticleDescriptorBase
 	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 	bool allowsCreation_{false};	 // Whether particles can be created during simulation
+	bool allowsDestruction_{false};  // Whether particles can be destroyed during simulation
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation)
-	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact), allowsCreation_(allows_creation)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false)
+	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact), allowsCreation_(allows_creation),
+	      allowsDestruction_(allows_destruction)
 	{
 	}
 
@@ -53,6 +56,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsCreation() const -> bool { return allowsCreation_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
 
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
@@ -71,6 +75,7 @@ class PhysicsParticleDescriptorBase
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
+	virtual void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
 #endif // AMREX_SPACEDIM == 3
 };
@@ -87,8 +92,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
 	// Constructor initializing descriptor with container and particle properties
-	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation), container_(container)
+	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container, bool allows_destruction = false)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction), container_(container)
 	{
 	}
 
@@ -293,6 +298,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 													  current_time, dt);
 	}
 
+	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) override
+	{
+		if (container_ != nullptr) {
+			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
+				container_, this->getMassIndex(), lev, current_time, dt);
+		}
+	}
+
 	// Compute maximum particle speed at a given level
 	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::Real override
 	{
@@ -422,22 +435,22 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
 	void registerParticleType(ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation,
-				  ContainerType *container)
+				  ContainerType *container, bool allows_destruction = false)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
 		if (type == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction);
 		}
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
@@ -547,11 +560,23 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Compute maximum particle speed at a given level
+	// Destroy particles based on particle type
+	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			// Only destroy particles if the descriptor allows destruction
+			if (descriptor->getAllowsDestruction()) {
+				// Call the appropriate particle destruction method based on the particle type
+				descriptor->destroyParticles(lev, current_time, dt);
+			}
+		}
+	}
+
+	// Compute maximum particle speed across all particle types
 	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::Real
 	{
 		amrex::Real max_speed = 0.0;
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				const amrex::Real speed = descriptor->computeMaxParticleSpeed(lev);
 				AMREX_ASSERT(!std::isnan(speed));
