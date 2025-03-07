@@ -45,8 +45,8 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 			}
 
 			// Redistribute particles at this level to actually remove the invalid particles
-			// TODO(cch): This won't work when AMR subcycling is enabled. When a particle moves into the ghost cells in the first step of the subcycle,
-			// it may be moved from that level into a lower level. Then, in the second step of the subcycle, it will not be drifted.
+			// TODO(cch): This won't work when AMR subcycling is enabled. When a particle moves into the ghost cells in the first step of the
+			// subcycle, it may be moved from that level into a lower level. Then, in the second step of the subcycle, it will not be drifted.
 			container->Redistribute(lev);
 		}
 	}
