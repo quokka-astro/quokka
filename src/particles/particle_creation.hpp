@@ -14,7 +14,7 @@ template <typename problem_t, typename ContainerType, template <typename> class 
 static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
 {
 	if (container != nullptr) {
-		if (mass_idx >= 0 && mass_idx + 3 < ContainerType::ParticleType::NReal) {
+		if (mass_idx >= 0) {
 			// Use the provided ParticleChecker type with global particle parameters
 			CheckerType<problem_t> particle_checker;
 

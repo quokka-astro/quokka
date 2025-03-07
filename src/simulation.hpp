@@ -323,6 +323,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void createDiagnostics();
 	void updateDiagnostics();
 	void doDiagnostics();
+	void printParticleStatistics();
 	void WriteMetadataFile(std::string const &MetadataFileName) const;
 	void ReadMetadataFile(std::string const &chkfilename);
 	void WriteStatisticsFile();
@@ -1011,7 +1012,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		kickParticlesAllLevels(dt_[0]);
 
 		// Use the new type-aware particle creation method
+		// TODO(cch): Need to take care of AMR subscycling
 		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0]);
+
+		// Use the new type-aware particle destruction method
+		// TODO(cch): Need to take care of AMR subscycling
+		particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 #endif
 
 		cur_time += dt_[0];
@@ -1044,6 +1050,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		if (projectionInterval_ > 0 && (step + 1) % projectionInterval_ == 0) {
 			last_projection_step = step + 1;
 			WriteProjectionPlotfile();
+		}
+
+		// print particle statistics
+		if (quokka::particle_verbose > 0) {
+			printParticleStatistics();
 		}
 
 		// write diagnostics
@@ -2148,7 +2159,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICParticles->SetVerbose(0);
 
 		// Register with particle register - CIC particles allow creation
-		particleRegister_.registerParticleType(quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1, -1, false, true, CICParticles.get());
+		particleRegister_.registerParticleType(quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1, -1, false, true, CICParticles.get(), true);
 
 		// Initialize particles through derived class
 		createInitialCICParticles();
@@ -2363,6 +2374,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 		}
 	}
 }
+
+template <typename problem_t> void AMRSimulation<problem_t>::printParticleStatistics() { particleRegister_.printParticleStatistics(); }
 
 // do in-situ rendering with Ascent
 #ifdef AMREX_USE_ASCENT
