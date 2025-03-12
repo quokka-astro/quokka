@@ -421,7 +421,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 
 				// Get the units data for this particle type
-				const auto &typeData = quokka::units_data[particleType_];
+				const auto &typeData = quokka::get_units_data().at(particleType_);
 				if (!typeData.empty()) {
 					outFile << "# field: [M, L, T, Θ]\n";
 					// Write each field's units to the YAML file
