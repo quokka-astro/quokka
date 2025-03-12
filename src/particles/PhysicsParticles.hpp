@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <fstream>
 
 #include "AMReX_Array4.H"
 #include "AMReX_MultiFab.H"
@@ -70,6 +71,7 @@ class PhysicsParticleDescriptorBase
 	virtual void redistribute(int lev, int ngrow) = 0;
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
+	virtual void writeUnitsFile(const std::string &snapshot_name, const std::string &name) = 0;
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
@@ -402,6 +404,40 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			container_->Checkpoint(checkpointname, name, include_header);
 		}
 	}
+
+	// Implementation of particle data output to units file
+	void writeUnitsFile(const std::string &snapshot_name, const std::string &name) override
+	{
+		if (container_ != nullptr) {
+			// Only write on rank 0
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				// Create the full path for the Fields.yaml file
+				std::string filename = snapshot_name + "/" + name + "/Fields.yaml";
+				
+				// Open the file for writing
+				std::ofstream outFile(filename);
+				if (!outFile) {
+					amrex::Abort("Error opening file for writing: " + filename);
+				}
+
+				// Get the units data for this particle type
+				const auto &typeData = quokka::units_data[particleType_];
+				if (!typeData.empty()) {
+					outFile << "# field: [M, L, T, Θ]\n";
+					// Write each field's units to the YAML file
+					for (const auto &[fieldName, units] : typeData[0]) {
+						outFile << fieldName << ": [" 
+							<< units[0] << ", " 
+							<< units[1] << ", " 
+							<< units[2] << ", " 
+							<< units[3] << "]\n";
+					}
+				}
+				
+				outFile.close();
+			}
+		}
+	}
 };
 
 // Registry managing different types of physics particles
@@ -525,6 +561,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
+			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
 		}
 	}
 
@@ -533,6 +570,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
+			descriptor->writeUnitsFile(checkpointname, getParticleTypeName(type));
 		}
 	}
 
