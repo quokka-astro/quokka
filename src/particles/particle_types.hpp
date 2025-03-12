@@ -152,6 +152,13 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 
 #endif // AMREX_SPACEDIM == 3
 
+// Units data for each particle type as powers of Mass, Length, Time, Temperature
+std::map<ParticleType, std::vector<std::map<std::string, std::array<int, 4>>>> units_data = {
+	{ParticleType::Rad, {{{"birth_time", {0, 0, 1, 0}}, {"death_time", {0, 0, 1, 0}}, {"luminosity", {-1, 2, -3, 0}}}}},
+	{ParticleType::CIC, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
+	{ParticleType::CICRad, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}, {"birth_time", {0, 0, 1, 0}}, {"death_time", {0, 0, 1, 0}}, {"luminosity", {-1, 2, -3, 0}}}}},
+};
+
 // Assumptions for any particle type:
 // 1. For massive particles, velocity components start after mass
 // 2. Birth time, if existing, is always followed by death time
