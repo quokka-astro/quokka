@@ -412,7 +412,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Only write on rank 0
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				// Create the full path for the Fields.yaml file
-				std::string filename = snapshot_name + "/" + name + "/Fields.yaml";
+				const std::string filename = snapshot_name + "/" + name + "/Fields.yaml";
 				
 				// Open the file for writing
 				std::ofstream outFile(filename);
