@@ -45,7 +45,7 @@ jobs:
       shell: bash
       working-directory: ${{runner.workspace}}/build
       env: {CXXFLAGS: "-ffp-exception-behavior=strict -fsanitize=type -fno-omit-frame-pointer -g -O1 -fno-optimize-sibling-calls"}
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
