@@ -176,7 +176,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
 
-	std::unordered_map<std::string, variant_t> simulationMetadata_;
+	YAML::Node simulationMetadata_;
 
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
@@ -2522,20 +2522,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(s
 			amrex::FileOpenFailed(MetadataFileName);
 		}
 
-		// construct YAML from each (key, value) of simulationMetadata_
-		YAML::Emitter out;
-		out << YAML::BeginMap;
-		auto PrintVisitor = [&out](const auto &t) { out << YAML::Value << t; };
-		for (auto const &[key, value] : simulationMetadata_) {
-			out << YAML::Key << key;
-			std::visit(PrintVisitor, value);
-		}
-		out << YAML::EndMap;
-
 		// write YAML to MetadataFile
-		// (N.B. yaml-cpp is smart enough to emit sufficient digits for
-		//  floating-point types to represent their values to machine precision!)
-		MetadataFile << out.c_str() << '\n';
+		MetadataFile << simulationMetadata_ << '\n';
 	}
 }
 
