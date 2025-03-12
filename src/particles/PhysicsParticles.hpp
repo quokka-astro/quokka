@@ -2,10 +2,10 @@
 #define PHYSICS_PARTICLES_HPP_
 
 #include <cstdint>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <string>
-#include <fstream>
 
 #include "AMReX_Array4.H"
 #include "AMReX_MultiFab.H"
@@ -413,7 +413,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				// Create the full path for the Fields.yaml file
 				std::string filename = snapshot_name + "/" + name + "/Fields.yaml";
-				
+
 				// Open the file for writing
 				std::ofstream outFile(filename);
 				if (!outFile) {
@@ -426,14 +426,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					outFile << "# field: [M, L, T, Θ]\n";
 					// Write each field's units to the YAML file
 					for (const auto &[fieldName, units] : typeData[0]) {
-						outFile << fieldName << ": [" 
-							<< units[0] << ", " 
-							<< units[1] << ", " 
-							<< units[2] << ", " 
-							<< units[3] << "]\n";
+						outFile << fieldName << ": [" << units[0] << ", " << units[1] << ", " << units[2] << ", " << units[3] << "]\n";
 					}
 				}
-				
+
 				outFile.close();
 			}
 		}
