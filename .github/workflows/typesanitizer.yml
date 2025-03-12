@@ -39,7 +39,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev
 
     - name: Install Clang/LLVM
-      run: bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+      run: sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
     - name: Configure CMake
       shell: bash
