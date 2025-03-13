@@ -15,11 +15,11 @@ template <unsigned int position> constexpr auto bitflag() -> unsigned int { retu
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
 enum class ParticleSwitch : unsigned int {
-	None = 0U,	      // No particles, = 0b0000
-	CIC = bitflag<1>(),   // Cloud-In-Cell (gravitating) particles, = 0b0001
-	Rad = bitflag<2>(),   // Radiation particles, = 0b0010
+	None = 0U,	       // No particles, = 0b0000
+	CIC = bitflag<1>(),    // Cloud-In-Cell (gravitating) particles, = 0b0001
+	Rad = bitflag<2>(),    // Radiation particles, = 0b0010
 	CICRad = bitflag<3>(), // Combined gravitating-radiating particles, = 0b0100
-	Test = bitflag<4>()   // Test particles with all features enabled, = 0b1000
+	Test = bitflag<4>()    // Test particles with all features enabled, = 0b1000
 };
 
 // Enable bitwise operations on the enum class
@@ -67,10 +67,10 @@ namespace quokka
 
 // Enum class to identify different particle types
 enum class ParticleType {
-	Rad,   // Radiation particles
-	CIC,   // Gravitating particles
+	Rad,	// Radiation particles
+	CIC,	// Gravitating particles
 	CICRad, // Gravitating radiation particles
-	Test   // Test particles with all features enabled
+	Test	// Test particles with all features enabled
 };
 
 // Global particle parameters
@@ -157,19 +157,19 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 // Enum for StellarEvolution particle stage
 enum class StellarEvolutionStage {
 	LowMassStar,  // Low mass star stage
-	SNProgenitor,  // Supernova progenitor stage
+	SNProgenitor, // Supernova progenitor stage
 	SNRemnant     // Supernova remnant stage
 };
 
 // Indices for test particles (Test_particles)
 enum TestParticleDataIdx {
-	TestParticleMassIdx = 0,    // Mass of the particle
-	TestParticleVxIdx,          // Velocity in x direction
-	TestParticleVyIdx,          // Velocity in y direction
-	TestParticleVzIdx,          // Velocity in z direction
-	TestParticleBirthTimeIdx,   // Time when particle becomes active
-	TestParticleStageIdx,       // Stage of the particle (LowMassStar or SNProgenitor)
-	TestParticleLumIdx          // Base index for luminosity components
+	TestParticleMassIdx = 0,  // Mass of the particle
+	TestParticleVxIdx,	  // Velocity in x direction
+	TestParticleVyIdx,	  // Velocity in y direction
+	TestParticleVzIdx,	  // Velocity in z direction
+	TestParticleBirthTimeIdx, // Time when particle becomes active
+	TestParticleStageIdx,	  // Stage of the particle (LowMassStar or SNProgenitor)
+	TestParticleLumIdx	  // Base index for luminosity components
 };
 
 // Number of real components for StellarPop_particles, mass + 3 velocity components + luminosity

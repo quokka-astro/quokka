@@ -38,7 +38,8 @@ class PhysicsParticleDescriptorBase
 	int evolutionStageIndex_{-1};	 // Index for evolution stage (-1 if not used)
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false, int evolution_stage_idx = -1)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false,
+				      int evolution_stage_idx = -1)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact), allowsCreation_(allows_creation),
 	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx)
 	{
@@ -99,7 +100,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container,
 				  bool allows_destruction = false, bool evolution_stage_idx = false)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction, evolution_stage_idx), container_(container)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction, evolution_stage_idx),
+	      container_(container)
 	{
 	}
 
@@ -248,7 +250,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// zero_out_input is false because we want to accumulate supernova contributions
 			// vol_weight is false because SNDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, state, lev,
-					      SNDeposition{current_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex(), this->getEvolutionStageIndex()}, false);
+					      SNDeposition{current_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex(),
+							   this->getEvolutionStageIndex()},
+					      false);
 		}
 	}
 

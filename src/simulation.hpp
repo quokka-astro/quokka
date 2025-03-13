@@ -2192,8 +2192,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Register with particle register - Test particles have all features enabled
 		// mass_idx = 0, birth_time_idx = 4, stage_idx = 5, all bool attributes = true
-		particleRegister_.registerParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, quokka::TestParticleLumIdx, quokka::TestParticleBirthTimeIdx, true,
-						       true, TestParticles.get(), true, true);
+		particleRegister_.registerParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, quokka::TestParticleLumIdx,
+						       quokka::TestParticleBirthTimeIdx, true, true, TestParticles.get(), true, true);
 	}
 #endif // AMREX_SPACEDIM == 3
 

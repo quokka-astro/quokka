@@ -66,7 +66,7 @@ struct MassDeposition {
 //-------------------- Supernova depositions --------------------
 
 // Functor for depositing supernova energy and momentum from particles onto the grid
-// This is a simplified version of the SNDeposition functor that deposits mass and energy uniformly 
+// This is a simplified version of the SNDeposition functor that deposits mass and energy uniformly
 // to 5³ cells centered on the particle's cell. It is used for testing purposes.
 struct SNDeposition {
 	double current_time{};	   // Current simulation time
