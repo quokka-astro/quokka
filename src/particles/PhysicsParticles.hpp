@@ -412,7 +412,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Only write on rank 0
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				// Create the full path for the Fields.yaml file
-				const std::string filename = snapshot_name + "/" + name + "/Fields.yaml";
+				std::string filename;
+#ifdef QUOKKA_USE_OPENPMD
+				// For OpenPMD, write the YAML file alongside the OpenPMD file
+				filename = snapshot_name + ".yaml";
+#else
+				// For standard output, write the YAML file in the particle directory
+				filename = snapshot_name + "/" + name + "/Fields.yaml";
+#endif
 
 				// Open the file for writing
 				std::ofstream outFile(filename);
