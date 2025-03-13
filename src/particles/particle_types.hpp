@@ -73,12 +73,6 @@ enum class ParticleType {
 	Test   // Test particles with all features enabled
 };
 
-// Enum for Test particle stage
-enum class TestParticleStage {
-	LowMassStar,  // Low mass star stage
-	SNProgenitor  // Supernova progenitor stage
-};
-
 // Global particle parameters
 // The 'inline' keyword is used here to avoid multiple definition errors when this header
 // is included in multiple source files. It ensures that all translation units that include
@@ -88,25 +82,6 @@ inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 inline amrex::Real particle_param3 = -1.0; // NOLINT
 inline int particle_verbose = 0;	   // NOLINT print particle logistics
-
-//-------------------- Test particles --------------------
-
-// Indices for test particles (Test_particles)
-enum TestParticleDataIdx {
-	TestParticleMassIdx = 0,    // Mass of the particle
-	TestParticleVxIdx,          // Velocity in x direction
-	TestParticleVyIdx,          // Velocity in y direction
-	TestParticleVzIdx,          // Velocity in z direction
-	TestParticleBirthTimeIdx,   // Time when particle becomes active
-	TestParticleStageIdx        // Stage of the particle (LowMassStar or SNProgenitor)
-};
-
-// Number of real components for Test_particles
-constexpr int TestParticleRealComps = 6;
-
-// Type definitions for Test_particles container and iterator
-using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps>;
-using TestParticleIterator = amrex::ParIter<TestParticleRealComps>;
 
 //-------------------- Radiation particles --------------------
 
@@ -176,6 +151,43 @@ constexpr int CICRadParticleRealComps = []() constexpr {
 // Type definitions for CICRad_particles container and iterator
 template <typename problem_t> using CICRadParticleContainer = amrex::AmrParticleContainer<CICRadParticleRealComps<problem_t>>;
 template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICRadParticleRealComps<problem_t>>;
+
+//-------------------- Test particles --------------------
+
+// Enum for StellarEvolution particle stage
+enum class StellarEvolutionStage {
+	LowMassStar,  // Low mass star stage
+	SNProgenitor,  // Supernova progenitor stage
+	SNRemnant     // Supernova remnant stage
+};
+
+// Indices for test particles (Test_particles)
+enum TestParticleDataIdx {
+	TestParticleMassIdx = 0,    // Mass of the particle
+	TestParticleVxIdx,          // Velocity in x direction
+	TestParticleVyIdx,          // Velocity in y direction
+	TestParticleVzIdx,          // Velocity in z direction
+	TestParticleBirthTimeIdx,   // Time when particle becomes active
+	TestParticleStageIdx,       // Stage of the particle (LowMassStar or SNProgenitor)
+	TestParticleLumIdx          // Base index for luminosity components
+};
+
+// Number of real components for StellarPop_particles, mass + 3 velocity components + luminosity
+template <typename problem_t>
+constexpr int TestParticleRealComps = []() constexpr {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, stage, lum[nGroups]
+	} else {
+		return 6; // mass, vx, vy, vz, birth_time, stage
+	}
+}();
+
+// Number of integer components for Test_particles
+constexpr int TestParticleIntComps = 1; // fate
+
+// Type definitions for Test_particles container and iterator
+template <typename problem_t> using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps<problem_t>, TestParticleIntComps>;
+template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestParticleRealComps<problem_t>, TestParticleIntComps>;
 
 #endif // AMREX_SPACEDIM == 3
 

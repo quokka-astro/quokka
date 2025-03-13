@@ -468,7 +468,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #if AMREX_SPACEDIM == 3
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
-	std::unique_ptr<quokka::TestParticleContainer> TestParticles;
+	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 #endif // AMREX_SPACEDIM == 3
 #endif
 
@@ -2192,7 +2192,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Register with particle register - Test particles have all features enabled
 		// mass_idx = 0, birth_time_idx = 4, stage_idx = 5, all bool attributes = true
-		particleRegister_.registerParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, -1, quokka::TestParticleBirthTimeIdx, true,
+		particleRegister_.registerParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, quokka::TestParticleLumIdx, quokka::TestParticleBirthTimeIdx, true,
 						       true, TestParticles.get(), true, true);
 	}
 #endif // AMREX_SPACEDIM == 3
