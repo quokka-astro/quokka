@@ -35,12 +35,12 @@ class PhysicsParticleDescriptorBase
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 	bool allowsCreation_{false};	 // Whether particles can be created during simulation
 	bool allowsDestruction_{false};	 // Whether particles can be destroyed during simulation
-	bool allowsStellarEvolution_{false};	 // Whether particles end their life as supernovae
+	int evolutionStageIndex_{-1};	 // Index for evolution stage (-1 if not used)
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false, bool allows_stellar_evolution = false)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false, int evolution_stage_idx = -1)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact), allowsCreation_(allows_creation),
-	      allowsDestruction_(allows_destruction), allowsStellarEvolution_(allows_stellar_evolution)
+	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx)
 	{
 	}
 
@@ -59,7 +59,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsCreation() const -> bool { return allowsCreation_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
-	[[nodiscard]] AMREX_FORCE_INLINE auto allowsStellarEvolution() const -> bool { return allowsStellarEvolution_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
 
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
@@ -98,8 +98,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container,
-				  bool allows_destruction = false, bool allows_stellar_evolution = false)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction, allows_stellar_evolution), container_(container)
+				  bool allows_destruction = false, bool evolution_stage_idx = false)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction, evolution_stage_idx), container_(container)
 	{
 	}
 
@@ -244,11 +244,11 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time) override
 	{
-		if (container_ != nullptr && this->allowsStellarEvolution()) {
+		if (container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
 			// zero_out_input is false because we want to accumulate supernova contributions
 			// vol_weight is false because SNDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, state, lev,
-					      SNDeposition{current_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex()}, false);
+					      SNDeposition{current_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex(), this->getEvolutionStageIndex()}, false);
 		}
 	}
 
@@ -463,25 +463,25 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
 	void registerParticleType(ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation,
-				  ContainerType *container, bool allows_destruction = false, bool allows_stellar_evolution = false)
+				  ContainerType *container, bool allows_destruction = false, bool evolution_stage_idx = false)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
 		if (type == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, allows_stellar_evolution);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, evolution_stage_idx);
 		}
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, allows_stellar_evolution);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, evolution_stage_idx);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, allows_stellar_evolution);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, evolution_stage_idx);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, allows_stellar_evolution);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, evolution_stage_idx);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
