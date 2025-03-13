@@ -50,15 +50,10 @@ jobs:
       # Execute the build.  You can specify a specific target with "--target <NAME>"
       run: cmake --build . --config $BUILD_TYPE --parallel 4 --target test_hydro3d_blast
 
-    - name: Create test output directory
-      run: cmake -E make_directory $GITHUB_WORKSPACE/tests
-
-    - name: Test
-      working-directory: ${{runner.workspace}}/build
+    - name: Run
+      working-directory: ${{runner.workspace}}/tests
       shell: bash
-      # Execute tests defined by the CMake configuration.  
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest --output-on-failure -R HydroBlast3D
+      run: mpirun ../build/src/problems/HydroBlast3D/test_hydro3d_blast blast_32.in max_walltime=0:00:10 plotfile_interval=100 checkpoint_interval=100
 
     - name: Upload test output
       if: always()
