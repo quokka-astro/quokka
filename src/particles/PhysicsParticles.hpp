@@ -12,6 +12,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "hydro/hydro_system.hpp"
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
@@ -34,11 +35,12 @@ class PhysicsParticleDescriptorBase
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 	bool allowsCreation_{false};	 // Whether particles can be created during simulation
 	bool allowsDestruction_{false};	 // Whether particles can be destroyed during simulation
+	bool isSN_{false};		 // Whether particles end their life as supernovae
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false, bool is_sn = false)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact), allowsCreation_(allows_creation),
-	      allowsDestruction_(allows_destruction)
+	      allowsDestruction_(allows_destruction), isSN_(is_sn)
 	{
 	}
 
@@ -57,6 +59,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsCreation() const -> bool { return allowsCreation_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto isSN() const -> bool { return isSN_; }
 
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
@@ -73,6 +76,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
+	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
@@ -94,8 +98,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container,
-				  bool allows_destruction = false)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction), container_(container)
+				  bool allows_destruction = false, bool is_sn = false)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction, is_sn), container_(container)
 	{
 	}
 
@@ -234,6 +238,17 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// zero_out_input is false because we want to accumulate mass
 			// vol_weight is false because MassDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
+		}
+	}
+
+	// Implementation of supernova energy and momentum deposition from particles to grid
+	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time) override
+	{
+		if (container_ != nullptr && this->isSN()) {
+			// zero_out_input is false because we want to accumulate supernova contributions
+			// vol_weight is false because SNDeposition does the volume weighting
+			amrex::ParticleToMesh(*container_, state, lev,
+					      SNDeposition{current_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex()}, false);
 		}
 	}
 
@@ -499,6 +514,16 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->depositMass(rhs, finest_lev, Gconst);
+			}
+		}
+	}
+
+	// Deposit supernova energy and momentum from all particles
+	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->isSN()) {
+				descriptor->depositSN(state, lev, current_time);
 			}
 		}
 	}
