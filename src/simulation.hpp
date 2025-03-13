@@ -230,6 +230,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #if AMREX_SPACEDIM == 3
 	virtual void createInitialCICParticles() = 0;
 	virtual void createInitialCICRadParticles() = 0;
+	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow them to be created at the start
+	// of the simulation virtual void createInitialTestParticles() = 0;
 #endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
@@ -466,6 +468,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #if AMREX_SPACEDIM == 3
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
+	std::unique_ptr<quokka::TestParticleContainer> TestParticles;
 #endif // AMREX_SPACEDIM == 3
 #endif
 
@@ -2179,6 +2182,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		// Initialize particles through derived class
 		createInitialCICRadParticles();
 	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
+		AMREX_ASSERT(TestParticles == nullptr);
+
+		// Create particle container
+		TestParticles = std::make_unique<quokka::TestParticleContainer>(this);
+		TestParticles->SetVerbose(0);
+
+		// Register with particle register - Test particles have all features enabled
+		// mass_idx = 0, birth_time_idx = 4, stage_idx = 5, all bool attributes = true
+		particleRegister_.registerParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, -1, quokka::TestParticleBirthTimeIdx, true,
+						       true, TestParticles.get(), true, true);
+	}
 #endif // AMREX_SPACEDIM == 3
 
 	particleRegister_.redistribute(0);
@@ -2944,6 +2960,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		particleRegister_.registerParticleType(quokka::ParticleType::CICRad, quokka::CICRadParticleMassIdx, quokka::CICRadParticleLumIdx,
 						       quokka::CICRadParticleBirthTimeIdx, false, false, CICRadParticles.get());
 		CICRadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CICRad));
+	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
+		AMREX_ASSERT(TestParticles == nullptr);
+		TestParticles = std::make_unique<quokka::TestParticleContainer>(this);
+		particleRegister_.registerParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, -1, quokka::TestParticleBirthTimeIdx, true,
+						       true, TestParticles.get(), true, true);
+		TestParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Test));
 	}
 #endif // AMREX_SPACEDIM == 3
 #endif

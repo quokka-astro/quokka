@@ -18,7 +18,8 @@ enum class ParticleSwitch : unsigned int {
 	None = 0U,	      // No particles, = 0b0000
 	CIC = bitflag<1>(),   // Cloud-In-Cell (gravitating) particles, = 0b0001
 	Rad = bitflag<2>(),   // Radiation particles, = 0b0010
-	CICRad = bitflag<3>() // Combined gravitating-radiating particles, = 0b0100
+	CICRad = bitflag<3>(), // Combined gravitating-radiating particles, = 0b0100
+	Test = bitflag<4>()   // Test particles with all features enabled, = 0b1000
 };
 
 // Enable bitwise operations on the enum class
@@ -68,7 +69,14 @@ namespace quokka
 enum class ParticleType {
 	Rad,   // Radiation particles
 	CIC,   // Gravitating particles
-	CICRad // Gravitating radiation particles
+	CICRad, // Gravitating radiation particles
+	Test   // Test particles with all features enabled
+};
+
+// Enum for Test particle stage
+enum class TestParticleStage {
+	LowMassStar,  // Low mass star stage
+	SNProgenitor  // Supernova progenitor stage
 };
 
 // Global particle parameters
@@ -80,6 +88,25 @@ inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 inline amrex::Real particle_param3 = -1.0; // NOLINT
 inline int particle_verbose = 0;	   // NOLINT print particle logistics
+
+//-------------------- Test particles --------------------
+
+// Indices for test particles (Test_particles)
+enum TestParticleDataIdx {
+	TestParticleMassIdx = 0,    // Mass of the particle
+	TestParticleVxIdx,          // Velocity in x direction
+	TestParticleVyIdx,          // Velocity in y direction
+	TestParticleVzIdx,          // Velocity in z direction
+	TestParticleBirthTimeIdx,   // Time when particle becomes active
+	TestParticleStageIdx        // Stage of the particle (LowMassStar or SNProgenitor)
+};
+
+// Number of real components for Test_particles
+constexpr int TestParticleRealComps = 6;
+
+// Type definitions for Test_particles container and iterator
+using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps>;
+using TestParticleIterator = amrex::ParIter<TestParticleRealComps>;
 
 //-------------------- Radiation particles --------------------
 

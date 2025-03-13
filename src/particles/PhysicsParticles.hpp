@@ -35,12 +35,12 @@ class PhysicsParticleDescriptorBase
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 	bool allowsCreation_{false};	 // Whether particles can be created during simulation
 	bool allowsDestruction_{false};	 // Whether particles can be destroyed during simulation
-	bool isSN_{false};		 // Whether particles end their life as supernovae
+	bool allowsStellarEvolution_{false};	 // Whether particles end their life as supernovae
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false, bool is_sn = false)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, bool allows_destruction = false, bool allows_stellar_evolution = false)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), interactsWithHydro_(hydro_interact), allowsCreation_(allows_creation),
-	      allowsDestruction_(allows_destruction), isSN_(is_sn)
+	      allowsDestruction_(allows_destruction), allowsStellarEvolution_(allows_stellar_evolution)
 	{
 	}
 
@@ -59,7 +59,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getInteractsWithHydro() const -> bool { return interactsWithHydro_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsCreation() const -> bool { return allowsCreation_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
-	[[nodiscard]] AMREX_FORCE_INLINE auto isSN() const -> bool { return isSN_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto allowsStellarEvolution() const -> bool { return allowsStellarEvolution_; }
 
 	// Virtual interface for particle operations
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
@@ -98,8 +98,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container,
-				  bool allows_destruction = false, bool is_sn = false)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction, is_sn), container_(container)
+				  bool allows_destruction = false, bool allows_stellar_evolution = false)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction, allows_stellar_evolution), container_(container)
 	{
 	}
 
@@ -244,7 +244,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time) override
 	{
-		if (container_ != nullptr && this->isSN()) {
+		if (container_ != nullptr && this->allowsStellarEvolution()) {
 			// zero_out_input is false because we want to accumulate supernova contributions
 			// vol_weight is false because SNDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, state, lev,
@@ -453,6 +453,8 @@ template <typename problem_t> class PhysicsParticleRegister
 				return "CIC_particles";
 			case ParticleType::CICRad:
 				return "CICRad_particles";
+			case ParticleType::Test:
+				return "Test_particles";
 			default:
 				return "Unknown_particles";
 		}
@@ -461,22 +463,25 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
 	void registerParticleType(ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation,
-				  ContainerType *container, bool allows_destruction = false)
+				  ContainerType *container, bool allows_destruction = false, bool allows_stellar_evolution = false)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
 		if (type == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, allows_stellar_evolution);
 		}
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, allows_stellar_evolution);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction);
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, allows_stellar_evolution);
+		} else if (type == ParticleType::Test) {
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, allows_stellar_evolution);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
@@ -522,7 +527,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			if (descriptor->isSN()) {
+			if (descriptor->allowsStellarEvolution()) {
 				descriptor->depositSN(state, lev, current_time);
 			}
 		}
