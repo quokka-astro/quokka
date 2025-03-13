@@ -346,25 +346,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::initializeSimulatio
 		// if unit system is CONSTANTS, the units are not well defined unless all four constants, G, k_B, c, and a_rad, are defined. However, in a hydro
 		// simulation, only k_B is defined. In a radiation-hydrodynamics simulation, only k_B, c, and a_rad are defined. Besides, CONSTANTS is only used
 		// for testing purposes, so we don't care about the units in that case.
-		simulationMetadata_["unit_length"] = NAN;
-		simulationMetadata_["unit_mass"] = NAN;
-		simulationMetadata_["unit_time"] = NAN;
-		simulationMetadata_["unit_temperature"] = NAN;
+		simulationMetadata_["units"]["unit_length"] = NAN;
+		simulationMetadata_["units"]["unit_mass"] = NAN;
+		simulationMetadata_["units"]["unit_time"] = NAN;
+		simulationMetadata_["units"]["unit_temperature"] = NAN;
 
 		// constants
-		simulationMetadata_["k_B"] = Physics_Traits<problem_t>::boltzmann_constant;
-		simulationMetadata_["G"] = Physics_Traits<problem_t>::gravitational_constant;
+		simulationMetadata_["constants"]["k_B"] = Physics_Traits<problem_t>::boltzmann_constant;
+		simulationMetadata_["constants"]["G"] = Physics_Traits<problem_t>::gravitational_constant;
 		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-			simulationMetadata_["c"] = Physics_Traits<problem_t>::c_light;
-			simulationMetadata_["c_hat"] = Physics_Traits<problem_t>::c_light * RadSystem_Traits<problem_t>::c_hat_over_c;
-			simulationMetadata_["a_rad"] = Physics_Traits<problem_t>::radiation_constant;
+			simulationMetadata_["constants"]["c"] = Physics_Traits<problem_t>::c_light;
+			simulationMetadata_["constants"]["c_hat"] = Physics_Traits<problem_t>::c_light * RadSystem_Traits<problem_t>::c_hat_over_c;
+			simulationMetadata_["constants"]["a_rad"] = Physics_Traits<problem_t>::radiation_constant;
 		}
 	} else {
 		// units
-		simulationMetadata_["unit_length"] = unit_length;
-		simulationMetadata_["unit_mass"] = unit_mass;
-		simulationMetadata_["unit_time"] = unit_time;
-		simulationMetadata_["unit_temperature"] = unit_temperature;
+		simulationMetadata_["units"]["unit_length"] = unit_length;
+		simulationMetadata_["units"]["unit_mass"] = unit_mass;
+		simulationMetadata_["units"]["unit_time"] = unit_time;
+		simulationMetadata_["units"]["unit_temperature"] = unit_temperature;
 
 		// constants
 		double k_B = NAN;
@@ -376,12 +376,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::initializeSimulatio
 			      (Physics_Traits<problem_t>::unit_length * Physics_Traits<problem_t>::unit_length * Physics_Traits<problem_t>::unit_mass /
 			       (Physics_Traits<problem_t>::unit_time * Physics_Traits<problem_t>::unit_time) / Physics_Traits<problem_t>::unit_temperature);
 		}
-		simulationMetadata_["k_B"] = k_B;
-		simulationMetadata_["G"] = Gconst_;
+		simulationMetadata_["constants"]["k_B"] = k_B;
+		simulationMetadata_["constants"]["G"] = Gconst_;
 		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-			simulationMetadata_["c"] = RadSystem<problem_t>::c_light_;
-			simulationMetadata_["c_hat"] = RadSystem<problem_t>::c_hat_;
-			simulationMetadata_["a_rad"] = RadSystem<problem_t>::radiation_constant_;
+			simulationMetadata_["constants"]["c"] = RadSystem<problem_t>::c_light_;
+			simulationMetadata_["constants"]["c_hat"] = RadSystem<problem_t>::c_hat_;
+			simulationMetadata_["constants"]["a_rad"] = RadSystem<problem_t>::radiation_constant_;
 		}
 	}
 }
