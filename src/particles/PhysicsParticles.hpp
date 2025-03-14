@@ -78,7 +78,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
-	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time)
+	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
 	{ /* Default empty implementation */
 	}
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
@@ -456,18 +456,18 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 #if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
-	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time) override
+	void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) override
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
 			// zero_out_input is false because we want to accumulate supernova contributions
 			// vol_weight is false because SNDeposition does the volume weighting
 			amrex::ParticleToMesh(*this->container_, state, lev,
-					      SNDeposition{current_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex(),
+					      SNDeposition{step_end_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex(),
 							   this->getEvolutionStageIndex()},
 					      false);
 
 			// Update particle evolution stages after deposition
-			updateEvolutionStage(this->container_, lev, current_time, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+			updateEvolutionStage(this->container_, lev, step_end_time, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
@@ -597,11 +597,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit supernova energy and momentum from all particles
-	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time)
+	void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getEvolutionStageIndex() >= 0) {
-				descriptor->depositSN(state, lev, current_time);
+				descriptor->depositSN(state, lev, step_end_time);
 			}
 		}
 	}
