@@ -310,8 +310,6 @@ auto problem_main() -> int
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
-		const auto n_particle_actual = real_data.size();
-
 		// assume the first particle is in the first plane quadrant
 		for (const auto &data : real_data) {
 			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
