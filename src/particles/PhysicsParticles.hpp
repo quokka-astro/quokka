@@ -441,6 +441,43 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			container_->Checkpoint(checkpointname, name, include_header);
 		}
 	}
+
+	// Implementation of particle data output to units file
+	void writeUnitsFile(const std::string &snapshot_name, const std::string &name) override
+	{
+		if (container_ != nullptr) {
+			// Only write on rank 0
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				// Create the full path for the Fields.yaml file
+				std::string filename;
+#ifdef QUOKKA_USE_OPENPMD
+				// For OpenPMD, write the YAML file alongside the OpenPMD file
+				filename = snapshot_name + "_" + name + ".yaml";
+#else
+				// For standard output, write the YAML file in the particle directory
+				filename = snapshot_name + "/" + name + "/Fields.yaml";
+#endif
+
+				// Open the file for writing
+				std::ofstream outFile(filename);
+				if (!outFile) {
+					amrex::Abort("Error opening file for writing: " + filename);
+				}
+
+				// Get the units data for this particle type
+				const auto &typeData = quokka::get_units_data().at(particleType_);
+				if (!typeData.empty()) {
+					outFile << "# field: [M, L, T, Θ]\n";
+					// Write each field's units to the YAML file
+					for (const auto &[fieldName, units] : typeData[0]) {
+						outFile << fieldName << ": [" << units[0] << ", " << units[1] << ", " << units[2] << ", " << units[3] << "]\n";
+					}
+				}
+
+				outFile.close();
+			}
+		}
+	}
 };
 
 // New class for star particles that adds stellar evolution capabilities
