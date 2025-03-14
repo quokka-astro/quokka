@@ -67,17 +67,16 @@ struct MassDeposition {
 
 //-------------------- Supernova depositions --------------------
 
-constexpr double SN_time = 0.0015; // for testing: SN onset time = 1
-
 // Functor for depositing supernova energy and momentum from particles onto the grid
 // This is a simplified version of the SNDeposition functor that deposits mass and energy uniformly
 // to 5³ cells centered on the particle's cell. It is used for testing purposes.
 struct SNDeposition {
-	double current_time{};	   // Current simulation time
+	double step_end_time{};	   // Current simulation time
 	int start_part_comp{};	   // Starting component in particle data
 	int start_mesh_comp{};	   // Starting component in mesh data
 	int birthTimeIndex{};	   // Index for particle birth time
 	int evolutionStageIndex{}; // Index for particle evolution stage
+	double SN_time = particle_param2;
 
 	// Operator to perform supernova deposition using cloud-in-cell approach
 	template <typename ContainerType>
@@ -93,17 +92,17 @@ struct SNDeposition {
 				is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 			}
 
-			if (is_sn_progenitor && current_time >= p.rdata(birthTimeIndex) + SN_time) {
+			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex) + SN_time) {
 				// Find the cell containing the particle
 				int base_i = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 				int base_j = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 				int base_k = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
 
-				// Calculate the volume factor for normalization (5³ cells)
-				const int num_cells = 125; // 5³ cells
-				const amrex::Real vol_factor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])) / num_cells;
-
 				static constexpr int stencil_width = 2;
+
+				// Calculate the volume factor for normalization (5³ cells)
+				const int num_cells = (2 * stencil_width + 1) * (2 * stencil_width + 1) * (2 * stencil_width + 1);
+				const amrex::Real vol_factor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])) / num_cells;
 
 				// Deposit evenly to 5³ cells centered on the particle's cell
 				const amrex::Real pmass = p.rdata(start_part_comp) * vol_factor;
@@ -138,11 +137,13 @@ struct SNDeposition {
 
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
 template <typename ContainerType>
-void updateEvolutionStage(ContainerType *container, int lev, amrex::Real current_time, int birthTimeIndex, int evolutionStageIndex)
+void updateEvolutionStage(ContainerType *container, int lev, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
 {
 	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
 		return;
 	}
+
+	const double SN_time = particle_param2;
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		auto &particles = pti.GetArrayOfStructs();
@@ -156,7 +157,7 @@ void updateEvolutionStage(ContainerType *container, int lev, amrex::Real current
 			bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 			// Update the particle's evolution stage if it's time
-			if (is_sn_progenitor && current_time >= p.rdata(birthTimeIndex) + SN_time) {
+			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex) + SN_time) {
 				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
 			}
 		});
