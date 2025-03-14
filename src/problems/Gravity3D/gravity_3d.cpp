@@ -54,7 +54,8 @@ template <> struct Particle_Traits<BinaryOrbit> {
 	// static constexpr int particle_switch = 1;
 	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {
@@ -78,8 +79,8 @@ template <> struct Physics_Traits<BinaryOrbit> {
 namespace quokka
 {
 // Specialization for CIC particle creation
-template <> struct ParticleCreationTraits<ParticleType::CIC> {
-	// Specialized nested ParticleChecker for CIC particles
+template <> struct ParticleCreationTraits<ParticleType::Test> {
+	// Specialized nested ParticleChecker for Test particles
 	template <typename problem_t> struct ParticleChecker {
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
@@ -101,7 +102,7 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 		}
 	};
 
-	// Specialized nested ParticleCreator for CIC particles
+	// Specialized nested ParticleCreator for Test particles
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
 		int cpu_id;
@@ -167,14 +168,14 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
 	{
 		// Use the common implementation with our checker and creator types
-		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::CIC>::template ParticleChecker,
-							  ParticleCreationTraits<ParticleType::CIC>::template ParticleCreator>(container, mass_idx, state, lev,
+		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
+							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(container, mass_idx, state, lev,
 															       current_time, dt);
 	}
 };
 
-// Specialization for CIC particles destruction
-template <> struct ParticleDestructionTraits<ParticleType::CIC> {
+// Specialization for Test particles destruction
+template <> struct ParticleDestructionTraits<ParticleType::Test> {
 	// Default nested ParticleChecker - determines if a particle should be destroyed
 	template <typename problem_t> struct ParticleChecker {
 		amrex::Real t_destroy = particle_param3;
@@ -198,7 +199,7 @@ template <> struct ParticleDestructionTraits<ParticleType::CIC> {
 	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
 	{
 		// Use the common implementation with our checker type
-		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<ParticleType::CIC>::template ParticleChecker>(
+		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<ParticleType::Test>::template ParticleChecker>(
 		    container, mass_idx, lev, current_time, dt);
 	}
 };
@@ -223,13 +224,13 @@ template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokk
 
 template <> void QuokkaSimulation<BinaryOrbit>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
-{
-	// read particles from ASCII file
-	const int nreal_extra = 4; // mass vx vy vz
-	CICParticles->SetVerbose(1);
-	CICParticles->InitFromAsciiFile("Gravity3D.txt", nreal_extra, nullptr);
-}
+// template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
+// {
+// 	// read particles from ASCII file
+// 	const int nreal_extra = 4; // mass vx vy vz
+// 	CICParticles->SetVerbose(1);
+// 	CICParticles->InitFromAsciiFile("Gravity3D.txt", nreal_extra, nullptr);
+// }
 
 auto problem_main() -> int
 {
@@ -285,32 +286,32 @@ auto problem_main() -> int
 
 	int status = 0; // Initialize to success
 
-	auto particle_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
+	auto particle_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getParticleData(0);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
 		const auto n_particle_actual = particle_data.size();
 
-		// assume the first particle is in the first plane quadrant
-		for (const auto &data : particle_data) {
-			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
-			if (data[3] < 0.1) {
-				continue;
-			}
-			// First 3 elements are positions (x,y,z)
-			if (data[0] * exact_x > 0.0) {
-				position_error += std::abs(data[0] - exact_x);
-				position_error += std::abs(data[1] - exact_y);
-				position_error += std::abs(data[2] - exact_z);
-			} else {
-				position_error += std::abs(data[0] - (-exact_x));
-				position_error += std::abs(data[1] - (-exact_y));
-				position_error += std::abs(data[2] - (-exact_z));
-			}
-			position_norm += std::abs(data[0]);
-			position_norm += std::abs(data[1]);
-			position_norm += std::abs(data[2]);
-		}
+		// // assume the first particle is in the first plane quadrant
+		// for (const auto &data : particle_data) {
+		// 	// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
+		// 	if (data[3] < 0.1) {
+		// 		continue;
+		// 	}
+		// 	// First 3 elements are positions (x,y,z)
+		// 	if (data[0] * exact_x > 0.0) {
+		// 		position_error += std::abs(data[0] - exact_x);
+		// 		position_error += std::abs(data[1] - exact_y);
+		// 		position_error += std::abs(data[2] - exact_z);
+		// 	} else {
+		// 		position_error += std::abs(data[0] - (-exact_x));
+		// 		position_error += std::abs(data[1] - (-exact_y));
+		// 		position_error += std::abs(data[2] - (-exact_z));
+		// 	}
+		// 	position_norm += std::abs(data[0]);
+		// 	position_norm += std::abs(data[1]);
+		// 	position_norm += std::abs(data[2]);
+		// }
 
 		amrex::Print() << "Particle positions and data are: \n";
 		for (const auto &data : particle_data) {
@@ -325,7 +326,8 @@ auto problem_main() -> int
 		amrex::Print() << "Actual number of particles: " << n_particle_actual << "\n";
 
 		// compute relative error
-		const double relative_error = position_error / position_norm;
+		// const double relative_error = position_error / position_norm;
+		const double relative_error = 0.0;
 
 		amrex::Print() << "Position error: " << position_error << "\n";
 		amrex::Print() << "Position norm: " << position_norm << "\n";

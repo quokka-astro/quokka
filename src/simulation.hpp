@@ -2187,12 +2187,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		AMREX_ASSERT(TestParticles == nullptr);
 
 		// Create particle container
-		TestParticles = std::make_unique<quokka::TestParticleContainer>(this);
+		TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
 		TestParticles->SetVerbose(0);
 
 		// Register with particle register - Test particles have all features enabled
 		// mass_idx = 0, birth_time_idx = 4, stage_idx = 5, all bool attributes = true
-		particleRegister_.registerParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, quokka::TestParticleLumIdx,
+		particleRegister_.registerStarParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, quokka::TestParticleLumIdx,
 						       quokka::TestParticleBirthTimeIdx, true, true, TestParticles.get(), true, true);
 	}
 #endif // AMREX_SPACEDIM == 3
@@ -2964,7 +2964,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
 		AMREX_ASSERT(TestParticles == nullptr);
-		TestParticles = std::make_unique<quokka::TestParticleContainer>(this);
+		TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
 		particleRegister_.registerParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, -1, quokka::TestParticleBirthTimeIdx, true,
 						       true, TestParticles.get(), true, true);
 		TestParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Test));
