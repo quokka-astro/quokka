@@ -34,10 +34,10 @@ class PhysicsParticleDescriptorBase
 	int massIndex_{-1};		 // Index for particle mass (-1 if not used)
 	int lumIndex_{-1};		 // Index for radiation luminosity (-1 if not used)
 	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
-	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 	bool allowsCreation_{false};	 // Whether particles can be created during simulation
 	bool allowsDestruction_{false};	 // Whether particles can be destroyed during simulation
 	int evolutionStageIndex_{-1};	 // Index for evolution stage (-1 if not used)
+	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
@@ -765,7 +765,7 @@ template <typename problem_t> class PhysicsParticleRegister
 					amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
 
 					// Print each particle's data with aligned columns
-					for (int i = 0; i < real_data.size(); ++i) {
+					for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
 						amrex::Print()
 						    << "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + descriptor->getMassIndex()] << " | "
 						    << std::right << std::setw(20) << int_data[i][descriptor->getEvolutionStageIndex()] << "\n";
