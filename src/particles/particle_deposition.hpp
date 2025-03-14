@@ -107,7 +107,7 @@ struct SNDeposition {
 				// Deposit evenly to 5³ cells centered on the particle's cell
 				const amrex::Real pdensity = p.rdata(start_part_comp) * vol_factor;
 				const amrex::Real penergy = pdensity; // for testing: energy = mass
-				const amrex::Real pmomentum = 0.0; // for testing: momentum = 0
+				const amrex::Real pmomentum = 0.0;    // for testing: momentum = 0
 
 				for (int kk = -stencil_width; kk <= stencil_width; ++kk) {
 					for (int jj = -stencil_width; jj <= stencil_width; ++jj) {
