@@ -350,7 +350,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		if (container_ != nullptr) {
 			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(container_, this->getMassIndex(), lev,
-														      current_time, dt);
+														      current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 

@@ -115,8 +115,6 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real current_time;
-		amrex::Real param1 = particle_param1;
-		amrex::Real param2 = particle_param2;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index, amrex::Real current_time)
@@ -136,10 +134,12 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_mass = cell_density * cell_volume;
 				amrex::Real particle_mass = 0.5 * cell_mass / num_particles; // Divide mass among particles
+				int particle_stage = static_cast<int>(StellarEvolutionStage::SNProgenitor);
 
 				// mark half of the particles as low-mass particles which will be destroyed in the next time step
 				if (i <= particle_spacing) {
 					particle_mass = particle_low_mass;
+					particle_stage = static_cast<int>(StellarEvolutionStage::LowMassStar);
 				}
 
 				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
@@ -169,7 +169,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 					p.rdata(birth_time_index) = current_time;
 
 					// Set particle evolution stage
-					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
+					p.idata(evolution_stage_index) = particle_stage;
 				}
 
 				// Update cell density (remove mass that was given to particles)
@@ -194,30 +194,36 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 template <> struct ParticleDestructionTraits<ParticleType::Test> {
 	// Default nested ParticleChecker - determines if a particle should be destroyed
 	template <typename problem_t> struct ParticleChecker {
+		int birth_time_index;
+		int evolution_stage_index;
 		amrex::Real t_destroy = particle_param3;
 
-		// AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real param1) : param1(param1) {}
+		AMREX_GPU_HOST_DEVICE explicit ParticleChecker(int birth_time_index, int evolution_stage_index)
+		    : birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index)
+		{
+		}
 
 		template <typename ParticleType>
 		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
 		{
 			// Default implementation: destroy particles with mass < 1.0
-			amrex::ignore_unused(current_time, dt);
+			amrex::ignore_unused(mass_idx, current_time, dt);
 
-			const bool is_small_mass = (p.rdata(mass_idx) < 2.0 * particle_low_mass);
-			const bool is_time = (current_time <= t_destroy && current_time + dt > t_destroy);
-			return is_small_mass && is_time;
+			// only low-mass stars will be destroyed; just for testing
+			const bool is_low_mass = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::LowMassStar));
+			const bool is_time = (current_time >= p.rdata(birth_time_index) + t_destroy);
+			return is_low_mass && is_time;
 		}
 	};
 
 	// Main method to destroy particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
+	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index, int evolution_stage_index)
 	{
 		// Use the common implementation with our checker type
 		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType,
 							      ParticleDestructionTraits<ParticleType::Test>::template ParticleChecker>(container, mass_idx, lev,
-																       current_time, dt);
+																       current_time, dt, birth_time_index, evolution_stage_index);
 	}
 };
 

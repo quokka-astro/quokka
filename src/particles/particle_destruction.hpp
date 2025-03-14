@@ -11,12 +11,12 @@ namespace ParticleDestructionImpl
 {
 // Common implementation of particle destruction logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType>
-static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
+static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index, int evolution_stage_index)
 {
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
 			// Use the provided ParticleChecker type to determine which particles to destroy
-			CheckerType<problem_t> particle_checker;
+			CheckerType<problem_t> particle_checker(birth_time_index, evolution_stage_index);
 
 			// Iterate through all particles at this level
 			for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
@@ -57,6 +57,13 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 template <ParticleType particleType> struct ParticleDestructionTraits {
 	// Default nested ParticleChecker - determines if a particle should be destroyed
 	template <typename problem_t> struct ParticleChecker {
+		int birth_time_index;
+		int evolution_stage_index;
+
+		AMREX_GPU_HOST_DEVICE explicit ParticleChecker(int birth_time_index, int evolution_stage_index)
+		    : birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index)
+		{
+		}
 
 		template <typename ParticleType>
 		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
@@ -69,11 +76,11 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 
 	// Main method to destroy particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
+	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index, int evolution_stage_index)
 	{
 		// Use the common implementation with our checker type
 		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<particleType>::template ParticleChecker>(
-		    container, mass_idx, lev, current_time, dt);
+		    container, mass_idx, lev, current_time, dt, birth_time_index, evolution_stage_index);
 	}
 };
 
