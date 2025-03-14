@@ -11,7 +11,7 @@ namespace ParticleCreationImpl
 {
 // Common implementation of particle creation logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType, template <typename> class CreatorType>
-static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1)
 {
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
@@ -59,7 +59,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
 				// Initialize particle creator functor using the provided ParticleCreator type
-				CreatorType<problem_t> particle_creator(mass_idx, cpu_id, pid);
+				CreatorType<problem_t> particle_creator(mass_idx, cpu_id, pid, evolution_stage_index);
 
 				amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
@@ -95,12 +95,13 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	// Default nested ParticleCreator - initializes a particle's properties
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
+		int evolution_stage_index;
 		int cpu_id;
 		amrex::Long pid_start;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start)
-		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start)
+		ParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index)
+		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), evolution_stage_index(evolution_stage_index)
 		{
 		}
 
@@ -116,12 +117,12 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<particleType>::template ParticleChecker,
 							  ParticleCreationTraits<particleType>::template ParticleCreator>(container, mass_idx, state, lev,
-															  current_time, dt);
+															  current_time, dt, evolution_stage_index);
 	}
 };
 

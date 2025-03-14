@@ -105,14 +105,15 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	// Specialized nested ParticleCreator for Test particles
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
+		int evolution_stage_index;
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start)
-		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start)
+		ParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index)
+		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), evolution_stage_index(evolution_stage_index)
 		{
 		}
 
@@ -155,6 +156,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 					p.rdata(mass_idx + 1) = vx;
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
+
+					// Set particle evolution stage
+					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
 				}
 
 				// Update cell density (remove mass that was given to particles)
@@ -165,12 +169,12 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(container, mass_idx, state, lev,
-															       current_time, dt);
+															       current_time, dt, evolution_stage_index);
 	}
 };
 
@@ -286,11 +290,11 @@ auto problem_main() -> int
 
 	int status = 0; // Initialize to success
 
-	auto particle_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getParticleData(0);
+	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getParticleData(0);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
-		const auto n_particle_actual = particle_data.size();
+		const auto n_particle_actual = real_data.size();
 
 		// // assume the first particle is in the first plane quadrant
 		// for (const auto &data : particle_data) {
@@ -314,7 +318,7 @@ auto problem_main() -> int
 		// }
 
 		amrex::Print() << "Particle positions and data are: \n";
-		for (const auto &data : particle_data) {
+		for (const auto &data : real_data) {
 			// Print positions
 			amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
 			// Print additional data (mass, velocities)

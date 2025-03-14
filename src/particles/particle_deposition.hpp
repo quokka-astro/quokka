@@ -65,35 +65,6 @@ struct MassDeposition {
 	}
 };
 
-// Function to update particle evolution stages from SNProgenitor to SNRemnant
-template <typename ContainerType>
-void updateEvolutionStage(ContainerType *container, int lev, amrex::Real current_time, int birthTimeIndex, int evolutionStageIndex)
-{
-	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
-		return;
-	}
-
-	const double SN_time = 1.0; // for testing: SN onset time = 1
-
-	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
-		const amrex::Long np = pti.numParticles();
-
-		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
-			// Check if this is a supernova progenitor
-			bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
-
-			// Update the particle's evolution stage if it's time
-			if (is_sn_progenitor && current_time >= p.rdata(birthTimeIndex) + SN_time) {
-				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
-			}
-		});
-	}
-}
-
 //-------------------- Supernova depositions --------------------
 
 // Functor for depositing supernova energy and momentum from particles onto the grid
@@ -164,6 +135,35 @@ struct SNDeposition {
 		}
 	}
 };
+
+// Function to update particle evolution stages from SNProgenitor to SNRemnant
+template <typename ContainerType>
+void updateEvolutionStage(ContainerType *container, int lev, amrex::Real current_time, int birthTimeIndex, int evolutionStageIndex)
+{
+	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
+		return;
+	}
+
+	const double SN_time = 1.0; // for testing: SN onset time = 1
+
+	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+		auto &particles = pti.GetArrayOfStructs();
+		auto *pData = particles().data();
+		const amrex::Long np = pti.numParticles();
+
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+			// Check if this is a supernova progenitor
+			bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+
+			// Update the particle's evolution stage if it's time
+			if (is_sn_progenitor && current_time >= p.rdata(birthTimeIndex) + SN_time) {
+				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+			}
+		});
+	}
+}
 
 #endif // AMREX_SPACEDIM == 3
 

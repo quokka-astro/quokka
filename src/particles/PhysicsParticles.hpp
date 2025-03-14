@@ -66,7 +66,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
 
 	// New method to get particle positions and data
-	[[nodiscard]] virtual auto getParticleData(int lev) const -> std::vector<std::vector<double>> = 0;
+	[[nodiscard]] virtual auto getParticleData(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
@@ -342,7 +342,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(container_, this->getMassIndex(), state, lev,
-													  current_time, dt);
+													  current_time, dt, this->getEvolutionStageIndex());
 	}
 
 	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) override
@@ -531,9 +531,6 @@ template <typename problem_t> class PhysicsParticleRegister
 			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, evolution_stage_idx);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, evolution_stage_idx);
-		} else if (type == ParticleType::Test) {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, evolution_stage_idx);
 		}
 #endif // AMREX_SPACEDIM == 3

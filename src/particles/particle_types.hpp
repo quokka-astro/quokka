@@ -168,9 +168,10 @@ enum TestParticleDataIdx {
 	TestParticleVyIdx,	  // Velocity in y direction
 	TestParticleVzIdx,	  // Velocity in z direction
 	TestParticleBirthTimeIdx, // Time when particle becomes active
-	TestParticleStageIdx,	  // Stage of the particle (LowMassStar or SNProgenitor)
 	TestParticleLumIdx	  // Base index for luminosity components
 };
+
+constexpr int TestParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
 
 // Number of real components for StellarPop_particles, mass + 3 velocity components + luminosity
 template <typename problem_t>
@@ -183,7 +184,7 @@ constexpr int TestParticleRealComps = []() constexpr {
 }();
 
 // Number of integer components for Test_particles
-constexpr int TestParticleIntComps = 1; // fate
+constexpr int TestParticleIntComps = 1; // stellar evolution stage
 
 // Type definitions for Test_particles container and iterator
 template <typename problem_t> using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps<problem_t>, TestParticleIntComps>;

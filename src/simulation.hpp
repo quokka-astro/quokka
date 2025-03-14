@@ -230,8 +230,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #if AMREX_SPACEDIM == 3
 	virtual void createInitialCICParticles() = 0;
 	virtual void createInitialCICRadParticles() = 0;
-	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow them to be created at the start
-	// of the simulation virtual void createInitialTestParticles() = 0;
+	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
+	// of the simulation
 #endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
@@ -2193,7 +2193,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		// Register with particle register - Test particles have all features enabled
 		// mass_idx = 0, birth_time_idx = 4, stage_idx = 5, all bool attributes = true
 		particleRegister_.registerStarParticleType(quokka::ParticleType::Test, quokka::TestParticleMassIdx, quokka::TestParticleLumIdx,
-						       quokka::TestParticleBirthTimeIdx, true, true, TestParticles.get(), true, true);
+						       quokka::TestParticleBirthTimeIdx, true, true, TestParticles.get(), true, quokka::TestParticleStageIdx);
 	}
 #endif // AMREX_SPACEDIM == 3
 
