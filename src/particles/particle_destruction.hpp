@@ -11,7 +11,8 @@ namespace ParticleDestructionImpl
 {
 // Common implementation of particle destruction logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType>
-static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index, int evolution_stage_index)
+static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index,
+				 int evolution_stage_index)
 {
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
@@ -76,7 +77,8 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 
 	// Main method to destroy particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index, int evolution_stage_index)
+	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index,
+				     int evolution_stage_index)
 	{
 		// Use the common implementation with our checker type
 		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<particleType>::template ParticleChecker>(

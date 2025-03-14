@@ -11,7 +11,8 @@ namespace ParticleCreationImpl
 {
 // Common implementation of particle creation logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType, template <typename> class CreatorType>
-static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
+static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+				int evolution_stage_index = -1, int birth_time_index = -1)
 {
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
@@ -105,7 +106,8 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		amrex::Real current_time;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index, amrex::Real current_time)
+		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
+				amrex::Real current_time)
 		    : mass_idx(mass_index), birth_time_index(birth_time_index), cpu_id(processor_id), pid_start(particle_id_start),
 		      evolution_stage_index(evolution_stage_index), current_time(current_time)
 		{
@@ -123,12 +125,13 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+				    int evolution_stage_index = -1, int birth_time_index = -1)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<particleType>::template ParticleChecker,
-							  ParticleCreationTraits<particleType>::template ParticleCreator>(container, mass_idx, state, lev,
-															  current_time, dt, evolution_stage_index, birth_time_index);
+							  ParticleCreationTraits<particleType>::template ParticleCreator>(
+		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
 	}
 };
 

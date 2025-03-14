@@ -2,8 +2,8 @@
 #define PHYSICS_PARTICLES_HPP_
 
 #include <cstdint>
-#include <iomanip>
 #include <fstream>
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <string>
@@ -87,9 +87,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
-	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
-	{ /* Default empty implementation */
-	}
+	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) { /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -451,8 +449,8 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 {
       public:
 	// Constructor - forwards all arguments to the base class
-	StarParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, ContainerType *container,
-			       bool allows_destruction = false, int evolution_stage_idx = -1, bool hydro_interact = false)
+	StarParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, ContainerType *container, bool allows_destruction = false,
+			       int evolution_stage_idx = -1, bool hydro_interact = false)
 	    : PhysicsParticleDescriptor<ContainerType, problem_t, particleType>(mass_idx, lum_idx, birth_time_idx, allows_creation, container,
 										allows_destruction, evolution_stage_idx, hydro_interact)
 	{

@@ -2149,7 +2149,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		RadParticles->SetVerbose(0);
 
 		// Register with particle register - Rad particles do not allow creation
-		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, false, quokka::RadParticleBirthTimeIdx);
+		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, false,
+						       quokka::RadParticleBirthTimeIdx);
 
 		// Initialize particles through derived class
 		createInitialRadParticles();
@@ -2194,8 +2195,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Register with particle register - Test particles have all features enabled
 		// mass_idx = 0, birth_time_idx = 4, stage_idx = 5, all bool attributes = true
-		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test, quokka::TestParticleMassIdx, quokka::TestParticleLumIdx,
-						       quokka::TestParticleBirthTimeIdx, true, true, quokka::TestParticleStageIdx, true);
+		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test, quokka::TestParticleMassIdx,
+							   quokka::TestParticleLumIdx, quokka::TestParticleBirthTimeIdx, true, true,
+							   quokka::TestParticleStageIdx, true);
 	}
 #endif // AMREX_SPACEDIM == 3
 
@@ -2929,7 +2931,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, false, quokka::RadParticleBirthTimeIdx);
+		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, false,
+						       quokka::RadParticleBirthTimeIdx);
 		RadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Rad));
 	}
 
@@ -2952,8 +2955,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
 		AMREX_ASSERT(TestParticles == nullptr);
 		TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
-		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test, quokka::TestParticleMassIdx, quokka::TestParticleLumIdx,
-						       quokka::TestParticleBirthTimeIdx, true, true, quokka::TestParticleStageIdx, true);
+		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test, quokka::TestParticleMassIdx,
+							   quokka::TestParticleLumIdx, quokka::TestParticleBirthTimeIdx, true, true,
+							   quokka::TestParticleStageIdx, true);
 		TestParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Test));
 	}
 #endif // AMREX_SPACEDIM == 3
