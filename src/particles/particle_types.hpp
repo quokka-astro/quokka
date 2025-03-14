@@ -205,6 +205,13 @@ inline auto get_units_data() -> const auto &
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
+	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::Test,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}}};
 	return units_data;
 }

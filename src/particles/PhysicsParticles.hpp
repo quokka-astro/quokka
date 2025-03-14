@@ -465,7 +465,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 
 				// Get the units data for this particle type
-				const auto &typeData = quokka::get_units_data().at(particleType_);
+				const auto &unitsData = quokka::get_units_data();
+				if (unitsData.find(particleType_) == unitsData.end()) {
+					amrex::Abort("Error: Particle type not defined in units data map. Please add units for this particle type in get_units_data().");
+				}
+				
+				const auto &typeData = unitsData.at(particleType_);
 				if (!typeData.empty()) {
 					outFile << "# field: [M, L, T, Θ]\n";
 					// Write each field's units to the YAML file
