@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <iomanip>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <string>
@@ -75,6 +76,7 @@ class PhysicsParticleDescriptorBase
 	virtual void redistribute(int lev, int ngrow) = 0;
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
+	virtual void writeUnitsFile(const std::string &snapshot_name, const std::string &name) = 0;
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
@@ -629,6 +631,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
+			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
 		}
 	}
 
@@ -637,6 +640,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
+			descriptor->writeUnitsFile(checkpointname, getParticleTypeName(type));
 		}
 	}
 
