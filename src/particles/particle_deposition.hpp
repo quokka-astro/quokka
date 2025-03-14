@@ -3,7 +3,9 @@
 
 #include "AMReX_Array4.H"
 #include "AMReX_Extension.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
+#include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
 #include "particles/particle_types.hpp"
 
@@ -62,6 +64,35 @@ struct MassDeposition {
 		});
 	}
 };
+
+// Function to update particle evolution stages from SNProgenitor to SNRemnant
+template <typename ContainerType>
+void updateEvolutionStage(ContainerType *container, int lev, amrex::Real current_time, int birthTimeIndex, int evolutionStageIndex)
+{
+	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
+		return;
+	}
+
+	const double SN_time = 1.0; // for testing: SN onset time = 1
+
+	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+		auto &particles = pti.GetArrayOfStructs();
+		auto *pData = particles().data();
+		const amrex::Long np = pti.numParticles();
+
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+			// Check if this is a supernova progenitor
+			bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+
+			// Update the particle's evolution stage if it's time
+			if (is_sn_progenitor && current_time >= p.rdata(birthTimeIndex) + SN_time) {
+				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+			}
+		});
+	}
+}
 
 //-------------------- Supernova depositions --------------------
 
@@ -127,8 +158,8 @@ struct SNDeposition {
 					}
 				}
 
-				// Update the particle's evolution stage to SNRemnant
-				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+				// Note: We cannot modify the particle here because it's passed as const reference
+				// The evolution stage update is now handled by the updateEvolutionStage function
 			}
 		}
 	}

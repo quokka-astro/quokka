@@ -77,7 +77,9 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
-	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time) = 0;
+	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time)
+	{ /* Default empty implementation */
+	}
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
@@ -90,8 +92,10 @@ class PhysicsParticleDescriptorBase
 template <typename ContainerType, typename problem_t, ParticleType particleType> class PhysicsParticleDescriptor : public PhysicsParticleDescriptorBase
 {
       private:
-	ContainerType *container_{}; // Pointer to the actual particle container
 	static constexpr ParticleType particleType_ = particleType;
+
+      protected:
+	ContainerType *container_{}; // Pointer to the actual particle container - moved to protected
 
       public:
 	// Get the particle type
@@ -99,7 +103,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container,
-				  bool allows_destruction = false, bool evolution_stage_idx = false)
+				  bool allows_destruction = false, int evolution_stage_idx = -1)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, allows_destruction, evolution_stage_idx),
 	      container_(container)
 	{
@@ -240,19 +244,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// zero_out_input is false because we want to accumulate mass
 			// vol_weight is false because MassDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
-		}
-	}
-
-	// Implementation of supernova energy and momentum deposition from particles to grid
-	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time) override
-	{
-		if (container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
-			// zero_out_input is false because we want to accumulate supernova contributions
-			// vol_weight is false because SNDeposition does the volume weighting
-			amrex::ParticleToMesh(*container_, state, lev,
-					      SNDeposition{current_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex(),
-							   this->getEvolutionStageIndex()},
-					      false);
 		}
 	}
 
@@ -423,6 +414,38 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 };
 
+// New class for star particles that adds stellar evolution capabilities
+template <typename ContainerType, typename problem_t, ParticleType particleType>
+class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, problem_t, particleType>
+{
+      public:
+	// Constructor - forwards all arguments to the base class
+	StarParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation, ContainerType *container,
+			       bool allows_destruction = false, int evolution_stage_idx = -1)
+	    : PhysicsParticleDescriptor<ContainerType, problem_t, particleType>(mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container,
+										allows_destruction, evolution_stage_idx)
+	{
+	}
+
+#if AMREX_SPACEDIM == 3
+	// Implementation of supernova energy and momentum deposition from particles to grid
+	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time) override
+	{
+		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
+			// zero_out_input is false because we want to accumulate supernova contributions
+			// vol_weight is false because SNDeposition does the volume weighting
+			amrex::ParticleToMesh(*this->container_, state, lev,
+					      SNDeposition{current_time, this->getMassIndex(), HydroSystem<problem_t>::density_index, this->getBirthTimeIndex(),
+							   this->getEvolutionStageIndex()},
+					      false);
+
+			// Update particle evolution stages after deposition
+			updateEvolutionStage(this->container_, lev, current_time, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+		}
+	}
+#endif // AMREX_SPACEDIM == 3
+};
+
 // Registry managing different types of physics particles
 template <typename problem_t> class PhysicsParticleRegister
 {
@@ -467,7 +490,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
 	void registerParticleType(ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation,
-				  ContainerType *container, bool allows_destruction = false, bool evolution_stage_idx = false)
+				  ContainerType *container, bool allows_destruction = false, int evolution_stage_idx = -1)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
@@ -489,7 +512,29 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
-			amrex::Abort("Unknown particle type");
+			amrex::Abort("Unknown particle type for physics particles");
+		}
+
+		particleRegistry_[type] = std::move(descriptor);
+	}
+
+	// Register a new star particle type with specified properties
+	// Star particles have additional stellar evolution capabilities including supernova feedback
+	template <typename ContainerType>
+	void registerStarParticleType(ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool hydro_interact, bool allows_creation,
+				      ContainerType *container, bool allows_destruction = false, int evolution_stage_idx = -1)
+	{
+		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
+
+		// Create the appropriate star particle descriptor based on the particle type
+#if AMREX_SPACEDIM == 3
+		if (type == ParticleType::Test) {
+			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
+			    mass_idx, lum_idx, birth_time_idx, hydro_interact, allows_creation, container, allows_destruction, evolution_stage_idx);
+		}
+#endif // AMREX_SPACEDIM == 3
+		else {
+			amrex::Abort("Unknown particle type for star particles");
 		}
 
 		particleRegistry_[type] = std::move(descriptor);
@@ -531,7 +576,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void depositSN(amrex::MultiFab &state, int lev, amrex::Real current_time)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			if (descriptor->allowsStellarEvolution()) {
+			if (descriptor->getEvolutionStageIndex() >= 0) {
 				descriptor->depositSN(state, lev, current_time);
 			}
 		}
