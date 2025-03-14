@@ -105,8 +105,8 @@ struct SNDeposition {
 				const amrex::Real vol_factor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])) / num_cells;
 
 				// Deposit evenly to 5³ cells centered on the particle's cell
-				const amrex::Real pmass = p.rdata(start_part_comp) * vol_factor;
-				const amrex::Real penergy = pmass; // for testing: energy = mass
+				const amrex::Real pdensity = p.rdata(start_part_comp) * vol_factor;
+				const amrex::Real penergy = pdensity; // for testing: energy = mass
 				const amrex::Real pmomentum = 0.0; // for testing: momentum = 0
 
 				for (int kk = -stencil_width; kk <= stencil_width; ++kk) {
@@ -115,7 +115,7 @@ struct SNDeposition {
 							// Add the contribution to each cell
 							// We assume start_mesh_comp is the density index followed by the momentum indices and then the energy
 							// index
-							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp), pmass);
+							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp), pdensity);
 							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp + 1),
 										     pmomentum);
 							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp + 2),

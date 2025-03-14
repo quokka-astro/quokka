@@ -31,11 +31,17 @@ struct BinaryOrbit {
 // turned into SNRemnant. In the fourth time step, all SNRemnant particles are destroyed. In the end of the simulation, there are 2 CIC particles and 18 Test
 // particles.
 
+constexpr double rho0 = 1.0e-5;
+constexpr double init_mass_total = rho0 * 4 * 4 * 4;
+
 constexpr int particle_per_cell = 2;
 constexpr int particle_spacing = 20;
+constexpr double SN_mass = 0.1; // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
-const int n_expected_test_particles = 18; // initially 0, then 3^3 * 2 created, two thirds destroyed
+constexpr int n_expected_test_particles = 18; // initially 0, then 3^3 * 2 created, two thirds destroyed
+constexpr int n_SN = 3 * 3 * 3 * 2 * 2 / 3;
+constexpr double m_SN = n_SN * SN_mass;
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -129,10 +135,10 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_mass = cell_density * cell_volume;
-				amrex::Real particle_mass = 0.5 * cell_mass / num_particles; // Divide mass among particles
+				amrex::Real particle_mass = SN_mass;
 				int particle_stage = static_cast<int>(StellarEvolutionStage::SNProgenitor);
 
-				// mark half of the particles as low-mass particles which will be destroyed in the next time step
+				// mark half of the particles as low-mass stars
 				if (i <= particle_spacing) {
 					particle_mass = particle_low_mass;
 					particle_stage = static_cast<int>(StellarEvolutionStage::LowMassStar);
@@ -146,7 +152,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
 					auto &p = particles[p_idx]; // NOLINT
 
-					// Set particle position (all at cell center for now)
+					// Set particle position at cell center
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
 					p.pos(1) = plo[1] + (j + 0.5) * dx[1];
 					p.pos(2) = plo[2] + (k + 0.5) * dx[2];
@@ -168,8 +174,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 					p.idata(evolution_stage_index) = particle_stage;
 				}
 
-				// Update cell density (remove mass that was given to particles)
-				state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.
+				state_arr(i, j, k, HydroSystem<problem_t>::density_index) -= 1.0e-20;
 			}
 		}
 	};
@@ -232,8 +238,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokk
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		double const rho = 1.0e-5; // g cm^{-3}
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<BinaryOrbit>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) = 0;
@@ -304,6 +309,16 @@ auto problem_main() -> int
 
 	int status = 0; // Initialize to success
 
+	// get total mass in cells
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<BinaryOrbit>::density_index) * vol;
+	amrex::Real const SN_remnant_mass = total_mass - init_mass_total;
+	amrex::Print() << "Total SN remnant mass: " << SN_remnant_mass << "\n";
+	amrex::Print() << "Expected total SN remnant mass in cells: " << m_SN << "\n";
+	const double SN_remnant_mass_rel_err = std::abs(SN_remnant_mass - m_SN) / m_SN;
+	amrex::Print() << "SN remnant mass relative error: " << SN_remnant_mass_rel_err << "\n";
+
 	// ----- Check CIC particles -----
 
 	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
@@ -355,9 +370,12 @@ auto problem_main() -> int
 		amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
 		amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
 
+		// ----- Check SN remnant mass -----
+
 		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
+		const double max_err_tol_mass = 1.0e-8; // max error tol in mass
 		status = 1;
-		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles) {
+		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < max_err_tol_mass) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}
