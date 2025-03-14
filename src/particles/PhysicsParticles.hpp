@@ -78,14 +78,16 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
-	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
-	{ /* Default empty implementation */
-	}
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
 	virtual void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
+
+	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
+	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
+	{ /* Default empty implementation */
+	}
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -598,10 +600,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Deposit supernova energy and momentum from all particles
 	void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
 	{
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			if (descriptor->getEvolutionStageIndex() >= 0) {
-				descriptor->depositSN(state, lev, step_end_time);
-			}
+		// this function is only implemented for one particle type (Test particles), so we specify the particle type manually here
+		auto it = particleRegistry_.find(ParticleType::Test);
+		if (it != particleRegistry_.end()) {
+			it->second->depositSN(state, lev, step_end_time);
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
