@@ -36,7 +36,7 @@ constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
 constexpr int particle_spacing = 20;
-constexpr double SN_mass = 0.1; // mass of SNProgenitor particles
+constexpr double SN_mass = 0.1;		      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
 constexpr int n_expected_test_particles = 18; // initially 0, then 3^3 * 2 created, two thirds destroyed
@@ -120,8 +120,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
 				amrex::Real current_time)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), cpu_id(processor_id), pid_start(particle_id_start),
-		      evolution_stage_index(evolution_stage_index), current_time(current_time)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
+		      pid_start(particle_id_start), current_time(current_time)
 		{
 		}
 
@@ -373,7 +373,7 @@ auto problem_main() -> int
 		// ----- Check SN remnant mass -----
 
 		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
-		const double max_err_tol_mass = 1.0e-8; // max error tol in mass
+		const double max_err_tol_mass = 1.0e-8;			      // max error tol in mass
 		status = 1;
 		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < max_err_tol_mass) {
 			status = 0;
