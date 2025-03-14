@@ -167,9 +167,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
 	// @param lev: level from which to get particles
 	// @return: vector of particle data on rank 0, empty vector on other ranks
-	[[nodiscard]] auto getParticleData(int lev) const -> std::vector<std::vector<double>> override
+	[[nodiscard]] auto getParticleData(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
-		std::vector<std::vector<double>> particle_data;
+		std::vector<std::vector<double>> real_data;
+		std::vector<std::vector<int>> int_data;
 
 		// All ranks must participate in copyParticles
 		if (container_ != nullptr) {
@@ -200,30 +201,55 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
 					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
 
-					// Extract positions and real components from host data
+					// Check if particles have integer components
+					constexpr bool has_int_components = (ContainerType::ParticleType::NInt > 0);
+
+					// Pre-size vectors to avoid reallocations
+					real_data.reserve(np);
+					if constexpr (has_int_components) {
+						int_data.reserve(np);
+					}
+
+					// Extract positions, real components, and integer components from host data
 					for (int i = 0; i < np; ++i) {
 						const auto &p = pData_h[i];
-						std::vector<double> data;
+
+						// Process real data (positions and rdata)
+						std::vector<double> r_data;
 						// Pre-allocate to avoid reallocations
-						data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
+						r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
 
 						// First add position components
 						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-							data.push_back(p.pos(d));
+							r_data.push_back(p.pos(d));
 						}
 
 						// Then add all real components (mass, velocities, etc)
 						for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
-							data.push_back(p.rdata(d));
+							r_data.push_back(p.rdata(d));
 						}
 
-						particle_data.push_back(std::move(data));
+						real_data.push_back(std::move(r_data));
+
+						// Process integer data (idata) only if particles have integer components
+						if constexpr (has_int_components) {
+							std::vector<int> i_data;
+							// Pre-allocate to avoid reallocations
+							i_data.reserve(ContainerType::ParticleType::NInt);
+
+							// Add all integer components
+							for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
+								i_data.push_back(p.idata(d));
+							}
+
+							int_data.push_back(std::move(i_data));
+						}
 					}
 				}
 			}
 		}
 
-		return particle_data; // Empty vector on non-root ranks
+		return {real_data, int_data}; // Empty vectors on non-root ranks
 	}
 
 	// Get the number of particles in the container
@@ -684,6 +710,16 @@ template <typename problem_t> class PhysicsParticleRegister
 		amrex::Print() << "Particle type, Number of particles\n";
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			amrex::Print() << getParticleTypeName(type) << ", " << descriptor->getNumParticles() << "\n";
+			// if has stellar evolution stage, print the mass and particle stage for all particles
+			if (descriptor->getEvolutionStageIndex() >= 0) {
+				amrex::Print() << "  Mass, Stellar evolution stage\n";
+				// use getParticleData to get the mass and evolution stage for all particles
+				const auto [real_data, int_data] = descriptor->getParticleData(0);
+				for (int i = 0; i < real_data.size(); ++i) {
+					amrex::Print() << "  " << real_data[i][AMREX_SPACEDIM + descriptor->getMassIndex()] << ", "
+						       << int_data[i][descriptor->getEvolutionStageIndex()] << "\n";
+				}
+			}
 		}
 	}
 
