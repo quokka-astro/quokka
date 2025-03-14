@@ -29,8 +29,9 @@ struct BinaryOrbit {
 // The initial condition consists of 2 particles with a mass of 1.0.
 // In the first time step, 2^3 * 2 particles are created. Half of them are low-mass particles
 // marked for destruction. In the next time step, low-mass particles are destroyed. There
-// are 8 of them. Finally, in the third and last step, 2^3 * 2 particles are created.
-// The final number of particles is 26
+// are 8 of them. Finally, in the third and last step, all previous particles are marked as
+// SNRemnant and 2^3 * 2 particles are created.
+// The final number of particles is 26, of which 8 are SNRemnant.
 
 constexpr int particle_per_cell = 2;
 constexpr int particle_spacing = 30;
@@ -82,11 +83,15 @@ namespace quokka
 template <> struct ParticleCreationTraits<ParticleType::Test> {
 	// Specialized nested ParticleChecker for Test particles
 	template <typename problem_t> struct ParticleChecker {
+		amrex::Real current_time;
+		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 
+		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
+
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
@@ -105,15 +110,18 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	// Specialized nested ParticleCreator for Test particles
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
+		int birth_time_index;
 		int evolution_stage_index;
 		int cpu_id;
 		amrex::Long pid_start;
+		amrex::Real current_time;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index)
-		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), evolution_stage_index(evolution_stage_index)
+		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index, amrex::Real current_time)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), cpu_id(processor_id), pid_start(particle_id_start),
+		      evolution_stage_index(evolution_stage_index), current_time(current_time)
 		{
 		}
 
@@ -157,6 +165,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
 
+					// set birth time to current time
+					p.rdata(birth_time_index) = current_time;
+
 					// Set particle evolution stage
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
 				}
@@ -169,12 +180,13 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+				    int evolution_stage_index, int birth_time_index)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
-							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(container, mass_idx, state, lev,
-															       current_time, dt, evolution_stage_index);
+							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
+		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
 	}
 };
 
@@ -203,8 +215,9 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
 	{
 		// Use the common implementation with our checker type
-		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<ParticleType::Test>::template ParticleChecker>(
-		    container, mass_idx, lev, current_time, dt);
+		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType,
+							      ParticleDestructionTraits<ParticleType::Test>::template ParticleChecker>(container, mass_idx, lev,
+																       current_time, dt);
 	}
 };
 

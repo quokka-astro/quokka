@@ -67,6 +67,8 @@ struct MassDeposition {
 
 //-------------------- Supernova depositions --------------------
 
+constexpr double SN_time = 0.0015; // for testing: SN onset time = 1
+
 // Functor for depositing supernova energy and momentum from particles onto the grid
 // This is a simplified version of the SNDeposition functor that deposits mass and energy uniformly
 // to 5³ cells centered on the particle's cell. It is used for testing purposes.
@@ -83,8 +85,6 @@ struct SNDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
-		const double SN_time = 1.0; // for testing: SN onset time = 1
-
 		// Check if the particle has an integer component for evolution stage
 		if constexpr (ContainerType::NInt > 0) {
 			// Check if this is a supernova progenitor
@@ -143,8 +143,6 @@ void updateEvolutionStage(ContainerType *container, int lev, amrex::Real current
 	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
 		return;
 	}
-
-	const double SN_time = 1.0; // for testing: SN onset time = 1
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		auto &particles = pti.GetArrayOfStructs();

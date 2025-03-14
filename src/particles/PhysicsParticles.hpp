@@ -2,6 +2,7 @@
 #define PHYSICS_PARTICLES_HPP_
 
 #include <cstdint>
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <string>
@@ -342,7 +343,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(container_, this->getMassIndex(), state, lev,
-													  current_time, dt, this->getEvolutionStageIndex());
+													  current_time, dt, this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 	}
 
 	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) override
@@ -704,17 +705,32 @@ template <typename problem_t> class PhysicsParticleRegister
 	void printParticleStatistics() const
 	{
 		amrex::Print() << "Particle statistics:\n";
-		amrex::Print() << "Particle type, Number of particles\n";
+		amrex::Print() << std::left << std::setw(20) << "Particle type" << std::right << std::setw(15) << "Number of particles"
+			       << "\n";
+
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			amrex::Print() << getParticleTypeName(type) << ", " << descriptor->getNumParticles() << "\n";
+			amrex::Print() << "\n";
+			amrex::Print() << std::left << std::setw(20) << getParticleTypeName(type) << std::right << std::setw(15)
+				       << descriptor->getNumParticles() << "\n";
+
 			// if has stellar evolution stage, print the mass and particle stage for all particles
 			if (descriptor->getEvolutionStageIndex() >= 0) {
-				amrex::Print() << "  Mass, Stellar evolution stage\n";
-				// use getParticleData to get the mass and evolution stage for all particles
 				const auto [real_data, int_data] = descriptor->getParticleData(0);
-				for (int i = 0; i < real_data.size(); ++i) {
-					amrex::Print() << "  " << real_data[i][AMREX_SPACEDIM + descriptor->getMassIndex()] << ", "
-						       << int_data[i][descriptor->getEvolutionStageIndex()] << "\n";
+
+				if (!real_data.empty()) {
+					// Print header for detailed particle data
+					amrex::Print() << "  " << std::left << std::setw(15) << "Mass"
+						       << " | " << std::right << std::setw(20) << "Stellar evolution stage"
+						       << "\n";
+					amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
+
+					// Print each particle's data with aligned columns
+					for (int i = 0; i < real_data.size(); ++i) {
+						amrex::Print()
+						    << "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + descriptor->getMassIndex()] << " | "
+						    << std::right << std::setw(20) << int_data[i][descriptor->getEvolutionStageIndex()] << "\n";
+					}
+					amrex::Print() << "\n"; // Add extra line for readability between particle types
 				}
 			}
 		}

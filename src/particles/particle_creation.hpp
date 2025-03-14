@@ -11,12 +11,12 @@ namespace ParticleCreationImpl
 {
 // Common implementation of particle creation logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType, template <typename> class CreatorType>
-static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1)
+static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
 {
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
 			// Use the provided ParticleChecker type with global particle parameters
-			CheckerType<problem_t> particle_checker;
+			CheckerType<problem_t> particle_checker(current_time, dt);
 
 			for (amrex::MFIter mfi = container->MakeMFIter(lev); mfi.isValid(); ++mfi) {
 				const auto &box = mfi.validbox();
@@ -35,7 +35,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
-					pcounts[index] = particle_checker(state_arr, i, j, k, dx, current_time, dt); // NOLINT
+					pcounts[index] = particle_checker(state_arr, i, j, k, dx); // NOLINT
 				});
 
 				// Calculate exclusive prefix sum to get unique position for each particle
@@ -59,7 +59,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
 				// Initialize particle creator functor using the provided ParticleCreator type
-				CreatorType<problem_t> particle_creator(mass_idx, cpu_id, pid, evolution_stage_index);
+				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, cpu_id, pid, evolution_stage_index, current_time);
 
 				amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
@@ -81,13 +81,16 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 template <ParticleType particleType> struct ParticleCreationTraits {
 	// Default nested ParticleChecker - determines if a particle should be created at a location
 	template <typename problem_t> struct ParticleChecker {
-		AMREX_GPU_HOST_DEVICE ParticleChecker() = default;
+		amrex::Real current_time;
+		amrex::Real dt;
+
+		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
 			// Default implementation creates no particles
-			amrex::ignore_unused(state_arr, i, j, k, dx, current_time, dt);
+			amrex::ignore_unused(state_arr, i, j, k, dx);
 			return 0;
 		}
 	};
@@ -95,13 +98,16 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	// Default nested ParticleCreator - initializes a particle's properties
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
+		int birth_time_index;
 		int evolution_stage_index;
 		int cpu_id;
 		amrex::Long pid_start;
+		amrex::Real current_time;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index)
-		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), evolution_stage_index(evolution_stage_index)
+		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index, amrex::Real current_time)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), cpu_id(processor_id), pid_start(particle_id_start),
+		      evolution_stage_index(evolution_stage_index), current_time(current_time)
 		{
 		}
 
@@ -117,12 +123,12 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<particleType>::template ParticleChecker,
 							  ParticleCreationTraits<particleType>::template ParticleCreator>(container, mass_idx, state, lev,
-															  current_time, dt, evolution_stage_index);
+															  current_time, dt, evolution_stage_index, birth_time_index);
 	}
 };
 
