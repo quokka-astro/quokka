@@ -132,9 +132,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
-				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-				const amrex::Real cell_mass = cell_density * cell_volume;
 				amrex::Real particle_mass = SN_mass;
 				int particle_stage = static_cast<int>(StellarEvolutionStage::SNProgenitor);
 
