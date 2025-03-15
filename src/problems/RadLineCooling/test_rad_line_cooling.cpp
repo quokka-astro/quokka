@@ -29,7 +29,6 @@ constexpr double rho0 = 1.0; // matter density
 constexpr double a_rad = 1.0;
 constexpr double mu = 1.5; // mean molecular weight; so that C_V = 1.0
 constexpr double C_V = 1.0;
-constexpr double k_B = 1.0;
 
 constexpr double nu_unit = 1.0;
 constexpr double erad_floor = a_rad * 1e-20;
