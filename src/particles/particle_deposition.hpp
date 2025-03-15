@@ -98,7 +98,7 @@ struct SNDeposition {
 				int base_j = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 				int base_k = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
 
-				static constexpr int stencil_width = 2;
+				const int stencil_width = 4;
 
 				// Calculate the volume factor for normalization (5³ cells)
 				const int num_cells = (2 * stencil_width + 1) * (2 * stencil_width + 1) * (2 * stencil_width + 1);

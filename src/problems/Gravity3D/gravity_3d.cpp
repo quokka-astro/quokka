@@ -35,13 +35,20 @@ constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
-constexpr int particle_spacing = 20;
 constexpr double SN_mass = 0.1;		      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
-constexpr int n_expected_test_particles = 18; // initially 0, then 3^3 * 2 created, two thirds destroyed
-constexpr int n_SN = 3 * 3 * 3 * 2 * 2 / 3;
+constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
+constexpr int n_SN = 2 * 2 * 2 * 2 / 2;
 constexpr double m_SN = n_SN * SN_mass;
+
+// locations of the particles: a 2x2x2 grids of particles
+constexpr int loc_x1 = 31;
+constexpr int loc_x2 = 32;
+constexpr int loc_y1 = 31;
+constexpr int loc_y2 = 32;
+constexpr int loc_z1 = 31;
+constexpr int loc_z2 = 32;
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -59,7 +66,7 @@ template <> struct Particle_Traits<BinaryOrbit> {
 	// static constexpr int particle_switch = 1;
 	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
-	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+	// This is the correct way to define the particle switch
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
 };
 
@@ -76,7 +83,7 @@ template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr int nGroups = 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gravitational_constant = 1.0;
+	static constexpr double gravitational_constant = 1.0e-5; // set a small value to keep the cells/particles from moving
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
@@ -99,9 +106,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
 			amrex::ignore_unused(state_arr, dx);
-			const int spacing = particle_spacing;
 			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
-			if (is_create_particle && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) && (k != 0 && k % spacing == 0)) {
+			if (is_create_particle && (i == loc_x1 || i == loc_x2) && (j == loc_y1 || j == loc_y2) && (k == loc_z1 || k == loc_z2)) {
 				return particle_per_cell;
 			}
 			return 0;
@@ -133,14 +139,6 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-				amrex::Real particle_mass = SN_mass;
-				int particle_stage = static_cast<int>(StellarEvolutionStage::SNProgenitor);
-
-				// mark half of the particles as low-mass stars
-				if (i <= particle_spacing) {
-					particle_mass = particle_low_mass;
-					particle_stage = static_cast<int>(StellarEvolutionStage::LowMassStar);
-				}
 
 				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
@@ -160,7 +158,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 					p.cpu() = cpu_id;
 
 					// Initialize particle properties
-					p.rdata(mass_idx) = particle_mass;
+					p.rdata(mass_idx) = p_idx == 0 ? SN_mass : particle_low_mass;
 					p.rdata(mass_idx + 1) = vx;
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
@@ -169,7 +167,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 					p.rdata(birth_time_index) = current_time;
 
 					// Set particle evolution stage
-					p.idata(evolution_stage_index) = particle_stage;
+					p.idata(evolution_stage_index) = p_idx == 0 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : static_cast<int>(StellarEvolutionStage::LowMassStar);
 				}
 
 				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.
