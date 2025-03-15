@@ -70,6 +70,7 @@ struct MassDeposition {
 // Functor for depositing supernova energy and momentum from particles onto the grid
 // This is a simplified version of the SNDeposition functor that deposits mass and energy uniformly
 // to 5³ cells centered on the particle's cell. It is used for testing purposes.
+// Note: the deposition radius must be <= nghost_cc_
 struct SNDeposition {
 	double step_end_time{};	   // Current simulation time
 	int start_part_comp{};	   // Starting component in particle data
@@ -98,6 +99,7 @@ struct SNDeposition {
 				int base_j = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 				int base_k = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
 
+				// Note: stencil_width <= nghost_cc_ is required!!!
 				const int stencil_width = 4;
 
 				// Calculate the volume factor for normalization (5³ cells)
