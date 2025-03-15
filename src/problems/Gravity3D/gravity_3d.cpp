@@ -318,7 +318,9 @@ auto problem_main() -> int
 
 	// ----- Check CIC particles -----
 
+	// particle actions must be called on all ranks
 	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
+	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
@@ -361,8 +363,6 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error: " << relative_error << "\n";
 
 		// ----- Check Test particles -----
-
-		const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 		amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
 		amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
