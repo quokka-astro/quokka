@@ -167,7 +167,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 					p.rdata(birth_time_index) = current_time;
 
 					// Set particle evolution stage
-					p.idata(evolution_stage_index) = p_idx == 0 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : static_cast<int>(StellarEvolutionStage::LowMassStar);
+					p.idata(evolution_stage_index) = p_idx == 0 ? static_cast<int>(StellarEvolutionStage::SNProgenitor)
+										    : static_cast<int>(StellarEvolutionStage::LowMassStar);
 				}
 
 				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.
