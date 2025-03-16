@@ -26,17 +26,29 @@ struct BinaryOrbit {
 };
 
 // This is an ad-hoc test of particle creation and destruction.
-// The initial condition consists of 2 particles with a mass of 1.0.
-// In the first time step, 2^3 * 2 particles are created. Half of them are low-mass particles
-// marked for destruction. In the next time step, low-mass particles are destroyed. There
-// are 8 of them. Finally, in the third and last step, 2^3 * 2 particles are created.
-// The final number of particles is 26
+// The initial condition consists of 2 CIC particles with a mass of 1.0. We keep track of their orbit and compare with the exact solution. In the second time
+// step, 3^3 * 2 particles are created. A third of them are LowMassStar and the rest are SNProgenitor. In the third time step, all SNProgenitor particles are
+// turned into SNRemnant. In the fourth time step, all SNRemnant particles are destroyed. In the end of the simulation, there are 2 CIC particles and 18 Test
+// particles.
+
+constexpr double rho0 = 1.0e-5;
+constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
-constexpr int particle_spacing = 30;
+constexpr double SN_mass = 0.1;		      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
-constexpr int n_particle_last = 26; // initial 2, 2^3 * 2 * 2 created, 8 destroyed
+constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
+constexpr int n_SN = 2 * 2 * 2 * 2 / 2;
+constexpr double m_SN = n_SN * SN_mass;
+
+// locations of the particles: a 2x2x2 grids of particles
+constexpr int loc_x1 = 31;
+constexpr int loc_x2 = 32;
+constexpr int loc_y1 = 31;
+constexpr int loc_y2 = 32;
+constexpr int loc_z1 = 31;
+constexpr int loc_z2 = 32;
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -54,7 +66,8 @@ template <> struct Particle_Traits<BinaryOrbit> {
 	// static constexpr int particle_switch = 1;
 	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+	// This is the correct way to define the particle switch
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {
@@ -70,7 +83,7 @@ template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr int nGroups = 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gravitational_constant = 1.0;
+	static constexpr double gravitational_constant = 1.0e-5; // set a small value to keep the cells/particles from moving
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
@@ -78,40 +91,43 @@ template <> struct Physics_Traits<BinaryOrbit> {
 namespace quokka
 {
 // Specialization for CIC particle creation
-template <> struct ParticleCreationTraits<ParticleType::CIC> {
-	// Specialized nested ParticleChecker for CIC particles
+template <> struct ParticleCreationTraits<ParticleType::Test> {
+	// Specialized nested ParticleChecker for Test particles
 	template <typename problem_t> struct ParticleChecker {
+		amrex::Real current_time;
+		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
-		amrex::Real param2 = particle_param2;
+
+		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real current_time, amrex::Real dt) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
 			amrex::ignore_unused(state_arr, dx);
-			const int spacing = particle_spacing;
-			const bool is_create_particle_1 = current_time <= param1 && current_time + dt > param1;
-			const bool is_create_particle_2 = current_time <= param2 && current_time + dt > param2;
-			if ((is_create_particle_1 || is_create_particle_2) && (i != 0 && i % spacing == 0) && (j != 0 && j % spacing == 0) &&
-			    (k != 0 && k % spacing == 0)) {
+			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
+			if (is_create_particle && (i == loc_x1 || i == loc_x2) && (j == loc_y1 || j == loc_y2) && (k == loc_z1 || k == loc_z2)) {
 				return particle_per_cell;
 			}
 			return 0;
 		}
 	};
 
-	// Specialized nested ParticleCreator for CIC particles
+	// Specialized nested ParticleCreator for Test particles
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
+		int birth_time_index;
+		int evolution_stage_index;
 		int cpu_id;
 		amrex::Long pid_start;
-		amrex::Real param1 = particle_param1;
-		amrex::Real param2 = particle_param2;
+		amrex::Real current_time;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int processor_id, amrex::Long particle_id_start)
-		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start)
+		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
+				amrex::Real current_time)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
+		      pid_start(particle_id_start), current_time(current_time)
 		{
 		}
 
@@ -122,15 +138,7 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
-				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-				const amrex::Real cell_mass = cell_density * cell_volume;
-				amrex::Real particle_mass = 0.5 * cell_mass / num_particles; // Divide mass among particles
-
-				// mark half of the particles as low-mass particles which will be destroyed in the next time step
-				if (i <= particle_spacing) {
-					particle_mass = particle_low_mass;
-				}
 
 				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
@@ -140,7 +148,7 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
 					auto &p = particles[p_idx]; // NOLINT
 
-					// Set particle position (all at cell center for now)
+					// Set particle position at cell center
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
 					p.pos(1) = plo[1] + (j + 0.5) * dx[1];
 					p.pos(2) = plo[2] + (k + 0.5) * dx[2];
@@ -150,56 +158,72 @@ template <> struct ParticleCreationTraits<ParticleType::CIC> {
 					p.cpu() = cpu_id;
 
 					// Initialize particle properties
-					p.rdata(mass_idx) = particle_mass;
+					p.rdata(mass_idx) = p_idx == 0 ? SN_mass : particle_low_mass;
 					p.rdata(mass_idx + 1) = vx;
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
+
+					// set birth time to current time
+					p.rdata(birth_time_index) = current_time;
+
+					// Set particle evolution stage
+					p.idata(evolution_stage_index) = p_idx == 0 ? static_cast<int>(StellarEvolutionStage::SNProgenitor)
+										    : static_cast<int>(StellarEvolutionStage::LowMassStar);
 				}
 
-				// Update cell density (remove mass that was given to particles)
-				state_arr(i, j, k, HydroSystem<problem_t>::density_index) = 0.5 * cell_density;
+				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.
+				state_arr(i, j, k, HydroSystem<problem_t>::density_index) -= 1.0e-20;
 			}
 		}
 	};
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+				    int evolution_stage_index, int birth_time_index)
 	{
 		// Use the common implementation with our checker and creator types
-		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::CIC>::template ParticleChecker,
-							  ParticleCreationTraits<ParticleType::CIC>::template ParticleCreator>(container, mass_idx, state, lev,
-															       current_time, dt);
+		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
+							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
+		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
 	}
 };
 
-// Specialization for CIC particles destruction
-template <> struct ParticleDestructionTraits<ParticleType::CIC> {
+// Specialization for Test particles destruction
+template <> struct ParticleDestructionTraits<ParticleType::Test> {
 	// Default nested ParticleChecker - determines if a particle should be destroyed
 	template <typename problem_t> struct ParticleChecker {
+		int birth_time_index;
+		int evolution_stage_index;
 		amrex::Real t_destroy = particle_param3;
 
-		// AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real param1) : param1(param1) {}
+		AMREX_GPU_HOST_DEVICE explicit ParticleChecker(int birth_time_index, int evolution_stage_index)
+		    : birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index)
+		{
+		}
 
 		template <typename ParticleType>
 		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
 		{
 			// Default implementation: destroy particles with mass < 1.0
-			amrex::ignore_unused(current_time, dt);
+			amrex::ignore_unused(mass_idx, current_time, dt);
 
-			const bool is_small_mass = (p.rdata(mass_idx) < 2.0 * particle_low_mass);
-			const bool is_time = (current_time <= t_destroy && current_time + dt > t_destroy);
-			return is_small_mass && is_time;
+			// only SNRemnant will be destroyed; just for testing
+			const bool is_sn_remnant = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::SNRemnant));
+			const bool is_time = (current_time + dt > t_destroy);
+			return is_sn_remnant && is_time;
 		}
 	};
 
 	// Main method to destroy particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt)
+	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index,
+				     int evolution_stage_index)
 	{
 		// Use the common implementation with our checker type
-		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<ParticleType::CIC>::template ParticleChecker>(
-		    container, mass_idx, lev, current_time, dt);
+		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType,
+							      ParticleDestructionTraits<ParticleType::Test>::template ParticleChecker>(
+		    container, mass_idx, lev, current_time, dt, birth_time_index, evolution_stage_index);
 	}
 };
 
@@ -211,8 +235,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokk
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		double const rho = 1.0e-5; // g cm^{-3}
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<BinaryOrbit>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) = 0;
@@ -281,18 +304,28 @@ auto problem_main() -> int
 	double position_error = 0.0;
 	double position_norm = 0.0;
 
-	const int n_particle_expect = n_particle_last;
-
 	int status = 0; // Initialize to success
 
-	auto particle_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
+	// get total mass in cells
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<BinaryOrbit>::density_index) * vol;
+	amrex::Real const SN_remnant_mass = total_mass - init_mass_total;
+	amrex::Print() << "Total SN remnant mass: " << SN_remnant_mass << "\n";
+	amrex::Print() << "Expected total SN remnant mass in cells: " << m_SN << "\n";
+	const double SN_remnant_mass_rel_err = std::abs(SN_remnant_mass - m_SN) / m_SN;
+	amrex::Print() << "SN remnant mass relative error: " << SN_remnant_mass_rel_err << "\n";
+
+	// ----- Check CIC particles -----
+
+	// particle actions must be called on all ranks
+	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
+	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
-		const auto n_particle_actual = particle_data.size();
-
 		// assume the first particle is in the first plane quadrant
-		for (const auto &data : particle_data) {
+		for (const auto &data : real_data) {
 			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
 			if (data[3] < 0.1) {
 				continue;
@@ -313,7 +346,7 @@ auto problem_main() -> int
 		}
 
 		amrex::Print() << "Particle positions and data are: \n";
-		for (const auto &data : particle_data) {
+		for (const auto &data : real_data) {
 			// Print positions
 			amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
 			// Print additional data (mass, velocities)
@@ -321,8 +354,6 @@ auto problem_main() -> int
 			amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
 		}
 		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
-		amrex::Print() << "Expected number of particles: " << n_particle_expect << "\n";
-		amrex::Print() << "Actual number of particles: " << n_particle_actual << "\n";
 
 		// compute relative error
 		const double relative_error = position_error / position_norm;
@@ -331,9 +362,17 @@ auto problem_main() -> int
 		amrex::Print() << "Position norm: " << position_norm << "\n";
 		amrex::Print() << "Relative error: " << relative_error << "\n";
 
+		// ----- Check Test particles -----
+
+		amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
+		amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
+
+		// ----- Check SN remnant mass -----
+
 		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
+		const double max_err_tol_mass = 1.0e-8;			      // max error tol in mass
 		status = 1;
-		if (relative_error < max_err_tol && n_particle_actual == n_particle_expect) {
+		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < max_err_tol_mass) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}
