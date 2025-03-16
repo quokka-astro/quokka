@@ -79,6 +79,13 @@ struct SNDeposition {
 	int evolutionStageIndex{}; // Index for particle evolution stage
 	double SN_time = particle_param2;
 
+	static constexpr int stencil_width = 4;
+
+	// Abort if stencil_width > nghost_cc_.
+	// A stencil_width > nghost_cc_ would result in particles depositing energy/momentum outside the ghost zones.
+	// We can't use AMRSimulation<problem_t>::nghost_cc_ here because we don't have a problem_t template parameter.
+	static_assert(stencil_width <= 4, "stencil_width must be <= nghost_cc_");
+
 	// Operator to perform supernova deposition using cloud-in-cell approach
 	template <typename ContainerType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &state,
@@ -98,9 +105,6 @@ struct SNDeposition {
 				int base_i = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 				int base_j = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 				int base_k = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
-
-				// Note: stencil_width <= nghost_cc_ is required!!!
-				const int stencil_width = 4;
 
 				// Calculate the volume factor for normalization (5³ cells)
 				const int num_cells = (2 * stencil_width + 1) * (2 * stencil_width + 1) * (2 * stencil_width + 1);

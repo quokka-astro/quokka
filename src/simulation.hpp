@@ -1018,11 +1018,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0]);
 
 		// Stellar evolution and SN deposition
-		// TODO(cch): Need to take care of AMR subscycling
+		// TODO(cch): Need to take care of AMR subcycling
 		particleRegister_.depositSN(state_new_cc_[0], 0, cur_time + dt_[0]);
 
 		// Use the new type-aware particle destruction method
-		// TODO(cch): Need to take care of AMR subscycling
+		// TODO(cch): Need to take care of AMR subcycling
 		particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 #endif
 
