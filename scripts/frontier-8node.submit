@@ -11,8 +11,7 @@
 #SBATCH --gpu-bind=closest
 #SBATCH -N 8
 
-# note (5-16-22, OLCFHELP-6888): libfabric workaround
-export FI_MR_CACHE_MAX_COUNT=0
+source $HOME/amrex_frontier.profile
 
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
