@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include <cfenv>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
