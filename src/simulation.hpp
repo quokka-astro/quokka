@@ -2546,7 +2546,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(s
 template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
 {
         fenv_t orig_feenv;
-        feholdexcept(&orig_feenv); // disable FPE for YAML reading
+	feholdexcept(&orig_feenv); // disable FPE for YAML reading
 
 	// read metadata file in on all ranks (needed when restarting from checkpoint)
 	const std::string MetadataFileName(chkfilename + "/metadata.yaml");
@@ -2570,8 +2570,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
 		}
 	}
-	
-	fesetenv(&orig_feenv);	   // restore FPE
+
+	fesetenv(&orig_feenv); // restore FPE
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlotfile() const
