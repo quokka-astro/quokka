@@ -11,7 +11,7 @@
 #SBATCH --gpu-bind=closest
 #SBATCH -N 64
 
-source $HOME/amrex_frontier.profile
+. scripts/frontier.profile
 
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
