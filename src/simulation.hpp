@@ -101,7 +101,7 @@ using namespace ascent;
 #endif
 
 // Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
-constexpr auto QUOKKA_VERSION = "25.03";
+static constexpr auto QUOKKA_VERSION = "25.03";
 
 enum class ParticleStep { BeforePoissonSolve, AfterPoissonSolve };
 
