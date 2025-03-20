@@ -100,6 +100,9 @@ using namespace conduit;
 using namespace ascent;
 #endif
 
+// Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
+static constexpr auto QUOKKA_VERSION = "25.03";
+
 enum class ParticleStep { BeforePoissonSolve, AfterPoissonSolve };
 
 using variant_t = std::variant<amrex::Real, std::string>;
@@ -559,6 +562,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 			amrex::Abort("Grids not properly nested!");
 		}
 	}
+
+	// add Quokka version to metadata
+	simulationMetadata_["quokka_version"] = QUOKKA_VERSION;
 
 	// add git commit to metadata
 	simulationMetadata_["git_hash_quokka"] = getGitHashForQuokka();
