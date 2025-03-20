@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include <cfenv>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -99,9 +100,6 @@ namespace filesystem = experimental::filesystem;
 using namespace conduit;
 using namespace ascent;
 #endif
-
-// Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
-static constexpr auto QUOKKA_VERSION = "25.03";
 
 enum class ParticleStep { BeforePoissonSolve, AfterPoissonSolve };
 
@@ -562,9 +560,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 			amrex::Abort("Grids not properly nested!");
 		}
 	}
-
-	// add Quokka version to metadata
-	simulationMetadata_["quokka_version"] = QUOKKA_VERSION;
 
 	// add git commit to metadata
 	simulationMetadata_["git_hash_quokka"] = getGitHashForQuokka();
@@ -2551,6 +2546,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(s
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
 {
+	fenv_t orig_feenv;
+	feholdexcept(&orig_feenv); // disable FPE for YAML reading
+
 	// read metadata file in on all ranks (needed when restarting from checkpoint)
 	const std::string MetadataFileName(chkfilename + "/metadata.yaml");
 
@@ -2573,6 +2571,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
 		}
 	}
+
+	fesetenv(&orig_feenv); // restore FPE
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlotfile() const
