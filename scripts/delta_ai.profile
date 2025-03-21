@@ -13,6 +13,9 @@ module load cmake/3.30.2
 # python
 module load cray-python/3.11.7
 
+# emacs (optional)
+module load emacs/29.3
+
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
 export CRAY_ACCEL_TARGET=nvidia90
