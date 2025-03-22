@@ -17,12 +17,15 @@ env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         submodules: true
         fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of sonarcloud analysis
@@ -59,11 +62,11 @@ jobs:
       shell: bash
       # Execute tests defined by the CMake configuration.  
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ASAN_OPTIONS=abort_on_error=1:fast_unwind_on_malloc=1:detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=0 LSAN_OPTIONS=suppressions=$GITHUB_WORKSPACE/tests/leak_suppress.txt ctest --output-on-failure -C $BUILD_TYPE
+      run: ASAN_OPTIONS=abort_on_error=1:fast_unwind_on_malloc=1:detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=0 LSAN_OPTIONS=suppressions=$GITHUB_WORKSPACE/tests/leak_suppress.txt ctest --output-on-failure -C $BUILD_TYPE -j4
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
       with:
         name: test-results
         path: ${{github.workspace}}/tests

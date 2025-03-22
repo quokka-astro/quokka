@@ -2,16 +2,17 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
     -   id: check-yaml
+        exclude: docs/mkdocs.yml
     -   id: check-added-large-files
     -   id: check-case-conflict
     -   id: check-merge-conflict
     -   id: check-symlinks
     -   id: mixed-line-ending
 -   repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v18.1.8
+    rev: v20.1.0
     hooks:
     -   id: clang-format
 ci:
