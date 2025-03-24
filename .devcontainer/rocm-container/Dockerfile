@@ -3,6 +3,10 @@ FROM rocm/dev-ubuntu-24.04@sha256:708bbb9e2031a81e949a0847f0655c4fb1a790f8ac7cd0
 
 # Set environment variables for ROCm
 ENV hip_DIR=/opt/rocm/lib/cmake/hip
+ENV rocrand_DIR=/opt/rocm-6.3.4/lib/cmake/rocrand
+ENV hiprand_DIR=/opt/rocm-6.3.4/lib/cmake/hiprand
+ENV rocprim_DIR=/opt/rocm-6.3.4/lib/cmake/rocprim
+ENV rocsparse_DIR=/opt/rocm-6.3.4/lib/cmake/rocsparse
 ENV AMREX_AMD_ARCH=gfx908
 
 # Update package lists and install necessary dependencies
