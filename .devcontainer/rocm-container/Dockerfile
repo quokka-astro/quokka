@@ -1,13 +1,15 @@
 # Use the AMD ROCm image as the base image
 FROM rocm/dev-ubuntu-24.04@sha256:708bbb9e2031a81e949a0847f0655c4fb1a790f8ac7cd0031116f56b04ada7d5
 
-# Set environment variables for ROCm
+# Set environment variables for CMake
 ENV hip_DIR=/opt/rocm/lib/cmake/hip
 ENV rocrand_DIR=/opt/rocm-6.3.4/lib/cmake/rocrand
 ENV hiprand_DIR=/opt/rocm-6.3.4/lib/cmake/hiprand
 ENV rocprim_DIR=/opt/rocm-6.3.4/lib/cmake/rocprim
 ENV rocsparse_DIR=/opt/rocm-6.3.4/lib/cmake/rocsparse
 ENV AMREX_AMD_ARCH=gfx908
+ENV CC=hipcc
+ENV CXX=hipcc
 
 # Update package lists and install necessary dependencies
 RUN apt-get update -qq && apt-get upgrade -y -qq && \
