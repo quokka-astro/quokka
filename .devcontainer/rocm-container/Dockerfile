@@ -3,7 +3,7 @@ FROM rocm/dev-ubuntu-24.04@sha256:708bbb9e2031a81e949a0847f0655c4fb1a790f8ac7cd0
 
 # Set environment variables for ROCm
 ENV hip_DIR=/opt/rocm/lib/cmake/hip
-ENV AMREX_AMD_ARCH=gfx90a
+ENV AMREX_AMD_ARCH=gfx908
 
 # Update package lists and install necessary dependencies
 RUN apt-get update -qq && apt-get upgrade -y -qq && \
