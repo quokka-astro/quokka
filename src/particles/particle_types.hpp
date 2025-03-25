@@ -19,7 +19,7 @@ enum class ParticleSwitch : unsigned int {
 	CIC = bitflag<1>(),	   // Cloud-In-Cell (gravitating) particles, = 0b0001
 	Rad = bitflag<2>(),	   // Radiation particles, = 0b0010
 	CICRad = bitflag<3>(),	   // Combined gravitating-radiating particles, = 0b0100
-	StellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
+	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
 	Test = bitflag<5>()	   // Test particles with all features enabled, = 0b1000
 };
 
@@ -71,7 +71,7 @@ enum class ParticleType {
 	Rad,	    // Radiation particles
 	CIC,	    // Gravitating particles
 	CICRad,	    // Gravitating radiation particles
-	StellarPop, // Stellar population particles
+	StochasticStellarPop, // Stellar population particles
 	Test	    // Test particles with all features enabled
 };
 
@@ -165,21 +165,21 @@ enum class StellarEvolutionStage {
 
 //-------------------- Stellar population particles --------------------
 
-// Indices for stellar population particles (StellarPop_particles), mass + 3 velocity components + fate + luminosity
-enum StellarPopParticleDataIdx {
-	StellarPopParticleMassIdx = 0,	// Mass of the particle
-	StellarPopParticleVxIdx,	// Velocity in x direction
-	StellarPopParticleVyIdx,	// Velocity in y direction
-	StellarPopParticleVzIdx,	// Velocity in z direction
-	StellarPopParticleBirthTimeIdx, // Time when particle becomes active
-	StellarPopParticleLumIdx	// Base index for luminosity components
+// Indices for stellar population particles (StochasticStellarPop_particles), mass + 3 velocity components + fate + luminosity
+enum StochasticStellarPopParticleDataIdx {
+	StochasticStellarPopParticleMassIdx = 0,	// Mass of the particle
+	StochasticStellarPopParticleVxIdx,	// Velocity in x direction
+	StochasticStellarPopParticleVyIdx,	// Velocity in y direction
+	StochasticStellarPopParticleVzIdx,	// Velocity in z direction
+	StochasticStellarPopParticleBirthTimeIdx, // Time when particle becomes active
+	StochasticStellarPopParticleLumIdx	// Base index for luminosity components
 };
 
-constexpr int StellarPopParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
+constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
 
-// Number of real components for StellarPop_particles, mass + 3 velocity components + luminosity
+// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
 template <typename problem_t>
-constexpr int StellarPopParticleRealComps = []() constexpr {
+constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && Physics_Traits<problem_t>::is_radiation_enabled) {
 		return 5 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, lum[nGroups]
 	} else {
@@ -187,13 +187,13 @@ constexpr int StellarPopParticleRealComps = []() constexpr {
 	}
 }();
 
-// Number of integer components for StellarPop_particles
-constexpr int StellarPopParticleIntComps = 1; // fate
+// Number of integer components for StochasticStellarPop_particles
+constexpr int StochasticStellarPopParticleIntComps = 1; // fate
 
-// Type definitions for StellarPop_particles container and iterator
+// Type definitions for StochasticStellarPop_particles container and iterator
 template <typename problem_t>
-using StellarPopParticleContainer = amrex::AmrParticleContainer<StellarPopParticleRealComps<problem_t>, StellarPopParticleIntComps>;
-template <typename problem_t> using StellarPopParticleIterator = amrex::ParIter<StellarPopParticleRealComps<problem_t>, StellarPopParticleIntComps>;
+using StochasticStellarPopParticleContainer = amrex::AmrParticleContainer<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
+template <typename problem_t> using StochasticStellarPopParticleIterator = amrex::ParIter<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
 
 //-------------------- Test particles --------------------
 
@@ -209,7 +209,7 @@ enum TestParticleDataIdx {
 
 constexpr int TestParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
 
-// Number of real components for StellarPop_particles, mass + 3 velocity components + luminosity
+// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
 template <typename problem_t>
 constexpr int TestParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -242,7 +242,7 @@ inline auto get_units_data() -> const auto &
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::StellarPop,
+	    {ParticleType::StochasticStellarPop,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
 	       {"vy", {0, 1, -1, 0}},

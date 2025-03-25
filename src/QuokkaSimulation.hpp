@@ -182,7 +182,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 #if AMREX_SPACEDIM == 3
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
-	void createInitialStellarPopParticles() override;
+	void createInitialStochasticStellarPopParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeBeforeTimestep() override;
@@ -577,11 +577,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCIC
 	// note: an implementation is only required if CICRad_particles are used
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialStellarPopParticles()
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialStochasticStellarPopParticles()
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
-	// note: an implementation is only required if StellarPop_particles are used
+	// note: an implementation is only required if StochasticStellarPop_particles are used
 }
 
 #endif // AMREX_SPACEDIM == 3
