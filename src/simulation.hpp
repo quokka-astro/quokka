@@ -2204,8 +2204,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		// Register with particle register - StellarPop particles allow creation
 		const bool stellarpop_allows_destruction = false;
 		particleRegister_.registerStarParticleType(StellarPopParticles.get(), quokka::ParticleType::StellarPop, quokka::StellarPopParticleMassIdx,
-						       quokka::StellarPopParticleLumIdx, quokka::StellarPopParticleBirthTimeIdx, true, stellarpop_allows_destruction,
-						       quokka::StellarPopParticleStageIdx, true);
+							   quokka::StellarPopParticleLumIdx, quokka::StellarPopParticleBirthTimeIdx, true,
+							   stellarpop_allows_destruction, quokka::StellarPopParticleStageIdx, true);
 
 		// Initialize particles through derived class
 		createInitialStellarPopParticles();
@@ -2980,8 +2980,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		const bool stellarpop_allows_destruction = false;
 		StellarPopParticles = std::make_unique<quokka::StellarPopParticleContainer<problem_t>>(this);
 		particleRegister_.registerStarParticleType(StellarPopParticles.get(), quokka::ParticleType::StellarPop, quokka::StellarPopParticleMassIdx,
-						       quokka::StellarPopParticleLumIdx, quokka::StellarPopParticleBirthTimeIdx, true, stellarpop_allows_destruction,
-						       quokka::StellarPopParticleStageIdx, true);
+							   quokka::StellarPopParticleLumIdx, quokka::StellarPopParticleBirthTimeIdx, true,
+							   stellarpop_allows_destruction, quokka::StellarPopParticleStageIdx, true);
 		StellarPopParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::StellarPop));
 	}
 

@@ -15,12 +15,12 @@ template <unsigned int position> constexpr auto bitflag() -> unsigned int { retu
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
 enum class ParticleSwitch : unsigned int {
-	None = 0U,	       // No particles, = 0b0000
-	CIC = bitflag<1>(),    // Cloud-In-Cell (gravitating) particles, = 0b0001
-	Rad = bitflag<2>(),    // Radiation particles, = 0b0010
-	CICRad = bitflag<3>(), // Combined gravitating-radiating particles, = 0b0100
+	None = 0U,		   // No particles, = 0b0000
+	CIC = bitflag<1>(),	   // Cloud-In-Cell (gravitating) particles, = 0b0001
+	Rad = bitflag<2>(),	   // Radiation particles, = 0b0010
+	CICRad = bitflag<3>(),	   // Combined gravitating-radiating particles, = 0b0100
 	StellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
-	Test = bitflag<5>()    // Test particles with all features enabled, = 0b1000
+	Test = bitflag<5>()	   // Test particles with all features enabled, = 0b1000
 };
 
 // Enable bitwise operations on the enum class
@@ -68,11 +68,11 @@ namespace quokka
 
 // Enum class to identify different particle types
 enum class ParticleType {
-	Rad,	// Radiation particles
-	CIC,	// Gravitating particles
-	CICRad, // Gravitating radiation particles
+	Rad,	    // Radiation particles
+	CIC,	    // Gravitating particles
+	CICRad,	    // Gravitating radiation particles
 	StellarPop, // Stellar population particles
-	Test	// Test particles with all features enabled
+	Test	    // Test particles with all features enabled
 };
 
 // Global particle parameters
@@ -167,12 +167,12 @@ enum class StellarEvolutionStage {
 
 // Indices for stellar population particles (StellarPop_particles), mass + 3 velocity components + fate + luminosity
 enum StellarPopParticleDataIdx {
-	StellarPopParticleMassIdx = 0, // Mass of the particle
-	StellarPopParticleVxIdx,       // Velocity in x direction
-	StellarPopParticleVyIdx,       // Velocity in y direction
-	StellarPopParticleVzIdx,       // Velocity in z direction
+	StellarPopParticleMassIdx = 0,	// Mass of the particle
+	StellarPopParticleVxIdx,	// Velocity in x direction
+	StellarPopParticleVyIdx,	// Velocity in y direction
+	StellarPopParticleVzIdx,	// Velocity in z direction
 	StellarPopParticleBirthTimeIdx, // Time when particle becomes active
-	StellarPopParticleLumIdx       // Base index for luminosity components
+	StellarPopParticleLumIdx	// Base index for luminosity components
 };
 
 constexpr int StellarPopParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
@@ -191,7 +191,8 @@ constexpr int StellarPopParticleRealComps = []() constexpr {
 constexpr int StellarPopParticleIntComps = 1; // fate
 
 // Type definitions for StellarPop_particles container and iterator
-template <typename problem_t> using StellarPopParticleContainer = amrex::AmrParticleContainer<StellarPopParticleRealComps<problem_t>, StellarPopParticleIntComps>;
+template <typename problem_t>
+using StellarPopParticleContainer = amrex::AmrParticleContainer<StellarPopParticleRealComps<problem_t>, StellarPopParticleIntComps>;
 template <typename problem_t> using StellarPopParticleIterator = amrex::ParIter<StellarPopParticleRealComps<problem_t>, StellarPopParticleIntComps>;
 
 //-------------------- Test particles --------------------
