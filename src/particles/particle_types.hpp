@@ -213,9 +213,9 @@ constexpr int TestParticleStageIdx = 0; // Evolution stage of the particle, inde
 template <typename problem_t>
 constexpr int TestParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, stage, lum[nGroups]
+		return 5 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, stage, lum[nGroups]
 	} else {
-		return 6; // mass, vx, vy, vz, birth_time, stage
+		return 5; // mass, vx, vy, vz, birth_time, stage
 	}
 }();
 
