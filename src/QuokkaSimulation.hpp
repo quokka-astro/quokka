@@ -579,9 +579,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCIC
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialStochasticStellarPopParticles()
 {
-	// default empty implementation
-	// user should implement using problem-specific template specialization
-	// note: an implementation is only required if StochasticStellarPop_particles are used
+	// Optional implementation
+	// StochasticStellarPop particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
+	// beginning of the simulation.
+	// note: an implementation is only effective if StochasticStellarPop_particles are used
 }
 
 #endif // AMREX_SPACEDIM == 3
