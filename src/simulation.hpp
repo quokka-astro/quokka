@@ -2203,9 +2203,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Register with particle register - StochasticStellarPop particles allow creation
 		const bool StochasticStellarPop_allows_destruction = false;
-		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop, quokka::StochasticStellarPopParticleMassIdx,
-							   quokka::StochasticStellarPopParticleLumIdx, quokka::StochasticStellarPopParticleBirthTimeIdx, true,
-							   StochasticStellarPop_allows_destruction, quokka::StochasticStellarPopParticleStageIdx, true);
+		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop,
+							   quokka::StochasticStellarPopParticleMassIdx, quokka::StochasticStellarPopParticleLumIdx,
+							   quokka::StochasticStellarPopParticleBirthTimeIdx, true, StochasticStellarPop_allows_destruction,
+							   quokka::StochasticStellarPopParticleStageIdx, true);
 
 		// Initialize particles through derived class
 		createInitialStochasticStellarPopParticles();
@@ -2979,9 +2980,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		AMREX_ASSERT(StochasticStellarPopParticles == nullptr);
 		const bool StochasticStellarPop_allows_destruction = false;
 		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
-		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop, quokka::StochasticStellarPopParticleMassIdx,
-							   quokka::StochasticStellarPopParticleLumIdx, quokka::StochasticStellarPopParticleBirthTimeIdx, true,
-							   StochasticStellarPop_allows_destruction, quokka::StochasticStellarPopParticleStageIdx, true);
+		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop,
+							   quokka::StochasticStellarPopParticleMassIdx, quokka::StochasticStellarPopParticleLumIdx,
+							   quokka::StochasticStellarPopParticleBirthTimeIdx, true, StochasticStellarPop_allows_destruction,
+							   quokka::StochasticStellarPopParticleStageIdx, true);
 		StochasticStellarPopParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::StochasticStellarPop));
 	}
 
