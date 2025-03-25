@@ -159,7 +159,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
-	// note: an implementation is only required if particles are used
+	// note: an implementation is only required if Rad particles are used
 }
 
 #if AMREX_SPACEDIM == 3
@@ -168,21 +168,20 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
-	// note: an implementation is only required if particles are used
+	// note: an implementation is only required if CIC particles are used
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialCICRadParticles()
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
-	// note: an implementation is only required if particles are used
+	// note: an implementation is only required if CICRad particles are used
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialStochasticStellarPopParticles()
 {
-	// default empty implementation
-	// user should implement using problem-specific template specialization
-	// note: an implementation is only required if particles are used
+	// Optional implementation
+	// note: an implementation is only effective if StochasticStellarPop particles are used
 }
 #endif // AMREX_SPACEDIM == 3
 
