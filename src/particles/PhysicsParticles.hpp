@@ -580,9 +580,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    mass_idx, lum_idx, birth_time_idx, allows_creation, container, allows_destruction, evolution_stage_idx, hydro_interact);
-		} else if (type == ParticleType::StellarPop) {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::StellarPop>>(
-			    mass_idx, lum_idx, birth_time_idx, allows_creation, container, allows_destruction, evolution_stage_idx, hydro_interact);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
@@ -604,6 +601,9 @@ template <typename problem_t> class PhysicsParticleRegister
 		// Create the appropriate star particle descriptor based on the particle type
 		if (type == ParticleType::Test) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
+			    mass_idx, lum_idx, birth_time_idx, allows_creation, container, allows_destruction, evolution_stage_idx, hydro_interact);
+		} else if (type == ParticleType::StellarPop) {
+			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StellarPop>>(
 			    mass_idx, lum_idx, birth_time_idx, allows_creation, container, allows_destruction, evolution_stage_idx, hydro_interact);
 		} else {
 			amrex::Abort("Unknown particle type for star particles");
