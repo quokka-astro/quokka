@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_REAL.H"
 
@@ -56,11 +57,11 @@ template <> struct SimulationData<AgoraGalaxy> {
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 {
-	// 1. read in circular velocity table "vcirc_SPH.dat"
+	// 1. read in circular velocity table "vcirc.dat"
 	std::vector<amrex::Real> radius_h;
 	std::vector<amrex::Real> vcirc_h;
 
-	std::string filename = "../extern/agora_data/vcirc_SPH.dat";
+	std::string filename = "../extern/agora_data/vcirc.dat";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 	std::string header;
@@ -86,8 +87,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.vcirc.resize(N);
 
 	for (int i = 0; i < N; ++i) {
-		userData_.radius[i] = radius_h[i];
-		userData_.vcirc[i] = vcirc_h[i];
+		userData_.radius[i] = radius_h[i] * 1.0e3 * C::parsec; // kpc
+		userData_.vcirc[i] = vcirc_h[i] * 1.0e5; // km/s
 	}
 }
 
@@ -124,7 +125,10 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		double rho = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
 
 		// interpolate circular velocity based on radius of cell center R
+		//std::cout << i << " " << j << " " << k << ": R = " << R << std::endl;
 		double const vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
+		AMREX_ALWAYS_ASSERT(!std::isnan(vcirc));
+
 		double const vx = vcirc * std::cos(theta);
 		double const vy = vcirc * std::sin(theta);
 		double const vz = 0;
