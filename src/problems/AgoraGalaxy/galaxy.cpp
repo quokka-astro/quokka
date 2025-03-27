@@ -88,7 +88,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 
 	for (int i = 0; i < N; ++i) {
 		userData_.radius[i] = radius_h[i] * 1.0e3 * C::parsec; // kpc
-		userData_.vcirc[i] = vcirc_h[i] * 1.0e5; // km/s
+		userData_.vcirc[i] = vcirc_h[i] * 1.0e5;	       // km/s
 	}
 }
 
@@ -125,7 +125,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		double rho = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
 
 		// interpolate circular velocity based on radius of cell center R
-		//std::cout << i << " " << j << " " << k << ": R = " << R << std::endl;
+		// std::cout << i << " " << j << " " << k << ": R = " << R << std::endl;
 		double const vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
 		AMREX_ALWAYS_ASSERT(!std::isnan(vcirc));
 
