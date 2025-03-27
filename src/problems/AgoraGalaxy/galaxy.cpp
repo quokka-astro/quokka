@@ -107,7 +107,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		// Cartesian coordinates
 		amrex::Real const x = prob_lo[0] + ((i + static_cast<amrex::Real>(0.5)) * dx[0]);
 		amrex::Real const y = prob_lo[1] + ((j + static_cast<amrex::Real>(0.5)) * dx[1]);
-		amrex::Real const z = prob_lo[2] + ((j + static_cast<amrex::Real>(0.5)) * dx[2]);
+		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
 
 		// cylindrical coordinates
 		amrex::Real const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));

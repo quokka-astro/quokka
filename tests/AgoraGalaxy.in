@@ -29,4 +29,4 @@ stop_time = 3.15e14         # 10 Myr
 derived_vars = gpot
 
 checkpoint_interval = -1
-plottime_interval = 3.15e13 # 1 Myr
+plotfile_interval = 1
