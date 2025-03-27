@@ -126,13 +126,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 		// interpolate circular velocity based on radius of cell center R
 		// std::cout << i << " " << j << " " << k << ": R = " << R << std::endl;
-		double const vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
+		double vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
 		AMREX_ALWAYS_ASSERT(!std::isnan(vcirc));
-
-		double const vx = -vcirc * std::cos(theta);
-		double const vy = vcirc * std::sin(theta);
-		double const vz = 0;
-		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
 
 		// compute temperature
 		double T = NAN;
@@ -141,8 +136,14 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		} else {
 			T = 1.0e6; // K
 			rho = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
+			vcirc = 0; // TODO(bwibking): taper velocity slowly to zero
 		}
 		const double Eint = quokka::EOS<AgoraGalaxy>::ComputeEintFromTgas(rho, T);
+
+		double const vx = -vcirc * std::cos(theta);
+		double const vy = vcirc * std::sin(theta);
+		double const vz = 0;
+		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
 
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index) = rho * vx;
