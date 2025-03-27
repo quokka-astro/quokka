@@ -1,4 +1,4 @@
-if(QUOKKA_PYTHON)
+if(QUOKKA_PYTHON) 
   message(STATUS "Building Quokka with Python support (to disable, add '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
   find_package(Python COMPONENTS Interpreter Development NumPy)
 else()
@@ -146,6 +146,5 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${openPMDSources}")
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
-
 
 add_subdirectory(problems)
