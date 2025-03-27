@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include <cfenv>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -233,6 +234,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #if AMREX_SPACEDIM == 3
 	virtual void createInitialCICParticles() = 0;
 	virtual void createInitialCICRadParticles() = 0;
+	virtual void createInitialStochasticStellarPopParticles() = 0;
 	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
 	// of the simulation
 #endif // AMREX_SPACEDIM == 3
@@ -470,6 +472,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #if AMREX_SPACEDIM == 3
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
+	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 #endif // AMREX_SPACEDIM == 3
 #endif
@@ -2192,6 +2195,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		createInitialCICRadParticles();
 	}
 
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
+		AMREX_ASSERT(StochasticStellarPopParticles == nullptr);
+
+		// Create particle container
+		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
+		StochasticStellarPopParticles->SetVerbose(0);
+
+		// Register with particle register - StochasticStellarPop particles allow creation
+		const bool StochasticStellarPop_allows_destruction = false;
+		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop,
+							   quokka::StochasticStellarPopParticleMassIdx, quokka::StochasticStellarPopParticleLumIdx,
+							   quokka::StochasticStellarPopParticleBirthTimeIdx, true, StochasticStellarPop_allows_destruction,
+							   quokka::StochasticStellarPopParticleStageIdx, true);
+
+		// Initialize particles through derived class
+		createInitialStochasticStellarPopParticles();
+	}
+
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
 		AMREX_ASSERT(TestParticles == nullptr);
 
@@ -2551,6 +2572,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(s
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
 {
+	fenv_t orig_feenv;
+	feholdexcept(&orig_feenv); // disable FPE for YAML reading
+
 	// read metadata file in on all ranks (needed when restarting from checkpoint)
 	const std::string MetadataFileName(chkfilename + "/metadata.yaml");
 
@@ -2573,6 +2597,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
 		}
 	}
+
+	fesetenv(&orig_feenv); // restore FPE
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlotfile() const
@@ -2954,6 +2980,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		particleRegister_.registerParticleType(CICRadParticles.get(), quokka::ParticleType::CICRad, quokka::CICRadParticleMassIdx,
 						       quokka::CICRadParticleLumIdx, false, quokka::CICRadParticleBirthTimeIdx);
 		CICRadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CICRad));
+	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
+		AMREX_ASSERT(StochasticStellarPopParticles == nullptr);
+		const bool StochasticStellarPop_allows_destruction = false;
+		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
+		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop,
+							   quokka::StochasticStellarPopParticleMassIdx, quokka::StochasticStellarPopParticleLumIdx,
+							   quokka::StochasticStellarPopParticleBirthTimeIdx, true, StochasticStellarPop_allows_destruction,
+							   quokka::StochasticStellarPopParticleStageIdx, true);
+		StochasticStellarPopParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::StochasticStellarPop));
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {

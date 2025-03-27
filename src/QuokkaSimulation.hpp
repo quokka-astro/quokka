@@ -10,7 +10,15 @@
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
 #include <array>
+#if __has_include(<filesystem>)
 #include <filesystem>
+#elif __has_include(<experimental/filesystem>)
+#include <experimental/filesystem>
+namespace std
+{
+namespace filesystem = experimental::filesystem;
+}
+#endif
 #include <limits>
 #include <string>
 #include <tuple>
@@ -182,6 +190,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 #if AMREX_SPACEDIM == 3
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
+	void createInitialStochasticStellarPopParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeBeforeTimestep() override;
@@ -574,6 +583,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCIC
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if CICRad_particles are used
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialStochasticStellarPopParticles()
+{
+	// Optional implementation
+	// StochasticStellarPop particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
+	// beginning of the simulation.
+	// note: an implementation is only effective if StochasticStellarPop_particles are used
 }
 
 #endif // AMREX_SPACEDIM == 3
