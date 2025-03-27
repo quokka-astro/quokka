@@ -129,7 +129,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		double const vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
 		AMREX_ALWAYS_ASSERT(!std::isnan(vcirc));
 
-		double const vx = vcirc * std::cos(theta);
+		double const vx = -vcirc * std::cos(theta);
 		double const vy = vcirc * std::sin(theta);
 		double const vz = 0;
 		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
