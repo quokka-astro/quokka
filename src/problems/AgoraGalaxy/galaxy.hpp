@@ -10,11 +10,8 @@
 ///
 
 // external headers
-#include <fstream>
 
 // internal headers
-#include "hydro_system.hpp"
-#include "interpolate.hpp"
 
 // function definitions
 auto problem_main() -> int;

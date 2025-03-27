@@ -10,17 +10,15 @@
 #include <cmath>
 
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_DistributionMapping.H"
-#include "AMReX_Geometry.H"
-#include "AMReX_MultiFab.H"
-#include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 
-#include "EOS.hpp"
-#include "RadhydroSimulation.hpp"
+#include "QuokkaSimulation.hpp"
+#include "SimulationData.hpp"
 #include "fundamental_constants.H"
 #include "galaxy.hpp"
-#include "hydro_system.hpp"
+#include "hydro/EOS.hpp"
+#include "hydro/hydro_system.hpp"
+#include "physics_info.hpp"
 
 struct AgoraGalaxy {
 };
@@ -36,6 +34,7 @@ template <> struct HydroSystem_Traits<AgoraGalaxy> {
 };
 
 template <> struct Physics_Traits<AgoraGalaxy> {
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
@@ -45,11 +44,11 @@ template <> struct Physics_Traits<AgoraGalaxy> {
 };
 
 template <> struct SimulationData<AgoraGalaxy> {
-	std::vector<amrex::Real> radius{};
-	std::vector<amrex::Real> vcirc{};
+	std::vector<amrex::Real> radius;
+	std::vector<amrex::Real> vcirc;
 };
 
-template <> void RadhydroSimulation<AgoraGalaxy>::preCalculateInitialConditions()
+template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 {
 	// 1. read in circular velocity table
 	// 2. copy to GPU
@@ -58,7 +57,7 @@ template <> void RadhydroSimulation<AgoraGalaxy>::preCalculateInitialConditions(
 	// TODO(bwibking): implement.
 }
 
-template <> void RadhydroSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -68,8 +67,8 @@ template <> void RadhydroSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quo
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
-		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+		amrex::Real const x = prob_lo[0] + ((i + static_cast<amrex::Real>(0.5)) * dx[0]);
+		amrex::Real const y = prob_lo[1] + ((j + static_cast<amrex::Real>(0.5)) * dx[1]);
 
 		// cylindrical coordinates
 		amrex::Real const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
@@ -83,7 +82,7 @@ template <> void RadhydroSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quo
 		double const vx = vcirc * std::cos(theta);
 		double const vy = vcirc * std::sin(theta);
 		double const vz = 0;
-		double const vsq = vx * vx + vy * vy + vz * vz;
+		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
 
 		// compute temperature
 		double T = NAN;
@@ -103,7 +102,7 @@ template <> void RadhydroSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quo
 	});
 }
 
-template <> void RadhydroSimulation<AgoraGalaxy>::createInitialParticles()
+template <> void QuokkaSimulation<AgoraGalaxy>::createInitialParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
@@ -111,7 +110,7 @@ template <> void RadhydroSimulation<AgoraGalaxy>::createInitialParticles()
 	CICParticles->InitFromAsciiFile("AgoraGalaxy_particles.txt", nreal_extra, nullptr);
 }
 
-template <> void RadhydroSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
@@ -152,7 +151,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<AgoraGalaxy> sim(BCs_cc);
+	QuokkaSimulation<AgoraGalaxy> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 
 	// initialize
