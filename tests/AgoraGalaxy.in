@@ -25,7 +25,7 @@ do_subcycle = 0
 
 cfl = 0.3
 max_timesteps = 1e4
-stop_time = 3.15e14         # 10 Myr
+stop_time = 3.15e15         # 100 Myr
 derived_vars = gpot
 
 checkpoint_interval = -1
