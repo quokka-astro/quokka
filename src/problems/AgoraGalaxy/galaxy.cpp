@@ -43,6 +43,10 @@ template <> struct Physics_Traits<AgoraGalaxy> {
 	static constexpr int nGroups = 1;			     // number of radiation groups
 };
 
+template <> struct Particle_Traits<AgoraGalaxy> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+};
+
 template <> struct SimulationData<AgoraGalaxy> {
 	std::vector<amrex::Real> radius;
 	std::vector<amrex::Real> vcirc;
@@ -102,7 +106,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-template <> void QuokkaSimulation<AgoraGalaxy>::createInitialParticles()
+template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
