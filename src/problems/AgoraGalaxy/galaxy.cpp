@@ -134,20 +134,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
 		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
 
-		auto taper_1d = [](double a, double b, double x) { return 0.5 * (a * (tanh(-x / 0.01) + 1.0) + b * (tanh(x / 0.01) + 1.0)); };
-
-		auto taper = [taper_1d](double a, double b, double R, double z) {
-			// set limits on maximum extent of the disk
-			constexpr double Rmax = 20.0e3 * C::parsec;
-			constexpr double zmax = 3.0e3 * C::parsec;
-			if (std::abs(z) < zmax) {
-				return taper_1d(a, b, (R - Rmax) / Rmax);
-			}
-			return b;
-		};
-
 		// compute density profile
-		auto rho_exact = [taper](double x, double y, double z) {
+		auto rho_exact = [](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			// Disk mass: 8.59322e9 Msun  (i.e. 20% gas fraction)
 			constexpr double M_GAS = 8.59322e9 * C::M_solar;
@@ -159,15 +147,20 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
 			double const rho_disk = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
 			constexpr double rho_bg = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
-			return taper(rho_disk, rho_bg, R, z);
+			return std::max(rho_disk, rho_bg); // rho_bg sets the density floor
 		};
 
 		// compute temperature profile
-		auto T_exact = [taper](double x, double y, double z) {
+		constexpr double Rmax = 20.0e3 * C::parsec;
+		constexpr double zmax = 3.0e3 * C::parsec;
+		auto T_exact = [](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			constexpr double T_disk = 1.0e4;
 			constexpr double T_bg = 1.0e6;
-			return taper(T_disk, T_bg, R, z);
+			if ((R < Rmax) && (std::abs(z) < zmax)) {
+				return T_disk;
+			}
+			return T_bg;
 		};
 
 		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
@@ -180,6 +173,17 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 				vcirc = vcirc_outer;
 			}
 			return vcirc;
+		};
+
+		auto taper_1d = [](double a, double b, double x, double x0, double x1) {
+			const double f = std::clamp((x - x0) / (x1 - x0), 0., 1.);
+			return ((1. - f) * a) + (f * b);
+		};
+
+		auto taper = [taper_1d](double a, double b, double R, double z) {
+			// linear taper from a to b as a function of R
+			//return taper_1d(a, b, R, Rmax, 1.1 * Rmax);
+			return a;
 		};
 
 		// compute velocity profiles
