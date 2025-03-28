@@ -61,7 +61,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	std::vector<amrex::Real> radius_h;
 	std::vector<amrex::Real> vcirc_h;
 
-	std::string filename = "../extern/agora_data/vcirc.dat";
+	std::string const filename = "../extern/agora_data/vcirc.dat";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 	std::string header;
@@ -74,8 +74,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 		for (double value = NAN; iss >> value;) {
 			values.push_back(value);
 		}
-		Real R_val = values.at(0);
-		Real vcirc_val = values.at(1);
+		Real const R_val = values.at(0);
+		Real const vcirc_val = values.at(1);
 
 		radius_h.push_back(R_val);
 		vcirc_h.push_back(vcirc_val);
@@ -101,7 +101,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 	double const *R_table = userData_.radius.dataPtr();
 	double const *vcirc_table = userData_.vcirc.dataPtr();
-	int const len_table = static_cast<int>(userData_.radius.size());
+	auto const len_table = static_cast<int>(userData_.radius.size());
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
@@ -121,7 +121,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		constexpr double z_d = 0.343218e3 * C::parsec;
 
 		// compute double exponential density profile
-		const double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
+		constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
 		double rho = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
 
 		// interpolate circular velocity based on radius of cell center R
