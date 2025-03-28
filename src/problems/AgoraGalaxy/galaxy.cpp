@@ -151,8 +151,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		};
 
 		// compute temperature profile
-		constexpr double Rmax = 20.0e3 * C::parsec;
-		constexpr double zmax = 3.0e3 * C::parsec;
+		constexpr double Rmax = 30.0e3 * C::parsec;
+		constexpr double zmax = 5.0e3 * C::parsec;
 		auto T_exact = [](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			constexpr double T_disk = 1.0e4;
