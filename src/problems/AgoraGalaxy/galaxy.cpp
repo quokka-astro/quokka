@@ -7,6 +7,7 @@
 /// \brief Defines a simulation using the AGORA isolated galaxy initial conditions.
 ///
 
+#include <algorithm>
 #include <cmath>
 
 #include "AMReX_BC_TYPES.H"
@@ -21,6 +22,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "math/quadrature.hpp"
 #include "physics_info.hpp"
 
 struct AgoraGalaxy {
@@ -51,6 +53,10 @@ template <> struct Particle_Traits<AgoraGalaxy> {
 };
 
 template <> struct SimulationData<AgoraGalaxy> {
+	amrex::Real r_inner{};
+	amrex::Real r_outer{};
+	amrex::Real vcirc_inner{};
+	amrex::Real vcirc_outer{};
 	amrex::Gpu::PinnedVector<amrex::Real> radius;
 	amrex::Gpu::PinnedVector<amrex::Real> vcirc;
 };
@@ -86,10 +92,21 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.radius.resize(N);
 	userData_.vcirc.resize(N);
 
+	const double length_unit = 1.0e3 * C::parsec; // kpc
+	const double vel_unit = 1.0e5;		      // km/s
 	for (int i = 0; i < N; ++i) {
-		userData_.radius[i] = radius_h[i] * 1.0e3 * C::parsec; // kpc
-		userData_.vcirc[i] = vcirc_h[i] * 1.0e5;	       // km/s
+		userData_.radius[i] = radius_h[i] * length_unit;
+		userData_.vcirc[i] = vcirc_h[i] * vel_unit;
 	}
+
+	// save min/max radii
+	auto min_result = std::min_element(radius_h.begin(), radius_h.end());
+	userData_.r_inner = (*min_result) * length_unit;
+	userData_.vcirc_inner = vcirc_h[std::distance(radius_h.begin(), min_result)] * vel_unit;
+
+	auto max_result = std::max_element(radius_h.begin(), radius_h.end());
+	userData_.r_outer = (*max_result) * length_unit;
+	userData_.vcirc_outer = vcirc_h[std::distance(radius_h.begin(), max_result)] * vel_unit;
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -102,53 +119,103 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	double const *R_table = userData_.radius.dataPtr();
 	double const *vcirc_table = userData_.vcirc.dataPtr();
 	auto const len_table = static_cast<int>(userData_.radius.size());
+	const amrex::Real R_table_min = userData_.r_inner;
+	const amrex::Real R_table_max = userData_.r_outer;
+	const amrex::Real vcirc_inner = userData_.vcirc_inner;
+	const amrex::Real vcirc_outer = userData_.vcirc_outer;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
-		amrex::Real const x = prob_lo[0] + ((i + static_cast<amrex::Real>(0.5)) * dx[0]);
-		amrex::Real const y = prob_lo[1] + ((j + static_cast<amrex::Real>(0.5)) * dx[1]);
-		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
+		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
+		amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
+		amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
 
-		// cylindrical coordinates
-		amrex::Real const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-		amrex::Real const theta = std::atan2(x, y);
+		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
+		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
+		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
 
-		// Disk mass: 8.59322e9 Msun  (i.e. 20% gas fraction)
-		constexpr double M_GAS = 8.59322e9 * C::M_solar;
-		// Disk scale length: 3.43218 kpc
-		constexpr double r_d = 3.43218e3 * C::parsec;
-		// Disk scale height: 0.343218 kpc (10% of scale length)
-		constexpr double z_d = 0.343218e3 * C::parsec;
+		auto taper_1d = [](double a, double b, double x) { return 0.5 * (a * (tanh(-x / 0.01) + 1.0) + b * (tanh(x / 0.01) + 1.0)); };
 
-		// compute double exponential density profile
-		constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
-		double rho = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
+		auto taper = [taper_1d](double a, double b, double R, double z) {
+			// set limits on maximum extent of the disk
+			constexpr double Rmax = 20.0e3 * C::parsec;
+			constexpr double zmax = 3.0e3 * C::parsec;
+			if (abs(z) < zmax) {
+				return taper_1d(a, b, (R - Rmax) / Rmax);
+			}
+			return b;
+		};
 
-		// interpolate circular velocity based on radius of cell center R
-		// std::cout << i << " " << j << " " << k << ": R = " << R << std::endl;
-		double vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
-		AMREX_ALWAYS_ASSERT(!std::isnan(vcirc));
-
-		// compute temperature
-		double T = NAN;
-		constexpr double Rmax = 20.0e3 * C::parsec;
-		constexpr double zmax = 3.0e3 * C::parsec;
-		if ((R < Rmax) && (std::abs(z) < zmax)) {
-			T = 1.0e4; // K
-		} else {
-			constexpr double Rmax_vcirc = 2.0 * Rmax;
-			const double f = (R - Rmax) / (Rmax_vcirc - Rmax);
+		// compute density profile
+		auto rho_exact = [taper](double x, double y, double z) {
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			// Disk mass: 8.59322e9 Msun  (i.e. 20% gas fraction)
+			constexpr double M_GAS = 8.59322e9 * C::M_solar;
+			// Disk scale length: 3.43218 kpc
+			constexpr double r_d = 3.43218e3 * C::parsec;
+			// Disk scale height: 0.343218 kpc (10% of scale length)
+			constexpr double z_d = 0.343218e3 * C::parsec;
+			// normalization constant
+			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
+			double const rho_disk = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
 			constexpr double rho_bg = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
-			T = 1.0e6; // K
-			rho = rho_bg;
-			vcirc = ((R < Rmax_vcirc) && (std::abs(z) < zmax)) ? (1.0 - f) * vcirc : 0.;
-		}
-		const double Eint = quokka::EOS<AgoraGalaxy>::ComputeEintFromTgas(rho, T);
+			return taper(rho_disk, rho_bg, R, z);
+		};
 
-		double const vx = -vcirc * std::cos(theta);
-		double const vy = vcirc * std::sin(theta);
+		// compute temperature profile
+		auto T_exact = [taper](double x, double y, double z) {
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			constexpr double T_disk = 1.0e4;
+			constexpr double T_bg = 1.0e6;
+			return taper(T_disk, T_bg, R, z);
+		};
+
+		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
+			double vcirc = NAN;
+			if ((R >= R_table_min) && (R <= R_table_max)) {
+				vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
+			} else if (R < R_table_min) {
+				vcirc = vcirc_inner;
+			} else {
+				vcirc = vcirc_outer;
+			}
+			return vcirc;
+		};
+
+		// compute velocity profiles
+		auto vx_exact = [taper, vcirc_exact](double x, double y, double z) {
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const theta = std::atan2(x, y);
+			return taper(-vcirc_exact(R) * std::cos(theta), 0., R, z); // vx
+		};
+
+		auto vy_exact = [taper, vcirc_exact](double x, double y, double z) {
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const theta = std::atan2(x, y);
+			return taper(vcirc_exact(R) * std::sin(theta), 0., R, z); // vy
+		};
+
+		const double cell_vol = dx[0] * dx[1] * dx[2];
+
+		// integrate density profile over cell volume
+		const double rho = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		AMREX_ALWAYS_ASSERT(!std::isnan(rho));
+
+		// integrate temperature profile over cell volume
+		const double T = quad_3d(T_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		AMREX_ALWAYS_ASSERT(!std::isnan(T));
+
+		// integrate velocity profiles over cell volume
+		const double vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		double const vz = 0;
+		AMREX_ALWAYS_ASSERT(!std::isnan(vx));
+		AMREX_ALWAYS_ASSERT(!std::isnan(vy));
+		AMREX_ALWAYS_ASSERT(!std::isnan(vz));
+
+		// compute auxiliary quantities
 		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
+		double const Eint = quokka::EOS<AgoraGalaxy>::ComputeEintFromTgas(rho, T);
 
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index) = rho * vx;
@@ -175,6 +242,26 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 		auto const &phi_arr = phi[lev].const_arrays();
 		auto output = mf.arrays();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k); });
+	}
+
+	if (dname == "temperature") {
+		const int ncomp = ncomp_cc_in;
+		auto tables = grackleTables_.const_tables();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_new_cc_[lev].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				Real const rho = state(i, j, k, HydroSystem<AgoraGalaxy>::density_index);
+				Real const x1Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index);
+				Real const x2Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x2Momentum_index);
+				Real const x3Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x3Momentum_index);
+				Real const Egas = state(i, j, k, HydroSystem<AgoraGalaxy>::energy_index);
+				Real const Eint = RadSystem<AgoraGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, HydroSystem<AgoraGalaxy>::gamma_, tables);
+				output(i, j, k, ncomp) = Tgas;
+			});
+		}
 	}
 }
 

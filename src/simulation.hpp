@@ -149,6 +149,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
+	amrex::Real initDtShrinkFactor_ = 1.0; // do not shrink by default
 	amrex::Real constantDt_ = 0.0;
 	amrex::Vector<int> istep;	      // which step?
 	amrex::Vector<int> nsubsteps;	      // how many substeps on each level?
@@ -655,6 +656,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default CFL number for particles == 0.99, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
 
+	// Default initial timestep shrink factor == 1. Set to < 1 if you want to reduce the first timestep.
+	pp.query("init_dt_shrink_factor", initDtShrinkFactor_);
+
 	// Default AMR interpolation method == lincc_interp
 	pp.query("amr_interpolation_method", amrInterpMethod_);
 
@@ -868,7 +872,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
 
 		if (tNew_[level] == 0.0) { // first timestep
-			dt_0 = std::min(dt_0, initDt_);
+			dt_0 = std::min(dt_0, initDt_) * initDtShrinkFactor_;
 		}
 		if (constantDt_ > 0.0) { // use constant timestep if set
 			dt_0 = constantDt_;
@@ -883,7 +887,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		dt_global = std::min(dt_global, maxDt_); // limit to maxDt_
 
 		if (tNew_[level] == 0.0) { // special case: first timestep
-			dt_global = std::min(dt_global, initDt_);
+			dt_global = std::min(dt_global, initDt_) * initDtShrinkFactor_;
 		}
 		if (constantDt_ > 0.0) { // special case: constant timestep
 			dt_global = constantDt_;

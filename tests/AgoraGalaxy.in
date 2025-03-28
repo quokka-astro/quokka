@@ -24,11 +24,17 @@ do_reflux = 1
 do_subcycle = 0
 
 cfl = 0.2
-hydro.artificial_viscosity_coefficient = 0.1
-
+init_dt_shrink_factor = 0.2
+hydro.artificial_viscosity_coefficient = 0.0
 max_timesteps = 1e4
-stop_time = 3.15e15         # 100 Myr
-derived_vars = gpot
+stop_time = 6.3e15         # 200 Myr
+
+cooling.enabled = 1
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = grackle
+cooling.hdf5_data_file = "./CloudyData_UVB=HM2012.h5"
+temperature_floor = 1e4
 
 checkpoint_interval = -1
-plotfile_interval = 10
+plotfile_interval = 20
+derived_vars = temperature gpot
