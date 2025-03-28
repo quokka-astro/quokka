@@ -131,12 +131,17 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 		// compute temperature
 		double T = NAN;
-		if ((R < 20.0e3 * C::parsec) && (std::abs(z) < 3.0e3 * C::parsec)) {
+		constexpr double Rmax = 20.0e3 * C::parsec;
+		constexpr double zmax = 3.0e3 * C::parsec;
+		if ((R < Rmax) && (std::abs(z) < zmax)) {
 			T = 1.0e4; // K
 		} else {
+			constexpr double Rmax_vcirc = 2.0 * Rmax;
+			const double f = (R - Rmax) / (Rmax_vcirc - Rmax);
+			constexpr double rho_bg = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
 			T = 1.0e6; // K
-			rho = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
-			vcirc = 0; // TODO(bwibking): taper velocity slowly to zero
+			rho = rho_bg;
+			vcirc = ((R < Rmax_vcirc) && (std::abs(z) < zmax)) ? (1.0 - f) * vcirc : 0.;
 		}
 		const double Eint = quokka::EOS<AgoraGalaxy>::ComputeEintFromTgas(rho, T);
 

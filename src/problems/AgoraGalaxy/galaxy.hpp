@@ -1,5 +1,5 @@
-#ifndef TEST_BINARY_ORBIT_HPP_ // NOLINT
-#define TEST_BINARY_ORBIT_HPP_
+#ifndef GALAXY_HPP_ // NOLINT
+#define GALAXY_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -16,4 +16,4 @@
 // function definitions
 auto problem_main() -> int;
 
-#endif // TEST_BINARY_ORBIT_HPP_
+#endif // GALAXY_HPP_
