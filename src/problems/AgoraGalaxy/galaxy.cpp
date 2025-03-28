@@ -94,7 +94,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 
 	const double length_unit = 1.0e3 * C::parsec; // kpc
 	const double vel_unit = 1.0e5;		      // km/s
-	for (int i = 0; i < N; ++i) {
+	for (size_t i = 0; i < N; ++i) {
 		userData_.radius[i] = radius_h[i] * length_unit;
 		userData_.vcirc[i] = vcirc_h[i] * vel_unit;
 	}
@@ -140,7 +140,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			// set limits on maximum extent of the disk
 			constexpr double Rmax = 20.0e3 * C::parsec;
 			constexpr double zmax = 3.0e3 * C::parsec;
-			if (abs(z) < zmax) {
+			if (std::abs(z) < zmax) {
 				return taper_1d(a, b, (R - Rmax) / Rmax);
 			}
 			return b;
