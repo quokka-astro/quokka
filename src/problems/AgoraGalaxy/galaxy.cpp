@@ -150,21 +150,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return std::max(rho_disk, rho_bg); // rho_bg sets the density floor
 		};
 
-		// compute temperature profile
-		constexpr double Rmax = 30.0e3 * C::parsec;
-		constexpr double zmax = 5.0e3 * C::parsec;
-		auto T_exact = [](double x, double y, double z) {
-			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			constexpr double T_disk = 1.0e4;
-			constexpr double T_bg = 1.0e6;
-#if 0
-			if ((R < Rmax) && (std::abs(z) < zmax)) {
-				return T_disk;
-			}
-#endif
-			return T_bg;
-		};
-
 		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
 			double vcirc = NAN;
 			if ((R >= R_table_min) && (R <= R_table_max)) {
@@ -181,6 +166,9 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			const double f = std::clamp((x - x0) / (x1 - x0), 0., 1.);
 			return ((1. - f) * a) + (f * b);
 		};
+
+		constexpr double Rmax = 30.0e3 * C::parsec;
+		constexpr double zmax = 5.0e3 * C::parsec;
 
 		auto taper = [taper_1d](double a, double b, double R, double z) {
 			// linear taper from a to b as a function of R
@@ -207,9 +195,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		const double rho = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		AMREX_ALWAYS_ASSERT(!std::isnan(rho));
 
-		// integrate temperature profile over cell volume
-		const double T = quad_3d(T_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		AMREX_ALWAYS_ASSERT(!std::isnan(T));
+		// set temperature to constant (the disk will cool quasi-instantly)
+		const double T = 1.0e6; // K
 
 		// integrate velocity profiles over cell volume
 		const double vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
