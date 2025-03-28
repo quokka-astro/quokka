@@ -25,7 +25,6 @@ do_subcycle = 0
 
 cfl = 0.2
 init_dt_shrink_factor = 0.2
-hydro.artificial_viscosity_coefficient = 0.0
 max_timesteps = 1e4
 stop_time = 6.3e15         # 200 Myr
 
