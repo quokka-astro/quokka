@@ -182,7 +182,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 		auto taper = [taper_1d](double a, double b, double R, double z) {
 			// linear taper from a to b as a function of R
-			//return taper_1d(a, b, R, Rmax, 1.1 * Rmax);
+			// return taper_1d(a, b, R, Rmax, 1.1 * Rmax);
 			return a;
 		};
 
