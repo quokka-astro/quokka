@@ -157,9 +157,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			constexpr double T_disk = 1.0e4;
 			constexpr double T_bg = 1.0e6;
+#if 0
 			if ((R < Rmax) && (std::abs(z) < zmax)) {
 				return T_disk;
 			}
+#endif
 			return T_bg;
 		};
 
