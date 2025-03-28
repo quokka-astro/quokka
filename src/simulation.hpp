@@ -149,7 +149,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
-	amrex::Real initDtShrinkFactor_ = 1.0; // do not shrink by default
+	amrex::Real initDtShrinkFactor_ = 1.0;			  // do not shrink by default
 	amrex::Real constantDt_ = 0.0;
 	amrex::Vector<int> istep;	      // which step?
 	amrex::Vector<int> nsubsteps;	      // how many substeps on each level?
