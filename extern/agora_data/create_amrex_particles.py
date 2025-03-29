@@ -39,5 +39,6 @@ if __name__ == "__main__":
             ## save to output file
             print("writing", part_file, "...")
             Npart = len(x)
+            output.write(f"{Npart}\n")
             for i in range(Npart):
                 output.write(f"{x[i]} {y[i]} {z[i]} {m[i]} {vx[i]} {vy[i]} {vz[i]}\n")

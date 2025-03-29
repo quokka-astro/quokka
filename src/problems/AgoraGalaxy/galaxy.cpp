@@ -219,7 +219,10 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
+	
+	amrex::Print() << "Reading particles from file...\n";
 	CICParticles->InitFromAsciiFile("AgoraGalaxy_particles.txt", nreal_extra, nullptr);
+	amrex::Print() << "particles read.\n\n";
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
