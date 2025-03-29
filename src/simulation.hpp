@@ -1207,17 +1207,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].setVal(0);
 		}
 
+		// deposit particle mass from all particles that have mass into rhs by accumulation
+		// NOTE: this MUST be done before adding the rhs from the gas
+		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
+
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			fillPoissonRhsAtLevel(rhs[lev], lev);
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
-
-#ifdef AMREX_PARTICLES
-		// deposit particle mass from all particles that have mass into rhs by accumulation
-		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
-#endif
 
 		// // For debugging: print rhs at nz = 16 and lev = 0
 		// amrex::Print() << "rhs[0].data() =";

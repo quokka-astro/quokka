@@ -14,6 +14,7 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuContainers.H"
+#include "AMReX_GpuDevice.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -239,6 +240,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxA
 			tag[bx](i, j, k) = amrex::TagBox::SET;
 		}
 	});
+	amrex::Gpu::streamSynchronize();
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
@@ -249,6 +251,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 		auto const &phi_arr = phi[lev].const_arrays();
 		auto output = mf.arrays();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k); });
+		amrex::Gpu::streamSynchronize();
 	}
 
 	if (dname == "temperature") {
