@@ -127,6 +127,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::Real R_table_max = userData_.r_outer;
 	const amrex::Real vcirc_inner = userData_.vcirc_inner;
 	const amrex::Real vcirc_outer = userData_.vcirc_outer;
+	const amrex::Real rho_bg = ::rho_bg; // workaround nvcc compiler bug
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
