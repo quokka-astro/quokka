@@ -899,7 +899,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 
 	// special case: shrink dt on first timestep
-	if (tNew_[0] == 0.0) { 
+	if (tNew_[0] == 0.0) {
 		dt_0 *= initDtShrinkFactor_;
 		dt_global *= initDtShrinkFactor_;
 	}
