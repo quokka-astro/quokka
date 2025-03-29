@@ -225,7 +225,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxA
 {
 	// quasi-Lagrangian refinement:
 	// refine if the cell mass is greater than 'mass_refine_threshold'
-	amrex::Real mass_refine_threshold = 8.593e4 * C::M_solar;
+	const amrex::Real mass_refine_threshold = 8.593e4 * C::M_solar;
 
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::Real cell_vol = dx[0] * dx[1] * dx[2];
