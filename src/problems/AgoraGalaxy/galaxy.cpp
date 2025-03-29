@@ -71,7 +71,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	std::vector<amrex::Real> radius_h;
 	std::vector<amrex::Real> vcirc_h;
 
-	std::string const filename = "../extern/agora_data/vcirc.dat";
+	const std::string filename = "vcirc.dat";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 	std::string header;
