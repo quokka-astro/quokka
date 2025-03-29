@@ -833,6 +833,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	// compute timestep due to extra physics on level 'lev'
 	const amrex::Real extra_physics_dt = computeExtraPhysicsTimestep(lev);
 
+	if (verbose) {
+		amrex::Print() << "[Level " << lev << "] hydro dt = " << hydro_dt << " particle dt = " << particle_dt << "\n";
+	}
+
 	// return minimum timestep
 	return std::min({hydro_dt, particle_dt, extra_physics_dt});
 }
@@ -872,7 +876,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
 
 		if (tNew_[level] == 0.0) { // first timestep
-			dt_0 = std::min(dt_0, initDt_) * initDtShrinkFactor_;
+			dt_0 = std::min(dt_0, initDt_);
 		}
 		if (constantDt_ > 0.0) { // use constant timestep if set
 			dt_0 = constantDt_;
@@ -887,11 +891,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		dt_global = std::min(dt_global, maxDt_); // limit to maxDt_
 
 		if (tNew_[level] == 0.0) { // special case: first timestep
-			dt_global = std::min(dt_global, initDt_) * initDtShrinkFactor_;
+			dt_global = std::min(dt_global, initDt_);
 		}
 		if (constantDt_ > 0.0) { // special case: constant timestep
 			dt_global = constantDt_;
 		}
+	}
+
+	// special case: shrink dt on first timestep
+	if (tNew_[0] == 0.0) { 
+		dt_0 *= initDtShrinkFactor_;
+		dt_global *= initDtShrinkFactor_;
 	}
 
 	// compute work estimate for subcycling
