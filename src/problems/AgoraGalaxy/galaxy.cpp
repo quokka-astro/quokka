@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuContainers.H"
@@ -60,6 +61,8 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Gpu::PinnedVector<amrex::Real> radius;
 	amrex::Gpu::PinnedVector<amrex::Real> vcirc;
 };
+
+constexpr double rho_bg = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 {
@@ -146,7 +149,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			// normalization constant
 			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
 			double const rho_disk = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
-			constexpr double rho_bg = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
 			return std::max(rho_disk, rho_bg); // rho_bg sets the density floor
 		};
 
@@ -162,41 +164,30 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return vcirc;
 		};
 
+#if 0
 		auto taper_1d = [](double a, double b, double x, double x0, double x1) {
 			const double f = std::clamp((x - x0) / (x1 - x0), 0., 1.);
 			return ((1. - f) * a) + (f * b);
 		};
-
-		constexpr double Rmax = 30.0e3 * C::parsec;
-		constexpr double zmax = 5.0e3 * C::parsec;
-
-		auto taper = [taper_1d](double a, double b, double R, double z) {
-			// linear taper from a to b as a function of R
-			// return taper_1d(a, b, R, Rmax, 1.1 * Rmax);
-			return a;
-		};
+#endif
 
 		// compute velocity profiles
-		auto vx_exact = [taper, vcirc_exact](double x, double y, double z) {
+		auto vx_exact = [vcirc_exact](double x, double y, double /*z*/) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			double const theta = std::atan2(x, y);
-			return taper(-vcirc_exact(R) * std::cos(theta), 0., R, z); // vx
+			return -vcirc_exact(R) * std::cos(theta); // vx
 		};
 
-		auto vy_exact = [taper, vcirc_exact](double x, double y, double z) {
+		auto vy_exact = [vcirc_exact](double x, double y, double /*z*/) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			double const theta = std::atan2(x, y);
-			return taper(vcirc_exact(R) * std::sin(theta), 0., R, z); // vy
+			return vcirc_exact(R) * std::sin(theta); // vy
 		};
-
-		const double cell_vol = dx[0] * dx[1] * dx[2];
 
 		// integrate density profile over cell volume
+		const double cell_vol = dx[0] * dx[1] * dx[2];
 		const double rho = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		AMREX_ALWAYS_ASSERT(!std::isnan(rho));
-
-		// set temperature to constant (the disk will cool quasi-instantly)
-		const double T = 1.0e6; // K
 
 		// integrate velocity profiles over cell volume
 		const double vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
@@ -205,6 +196,9 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		AMREX_ALWAYS_ASSERT(!std::isnan(vx));
 		AMREX_ALWAYS_ASSERT(!std::isnan(vy));
 		AMREX_ALWAYS_ASSERT(!std::isnan(vz));
+
+		// set temperature to constant (the disk will cool quasi-instantly)
+		const double T = 1.0e6; // K
 
 		// compute auxiliary quantities
 		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
@@ -225,6 +219,26 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
 	CICParticles->InitFromAsciiFile("AgoraGalaxy_particles.txt", nreal_extra, nullptr);
+}
+
+template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// quasi-Lagrangian refinement:
+	// refine if the cell mass is greater than 'mass_refine_threshold'
+	amrex::Real mass_refine_threshold = 8.593e4 * C::M_solar;
+
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+	const amrex::Real cell_vol = dx[0] * dx[1] * dx[2];
+	const auto state = state_new_cc_[lev].const_arrays();
+	const auto tag = tags.arrays();
+
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::Real const rho = state[bx](i, j, k, HydroSystem<AgoraGalaxy>::density_index);
+		amrex::Real const cell_mass = rho * cell_vol;
+		if (cell_mass > mass_refine_threshold) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
+		}
+	});
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
