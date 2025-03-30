@@ -65,8 +65,8 @@ if __name__ == "__main__":
         plt1.annotate_streamlines(("gas", "velocity_x"), ("gas", "velocity_y"), color="black")
         plt1.annotate_scale()
         plt1.annotate_timestamp()
-        for i in range(0, x.shape[0], 100):
-            plt1.annotate_arrow([x[i]+dt*vx[i], y[i]+dt*vy[i], z[i]+dt*vz[i]], starting_pos=[x[i], y[i], z[i]])
+        #for i in range(0, x.shape[0], 100):
+        #    plt1.annotate_arrow([x[i]+dt*vx[i], y[i]+dt*vy[i], z[i]+dt*vz[i]], starting_pos=[x[i], y[i], z[i]])
         plt1.save()
     
         # y-projection
