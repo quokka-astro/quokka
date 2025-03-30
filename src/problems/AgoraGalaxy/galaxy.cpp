@@ -140,7 +140,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
 
 		// compute density profile
-		auto rho_exact = [](double x, double y, double z) {
+		auto rho_exact = [rho_bg](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			// Disk mass: 8.59322e9 Msun  (i.e. 20% gas fraction)
 			constexpr double M_GAS = 8.59322e9 * C::M_solar;
