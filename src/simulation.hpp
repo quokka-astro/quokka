@@ -149,7 +149,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
-	amrex::Real initDtShrinkFactor_ = 1.0;			  // do not shrink by default
 	amrex::Real constantDt_ = 0.0;
 	amrex::Vector<int> istep;	      // which step?
 	amrex::Vector<int> nsubsteps;	      // how many substeps on each level?
@@ -656,9 +655,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default CFL number for particles == 0.99, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
 
-	// Default initial timestep shrink factor == 1. Set to < 1 if you want to reduce the first timestep.
-	pp.query("init_dt_shrink_factor", initDtShrinkFactor_);
-
 	// Default AMR interpolation method == lincc_interp
 	pp.query("amr_interpolation_method", amrInterpMethod_);
 
@@ -833,10 +829,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	// compute timestep due to extra physics on level 'lev'
 	const amrex::Real extra_physics_dt = computeExtraPhysicsTimestep(lev);
 
-	if (verbose) {
-		amrex::Print() << "[Level " << lev << "] hydro dt = " << hydro_dt << " particle dt = " << particle_dt << "\n";
-	}
-
 	// return minimum timestep
 	return std::min({hydro_dt, particle_dt, extra_physics_dt});
 }
@@ -896,12 +888,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		if (constantDt_ > 0.0) { // special case: constant timestep
 			dt_global = constantDt_;
 		}
-	}
-
-	// special case: shrink dt on first timestep
-	if (tNew_[0] == 0.0) {
-		dt_0 *= initDtShrinkFactor_;
-		dt_global *= initDtShrinkFactor_;
 	}
 
 	// compute work estimate for subcycling
@@ -1217,16 +1203,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].setVal(0);
 		}
 
-		// deposit particle mass from all particles that have mass into rhs by accumulation
-		// NOTE: this MUST be done before adding the rhs from the gas
-		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
-
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			fillPoissonRhsAtLevel(rhs[lev], lev);
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
+
+#ifdef AMREX_PARTICLES
+		// deposit particle mass from all particles that have mass into rhs by accumulation
+		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
+#endif
 
 		// // For debugging: print rhs at nz = 16 and lev = 0
 		// amrex::Print() << "rhs[0].data() =";
