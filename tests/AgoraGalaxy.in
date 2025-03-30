@@ -46,3 +46,7 @@ temperature_floor = 1e4
 checkpoint_interval = -1
 plotfile_interval = 10
 derived_vars = temperature gpot
+
+agora_galaxy.vcirc_file = "../extern/agora_data/vcirc.dat"
+agora_galaxy.particle_file = "./AgoraGalaxy_particles.txt"
+agora_galaxy.mass_refine_threshold = 8.51e4

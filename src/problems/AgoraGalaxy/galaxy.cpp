@@ -71,7 +71,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	std::vector<amrex::Real> radius_h;
 	std::vector<amrex::Real> vcirc_h;
 
-	const std::string filename = "vcirc.dat";
+	// get circular velocity profile filename from ParmParse
+	amrex::ParmParse const pp("agora_galaxy");
+	std::string filename;
+	pp.query("vcirc_file", filename);
+
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 	std::string header;
@@ -218,19 +222,24 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 {
 	// read particles from ASCII file
-	const int nreal_extra = 4; // mass vx vy vz
-	CICParticles->SetVerbose(1);
+	amrex::ParmParse const pp("agora_galaxy");
+	std::string filename;
+	pp.query("particle_file", filename);
+	amrex::Print() << "Reading particles from file " << filename << "...\n";
 
-	amrex::Print() << "Reading particles from file...\n";
-	CICParticles->InitFromAsciiFile("AgoraGalaxy_particles.txt", nreal_extra, nullptr);
-	amrex::Print() << "particles read.\n\n";
+	CICParticles->SetVerbose(1);
+	const int nreal_extra = 4; // mass vx vy vz
+	CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// quasi-Lagrangian refinement:
 	// refine if the cell mass is greater than 'mass_refine_threshold'
-	const amrex::Real mass_refine_threshold = 8.593e4 * C::M_solar;
+	amrex::ParmParse const pp("agora_galaxy");
+	amrex::Real mass_refine_threshold_Msun = NAN;
+	pp.query("mass_refine_threshold", mass_refine_threshold_Msun);
+	const amrex::Real mass_refine_threshold = mass_refine_threshold_Msun * C::M_solar;
 
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::Real cell_vol = dx[0] * dx[1] * dx[2];
