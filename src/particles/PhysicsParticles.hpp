@@ -163,18 +163,25 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return positions; // Empty vector on non-root ranks
 	}
 
-	// Get particle positions and data from all ranks and gather them on rank 0.
+	// Get positions and fields data from all particles at level 0 from all ranks and gather them on rank 0.
 	// This method creates a temporary particle container on rank 0 and copies all particles to it.
 	// The returned data for each particle contains:
-	// - First AMREX_SPACEDIM elements are positions [x,y,z]
-	// - Remaining elements are particle data (e.g., mass, velocities, etc.)
+	// - first:
+	//   - First AMREX_SPACEDIM elements are positions [x,y,z]
+	//   - Remaining elements are particle data (e.g., mass, velocities, etc.)
+	// - second:
+	//   - Integer data (e.g., id, type, etc.)
 	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
-	// @param lev: level from which to get particles
-	// @return: vector of particle data on rank 0, empty vector on other ranks
+	// @return: tuple of vectors of particle data on rank 0, empty vectors on other ranks
 	[[nodiscard]] auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
 		std::vector<std::vector<double>> real_data;
 		std::vector<std::vector<int>> int_data;
+
+		// If max level > 0, return empty vectors. This function does not support multi-level particles. 
+		if (container_->finestLevel() > 0) {
+			return {real_data, int_data};
+		}
 
 		// All ranks must participate in copyParticles
 		if (container_ != nullptr) {
