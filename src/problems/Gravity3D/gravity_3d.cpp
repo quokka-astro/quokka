@@ -43,12 +43,13 @@ constexpr int n_SN = 2 * 2 * 2 * 2 / 2;
 constexpr double m_SN = n_SN * SN_mass;
 
 // locations of the particles: a 2x2x2 grids of particles
-constexpr int loc_x1 = 31;
-constexpr int loc_x2 = 32;
-constexpr int loc_y1 = 31;
-constexpr int loc_y2 = 32;
-constexpr int loc_z1 = 31;
-constexpr int loc_z2 = 32;
+constexpr double nx = 64.0;
+constexpr double loc_x1 = 31.5 / nx;
+constexpr double loc_x2 = 32.5 / nx;
+constexpr double loc_y1 = 31.5 / nx;
+constexpr double loc_y2 = 32.5 / nx;
+constexpr double loc_z1 = 31.5 / nx;
+constexpr double loc_z2 = 32.5 / nx;
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -105,9 +106,19 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
-			amrex::ignore_unused(state_arr, dx);
+			amrex::ignore_unused(state_arr);
+
+			// Calculate cell indices for the particle locations
+			const int i_par1 = static_cast<int>(floor(loc_x1 / dx[0]));
+			const int j_par1 = static_cast<int>(floor(loc_y1 / dx[1]));
+			const int k_par1 = static_cast<int>(floor(loc_z1 / dx[2]));
+
+			const int i_par2 = static_cast<int>(floor(loc_x2 / dx[0]));
+			const int j_par2 = static_cast<int>(floor(loc_y2 / dx[1]));
+			const int k_par2 = static_cast<int>(floor(loc_z2 / dx[2]));
+
 			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
-			if (is_create_particle && (i == loc_x1 || i == loc_x2) && (j == loc_y1 || j == loc_y2) && (k == loc_z1 || k == loc_z2)) {
+			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
 				return particle_per_cell;
 			}
 			return 0;
