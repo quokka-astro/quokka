@@ -63,7 +63,7 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Gpu::PinnedVector<amrex::Real> vcirc;
 };
 
-constexpr double rho_bg = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
+constexpr double rho_halo = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 {
@@ -131,7 +131,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::Real R_table_max = userData_.r_outer;
 	const amrex::Real vcirc_inner = userData_.vcirc_inner;
 	const amrex::Real vcirc_outer = userData_.vcirc_outer;
-	const amrex::Real rho_bg = ::rho_bg; // workaround nvcc compiler bug
+	const amrex::Real rho_bg = ::rho_halo; // workaround nvcc compiler bug
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
@@ -192,19 +192,35 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 		// integrate density profile over cell volume
 		const double cell_vol = dx[0] * dx[1] * dx[2];
-		const double rho = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		AMREX_ALWAYS_ASSERT(!std::isnan(rho));
-
-		// integrate velocity profiles over cell volume
-		const double vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		double const vz = 0;
-		AMREX_ALWAYS_ASSERT(!std::isnan(vx));
-		AMREX_ALWAYS_ASSERT(!std::isnan(vy));
-		AMREX_ALWAYS_ASSERT(!std::isnan(vz));
+		const double rho_disk = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
 
 		// set temperature to constant (the disk will cool quasi-instantly)
-		const double T = 1.0e6; // K
+		const double T_halo = 1.0e6; // K
+		const double T_disk = 1.0e4; // K
+
+		double rho = NAN;
+		double vx = NAN;
+		double vy = NAN;
+		double vz = 0;
+		double T = NAN;
+
+		// IMPORTANT: transition between disk and halo at the isosurface of P_halo == P_disk
+		if (rho_halo * T_halo > rho_disk * T_disk) {
+			rho = rho_halo;
+			T = T_halo;
+			// velocity is always assumed zero outside of the disk
+			vx = 0;
+			vy = 0;
+		} else { // we are in the disk
+			rho = rho_disk;
+			T = T_disk;
+			// integrate velocity profiles over cell volume
+			vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+			vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+			AMREX_ALWAYS_ASSERT(!std::isnan(vx));
+			AMREX_ALWAYS_ASSERT(!std::isnan(vy));
+		}
 
 		// compute auxiliary quantities
 		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
