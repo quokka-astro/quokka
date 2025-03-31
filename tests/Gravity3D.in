@@ -25,8 +25,8 @@ do_subcycle = 0
 suppress_output = 0
 
 stop_time = 5.0
-plotfile_interval = 3
-checkpoint_interval = 3
+plotfile_interval = 1000000
+checkpoint_interval = 1000000
 
 particles.param1 = 0.0015 # create particles at this time, which is step 2
 particles.param2 = 0.0015 # turn SNProgenitor into SNRemnant after this time

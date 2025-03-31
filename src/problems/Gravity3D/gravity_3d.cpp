@@ -35,7 +35,7 @@ constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
-constexpr double SN_mass = 0.1;		      // mass of SNProgenitor particles
+constexpr double SN_mass = 1.0e-10;		      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
 constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
@@ -83,7 +83,7 @@ template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr int nGroups = 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gravitational_constant = 1.0e-5; // set a small value to keep the cells/particles from moving
+	static constexpr double gravitational_constant = 1.0;
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
@@ -369,7 +369,15 @@ auto problem_main() -> int
 
 		// ----- Check SN remnant mass -----
 
-		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
+		// max error tol for particle positions
+		double max_err_tol = 0.0;
+		if (sim.tNew_[0] < 0.011) {
+			max_err_tol = 5.0e-7;
+		} else if (sim.tNew_[0] < 0.11) {
+			max_err_tol = 5.0e-6;
+		} else {
+			max_err_tol = 0.05;
+		}
 		const double max_err_tol_mass = 1.0e-8;			      // max error tol in mass
 		status = 1;
 		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < max_err_tol_mass) {
