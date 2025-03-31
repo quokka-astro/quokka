@@ -68,7 +68,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
 
 	// New method to get particle positions and data
-	[[nodiscard]] virtual auto getParticleData(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
+	[[nodiscard]] virtual auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
@@ -85,6 +85,7 @@ class PhysicsParticleDescriptorBase
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
 	virtual void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
+	virtual void printParticleStatistics() const = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
 	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) { /* Default empty implementation */ }
@@ -170,7 +171,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
 	// @param lev: level from which to get particles
 	// @return: vector of particle data on rank 0, empty vector on other ranks
-	[[nodiscard]] auto getParticleData(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
+	[[nodiscard]] auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
 		std::vector<std::vector<double>> real_data;
 		std::vector<std::vector<int>> int_data;
@@ -194,7 +195,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Only rank 0 processes the particles since they're all gathered there
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				// Get iterator for the single box on rank 0
-				typename ContainerType::ParIterType const pIter(analysisPC, lev);
+				typename ContainerType::ParIterType const pIter(analysisPC, 0);
 				if (pIter.isValid()) {
 					const amrex::Long np = pIter.numParticles();
 					auto &particles = pIter.GetArrayOfStructs();
@@ -484,6 +485,39 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 	}
+
+	void printParticleStatistics() const override
+	{
+		if (container_ != nullptr) {
+			amrex::Print() << "\n";
+			// TODO: fix here
+			amrex::Print() << std::left << std::setw(20) << PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_)
+				       << std::right << std::setw(15) << getNumParticles() << "\n";
+
+			// if has stellar evolution stage, print the mass and particle stage for all particles
+			if (getEvolutionStageIndex() >= 0) {
+				for (int lev = 1; lev <= container_->finestLevel(); ++lev) {
+					const auto [real_data, int_data] = getParticleDataAtLevelZero();
+
+					if (!real_data.empty()) {
+						// Print header for detailed particle data
+						amrex::Print() << "  " << std::left << std::setw(15) << "Mass"
+										<< " | " << std::right << std::setw(20) << "Stellar evolution stage"
+										<< "\n";
+						amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
+
+						// Print each particle's data with aligned columns
+						for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
+							amrex::Print()
+									<< "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + getMassIndex()] << " | "
+									<< std::right << std::setw(20) << int_data[i][getEvolutionStageIndex()] << "\n";
+						}
+						amrex::Print() << "\n"; // Add extra line for readability between particle types
+					}
+				}
+			}
+		}
+	}
 };
 
 // New class for star particles that adds stellar evolution capabilities
@@ -760,30 +794,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			       << "\n";
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			amrex::Print() << "\n";
-			amrex::Print() << std::left << std::setw(20) << getParticleTypeName(type) << std::right << std::setw(15)
-				       << descriptor->getNumParticles() << "\n";
-
-			// if has stellar evolution stage, print the mass and particle stage for all particles
-			if (descriptor->getEvolutionStageIndex() >= 0) {
-				const auto [real_data, int_data] = descriptor->getParticleData(0);
-
-				if (!real_data.empty()) {
-					// Print header for detailed particle data
-					amrex::Print() << "  " << std::left << std::setw(15) << "Mass"
-						       << " | " << std::right << std::setw(20) << "Stellar evolution stage"
-						       << "\n";
-					amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
-
-					// Print each particle's data with aligned columns
-					for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
-						amrex::Print()
-						    << "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + descriptor->getMassIndex()] << " | "
-						    << std::right << std::setw(20) << int_data[i][descriptor->getEvolutionStageIndex()] << "\n";
-					}
-					amrex::Print() << "\n"; // Add extra line for readability between particle types
-				}
-			}
+			descriptor->printParticleStatistics();
 		}
 	}
 
