@@ -155,7 +155,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			// normalization constant
 			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
 			double const rho_disk = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
-			return std::max(rho_disk, rho_bg); // rho_bg sets the density floor
+			return rho_disk;
 		};
 
 		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
