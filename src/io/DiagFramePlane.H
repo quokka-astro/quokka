@@ -24,7 +24,7 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 
 	void Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, const amrex::Vector<const amrex::MultiFab *> &a_slice,
 				       const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
-				       const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref);
+				       const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref, const YAML::Node &simulationMetadata);
 
 	static void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name);
 
