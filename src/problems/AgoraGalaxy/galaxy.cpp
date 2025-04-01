@@ -146,25 +146,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		// compute density profile
 		auto rho_exact = [rho_bg](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			double const theta = std::atan2(x, y);
-
-			// Disk mass: 8.59322e9 Msun  (i.e. 20% gas fraction)
-			constexpr double M_GAS = 8.59322e9 * C::M_solar;
-			// Disk scale length: 3.43218 kpc
-			constexpr double r_d = 3.43218e3 * C::parsec;
-			// Disk scale height: 0.343218 kpc (10% of scale length)
-			constexpr double z_d = 0.343218e3 * C::parsec;
-			// normalization constant
-			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
-			double const rho_disk = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
-
-			// compute harmonic perturbation
-			int const m = 2;
-			int const n = 1;
-			double const lambda_mn = 5.1356; // from Mathematica
-			double const drho_over_rho = 0.1 * std::cyl_bessel_j(m, lambda_mn * R / r_d) * std::sin(m * theta);
-			double const rho = rho_disk * (1 + drho_over_rho);
-			return rho;
+			constexpr double M_GAS = 8.59322e9 * C::M_solar; // disk mass: 8.59322e9 Msun (20% gas fraction)
+			constexpr double r_d = 3.43218e3 * C::parsec; // disk scale length: 3.43218 kpc
+			constexpr double z_d = 0.343218e3 * C::parsec; // disk scale height: 0.343218 kpc
+			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d; // normalization constant
+			return rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
 		};
 
 		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
@@ -178,13 +164,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			}
 			return vcirc;
 		};
-
-#if 0
-		auto taper_1d = [](double a, double b, double x, double x0, double x1) {
-			const double f = std::clamp((x - x0) / (x1 - x0), 0., 1.);
-			return ((1. - f) * a) + (f * b);
-		};
-#endif
 
 		// compute velocity profiles
 		auto vx_exact = [vcirc_exact](double x, double y, double /*z*/) {
@@ -214,17 +193,28 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		double vz = 0;
 		double T = NAN;
 
-		// IMPORTANT: transition between disk and halo at the isosurface of P_halo == P_disk
+		// IMPORTANT: transition between disk and halo at the P_halo == P_disk surface
 		if (rho_halo * T_halo > rho_disk * T_disk) {
 			rho = rho_halo;
 			T = T_halo;
-			// velocity is always assumed zero outside of the disk
-			vx = 0;
+			vx = 0; // velocity is zero in the halo
 			vy = 0;
 		} else { // we are in the disk
-			rho = rho_disk;
+			double const x = 0.5 * (x0 + x1);
+			double const y = 0.5 * (y0 + y1);
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const theta = std::atan2(x, y);
+
+			// set density (compute density perturbation)
+			double const R_max = 20.0e3 * C::parsec;
+			double const drho_over_rho = std::cyl_bessel_j(2, 5.1356 * R / R_max) * std::sin(2.0 * theta);
+			rho = rho_disk * (1 + drho_over_rho);
+			AMREX_ALWAYS_ASSERT(rho > 0.);
+
+			// set temperature
 			T = T_disk;
-			// integrate velocity profiles over cell volume
+
+			// set velocity (integrate velocity profiles over cell volume)
 			vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 			vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 			AMREX_ALWAYS_ASSERT(!std::isnan(vx));
