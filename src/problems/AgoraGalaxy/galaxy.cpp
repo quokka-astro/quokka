@@ -209,13 +209,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 			// set density (compute density perturbation)
 			double const R_max = 20.0e3 * C::parsec;
-#if defined(AMREX_USE_CUDA) || defined(AMREX_USE_HIP)
+			// NOTE: jn is the C standard math function for BesselJ. it works everywhere.
 			double const drho_over_rho = jn(2, 5.1356 * R / R_max) * std::sin(2.0 * theta);
-#elif defined(__GLIBCXX__)
-			double const drho_over_rho = std::cyl_bessel_j(2, 5.1356 * R / R_max) * std::sin(2.0 * theta);
-#else // required for libc++ (e.g., on macOS)
-			double const drho_over_rho = boost::math::cyl_bessel_j(2, 5.1356 * R / R_max) * std::sin(2.0 * theta);
-#endif
 			rho = rho_disk * (1 + drho_over_rho);
 			AMREX_ALWAYS_ASSERT(rho > 0.);
 
