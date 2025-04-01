@@ -269,7 +269,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxA
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
-		const auto state = state_new_cc_[lev].const_array(mfi);
+		// const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {

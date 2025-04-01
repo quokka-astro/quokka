@@ -497,7 +497,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		if (container_ != nullptr) {
 			amrex::Print() << "\n";
-			// TODO: fix here
+			// TODO(cch): add a getParticleTypeName() method to PhysicsParticleDescriptor and call it here
 			amrex::Print() << std::left << std::setw(20) << PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_) << std::right
 				       << std::setw(15) << getNumParticles() << "\n";
 
