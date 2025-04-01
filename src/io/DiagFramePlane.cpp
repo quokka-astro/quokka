@@ -315,11 +315,8 @@ void DiagFramePlane::Write2DMultiLevelPlotfile(const std::string &a_pltfile, int
 		PlaneFile.close();
 
 		// Write metadata file
-#ifdef QUOKKA_USE_OPENPMD
-		std::string const MetadataFileName(a_pltfile + ".metadata.yaml");
-#else
+		// The slices are always in AMReX plotfile format, so we can always use /metadata.yaml.
 		std::string const MetadataFileName(a_pltfile + "/metadata.yaml");
-#endif
 		std::ofstream MetadataFile;
 		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
 		MetadataFile.open(MetadataFileName.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
