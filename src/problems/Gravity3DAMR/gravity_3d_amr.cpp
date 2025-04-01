@@ -30,7 +30,7 @@ constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
-constexpr double SN_mass = 1.0e-5;		      // mass of SNProgenitor particles
+constexpr double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
 constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
@@ -418,7 +418,7 @@ auto problem_main() -> int
 
 		// ----- Check SN remnant mass -----
 
-		const double max_err_tol_mass = 1.0e-7;			      // max error tol in mass
+		const double max_err_tol_mass = 1.0e-7; // max error tol in mass
 		if (n_particle_test != n_expected_test_particles || SN_remnant_mass_rel_err > max_err_tol_mass) {
 			status = 1;
 		}
