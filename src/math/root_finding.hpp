@@ -12,7 +12,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
-#define BOOST_MATH_STD_USING_CORE                                                                                                                              \
+#define QUOKKA_MATH_STD_USING_CORE                                                                                                                              \
 	using std::abs;                                                                                                                                        \
 	using std::acos;                                                                                                                                       \
 	using std::cos;                                                                                                                                        \
@@ -37,32 +37,32 @@
 	using std::log10;                                                                                                                                      \
 	using std::sqrt;
 
-#define BOOST_MATH_STD_USING BOOST_MATH_STD_USING_CORE
+#define QUOKKA_MATH_STD_USING QUOKKA_MATH_STD_USING_CORE
 
-#ifdef BOOST_MATH_INSTRUMENT
+#ifdef QUOKKA_MATH_INSTRUMENT
 
 #include <iomanip>
 #include <iostream>
 #include <typeinfo>
 
-#define BOOST_MATH_INSTRUMENT_CODE(x) std::cout << std::setprecision(35) << __FILE__ << ":" << __LINE__ << " " << x << std::endl;
-#define BOOST_MATH_INSTRUMENT_VARIABLE(name) BOOST_MATH_INSTRUMENT_CODE(BOOST_STRINGIZE(name) << " = " << name)
+#define QUOKKA_MATH_INSTRUMENT_CODE(x) std::cout << std::setprecision(35) << __FILE__ << ":" << __LINE__ << " " << x << std::endl;
+#define QUOKKA_MATH_INSTRUMENT_VARIABLE(name) QUOKKA_MATH_INSTRUMENT_CODE(QUOKKA_STRINGIZE(name) << " = " << name)
 
 #else
 
-#define BOOST_MATH_INSTRUMENT_CODE(x)
-#define BOOST_MATH_INSTRUMENT_VARIABLE(name)
+#define QUOKKA_MATH_INSTRUMENT_CODE(x)
+#define QUOKKA_MATH_INSTRUMENT_VARIABLE(name)
 
 #endif
 
 #include "math/math_impl.hpp"
 
-#ifdef BOOST_MATH_LOG_ROOT_ITERATIONS
-#define BOOST_MATH_LOGGER_INCLUDE <boost/math/tools/iteration_logger.hpp>
-#include BOOST_MATH_LOGGER_INCLUDE
-#undef BOOST_MATH_LOGGER_INCLUDE
+#ifdef QUOKKA_MATH_LOG_ROOT_ITERATIONS
+#define QUOKKA_MATH_LOGGER_INCLUDE <boost/math/tools/iteration_logger.hpp>
+#include QUOKKA_MATH_LOGGER_INCLUDE
+#undef QUOKKA_MATH_LOGGER_INCLUDE
 #else
-#define BOOST_MATH_LOG_COUNT(count)
+#define QUOKKA_MATH_LOG_COUNT(count)
 #endif
 
 namespace quokka::math
@@ -77,12 +77,12 @@ template <class T> class eps_tolerance
 	AMREX_GPU_HOST_DEVICE
 	AMREX_FORCE_INLINE explicit eps_tolerance(unsigned bits)
 	{
-		BOOST_MATH_STD_USING
+		QUOKKA_MATH_STD_USING
 		eps = (std::max)(T(ldexp(1.0F, 1 - bits)), T(4 * std::numeric_limits<T>::epsilon()));
 	}
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool operator()(const T &a, const T &b)
 	{
-		BOOST_MATH_STD_USING
+		QUOKKA_MATH_STD_USING
 		return fabs(a - b) <= (eps * (std::min)(fabs(a), fabs(b)));
 	}
 
@@ -103,7 +103,7 @@ template <class F, class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void bracke
 	// the interval.  In other words d is the third best guess
 	// to the root.
 	//
-	BOOST_MATH_STD_USING // For ADL of std math functions
+	QUOKKA_MATH_STD_USING // For ADL of std math functions
 	    T tol = std::numeric_limits<T>::epsilon() * 2;
 	//
 	// If the interval [a,b] is very small, or if c is too close
@@ -153,7 +153,7 @@ template <class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T safe_div(T num, T 
 	// return num / denom without overflow,
 	// return r if overflow would occur.
 	//
-	BOOST_MATH_STD_USING // For ADL of std math functions
+	QUOKKA_MATH_STD_USING // For ADL of std math functions
 
 	    if (fabs(denom) < 1)
 	{
@@ -175,7 +175,7 @@ template <class T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T secant_interpolate
 	// that the function is unlikely to be smooth with a root very
 	// close to a or b.
 	//
-	BOOST_MATH_STD_USING // For ADL of std math functions
+	QUOKKA_MATH_STD_USING // For ADL of std math functions
 
 	    T tol = std::numeric_limits<T>::epsilon() * 5;
 	T c = a - (fa / (fb - fa)) * (b - a);
@@ -247,25 +247,25 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T cubic_interpolate(const T &a, const T
 	// inside [a, b], so we fall back to quadratic
 	// interpolation in case of an erroneous result.
 	//
-	BOOST_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b << " d = " << d << " e = " << e << " fa = " << fa << " fb = " << fb << " fd = " << fd
+	QUOKKA_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b << " d = " << d << " e = " << e << " fa = " << fa << " fb = " << fb << " fd = " << fd
 					   << " fe = " << fe);
 	T q11 = (d - e) * fd / (fe - fd);
 	T q21 = (b - d) * fb / (fd - fb);
 	T q31 = (a - b) * fa / (fb - fa);
 	T d21 = (b - d) * fd / (fd - fb);
 	T d31 = (a - b) * fb / (fb - fa);
-	BOOST_MATH_INSTRUMENT_CODE("q11 = " << q11 << " q21 = " << q21 << " q31 = " << q31 << " d21 = " << d21 << " d31 = " << d31);
+	QUOKKA_MATH_INSTRUMENT_CODE("q11 = " << q11 << " q21 = " << q21 << " q31 = " << q31 << " d21 = " << d21 << " d31 = " << d31);
 	T q22 = (d21 - q11) * fb / (fe - fb);
 	T q32 = (d31 - q21) * fa / (fd - fa);
 	T d32 = (d31 - q21) * fd / (fd - fa);
 	T q33 = (d32 - q22) * fa / (fe - fa);
 	T c = q31 + q32 + q33 + a;
-	BOOST_MATH_INSTRUMENT_CODE("q22 = " << q22 << " q32 = " << q32 << " d32 = " << d32 << " q33 = " << q33 << " c = " << c);
+	QUOKKA_MATH_INSTRUMENT_CODE("q22 = " << q22 << " q32 = " << q32 << " d32 = " << d32 << " q33 = " << q33 << " c = " << c);
 
 	if ((c <= a) || (c >= b)) {
 		// Out of bounds step, fall back to quadratic interpolation:
 		c = quadratic_interpolate(a, b, d, fa, fb, fd, 3);
-		BOOST_MATH_INSTRUMENT_CODE("Out of bounds interpolation, falling back to "
+		QUOKKA_MATH_INSTRUMENT_CODE("Out of bounds interpolation, falling back to "
 					   "quadratic interpolation. c = "
 					   << c);
 	}
@@ -282,7 +282,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 	// Main entry point and logic for Toms Algorithm 748
 	// root finder.
 	//
-	BOOST_MATH_STD_USING // For ADL of std math functions
+	QUOKKA_MATH_STD_USING // For ADL of std math functions
 
 	    int count = max_iter;
 	T a, b, fa, fb, c, u, fu, a0, b0, d, fd, e, fe;
@@ -319,7 +319,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 		c = detail::secant_interpolate(a, b, fa, fb);
 		detail::bracket(f, a, b, c, fa, fb, d, fd);
 		--count;
-		BOOST_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
+		QUOKKA_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
 
 		if (count && (fa != 0) && !tol(a, b)) {
 			//
@@ -330,7 +330,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 			fe = fd;
 			detail::bracket(f, a, b, c, fa, fb, d, fd);
 			--count;
-			BOOST_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
+			QUOKKA_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
 		}
 	}
 
@@ -351,7 +351,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 			    (fabs(fb - fe) < min_diff) || (fabs(fd - fe) < min_diff);
 		if (prof) {
 			c = detail::quadratic_interpolate(a, b, d, fa, fb, fd, 2);
-			BOOST_MATH_INSTRUMENT_CODE("Can't take cubic step!!!!");
+			QUOKKA_MATH_INSTRUMENT_CODE("Can't take cubic step!!!!");
 		} else {
 			c = detail::cubic_interpolate(a, b, d, e, fa, fb, fd, fe);
 		}
@@ -364,7 +364,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 		if ((0 == --count) || (fa == 0) || tol(a, b)) {
 			break;
 		}
-		BOOST_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
+		QUOKKA_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
 		//
 		// Now another interpolated step:
 		//
@@ -372,7 +372,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 		       (fabs(fb - fe) < min_diff) || (fabs(fd - fe) < min_diff);
 		if (prof) {
 			c = detail::quadratic_interpolate(a, b, d, fa, fb, fd, 3);
-			BOOST_MATH_INSTRUMENT_CODE("Can't take cubic step!!!!");
+			QUOKKA_MATH_INSTRUMENT_CODE("Can't take cubic step!!!!");
 		} else {
 			c = detail::cubic_interpolate(a, b, d, e, fa, fb, fd, fe);
 		}
@@ -383,7 +383,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 		if ((0 == --count) || (fa == 0) || tol(a, b)) {
 			break;
 		}
-		BOOST_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
+		QUOKKA_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
 		//
 		// Now we take a double-length secant step:
 		//
@@ -404,8 +404,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 		e = d;
 		fe = fd;
 		detail::bracket(f, a, b, c, fa, fb, d, fd);
-		BOOST_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
-		BOOST_MATH_INSTRUMENT_CODE(" tol = " << T((fabs(a) - fabs(b)) / fabs(a)));
+		QUOKKA_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
+		QUOKKA_MATH_INSTRUMENT_CODE(" tol = " << T((fabs(a) - fabs(b)) / fabs(a)));
 		if ((0 == --count) || (fa == 0) || tol(a, b)) {
 			break;
 		}
@@ -423,8 +423,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 		fe = fd;
 		detail::bracket(f, a, b, T(a + (b - a) / 2), fa, fb, d, fd);
 		--count;
-		BOOST_MATH_INSTRUMENT_CODE("Not converging: Taking a bisection!!!!");
-		BOOST_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
+		QUOKKA_MATH_INSTRUMENT_CODE("Not converging: Taking a bisection!!!!");
+		QUOKKA_MATH_INSTRUMENT_CODE(" a = " << a << " b = " << b);
 	} // while loop
 
 	max_iter -= count;
@@ -433,7 +433,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 	} else if (fb == 0) {
 		a = b;
 	}
-	BOOST_MATH_LOG_COUNT(max_iter)
+	QUOKKA_MATH_LOG_COUNT(max_iter)
 	return std::make_pair(a, b);
 }
 

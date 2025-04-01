@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "boost/math/special_functions/bessel.hpp"
+
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
@@ -207,7 +209,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 			// set density (compute density perturbation)
 			double const R_max = 20.0e3 * C::parsec;
-			double const drho_over_rho = std::cyl_bessel_j(2, 5.1356 * R / R_max) * std::sin(2.0 * theta);
+			double const drho_over_rho = boost::math::cyl_bessel_j(2, 5.1356 * R / R_max) * std::sin(2.0 * theta);
 			rho = rho_disk * (1 + drho_over_rho);
 			AMREX_ALWAYS_ASSERT(rho > 0.);
 
