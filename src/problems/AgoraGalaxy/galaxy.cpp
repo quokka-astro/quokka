@@ -192,7 +192,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		double rho = NAN;
 		double vx = NAN;
 		double vy = NAN;
-		double vz = 0;
+		double const vz = 0;
 		double T = NAN;
 
 		// IMPORTANT: transition between disk and halo at the P_halo == P_disk surface
