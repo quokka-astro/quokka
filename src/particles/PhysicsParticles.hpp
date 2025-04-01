@@ -78,6 +78,7 @@ class PhysicsParticleDescriptorBase
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
 	virtual void writeUnitsFile(const std::string &snapshot_name, const std::string &name) = 0;
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
+	virtual void printParticleStatistics() const = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
@@ -85,7 +86,6 @@ class PhysicsParticleDescriptorBase
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
 	virtual void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
-	virtual void printParticleStatistics() const = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
 	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) { /* Default empty implementation */ }
