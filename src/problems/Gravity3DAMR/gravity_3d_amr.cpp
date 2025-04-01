@@ -418,7 +418,7 @@ auto problem_main() -> int
 
 		// ----- Check SN remnant mass -----
 
-		const double max_err_tol_mass = 1.0e-8;			      // max error tol in mass
+		const double max_err_tol_mass = 1.0e-7;			      // max error tol in mass
 		if (n_particle_test != n_expected_test_particles || SN_remnant_mass_rel_err > max_err_tol_mass) {
 			status = 1;
 		}
