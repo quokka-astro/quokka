@@ -3,6 +3,7 @@
 
 #include "AMReX_VisMF.H"
 #include "DiagBase.H"
+#include "yaml-cpp/yaml.h"
 
 class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 {
@@ -17,7 +18,7 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			 const amrex::Vector<std::string> &a_varNames) override;
+			 const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 

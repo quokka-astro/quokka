@@ -2415,7 +2415,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 
 	for (const auto &diag : m_diagnostics) {
 		if (diag->doDiag(tNew_[0], istep[0])) {
-			diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars);
+			diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, simulationMetadata_);
 		}
 	}
 }

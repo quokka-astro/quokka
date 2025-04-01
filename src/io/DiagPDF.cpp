@@ -118,7 +118,7 @@ auto DiagPDF::getIdxVec(const int linidx, std::vector<int> const &nBins) -> std:
 }
 
 void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			  const amrex::Vector<std::string> &a_stateVar)
+			  const amrex::Vector<std::string> &a_stateVar, const YAML::Node &simulationMetadata)
 {
 	// Set PDF range
 	const int nvars = static_cast<int>(m_varNames.size());

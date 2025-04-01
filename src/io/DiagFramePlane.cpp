@@ -3,6 +3,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_VisMF.H"
+#include "yaml-cpp/yaml.h"
 
 void printLowerDimIntVect(std::ostream &a_File, const amrex::IntVect &a_IntVect, int skipDim)
 {
@@ -191,7 +192,7 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 }
 
 void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-				 const amrex::Vector<std::string> & /*a_stateVar*/)
+				 const amrex::Vector<std::string> & /*a_stateVar*/, const YAML::Node &simulationMetadata)
 {
 	// Interpolate data to slice
 	amrex::Vector<amrex::MultiFab> planeData(a_state.size());
@@ -259,6 +260,22 @@ void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const a
 		}
 		amrex::Vector<int> const step_array(nlevs, a_nstep);
 		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio);
+
+		// Write metadata file
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::string const MetadataFileName(diagfile + "/metadata.yaml");
+			amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+			std::ofstream MetadataFile;
+			MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+			MetadataFile.open(MetadataFileName.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+			if (!MetadataFile.good()) {
+				amrex::FileOpenFailed(MetadataFileName);
+			}
+
+			// write YAML to MetadataFile
+			MetadataFile << simulationMetadata << '\n';
+			MetadataFile.close();
+		}
 	}
 }
 
