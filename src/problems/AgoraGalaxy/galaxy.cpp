@@ -162,7 +162,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			int const m = 2;
 			int const n = 1;
 			double const lambda_mn = 5.1356; // from Mathematica
-			double const drho_over_rho = 0.1 * std::cyl_bessel_j(m, lambda_mn * R) * std::sin(m * theta);
+			double const drho_over_rho = 0.1 * std::cyl_bessel_j(m, lambda_mn * R / r_d) * std::sin(m * theta);
 			double const rho = rho_disk * (1 + drho_over_rho);
 			return rho;
 		};
