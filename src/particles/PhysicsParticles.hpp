@@ -501,26 +501,24 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			amrex::Print() << std::left << std::setw(20) << PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_)
 				       << std::right << std::setw(15) << getNumParticles() << "\n";
 
-			// if has stellar evolution stage, print the mass and particle stage for all particles
-			if (getEvolutionStageIndex() >= 0) {
-				for (int lev = 1; lev <= container_->finestLevel(); ++lev) {
-					const auto [real_data, int_data] = getParticleDataAtLevelZero();
+			// if max_level = 0 and has stellar evolution stage, print the mass and particle stage for all particles
+			if (getEvolutionStageIndex() >= 0 && container_->finestLevel() == 0) {
+				const auto [real_data, int_data] = getParticleDataAtLevelZero();
 
-					if (!real_data.empty()) {
-						// Print header for detailed particle data
-						amrex::Print() << "  " << std::left << std::setw(15) << "Mass"
-										<< " | " << std::right << std::setw(20) << "Stellar evolution stage"
-										<< "\n";
-						amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
+				if (!real_data.empty()) {
+					// Print header for detailed particle data
+					amrex::Print() << "  " << std::left << std::setw(15) << "Mass"
+									<< " | " << std::right << std::setw(20) << "Stellar evolution stage"
+									<< "\n";
+					amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
 
-						// Print each particle's data with aligned columns
-						for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
-							amrex::Print()
-									<< "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + getMassIndex()] << " | "
-									<< std::right << std::setw(20) << int_data[i][getEvolutionStageIndex()] << "\n";
-						}
-						amrex::Print() << "\n"; // Add extra line for readability between particle types
+					// Print each particle's data with aligned columns
+					for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
+						amrex::Print()
+								<< "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + getMassIndex()] << " | "
+								<< std::right << std::setw(20) << int_data[i][getEvolutionStageIndex()] << "\n";
 					}
+					amrex::Print() << "\n"; // Add extra line for readability between particle types
 				}
 			}
 		}

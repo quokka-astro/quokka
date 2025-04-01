@@ -5,12 +5,8 @@
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_Geometry.H"
-#include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
@@ -20,7 +16,6 @@
 #include "QuokkaSimulation.hpp"
 #include "gravity_3d_amr.hpp"
 #include "hydro/hydro_system.hpp"
-#include <algorithm>
 
 struct BinaryOrbit {
 };
@@ -35,7 +30,7 @@ constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
-constexpr double SN_mass = 1.0e-10;		      // mass of SNProgenitor particles
+constexpr double SN_mass = 1.0e-5;		      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
 constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
@@ -265,6 +260,30 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	CICParticles->InitFromAsciiFile("Gravity3D.txt", nreal_extra, nullptr);
 }
 
+template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// tag cells for refinement: static mesh refinement within 0.3 < x,y,z < 0.7
+
+	auto const &dx = geom[lev].CellSizeArray();
+	auto const &plo = geom[lev].ProbLoArray();
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const double x = plo[0] + ((i + 0.5) * dx[0]);
+			const double y = plo[1] + ((j + 0.5) * dx[1]);
+			const double z = plo[2] + ((k + 0.5) * dx[2]);
+
+			if ((x >= 0.3 && x <= 0.7) && (y >= 0.3 && y <= 0.7) && (z >= 0.3 && z <= 0.7)) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
@@ -333,69 +352,82 @@ auto problem_main() -> int
 	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevelZero();
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
+	// ----- Check Test particles -----
+
+	amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
+	amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
-		// assume the first particle is in the first plane quadrant
-		for (const auto &data : real_data) {
-			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
-			if (data[3] < 0.1) {
-				continue;
+		// check the size of real_data
+		const int n_particles = static_cast<int>(real_data.size());
+
+		if (n_particles > 0) {
+
+			// assume the first particle is in the first plane quadrant
+			for (const auto &data : real_data) {
+				// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
+				if (data[3] < 0.1) {
+					continue;
+				}
+				// First 3 elements are positions (x,y,z)
+				if (data[0] * exact_x > 0.0) {
+					position_error += std::abs(data[0] - exact_x);
+					position_error += std::abs(data[1] - exact_y);
+					position_error += std::abs(data[2] - exact_z);
+				} else {
+					position_error += std::abs(data[0] - (-exact_x));
+					position_error += std::abs(data[1] - (-exact_y));
+					position_error += std::abs(data[2] - (-exact_z));
+				}
+				position_norm += std::abs(data[0]);
+				position_norm += std::abs(data[1]);
+				position_norm += std::abs(data[2]);
 			}
-			// First 3 elements are positions (x,y,z)
-			if (data[0] * exact_x > 0.0) {
-				position_error += std::abs(data[0] - exact_x);
-				position_error += std::abs(data[1] - exact_y);
-				position_error += std::abs(data[2] - exact_z);
+
+			amrex::Print() << "Particle positions and data are: \n";
+			for (const auto &data : real_data) {
+				// Print positions
+				amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
+				// Print additional data (mass, velocities)
+				amrex::Print() << " | Mass: " << data[3];
+				amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
+			}
+			amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+
+			// compute relative error
+			const double relative_error = position_error / position_norm;
+
+			amrex::Print() << "Position error: " << position_error << "\n";
+			amrex::Print() << "Position norm: " << position_norm << "\n";
+			amrex::Print() << "Relative error: " << relative_error << "\n";
+
+			// max error tol for particle positions
+			double max_err_tol = 0.0;
+			if (sim.tNew_[0] < 0.011) {
+				max_err_tol = 5.0e-7;
+			} else if (sim.tNew_[0] < 0.11) {
+				max_err_tol = 5.0e-6;
 			} else {
-				position_error += std::abs(data[0] - (-exact_x));
-				position_error += std::abs(data[1] - (-exact_y));
-				position_error += std::abs(data[2] - (-exact_z));
+				max_err_tol = 0.05;
 			}
-			position_norm += std::abs(data[0]);
-			position_norm += std::abs(data[1]);
-			position_norm += std::abs(data[2]);
+			if (!(relative_error < max_err_tol)) {
+				status = 1;
+			}
 		}
-
-		amrex::Print() << "Particle positions and data are: \n";
-		for (const auto &data : real_data) {
-			// Print positions
-			amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
-			// Print additional data (mass, velocities)
-			amrex::Print() << " | Mass: " << data[3];
-			amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
-		}
-		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
-
-		// compute relative error
-		const double relative_error = position_error / position_norm;
-
-		amrex::Print() << "Position error: " << position_error << "\n";
-		amrex::Print() << "Position norm: " << position_norm << "\n";
-		amrex::Print() << "Relative error: " << relative_error << "\n";
-
-		// ----- Check Test particles -----
-
-		amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
-		amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
 
 		// ----- Check SN remnant mass -----
 
-		// max error tol for particle positions
-		double max_err_tol = 0.0;
-		if (sim.tNew_[0] < 0.011) {
-			max_err_tol = 5.0e-7;
-		} else if (sim.tNew_[0] < 0.11) {
-			max_err_tol = 5.0e-6;
-		} else {
-			max_err_tol = 0.05;
-		}
 		const double max_err_tol_mass = 1.0e-8;			      // max error tol in mass
-		status = 1;
-		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < max_err_tol_mass) {
-			status = 0;
-			amrex::Print() << "Relative error within tolerance.\n";
+		if (n_particle_test != n_expected_test_particles || SN_remnant_mass_rel_err > max_err_tol_mass) {
+			status = 1;
 		}
 	}
 
+	if (status == 0) {
+		amrex::Print() << "Relative error within tolerance.\n";
+	} else {
+		amrex::Print() << "Test failed.\n";
+	}
 	return status;
 }
