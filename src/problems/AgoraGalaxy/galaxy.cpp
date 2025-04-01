@@ -146,9 +146,9 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		// compute density profile
 		auto rho_exact = [rho_bg](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			constexpr double M_GAS = 8.59322e9 * C::M_solar; // disk mass: 8.59322e9 Msun (20% gas fraction)
-			constexpr double r_d = 3.43218e3 * C::parsec; // disk scale length: 3.43218 kpc
-			constexpr double z_d = 0.343218e3 * C::parsec; // disk scale height: 0.343218 kpc
+			constexpr double M_GAS = 8.59322e9 * C::M_solar;		// disk mass: 8.59322e9 Msun (20% gas fraction)
+			constexpr double r_d = 3.43218e3 * C::parsec;			// disk scale length: 3.43218 kpc
+			constexpr double z_d = 0.343218e3 * C::parsec;			// disk scale height: 0.343218 kpc
 			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d; // normalization constant
 			return rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
 		};
