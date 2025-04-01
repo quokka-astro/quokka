@@ -146,6 +146,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		// compute density profile
 		auto rho_exact = [rho_bg](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const theta = std::atan2(x, y);
+
 			// Disk mass: 8.59322e9 Msun  (i.e. 20% gas fraction)
 			constexpr double M_GAS = 8.59322e9 * C::M_solar;
 			// Disk scale length: 3.43218 kpc
@@ -155,7 +157,14 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			// normalization constant
 			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d;
 			double const rho_disk = rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
-			return rho_disk;
+
+			// compute harmonic perturbation
+			int const m = 2;
+			int const n = 1;
+			double const lambda_mn = 5.1356; // from Mathematica
+			double const drho_over_rho = 0.1 * std::cyl_bessel_j(m, lambda_mn * R) * std::sin(m * theta);
+			double const rho = rho_disk * (1 + drho_over_rho);
+			return rho;
 		};
 
 		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
