@@ -164,7 +164,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 		double const total_stars = (1. - alpha) * norm_ratio * (std::erf(arg(m_imf_break)) - std::erf(arg(m_imf_min))) + std::pow(m_imf_max, 1.0 - alpha) -
 				     std::pow(m_imf_break, 1.0 - alpha);
-		double num_high_mass_stars = std::pow(m_imf_max, 1.0 - alpha) - std::pow(m_star_high, 1.0 - alpha);
+		double const num_high_mass_stars = std::pow(m_imf_max, 1.0 - alpha) - std::pow(m_star_high, 1.0 - alpha);
 		;
 
 		fstar_high = num_high_mass_stars / total_stars;
