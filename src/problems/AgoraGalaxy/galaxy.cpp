@@ -10,8 +10,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "boost/math/special_functions/bessel.hpp"
-
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
