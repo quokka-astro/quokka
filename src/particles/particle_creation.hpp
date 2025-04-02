@@ -270,7 +270,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 					p.rdata(birth_time_index + 1) = LONG_MAX;
 					if (p_idx > 0) {
-						double sigma_sq_x, sigma_sq_y, sigma_sq_z;
+						double sigma_sq_x;
+						double sigma_sq_y;
+						double sigma_sq_z;
 						double numx = 0.0, numy = 0.0, numz = 0.0, denominator = 0.0;
 						double vx_adj, vy_adj, vz_adj, rho_adj;
 						// Get the average velocity from the adjoining cells
