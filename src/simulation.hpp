@@ -1239,6 +1239,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
+			const bool this_lev_contains_nan = phi[lev].contains_nan();
+			if (this_lev_contains_nan) {
+				amrex::Print() << "[ERROR] Phi contains NAN on level " << lev << "!" << std::endl;
+				amrex::Print() << "[ERROR] Writing plotfile for debugging... " << lev << "!" << std::endl;
+				WritePlotFile();
+			}
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // this fails when max_level=2 for SphericalCollapse
 		}
 	}
