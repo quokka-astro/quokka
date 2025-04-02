@@ -15,11 +15,11 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
+#include "math/interpolate.hpp"
 
 using Real = amrex::Real;
 static constexpr int FATE_ARR_SIZE = 200;
-static constexpr int AGE_ARR_SIZE = 196;
-static constexpr Real Msun = 1.989e33;
+static constexpr int AGE_ARR_SIZE  = 196;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -> int
 {
@@ -44,24 +44,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	    0., 0., 1., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0., 0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
 	    0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 1.
 
-	};
+    };
 
-	// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
-
-	size_t ii = 0;
-	double x_interp = mass_star / Msun;
-	while (ii < FATE_ARR_SIZE - 1 && x_interp > interp_mass_star[ii + 1]) {
-		ii++;
-	}
-
-	// Perform linear interpolation
-	const Real x1 = interp_mass_star[ii];
-	const Real x2 = interp_mass_star[ii + 1];
-	const Real y1 = interp_star_fate[ii];
-	const Real y2 = interp_star_fate[ii + 1];
-	amrex::Real fate_interp = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
-
-	return (fate_interp < 0.5 ? 0 : 1);
+   // Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
+        auto const &x_arr = interp_mass_star;
+        auto const &y_arr = interp_star_fate;
+        amrex::Real fate_interp = interpolate_value(mass_star/C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE);
+    return (fate_interp <0.5 ? 0 : 1); 
+ 
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_star) -> Real
@@ -107,22 +97,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 	    3.81049975e+06, 3.72820650e+06, 3.66312475e+06, 3.59110975e+06, 3.52811250e+06, 3.46507475e+06, 3.40187575e+06, 3.33257625e+06, 3.26777575e+06,
 	    3.15637975e+06, 2.95494125e+06, 2.92330350e+06, 2.87439675e+06, 2.80228975e+06, 2.73674900e+06, 2.68266550e+06
 
-	};
+    };
 
-	// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
-
-	size_t ii = 0;
-	double x_interp = mass_star / Msun;
-	while (ii < AGE_ARR_SIZE - 1 && x_interp > interp_mass_star[ii + 1]) {
-		ii++;
-	}
-
-	// Perform linear interpolation
-	const Real x1 = interp_mass_star[ii];
-	const Real x2 = interp_mass_star[ii + 1];
-	const Real y1 = interp_death_time[ii];
-	const Real y2 = interp_death_time[ii + 1];
-	amrex::Real death_time = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
-
-	return death_time;
+   // Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
+    auto const &x_arr = interp_mass_star;
+    auto const &y_arr = interp_death_time;
+    amrex::Real death_time = interpolate_value(mass_star/C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE);
+    return death_time; 
+ 
 }
