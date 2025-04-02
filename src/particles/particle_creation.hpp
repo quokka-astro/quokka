@@ -235,11 +235,11 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-				const amrex::Real cell_mass = cell_volume * cell_density;
-				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
-				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
-				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+				const amrex::Real cell_volume  = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+				const amrex::Real cell_mass    = cell_volume * cell_density;
+				amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+				amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+				amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
 				double total_momx = 0.0;
@@ -331,8 +331,18 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
 				}
 				state_arr(i, j, k, HydroSystem<problem_t>::density_index) = (cell_mass - mass_low_mass_star) / cell_volume;
+<<<<<<< HEAD
 				state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *=
 				    cell_density / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+=======
+				vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+				vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+				vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+				state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *=  cell_density / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+				state_arr(i, j, k, HydroSystem<problem_t>::energy_index) = 0.5 * state_arr(i, j, k, HydroSystem<problem_t>::density_index) * (vx*vx + vy*vy + vz*vz) 
+				                                                            + state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+
+>>>>>>> 84e1d84e (modify total energy after star formation)
 			}
 		}
 	};
