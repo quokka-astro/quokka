@@ -197,7 +197,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			if (LambdaJ < J * dx[0]) {
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
-				amrex::Real num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
+				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
 				num_star = 1 + (amrex::RandomPoisson(num_high_mass_stars_exp, engine));
 			}
 			return num_star;
