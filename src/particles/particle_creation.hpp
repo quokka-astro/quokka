@@ -193,7 +193,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
-			int num_star = 0;
+			int num_star;
 
 			if (LambdaJ < J * dx[0]) {
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
