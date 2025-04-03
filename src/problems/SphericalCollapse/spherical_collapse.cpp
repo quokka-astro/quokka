@@ -31,6 +31,10 @@ template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
+template <> struct Particle_Traits<CollapseProblem> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+};
+
 template <> struct HydroSystem_Traits<CollapseProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
@@ -87,7 +91,7 @@ template <> void QuokkaSimulation<CollapseProblem>::setInitialConditionsOnGrid(q
 	});
 }
 
-template <> void QuokkaSimulation<CollapseProblem>::createInitialParticles()
+template <> void QuokkaSimulation<CollapseProblem>::createInitialCICParticles()
 {
 	// add particles at random positions in the box
 	const bool generate_on_root_rank = true;

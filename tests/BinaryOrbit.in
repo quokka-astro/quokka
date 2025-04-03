@@ -26,7 +26,6 @@ stop_time = 5.0e7   # s
 
 do_reflux = 1
 do_subcycle = 0
-do_cic_particles = 1    # turns on CIC particles
 
 ascent_interval = -1
 checkpoint_interval = -1

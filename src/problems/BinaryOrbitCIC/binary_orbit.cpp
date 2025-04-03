@@ -8,12 +8,8 @@
 ///
 
 #include "AMReX.H"
-#include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFab.H"
@@ -35,6 +31,10 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
 	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
 	static constexpr double mean_molecular_weight = C::m_u;
+};
+
+template <> struct Particle_Traits<BinaryOrbit> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {
@@ -72,7 +72,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialParticles()
+template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz

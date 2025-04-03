@@ -1,18 +1,29 @@
 #!/bin/bash
 
-# NOTE: CCE and ROCm versions must match according to this table:
-#  https://docs.olcf.ornl.gov/systems/frontier_user_guide.html#compatible-compiler-rocm-toolchain-versions
+source /opt/cray/pe/cpe/24.11/restore_lmod_system_defaults.sh
 
-#source /opt/cray/pe/cpe/23.09/restore_lmod_system_defaults.sh
+module load cpe/24.11
+module load pawseyenv/2025.03
+
 module load PrgEnv-cray
+module load craype-x86-trento
 module load craype-accel-amd-gfx90a
-module load cray-mpich
-module load cce/16.0.1
-module load rocm/5.5.3 # matches cce/16 clang version
 
+module load rocm/6.3.2 # MUST use this version to avoid compiler bugs
+module load cray-mpich
+module load cce/18.0.1
+
+# hdf5
 module load cray-hdf5
-module load cray-python/3.9.13.1
-module load cmake/3.27.7
+
+# adios2 (optional)
+module load adios2/2.10.2-hdf5
+
+# python
+module load cray-python/3.11.7
+
+# cmake
+module load cmake/3.30.5
 
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
@@ -21,9 +32,14 @@ export MPICH_GPU_SUPPORT_ENABLED=1
 export AMREX_AMD_ARCH=gfx90a
 
 # compiler environment hints
-export CC=$(which cc)
-export CXX=$(which CC)
+export CC=$(which hipcc)
+export CXX=$(which hipcc)
 export FC=$(which ftn)
-export CFLAGS="-I${ROCM_PATH}/include"
-export CXXFLAGS="-I${ROCM_PATH}/include -mllvm -amdgpu-function-calls=true"
 
+# these flags are REQUIRED
+export CFLAGS="-I${MPICH_DIR}/include"
+export CXXFLAGS="-I${MPICH_DIR}/include"
+export LDFLAGS="-L${MPICH_DIR}/lib -lmpi \
+  ${CRAY_XPMEM_POST_LINK_OPTS} -lxpmem \
+  ${PE_MPICH_GTL_DIR_amd_gfx90a} ${PE_MPICH_GTL_LIBS_amd_gfx90a}"
+export LD_LIBRARY_PATH=$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH

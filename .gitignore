@@ -10,6 +10,7 @@ docs/doxygen/
 tests/last_chk
 tests/plt*
 tests/chk*
+tests/slice*
 tests/*.csv
 tests/plt*
 sims/

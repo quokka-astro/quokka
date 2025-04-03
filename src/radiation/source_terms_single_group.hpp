@@ -47,9 +47,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
 		AMREX_ASSERT(Erad0 > 0.0);
 
+		const double cscale = c / chat;
+
 		// load radiation energy source term
 		// plus advection source term (for well-balanced/SDC integrators)
-		const double Src = radEnergySource(i, j, k, 0) * dt * chat;
+		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
+		const double Src = radEnergySource(i, j, k, 0) * dt / cscale;
 		if constexpr (gamma_ != 1.0) {
 			AMREX_ASSERT(Src >= 0.0);
 		}
@@ -73,8 +76,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		double work_prev = 0.0;
 		amrex::GpuArray<Real, 3> dMomentum{};
 		amrex::GpuArray<Real, 3> Frad_t1{};
-
-		const double cscale = c / chat;
 
 		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
@@ -236,16 +237,23 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, H_num_den)[0];
 					}
 
+					// Check for convergence. We need to take care of a special situation when tau is very small, in which case the source
+					// term won't be able to cancel the residual no matter how many iterations we try. This could happen when Src is
+					// non-zero or when the opacity is a sharp function of temperature. We set the criterion to be that: tau *
+					// std::max(a_rad * T_gas^4, E_tot0) < resid_tol * Etot0.
+
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
+					double F_D_abs = 0.0;
+					if (tau * std::max(radiation_constant_ * std::pow(T_gas, 4), Etot0) < resid_tol * Etot0) {
+						Erad_guess = Erad0 + Src;
+						F_D = 0.0;
+						F_D_abs = 0.0;
+					} else {
+						F_D_abs = std::abs(F_D);
+					}
 					if constexpr (add_line_cooling_to_radiation_in_jac) {
 						F_D -= (1.0 / cscale) * cooling * dt;
-					}
-					double F_D_abs = 0.0;
-					if (tau > 0.0) {
-						F_D_abs = std::abs(F_D);
-					} else {
-						F_D_abs = std::abs(F_D + R);
 					}
 
 					// check relative convergence of the residuals
@@ -258,8 +266,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 #if 0
 					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 					if (n == maxIter - 10) {
-						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
-							  << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0 << "; C_V = " << c_v
+							  << ", a_rad = " << radiation_constant_ << std::endl;
 					} else if (n >= maxIter - 10) {
 						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
 							  << ", tau = " << tau;

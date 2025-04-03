@@ -23,7 +23,6 @@ constexpr double T_initial = T_hohlraum * 0.001;
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = radiation_constant_cgs_;
-constexpr double c_v = (C::k_B / C::m_u) / (5. / 3. - 1.);
 
 constexpr double Erad_floor_ = a_rad * T_initial * T_initial * T_initial * T_initial;
 

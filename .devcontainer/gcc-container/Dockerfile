@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04
+FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04@sha256:53f5af4877aaf4c1ee3310f21e0df2ecf0ad6e776910ab3a376f60f2b304a039
 
 RUN apt-get --yes -qq update \
  && apt-get --yes -qq upgrade \
@@ -35,7 +35,7 @@ RUN mkdir /tmp/build-adios2 && cd /tmp/build-adios2 && \
  cd / && \
  rm -rf /tmp/build-adios2
 
-WORKDIR /home/ubuntu
-USER ubuntu
+WORKDIR /home/vscode
+USER vscode
 
 CMD [ "/bin/bash" ]

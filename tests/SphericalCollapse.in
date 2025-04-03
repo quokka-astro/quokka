@@ -30,7 +30,6 @@ derived_vars = gpot
 do_reflux = 1
 do_subcycle = 0
 do_tracers = 0          # turn on tracer particles
-do_cic_particles = 1    # turns on CIC particles
 
 ascent_interval = 100
 plotfile_interval = 200
