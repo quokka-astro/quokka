@@ -1,5 +1,5 @@
 This file contains values for logPhi, logG, and z, for setting the potential and external gravity for the problem.
-It also contains other parameters for setting the intial density and pressure profiles. 
+It also contains other parameters for setting the initial density and pressure profiles. 
 The three datasets correspond to different distances from the Galaxy's centre.
 These need to be copied and pasted into test_sne.cpp.
 
