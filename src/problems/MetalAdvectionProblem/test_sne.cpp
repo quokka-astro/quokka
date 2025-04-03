@@ -62,8 +62,8 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> z_data{
     1.21085081e+22};
 
 AMREX_GPU_MANAGED Real z_star = 245.0 * pc;
-AMREX_GPU_MANAGED Real Sigma_star = 42.0 * Msun / pc / pc;
-AMREX_GPU_MANAGED Real rho_dm = 0.0064 * Msun / pc / pc / pc;
+AMREX_GPU_MANAGED Real Sigma_star = 42.0 * C::M_solar / pc / pc;
+AMREX_GPU_MANAGED Real rho_dm = 0.0064 * C::M_solar / pc / pc / pc;
 AMREX_GPU_MANAGED Real R0_Gal = 8.e3 * pc;
 AMREX_GPU_MANAGED Real ks_sigma_sfr = 2.088579882548443e-55;
 AMREX_GPU_MANAGED Real hscale = 150. * pc;
@@ -107,7 +107,7 @@ template <> struct SimulationData<NewProblem> {
 	int SN_counter_cumulative = 0;
 	Real SN_rate_per_vol = NAN;  // rate per unit time per unit volume
 	Real E_blast = 1.0e51;	     // ergs
-	Real M_ejecta = 5.0 * Msun;  // 5.0 * Msun; // g
+	Real M_ejecta = 5.0 * C::M_solar;  // 5.0 * Msun; // g
 	Real refine_threshold = 1.0; // gradient refinement threshold
 };
 
