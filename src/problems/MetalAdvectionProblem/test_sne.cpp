@@ -64,7 +64,7 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> z_data{
 AMREX_GPU_MANAGED Real z_star = 245.0 * pc;
 AMREX_GPU_MANAGED Real Sigma_star = 42.0 * Msun / pc / pc;
 AMREX_GPU_MANAGED Real rho_dm = 0.0064 * Msun / pc / pc / pc;
-AMREX_GPU_MANAGED Real R0 = 8.e3 * pc;
+AMREX_GPU_MANAGED Real R0_Gal = 8.e3 * pc;
 AMREX_GPU_MANAGED Real ks_sigma_sfr = 2.088579882548443e-55;
 AMREX_GPU_MANAGED Real hscale = 150. * pc;
 AMREX_GPU_MANAGED Real sigma1 = 700000.0;
@@ -126,8 +126,8 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 
 		// Calculate DM Potential
 		double prefac;
-		prefac = 2. * M_PI * Const_G * rho_dm * std::pow(R0, 2);
-		double Phidm = (prefac * std::log(1. + std::pow(z / R0, 2)));
+		prefac = 2. * M_PI * Const_G * rho_dm * std::pow(R0_Gal, 2);
+		double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal, 2)));
 
 		// Calculate Stellar Disk Potential
 		double prefac2;
@@ -212,13 +212,10 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 					state(i, j, k, HydroSystem<NewProblem>::energy_index) += rho_eint_blast;
 					state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) += rho_eint_blast;
 					state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex) += scalar_blast;
-
-					printf("The total number of SN gone off=%d\n", cum_sn);
-					Real Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index) / Const_mH, -3. / 7.);
-					printf("Rpds = %.2e pc\n", Rpds);
 				}
 			}
 		});
+		printf("The total number of SN gone off=%d\n", cum_sn);
 	}
 }
 
@@ -291,7 +288,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<NewProblem>::GetGradFixedPo
 
 	amrex::Real ginterp = (y1 + (y2 - y1) * (x_interp - x1) / (x2 - x1));
 
-	grad_potential[2] = 2. * M_PI * Const_G * rho_dm * std::pow(R0, 2) * (2. * z / std::pow(R0, 2)) / (1. + std::pow(z, 2) / std::pow(R0, 2));
+	grad_potential[2] = 2. * M_PI * Const_G * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
 	grad_potential[2] += 2. * M_PI * Const_G * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
 	grad_potential[2] += (z / std::abs(z)) * std::pow(10., ginterp);
 
