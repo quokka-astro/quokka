@@ -105,10 +105,10 @@ template <> struct SimulationData<NewProblem> {
 
 	int nblast = 0;
 	int SN_counter_cumulative = 0;
-	Real SN_rate_per_vol = NAN;  // rate per unit time per unit volume
-	Real E_blast = 1.0e51;	     // ergs
-	Real M_ejecta = 5.0 * C::M_solar;  // 5.0 * Msun; // g
-	Real refine_threshold = 1.0; // gradient refinement threshold
+	Real SN_rate_per_vol = NAN;	  // rate per unit time per unit volume
+	Real E_blast = 1.0e51;		  // ergs
+	Real M_ejecta = 5.0 * C::M_solar; // 5.0 * Msun; // g
+	Real refine_threshold = 1.0;	  // gradient refinement threshold
 };
 
 template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
