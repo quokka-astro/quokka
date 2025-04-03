@@ -23,8 +23,8 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "radiation/radiation_system.hpp"
 #include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
 #include "test_sne.hpp"
 
 // global variables needed for Dirichlet boundary condition and initial conditions
@@ -136,10 +136,10 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 		double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
 
 		// Calculate Gas Disk Potential
-	
+
 		auto const &x_arr = z_data;
-		auto const &y_arr = logphi_data; 
-		amrex::Real phi_interp =  interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
+		auto const &y_arr = logphi_data;
+		amrex::Real phi_interp = interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
 		amrex::Real Phigas = std::pow(10., phi_interp);
 
 		double Phitot = Phist + Phidm + Phigas;
@@ -264,9 +264,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<NewProblem>::GetGradFixedPo
 
 	// Interpolate to find the accurate g-value from array
 	auto const &x_arr = z_data;
-	auto const &y_arr = logg_data; 
-	amrex::Real ginterp =  interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
-	
+	auto const &y_arr = logg_data;
+	amrex::Real ginterp = interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
 
 	grad_potential[2] = 2. * M_PI * Const_G * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
 	grad_potential[2] += 2. * M_PI * Const_G * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
