@@ -320,7 +320,7 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 
 // Code for producing in-situ Projection plots
 template <>
-auto QuokkaSimulation<NewProblem>::ComputeProjections(onst amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+auto QuokkaSimulation<NewProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute density projection
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
@@ -424,8 +424,7 @@ auto QuokkaSimulation<NewProblem>::ComputeProjections(onst amrex::Direction dir)
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
 		    return (rhoZ);
-	    },
-	    dir);
+	    });
 	return proj;
 }
 
