@@ -46,6 +46,7 @@ checkpoint_interval = -1
 plotfile_interval = 10
 derived_vars = temperature gpot
 
-agora_galaxy.vcirc_file = "../extern/agora_data/vcirc.dat"
+agora_galaxy.vcirc_file = "./vcirc.dat"
 agora_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
-agora_galaxy.mass_refine_threshold = 8.593e4
+agora_galaxy.refine_Rmax_kpc = 20.0
+agora_galaxy.refine_zmax_kpc = 5.0

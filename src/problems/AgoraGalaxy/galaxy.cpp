@@ -250,22 +250,28 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 
 template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// quasi-Lagrangian refinement:
-	// refine if the cell mass is greater than 'mass_refine_threshold'
+	// geometrical refinement
+	// tag cells within the cylinder defined by R < Rmax and abs(z) < zmax
 	amrex::ParmParse const pp("agora_galaxy");
-	amrex::Real mass_refine_threshold_Msun = NAN;
-	pp.query("mass_refine_threshold", mass_refine_threshold_Msun);
-	const amrex::Real mass_refine_threshold = mass_refine_threshold_Msun * C::M_solar;
+	amrex::Real refine_Rmax_kpc = NAN;
+	amrex::Real refine_zmax_kpc = NAN;
+	pp.query("refine_Rmax_kpc", refine_Rmax_kpc);
+	pp.query("refine_zmax_kpc", refine_zmax_kpc);
+	const amrex::Real refine_Rmax = refine_Rmax_kpc * (1.0e3 * C::parsec);
+	const amrex::Real refine_zmax = refine_zmax_kpc * (1.0e3 * C::parsec);
 
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-	const amrex::Real cell_vol = dx[0] * dx[1] * dx[2];
+	const auto prob_lo = geom[lev].ProbLoArray();
+	const auto dx = geom[lev].CellSizeArray();
 	const auto state = state_new_cc_[lev].const_arrays();
 	const auto tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real const rho = state[bx](i, j, k, HydroSystem<AgoraGalaxy>::density_index);
-		amrex::Real const cell_mass = rho * cell_vol;
-		if (cell_mass > mass_refine_threshold) {
+		amrex::Real const x = prob_lo[0] + ((i + 0.5) * dx[0]);
+		amrex::Real const y = prob_lo[1] + ((j + 0.5) * dx[1]);
+		amrex::Real const z = prob_lo[2] + ((k + 0.5) * dx[2]);
+		amrex::Real const R = std::sqrt(x*x + y*y);
+
+		if ((R < refine_Rmax) && (std::abs(z) < refine_zmax)) {
 			tag[bx](i, j, k) = amrex::TagBox::SET;
 		}
 	});
