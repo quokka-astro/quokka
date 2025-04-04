@@ -337,7 +337,7 @@ auto QuokkaSimulation<NewProblem>::ComputeProjections(const amrex::Direction dir
 
 	proj["hot_mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    double flux;
+		    double flux = NAN;
 		    Real const rho = state(i, j, k, HydroSystem<NewProblem>::density_index);
 		    Real const vx3 = state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) / rho;
 		    Real const Eint = state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index);
