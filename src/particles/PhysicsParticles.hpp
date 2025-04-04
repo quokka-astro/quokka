@@ -64,9 +64,6 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
 
-	// Virtual interface for particle operations
-	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
-
 	// New method to get particle positions and data
 	[[nodiscard]] virtual auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
@@ -111,56 +108,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, hydro_interact),
 	      container_(container)
 	{
-	}
-
-	// Get particle positions from all ranks and gather them on rank 0.
-	// This method creates a temporary particle container on rank 0 and copies all particles to it.
-	// Only rank 0 will return the actual particle positions, other ranks return an empty vector.
-	// @param lev: level from which to get particles
-	// @return: vector of particle positions [x,y,z] on rank 0, empty vector on other ranks
-	[[nodiscard]] auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> override
-	{
-		std::vector<std::array<double, AMREX_SPACEDIM>> positions;
-
-		// All ranks must participate in copyParticles
-		if (container_ != nullptr) {
-			// Create single-box particle container for analysis on all ranks
-			ContainerType analysisPC{};
-			// Define a single box [0,1]^3 that will hold all particles on rank 0
-			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
-			amrex::Geometry const geom(box);
-			amrex::BoxArray const boxArray(box);
-			// Force all particles to rank 0 by using a single-rank distribution
-			amrex::Vector<int> const ranks({0});
-			amrex::DistributionMapping const dmap(ranks);
-
-			// Initialize the analysis container and gather all particles to rank 0
-			analysisPC.Define(geom, dmap, boxArray);
-			analysisPC.copyParticles(*container_); // MPI communication happens here
-
-			// Only rank 0 processes the particles since they're all gathered there
-			if (amrex::ParallelDescriptor::IOProcessor()) {
-				// Get iterator for the single box on rank 0
-				typename ContainerType::ParIterType const pIter(analysisPC, lev);
-				if (pIter.isValid()) {
-					const amrex::Long np = pIter.numParticles();
-					auto &particles = pIter.GetArrayOfStructs();
-
-					// Transfer particle data from GPU to CPU for analysis
-					typename ContainerType::ParticleType *pData = particles().data();
-					amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
-					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
-
-					// Extract just the positions into the return vector
-					for (int i = 0; i < np; ++i) {
-						const auto &p = pData_h[i];
-						positions.push_back({AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))});
-					}
-				}
-			}
-		}
-
-		return positions; // Empty vector on non-root ranks
 	}
 
 	// Get positions and fields data from all particles at level 0 from all ranks and gather them on rank 0.
