@@ -179,6 +179,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		};
 
 		// integrate density profile over cell volume
+		// TODO(bwibking): use adaptive quadrature with relative tolerance
 		const double cell_vol = dx[0] * dx[1] * dx[2];
 		const double rho_disk = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
@@ -216,6 +217,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			T = T_disk;
 
 			// set velocity (integrate velocity profiles over cell volume)
+			// TODO(bwibking): use adaptive quadrature with relative tolerance
 			vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 			vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 			AMREX_ALWAYS_ASSERT(!std::isnan(vx));
