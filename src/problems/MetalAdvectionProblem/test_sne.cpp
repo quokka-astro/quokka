@@ -319,7 +319,8 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 }
 
 // Code for producing in-situ Projection plots
-template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(onst amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+template <>
+auto QuokkaSimulation<NewProblem>::ComputeProjections(onst amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute density projection
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
