@@ -420,10 +420,11 @@ auto QuokkaSimulation<NewProblem>::ComputeProjections(const amrex::Direction dir
 	    },
 	    dir);
 
-	proj["scalar"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
-		return (rhoZ);
-	});
+	proj["scalar"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const rhoZ = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex);
+		    return (rhoZ);
+	    });
 	return proj;
 }
 
