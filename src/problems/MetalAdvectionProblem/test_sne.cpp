@@ -25,6 +25,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "io/projection.hpp"
 #include "test_sne.hpp"
 
 // global variables needed for Dirichlet boundary condition and initial conditions
