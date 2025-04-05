@@ -2,6 +2,7 @@
 #define DIAGPDF_H
 
 #include "DiagBase.H"
+#include "yaml-cpp/yaml.h"
 
 class DiagPDF : public DiagBase::Register<DiagPDF>
 {
@@ -14,7 +15,7 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			 const amrex::Vector<std::string> &a_stateVar) override;
+			 const amrex::Vector<std::string> &a_stateVar, const YAML::Node &simulationMetadata) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
