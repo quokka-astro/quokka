@@ -32,8 +32,8 @@ regrid_interval     = -1    # static refinement only (do not regrid)
 do_reflux = 1
 do_subcycle = 0
 
-cfl = 0.2
-max_timesteps = 1e4
+cfl = 0.3
+max_timesteps = 100
 stop_time = 6.3e15         # 200 Myr
 
 cooling.enabled = 1
@@ -48,5 +48,5 @@ derived_vars = temperature gpot
 
 agora_galaxy.vcirc_file = "./vcirc.dat"
 agora_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
-agora_galaxy.refine_Rmax_kpc = 20.0
-agora_galaxy.refine_zmax_kpc = 5.0
+agora_galaxy.refine_Rmax_kpc = 16.0
+agora_galaxy.refine_zmax_kpc = 4.0
