@@ -48,8 +48,7 @@ docs/doxyoutput/
 _build/
 
 # Include image and pdf files inside docs
-!/docs/docs/flowchart-v2.pdf
-!/docs/docs/tests/attach/*.png
+!/docs/markdown/tests/attach/*.png
 
 # Kokkos build files
 KokkosCore_config.h

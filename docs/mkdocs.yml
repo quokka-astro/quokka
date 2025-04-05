@@ -1,4 +1,5 @@
 site_name: Quokka
+docs_dir: markdown
 copyright: © Copyright 2020-2024, Ben Wibking and Quokka Developers.
 theme:
   name: readthedocs
@@ -39,7 +40,7 @@ plugins:
   - awesome-pages
   - include-markdown
   - bibtex:
-      bib_file: docs/references.bib
+      bib_file: markdown/references.bib
       bib_by_default: true
       csl_file: apa-6th-edition.csl
       # csl_file: https://raw.githubusercontent.com/citation-style-language/styles/master/apa-5th-edition.csl
