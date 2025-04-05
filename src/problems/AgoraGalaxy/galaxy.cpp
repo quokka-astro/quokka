@@ -278,8 +278,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxA
 		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
 		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
 
-		auto tagIfPointInRegion = [=] (amrex::Real x, amrex::Real y, amrex::Real z) {
-			amrex::Real const R = std::sqrt(x*x + y*y);
+		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
+			amrex::Real const R = std::sqrt(x * x + y * y);
 			if ((R < refine_Rmax) && (std::abs(z) < refine_zmax)) {
 				tag[bx](i, j, k) = amrex::TagBox::SET;
 			}
