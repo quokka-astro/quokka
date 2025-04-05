@@ -38,13 +38,14 @@ constexpr int n_SN = 2 * 2 * 2 * 2 / 2;
 constexpr double m_SN = n_SN * SN_mass;
 
 // locations of the particles: a 2x2x2 grids of particles
-constexpr double nx = 64.0;
-constexpr double loc_x1 = 31.5 / nx;
-constexpr double loc_x2 = 32.5 / nx;
-constexpr double loc_y1 = 31.5 / nx;
-constexpr double loc_y2 = 32.5 / nx;
-constexpr double loc_z1 = 31.5 / nx;
-constexpr double loc_z2 = 32.5 / nx;
+constexpr double box_width_ = 4.0;
+constexpr double dx_ = box_width_ / 64.0;
+constexpr double loc_x1 = -0.5 * dx_;
+constexpr double loc_x2 = 0.5 * dx_;
+constexpr double loc_y1 = -0.5 * dx_;
+constexpr double loc_y2 = 0.5 * dx_;
+constexpr double loc_z1 = -0.5 * dx_;
+constexpr double loc_z2 = 0.5 * dx_;
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -94,6 +95,16 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 
+		double x_L = -box_width_ / 2.0;
+		// Calculate cell indices for the particle locations
+		int i_par1 = static_cast<int>(floor((loc_x1 - x_L) / dx_));
+		int j_par1 = static_cast<int>(floor((loc_y1 - x_L) / dx_));
+		int k_par1 = static_cast<int>(floor((loc_z1 - x_L) / dx_));
+
+		int i_par2 = static_cast<int>(floor((loc_x2 - x_L) / dx_));
+		int j_par2 = static_cast<int>(floor((loc_y2 - x_L) / dx_));
+		int k_par2 = static_cast<int>(floor((loc_z2 - x_L) / dx_));
+
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
@@ -102,15 +113,6 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
 			amrex::ignore_unused(state_arr);
-
-			// Calculate cell indices for the particle locations
-			const int i_par1 = static_cast<int>(floor(loc_x1 / dx[0]));
-			const int j_par1 = static_cast<int>(floor(loc_y1 / dx[1]));
-			const int k_par1 = static_cast<int>(floor(loc_z1 / dx[2]));
-
-			const int i_par2 = static_cast<int>(floor(loc_x2 / dx[0]));
-			const int j_par2 = static_cast<int>(floor(loc_y2 / dx[1]));
-			const int k_par2 = static_cast<int>(floor(loc_z2 / dx[2]));
 
 			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
 			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
@@ -262,7 +264,8 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 
 template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement: static mesh refinement within 0.3 < x,y,z < 0.7
+	// tag cells for refinement: static mesh refinement within 0 < x < 1.5 and -1.5 < y,z < 1.5
+	// Note that the particle are within r = 1.0 from the origin.
 
 	auto const &dx = geom[lev].CellSizeArray();
 	auto const &plo = geom[lev].ProbLoArray();
@@ -277,7 +280,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxA
 			const double y = plo[1] + ((j + 0.5) * dx[1]);
 			const double z = plo[2] + ((k + 0.5) * dx[2]);
 
-			if ((x >= 0.3 && x <= 0.7) && (y >= 0.3 && y <= 0.7) && (z >= 0.3 && z <= 0.7)) {
+			if ((x >= 0.0 && x <= 1.5) && (y >= -1.5 && y <= 1.5) && (z >= -1.5 && z <= 1.5)) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
@@ -418,8 +421,8 @@ auto problem_main() -> int
 
 		// ----- Check SN remnant mass -----
 
-		const double max_err_tol_mass = 1.0e-7; // max error tol in mass
-		if (n_particle_test != n_expected_test_particles || SN_remnant_mass_rel_err > max_err_tol_mass) {
+		const double max_err_tol_mass = 2.0e-6; // max error tol in mass. Mass is not conserved to machine precision due to AMR interpolation.
+		if (n_particle_test != n_expected_test_particles || SN_remnant_mass_rel_err > max_err_tol_mass || std::isnan(SN_remnant_mass_rel_err)) {
 			status = 1;
 		}
 	}

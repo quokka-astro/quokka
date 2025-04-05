@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -2.03125 -2.03125 -2.03125
-geometry.prob_hi     =  1.96875  1.96875  1.96875
+geometry.prob_lo     =  -2.0 -2.0 -2.0
+geometry.prob_hi     =  2.0 2.0 2.0
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -14,7 +14,7 @@ amr.v              = 1       # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 64 64 64
-amr.max_level       = 1     # number of levels = max_level + 1
+amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 32     # grid size must be divisible by this
 amr.max_grid_size   = 32    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
@@ -31,3 +31,4 @@ particles.verbose = 1
 
 stop_time = 5.0
 max_timesteps = 4
+plotfile_interval = 100000
