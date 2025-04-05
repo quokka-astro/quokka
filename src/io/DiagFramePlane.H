@@ -3,6 +3,7 @@
 
 #include "AMReX_VisMF.H"
 #include "DiagBase.H"
+#include "yaml-cpp/yaml.h"
 
 class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 {
@@ -17,13 +18,13 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			 const amrex::Vector<std::string> &a_varNames) override;
+			 const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
 	void Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, const amrex::Vector<const amrex::MultiFab *> &a_slice,
 				       const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
-				       const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref);
+				       const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref, const YAML::Node &simulationMetadata);
 
 	static void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name);
 
