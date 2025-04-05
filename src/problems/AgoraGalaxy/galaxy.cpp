@@ -63,8 +63,6 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Gpu::PinnedVector<amrex::Real> vcirc;
 };
 
-constexpr double rho_halo = 1.0e-6 * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
-
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 {
 	// 1. read in circular velocity table "vcirc.dat"
@@ -119,11 +117,48 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 
 template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	// read parameters
+	//
+	amrex::ParmParse const pp("agora_galaxy");
 
+	// disc parameters
+	double disk_gas_mass_Msun = NAN;     // disk mass
+	double disk_Rscale_kpc = NAN;	     // disk scale length
+	double disk_zscale_kpc = NAN;	     // disk scale height
+	double T_disk = NAN;		     // K
+	double disk_perturb_amplitude = NAN; // amplitude of harmonic mode perturbation
+	double disk_perturb_Rmax_kpc = NAN;  // max radius (in kpc) for harmonic mode perturbations
+	pp.query("disk_gas_mass_Msun", disk_gas_mass_Msun);
+	pp.query("disk_Rscale_kpc", disk_Rscale_kpc);
+	pp.query("disk_zscale_kpc", disk_zscale_kpc);
+	pp.query("disk_temperature", T_disk);
+	pp.query("disk_perturb_amplitude", disk_perturb_amplitude);
+	pp.query("disk_perturb_Rmax_kpc", disk_perturb_Rmax_kpc);
+	AMREX_ALWAYS_ASSERT(!std::isnan(disk_gas_mass_Msun));
+	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
+	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
+	AMREX_ALWAYS_ASSERT(!std::isnan(T_disk));
+	AMREX_ALWAYS_ASSERT(!std::isnan(disk_perturb_amplitude));
+	AMREX_ALWAYS_ASSERT(!std::isnan(disk_perturb_Rmax_kpc));
+
+	const double disk_gas_mass = disk_gas_mass_Msun * C::M_solar;
+	const double R_d = disk_Rscale_kpc * (1.0e3 * C::parsec);
+	const double z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
+	const double R_max_perturb = disk_perturb_Rmax_kpc * (1e3 * C::parsec);
+	const double rho_0 = disk_gas_mass / 4. / M_PI / (R_d * R_d) / z_d; // normalization constant
+
+	// halo parameters
+	double T_halo = 1.0e6;	    // K
+	double ndens_halo = 1.0e-6; // cm^{-3}
+	pp.query("halo_temperature", T_halo);
+	pp.query("halo_number_density", ndens_halo);
+	AMREX_ALWAYS_ASSERT(!std::isnan(T_halo));
+	AMREX_ALWAYS_ASSERT(!std::isnan(ndens_halo));
+
+	const double rho_halo = ndens_halo * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
+
+	// read tables
+	//
 	double const *R_table = userData_.radius.dataPtr();
 	double const *vcirc_table = userData_.vcirc.dataPtr();
 	auto const len_table = static_cast<int>(userData_.radius.size());
@@ -131,7 +166,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::Real R_table_max = userData_.r_outer;
 	const amrex::Real vcirc_inner = userData_.vcirc_inner;
 	const amrex::Real vcirc_outer = userData_.vcirc_outer;
-	const amrex::Real rho_bg = ::rho_halo; // workaround nvcc compiler bug
+
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
@@ -144,13 +183,9 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
 
 		// compute density profile
-		auto rho_exact = [rho_bg](double x, double y, double z) {
+		auto rho_exact = [rho_0, R_d, z_d](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			constexpr double M_GAS = 8.59322e9 * C::M_solar;		// disk mass: 8.59322e9 Msun (20% gas fraction)
-			constexpr double r_d = 3.43218e3 * C::parsec;			// disk scale length: 3.43218 kpc
-			constexpr double z_d = 0.343218e3 * C::parsec;			// disk scale height: 0.343218 kpc
-			constexpr double rho_0 = M_GAS / 4. / M_PI / (r_d * r_d) / z_d; // normalization constant
-			return rho_0 * std::exp(-R / r_d) * std::exp(-std::abs(z) / z_d);
+			return rho_0 * std::exp(-R / R_d) * std::exp(-std::abs(z) / z_d);
 		};
 
 		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
@@ -184,10 +219,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		const double rho_disk = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
 
-		// set temperature to constant (the disk will cool quasi-instantly)
-		const double T_halo = 1.0e6; // K
-		const double T_disk = 1.0e4; // K
-
 		double rho = NAN;
 		double vx = NAN;
 		double vy = NAN;
@@ -207,9 +238,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			double const theta = std::atan2(x, y);
 
 			// set density (compute density perturbation)
-			double const R_max = 20.0e3 * C::parsec;
 			// NOTE: jn is the C standard math function for BesselJ. it works everywhere.
-			double const drho_over_rho = jn(2, 5.1356 * R / R_max) * std::sin(2.0 * theta);
+			double const drho_over_rho = disk_perturb_amplitude * jn(2, 5.1356 * R / R_max_perturb) * std::sin(2.0 * theta);
 			rho = rho_disk * (1 + drho_over_rho);
 			AMREX_ALWAYS_ASSERT(rho > 0.);
 
