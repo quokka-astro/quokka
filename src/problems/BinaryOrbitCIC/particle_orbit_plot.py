@@ -13,9 +13,11 @@ def particle_dist(plotfiles):
     err_vel_arr = []
     d0 = 2.0 * 3.125e12
     v0 = 10332860.
+    m0 = 2.0e34
 
     for pltfile in plotfiles:
         ds = yt.load(pltfile)
+        # print(ds.derived_field_list)
         Lx = ds.domain_right_edge[0] - ds.domain_left_edge[0]
         Nx = ds.domain_dimensions[0]
         cell_dx = Lx/Nx
@@ -26,6 +28,8 @@ def particle_dist(plotfiles):
         vxs = ad["CIC_particles", "particle_real_comp1"]
         vys = ad["CIC_particles", "particle_real_comp2"]
         vzs = ad["CIC_particles", "particle_real_comp3"]
+        ms = ad["CIC_particles", "particle_real_comp0"]
+        assert ms[0] == m0 and ms[1] == m0
         dx = x[0] - x[1]
         dy = y[0] - y[1]
         dz = z[0] - z[1]
