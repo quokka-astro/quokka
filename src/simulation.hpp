@@ -1028,7 +1028,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// Use the new type-aware particle creation method
 		// TODO(cch): Need to take care of AMR subscycling
-		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0]);
+		particleRegister_.createParticlesFromState(state_new_cc_[finest_level], finest_level, cur_time, dt_[0]);
 
 		// Stellar evolution and SN deposition
 		// TODO(cch): Need to take care of AMR subcycling
