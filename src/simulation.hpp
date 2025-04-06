@@ -1141,7 +1141,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		if (do_cic_particles != 0) {
 			// deposit particles using amrex::ParticleToMesh
 			amrex::ParticleToMesh(*CICParticles, amrex::GetVecOfPtrs(rhs), 0, finest_level,
-					      quokka::CICDeposition{Gconst_, quokka::ParticleMassIdx, 0, 1});
+					      quokka::CICDeposition{Gconst_, quokka::ParticleMassIdx, 0, 1}, false);
 		}
 #endif
 

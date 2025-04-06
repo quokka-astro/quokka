@@ -1,10 +1,18 @@
 # note: requires yt>=4.3.0
+import sys
 import yt
+from math import sqrt
+import glob
+import numpy as np
+
+yt.set_log_level(40)
 
 def particle_dist(plotfiles):
     t_arr = []
     err_arr = []
+    err_vel_arr = []
     d0 = 2.0 * 3.125e12
+    v0 = 10332860.
 
     for pltfile in plotfiles:
         ds = yt.load(pltfile)
@@ -15,27 +23,54 @@ def particle_dist(plotfiles):
         x = ad["CIC_particles", "particle_position_x"]
         y = ad["CIC_particles", "particle_position_y"]
         z = ad["CIC_particles", "particle_position_z"]
+        vxs = ad["CIC_particles", "particle_real_comp1"]
+        vys = ad["CIC_particles", "particle_real_comp2"]
+        vzs = ad["CIC_particles", "particle_real_comp3"]
         dx = x[0] - x[1]
         dy = y[0] - y[1]
         dz = z[0] - z[1]
-        from math import sqrt
         d = sqrt(dx*dx + dy*dy + dz*dz)
         #fractional_err = (d-d0)/d0
-        grid_err = (d-d0)/cell_dx
+        grid_err = (d - d0) / cell_dx.value
+        vx = vxs[0]
+        vy = vys[0]
+        vz = vzs[0]
+        v_mag = sqrt(vx*vx + vy*vy + vz*vz)
+        err_vel = (v_mag - v0) / v0
         t_arr.append(float(ds.current_time) / 3.15e7)
         err_arr.append(grid_err)
-    
-    return t_arr, err_arr
+        err_vel_arr.append(err_vel)
 
-import glob
-files = glob.glob("plt*")
-files = sorted(files)
-t, err = particle_dist(files)
+    return t_arr, err_arr, err_vel_arr
 
-import matplotlib.pyplot as plt
-plt.figure(figsize=(6,4))
-plt.plot(t, err)
-plt.xlabel("time (yr)")
-plt.ylabel(r"$(d-d_0)/\Delta x$")
-plt.tight_layout()
-plt.savefig("orbit.png", dpi=150)
+def main(pltdir):
+
+    files = glob.glob(pltdir + "/plt*")
+    files = sorted(files)
+    t, err, err_vel = particle_dist(files)
+
+    print("max error: {:.1e}".format(np.max(np.abs(err))))
+    print("max error velocity: {:.1e}".format(np.max(np.abs(err_vel))))
+
+    # print time vs err_vel as a table
+    print("time (yr) err_vel")
+    for i in range(len(t)):
+        print("{:.1e} {:.1e}".format(t[i], err_vel[i]))
+
+    return
+
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(6,4))
+    plt.plot(t[1:], np.abs(err[1:]))
+    # plt.ylim(-0.1, 0.1)
+    plt.grid()
+    plt.xlabel("time (yr)")
+    plt.ylabel(r"$(d-d_0)/\Delta x$")
+    plt.yscale("log")
+    plt.tight_layout()
+    plt.savefig("orbit.png", dpi=150)
+
+pltdir = "."
+if len(sys.argv) > 1:
+    pltdir = sys.argv[1]
+main(pltdir)
