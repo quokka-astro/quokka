@@ -80,8 +80,14 @@ class PhysicsParticleDescriptorBase
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
+
+	// Create particles from hydro state at the finest level
+	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call.
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
-	virtual void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) = 0;
+
+	// Destroy particles at level lev_min and above
+	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
+
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
@@ -303,11 +309,11 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		    container_, this->getMassIndex(), state, lev, current_time, dt, this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 	}
 
-	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) override
+	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) override
 	{
 		if (container_ != nullptr) {
 			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
-			    container_, this->getMassIndex(), lev, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+			    container_, this->getMassIndex(), lev_min, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 
@@ -711,13 +717,13 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Destroy particles based on particle type
-	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt)
+	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only destroy particles if the descriptor allows destruction
 			if (descriptor->getAllowsDestruction()) {
 				// Call the appropriate particle destruction method based on the particle type
-				descriptor->destroyParticles(lev, current_time, dt);
+				descriptor->destroyParticles(lev_min, current_time, dt);
 			}
 		}
 	}
