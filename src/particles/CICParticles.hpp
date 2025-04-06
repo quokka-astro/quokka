@@ -38,7 +38,7 @@ struct CICDeposition {
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp,
 				      [=] AMREX_GPU_DEVICE(const CICParticleContainer::ParticleType &part, int comp) {
-					      return 4.0 * M_PI * Gconst * part.rdata(comp); // weight by 4 pi G
+					      return 4.0 * M_PI * Gconst * part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])); // weight by 4 pi G
 				      });
 	}
 };
