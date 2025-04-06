@@ -91,7 +91,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
-	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) { /* Default empty implementation */ }
+	virtual void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) { /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -492,18 +492,19 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 #if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
-	void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) override
+	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) override
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
+			// Deposit supernova energy and momentum from level lev_min to finest level
 			// zero_out_input is false because we want to accumulate supernova contributions
 			// vol_weight is false because SNDeposition does the volume weighting
-			amrex::ParticleToMesh(*this->container_, state, lev,
+			amrex::ParticleToMesh(*this->container_, state, lev_min, -1,
 					      SNDeposition{step_end_time, this->getMassIndex(), HydroSystem<problem_t>::density_index,
 							   this->getBirthTimeIndex(), this->getEvolutionStageIndex()},
-					      false);
+					      false, false);
 
 			// Update particle evolution stages after deposition
-			updateEvolutionStage(this->container_, lev, step_end_time, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+			updateEvolutionStage(this->container_, lev_min, step_end_time, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
@@ -637,12 +638,12 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit supernova energy and momentum from all particles
-	void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
+	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time)
 	{
 		// this function is only implemented for one particle type (Test particles), so we specify the particle type manually here
 		auto it = particleRegistry_.find(ParticleType::Test);
 		if (it != particleRegistry_.end()) {
-			it->second->depositSN(state, lev, step_end_time);
+			it->second->depositSN(state, lev_min, step_end_time);
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
