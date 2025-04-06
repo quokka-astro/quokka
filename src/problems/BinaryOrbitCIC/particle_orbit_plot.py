@@ -51,15 +51,20 @@ def main(pltdir):
 
     files = glob.glob(pltdir + "/plt*")
     files = sorted(files)
-    t, err, err_vel = particle_dist(files)
+    t, err_dist, err_vel = particle_dist(files)
 
-    print("max error: {:.1e}".format(np.max(np.abs(err))))
-    print("max error velocity: {:.1e}".format(np.max(np.abs(err_vel))))
+    print("max rel_error distance: {:.1e}".format(np.max(np.abs(err_dist))))
+    print()
+    # print("max error velocity: {:.1e}".format(np.max(np.abs(err_vel))))
 
     # print time vs err_vel as a table
-    print("time (yr) err_vel")
+    err_vel_tol = 1.0e-3
+    print("time (yr) rel_err_vel within_tol_1e-3?")
     for i in range(len(t)):
-        print("{:.1e} {:.1e}".format(t[i], err_vel[i]))
+        if np.abs(err_vel[i]) < err_vel_tol:
+            print("{:.1e} {:.1e} yes".format(t[i], err_vel[i]))
+        else:
+            print("{:.1e} {:.1e} no".format(t[i], err_vel[i]))
 
     return
 
