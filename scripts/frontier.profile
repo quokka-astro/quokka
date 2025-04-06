@@ -29,6 +29,7 @@ module load emacs
 
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
+export FI_MR_CACHE_MONITOR=kdreg2
 
 # optimize ROCm/HIP compilation for MI250X
 export AMREX_AMD_ARCH=gfx90a
