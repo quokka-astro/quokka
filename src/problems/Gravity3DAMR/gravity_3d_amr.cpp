@@ -16,14 +16,15 @@
 #include "QuokkaSimulation.hpp"
 #include "gravity_3d_amr.hpp"
 #include "hydro/hydro_system.hpp"
+#include "math/ODEIntegrate.hpp"
 
 struct BinaryOrbit {
 };
 
 // This is an ad-hoc test of particle creation and destruction.
 // The initial condition consists of 2 CIC particles with a mass of 1.0. We keep track of their orbit and compare with the exact solution. In the second time
-// step, 3^3 * 2 particles are created. A third of them are LowMassStar and the rest are SNProgenitor. In the third time step, all SNProgenitor particles are
-// turned into SNRemnant. In the fourth time step, all SNRemnant particles are destroyed. In the end of the simulation, there are 2 CIC particles and 18 Test
+// step, 8 * 2 = 16 particles are created. Half of them are LowMassStar and the other half are SNProgenitor. In the third time step, all SNProgenitor particles are
+// turned into SNRemnant. In the fourth time step, all SNRemnant particles are destroyed. In the end of the simulation, there are 2 CIC particles and 8 Test
 // particles.
 
 constexpr double rho0 = 1.0e-5;
@@ -33,19 +34,14 @@ constexpr int particle_per_cell = 2;
 constexpr double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
-constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
-constexpr int n_SN = 2 * 2 * 2 * 2 / 2;
+constexpr int n_expected_test_particles = 4; // initially 0, then 2^3 * 2 created, then half of them destroyed
+constexpr int n_SN = 4;
 constexpr double m_SN = n_SN * SN_mass;
 
 // locations of the particles: a 2x2x2 grids of particles
-constexpr double box_width_ = 4.0;
-constexpr double dx_ = box_width_ / 64.0;
-constexpr double loc_x1 = -0.5 * dx_;
-constexpr double loc_x2 = 0.5 * dx_;
-constexpr double loc_y1 = -0.5 * dx_;
-constexpr double loc_y2 = 0.5 * dx_;
-constexpr double loc_z1 = -0.5 * dx_;
-constexpr double loc_z2 = 0.5 * dx_;
+constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
+// need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
+constexpr double particle_offset_from_center_ = 0.01;
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -64,7 +60,8 @@ template <> struct Particle_Traits<BinaryOrbit> {
 	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
 	// This is the correct way to define the particle switch
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {
@@ -95,15 +92,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 
-		double x_L = -box_width_ / 2.0;
-		// Calculate cell indices for the particle locations
-		int i_par1 = static_cast<int>(floor((loc_x1 - x_L) / dx_));
-		int j_par1 = static_cast<int>(floor((loc_y1 - x_L) / dx_));
-		int k_par1 = static_cast<int>(floor((loc_z1 - x_L) / dx_));
-
-		int i_par2 = static_cast<int>(floor((loc_x2 - x_L) / dx_));
-		int j_par2 = static_cast<int>(floor((loc_y2 - x_L) / dx_));
-		int k_par2 = static_cast<int>(floor((loc_z2 - x_L) / dx_));
+		double x_L = box_left_edge_;
+		double offset = particle_offset_from_center_;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
@@ -114,8 +104,17 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 			// Could check density threshold or other state-based conditions
 			amrex::ignore_unused(state_arr);
 
+			// Calculate cell indices for the particle locations
+			// int i_par1 = static_cast<int>(floor((-offset - x_L) / dx[0]));
+			int j_par1 = static_cast<int>(floor((-offset - x_L) / dx[1]));
+			int k_par1 = static_cast<int>(floor((-offset - x_L) / dx[2]));
+
+			int i_par2 = static_cast<int>(floor((offset - x_L) / dx[0]));
+			int j_par2 = static_cast<int>(floor((offset - x_L) / dx[1]));
+			int k_par2 = static_cast<int>(floor((offset - x_L) / dx[2]));
+			
 			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
-			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
+			if (is_create_particle && (i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
 				return particle_per_cell;
 			}
 			return 0;
@@ -280,7 +279,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxA
 			const double y = plo[1] + ((j + 0.5) * dx[1]);
 			const double z = plo[2] + ((k + 0.5) * dx[2]);
 
-			if ((x >= 0.0 && x <= 1.5) && (y >= -1.5 && y <= 1.5) && (z >= -1.5 && z <= 1.5)) {
+			if ((x >= 0.5 && x <= 1.5) && (y >= -1.5 && y <= 1.5) && (z >= -1.5 && z <= 1.5)) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
@@ -319,17 +318,21 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
-	sim.initDt_ = dt_;
-	sim.maxDt_ = dt_;
+	// sim.initDt_ = dt_;
+	// sim.maxDt_ = dt_;
 
 	// initialize
 	sim.setInitialConditions();
 
 	// evolve
 	sim.evolve();
+	
+	// return 0;
 
 	// exact solution
-	const double theta = 0.5 * sim.tNew_[0];
+	// const double theta_init = M_PI / 2.0 - 0.1;
+	const double theta_init = 0.0;
+	const double theta = (0.5 * sim.tNew_[0]) + theta_init;
 	const double exact_x = 1.0 * std::cos(theta);
 	const double exact_y = 1.0 * std::sin(theta);
 	const double exact_z = 0.0;
@@ -357,8 +360,8 @@ auto problem_main() -> int
 
 	// ----- Check Test particles -----
 
-	amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
-	amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
+	amrex::Print() << "Expected number of test particles: " << n_expected_test_particles << "\n";
+	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 

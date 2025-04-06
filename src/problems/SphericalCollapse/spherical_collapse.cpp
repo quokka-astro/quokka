@@ -119,6 +119,8 @@ template <> void QuokkaSimulation<CollapseProblem>::ErrorEst(int lev, amrex::Tag
 			Real const q = state(i, j, k, nidx);
 			if (q > q_min) {
 				tag(i, j, k) = amrex::TagBox::SET;
+			} else {
+				tag(i, j, k) = amrex::TagBox::CLEAR;
 			}
 		});
 	}

@@ -69,17 +69,36 @@ class PhysicsParticleDescriptorBase
 
 	// Pure virtual methods that must be implemented by derived classes
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
+
+	// Redistribute particles at level lev and above
 	virtual void redistribute(int lev) = 0;
+	
+	// Redistribute particles at level lev and above with ngrow ghost cells
 	virtual void redistribute(int lev, int ngrow) = 0;
+
+	// Write particle data to plot file
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
+
+	// Write particle data to checkpoint file
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
+
+	// Write units info of particles to checkpoint/plotfile
 	virtual void writeUnitsFile(const std::string &snapshot_name, const std::string &name) = 0;
-	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
+
+	// Print statistics of particles
 	virtual void printParticleStatistics() const = 0;
+
+	// Get the number of particles
+	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
+
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
-	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
-	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
+
+	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
+	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
+
+	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
+	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
 
 	// Create particles from hydro state at the finest level
 	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call.
@@ -131,10 +150,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		std::vector<std::vector<double>> real_data;
 		std::vector<std::vector<int>> int_data;
 
-		// If max level > 0, return empty vectors. This function does not support multi-level particles.
-		if (container_->finestLevel() > 0) {
-			return {real_data, int_data};
-		}
+		// // If max level > 0, return empty vectors. This function does not support multi-level particles.
+		// if (container_->finestLevel() > 0) {
+		// 	return {real_data, int_data};
+		// }
 
 		// All ranks must participate in copyParticles
 		if (container_ != nullptr) {
@@ -237,27 +256,28 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	// Implementation of particle drift (position update based on velocity)
-	void driftParticles(int lev, amrex::Real dt) const override
+	void driftParticles(int lev_min, int lev_max, amrex::Real dt) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
 
 			if (mass_idx >= 0) {
-				for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
+				for (int lev = lev_min; lev <= lev_max; ++lev) {
+					for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+						auto &particles = pIter.GetArrayOfStructs();
+						auto *pData = particles().data();
+						const amrex::Long np = pIter.numParticles();
 
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-						// update particle position based on velocity components
-						for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-							if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
-								p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+							// update particle position based on velocity components
+							for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+								if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
+									p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+								}
 							}
-						}
-					});
+						});
+					}
 				}
 			}
 		}
@@ -270,33 +290,33 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
 
 			if (mass_idx >= 0) {
-				for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
+					for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+						auto &particles = pIter.GetArrayOfStructs();
+						auto *pData = particles().data();
+						const amrex::Long np = pIter.numParticles();
 
 					const auto &accel_arr = accel.array(pIter);
-					const auto &geom = container_->Geom(lev);
-					const auto plo = geom.ProbLoArray();
-					const auto dx_inv = geom.InvCellSizeArray();
+						const auto &geom = container_->Geom(lev);
+						const auto plo = geom.ProbLoArray();
+						const auto dx_inv = geom.InvCellSizeArray();
 
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-						amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
+						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+							amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 
-						// Interpolate acceleration from grid to particle and update velocity
-						interp.MeshToParticle(
-						    p, accel_arr, 0, mass_idx + 1, AMREX_SPACEDIM,
-						    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
-							    return acc(i, j, k, comp); // no weighting
-						    },
-						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
-							    // kick particle by updating its velocity
-							    if (comp < ContainerType::ParticleType::NReal) {
-								    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
-							    }
-						    });
-					});
+							// Interpolate acceleration from grid to particle and update velocity
+							interp.MeshToParticle(
+									p, accel_arr, 0, mass_idx + 1, AMREX_SPACEDIM,
+									[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
+										return acc(i, j, k, comp); // no weighting
+									},
+									[=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+										// kick particle by updating its velocity
+										if (comp < ContainerType::ParticleType::NReal) {
+											p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+										}
+									});
+						});
 				}
 			}
 		}
@@ -684,23 +704,21 @@ template <typename problem_t> class PhysicsParticleRegister
 
 #if AMREX_SPACEDIM == 3
 	// Update positions of all massive particles
-	void driftParticlesAllLevels(amrex::Real dt, int finest_level)
+	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					descriptor->driftParticles(lev, dt);
-				}
+				descriptor->driftParticles(0, lev_max, dt);
 			}
 		}
 	}
 
 	// Update velocities of all massive particles
-	void kickParticlesAtLevel(amrex::Real dt, amrex::MultiFab &acceleration, int lev)
+	void kickParticlesAtLevel(int lev, amrex::Real dt, amrex::MultiFab &accel)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				descriptor->kickParticles(lev, dt, acceleration);
+				descriptor->kickParticles(lev, dt, accel);
 			}
 		}
 	}
@@ -713,6 +731,9 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
 				descriptor->createParticlesFromState(state, lev, current_time, dt);
+
+				// redistribute particles
+				// descriptor->redistribute(lev);
 			}
 		}
 	}

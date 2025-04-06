@@ -1007,9 +1007,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// hyperbolic advance over all levels
 		// (N.B. when AMR is enabled, regridding may happen during this function!)
+		// Particle redistribution is done here.
 		int lev = 0;		 // coarsest level
 		const int iteration = 1; // this is the first call to advance level 'lev'
 		timeStepWithSubcycling(lev, cur_time, iteration);
+
+		particleRegister_.redistribute(0);
 
 #if AMREX_SPACEDIM == 3
 		// drift particles from t to (t + dt)
@@ -1025,6 +1028,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		if (doPoissonSolve_ == 1) {
 			kickParticlesAllLevels(dt_[0]);
 		}
+
+		// Redistribute particles after kick-drift-kick to prepare for particle operations
+		particleRegister_.redistribute(0);
 
 		// Use the new type-aware particle creation method
 		// TODO(cch): Need to take care of AMR subscycling
@@ -1352,7 +1358,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
 
 		// Kick particles using the acceleration field
-		particleRegister_.kickParticlesAtLevel(dt, accel[lev], lev);
+		particleRegister_.kickParticlesAtLevel(lev, dt, accel[lev]);
 	}
 }
 #endif // AMREX_SPACEDIM == 3
