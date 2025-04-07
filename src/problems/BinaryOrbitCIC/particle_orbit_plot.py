@@ -5,6 +5,7 @@ import yt
 from math import sqrt
 import glob
 import numpy as np
+# import matplotlib.pyplot as plt
 
 yt.set_log_level(40)
 
@@ -116,38 +117,48 @@ def plot_debug_Poisson_rhs(pltdir):
     max_idx = 300
 
     # derive field: -Poisson_RHS
-    yt.add_field(("boxlib", "Poisson_RHS_neg"), function=lambda field, data: -data["boxlib", "Poisson_RHS"], sampling_type="cell")
+    # try:
+    #     yt.add_field(("boxlib", "Poisson_RHS_neg"), function=lambda field, data: -data["boxlib", "Poisson_RHS"], sampling_type="cell")
+    # except:
+    #     print("Poisson_RHS does not exist")
+    #     pass
     
     for pltfile in sorted(glob.glob(pltdir + "/debug_*")):
+        # skip if not a directory
         if not os.path.isdir(pltfile):
             continue
-        is_accel = "accel" in pltfile
-        # idx = int(pltfile[-5:])
-        # if idx > max_idx:
-        #     continue
+        # only plot accel fields
+        is_accel = "accel" in os.path.basename(pltfile)
+        if not is_accel:
+            continue
         ds = yt.load(pltfile)
         ad = ds.all_data()
-        field = ("boxlib", "Poisson_RHS")
+        # field = ("boxlib", "Poisson_RHS")
+        field = ("boxlib", "accel_x")
         slc = yt.SlicePlot(ds, "z", field)
         if is_accel:
             slc.set_zlim(field, 1e0, 3e4)
             slc.set_log(field, True)
+        slc.set_width((1.3e13, "cm"))
+        slc.annotate_grids()
         figfn = pltfile
         if figfn[-1] == '/':
             figfn = figfn[:-1]
-        figfn = figfn + "_Poisson_RHS.png"
+        # figfn = figfn + "_Poisson_RHS.png"
+        figfn = figfn + "_accel_x.png"
         slc.save(figfn, mpl_kwargs={"dpi": 300})
 
-        if is_accel:
-            field = ("boxlib", "Poisson_RHS_neg")
-            slc = yt.SlicePlot(ds, "z", field)
-            slc.set_zlim(field, 1e0, 3e4)
-            slc.set_log(field, True)
-            figfn = pltfile
-            if figfn[-1] == '/':
-                figfn = figfn[:-1]
-            figfn = figfn + "_Poisson_RHS_neg.png"
-            slc.save(figfn, mpl_kwargs={"dpi": 300})
+        # plot negative accel
+        # if is_accel:
+        #     field = ("boxlib", "Poisson_RHS_neg")
+        #     slc = yt.SlicePlot(ds, "z", field)
+        #     slc.set_zlim(field, 1e0, 3e4)
+        #     slc.set_log(field, True)
+        #     figfn = pltfile
+        #     if figfn[-1] == '/':
+        #         figfn = figfn[:-1]
+        #     figfn = figfn + "_Poisson_RHS_neg.png"
+        #     slc.save(figfn, mpl_kwargs={"dpi": 300})
 
 pltdir = "."
 if len(sys.argv) > 1:
