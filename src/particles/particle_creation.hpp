@@ -331,10 +331,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
 				}
 				state_arr(i, j, k, HydroSystem<problem_t>::density_index) = (cell_mass - mass_low_mass_star) / cell_volume;
-<<<<<<< HEAD
-				state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *=
-				    cell_density / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-=======
 				vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
@@ -344,7 +340,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				    0.5 * state_arr(i, j, k, HydroSystem<problem_t>::density_index) * (vx * vx + vy * vy + vz * vz) +
 				    state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 
->>>>>>> 84e1d84e (modify total energy after star formation)
 			}
 		}
 	};
