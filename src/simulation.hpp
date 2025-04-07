@@ -652,7 +652,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default CFL number == 0.3, set to whatever is in the file
 	pp.query("cfl", cflNumber_);
 
-	// Default CFL number for particles == 0.99, set to whatever is in the file
+	// Default CFL number for particles == 0.5, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
 
 	// Default AMR interpolation method == lincc_interp
