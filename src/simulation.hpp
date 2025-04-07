@@ -1249,7 +1249,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			auto accel_arr = accel[lev].arrays();
 			const auto &phi_arr = phi[lev].const_arrays();
 			const auto dx_inv = geom[lev].InvCellSizeArray();
-			const amrex::IntVect ng(0);
+			amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)}; // CCH: must include 1 ghost zone, right?
 
 			// check for NaN
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
@@ -1279,6 +1279,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
 
+			// write accel, before fillboundary/interpolation
+			const int lev_plot = max_level;
+			const std::string debug_accel_lev = "debug_accel_bf_fillbd_lev" + std::to_string(lev) + "_";
+			const std::string plotfile_name4 = amrex::Concatenate(debug_accel_lev, istep[0], 5);
+			const int plt_interval = 1;
+			const amrex::Vector<std::string> debug_poisson_names = {"accel_x", "accel_y", "accel_z"};
+			if (istep[0] % plt_interval == 0) {
+				WriteSingleLevelPlotfile(plotfile_name4, accel[lev], debug_poisson_names, geom[lev], -1.0, istep[0] + 1);
+			}
+
 			if (lev == 0) {
 				accel[lev].FillBoundary(geom[lev].periodicity());
 				fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
@@ -1293,14 +1303,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
 
 			// write accel
-			const int lev_plot = max_level;
-			if (lev == lev_plot) {
-				std::string plotfile_name4 = CustomPlotFileName("debug_Poisson_accel", istep[0]);
-				const int plt_interval = 10;
-				const amrex::Vector<std::string> debug_poisson_names = {"accel_x", "accel_y", "accel_z"};
-				if (istep[0] % plt_interval == 0) {
-					WriteSingleLevelPlotfile(plotfile_name4, accel[lev], debug_poisson_names, geom[lev], -1.0, istep[0] + 1);
-				}
+			const std::string debug_accel_lev_af = "debug_accel_af_fillbd_lev" + std::to_string(lev) + "_";
+			const std::string plotfile_name5 = amrex::Concatenate(debug_accel_lev_af, istep[0], 5);
+			if (istep[0] % plt_interval == 0) {
+				WriteSingleLevelPlotfile(plotfile_name5, accel[lev], debug_poisson_names, geom[lev], -1.0, istep[0] + 1);
 			}
 
 			// loop over boxes of particles on this level
@@ -1321,7 +1327,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 					    p, accel_arr, 0, quokka::ParticleVxIdx, AMREX_SPACEDIM,
 					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
 								const auto tmp = acc(i, j, k, comp);
-								printf("accel at (i, j, k) = (%d, %d, %d) = %e\n", i, j, k, tmp);
+								// printf("accel at (i, j, k) = (%d, %d, %d) = %e\n", i, j, k, tmp);
 						    return tmp;
 					    },
 					    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int comp, amrex::Real acc_comp) {
@@ -2205,11 +2211,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 	int comp = 0;
 	int ncomp_per_dim_fc = 0;
 	int ncomp_tot_fc = 0;
-	int nghost_fc = 0;
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
 		ncomp_tot_fc = Physics_Indices<problem_t>::nvarTotal_fc;
-		nghost_fc = state_new_fc_[lev][0].nGrow();
 	}
 	const int ncomp_deriv = derivedNames_.size();
 	const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
