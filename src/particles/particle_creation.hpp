@@ -143,7 +143,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	// Specialized nested ParticleChecker for StochasticStellarPop particles
 
 	static constexpr amrex::Real eps_star = 0.5; // fraction of gas mass that goes into star particles
-	static constexpr amrex::Real eps_ff   = 0.5; // efficiency per free fall time 
+	static constexpr amrex::Real eps_ff = 0.5;   // efficiency per free fall time
 	static constexpr amrex::Real J = 0.5;	     // Jeans parameter
 
 	// Constants for the Chabrier IMF
@@ -194,11 +194,12 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-			const amrex::Real prob_star_formation = eps_ff * dt / eps_star/ t_ff;
+			const amrex::Real prob_star_formation = eps_ff * dt / eps_star / t_ff;
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star;
 
-			if (LambdaJ < J * dx[0] && random_draw < prob_star_formation) { //Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
+			if (LambdaJ < J * dx[0] &&
+			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
@@ -244,7 +245,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 				amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
 				const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-				const amrex::Real particle_mass = cell_density * cell_volume * eps_ff * dt/t_ff;
+				const amrex::Real particle_mass = cell_density * cell_volume * eps_ff * dt / t_ff;
 				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
 				double total_momx = 0.0;
 				double total_momy = 0.0;
@@ -343,7 +344,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				state_arr(i, j, k, HydroSystem<problem_t>::energy_index) =
 				    0.5 * state_arr(i, j, k, HydroSystem<problem_t>::density_index) * (vx * vx + vy * vy + vz * vz) +
 				    state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-
 			}
 		}
 	};
