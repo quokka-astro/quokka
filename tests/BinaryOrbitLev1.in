@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -2.5e13 -2.5e13 -2.5e13
-geometry.prob_hi     =   2.5e13  2.5e13  2.5e13
+geometry.prob_lo     =  -6.0e12 -6.0e12 -6.0e12
+geometry.prob_hi     =   6.0e12  6.0e12  6.0e12
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -31,5 +31,5 @@ do_cic_particles = 1    # turns on CIC particles
 ascent_interval = -1
 checkpoint_interval = -1
 #plottime_interval = 2.0e5 # s
-plotfile_interval = 2
+plotfile_interval = -1
 derived_vars = gpot

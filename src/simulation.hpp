@@ -1137,6 +1137,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].setVal(0);
 		}
 
+		// write rhs
+		const int lev_plot = max_level;
+		std::string plotfile_name = CustomPlotFileName("debug_Poisson_rhs", istep[0]);
+		const amrex::Vector<std::string> debug_poisson_names = {"rhs"};
+		const int plt_interval = 10;
+		if (istep[0] % plt_interval == 0) {
+			WriteSingleLevelPlotfile(plotfile_name, rhs[lev_plot], debug_poisson_names, geom[lev_plot], -1.0, istep[0] + 1);
+		}
+
 #ifdef AMREX_PARTICLES
 		if (do_cic_particles != 0) {
 			// deposit particles using amrex::ParticleToMesh
@@ -1144,6 +1153,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 					      quokka::CICDeposition{Gconst_, quokka::ParticleMassIdx, 0, 1}, false, false);
 		}
 #endif
+
+		// write rhs
+		std::string plotfile_name2 = CustomPlotFileName("debug_Poisson_rhs_after_deposition", istep[0]);
+		if (istep[0] % plt_interval == 0) {
+			WriteSingleLevelPlotfile(plotfile_name2, rhs[lev_plot], debug_poisson_names, geom[lev_plot], -1.0, istep[0] + 1);
+		}
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
@@ -1156,6 +1171,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		if (verbose) {
 			amrex::Print() << "\n";
+		}
+
+		// write phi
+		std::string plotfile_name3 = CustomPlotFileName("debug_Poisson_phi", istep[0]);
+		const amrex::Vector<std::string> debug_phi_name = {"phi"};
+		if (istep[0] % plt_interval == 0) {
+			WriteSingleLevelPlotfile(plotfile_name3, phi[lev_plot], debug_phi_name, geom[lev_plot], -1.0, istep[0] + 1);
 		}
 
 		// check for NaN
@@ -1235,7 +1257,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			amrex::ParallelFor(accel[lev], ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
 				// compute cell-centered acceleration -grad(phi)
 				if (n == 0) {
-					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
+					// accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
+					const auto tmp1 = phi_arr[bx](i + 1, j, k);
+					const auto tmp2 = phi_arr[bx](i - 1, j, k);
+					const auto tmp3 = -0.5 * dx_inv[0] * (tmp1 - tmp2);
+					if (lev == max_level && i == 14 && j == 31 && k == 31) {
+						printf("tmp1 = %e, tmp2 = %e, tmp3 = %e\n", tmp1, tmp2, tmp3);
+					}
+					accel_arr[bx](i, j, k, n) = tmp3;
 				}
 				if (n == 1) {
 					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j - 1, k));
@@ -1263,6 +1292,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
 			AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
 
+			// write accel
+			const int lev_plot = max_level;
+			if (lev == lev_plot) {
+				std::string plotfile_name4 = CustomPlotFileName("debug_Poisson_accel", istep[0]);
+				const int plt_interval = 10;
+				const amrex::Vector<std::string> debug_poisson_names = {"accel_x", "accel_y", "accel_z"};
+				if (istep[0] % plt_interval == 0) {
+					WriteSingleLevelPlotfile(plotfile_name4, accel[lev], debug_poisson_names, geom[lev], -1.0, istep[0] + 1);
+				}
+			}
+
 			// loop over boxes of particles on this level
 			for (quokka::CICParticleIterator pIter(*CICParticles, lev); pIter.isValid(); ++pIter) {
 				auto &particles = pIter.GetArrayOfStructs();
@@ -1274,11 +1314,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 					quokka::CICParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					// print particle velocity
+					printf("particle velocity: %e %e %e\n", p.rdata(quokka::ParticleVxIdx), p.rdata(quokka::ParticleVyIdx), p.rdata(quokka::ParticleVzIdx));
 					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 					interp.MeshToParticle(
 					    p, accel_arr, 0, quokka::ParticleVxIdx, AMREX_SPACEDIM,
 					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
-						    return acc(i, j, k, comp); // no weighting
+								const auto tmp = acc(i, j, k, comp);
+								printf("accel at (i, j, k) = (%d, %d, %d) = %e\n", i, j, k, tmp);
+						    return tmp;
 					    },
 					    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int comp, amrex::Real acc_comp) {
 						    // kick particle by updating its velocity

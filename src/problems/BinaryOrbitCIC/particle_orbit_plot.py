@@ -1,4 +1,5 @@
 # note: requires yt>=4.3.0
+import os
 import sys
 import yt
 from math import sqrt
@@ -11,6 +12,7 @@ def particle_dist(plotfiles):
     t_arr = []
     err_arr = []
     err_vel_arr = []
+    pos = []
     d0 = 2.0 * 3.125e12
     v0 = 10332860.
     m0 = 2.0e34
@@ -25,6 +27,7 @@ def particle_dist(plotfiles):
         x = ad["CIC_particles", "particle_position_x"]
         y = ad["CIC_particles", "particle_position_y"]
         z = ad["CIC_particles", "particle_position_z"]
+        pos.append((float(x[0].value), float(y[0].value), float(z[0].value)))
         vxs = ad["CIC_particles", "particle_real_comp1"]
         vys = ad["CIC_particles", "particle_real_comp2"]
         vzs = ad["CIC_particles", "particle_real_comp3"]
@@ -45,26 +48,56 @@ def particle_dist(plotfiles):
         err_arr.append(grid_err)
         err_vel_arr.append(err_vel)
 
-    return t_arr, err_arr, err_vel_arr
+    return t_arr, err_arr, err_vel_arr, pos
+
+def get_particle_orbit(plotfiles):
+    t_arr = []
+    pos1_arr = []
+    pos2_arr = []
+    for pltfile in plotfiles:
+        ds = yt.load(pltfile)
+        ad = ds.all_data()
+        x = ad["CIC_particles", "particle_position_x"]
+        y = ad["CIC_particles", "particle_position_y"]
+        z = ad["CIC_particles", "particle_position_z"]
+        t_arr.append(float(ds.current_time) / 3.15e7)
+        pos1_arr.append((float(x[0].value), float(y[0].value), float(z[0].value)))
+        pos2_arr.append((float(x[1].value), float(y[1].value), float(z[1].value)))
+    return t_arr, pos1_arr, pos2_arr
 
 def main(pltdir):
 
     files = glob.glob(pltdir + "/plt*")
     files = sorted(files)
-    t, err_dist, err_vel = particle_dist(files)
+    t, err_dist, err_vel, pos_particle0 = particle_dist(files)
 
     print("max rel_error distance: {:.1e}".format(np.max(np.abs(err_dist))))
     print()
     # print("max error velocity: {:.1e}".format(np.max(np.abs(err_vel))))
 
     # print time vs err_vel as a table
-    err_vel_tol = 1.0e-3
-    print("time (yr) rel_err_vel within_tol_1e-3?")
+    print("time(yr) rel_err_vel within_tol_1e-3 within_tol_1e-2?")
     for i in range(len(t)):
-        if np.abs(err_vel[i]) < err_vel_tol:
-            print("{:.1e} {:.1e} yes".format(t[i], err_vel[i]))
-        else:
-            print("{:.1e} {:.1e} no".format(t[i], err_vel[i]))
+        print("{:.1e} {:.1e} {} {}".format(t[i], err_vel[i], np.abs(err_vel[i]) < 1.0e-3, np.abs(err_vel[i]) < 1.0e-2))
+
+    # plot the orbit
+    t, pos1_arr, pos2_arr = get_particle_orbit(files)
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(6,6))
+    plt.title("AMR, base nx=32, effective nx=64")
+    # plt.title("Uniform, nx=32")
+    # plt.title("Uniform, nx=64")
+    plt.scatter([pos[0] for pos in pos1_arr], [pos[1] for pos in pos1_arr], color="red", label="particle 1")
+    plt.scatter([pos[0] for pos in pos2_arr], [pos[1] for pos in pos2_arr], color="blue", label="particle 2")
+    plt.legend()
+    ax = plt.gca()
+    ax.set(xlabel="x", ylabel="y")
+    ax.axis("equal")
+    ax.grid()
+    hw = 6.0e12
+    ax.set(xlim=(-hw, hw), ylim=(-hw, hw))
+    figdir = os.path.dirname(files[0])
+    plt.savefig(os.path.join(figdir, "orbit.png"), dpi=300)
 
     return
 
@@ -79,7 +112,46 @@ def main(pltdir):
     plt.tight_layout()
     plt.savefig("orbit.png", dpi=150)
 
+def plot_debug_Poisson_rhs(pltdir):
+    max_idx = 300
+
+    # derive field: -Poisson_RHS
+    yt.add_field(("boxlib", "Poisson_RHS_neg"), function=lambda field, data: -data["boxlib", "Poisson_RHS"], sampling_type="cell")
+    
+    for pltfile in sorted(glob.glob(pltdir + "/debug_*")):
+        if not os.path.isdir(pltfile):
+            continue
+        is_accel = "accel" in pltfile
+        # idx = int(pltfile[-5:])
+        # if idx > max_idx:
+        #     continue
+        ds = yt.load(pltfile)
+        ad = ds.all_data()
+        field = ("boxlib", "Poisson_RHS")
+        slc = yt.SlicePlot(ds, "z", field)
+        if is_accel:
+            slc.set_zlim(field, 1e0, 3e4)
+            slc.set_log(field, True)
+        figfn = pltfile
+        if figfn[-1] == '/':
+            figfn = figfn[:-1]
+        figfn = figfn + "_Poisson_RHS.png"
+        slc.save(figfn, mpl_kwargs={"dpi": 300})
+
+        if is_accel:
+            field = ("boxlib", "Poisson_RHS_neg")
+            slc = yt.SlicePlot(ds, "z", field)
+            slc.set_zlim(field, 1e0, 3e4)
+            slc.set_log(field, True)
+            figfn = pltfile
+            if figfn[-1] == '/':
+                figfn = figfn[:-1]
+            figfn = figfn + "_Poisson_RHS_neg.png"
+            slc.save(figfn, mpl_kwargs={"dpi": 300})
+
 pltdir = "."
 if len(sys.argv) > 1:
     pltdir = sys.argv[1]
-main(pltdir)
+
+# main(pltdir)
+plot_debug_Poisson_rhs(pltdir)
