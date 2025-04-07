@@ -1342,6 +1342,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		accel[lev].FillBoundary(geom[lev].periodicity());
 		fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
 
+		// FOR DEBUGGING ONLY: write accel field
+		const std::string debug_accel_lev_af = "debug_accel_af_fillbd_lev" + std::to_string(lev) + "_";
+		const std::string plotfile_name5 = amrex::Concatenate(debug_accel_lev_af, istep[0], 5);
+		amrex::Vector<std::string> const debug_poisson_names{"accel_x", "accel_y", "accel_z"};
+		amrex::WriteSingleLevelPlotfile(plotfile_name5, accel[lev], debug_poisson_names, geom[lev], -1.0, istep[0] + 1);
+
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());

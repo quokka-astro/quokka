@@ -91,6 +91,21 @@ template <> void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::
 	}
 }
 
+template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+		const int nidx = HydroSystem<BinaryOrbit>::density_index;
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			Real const q = state(i, j, k, nidx);
+			tag(i, j, k) = amrex::TagBox::SET;
+		});
+	}
+}
+
 template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 {
 	// every N cycles, save particle statistics
