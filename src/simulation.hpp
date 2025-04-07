@@ -1316,6 +1316,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
 
+		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+		if (lev > 0) {
+			// fill ghosts at coarse-fine boundary
+			// this *also* fills valid cells, so we have to do it *before* computing the real accelerations
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
+			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
+						 fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
+		}
+
 		amrex::ParallelFor(accel[lev], ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
 			// compute cell-centered acceleration -grad(phi)
 			if (n == 0) {
@@ -1330,18 +1339,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		});
 		amrex::Gpu::streamSynchronizeAll();
 
-		// fill ghost cells for accel[lev]
-		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+		// fill ghost cells for accel[lev] that are NOT at coarse-fine boundary
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
-
-		if (lev == 0) {
-			accel[lev].FillBoundary(geom[lev].periodicity());
-			fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
-		} else {
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
-			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
-						     fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
-		}
+		accel[lev].FillBoundary(geom[lev].periodicity());
+		fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
 
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
