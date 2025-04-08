@@ -93,13 +93,10 @@ template <> void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::
 
 template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 {
-	// every N cycles, save particle statistics
+	// every N cycles, save particle statistics at the finest level
 	static int cycle = 1;
 	if (cycle % 10 == 0) {
-		// Get the finest level number
-		const int finest_level = finestLevel();
-
-		// create particle container for analysis using the same geometry as finest level
+		// create particle container for analysis
 		amrex::ParticleContainer<quokka::CICParticleRealComps> analysisPC{};
 		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
 		amrex::Geometry const geom(box);
@@ -108,20 +105,11 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 		amrex::DistributionMapping const dmap(ranks);
 		analysisPC.Define(geom, dmap, boxArray);
 
-		// Print number of particles in source container
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::Long total_particles = 0;
-			const auto& particles = CICParticles->GetParticles(finest_level);
-			for (const auto& kv : particles) {
-				total_particles += kv.second.numParticles();
-			}
-			amrex::Print() << "Number of particles at finest level: " << total_particles << "\n";
-		}
-
-		// Create a single destination tile
+		// Create a single destination tile and copy all particles from finest level
 		auto& dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
 
 		// Copy particles from each source tile
+		const int finest_level = finestLevel();
 		const auto& particles = CICParticles->GetParticles(finest_level);
 		for (const auto& kv : particles) {
 			const auto& src_tile = kv.second;
@@ -132,60 +120,38 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 				// Resize to accommodate new particles
 				dst_tile.resize(old_size + np);
 				// Get source and destination arrays
-				auto& src_aos = src_tile.GetArrayOfStructs();
+				const auto& src_aos = src_tile.GetArrayOfStructs();
 				auto& dst_aos = dst_tile.GetArrayOfStructs();
 				// Copy particles
-				amrex::Gpu::copy(amrex::Gpu::deviceToDevice,
-							   src_aos.data(),
-							   src_aos.data() + np,
-							   dst_aos.data() + old_size);
+				amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + old_size); // NOLINT
 			}
-		}
-
-		// Print number of particles in analysis container
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::Long total_particles_analysis = 0;
-			const auto& analysis_particles = analysisPC.GetParticles(0);
-			for (const auto& kv : analysis_particles) {
-				total_particles_analysis += kv.second.numParticles();
-			}
-			amrex::Print() << "Number of particles in analysis container: " << total_particles_analysis << "\n";
 		}
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			quokka::CICParticleIterator const pIter(analysisPC, 0);
-			if (pIter.isValid()) {
+			if (pIter.isValid() && pIter.numParticles() >= 2) {
 				amrex::Print() << "Computing particle statistics...\n";
-				const amrex::Long np = pIter.numParticles();
-				amrex::Print() << "Number of particles in iterator: " << np << "\n";
-				
-				if (np >= 2) {  // Only proceed if we have at least 2 particles
-					auto &particles = pIter.GetArrayOfStructs();
+				auto &particles = pIter.GetArrayOfStructs();
 
-					// copy particles from device to host
-					quokka::CICParticleContainer::ParticleType *pData = particles().data();
-					amrex::Vector<quokka::CICParticleContainer::ParticleType> pData_h(np);
-					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
+				// copy particles from device to host
+				quokka::CICParticleContainer::ParticleType *pData = particles().data();
+				amrex::Vector<quokka::CICParticleContainer::ParticleType> pData_h(pIter.numParticles());
+				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + pIter.numParticles(), pData_h.begin()); // NOLINT
 
-					// compute orbital elements
-					quokka::CICParticleContainer::ParticleType &p1 = pData_h[0];
-					quokka::CICParticleContainer::ParticleType &p2 = pData_h[1];
-					const amrex::ParticleReal dx = p1.pos(0) - p2.pos(0);
-					const amrex::ParticleReal dy = p1.pos(1) - p2.pos(1);
-					const amrex::ParticleReal dz = p1.pos(2) - p2.pos(2);
-					const amrex::ParticleReal dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-					printf("dist = %e\n", dist);
-					const amrex::ParticleReal dist0 = 6.25e12; // cm
-					const amrex::Real cell_dx0 = this->geom[finest_level].CellSize(0); // Use finest level cell size
+				// compute orbital elements
+				quokka::CICParticleContainer::ParticleType &p1 = pData_h[0];
+				quokka::CICParticleContainer::ParticleType &p2 = pData_h[1];
+				const amrex::ParticleReal dx = p1.pos(0) - p2.pos(0);
+				const amrex::ParticleReal dy = p1.pos(1) - p2.pos(1);
+				const amrex::ParticleReal dz = p1.pos(2) - p2.pos(2);
+				const amrex::ParticleReal dist = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+				const amrex::ParticleReal dist0 = 6.25e12; // cm
+				const amrex::Real cell_dx0 = this->geom[finest_level].CellSize(0);
 
-					// save statistics
-					userData_.time.push_back(tNew_[finest_level]); // Use time from finest level
-					userData_.dist.push_back((dist - dist0) / cell_dx0);
-				} else {
-					amrex::Print() << "Not enough particles for analysis (need at least 2)!\n";
-				}
-			} else {
-				amrex::Print() << "Particle iterator is not valid!\n";
+				// save statistics
+				userData_.time.push_back(tNew_[finest_level]);
+				userData_.dist.push_back((dist - dist0) / cell_dx0);
+				amrex::Print() << "Particle separation: " << dist << " cm, initial separation is " << dist0 << " cm.\n";
 			}
 		}
 	}
