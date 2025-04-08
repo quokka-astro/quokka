@@ -217,6 +217,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real current_time;
+		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 
