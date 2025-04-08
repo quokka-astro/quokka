@@ -116,8 +116,6 @@ def plot_orbit_and_error(pltdir):
 
 
 def plot_debug_Poisson_rhs(pltdir):
-    max_idx = 300
-
     for pltfile in sorted(glob.glob(pltdir + "/debug_*")):
         # skip if not a directory
         if not os.path.isdir(pltfile):
@@ -127,8 +125,6 @@ def plot_debug_Poisson_rhs(pltdir):
         if not is_accel:
             continue
         ds = yt.load(pltfile)
-        ad = ds.all_data()
-        # field = ("boxlib", "Poisson_RHS")
         field = ("boxlib", "accel_x")
         slc = yt.SlicePlot(ds, "z", field)
         if is_accel:
@@ -140,7 +136,6 @@ def plot_debug_Poisson_rhs(pltdir):
         figfn = pltfile
         if figfn[-1] == '/':
             figfn = figfn[:-1]
-        # figfn = figfn + "_Poisson_RHS.png"
         figfn = figfn + "_accel_x.png"
         slc.save(figfn, mpl_kwargs={"dpi": 300})
 
