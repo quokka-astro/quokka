@@ -106,13 +106,13 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 		analysisPC.Define(geom, dmap, boxArray);
 
 		// Create a single destination tile and copy all particles from finest level
-		auto& dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
+		auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
 
 		// Copy particles from each source tile
 		const int finest_level = finestLevel();
-		const auto& particles = CICParticles->GetParticles(finest_level);
-		for (const auto& kv : particles) {
-			const auto& src_tile = kv.second;
+		const auto &particles = CICParticles->GetParticles(finest_level);
+		for (const auto &kv : particles) {
+			const auto &src_tile = kv.second;
 			const int np = src_tile.numParticles();
 			if (np > 0) {
 				// Get current size of destination tile
@@ -120,8 +120,8 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 				// Resize to accommodate new particles
 				dst_tile.resize(old_size + np);
 				// Get source and destination arrays
-				const auto& src_aos = src_tile.GetArrayOfStructs();
-				auto& dst_aos = dst_tile.GetArrayOfStructs();
+				const auto &src_aos = src_tile.GetArrayOfStructs();
+				auto &dst_aos = dst_tile.GetArrayOfStructs();
 				// Copy particles
 				amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + old_size); // NOLINT
 			}
@@ -168,9 +168,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxA
 		const auto tag = tags.array(mfi);
 		const int nidx = HydroSystem<BinaryOrbit>::density_index;
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			tag(i, j, k) = amrex::TagBox::SET;
-		});
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
 	}
 }
 
@@ -219,7 +217,7 @@ auto problem_main() -> int
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		if (!sim.userData_.dist.empty()) {
 			auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
-									[](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
+						       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
 			max_err = std::abs(*result);
 			amrex::Print() << "max particle separation = " << max_err << " cell widths.\n";
 		} else {
