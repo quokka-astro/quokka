@@ -1213,22 +1213,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
 #endif
 
-		// // For debugging: print rhs at nz = 16 and lev = 0
-		// amrex::Print() << "rhs[0].data() =";
-		// for (amrex::MFIter iter(rhs[0]); iter.isValid(); ++iter) {
-		// 	const amrex::Box &indexRange = iter.validbox();
-		// 	auto const &rhs_arr = rhs[0].array(iter);
-		// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// 		if (k == 8) {
-		// 			if (i == 0) {
-		// 				std::cout << "\n";
-		// 			}
-		// 			std::cout << rhs_arr(i, j, k) << ", ";
-		// 		}
-		// 	});
-		// 	std::cout << "\n";
-		// }
-
 		amrex::Real abstol = abstolPoisson_ * rhs_min;
 		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		if (verbose) {
@@ -1237,7 +1221,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // this fails when max_level=2 for SphericalCollapse
+			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // NOTE: this fails when multiple levels are fully refined
 		}
 	}
 #endif
@@ -1341,12 +1325,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// fill ghost cells for accel[lev] that are NOT at coarse-fine boundary
 		accel[lev].FillBoundary(geom[lev].periodicity());
 		fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
-
-		// FOR DEBUGGING ONLY: write accel field
-		const std::string debug_accel_lev_af = "debug_accel_af_fillbd_lev" + std::to_string(lev) + "_";
-		const std::string plotfile_name5 = amrex::Concatenate(debug_accel_lev_af, istep[0], 5);
-		amrex::Vector<std::string> const debug_poisson_names{"accel_x", "accel_y", "accel_z"};
-		amrex::WriteSingleLevelPlotfile(plotfile_name5, accel[lev], debug_poisson_names, geom[lev], -1.0, istep[0] + 1);
 
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
