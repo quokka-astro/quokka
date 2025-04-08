@@ -1077,7 +1077,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// print particle statistics
 		if (quokka::particle_verbose > 0) {
-			particleRegister_.printParticleStatistics();
+			particleRegister_.printParticleStatistics(max_level);
 		}
 
 		// write diagnostics
