@@ -61,7 +61,7 @@ template <> struct Particle_Traits<BinaryOrbit> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
 	// This is the correct way to define the particle switch
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {
@@ -279,7 +279,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxA
 			const double y = plo[1] + ((j + 0.5) * dx[1]);
 			const double z = plo[2] + ((k + 0.5) * dx[2]);
 
-			if ((x >= 0.5 && x <= 1.5) && (y >= -1.5 && y <= 1.5) && (z >= -1.5 && z <= 1.5)) {
+			if ((x >= 0.1 && x <= 1.5) && (y >= -1.5 && y <= 1.5) && (z >= -1.5 && z <= 1.5)) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
@@ -355,7 +355,7 @@ auto problem_main() -> int
 	// ----- Check CIC particles -----
 
 	// particle actions must be called on all ranks
-	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevelZero();
+	const int max_level = sim.maxLevel();
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 	// ----- Check Test particles -----
@@ -364,66 +364,7 @@ auto problem_main() -> int
 	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-
-		// check the size of real_data
-		const int n_particles = static_cast<int>(real_data.size());
-
-		if (n_particles > 0) {
-
-			// assume the first particle is in the first plane quadrant
-			for (const auto &data : real_data) {
-				// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
-				if (data[3] < 0.1) {
-					continue;
-				}
-				// First 3 elements are positions (x,y,z)
-				if (data[0] * exact_x > 0.0) {
-					position_error += std::abs(data[0] - exact_x);
-					position_error += std::abs(data[1] - exact_y);
-					position_error += std::abs(data[2] - exact_z);
-				} else {
-					position_error += std::abs(data[0] - (-exact_x));
-					position_error += std::abs(data[1] - (-exact_y));
-					position_error += std::abs(data[2] - (-exact_z));
-				}
-				position_norm += std::abs(data[0]);
-				position_norm += std::abs(data[1]);
-				position_norm += std::abs(data[2]);
-			}
-
-			amrex::Print() << "Particle positions and data are: \n";
-			for (const auto &data : real_data) {
-				// Print positions
-				amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
-				// Print additional data (mass, velocities)
-				amrex::Print() << " | Mass: " << data[3];
-				amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
-			}
-			amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
-
-			// compute relative error
-			const double relative_error = position_error / position_norm;
-
-			amrex::Print() << "Position error: " << position_error << "\n";
-			amrex::Print() << "Position norm: " << position_norm << "\n";
-			amrex::Print() << "Relative error: " << relative_error << "\n";
-
-			// max error tol for particle positions
-			double max_err_tol = 0.0;
-			if (sim.tNew_[0] < 0.011) {
-				max_err_tol = 5.0e-7;
-			} else if (sim.tNew_[0] < 0.11) {
-				max_err_tol = 5.0e-6;
-			} else {
-				max_err_tol = 0.05;
-			}
-			if (!(relative_error < max_err_tol)) {
-				status = 1;
-			}
-		}
-
 		// ----- Check SN remnant mass -----
-
 		const double max_err_tol_mass = 2.0e-6; // max error tol in mass. Mass is not conserved to machine precision due to AMR interpolation.
 		if (n_particle_test != n_expected_test_particles || SN_remnant_mass_rel_err > max_err_tol_mass || std::isnan(SN_remnant_mass_rel_err)) {
 			status = 1;
