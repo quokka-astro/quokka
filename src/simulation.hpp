@@ -12,7 +12,6 @@
 // c++ headers
 #include <cfenv>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
 #if __has_include(<filesystem>)
 #include <filesystem>
@@ -70,7 +69,6 @@ namespace filesystem = experimental::filesystem;
 
 #ifdef AMREX_PARTICLES
 #include "AMReX_AmrParticles.H"
-#include "AMReX_Particles.H"
 #include "particles/PhysicsParticles.hpp"
 #endif
 
@@ -187,7 +185,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
 
-	inline auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> &BCs_cc) -> amrex::Vector<amrex::BCRec>
+	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> &BCs_cc) -> amrex::Vector<amrex::BCRec>
 	{
 		amrex::Vector<amrex::BCRec> BCs_fc(Physics_Indices<problem_t>::nvarPerDim_fc);
 
@@ -248,7 +246,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
 
 	// compute projected vars
-	[[nodiscard]] virtual auto ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
+	[[nodiscard]] virtual auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
 
 	// compute statistics
 	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
@@ -652,7 +650,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default CFL number == 0.3, set to whatever is in the file
 	pp.query("cfl", cflNumber_);
 
-	// Default CFL number for particles == 0.99, set to whatever is in the file
+	// Default CFL number for particles == 0.5, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
 
 	// Default AMR interpolation method == lincc_interp
@@ -1195,8 +1193,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// set up elliptic solve object
 		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
 		if (verbose) {
-			poissonSolver.setVerbose(true);
-			poissonSolver.setBottomVerbose(false);
+			poissonSolver.setVerbose(1);
+			poissonSolver.setBottomVerbose(0);
 			amrex::Print() << "Doing Poisson solve...\n\n";
 		}
 
@@ -1225,22 +1223,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
 #endif
 
-		// // For debugging: print rhs at nz = 16 and lev = 0
-		// amrex::Print() << "rhs[0].data() =";
-		// for (amrex::MFIter iter(rhs[0]); iter.isValid(); ++iter) {
-		// 	const amrex::Box &indexRange = iter.validbox();
-		// 	auto const &rhs_arr = rhs[0].array(iter);
-		// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// 		if (k == 8) {
-		// 			if (i == 0) {
-		// 				std::cout << "\n";
-		// 			}
-		// 			std::cout << rhs_arr(i, j, k) << ", ";
-		// 		}
-		// 	});
-		// 	std::cout << "\n";
-		// }
-
 		amrex::Real abstol = abstolPoisson_ * rhs_min;
 		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		if (verbose) {
@@ -1249,7 +1231,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // this fails when max_level=2 for SphericalCollapse
+			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // NOTE: this fails when multiple levels are fully refined
 		}
 	}
 #endif
@@ -1326,6 +1308,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
 
+		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
+		if (lev > 0) {
+			// fill ghosts at coarse-fine boundary
+			// this *also* fills valid cells, so we have to do it *before* computing the real accelerations
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
+			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
+						     fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
+		}
+
 		amrex::ParallelFor(accel[lev], ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
 			// compute cell-centered acceleration -grad(phi)
 			if (n == 0) {
@@ -1340,18 +1332,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		});
 		amrex::Gpu::streamSynchronizeAll();
 
-		// fill ghost cells for accel[lev]
-		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
-
-		if (lev == 0) {
-			accel[lev].FillBoundary(geom[lev].periodicity());
-			fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
-		} else {
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
-			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
-						     fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
-		}
+		// fill ghost cells for accel[lev] that are NOT at coarse-fine boundary
+		accel[lev].FillBoundary(geom[lev].periodicity());
+		fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
 
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
