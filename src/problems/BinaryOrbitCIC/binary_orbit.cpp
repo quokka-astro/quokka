@@ -52,8 +52,8 @@ template <> struct Physics_Traits<BinaryOrbit> {
 };
 
 template <> struct SimulationData<BinaryOrbit> {
-	std::vector<amrex::ParticleReal> time{};
-	std::vector<amrex::ParticleReal> dist{};
+	std::vector<amrex::ParticleReal> time;
+	std::vector<amrex::ParticleReal> dist;
 };
 
 template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -162,11 +162,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxA
 {
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
-		const auto prob_lo = geom[lev].ProbLoArray();
-		const auto dx = geom[lev].CellSizeArray();
-		const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
-		const int nidx = HydroSystem<BinaryOrbit>::density_index;
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
 	}
