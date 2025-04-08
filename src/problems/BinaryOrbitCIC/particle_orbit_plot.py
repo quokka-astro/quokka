@@ -33,7 +33,7 @@ def get_particle_dist(plotfiles):
         vys = ad["CIC_particles", "particle_real_comp2"]
         vzs = ad["CIC_particles", "particle_real_comp3"]
         ms = ad["CIC_particles", "particle_real_comp0"]
-        assert ms[0] == m0 and ms[1] == m0
+        assert np.isclose(ms[0], m0) and np.isclose(ms[1], m0)
         dx = x[0] - x[1]
         dy = y[0] - y[1]
         dz = z[0] - z[1]
