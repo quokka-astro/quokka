@@ -349,7 +349,8 @@ auto problem_main() -> int
 	// ----- Check CIC particles -----
 
 	// particle actions must be called on all ranks
-	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevelZero();
+	const int max_level = sim.maxLevel();
+	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(max_level);
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
