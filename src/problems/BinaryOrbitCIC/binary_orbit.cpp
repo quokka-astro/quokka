@@ -200,7 +200,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
-	sim.initDt_ = 1.0e3;	 // s
 
 	// initialize
 	sim.setInitialConditions();

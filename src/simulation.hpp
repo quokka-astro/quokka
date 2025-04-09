@@ -1318,6 +1318,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
 				amrex::InterpFromCoarseLevel(accel[lev][idim], 0., accel[lev - 1][idim], 0, 0, 1, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
 							     fineBdryFunct, 0, refRatio(lev - 1), &amrex::face_linear_interp, accelBC, 0);
+				// deallocate coarse MF
+				accel[lev - 1][idim].clear();
 			}
 		}
 
