@@ -1193,7 +1193,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		constexpr int nghost_phi = 1;
 		constexpr int nghost_deposit = 1; // CIC deposition requires 1 ghost cell
-		constexpr int nghost_drift = 1;   // particle can drift up to 1 cell
+		constexpr int nghost_drift = 1;	  // particle can drift up to 1 cell
 		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
