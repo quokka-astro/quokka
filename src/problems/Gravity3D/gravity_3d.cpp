@@ -98,9 +98,7 @@ template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBox
 		// const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			tag(i, j, k) = amrex::TagBox::SET;
-		});
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
 	}
 }
 
