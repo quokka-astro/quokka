@@ -1298,6 +1298,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		const auto dx_inv = geom[lev].InvCellSizeArray();
 		const amrex::IntVect ng(0);
 
+		// write phi
+		const int plt_interval = 10;
+		const std::string debug_phi_lev = "debug_phi_lev" + std::to_string(lev) + "_";
+		const std::string plotfile_name1 = amrex::Concatenate(debug_phi_lev, istep[0], 5);
+		if (istep[0] % plt_interval == 0) {
+			WriteSingleLevelPlotfile(plotfile_name1, phi[lev], {"phi"}, geom[lev], -1.0, istep[0] + 1);
+		}
+
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
 
@@ -1325,6 +1333,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		});
 		amrex::Gpu::streamSynchronizeAll();
 
+		// write accel, before fillboundary
+		const std::string debug_accel_lev = "debug_accel_bf_fillbd_lev" + std::to_string(lev) + "_";
+		const std::string plotfile_name4 = amrex::Concatenate(debug_accel_lev, istep[0], 5);
+		const amrex::Vector<std::string> debug_poisson_names = {"accel_x", "accel_y", "accel_z"};
+		if (istep[0] % plt_interval == 0) {
+			WriteSingleLevelPlotfile(plotfile_name4, accel[lev], debug_poisson_names, geom[lev], -1.0, istep[0] + 1);
+		}
+
 		// fill ghost cells for accel[lev] that are NOT at coarse-fine boundary
 		accel[lev].FillBoundary(geom[lev].periodicity());
 		fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
@@ -1332,6 +1348,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
 		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
+
+		// write accel, after fillboundary
+		const std::string debug_accel_lev_after = "debug_accel_af_fillbd_lev" + std::to_string(lev) + "_";
+		const std::string plotfile_name5 = amrex::Concatenate(debug_accel_lev_after, istep[0], 5);
+		if (istep[0] % plt_interval == 0) {
+			WriteSingleLevelPlotfile(plotfile_name5, accel[lev], debug_poisson_names, geom[lev], -1.0, istep[0] + 1);
+		}
 
 		// Kick particles using the acceleration field
 		particleRegister_.kickParticlesAtLevel(dt, accel[lev], lev);
