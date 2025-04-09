@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -2.03125 -2.03125 -2.03125
-geometry.prob_hi     =  1.96875  1.96875  1.96875
+geometry.prob_lo     =  -2.0 -2.0 -2.0
+geometry.prob_hi     =  2.0 2.0 2.0
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -31,4 +31,4 @@ particles.param2 = 0.0015 # turn SNProgenitor into SNRemnant after this time
 particles.param3 = 0.0035 # destroy particles at this time, which is step 4
 particles.verbose = 1
 
-max_timesteps = 4
+max_timesteps = 40
