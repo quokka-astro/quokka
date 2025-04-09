@@ -90,12 +90,8 @@ template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBox
 	// tag cells for refinement: static mesh refinement within 0 < x < 1.5 and -1.5 < y,z < 1.5
 	// Note that the particle are within r = 1.0 from the origin.
 
-	auto const &dx = geom[lev].CellSizeArray();
-	auto const &plo = geom[lev].ProbLoArray();
-
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
-		// const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });

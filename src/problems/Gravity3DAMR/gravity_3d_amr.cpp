@@ -344,7 +344,6 @@ auto problem_main() -> int
 	// ----- Check CIC particles -----
 
 	// particle actions must be called on all ranks
-	const int max_level = sim.maxLevel();
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 	// ----- Check Test particles -----
