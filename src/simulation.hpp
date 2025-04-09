@@ -1286,29 +1286,31 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		}
 	}
 
+	// Compute accelerations and kick particles
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		// compute accelerations
-		accel[lev].define(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 1);
+		// NOTE: CIC interpolation requires 1, but particles may have drifted
+		// 	into 1 ghost cell since last particle redistribute.
+		const int nghost_acc = 2;
+
+		accel[lev].define(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
 		accel[lev].setVal(0.);
-		auto accel_arr = accel[lev].arrays();
-		const auto &phi_arr = phi[lev].const_arrays();
-		const auto dx_inv = geom[lev].InvCellSizeArray();
-		const amrex::IntVect ng(0);
 
-		// check for NaN
-		AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
-
+		// Fill ghosts at coarse-fine boundary
+		// (This *also* fills valid cells, so we have to do it before computing the valid cell accelerations.)
 		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
 		if (lev > 0) {
-			// fill ghosts at coarse-fine boundary
-			// this *also* fills valid cells, so we have to do it *before* computing the real accelerations
+			amrex::Mapper *interp_without_limiting = &amrex::mf_pc_interp;
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
 			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
-						     fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
+						     fineBdryFunct, 0, refRatio(lev - 1), interp_without_limiting, accelBC, 0);
 		}
 
-		amrex::ParallelFor(accel[lev], ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
+		// Fill valid cells
+		auto accel_arr = accel[lev].arrays();
+		const auto &phi_arr = phi[lev].const_arrays();
+		const auto dx_inv = geom[lev].InvCellSizeArray();
+		amrex::ParallelFor(accel[lev], amrex::IntVect{0}, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
 			// compute cell-centered acceleration -grad(phi)
 			if (n == 0) {
 				accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
@@ -1322,7 +1324,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		});
 		amrex::Gpu::streamSynchronizeAll();
 
-		// fill ghost cells for accel[lev] that are NOT at coarse-fine boundary
+		// Fill ghost cells at internal boundaries (plus physical boundaries at the current level)
 		accel[lev].FillBoundary(geom[lev].periodicity());
 		fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
 
