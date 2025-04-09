@@ -7,6 +7,8 @@
 /// \brief Defines a test problem for a binary orbit.
 ///
 
+#include <algorithm>
+
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_DistributionMapping.H"
@@ -18,11 +20,9 @@
 #include "AMReX_Print.H"
 
 #include "AMReX_REAL.H"
-#include "AMReX_ccse-mpi.H"
 #include "QuokkaSimulation.hpp"
 #include "binary_orbit.hpp"
 #include "hydro/hydro_system.hpp"
-#include <algorithm>
 
 struct BinaryOrbit {
 };
