@@ -1191,12 +1191,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		phi.resize(finest_level + 1);
 		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
-		const int nghost = 1;
-		const int ncomp = 1;
+		constexpr int nghost_phi = 1;
+		constexpr int nghost_deposit = 1; // CIC deposition requires 1 ghost cell
+		constexpr int nghost_drift = 1;   // particle can drift up to 1 cell
+		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
+		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
-			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
+			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
 		}
