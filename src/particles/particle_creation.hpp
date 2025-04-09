@@ -62,7 +62,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
 				// Initialize particle creator functor using the provided ParticleCreator type
-				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, cpu_id, pid, evolution_stage_index, current_time);
+				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, cpu_id, pid, evolution_stage_index, current_time, dt);
 
 				amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
@@ -106,12 +106,13 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real current_time;
+		amrex::Real dt;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				amrex::Real current_time)
+				amrex::Real current_time, amrex::Real dt)
 		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
-		      pid_start(particle_id_start), current_time(current_time)
+		      pid_start(particle_id_start), current_time(current_time), dt(dt)
 		{
 		}
 
