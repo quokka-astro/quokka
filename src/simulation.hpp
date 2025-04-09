@@ -1274,15 +1274,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 	}
 
 	// Create acceleration MultiFabs for each level
-	amrex::Vector<amrex::MultiFab> accel(finest_level + 1);
+	amrex::Vector<amrex::Vector<amrex::MultiFab>> accel(finest_level + 1);
 
-	// self-gravity in Quokka requires open boundary conditions,
-	// so we extrapolate the gravitational accelerations at physical boundaries
-	amrex::Vector<amrex::BCRec> accelBC(AMREX_SPACEDIM);
-	for (int j = 0; j < AMREX_SPACEDIM; ++j) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			accelBC[j].setLo(i, amrex::BCType::foextrap);
-			accelBC[j].setHi(i, amrex::BCType::foextrap);
+	// set boundary conditions for accelerations
+	amrex::Vector<amrex::BCRec> accelBC(1);
+	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+		// lower boundary
+		if (BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i) == amrex::BCType::int_dir) {
+			accelBC[0].setLo(i, amrex::BCType::int_dir);
+		} else {
+			accelBC[0].setLo(i, amrex::BCType::foextrap);
+		}
+		// upper boundary
+		if (BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i) == amrex::BCType::int_dir) {
+			accelBC[0].setHi(i, amrex::BCType::int_dir);
+		} else {
+			accelBC[0].setHi(i, amrex::BCType::foextrap);
 		}
 	}
 
@@ -1292,48 +1299,65 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// 	into 1 ghost cell since last particle redistribute.
 		const int nghost_acc = 2;
 
-		accel[lev].define(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
-		accel[lev].setVal(0.);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			auto ba_face = amrex::convert(boxArray(lev), amrex::IntVect::TheDimensionVector(idim));
+			accel[lev].resize(idim);
+			accel[lev][idim].define(ba_face, DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
+			accel[lev][idim].setVal(0.);
+		}
 
 		// Fill ghosts at coarse-fine boundary
 		// (This *also* fills valid cells, so we have to do it before computing the valid cell accelerations.)
-		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
 		if (lev > 0) {
-			amrex::MFInterpolater *interp_without_limiting = &amrex::mf_pc_interp;
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
-			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
-						     fineBdryFunct, 0, refRatio(lev - 1), interp_without_limiting, accelBC, 0);
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
+				amrex::InterpFromCoarseLevel(accel[lev][idim], 0., accel[lev - 1][idim], 0, 0, 1, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
+							     fineBdryFunct, 0, refRatio(lev - 1), &amrex::face_linear_interp, accelBC, 0);
+			}
 		}
 
 		// Fill valid cells
-		auto accel_arr = accel[lev].arrays();
 		const auto &phi_arr = phi[lev].const_arrays();
 		const auto dx_inv = geom[lev].InvCellSizeArray();
-		amrex::ParallelFor(accel[lev], amrex::IntVect{0}, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
-			// compute cell-centered acceleration -grad(phi)
-			if (n == 0) {
-				accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
-			}
-			if (n == 1) {
-				accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j - 1, k));
-			}
-			if (n == 2) {
-				accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k - 1));
-			}
-		});
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			auto accel_arr = accel[lev][idim].arrays();
+			amrex::ParallelFor(accel[lev][idim], amrex::IntVect{0}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+				// compute face-centered acceleration -grad(phi)
+				if (idim == 0) {
+					accel_arr[bx](i, j, k) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i, j, k));
+				}
+				if (idim == 1) {
+					accel_arr[bx](i, j, k) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j, k));
+				}
+				if (idim == 2) {
+					accel_arr[bx](i, j, k) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k));
+				}
+			});
+		}
 		amrex::Gpu::streamSynchronizeAll();
 
-		// Fill ghost cells at internal boundaries (plus physical boundaries at the current level)
-		accel[lev].FillBoundary(geom[lev].periodicity());
-		fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
+		// Fill remaining ghost cells
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			// internal boundaries
+			accel[lev][idim].FillBoundary(geom[lev].periodicity());
 
-		// check for NaN
-		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
-		AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
+			// physical boundaries
+			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
+			fineBdryFunct(accel[lev][idim], 0, accel[lev][idim].nComp(), accel[lev][idim].nGrowVect(), 0., 0);
+
+			// check for NaN
+			AMREX_ALWAYS_ASSERT(!accel[lev][idim].contains_nan());
+		}
+
+		// average to cell centers
+		amrex::MultiFab accel_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
+		amrex::average_face_to_cellcenter(accel_cc, amrex::GetVecOfConstPtrs(accel[lev]), geom[lev]);
 
 		// Kick particles using the acceleration field
-		particleRegister_.kickParticlesAtLevel(dt, accel[lev], lev);
+		particleRegister_.kickParticlesAtLevel(dt, accel_cc, lev);
 	}
 }
 #endif // AMREX_SPACEDIM == 3
