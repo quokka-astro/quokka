@@ -75,7 +75,7 @@ class PhysicsParticleDescriptorBase
 
 	// Redistribute particles at level lev and above
 	virtual void redistribute(int lev) = 0;
-	
+
 	// Redistribute particles at level lev and above with ngrow ghost cells
 	virtual void redistribute(int lev, int ngrow) = 0;
 
@@ -240,91 +240,91 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	[[nodiscard]] auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
-	    std::vector<std::vector<double>> real_data;
-	    std::vector<std::vector<int>> int_data;
+		std::vector<std::vector<double>> real_data;
+		std::vector<std::vector<int>> int_data;
 
-	    if (container_ != nullptr) {
-	        // Create single-box particle container for analysis
-	        ContainerType analysisPC{};
-	        amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
-	        amrex::Geometry const geom(box);
-	        amrex::BoxArray const boxArray(box);
-	        amrex::Vector<int> const ranks({0}); // workaround nvcc bug
-	        amrex::DistributionMapping const dmap(ranks);
-	        analysisPC.Define(geom, dmap, boxArray);
+		if (container_ != nullptr) {
+			// Create single-box particle container for analysis
+			ContainerType analysisPC{};
+			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
+			amrex::Geometry const geom(box);
+			amrex::BoxArray const boxArray(box);
+			amrex::Vector<int> const ranks({0}); // workaround nvcc bug
+			amrex::DistributionMapping const dmap(ranks);
+			analysisPC.Define(geom, dmap, boxArray);
 
-	        // Create a single destination tile
-	        auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
+			// Create a single destination tile
+			auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
 
-	        // Copy particles only from the specified level
-	        const auto &particles = container_->GetParticles(lev);
-	        for (const auto &kv : particles) {
-	            const auto &src_tile = kv.second;
-	            const int np = src_tile.numParticles();
-	            if (np > 0) {
-	                const int old_size = dst_tile.numParticles();
-	                dst_tile.resize(old_size + np);
-	                const auto &src_aos = src_tile.GetArrayOfStructs();
-	                auto &dst_aos = dst_tile.GetArrayOfStructs();
-	                amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + old_size);
-	            }
-	        }
+			// Copy particles only from the specified level
+			const auto &particles = container_->GetParticles(lev);
+			for (const auto &kv : particles) {
+				const auto &src_tile = kv.second;
+				const int np = src_tile.numParticles();
+				if (np > 0) {
+					const int old_size = dst_tile.numParticles();
+					dst_tile.resize(old_size + np);
+					const auto &src_aos = src_tile.GetArrayOfStructs();
+					auto &dst_aos = dst_tile.GetArrayOfStructs();
+					amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + old_size);
+				}
+			}
 
-	        // Copy particles from device to host and process them
-	        if (amrex::ParallelDescriptor::IOProcessor()) {
-							typename ContainerType::ParIterType const pIter(analysisPC, 0);
-	            if (pIter.isValid() && pIter.numParticles() > 0) {
-	                auto &particles = pIter.GetArrayOfStructs();
-									typename ContainerType::ParticleType *pData = particles().data();
-	                amrex::Vector<typename ContainerType::ParticleType> pData_h(pIter.numParticles());
-	                amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + pIter.numParticles(), pData_h.begin());
+			// Copy particles from device to host and process them
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				typename ContainerType::ParIterType const pIter(analysisPC, 0);
+				if (pIter.isValid() && pIter.numParticles() > 0) {
+					auto &particles = pIter.GetArrayOfStructs();
+					typename ContainerType::ParticleType *pData = particles().data();
+					amrex::Vector<typename ContainerType::ParticleType> pData_h(pIter.numParticles());
+					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + pIter.numParticles(), pData_h.begin());
 
-	                // Check if particles have integer components
-	                constexpr bool has_int_components = (ContainerType::ParticleType::NInt > 0);
+					// Check if particles have integer components
+					constexpr bool has_int_components = (ContainerType::ParticleType::NInt > 0);
 
-	                // Pre-size vectors to avoid reallocations
-	                real_data.reserve(pIter.numParticles());
-	                if constexpr (has_int_components) {
-	                    int_data.reserve(pIter.numParticles());
-	                }
+					// Pre-size vectors to avoid reallocations
+					real_data.reserve(pIter.numParticles());
+					if constexpr (has_int_components) {
+						int_data.reserve(pIter.numParticles());
+					}
 
-	                // Process each particle
-	                for (int i = 0; i < pIter.numParticles(); ++i) {
-	                    const auto &p = pData_h[i];
+					// Process each particle
+					for (int i = 0; i < pIter.numParticles(); ++i) {
+						const auto &p = pData_h[i];
 
-	                    // Process real data (positions and rdata)
-	                    std::vector<double> r_data;
-	                    r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
+						// Process real data (positions and rdata)
+						std::vector<double> r_data;
+						r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
 
-	                    // Add position components
-	                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-	                        r_data.push_back(p.pos(d));
-	                    }
+						// Add position components
+						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+							r_data.push_back(p.pos(d));
+						}
 
-	                    // Add all real components
-	                    for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
-	                        r_data.push_back(p.rdata(d));
-	                    }
+						// Add all real components
+						for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
+							r_data.push_back(p.rdata(d));
+						}
 
-	                    real_data.push_back(std::move(r_data));
+						real_data.push_back(std::move(r_data));
 
-	                    // Process integer data if particles have integer components
-	                    if constexpr (has_int_components) {
-	                        std::vector<int> i_data;
-	                        i_data.reserve(ContainerType::ParticleType::NInt);
+						// Process integer data if particles have integer components
+						if constexpr (has_int_components) {
+							std::vector<int> i_data;
+							i_data.reserve(ContainerType::ParticleType::NInt);
 
-	                        for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
-	                            i_data.push_back(p.idata(d));
-	                        }
+							for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
+								i_data.push_back(p.idata(d));
+							}
 
-	                        int_data.push_back(std::move(i_data));
-	                    }
-	                }
-	            }
-	        }
-	    }
+							int_data.push_back(std::move(i_data));
+						}
+					}
+				}
+			}
+		}
 
-	    return {real_data, int_data}; // Empty vectors on non-root ranks
+		return {real_data, int_data}; // Empty vectors on non-root ranks
 	}
 
 	// Get the number of particles in the container
@@ -382,33 +382,33 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
 
 			if (mass_idx >= 0) {
-					for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-						auto &particles = pIter.GetArrayOfStructs();
-						auto *pData = particles().data();
-						const amrex::Long np = pIter.numParticles();
+				for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+					auto &particles = pIter.GetArrayOfStructs();
+					auto *pData = particles().data();
+					const amrex::Long np = pIter.numParticles();
 
 					const auto &accel_arr = accel.array(pIter);
-						const auto &geom = container_->Geom(lev);
-						const auto plo = geom.ProbLoArray();
-						const auto dx_inv = geom.InvCellSizeArray();
+					const auto &geom = container_->Geom(lev);
+					const auto plo = geom.ProbLoArray();
+					const auto dx_inv = geom.InvCellSizeArray();
 
-						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-							amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
+					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+						amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 
-							// Interpolate acceleration from grid to particle and update velocity
-							interp.MeshToParticle(
-									p, accel_arr, 0, mass_idx + 1, AMREX_SPACEDIM,
-									[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
-										return acc(i, j, k, comp); // no weighting
-									},
-									[=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
-										// kick particle by updating its velocity
-										if (comp < ContainerType::ParticleType::NReal) {
-											p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
-										}
-									});
-						});
+						// Interpolate acceleration from grid to particle and update velocity
+						interp.MeshToParticle(
+						    p, accel_arr, 0, mass_idx + 1, AMREX_SPACEDIM,
+						    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
+							    return acc(i, j, k, comp); // no weighting
+						    },
+						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+							    // kick particle by updating its velocity
+							    if (comp < ContainerType::ParticleType::NReal) {
+								    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+							    }
+						    });
+					});
 				}
 			}
 		}
