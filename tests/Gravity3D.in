@@ -32,4 +32,3 @@ particles.param3 = 0.0035 # destroy particles at this time, which is step 4
 particles.verbose = 1
 
 max_timesteps = 4
-

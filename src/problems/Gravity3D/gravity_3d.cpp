@@ -25,11 +25,11 @@
 struct TestParticle {
 };
 
-// This is an ad-hoc test of particle creation and destruction.
-// The initial condition consists of 2 CIC particles with a mass of 1.0. We keep track of their orbit and compare with the exact solution. In the second time
-// step, 3^3 * 2 particles are created. A third of them are LowMassStar and the rest are SNProgenitor. In the third time step, all SNProgenitor particles are
-// turned into SNRemnant. In the fourth time step, all SNRemnant particles are destroyed. In the end of the simulation, there are 2 CIC particles and 18 Test
-// particles.
+// This is a test of gravity, particle creation, supernova ejection, and stellar destruction in a static, fully refined mesh.
+// The initial condition consists of 2 CIC particles with a mass of 1.0 in circular orbit. We keep track of their orbit over the course of
+// the simulation and compare with the exact solution. In the second time step, 16 particles are created. Half them are LowMassStar and the
+// rest are SNProgenitor. In the third time step, all SNProgenitor particles are turned into SNRemnant. In the fourth time step, all
+// SNRemnant particles are destroyed. In the end of the simulation, there are a total of 2 CIC particles and 8 Test particles left.
 
 constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
@@ -39,17 +39,13 @@ constexpr double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
 constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
-constexpr int n_SN = 2 * 2 * 2 * 2 / 2;
+constexpr int n_SN = 8;
 constexpr double m_SN = n_SN * SN_mass;
 
 // locations of the particles: a 2x2x2 grids of particles
-constexpr double nx = 64.0;
-constexpr double loc_x1 = 31.5 / nx;
-constexpr double loc_x2 = 32.5 / nx;
-constexpr double loc_y1 = 31.5 / nx;
-constexpr double loc_y2 = 32.5 / nx;
-constexpr double loc_z1 = 31.5 / nx;
-constexpr double loc_z2 = 32.5 / nx;
+constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
+// need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
+constexpr double particle_offset_from_center_ = 0.01;
 
 template <> struct quokka::EOS_Traits<TestParticle> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -118,6 +114,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 
+		double x_L = box_left_edge_;
+		double offset = particle_offset_from_center_;
+
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
@@ -128,13 +127,13 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 			amrex::ignore_unused(state_arr);
 
 			// Calculate cell indices for the particle locations
-			const int i_par1 = static_cast<int>(floor(loc_x1 / dx[0]));
-			const int j_par1 = static_cast<int>(floor(loc_y1 / dx[1]));
-			const int k_par1 = static_cast<int>(floor(loc_z1 / dx[2]));
+			const int i_par1 = static_cast<int>(floor((-offset - x_L) / dx[0]));
+			const int j_par1 = static_cast<int>(floor((-offset - x_L) / dx[1]));
+			const int k_par1 = static_cast<int>(floor((-offset - x_L) / dx[2]));
 
-			const int i_par2 = static_cast<int>(floor(loc_x2 / dx[0]));
-			const int j_par2 = static_cast<int>(floor(loc_y2 / dx[1]));
-			const int k_par2 = static_cast<int>(floor(loc_z2 / dx[2]));
+			const int i_par2 = static_cast<int>(floor((offset - x_L) / dx[0]));
+			const int j_par2 = static_cast<int>(floor((offset - x_L) / dx[1]));
+			const int k_par2 = static_cast<int>(floor((offset - x_L) / dx[2]));
 
 			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
 			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
@@ -316,8 +315,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
-	sim.initDt_ = dt_;
-	sim.maxDt_ = dt_;
 
 	// initialize
 	sim.setInitialConditions();
@@ -352,6 +349,11 @@ auto problem_main() -> int
 	const int max_level = sim.maxLevel();
 	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(max_level);
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
+
+	// ----- Check Test particles -----
+
+	amrex::Print() << "Expected number of test particles: " << n_expected_test_particles << "\n";
+	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
@@ -393,13 +395,6 @@ auto problem_main() -> int
 		amrex::Print() << "Position norm: " << position_norm << "\n";
 		amrex::Print() << "Relative error: " << relative_error << "\n";
 
-		// ----- Check Test particles -----
-
-		amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
-		amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
-
-		// ----- Check SN remnant mass -----
-
 		// max error tol for particle positions
 		double max_err_tol = 0.0;
 		if (sim.tNew_[0] < 0.011) {
@@ -409,11 +404,17 @@ auto problem_main() -> int
 		} else {
 			max_err_tol = 0.05;
 		}
-		const double max_err_tol_mass = 1.0e-8; // max error tol in mass
+
+		// ----- Check SN remnant mass -----
+
+		const double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
 		status = 1;
-		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < max_err_tol_mass) {
+		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
+		}
+		if (status > 0) {
+			amrex::Print() << "Test failed.\n";
 		}
 	}
 
