@@ -162,9 +162,16 @@ template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxA
 {
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
+		const auto prob_lo = this->geom[lev].ProbLoArray();
+		const auto dx = this->geom[lev].CellSizeArray();
 		const auto tag = tags.array(mfi);
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const double x = prob_lo[0] + (i + 0.5) * dx[0];
+			if (x > 5.0 * dx[0]) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
 	}
 }
 

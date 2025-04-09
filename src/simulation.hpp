@@ -1013,6 +1013,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
 #endif
 
+		// redistribute particles at all levels
+		particleRegister_.redistribute(0);
+
 		// elliptic solve over entire AMR grid (post-timestep)
 		ellipticSolveAllLevels(dt_[0]);
 
