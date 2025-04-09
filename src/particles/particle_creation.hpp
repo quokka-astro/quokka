@@ -190,14 +190,13 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			auto engine = amrex::RandomEngine();
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-			const amrex::Real intenergy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
 			const amrex::Real prob_star_formation = eps_ff * dt / eps_star / t_ff;
 			const amrex::Real random_draw = amrex::Random(engine);
-			int num_star;
+			int num_star = 0;
 
 			if (LambdaJ < J * dx[0] &&
 			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
