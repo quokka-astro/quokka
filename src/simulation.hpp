@@ -1299,10 +1299,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// 	into 1 ghost cell since last particle redistribute.
 		const int nghost_acc = 2;
 
+		accel[lev].resize(AMREX_SPACEDIM);
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			auto ba_face = amrex::convert(boxArray(lev), amrex::IntVect::TheDimensionVector(idim));
-			accel[lev].resize(idim);
-			accel[lev][idim].define(ba_face, DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
+			accel[lev][idim].define(ba_face, DistributionMap(lev), 1, nghost_acc);
 			accel[lev][idim].setVal(0.);
 		}
 
@@ -1326,13 +1326,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			amrex::ParallelFor(accel[lev][idim], amrex::IntVect{0}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 				// compute face-centered acceleration -grad(phi)
 				if (idim == 0) {
-					accel_arr[bx](i, j, k) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i, j, k));
+					accel_arr[bx](i, j, k) = -0.5 * dx_inv[0] * (phi_arr[bx](i, j, k) - phi_arr[bx](i - 1, j, k));
 				}
 				if (idim == 1) {
-					accel_arr[bx](i, j, k) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j, k));
+					accel_arr[bx](i, j, k) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j, k) - phi_arr[bx](i, j - 1, k));
 				}
 				if (idim == 2) {
-					accel_arr[bx](i, j, k) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k));
+					accel_arr[bx](i, j, k) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k) - phi_arr[bx](i, j, k - 1));
 				}
 			});
 		}
