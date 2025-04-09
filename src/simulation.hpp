@@ -1300,7 +1300,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
 		if (lev > 0) {
-			amrex::Mapper *interp_without_limiting = &amrex::mf_pc_interp;
+			amrex::MFInterpolater *interp_without_limiting = &amrex::mf_pc_interp;
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
 			amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
 						     fineBdryFunct, 0, refRatio(lev - 1), interp_without_limiting, accelBC, 0);
