@@ -116,28 +116,65 @@ def plot_orbit_and_error(pltdir):
 
 
 def plot_debug_Poisson_rhs(pltdir):
+
     for pltfile in sorted(glob.glob(pltdir + "/debug_*")):
         # skip if not a directory
         if not os.path.isdir(pltfile):
             continue
-        # only plot accel fields
-        is_accel = "accel" in os.path.basename(pltfile)
-        if not is_accel:
+        # skip if contains "old"
+        if "old" in os.path.basename(pltfile):
             continue
-        ds = yt.load(pltfile)
-        field = ("boxlib", "accel_x")
-        slc = yt.SlicePlot(ds, "z", field)
+        # only plot accel fields
+        is_accel = "_accel_" in os.path.basename(pltfile)
+        is_phi = "_phi_" in os.path.basename(pltfile)
+        print("is_accel = ", is_accel, "is_phi = ", is_phi)
         if is_accel:
+            yt.add_field(("boxlib", "accel_x_neg"), function=lambda field, data: -data[("boxlib", "accel_x")], sampling_type="cell")
+            ds = yt.load(pltfile)
+            field = ("boxlib", "accel_x")
+            slc = yt.SlicePlot(ds, "z", field)
+            # if is_accel:
+            #     slc.set_zlim(field, 1e0, 3e4)
+            #     slc.set_log(field, True)
+            slc.set_width((2.0e13, "cm"))
+            slc.set_cmap(field, "seismic")
+            slc.annotate_grids()
+            slc.annotate_cell_edges(line_width=0.001, color='black')
+            figfn = pltfile
+            if figfn[-1] == '/':
+                figfn = figfn[:-1]
+            figfn = figfn + "_accel_x.png"
+            slc.save(figfn, mpl_kwargs={"dpi": 300})
+            continue
+
+            # plot derived field accel_x_neg
+            field = ("boxlib", "accel_x_neg")
+            slc = yt.SlicePlot(ds, "z", field)
             slc.set_zlim(field, 1e0, 3e4)
             slc.set_log(field, True)
-        slc.set_width((1.3e13, "cm"))
-        slc.annotate_grids()
-        slc.annotate_cell_edges(line_width=0.001, color='black')
-        figfn = pltfile
-        if figfn[-1] == '/':
-            figfn = figfn[:-1]
-        figfn = figfn + "_accel_x.png"
-        slc.save(figfn, mpl_kwargs={"dpi": 300})
+            slc.set_width((2.0e13, "cm"))
+            slc.annotate_grids()
+            slc.annotate_cell_edges(line_width=0.001, color='black')
+            figfn = pltfile
+            if figfn[-1] == '/':
+                figfn = figfn[:-1]
+            figfn = figfn + "_accel_x_neg.png"
+            slc.save(figfn, mpl_kwargs={"dpi": 300})
+        if 0:
+            # plot phi
+            ds = yt.load(pltfile)
+            # add phi_neg field
+            field = ("boxlib", "phi_neg")
+            yt.add_field(field, function=lambda field, data: -data[("boxlib", "phi")], sampling_type="cell")
+            slc = yt.SlicePlot(ds, "z", field)
+            # slc.set_zlim(field, -1e10, 1e10)
+            slc.set_log(field, True)
+            slc.set_zlim(field, 6e13, 2e15)
+            figfn = pltfile
+            if figfn[-1] == '/':
+                figfn = figfn[:-1]
+            figfn = figfn + "_phi.png"
+            slc.save(figfn, mpl_kwargs={"dpi": 300})
 
 
 if __name__ == "__main__":
@@ -145,5 +182,5 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         pltdir = sys.argv[1]
 
-    plot_orbit_and_error(pltdir)
-    # plot_debug_Poisson_rhs(pltdir)
+    # plot_orbit_and_error(pltdir)
+    plot_debug_Poisson_rhs(pltdir)

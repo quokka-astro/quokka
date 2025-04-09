@@ -160,6 +160,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 
 template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
+	// Refine the right-half of the domain
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto prob_lo = this->geom[lev].ProbLoArray();
