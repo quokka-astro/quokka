@@ -37,8 +37,8 @@ constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 constexpr int particle_per_cell = 2;
 constexpr double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
-constexpr double dt_ = 0.001; // a constant timestep is required to control the creation and destruction of particles
-constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
+constexpr double dt_ = 0.001;		      // a constant timestep is required to control the creation and destruction of particles
+constexpr int n_expected_test_particles = 8;  // initially 0, then 2^3 * 2 created, then half of them destroyed
 constexpr int n_SN = 8;
 constexpr double m_SN = n_SN * SN_mass;
 

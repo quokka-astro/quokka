@@ -356,7 +356,7 @@ auto problem_main() -> int
 		// ----- Check SN remnant mass -----
 
 		// SNR mass is not conserved to machine precision due to AMR interpolation. Relative error is about 7e-5
-		const double SNR_mass_rel_err_tol = 1.0e-4; 
+		const double SNR_mass_rel_err_tol = 1.0e-4;
 		status = 1;
 		if (n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
 			status = 0;
