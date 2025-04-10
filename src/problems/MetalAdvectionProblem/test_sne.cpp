@@ -243,10 +243,9 @@ template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
 		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
 	}
 
-	std::ostringstream oss; 
+	std::ostringstream oss;
 	amrex::SaveRandomState(oss);
 	simulationMetadata_["random_number_generator_state"] = oss.str();
-
 }
 
 template <> void QuokkaSimulation<MetalProblem>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
@@ -430,10 +429,10 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 
 // Implement User-defined diode BC
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<MetalProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real /*time*/, const amrex::BCRec * /*bcr*/,
-												int /*bcomp*/, int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<MetalProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+							 int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.dim3();
 	amrex::Box const &box = geom.Domain();
