@@ -11,6 +11,7 @@
 
 // external headers
 #include <fmt/format.h>
+#include "fundamental_constants.H"
 
 // TODO: replace with Microphysics constant
 
