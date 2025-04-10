@@ -181,7 +181,7 @@ constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of th
 // Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
-	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && Physics_Traits<problem_t>::is_radiation_enabled) {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, lum[nGroups]
 	} else {
 		return 6; // mass, vx, vy, vz, birth_time, death_time
