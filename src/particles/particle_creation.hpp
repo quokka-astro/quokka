@@ -4,6 +4,7 @@
 #include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
 #include "stellarpop_data.hpp"
+#include <cmath>
 
 namespace quokka
 {
@@ -148,13 +149,13 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr amrex::Real J = 0.5;	     // Jeans parameter
 
 	// Constants for the Chabrier IMF
-	static constexpr amrex::Real m_star_high = 8.0 * C::M_solar;	// all stars above this mass are considered high mass stars
-	static constexpr amrex::Real m_imf_min = 0.08 * C::M_solar;	// lower limit of the IMF
-	static constexpr amrex::Real m_imf_max = 120.0 * C::M_solar;	// high mass limit of the IMF
-	static constexpr amrex::Real m_imf_break = 8.0 * C::M_solar;	// IMF is lognormal below this mass and powerlaw above
-	static constexpr amrex::Real imf_disp = 0.55;			// dispersion of the lognormal IMF
-	static const amrex::Real imf_mu = std::log10(0.2 * C::M_solar); // mean of the lognormal IMF
-	static constexpr amrex::Real alpha = 2.35;			// slope of the powerlaw
+	static constexpr amrex::Real m_star_high = 8.0 * C::M_solar;	    // all stars above this mass are considered high mass stars
+	static constexpr amrex::Real m_imf_min = 0.08 * C::M_solar;	    // lower limit of the IMF
+	static constexpr amrex::Real m_imf_max = 120.0 * C::M_solar;	    // high mass limit of the IMF
+	static constexpr amrex::Real m_imf_break = 8.0 * C::M_solar;	    // IMF is lognormal below this mass and powerlaw above
+	static constexpr amrex::Real imf_disp = 0.55;			    // dispersion of the lognormal IMF
+	static constexpr amrex::Real imf_mu = std::log10(0.2 * C::M_solar); // mean of the lognormal IMF
+	static constexpr amrex::Real alpha = 2.35;			    // slope of the powerlaw
 
 	static double fstar_high;      // fstar is the fraction of number of high mass stars from the IMF
 	static double m_star_high_avg; // average mass of high mass stars
