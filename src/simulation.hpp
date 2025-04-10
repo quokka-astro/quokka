@@ -464,8 +464,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int do_tracers = 0;
 
       protected:
-	void InitParticles();	 // create tracer particles
-	void InitPhyParticles(); // create PhysicsParticles
+	void InitParticles();			// create tracer particles
+	void InitPhyParticles();		// create PhysicsParticles
 	virtual void InitSetPhyParticles() = 0; // set components of PhysicsParticles
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
 	std::unique_ptr<quokka::RadParticleContainer<problem_t>> RadParticles;
