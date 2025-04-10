@@ -154,7 +154,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr amrex::Real m_imf_max = 120.0 * C::M_solar;	    // high mass limit of the IMF
 	static constexpr amrex::Real m_imf_break = 8.0 * C::M_solar;	    // IMF is lognormal below this mass and powerlaw above
 	static constexpr amrex::Real imf_disp = 0.55;			    // dispersion of the lognormal IMF
-	static constexpr amrex::Real imf_mu = std::log10(0.2 * C::M_solar); // mean of the lognormal IMF
+	static constexpr amrex::Real imf_mu = 32.599 ; //=log10(0.2 * C::M_solar), mean of the lognormal IMF, avoid compiler error
 	static constexpr amrex::Real alpha = 2.35;			    // slope of the powerlaw
 
 	static double fstar_high;      // fstar is the fraction of number of high mass stars from the IMF
