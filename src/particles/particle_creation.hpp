@@ -338,7 +338,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				}
 
 				if (num_particles > 1) { // Update momentum of the low mass star if there is(are) high mass star(s) in the cell
-					auto &plow = particles[0];
+					const int p_idx = 0; 
+					auto &plow = particles[p_idx];
 					plow.rdata(mass_idx + 1) = -total_momx / plow.rdata(mass_idx);
 					plow.rdata(mass_idx + 2) = -total_momy / plow.rdata(mass_idx);
 					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
