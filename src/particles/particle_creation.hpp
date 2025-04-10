@@ -204,7 +204,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
-				num_star = static_cast<int> (1 + (amrex::RandomPoisson(num_high_mass_stars_exp, engine)));
+				num_star = static_cast<int>(1 + (amrex::RandomPoisson(num_high_mass_stars_exp, engine)));
 			}
 			return num_star;
 		}
@@ -285,7 +285,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double numy = 0.0;
 						double numz = 0.0;
 						double denominator = 0.0;
-						double vx_adj = NAN; 
+						double vx_adj = NAN;
 						double vy_adj = NAN;
 						double vz_adj = NAN;
 						double rho_adj = NAN;
