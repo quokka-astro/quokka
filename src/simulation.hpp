@@ -998,7 +998,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 #if AMREX_SPACEDIM == 3
 		// do particle leapfrog (first kick at time t)
-		kickParticlesAllLevels(dt_[0]);
+		if (doPoissonSolve_ != 0) {
+			kickParticlesAllLevels(dt_[0]);
+		}
 #endif
 
 		// hyperbolic advance over all levels
@@ -1018,7 +1020,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
-		kickParticlesAllLevels(dt_[0]);
+		if (doPoissonSolve_ != 0) {
+			kickParticlesAllLevels(dt_[0]);
+		}
 
 		// Use the new type-aware particle creation method
 		// TODO(cch): Need to take care of AMR subscycling
