@@ -72,6 +72,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void createInitialStochasticStellarPopParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
+	void InitSetPhyParticles() override;
 	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
@@ -184,6 +185,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 	// note: an implementation is only effective if StochasticStellarPop particles are used
 }
 #endif // AMREX_SPACEDIM == 3
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::InitSetPhyParticles()
+{
+	// do nothing -- user should implement if desired
+}
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeBeforeTimestep()
 {

@@ -229,6 +229,23 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 
 } // namespace quokka
 
+template <> void QuokkaSimulation<BinaryOrbit>::InitSetPhyParticles()
+{
+	// Loop over all particles and set first integer component to 0
+	// for (int lev = 0; lev < finestLevel() + 1; lev++) {
+	const int lev = 0;
+	auto &particles = StochasticStellarPopParticles->GetParticles(lev);
+	for (auto &kv : particles) {
+		auto &particle_array = kv.second.GetArrayOfStructs();
+		const int np = particle_array.numParticles();
+		for (int i = 0; i < np; i++) {
+			auto &p = particle_array[i];
+			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+		}
+	}
+	// }
+}
+
 template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;

@@ -193,6 +193,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void createInitialStochasticStellarPopParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
+	void InitSetPhyParticles() override;
 	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
@@ -594,6 +595,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSto
 }
 
 #endif // AMREX_SPACEDIM == 3
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::InitSetPhyParticles()
+{
+	// do nothing -- user should implement if desired
+}
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeBeforeTimestep()
 {
