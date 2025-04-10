@@ -172,6 +172,7 @@ enum StochasticStellarPopParticleDataIdx {
 	StochasticStellarPopParticleVyIdx,	  // Velocity in y direction
 	StochasticStellarPopParticleVzIdx,	  // Velocity in z direction
 	StochasticStellarPopParticleBirthTimeIdx, // Time when particle becomes active
+	StochasticStellarPopParticleDeathTimeIdx, // Time when particle becomes inactive
 	StochasticStellarPopParticleLumIdx	  // Base index for luminosity components
 };
 
@@ -181,9 +182,9 @@ constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of th
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 5 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, lum[nGroups]
+		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, lum[nGroups]
 	} else {
-		return 5; // mass, vx, vy, vz, birth_time
+		return 6; // mass, vx, vy, vz, birth_time, death_time
 	}
 }();
 
