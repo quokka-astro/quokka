@@ -206,7 +206,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 				}
 			}
 		});
-		printf("The total number of SN gone off=%d\n", cum_sn);
+		amrex::Print() << "The total number of SN gone off= " << cum_sn << "\n";
 	}
 }
 
@@ -248,11 +248,11 @@ template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
 	simulationMetadata_["random_number_generator_state"] = oss.str();
 }
 
-template <> void QuokkaSimulation<MetalProblem>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
+template <> void QuokkaSimulation<MetalProblem>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) //NOLINT
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 
 	AddSupernova(state_new_cc_[lev], prob_lo, prob_hi, dx, userData_, lev);
 }
@@ -283,8 +283,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixed
 // Add Strang Split Source Term for External Fixed Potential Here
 template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev)
 {
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const Real dt = dt_lev;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {

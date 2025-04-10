@@ -13,7 +13,6 @@
 #include "fundamental_constants.H"
 #include <fmt/format.h>
 
-// TODO: replace with Microphysics constant
 
 constexpr double yr_to_s = 3.154e7;
 constexpr double Myr = 1.e6 * yr_to_s;
