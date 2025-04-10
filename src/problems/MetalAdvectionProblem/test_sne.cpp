@@ -167,17 +167,17 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
-void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi, 
+void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
 		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<MetalProblem> const &userData, int level) // NOLINT
 {
 
 	//  inject energy into cells with stochastic sampling
 	const BL_PROFILE("QuokkaSimulation::Addsupernova()")
 
-	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
-	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
-	const Real rho_blast = userData.M_ejecta / cell_vol;	   // g cm^-3
-	const Real scalar_blast = 1.e3 / cell_vol;		   // g cm^-3
+	    const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
+	const Real rho_eint_blast = userData.E_blast / cell_vol;       // ergs cm^-3
+	const Real rho_blast = userData.M_ejecta / cell_vol;	       // g cm^-3
+	const Real scalar_blast = 1.e3 / cell_vol;		       // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -262,7 +262,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixed
     -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
 {
 
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential; //NOLINT
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential; // NOLINT
 	grad_potential[0] = 0.0;
 	grad_potential[1] = 0.0;
 
@@ -292,8 +292,8 @@ template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::Mu
 		auto const &state = mf.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec; //NOLINT
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> GradPhi; //NOLINT
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec;  // NOLINT
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> GradPhi; // NOLINT
 			double x1mom_new = NAN;
 			double x2mom_new = NAN;
 			double x3mom_new = NAN;
