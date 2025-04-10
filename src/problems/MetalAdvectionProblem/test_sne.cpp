@@ -31,7 +31,7 @@
 // global variables needed for Dirichlet boundary condition and initial conditions
 // copy from data_sets.dat depending on galaxy environment
 static constexpr int ARR_SIZE = 100;
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> logphi_data{
+const amrex::GpuArray<amrex::Real, ARR_SIZE> logphi_data{
     5.23749982, 5.83925514, 6.19098487, 6.44028658, 6.63341552, 6.79097415, 6.92395454, 7.03892608, 7.1401333,	7.23047697, 7.31202697, 7.38631194, 7.45449324,
     7.5174744,	7.57597231, 7.63056519, 7.68172614, 7.72984716, 7.77525663, 7.81823237, 7.85901159, 7.89779849, 7.93477008, 7.9700808,	8.00386622, 8.03624594,
     8.06732603, 8.09720099, 8.12595536, 8.1536651,  8.18039866, 8.206218,   8.23117933, 8.25533386, 8.2787285,	8.30140621, 8.32340645, 8.34476546, 8.36551667,
@@ -40,7 +40,7 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> logphi_data{
     8.77222155, 8.78339974, 8.79438465, 8.80518201, 8.81579732, 8.8262358,  8.83650248, 8.84660217, 8.85653946, 8.86631876, 8.87594432, 8.88542019, 8.89475028,
     8.90393833, 8.91298796, 8.92190263, 8.93068568, 8.93934034, 8.94786969, 8.95627673, 8.96456434, 8.97273531, 8.98079244, 8.98873851, 8.99657621, 9.00430812,
     9.01193675, 9.01946449, 9.02689367, 9.03422652, 9.0414652,	9.04861178, 9.0556683,	9.06263668, 9.06951882};
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> logg_data{
+const amrex::GpuArray<amrex::Real, ARR_SIZE> logg_data{
     -9.85457856, -9.39107618, -9.19504351, -9.08451673, -9.01789453, -8.9773358,  -8.95292764, -8.93860797, -8.93051793, -8.92611324, -8.92379746, -8.92261559,
     -8.92202532, -8.92173815, -8.92160118, -8.92153673, -8.92150669, -8.9214927,  -8.92148604, -8.92148266, -8.92148075, -8.92147948, -8.92147848, -8.92147761,
     -8.9214768,	 -8.92147602, -8.92147525, -8.9214745,	-8.92147377, -8.92147304, -8.92147233, -8.92147163, -8.92147094, -8.92147026, -8.92146959, -8.92146894,
@@ -50,7 +50,7 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> logg_data{
     -8.92145118, -8.92145085, -8.92145052, -8.9214502,	-8.92144989, -8.92144959, -8.92144929, -8.921449,   -8.92144871, -8.92144844, -8.92144816, -8.9214479,
     -8.92144764, -8.92144738, -8.92144713, -8.92144689, -8.92144665, -8.92144642, -8.92144619, -8.92144596, -8.92144574, -8.92144553, -8.92144531, -8.92144511,
     -8.9214449,	 -8.9214447,  -8.92144451, -8.92144431};
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> z_data{
+const amrex::GpuArray<amrex::Real, ARR_SIZE> z_data{
     6.08467742e+19, 1.82540323e+20, 3.04233871e+20, 4.25927419e+20, 5.47620968e+20, 6.69314516e+20, 7.91008065e+20, 9.12701613e+20, 1.03439516e+21,
     1.15608871e+21, 1.27778226e+21, 1.39947581e+21, 1.52116935e+21, 1.64286290e+21, 1.76455645e+21, 1.88625000e+21, 2.00794355e+21, 2.12963710e+21,
     2.25133065e+21, 2.37302419e+21, 2.49471774e+21, 2.61641129e+21, 2.73810484e+21, 2.85979839e+21, 2.98149194e+21, 3.10318548e+21, 3.22487903e+21,
@@ -64,16 +64,16 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> z_data{
     1.10132661e+22, 1.11349597e+22, 1.12566532e+22, 1.13783468e+22, 1.15000403e+22, 1.16217339e+22, 1.17434274e+22, 1.18651210e+22, 1.19868145e+22,
     1.21085081e+22};
 
-AMREX_GPU_MANAGED Real z_star = 245.0 * pc;
-AMREX_GPU_MANAGED Real Sigma_star = 42.0 * C::M_solar / pc / pc;
-AMREX_GPU_MANAGED Real rho_dm = 0.0064 * C::M_solar / pc / pc / pc;
-AMREX_GPU_MANAGED Real R0_Gal = 8.e3 * pc;
-AMREX_GPU_MANAGED Real ks_sigma_sfr = 2.088579882548443e-55;
-AMREX_GPU_MANAGED Real hscale = 150. * pc;
-AMREX_GPU_MANAGED Real sigma1 = 700000.0;
-AMREX_GPU_MANAGED Real sigma2 = 7000000.0;
-AMREX_GPU_MANAGED Real rho01 = 2.78556e-24;
-AMREX_GPU_MANAGED Real rho02 = 2.7855600000000006e-29;
+static constexpr amrex::Real z_star = 245.0 * pc;
+static constexpr amrex::Real Sigma_star = 42.0 * C::M_solar / pc / pc;
+static constexpr amrex::Real rho_dm = 0.0064 * C::M_solar / pc / pc / pc;
+static constexpr amrex::Real R0_Gal = 8.e3 * pc;
+static constexpr amrex::Real ks_sigma_sfr = 2.088579882548443e-55;
+static constexpr amrex::Real hscale = 150. * pc;
+static constexpr amrex::Real sigma1 = 700000.0;
+static constexpr amrex::Real sigma2 = 7000000.0;
+static constexpr amrex::Real rho01 = 2.78556e-24;
+static constexpr amrex::Real rho02 = 2.7855600000000006e-29;
 
 struct MetalProblem {
 };
@@ -125,33 +125,33 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 	double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 
 		// Calculate DM Potential
-		double prefac;
+		double prefac = NAN;
 		prefac = 2. * M_PI * Gconst_ * rho_dm * std::pow(R0_Gal, 2);
-		double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal, 2)));
+		const Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal, 2)));
 
 		// Calculate Stellar Disk Potential
-		double prefac2;
+		double prefac2 = NAN;
 		prefac2 = 2. * M_PI * Gconst_ * Sigma_star * z_star;
-		double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
+		const double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
 
 		// Calculate Gas Disk Potential
 
 		auto const &x_arr = z_data;
 		auto const &y_arr = logphi_data;
-		amrex::Real phi_interp = interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
-		amrex::Real Phigas = std::pow(10., phi_interp);
+		const double phi_interp = interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
+		const double Phigas = std::pow(10., phi_interp);
 
-		double Phitot = Phist + Phidm + Phigas;
+		const double Phitot = Phist + Phidm + Phigas;
 
-		double rho, rho_disk, rho_halo;
+		double rho, rho_disk, rho_halo; //NOLINT
 		rho_disk = rho01 * std::exp(-Phitot / std::pow(sigma1, 2.0));
 		rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
 		rho = (rho_disk + rho_halo);
 
-		double P = rho_disk * std::pow(sigma1, 2.0) + rho_halo * std::pow(sigma2, 2.0);
+		double double P = rho_disk * std::pow(sigma1, 2.0) + rho_halo * std::pow(sigma2, 2.0);
 
 		AMREX_ASSERT(!std::isnan(rho));
 
@@ -170,7 +170,7 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
 		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<MetalProblem> const &userData, int level)
 {
-	// TODO for AV - ave (and restore) the RNG state in the metadata.yaml file
+	
 	//  inject energy into cells with stochastic sampling
 	BL_PROFILE("QuokkaSimulation::Addsupernova()")
 
@@ -266,7 +266,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixed
 	grad_potential[0] = 0.0;
 	grad_potential[1] = 0.0;
 
-	double z = posvec[2];
+	double const z = posvec[2];
 
 	// Interpolate to find the accurate g-value from array
 	auto const &x_arr = z_data;
@@ -301,7 +301,7 @@ template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::Mu
 			const Real x3mom = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index);
 			const Real Egas = state(i, j, k, HydroSystem<MetalProblem>::energy_index);
 
-			Real Eint = RadSystem<MetalProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
+			const Real Eint = RadSystem<MetalProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
 
 			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
 			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
@@ -357,7 +357,7 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 
 	proj["warm_mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    double flux;
+		    double flux = NAN;
 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
 		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
@@ -381,7 +381,7 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 
 	proj["warm_scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    double flux;
+		    double flux = NAN;
 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
 		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
@@ -398,7 +398,7 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 
 	proj["hot_scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    double flux;
+		    double flux = NAN;
 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
 		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
