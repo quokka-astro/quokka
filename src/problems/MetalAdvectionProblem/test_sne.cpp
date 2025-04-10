@@ -241,6 +241,11 @@ template <> void QuokkaSimulation<NewProblem>::computeBeforeTimestep()
 		py(i) = geom[0].ProbLength(1) * amrex::Random();
 		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
 	}
+
+	std::ostringstream oss; 
+	amrex::SaveRandomState(oss);
+	simulationMetadata_["random_number_generator_state"] = oss.str();
+
 }
 
 template <> void QuokkaSimulation<NewProblem>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
