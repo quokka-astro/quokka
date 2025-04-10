@@ -29,6 +29,7 @@
 #include "test_sne.hpp"
 
 // global variables needed for Dirichlet boundary condition and initial conditions
+// copy from data_sets.dat depending on galaxy environment
 static constexpr int ARR_SIZE = 100;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> logphi_data{
     5.23749982, 5.83925514, 6.19098487, 6.44028658, 6.63341552, 6.79097415, 6.92395454, 7.03892608, 7.1401333,	7.23047697, 7.31202697, 7.38631194, 7.45449324,
@@ -128,12 +129,12 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 
 		// Calculate DM Potential
 		double prefac;
-		prefac = 2. * M_PI * Const_G * rho_dm * std::pow(R0_Gal, 2);
+		prefac = 2. * M_PI * Gconst_ * rho_dm * std::pow(R0_Gal, 2);
 		double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal, 2)));
 
 		// Calculate Stellar Disk Potential
 		double prefac2;
-		prefac2 = 2. * M_PI * Const_G * Sigma_star * z_star;
+		prefac2 = 2. * M_PI * Gconst_ * Sigma_star * z_star;
 		double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
 
 		// Calculate Gas Disk Potential
@@ -273,8 +274,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixed
 	auto const &y_arr = logg_data;
 	amrex::Real ginterp = interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
 
-	grad_potential[2] = 2. * M_PI * Const_G * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
-	grad_potential[2] += 2. * M_PI * Const_G * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
+	grad_potential[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
+	grad_potential[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
 	grad_potential[2] += (z / std::abs(z)) * std::pow(10., ginterp);
 
 	return grad_potential;
