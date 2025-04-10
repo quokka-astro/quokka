@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(gravity_3d gravity_3d.cpp ${QuokkaObjSources})
+    add_executable(gravity_3d gravity_3d.cpp  ../../math/interpolate.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(gravity_3d)
     endif()
