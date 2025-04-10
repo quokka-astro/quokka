@@ -130,7 +130,7 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 		// Calculate DM Potential
 		double prefac = NAN;
 		prefac = 2. * M_PI * Gconst_ * rho_dm * std::pow(R0_Gal, 2);
-		const Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal, 2)));
+		const double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal, 2)));
 
 		// Calculate Stellar Disk Potential
 		double prefac2 = NAN;
@@ -151,7 +151,7 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 		rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
 		rho = (rho_disk + rho_halo);
 
-		double double P = rho_disk * std::pow(sigma1, 2.0) + rho_halo * std::pow(sigma2, 2.0);
+		const double P = rho_disk * std::pow(sigma1, 2.0) + rho_halo * std::pow(sigma2, 2.0);
 
 		AMREX_ASSERT(!std::isnan(rho));
 
