@@ -204,7 +204,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
-				num_star = 1 + (amrex::RandomPoisson(num_high_mass_stars_exp, engine));
+				num_star = static_cast<int> (1 + (amrex::RandomPoisson(num_high_mass_stars_exp, engine)));
 			}
 			return num_star;
 		}
@@ -278,11 +278,17 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 					p.rdata(birth_time_index + 1) = LONG_MAX;
 					if (p_idx > 0) {
-						double sigma_sq_x;
-						double sigma_sq_y;
-						double sigma_sq_z;
-						double numx = 0.0, numy = 0.0, numz = 0.0, denominator = 0.0;
-						double vx_adj, vy_adj, vz_adj, rho_adj;
+						double sigma_sq_x = NAN;
+						double sigma_sq_y = NAN;
+						double sigma_sq_z = NAN;
+						double numx = 0.0;
+						double numy = 0.0;
+						double numz = 0.0;
+						double denominator = 0.0;
+						double vx_adj = NAN; 
+						double vy_adj = NAN;
+						double vz_adj = NAN;
+						double rho_adj = NAN;
 						// Get the average velocity from the adjoining cells
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
@@ -314,7 +320,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						// Keep generating mass until it smaller than max mass in Sukhbold but smaller than high mass limit
 						double mass_of_star = 1.e50;
 						while (mass_of_star > m_imf_max || mass_of_star < m_star_high) {
-							double xx = amrex::Random(engine);
+							const double xx = amrex::Random(engine);
 							mass_of_star = xx * (std::pow(m_imf_max, 1.0 - alpha) - std::pow(m_imf_min, 1.0 - alpha)) +
 								       std::pow(m_imf_min, 1.0 - alpha);
 							mass_of_star = std::pow(mass_of_star, 1. / (1. - alpha));
