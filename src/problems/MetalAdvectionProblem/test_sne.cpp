@@ -146,7 +146,7 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 
 		const double Phitot = Phist + Phidm + Phigas;
 
-		double rho, rho_disk, rho_halo; //NOLINT
+		double rho, rho_disk, rho_halo; // NOLINT
 		rho_disk = rho01 * std::exp(-Phitot / std::pow(sigma1, 2.0));
 		rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
 		rho = (rho_disk + rho_halo);
@@ -170,7 +170,7 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
 		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<MetalProblem> const &userData, int level)
 {
-	
+
 	//  inject energy into cells with stochastic sampling
 	BL_PROFILE("QuokkaSimulation::Addsupernova()")
 
