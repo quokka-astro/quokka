@@ -38,8 +38,8 @@ constexpr int particle_per_cell = 2;
 constexpr double SN_mass = 0.1;		      // mass of SNProgenitor particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
-constexpr int n_expected_test_particles = 8; // initially 0, then 2^3 * 2 created, then half of them destroyed
-constexpr int n_SN = 2 * 2 * 2 * 2 / 2;
+constexpr int n_expected_test_particles = 10; // initially 2, then 2^3 * 2 created, then half of them destroyed
+constexpr int n_SN = 8;
 constexpr double m_SN = n_SN * SN_mass;
 
 // locations of the particles: a 2x2x2 grids of particles
@@ -229,23 +229,6 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 
 } // namespace quokka
 
-template <> void QuokkaSimulation<BinaryOrbit>::InitSetPhyParticles()
-{
-	// Loop over all particles and set first integer component to 0
-	// for (int lev = 0; lev < finestLevel() + 1; lev++) {
-	const int lev = 0;
-	auto &particles = StochasticStellarPopParticles->GetParticles(lev);
-	for (auto &kv : particles) {
-		auto &particle_array = kv.second.GetArrayOfStructs();
-		const int np = particle_array.numParticles();
-		for (int i = 0; i < np; i++) {
-			auto &p = particle_array[i];
-			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-		}
-	}
-	// }
-}
-
 template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -269,6 +252,31 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
 	CICParticles->InitFromAsciiFile("Gravity3D.txt", nreal_extra, nullptr);
+}
+
+template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
+{
+	// read particles from ASCII file
+	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
+	TestParticles->SetVerbose(1);
+	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
+}
+
+template <> void QuokkaSimulation<BinaryOrbit>::InitSetPhyParticles()
+{
+	// Loop over all particles and set first integer component to 0
+	// for (int lev = 0; lev < finestLevel() + 1; lev++) {
+	const int lev = 0;
+	auto &particles = StochasticStellarPopParticles->GetParticles(lev);
+	for (auto &kv : particles) {
+		auto &particle_array = kv.second.GetArrayOfStructs();
+		const int np = particle_array.numParticles();
+		for (int i = 0; i < np; i++) {
+			auto &p = particle_array[i];
+			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+		}
+	}
+	// }
 }
 
 auto problem_main() -> int
