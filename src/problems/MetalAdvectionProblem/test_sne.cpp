@@ -118,11 +118,11 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 {
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
@@ -167,12 +167,12 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
-void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi,
-		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<MetalProblem> const &userData, int level)
+void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi, 
+		  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, SimulationData<MetalProblem> const &userData, int level) // NOLINT
 {
 
 	//  inject energy into cells with stochastic sampling
-	BL_PROFILE("QuokkaSimulation::Addsupernova()")
+	const BL_PROFILE("QuokkaSimulation::Addsupernova()")
 
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
@@ -194,9 +194,9 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2] + 0.5 * dx[2];
 
 			for (int n = 0; n < np; ++n) {
-				Real x0 = std::abs(xc - px(n));
-				Real y0 = std::abs(yc - py(n));
-				Real z0 = std::abs(zc - pz(n));
+				const Real x0 = std::abs(xc - px(n));
+				const Real y0 = std::abs(yc - py(n));
+				const Real z0 = std::abs(zc - pz(n));
 
 				if (x0 < 0.5 * dx[0] && y0 < 0.5 * dx[1] && z0 < 0.5 * dx[2]) {
 					state(i, j, k, HydroSystem<MetalProblem>::density_index) += rho_blast;
@@ -250,9 +250,9 @@ template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
 
 template <> void QuokkaSimulation<MetalProblem>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
 {
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
 
 	AddSupernova(state_new_cc_[lev], prob_lo, prob_hi, dx, userData_, lev);
 }
@@ -262,7 +262,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixed
     -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
 {
 
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential; //NOLINT
 	grad_potential[0] = 0.0;
 	grad_potential[1] = 0.0;
 
@@ -271,7 +271,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixed
 	// Interpolate to find the accurate g-value from array
 	auto const &x_arr = z_data;
 	auto const &y_arr = logg_data;
-	amrex::Real ginterp = interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
+	const amrex::Real ginterp = interpolate_value(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
 
 	grad_potential[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
 	grad_potential[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + z * z / (z_star * z_star), -0.5));
@@ -292,8 +292,11 @@ template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::Mu
 		auto const &state = mf.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec, GradPhi;
-			double x1mom_new, x2mom_new, x3mom_new;
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec; //NOLINT
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> GradPhi; //NOLINT
+			double x1mom_new = NAN;
+			double x2mom_new = NAN;
+			double x3mom_new = NAN;
 
 			const Real rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
 			const Real x1mom = state(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index);
@@ -507,6 +510,5 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
 	return 0;
 }
