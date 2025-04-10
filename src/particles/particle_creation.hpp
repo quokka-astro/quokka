@@ -363,8 +363,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
 
-double ParticleCreationTraits<ParticleType::StochasticStellarPop>::fstar_high; // NOLINT 
-double ParticleCreationTraits<ParticleType::StochasticStellarPop>::m_star_high_avg; // NOLINT 
+double ParticleCreationTraits<ParticleType::StochasticStellarPop>::fstar_high;	    // NOLINT
+double ParticleCreationTraits<ParticleType::StochasticStellarPop>::m_star_high_avg; // NOLINT
 
 #endif // AMREX_SPACEDIM == 3
 
