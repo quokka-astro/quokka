@@ -1209,7 +1209,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		}
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			fillPoissonRhsAtLevel(rhs[lev], lev);
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
@@ -1219,6 +1218,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// deposit particle mass from all particles that have mass into rhs by accumulation
 		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
 #endif
+
+		// check for NaN
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
+		}
 
 		amrex::Real abstol = abstolPoisson_ * rhs_min;
 		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
@@ -1363,7 +1367,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 		// average to cell centers
 		amrex::MultiFab accel_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
-		amrex::average_face_to_cellcenter(accel_cc, amrex::GetVecOfConstPtrs(accel[lev]), geom[lev]);
+		amrex::average_face_to_cellcenter(accel_cc, 0, amrex::GetVecOfConstPtrs(accel[lev]), nghost_acc);
+
+		// check for NaN
+		AMREX_ALWAYS_ASSERT(!accel_cc.contains_nan());
 
 		// Kick particles using the acceleration field
 		particleRegister_.kickParticlesAtLevel(dt, accel_cc, lev);
