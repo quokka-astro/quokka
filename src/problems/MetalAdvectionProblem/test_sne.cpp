@@ -31,6 +31,7 @@
 // global variables needed for Dirichlet boundary condition and initial conditions
 // copy from data_sets.dat depending on galaxy environment
 static constexpr int ARR_SIZE = 100;
+//NOLINT
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> logphi_data{
     5.23749982, 5.83925514, 6.19098487, 6.44028658, 6.63341552, 6.79097415, 6.92395454, 7.03892608, 7.1401333,	7.23047697, 7.31202697, 7.38631194, 7.45449324,
     7.5174744,	7.57597231, 7.63056519, 7.68172614, 7.72984716, 7.77525663, 7.81823237, 7.85901159, 7.89779849, 7.93477008, 7.9700808,	8.00386622, 8.03624594,
