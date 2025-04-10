@@ -248,7 +248,7 @@ template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
 	simulationMetadata_["random_number_generator_state"] = oss.str();
 }
 
-template <> void QuokkaSimulation<MetalProblem>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) //NOLINT
+template <> void QuokkaSimulation<MetalProblem>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) // NOLINT
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
