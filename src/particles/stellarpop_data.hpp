@@ -16,6 +16,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "math/interpolate.hpp"
+#include "fundamental_constants.H"
 
 using Real = amrex::Real;
 static constexpr int FATE_ARR_SIZE = 200;
@@ -49,7 +50,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
 	auto const &x_arr = interp_mass_star;
 	auto const &y_arr = interp_star_fate;
-	amrex::Real fate_interp = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE);
+	amrex::Real fate_interp = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
 	return (fate_interp < 0.5 ? 0 : 1);
 }
 
@@ -101,6 +102,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 	// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
 	auto const &x_arr = interp_mass_star;
 	auto const &y_arr = interp_death_time;
-	amrex::Real death_time = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE);
+	amrex::Real death_time = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
 	return death_time;
 }
