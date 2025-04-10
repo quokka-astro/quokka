@@ -36,11 +36,12 @@ constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
 constexpr double SN_mass = 0.1;		      // mass of SNProgenitor particles
+constexpr double init_test_particle_mass = 2. * 1.0e-5; // mass of Test particles
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
-constexpr int n_expected_test_particles = 10; // initially 2, then 2^3 * 2 created, then half of them destroyed
+constexpr int n_expected_test_particles = 8; // 8 low_mass particles created and live to the end
 constexpr int n_SN = 8;
-constexpr double m_SN = n_SN * SN_mass;
+constexpr double m_SN = (n_SN * SN_mass) + init_test_particle_mass;
 
 // locations of the particles: a 2x2x2 grids of particles
 constexpr int loc_x1 = 31;
@@ -256,7 +257,8 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 
 template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 {
-	// read particles from ASCII file
+	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
+	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
@@ -265,9 +267,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 template <> void QuokkaSimulation<BinaryOrbit>::InitSetPhyParticles()
 {
 	// Loop over all particles and set first integer component to 0
-	// for (int lev = 0; lev < finestLevel() + 1; lev++) {
-	const int lev = 0;
-	auto &particles = StochasticStellarPopParticles->GetParticles(lev);
+	auto &particles = TestParticles->GetParticles(0);
 	for (auto &kv : particles) {
 		auto &particle_array = kv.second.GetArrayOfStructs();
 		const int np = particle_array.numParticles();
@@ -276,7 +276,6 @@ template <> void QuokkaSimulation<BinaryOrbit>::InitSetPhyParticles()
 			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 		}
 	}
-	// }
 }
 
 auto problem_main() -> int
