@@ -71,6 +71,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getParticleData(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
 	// Pure virtual methods that must be implemented by derived classes
+	[[nodiscard]] virtual auto isStarParticle() -> bool = 0;
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 	virtual void redistribute(int lev) = 0;
 	virtual void redistribute(int lev, int ngrow) = 0;
@@ -101,6 +102,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	ContainerType *container_{}; // Pointer to the actual particle container - moved to protected
 
       public:
+	[[nodiscard]] auto isStarParticle() -> bool override { return false; }
+
 	// Get the particle type
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
@@ -491,6 +494,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, problem_t, particleType>
 {
       public:
+	[[nodiscard]] auto isStarParticle() -> bool override { return true; }
+
 	// Constructor - forwards all arguments to the base class
 	StarParticleDescriptor(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, ContainerType *container, bool allows_destruction = false,
 			       int evolution_stage_idx = -1, bool hydro_interact = false)
@@ -648,10 +653,12 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Deposit supernova energy and momentum from all particles
 	void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
 	{
-		// this function is only implemented for one particle type (Test particles), so we specify the particle type manually here
-		auto it = particleRegistry_.find(ParticleType::Test);
-		if (it != particleRegistry_.end()) {
-			it->second->depositSN(state, lev, step_end_time);
+		// this function is only implemented for particles that belong to the StarParticleDescriptor class whose unique signature is that the
+		// isStarParticle() method returns true
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->isStarParticle()) {
+				descriptor->depositSN(state, lev, step_end_time);
+			}
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
