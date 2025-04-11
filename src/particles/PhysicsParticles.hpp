@@ -85,7 +85,7 @@ class PhysicsParticleDescriptorBase
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
 	virtual void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) = 0;
-	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::Real = 0;
+	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
 	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) { /* Default empty implementation */ }
@@ -360,9 +360,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Compute maximum particle speed at a given level
-	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::Real override
+	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> override
 	{
-		amrex::Real max_speed = 0.0;
+		amrex::ValLocPair<amrex::Real, amrex::RealVect> max_speed{.value = 0, .index = amrex::RealVect { AMREX_D_DECL(NAN, NAN, NAN) }};
 
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			// Only compute for particles that have velocity components
@@ -372,27 +372,29 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			if (mass_idx + 3 < ContainerType::ParticleType::NReal) {
 				// Use ParticleReduce with ReduceOpMax for efficient parallel reduction
 				amrex::ReduceOps<amrex::ReduceOpMax> reduce_ops;
-				using ReduceDataType = amrex::ReduceData<amrex::Real>;
+				using ResultType = amrex::GpuTuple<amrex::ValLocPair<amrex::Real, amrex::RealVect>>;
+				using ReduceDataType = amrex::ReduceData<ResultType>;
 
 				// Perform the reduction over all particles at this level
 				using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
 				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
 				    *container_, lev,
-				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
+				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> ResultType {
 					    // Compute velocity magnitude
 					    const amrex::Real vx = p_type.m_aos[i].rdata(mass_idx + 1);
 					    const amrex::Real vy = p_type.m_aos[i].rdata(mass_idx + 2);
 					    const amrex::Real vz = p_type.m_aos[i].rdata(mass_idx + 3);
 					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
-					    return std::sqrt(v2);
+					    const amrex::RealVect pos{p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2)};
+					    return {amrex::ValLocPair<amrex::Real, amrex::RealVect> { std::sqrt(v2), pos }};
 				    },
 				    reduce_ops);
 
 				// Extract the value from the tuple
 				max_speed = std::max(0.0, amrex::get<0>(result_tuple));
 
-				AMREX_ASSERT(!std::isnan(max_speed));
-				AMREX_ASSERT(!std::isinf(max_speed));
+				AMREX_ASSERT(!std::isnan(max_speed.value));
+				AMREX_ASSERT(!std::isinf(max_speed.value));
 			}
 		}
 
@@ -745,13 +747,13 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Compute maximum particle speed across all particle types
-	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::Real
+	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect>
 	{
-		amrex::Real max_speed = 0.0;
+		amrex::ValLocPair<amrex::Real, amrex::RealVect> max_speed{.value = 0, .index = amrex::RealVect{AMREX_D_DECL(NAN, NAN, NAN)}};
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				const amrex::Real speed = descriptor->computeMaxParticleSpeed(lev);
-				AMREX_ASSERT(!std::isnan(speed));
+				const amrex::ValLocPair<amrex::Real, amrex::RealVect> speed = descriptor->computeMaxParticleSpeed(lev);
+				AMREX_ASSERT(!std::isnan(speed.value));
 				max_speed = std::max(max_speed, speed);
 			}
 		}

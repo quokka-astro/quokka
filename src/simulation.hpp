@@ -820,15 +820,23 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	}
 
 	// compute maximum particle speed on level 'lev'
-	dtloc_t particle_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	amrex::ValLocPair<amrex::Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 #if AMREX_SPACEDIM == 3
 	if (particleRegister_.HasMassiveParticles()) {
-		const dtloc_t max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
+		const amrex::ValLocPair<amrex::Real, amrex::RealVect> max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
 		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed.value));
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
+			// compute IntVect from RealVect and geom[lev]
+			amrex::IntVect cell_idx;
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxinv = geom[lev].InvCellSizeArray();
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo = geom[lev].ProbLoArray();
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				cell_idx[i] = static_cast<int>(dxinv[i] * (max_particle_speed.index[i] - prob_lo[i]));
+			}
+			particle_dt.index = cell_idx;
 		}
 		if (verbose) {
 			amrex::Print() << "...[level " << lev << "] estimated particle timestep: " << particle_dt.value << '\n';
