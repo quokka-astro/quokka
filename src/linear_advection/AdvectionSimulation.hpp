@@ -61,6 +61,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
 
 	void computeMaxSignalLocal(int level) override;
+	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
@@ -118,6 +119,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSig
 		auto const &maxSignal = max_signal_speed_[level].array(iter);
 		LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(stateOld, maxSignal, advectionVx_, advectionVy_, advectionVz_, indexRange);
 	}
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>:: printCellProperties(int lev, amrex::IntVect const &index)
+{
+	// deliberately empty
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev)

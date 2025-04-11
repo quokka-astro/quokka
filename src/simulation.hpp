@@ -223,6 +223,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total) const;
 
 	virtual void computeMaxSignalLocal(int level) = 0;
+	virtual void printCellProperties(int lev, amrex::IntVect const &index) = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
@@ -814,6 +815,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		amrex::Print() << "...[level " << lev << "] estimated hydro timestep: " << hydro_dt.value << '\n';
 		amrex::Print() << "...[level " << lev << "] hydro timestep limited at cell " << hydro_dt.index << " with signal speed = " << domain_signal_max
 			       << '\n';
+		amrex::Print() << "...[level " << lev << "] ";
+		printCellProperties(lev, hydro_dt.index);
 	}
 
 	// compute maximum particle speed on level 'lev'

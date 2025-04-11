@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
+#include "hydro/EOS.hpp"
 #include <array>
 #if __has_include(<filesystem>)
 #include <filesystem>
@@ -182,6 +183,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
+	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
@@ -512,6 +514,32 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 				     "compute a time step.");
 		}
 	}
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
+{
+	// print density, velocity magnitude, temperature, adiabatic sound speed
+	amrex::Vector<amrex::Real> cell_values = amrex::get_cell_data(state_new_cc_[lev], index);
+
+	const amrex::Real rho = cell_values[HydroSystem<problem_t>::density_index];
+	const amrex::Real px1 = cell_values[HydroSystem<problem_t>::x1Momentum_index];
+	const amrex::Real px2 = cell_values[HydroSystem<problem_t>::x2Momentum_index];
+	const amrex::Real px3 = cell_values[HydroSystem<problem_t>::x3Momentum_index];
+	const amrex::Real Etot = cell_values[HydroSystem<problem_t>::energy_index];
+
+	const amrex::Real vx1 = px1 / rho;
+	const amrex::Real vx2 = px2 / rho;
+	const amrex::Real vx3 = px3 / rho;
+	const amrex::Real vsq = (vx1 * vx1) + (vx2 * vx2) + (vx3 * vx3);
+	const amrex::Real vel_mag = std::sqrt(vsq);
+
+	const amrex::Real Ekin = 0.5 * rho * vsq;
+	const amrex::Real Eint = Etot - Ekin;
+	const amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
+	const amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
+	const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+
+	amrex::Print() << "cell density = " << rho << ", |v| = " << vel_mag << ", T = " << T << ", cs = " << cs << "\n";
 }
 
 #if !defined(NDEBUG)
