@@ -840,6 +840,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		}
 		if (verbose) {
 			amrex::Print() << "...[level " << lev << "] estimated particle timestep: " << particle_dt.value << '\n';
+			amrex::Print() << "...[level " << lev << "] max particle velocity: " << max_particle_speed.value << '\n';
 #if 0
 			amrex::Print() << "...[level " << lev << "] particle timestep limited at cell " << particle_dt.index << '\n';
 #endif
