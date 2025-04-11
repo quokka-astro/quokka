@@ -61,7 +61,6 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
 
 	void computeMaxSignalLocal(int level) override;
-	auto computeExtraPhysicsTimestep(int level) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
@@ -129,14 +128,6 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::fillPoissonRh
 template <typename problem_t> void AdvectionSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt)
 {
 	// deliberately empty
-}
-
-template <typename problem_t>
-auto AdvectionSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
-{
-	// user can override this
-	return amrex::ValLocPair<amrex::Real, amrex::IntVect>{.value = std::numeric_limits<amrex::Real>::max(),
-							      .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::preCalculateInitialConditions()

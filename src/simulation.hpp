@@ -223,7 +223,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total) const;
 
 	virtual void computeMaxSignalLocal(int level) = 0;
-	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
@@ -811,7 +810,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 	if (verbose) {
 		amrex::Print() << "...estimated hydro timestep at level " << lev << ": " << hydro_dt.value << '\n';
-		amrex::Print() << "...timestep limited at cell " << hydro_dt.index << " with signal speed = " << domain_signal_max << '\n';
+		amrex::Print() << "...hydro timestep limited at cell " << hydro_dt.index << " with signal speed = " << domain_signal_max << '\n';
 	}
 
 	// compute maximum particle speed on level 'lev'
@@ -829,22 +828,24 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	}
 #endif
 
-	// compute timestep due to extra physics on level 'lev'
-	amrex::ValLocPair<amrex::Real, amrex::IntVect> extra_physics_dt = computeExtraPhysicsTimestep(lev);
+	if (verbose) {
+		amrex::Print() << "...estimated particle timestep at level " << lev << ": " << particle_dt.value << '\n';
+		amrex::Print() << "...particle timestep limited at cell " << particle_dt.index << '\n';
+	}
 
 	// compute minimum timestep
-	std::vector<amrex::ValLocPair<amrex::Real, amrex::IntVect>*> dts = {&hydro_dt, &particle_dt, &extra_physics_dt};
+	std::vector<amrex::ValLocPair<amrex::Real, amrex::IntVect>*> dts = {&hydro_dt, &particle_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end());
 
 	if (verbose) {
 		amrex::Print() << "...estimated timestep at level " << lev << ": " << dt_min_ptr->value << '\n';
 		amrex::Print() << "...timestep limited at cell " << dt_min_ptr->index << '\n';
+
+		// print the physics that limits the timestep
 		if (dt_min_ptr == &hydro_dt) {
 			amrex::Print() << "...timestep limited by hydro.\n";
 		} else if (dt_min_ptr == &particle_dt) {
 			amrex::Print() << "...timestep limited by particle velocity.\n";
-		} else if (dt_min_ptr == &extra_physics_dt) {
-			amrex::Print() << "...timestep limited by extra physics.\n";
 		}
 	}
 
@@ -857,11 +858,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 	// compute candidate timestep dt_tmp on each level
 	amrex::Vector<amrex::Real> dt_tmp(finest_level + 1);
-	amrex::Vector<amrex::IntVect> dt_loc_tmp(finest_level + 1);
 	for (int level = 0; level <= finest_level; ++level) {
-		auto const dt_tmp_lev = computeTimestepAtLevel(level);
-		dt_tmp[level] = dt_tmp_lev.value;
-		dt_loc_tmp[level] = dt_tmp_lev.index;
+		dt_tmp[level] = computeTimestepAtLevel(level).value;
 	}
 
 	// limit change in timestep on each level
