@@ -121,7 +121,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSig
 	}
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>:: printCellProperties(int lev, amrex::IntVect const &index)
+template <typename problem_t> void AdvectionSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
 {
 	// deliberately empty
 }
