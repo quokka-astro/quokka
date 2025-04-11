@@ -813,7 +813,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 	if (verbose) {
 		amrex::Print() << "...[level " << lev << "] estimated hydro timestep: " << hydro_dt.value << '\n';
-		amrex::Print() << "...[level " << lev << "] hydro timestep limited at cell " << hydro_dt.index << " with signal speed = " << domain_signal_max
+		amrex::Print() << "...[level " << lev << "] \thydro timestep limited at cell " << hydro_dt.index << " with signal speed = " << domain_signal_max
 			       << '\n';
 		printCellProperties(lev, hydro_dt.index);
 	}
@@ -840,9 +840,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		}
 		if (verbose) {
 			amrex::Print() << "...[level " << lev << "] estimated particle timestep: " << particle_dt.value << '\n';
-			amrex::Print() << "...[level " << lev << "] max particle velocity: " << max_particle_speed.value << '\n';
+			amrex::Print() << "...[level " << lev << "] \tmax particle velocity: " << max_particle_speed.value << '\n';
 #if 0
-			amrex::Print() << "...[level " << lev << "] particle timestep limited at cell " << particle_dt.index << '\n';
+			amrex::Print() << "...[level " << lev << "] \tparticle timestep limited at cell " << particle_dt.index << '\n';
 #endif
 		}
 	}
@@ -855,13 +855,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	if (verbose) {
 #if 0
 		amrex::Print() << "...[level " << lev << "] estimated timestep: " << dt_min_ptr->value << '\n';
-		amrex::Print() << "...[level " << lev << "] timestep limited at cell " << dt_min_ptr->index << '\n';
+		amrex::Print() << "...[level " << lev << "] \ttimestep limited at cell " << dt_min_ptr->index << '\n';
 #endif
 		// print the physics that limits the timestep
 		if (dt_min_ptr == &hydro_dt) {
-			amrex::Print() << "...[level " << lev << "] timestep limited by hydro.\n";
+			amrex::Print() << "...[level " << lev << "] timestep limited by HYDRO\n";
 		} else if (dt_min_ptr == &particle_dt) {
-			amrex::Print() << "...[level " << lev << "] timestep limited by particle velocity.\n";
+			amrex::Print() << "...[level " << lev << "] timestep limited by PARTICLES\n";
 		}
 	}
 
