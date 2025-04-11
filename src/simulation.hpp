@@ -827,13 +827,12 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
 		}
+		if (verbose) {
+			amrex::Print() << "...[level " << lev << "] estimated particle timestep: " << particle_dt.value << '\n';
+			amrex::Print() << "...[level " << lev << "] particle timestep limited at cell " << particle_dt.index << '\n';
+		}
 	}
 #endif
-
-	if (verbose) {
-		amrex::Print() << "...[level " << lev << "] estimated particle timestep: " << particle_dt.value << '\n';
-		amrex::Print() << "...[level " << lev << "] particle timestep limited at cell " << particle_dt.index << '\n';
-	}
 
 	// compute minimum timestep
 	std::vector<dtloc_t *> dts = {&hydro_dt, &particle_dt};
