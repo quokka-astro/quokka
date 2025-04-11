@@ -400,8 +400,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 		// Reduce across all MPI ranks to get global maximum. Use ParallelContext::CommunicatorSub() for current level and avoid using the default
 		// communicator.
+#if 0
 		amrex::ParallelAllReduce::Max(max_speed, amrex::ParallelContext::CommunicatorSub());
-		return max_speed;
+#endif
+		// temporary workaround since RealVect is not currently supported for MPI reductions
+		amrex::ParallelAllReduce::Max(max_speed.value, amrex::ParallelContext::CommunicatorSub());
+		return {.value = max_speed.value, .index = amrex::RealVect{NAN, NAN, NAN}};
 	}
 
 #endif // AMREX_SPACEDIM == 3
