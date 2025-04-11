@@ -800,13 +800,15 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	// compute CFL timestep on level 'lev'
 	BL_PROFILE("AMRSimulation::computeTimestepAtLevel()");
 
+	using dtloc_t = amrex::ValLocPair<amrex::Real, amrex::IntVect>;
+
 	// compute hydro timestep on level 'lev'
 	computeMaxSignalLocal(lev);
 	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-	amrex::ValLocPair<amrex::Real, amrex::IntVect> hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
+	dtloc_t hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
 
 	if (verbose) {
 		amrex::Print() << "...estimated hydro timestep at level " << lev << ": " << hydro_dt.value << '\n';
@@ -814,11 +816,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	}
 
 	// compute maximum particle speed on level 'lev'
-	amrex::ValLocPair<amrex::Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(),
-								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	dtloc_t particle_dt{.value = std::numeric_limits<amrex::Real>::max(), .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 #if AMREX_SPACEDIM == 3
 	if (particleRegister_.HasMassiveParticles()) {
-		const amrex::ValLocPair<amrex::Real, amrex::IntVect> max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
+		const dtloc_t max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
 		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed.value));
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
@@ -834,8 +835,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	}
 
 	// compute minimum timestep
-	std::vector<amrex::ValLocPair<amrex::Real, amrex::IntVect>*> dts = {&hydro_dt, &particle_dt};
-	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end());
+	std::vector<dtloc_t *> dts = {&hydro_dt, &particle_dt};
+	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
 	if (verbose) {
 		amrex::Print() << "...estimated timestep at level " << lev << ": " << dt_min_ptr->value << '\n';
