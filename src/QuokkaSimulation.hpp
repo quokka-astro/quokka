@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
+#include "hydro/EOS.hpp"
 #include <array>
 #if __has_include(<filesystem>)
 #include <filesystem>
@@ -182,7 +183,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
-	auto computeExtraPhysicsTimestep(int lev) -> amrex::Real override;
+	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
@@ -191,6 +192,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
+	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeBeforeTimestep() override;
@@ -514,11 +516,30 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 	}
 }
 
-template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
+template <typename problem_t> void QuokkaSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
 {
-	BL_PROFILE("QuokkaSimulation::computeExtraPhysicsTimestep()");
-	// users can override this to enforce additional timestep constraints
-	return std::numeric_limits<amrex::Real>::max();
+	// print density, velocity magnitude, temperature, adiabatic sound speed
+	amrex::Vector<amrex::Real> cell_values = amrex::get_cell_data(state_new_cc_[lev], index);
+
+	// cell_values is *only* filled on the MPI rank that holds the box with this cell
+	if (!cell_values.empty()) {
+		const amrex::Real rho = cell_values[HydroSystem<problem_t>::density_index];
+		const amrex::Real px1 = cell_values[HydroSystem<problem_t>::x1Momentum_index];
+		const amrex::Real px2 = cell_values[HydroSystem<problem_t>::x2Momentum_index];
+		const amrex::Real px3 = cell_values[HydroSystem<problem_t>::x3Momentum_index];
+		const amrex::Real Etot = cell_values[HydroSystem<problem_t>::energy_index];
+		const amrex::Real vx1 = px1 / rho;
+		const amrex::Real vx2 = px2 / rho;
+		const amrex::Real vx3 = px3 / rho;
+		const amrex::Real vsq = (vx1 * vx1) + (vx2 * vx2) + (vx3 * vx3);
+		const amrex::Real vel_mag = std::sqrt(vsq);
+		const amrex::Real Ekin = 0.5 * rho * vsq;
+		const amrex::Real Eint = Etot - Ekin;
+		const amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
+		const amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
+		const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+		std::cout << "cell density = " << rho << ", |v| = " << vel_mag << ", T = " << T << ", cs = " << cs << "\n";
+	}
 }
 
 #if !defined(NDEBUG)
@@ -593,6 +614,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSto
 	// note: an implementation is only effective if StochasticStellarPop_particles are used
 }
 
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTestParticles()
+{
+	// Optional implementation
+	// Test particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
+	// beginning of the simulation.
+	// note: an implementation is only effective if Test_particles are used
+}
 #endif // AMREX_SPACEDIM == 3
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeBeforeTimestep()

@@ -61,7 +61,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
 
 	void computeMaxSignalLocal(int level) override;
-	auto computeExtraPhysicsTimestep(int level) -> amrex::Real override;
+	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
@@ -70,6 +70,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
+	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
 	void computeBeforeTimestep() override;
@@ -120,6 +121,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSig
 	}
 }
 
+template <typename problem_t> void AdvectionSimulation<problem_t>::printCellProperties(int lev, amrex::IntVect const &index)
+{
+	// deliberately empty
+}
+
 template <typename problem_t> void AdvectionSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev)
 {
 	// deliberately empty
@@ -128,12 +134,6 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::fillPoissonRh
 template <typename problem_t> void AdvectionSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt)
 {
 	// deliberately empty
-}
-
-template <typename problem_t> auto AdvectionSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
-{
-	// user can override this
-	return std::numeric_limits<amrex::Real>::max();
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::preCalculateInitialConditions()
@@ -182,6 +182,12 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 {
 	// Optional implementation
 	// note: an implementation is only effective if StochasticStellarPop particles are used
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialTestParticles()
+{
+	// Optional implementation
+	// note: an implementation is only effective if Test particles are used
 }
 #endif // AMREX_SPACEDIM == 3
 
