@@ -405,7 +405,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 #endif
 		// temporary workaround since RealVect is not currently supported for MPI reductions
 		amrex::ParallelAllReduce::Max(max_speed.value, amrex::ParallelContext::CommunicatorSub());
-		return {.value = max_speed.value, .index = amrex::RealVect{NAN, NAN, NAN}};
+		return {.value = max_speed.value, .index = amrex::RealVect { NAN, NAN, NAN }};
 	}
 
 #endif // AMREX_SPACEDIM == 3
