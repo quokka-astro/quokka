@@ -233,6 +233,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void createInitialCICParticles() = 0;
 	virtual void createInitialCICRadParticles() = 0;
 	virtual void createInitialStochasticStellarPopParticles() = 0;
+	virtual void createInitialTestParticles() = 0;
 	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
 	// of the simulation
 #endif // AMREX_SPACEDIM == 3
@@ -2148,7 +2149,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, false,
 						       quokka::RadParticleBirthTimeIdx);
 
-		// Initialize particles through derived class
+		// Initialize particles through user-defined function
 		createInitialRadParticles();
 	}
 
@@ -2163,7 +2164,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		// Register with particle register - CIC particles allow creation
 		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1);
 
-		// Initialize particles through derived class
+		// Initialize particles through user-defined function
 		createInitialCICParticles();
 	}
 
@@ -2178,7 +2179,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		particleRegister_.registerParticleType(CICRadParticles.get(), quokka::ParticleType::CICRad, quokka::CICRadParticleMassIdx,
 						       quokka::CICRadParticleLumIdx, false, quokka::CICRadParticleBirthTimeIdx);
 
-		// Initialize particles through derived class
+		// Initialize particles through user-defined function
 		createInitialCICRadParticles();
 	}
 
@@ -2196,7 +2197,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 							   quokka::StochasticStellarPopParticleBirthTimeIdx, true, StochasticStellarPop_allows_destruction,
 							   quokka::StochasticStellarPopParticleStageIdx, true);
 
-		// Initialize particles through derived class
+		// Initialize particles through user-defined function
 		createInitialStochasticStellarPopParticles();
 	}
 
@@ -2212,6 +2213,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test, quokka::TestParticleMassIdx,
 							   quokka::TestParticleLumIdx, quokka::TestParticleBirthTimeIdx, true, true,
 							   quokka::TestParticleStageIdx, true);
+
+		// Initialize particles through user-defined function
+		createInitialTestParticles();
 	}
 #endif // AMREX_SPACEDIM == 3
 
