@@ -372,7 +372,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			if (mass_idx + 3 < ContainerType::ParticleType::NReal) {
 				// Use ParticleReduce with ReduceOpMax for efficient parallel reduction
 				amrex::ReduceOps<amrex::ReduceOpMax> reduce_ops;
-				using ResultType = amrex::GpuTuple<amrex::ValLocPair<amrex::Real, amrex::RealVect>>;
+				using ResultType = amrex::ValLocPair<amrex::Real, amrex::RealVect>;
 				using ReduceDataType = amrex::ReduceData<ResultType>;
 
 				// Perform the reduction over all particles at this level
@@ -386,12 +386,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					    const amrex::Real vz = p_type.m_aos[i].rdata(mass_idx + 3);
 					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
 					    const amrex::RealVect pos{p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2)};
-					    return {amrex::ValLocPair<amrex::Real, amrex::RealVect> { std::sqrt(v2), pos }};
+					    return amrex::ValLocPair<amrex::Real, amrex::RealVect> { std::sqrt(v2), pos };
 				    },
 				    reduce_ops);
 
 				// Extract the value from the tuple
-				max_speed = std::max(0.0, amrex::get<0>(result_tuple));
+				max_speed = amrex::get<0>(result_tuple);
 
 				AMREX_ASSERT(!std::isnan(max_speed.value));
 				AMREX_ASSERT(!std::isinf(max_speed.value));
