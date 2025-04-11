@@ -1,5 +1,6 @@
 # Star Formation Recipe 
 
+## Checking for Jeans Violation
 The star formation recipe is implemented via the Stochastic Stellar Population specialisation. Every cell is checked for Jeans violation and star particles are added if $\lambda_J = c_s/\sqrt{G\rho} < J \times dx$, where J is $0.5$. 
 
 Adding star particle to every Jeans violating cell can lead to a large number of small mass stars which can be cumbersome. To alleviate this issue, we control the star formation rate through $\epsilon_{\rm ff}$ and $\epsilon_{*}$. $\epsilon_{\rm ff}$ is the efficiency per freefall time given by $=\dot{M}_* \cdot t_{\rm ff} / M_{\rm cell} \cdot dt $, while $\epsilon_{*}$ is the fraction of cell mass that gets converted into stars. 
@@ -12,3 +13,13 @@ We circumvent this by associating a probability P to the process of spawning a s
 
 Both the descriptions of P, from assuming a star formation rate averaged over timestep or an instantaneous star formation rate, lead to identical expression of P if $dt<t_{\rm ff}$. However if we are in the regime of $dt>t_{\rm ff}$ neither prescriptions of P offer the correct answer because they rely on conditions at the beginning of the timestep. 
 
+
+## Estimating number and type of stars
+
+Once we establish that a star will form in a cell, we need to find out the stellar population looks like. In our implementation, the population comprises at least particle representing low mass star ($M<8M_{\odot}$) population and a random number of particles, each represeting a high mass star.
+
+The number of high mass stars is determined by the initial mass function, taken to be Chabrier03. The IMF is represented by a log normal for $M<M_{\odot}$ and a power law with a slope of $2.35$ beyond that. From the IMF, we can estimate the fraction of high mass stars, $f_{*,\rm{high}}$, and the average mass of high mass stars, $<m>_{*,\rm{high}}$. The expectation value of the number of high mass stars, \textit{num_high_mass_stars}, then is the ratio of the total mass in high mass stars and $<m>_{*,\rm{high}}$. 
+
+The total number of star particles to be spwaned in a cell is $1+$ Poission distribution with an expectation value of \textit{num_high_mass_stars}. A fraction $1-f_{*,\rm{high}}$ goes into the particle representing low mass star while the mass of the high mass star particles is randomly drawn from the high mass part of the IMF.
+
+In the case there are no high mass stars in the cell, the low mass star particle gets spawned at the centre of the cell with a velocity identical to the gas velocity. In the presence of high mass stars, the high mass stars get spatially averaged velocities and the low mass stars get an equal and opposite kick to conserve momentum.
