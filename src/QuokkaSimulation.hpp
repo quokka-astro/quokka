@@ -11,6 +11,7 @@
 
 #include "hydro/EOS.hpp"
 #include <array>
+#include <iostream>
 #if __has_include(<filesystem>)
 #include <filesystem>
 #elif __has_include(<experimental/filesystem>)
@@ -538,7 +539,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 		const amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
 		const amrex::Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
 		const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
-		std::cout << "cell density = " << rho << ", |v| = " << vel_mag << ", T = " << T << ", cs = " << cs << "\n";
+		std::cout << "...[level " << lev << "] cell density = " << rho << ", |v| = " << vel_mag << ", T = " << T << ", cs = " << cs << "\n";
 	}
 }
 
