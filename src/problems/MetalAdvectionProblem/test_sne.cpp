@@ -210,7 +210,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 		});
 		amrex::Print() << "The total number of SN gone off= " << cum_sn << "\n";
 	}
-} // NOLINTBEGIN
+} // NOLINTEND
 
 template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
 {
