@@ -262,11 +262,8 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
-}
 
-template <> void QuokkaSimulation<BinaryOrbit>::InitSetPhyParticles()
-{
-	// Loop over all particles and set first integer component to 0
+	// Loop over all particles and set first integer component to SNProgenitor
 	auto &particles = TestParticles->GetParticles(0);
 	for (auto &kv : particles) {
 		auto &particle_array = kv.second.GetArrayOfStructs();
