@@ -182,7 +182,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
-	auto computeExtraPhysicsTimestep(int lev) -> amrex::Real override;
+	auto computeExtraPhysicsTimestep(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect> override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
@@ -515,11 +515,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 	}
 }
 
-template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
 {
 	BL_PROFILE("QuokkaSimulation::computeExtraPhysicsTimestep()");
 	// users can override this to enforce additional timestep constraints
-	return std::numeric_limits<amrex::Real>::max();
+	return amrex::ValLocPair<amrex::Real, amrex::IntVect>{.value = std::numeric_limits<amrex::Real>::max(),
+							      .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 }
 
 #if !defined(NDEBUG)
