@@ -812,10 +812,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	dtloc_t hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
 
 	if (verbose) {
-		amrex::Print() << "...[level " << lev << "] estimated hydro timestep: " << hydro_dt.value << '\n';
-		amrex::Print() << "...[level " << lev << "] hydro timestep limited at cell " << hydro_dt.index << " with signal speed = " << domain_signal_max
-			       << '\n';
-		amrex::Print() << "...[level " << lev << "] ";
+		amrex::Print() << fmt::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
+		amrex::Print() << fmt::format("...[level {}] \thydro timestep limited at cell ({}, {}, {}) with signal speed = {:e}\n", lev, hydro_dt.index[0],
+					      hydro_dt.index[1], hydro_dt.index[2], domain_signal_max);
 		printCellProperties(lev, hydro_dt.index);
 	}
 
@@ -840,8 +839,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			particle_dt.index = cell_idx;
 		}
 		if (verbose) {
-			amrex::Print() << "...[level " << lev << "] estimated particle timestep: " << particle_dt.value << '\n';
-			amrex::Print() << "...[level " << lev << "] particle timestep limited at cell " << particle_dt.index << '\n';
+			amrex::Print() << fmt::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
+			amrex::Print() << fmt::format("...[level {}] \tmax particle velocity: {:e}\n", lev, max_particle_speed.value);
+			amrex::Print() << fmt::format("...[level {}] \tparticle timestep limited at position ({:e}, {:e}, {:e})\n", lev,
+						      max_particle_speed.index[0], max_particle_speed.index[1], max_particle_speed.index[2]);
 		}
 	}
 #endif
@@ -851,14 +852,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
 	if (verbose) {
-		amrex::Print() << "...[level " << lev << "] estimated timestep: " << dt_min_ptr->value << '\n';
-		amrex::Print() << "...[level " << lev << "] timestep limited at cell " << dt_min_ptr->index << '\n';
-
 		// print the physics that limits the timestep
 		if (dt_min_ptr == &hydro_dt) {
-			amrex::Print() << "...[level " << lev << "] timestep limited by hydro.\n";
+			amrex::Print() << fmt::format("...[level {}] timestep limited by HYDRO\n", lev);
 		} else if (dt_min_ptr == &particle_dt) {
-			amrex::Print() << "...[level " << lev << "] timestep limited by particle velocity.\n";
+			amrex::Print() << fmt::format("...[level {}] timestep limited by PARTICLES\n", lev);
 		}
 	}
 
