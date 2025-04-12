@@ -107,7 +107,7 @@ template <> struct fmt::formatter<amrex::IntVect> : formatter<std::vector<int>> 
 	// parse is inherited from formatter<std::vector<int>>.
 	auto format(amrex::IntVect iv, format_context &ctx) const -> format_context::iterator
 	{
-		std::vector<int> vec{AMREX_D_DECL(iv[0], iv[1], iv[2])};
+		std::vector<int> const vec{AMREX_D_DECL(iv[0], iv[1], iv[2])};
 		return formatter<std::vector<int>>::format(vec, ctx);
 	};
 };
