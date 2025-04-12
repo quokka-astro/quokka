@@ -64,7 +64,8 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
-#include <fmt/core.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <yaml-cpp/yaml.h>
 
 #ifdef AMREX_PARTICLES
@@ -102,7 +103,14 @@ using namespace ascent;
 // Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
 static constexpr auto QUOKKA_VERSION = "25.03";
 
-enum class ParticleStep { BeforePoissonSolve, AfterPoissonSolve };
+template <> struct fmt::formatter<amrex::IntVect> : formatter<std::vector<int>> {
+	// parse is inherited from formatter<std::vector<int>>.
+	auto format(amrex::IntVect iv, format_context &ctx) const -> format_context::iterator
+	{
+		std::vector<int> vec{AMREX_D_DECL(iv[0], iv[1], iv[2])};
+		return formatter<std::vector<int>>::format(vec, ctx);
+	};
+};
 
 using variant_t = std::variant<amrex::Real, std::string>;
 
@@ -813,8 +821,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 	if (verbose) {
 		amrex::Print() << fmt::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
-		amrex::Print() << fmt::format("...[level {}] \thydro timestep limited at cell ({}, {}, {}) with signal speed = {:e}\n", lev, hydro_dt.index[0],
-					      hydro_dt.index[1], hydro_dt.index[2], domain_signal_max);
+		amrex::Print() << fmt::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev, hydro_dt.index,
+					      domain_signal_max);
 		printCellProperties(lev, hydro_dt.index);
 	}
 
@@ -841,8 +849,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		if (verbose) {
 			amrex::Print() << fmt::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
 			amrex::Print() << fmt::format("...[level {}] \tmax particle velocity: {:e}\n", lev, max_particle_speed.value);
-			amrex::Print() << fmt::format("...[level {}] \tparticle timestep limited at position ({:e}, {:e}, {:e})\n", lev,
-						      max_particle_speed.index[0], max_particle_speed.index[1], max_particle_speed.index[2]);
+			amrex::Print() << fmt::format("...[level {}] \tparticle timestep limited at position {::e}\n", lev, max_particle_speed.index);
 		}
 	}
 #endif
