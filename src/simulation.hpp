@@ -64,7 +64,8 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
-#include <fmt/core.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <yaml-cpp/yaml.h>
 
 #ifdef AMREX_PARTICLES
@@ -102,7 +103,14 @@ using namespace ascent;
 // Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
 static constexpr auto QUOKKA_VERSION = "25.03";
 
-enum class ParticleStep { BeforePoissonSolve, AfterPoissonSolve };
+template <> struct fmt::formatter<amrex::IntVect> : formatter<std::vector<int>> {
+	// parse is inherited from formatter<std::vector<int>>.
+	auto format(amrex::IntVect iv, format_context &ctx) const -> format_context::iterator
+	{
+		std::vector<int> vec{AMREX_D_DECL(iv[0], iv[1], iv[2])};
+		return formatter<std::vector<int>>::format(vec, ctx);
+	};
+};
 
 using variant_t = std::variant<amrex::Real, std::string>;
 
@@ -153,7 +161,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::Real> tNew_;     // for state_new_cc_
 	amrex::Vector<amrex::Real> tOld_;     // for state_old_cc_
 	amrex::Vector<amrex::Real> dt_;	      // timestep for each level
-	amrex::Vector<int> reductionFactor_;  // timestep reduction factor for each level
 	amrex::Real stopTime_ = 1.0;	      // default
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real particleCflNumber_ = 0.5; // default
@@ -536,7 +543,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	tNew_.resize(nlevs_max, 0.0);
 	tOld_.resize(nlevs_max, -1.e100);
 	dt_.resize(nlevs_max, 1.e100);
-	reductionFactor_.resize(nlevs_max, 1);
 	state_new_cc_.resize(nlevs_max);
 	state_old_cc_.resize(nlevs_max);
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -813,8 +819,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 	if (verbose) {
 		amrex::Print() << fmt::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
-		amrex::Print() << fmt::format("...[level {}] \thydro timestep limited at cell ({}, {}, {}) with signal speed = {:e}\n", lev, hydro_dt.index[0],
-					      hydro_dt.index[1], hydro_dt.index[2], domain_signal_max);
+		amrex::Print() << fmt::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev, hydro_dt.index,
+					      domain_signal_max);
 		printCellProperties(lev, hydro_dt.index);
 	}
 
@@ -841,8 +847,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		if (verbose) {
 			amrex::Print() << fmt::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
 			amrex::Print() << fmt::format("...[level {}] \tmax particle velocity: {:e}\n", lev, max_particle_speed.value);
-			amrex::Print() << fmt::format("...[level {}] \tparticle timestep limited at position ({:e}, {:e}, {:e})\n", lev,
-						      max_particle_speed.index[0], max_particle_speed.index[1], max_particle_speed.index[2]);
+			amrex::Print() << fmt::format("...[level {}] \tparticle timestep limited at position {::e}\n", lev, max_particle_speed.index);
 		}
 	}
 #endif
@@ -884,7 +889,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	if (do_subcycle == 1) {
 		for (int lev = 1; lev <= max_level; ++lev) {
 			nsubsteps[lev] = MaxRefRatio(lev - 1);
-			reductionFactor_[lev] = 1; // reset additional subcycling
 		}
 	}
 
@@ -914,47 +918,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 	if (verbose) {
 		amrex::Print() << "...coarse timestep set by level " << level_that_sets_dt_0 << "\n";
-	}
-
-	// compute global timestep assuming no subcycling
-	amrex::Real dt_global = dt_tmp[0];
-
-	for (int level = 0; level <= finest_level; ++level) {
-		dt_global = std::min(dt_global, dt_tmp[level]);
-		dt_global = std::min(dt_global, maxDt_); // limit to maxDt_
-
-		if (tNew_[level] == 0.0) { // special case: first timestep
-			dt_global = std::min(dt_global, initDt_);
-		}
-		if (constantDt_ > 0.0) { // special case: constant timestep
-			dt_global = constantDt_;
-		}
-	}
-
-	// compute work estimate for subcycling
-	amrex::Long n_factor_work = 1;
-	amrex::Long work_subcycling = 0;
-	for (int level = 0; level <= finest_level; ++level) {
-		n_factor_work *= nsubsteps[level];
-		work_subcycling += n_factor_work * CountCells(level);
-	}
-
-	// compute work estimate for non-subcycling
-	amrex::Long total_cells = 0;
-	for (int level = 0; level <= finest_level; ++level) {
-		total_cells += CountCells(level);
-	}
-	const amrex::Real work_nonsubcycling = static_cast<amrex::Real>(total_cells) * (dt_0 / dt_global);
-
-	if (work_nonsubcycling <= static_cast<amrex::Real>(work_subcycling)) {
-		// use global timestep on this coarse step
-		if (verbose) {
-			const amrex::Real ratio = work_nonsubcycling / static_cast<amrex::Real>(work_subcycling);
-			amrex::Print() << "\t>> Using global timestep on this coarse step (estimated work ratio: " << ratio << ").\n";
-		}
-		for (int lev = 1; lev <= max_level; ++lev) {
-			nsubsteps[lev] = 1;
-		}
 	}
 
 	// Limit dt to avoid overshooting stop_time
