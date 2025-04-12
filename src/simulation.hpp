@@ -841,8 +841,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		if (verbose) {
 			amrex::Print() << fmt::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
 			amrex::Print() << fmt::format("...[level {}] \tmax particle velocity: {:e}\n", lev, max_particle_speed.value);
-			amrex::Print() << fmt::format("...[level {}] \tparticle timestep limited at position ({:e}, {:e}, {:e})\n", lev, max_particle_speed.index[0],
-						      max_particle_speed.index[1], max_particle_speed.index[2]);
+			amrex::Print() << fmt::format("...[level {}] \tparticle timestep limited at position ({:e}, {:e}, {:e})\n", lev,
+						      max_particle_speed.index[0], max_particle_speed.index[1], max_particle_speed.index[2]);
 		}
 	}
 #endif
