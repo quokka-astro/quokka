@@ -920,47 +920,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		amrex::Print() << "...coarse timestep set by level " << level_that_sets_dt_0 << "\n";
 	}
 
-	// compute global timestep assuming no subcycling
-	amrex::Real dt_global = dt_tmp[0];
-
-	for (int level = 0; level <= finest_level; ++level) {
-		dt_global = std::min(dt_global, dt_tmp[level]);
-		dt_global = std::min(dt_global, maxDt_); // limit to maxDt_
-
-		if (tNew_[level] == 0.0) { // special case: first timestep
-			dt_global = std::min(dt_global, initDt_);
-		}
-		if (constantDt_ > 0.0) { // special case: constant timestep
-			dt_global = constantDt_;
-		}
-	}
-
-	// compute work estimate for subcycling
-	amrex::Long n_factor_work = 1;
-	amrex::Long work_subcycling = 0;
-	for (int level = 0; level <= finest_level; ++level) {
-		n_factor_work *= nsubsteps[level];
-		work_subcycling += n_factor_work * CountCells(level);
-	}
-
-	// compute work estimate for non-subcycling
-	amrex::Long total_cells = 0;
-	for (int level = 0; level <= finest_level; ++level) {
-		total_cells += CountCells(level);
-	}
-	const amrex::Real work_nonsubcycling = static_cast<amrex::Real>(total_cells) * (dt_0 / dt_global);
-
-	if (work_nonsubcycling <= static_cast<amrex::Real>(work_subcycling)) {
-		// use global timestep on this coarse step
-		if (verbose) {
-			const amrex::Real ratio = work_nonsubcycling / static_cast<amrex::Real>(work_subcycling);
-			amrex::Print() << "\t>> Using global timestep on this coarse step (estimated work ratio: " << ratio << ").\n";
-		}
-		for (int lev = 1; lev <= max_level; ++lev) {
-			nsubsteps[lev] = 1;
-		}
-	}
-
 	// Limit dt to avoid overshooting stop_time
 	const amrex::Real eps = 1.e-3 * dt_0;
 
