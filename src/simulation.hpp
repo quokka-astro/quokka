@@ -161,7 +161,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::Real> tNew_;     // for state_new_cc_
 	amrex::Vector<amrex::Real> tOld_;     // for state_old_cc_
 	amrex::Vector<amrex::Real> dt_;	      // timestep for each level
-	amrex::Vector<int> reductionFactor_;  // timestep reduction factor for each level
 	amrex::Real stopTime_ = 1.0;	      // default
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real particleCflNumber_ = 0.5; // default
@@ -544,7 +543,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	tNew_.resize(nlevs_max, 0.0);
 	tOld_.resize(nlevs_max, -1.e100);
 	dt_.resize(nlevs_max, 1.e100);
-	reductionFactor_.resize(nlevs_max, 1);
 	state_new_cc_.resize(nlevs_max);
 	state_old_cc_.resize(nlevs_max);
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -891,7 +889,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	if (do_subcycle == 1) {
 		for (int lev = 1; lev <= max_level; ++lev) {
 			nsubsteps[lev] = MaxRefRatio(lev - 1);
-			reductionFactor_[lev] = 1; // reset additional subcycling
 		}
 	}
 
