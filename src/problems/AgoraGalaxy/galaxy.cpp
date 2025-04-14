@@ -311,14 +311,14 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 
 		if (level <= plotfile.finestLevel()) {
 			amrex::Print() << "Reading level " << level << " from plotfile...\n";
-			
+
 			amrex::MultiFab const plot_mf = plotfile.get(level);
 			int const ncomp = state_new_cc_[level].nComp();
 			amrex::ParallelCopy(state_new_cc_[level], plot_mf, 0, 0, ncomp);
 		} else {
 			// interpolate coarse levels onto this level
 			amrex::Print() << "Interpolating level " << level << " from coarse levels...\n";
-			
+
 			using GpuBndryFuncFab_t = amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>>;
 			using PhysBCFunct_t = amrex::PhysBCFunct<GpuBndryFuncFab_t>;
 			GpuBndryFuncFab_t boundaryFunctor(setBoundaryFunctor<AgoraGalaxy>{});
