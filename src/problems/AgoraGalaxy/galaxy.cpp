@@ -312,8 +312,12 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 			int const ncomp = state_new_cc_[level].nComp();
 			amrex::ParallelCopy(state_new_cc_[level], plot_mf, 0, 0, ncomp);
 		} else {
-			// TODO(bwibking): implement
-			// ...
+			// interpolate coarse level (level - 1) onto this level
+			amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>> boundaryFunctor(setBoundaryFunctor<AgoraGalaxy>{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>>> fineBdryFunct(geom[level], BCs_cc_, boundaryFunctor);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>>> coarseBdryFunct(geom[level - 1], BCs_cc_, boundaryFunctor);
+			amrex::InterpFromCoarseLevel(state_new_cc_[level], 0., state_new_cc_[level - 1], 0, 0, 1, geom[level - 1], geom[level], coarseBdryFunct,
+						     0, fineBdryFunct, 0, refRatio(level - 1), getAmrInterpolaterCellCentered(), BCs_cc_, 0);
 		}
 	}
 
