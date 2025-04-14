@@ -287,38 +287,35 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 
 template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int level, amrex::Real time)
 {
-	// fill boxes from scratch
-	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
-		quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
-				       geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
-		setInitialConditionsOnGrid(grid_elem);
-	}
+	/// Read plotfile and resample onto existing grids.
 
-	// Read plotfile and resample onto existing grids.
 	// (this does not currently work for face-centered vars)
 	static_assert(!Physics_Traits<AgoraGalaxy>::is_mhd_enabled);
 
-	// if requested, read plotfile and resample it
 	amrex::ParmParse const pp("agora_galaxy");
 	std::string plotfile_to_resample;
 	pp.query("plotfile_to_resample", plotfile_to_resample);
-	if (!plotfile_to_resample.empty()) {
+
+	if (plotfile_to_resample.empty()) {
+		// fill boxes from scratch
+		for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
+			quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
+					       geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
+			setInitialConditionsOnGrid(grid_elem);
+		}
+	} else {
+		// read level 'level' from plotfile
 		amrex::PlotFileData plotfile(plotfile_to_resample);
 		AMREX_ALWAYS_ASSERT(plotfile.finestLevel() <= finestLevel());
-
-		for (int lev = 0; lev < plotfile.finestLevel(); ++lev) {
-			amrex::MultiFab plot_mf = plotfile.get(lev);
+		if (level < plotfile.finestLevel()) {
+			amrex::MultiFab plot_mf = plotfile.get(level);
 			int const ng_src = plot_mf.nGrow();
-			int const ng_dst = state_new_cc_[lev].nGrow();
-			int const ncomp = state_new_cc_[lev].nComp();
-			auto const &periodic = Geom(lev).periodicity();
-			amrex::ParallelCopy(state_new_cc_[lev], plot_mf, 0, 0, ncomp);
-		}
-
-		// Interpolate any missing data
-		// (including existing levels, since grids may be larger)
-		for (int lev = 0; lev < finestLevel(); ++lev) {
-			// amrex::FillPatchTwoLevels(state_new_cc_[lev]);
+			int const ng_dst = state_new_cc_[level].nGrow();
+			int const ncomp = state_new_cc_[level].nComp();
+			amrex::ParallelCopy(state_new_cc_[level], plot_mf, 0, 0, ncomp);
+		} else {
+			// TODO(bwibking): implement
+			// ...
 		}
 	}
 
