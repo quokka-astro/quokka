@@ -13,8 +13,13 @@
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_FabArrayBase.H"
+#include "AMReX_FabArrayUtility.H"
+#include "AMReX_FillPatchUtil.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
+#include "AMReX_Parser_Y.H"
+#include "AMReX_PlotFileUtil.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -280,6 +285,56 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 	CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
 }
 
+template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int level, amrex::Real time)
+{
+	// fill boxes from scratch
+	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
+		quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
+				       geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
+		setInitialConditionsOnGrid(grid_elem);
+	}
+
+	// Read plotfile and resample onto existing grids.
+	// (this does not currently work for face-centered vars)
+	static_assert(!Physics_Traits<AgoraGalaxy>::is_mhd_enabled);
+
+	// if requested, read plotfile and resample it
+	amrex::ParmParse const pp("agora_galaxy");
+	std::string plotfile_to_resample;
+	pp.query("plotfile_to_resample", plotfile_to_resample);
+	if (!plotfile_to_resample.empty()) {
+		amrex::PlotFileData plotfile(plotfile_to_resample);
+		AMREX_ALWAYS_ASSERT(plotfile.finestLevel() <= finestLevel());
+
+		for (int lev = 0; lev < plotfile.finestLevel(); ++lev) {
+			amrex::MultiFab plot_mf = plotfile.get(lev);
+			int const ng_src = plot_mf.nGrow();
+			int const ng_dst = state_new_cc_[lev].nGrow();
+			int const ncomp = state_new_cc_[lev].nComp();
+			auto const &periodic = Geom(lev).periodicity();
+			amrex::ParallelCopy(state_new_cc_[lev], plot_mf, 0, 0, ncomp);
+		}
+
+		// Interpolate any missing data
+		// (including existing levels, since grids may be larger)
+		for (int lev = 0; lev < finestLevel(); ++lev) {
+			// amrex::FillPatchTwoLevels(state_new_cc_[lev]);
+		}
+	}
+
+	// check that the valid state_new_cc_[level] is properly filled
+	const int ncomp_cc = Physics_Indices<AgoraGalaxy>::nvarTotal_cc;
+	AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
+
+	// fill ghost zones
+	fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
+			       InterpHookNone, FillPatchType::fillpatch_function);
+
+	// copy to state_old_cc_ (including ghost zones)
+	const int nghost_cc = nghost_cc_;
+	state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp_cc, nghost_cc, nghost_cc);
+}
+
 template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// geometrical refinement
@@ -392,6 +447,9 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
+
+	// TODO(bwibking): read particles
+	// TODO(bwibking): split particles
 
 	// evolve
 	sim.evolve();
