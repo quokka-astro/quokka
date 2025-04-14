@@ -306,22 +306,22 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 			setInitialConditionsOnGrid(grid_elem);
 		}
 	} else {
-		// read level 'level' from plotfile
-		amrex::PlotFileData plotfile(plotfile_to_resample);
-		if (level <= plotfile.finestLevel()) {
-			amrex::Print() << "Reading level " << level << " from plotfile...\n";
-			amrex::MultiFab const plot_mf = plotfile.get(level);
-			int const ncomp = state_new_cc_[level].nComp();
-			amrex::ParallelCopy(state_new_cc_[level], plot_mf, 0, 0, ncomp);
-		}
-
 		if (level > 0) {
 			// interpolate coarse levels onto this level
 			// (must be done for *every* refined level, since our level may be embiggened)
-			amrex::Print() << "Filling any gaps in level " << level << " from coarse levels...\n";
+			amrex::Print() << "Interpolating level " << level << " from coarse levels...\n";
 			FillCoarsePatch(level, 0., state_new_cc_[level], 0, state_new_cc_[level].nComp(), BCs_cc_, quokka::centering::cc,
-					quokka::direction::na);
-			FixupState(level); // AMR interpolation may produce unphysical states
+					quokka::direction::na); // NOTE: FillCoarsePatch overwrites all cells
+			FixupState(level);			// AMR interpolation may produce unphysical states
+		}
+
+		// read existing level from plotfile and copy onto overlapping cells
+		amrex::PlotFileData plotfile(plotfile_to_resample);
+		if (level <= plotfile.finestLevel()) {
+			amrex::Print() << "Reading level " << level << " from plotfile and copying overlapping cells...\n";
+			amrex::MultiFab const plot_mf = plotfile.get(level);
+			int const ncomp = state_new_cc_[level].nComp();
+			amrex::ParallelCopy(state_new_cc_[level], plot_mf, 0, 0, ncomp);
 		}
 	}
 
