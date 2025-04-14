@@ -321,7 +321,7 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 			amrex::Print() << "Filling any gaps in level " << level << " from coarse levels...\n";
 			using GpuBndryFuncFab_t = amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>>;
 			using PhysBCFunct_t = amrex::PhysBCFunct<GpuBndryFuncFab_t>;
-			GpuBndryFuncFab_t boundaryFunctor(setBoundaryFunctor<AgoraGalaxy>{});
+			GpuBndryFuncFab_t const boundaryFunctor(setBoundaryFunctor<AgoraGalaxy>{});
 			amrex::Vector<PhysBCFunct_t> bdryFuncts(level + 1);
 			for (int lev = 0; lev <= level; ++lev) {
 				bdryFuncts[lev] = PhysBCFunct_t(geom[lev], BCs_cc_, boundaryFunctor);
@@ -338,7 +338,7 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 				st[lev] = std::move(vec_t);
 			}
 
-			// grids may not be properly nested during initial condition generation (need to check this)
+			// (need to check this) grids may not be properly nested during initial condition generation
 			amrex::FillPatchNLevels(state_new_cc_[level], level, amrex::IntVect{0}, 0., smf, st, 0, 0, state_new_cc_[level].nComp(), geom,
 						bdryFuncts, 0, ref_ratio, getAmrInterpolaterCellCentered(), BCs_cc_, 0);
 		}
