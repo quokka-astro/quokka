@@ -18,6 +18,8 @@
 #include "AMReX_FillPatchUtil.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
+#include "AMReX_MultiFab.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_Parser_Y.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_REAL.H"
@@ -306,24 +308,50 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 	} else {
 		// read level 'level' from plotfile
 		amrex::PlotFileData plotfile(plotfile_to_resample);
-		AMREX_ALWAYS_ASSERT(plotfile.finestLevel() <= finestLevel());
-		if (level < plotfile.finestLevel()) {
+
+		if (level <= plotfile.finestLevel()) {
+			amrex::Print() << "Reading level " << level << " from plotfile...\n";
+			
 			amrex::MultiFab const plot_mf = plotfile.get(level);
 			int const ncomp = state_new_cc_[level].nComp();
 			amrex::ParallelCopy(state_new_cc_[level], plot_mf, 0, 0, ncomp);
 		} else {
-			// interpolate coarse level (level - 1) onto this level
-			amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>> boundaryFunctor(setBoundaryFunctor<AgoraGalaxy>{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>>> fineBdryFunct(geom[level], BCs_cc_, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>>> coarseBdryFunct(geom[level - 1], BCs_cc_, boundaryFunctor);
-			amrex::InterpFromCoarseLevel(state_new_cc_[level], 0., state_new_cc_[level - 1], 0, 0, 1, geom[level - 1], geom[level], coarseBdryFunct,
-						     0, fineBdryFunct, 0, refRatio(level - 1), getAmrInterpolaterCellCentered(), BCs_cc_, 0);
+			// interpolate coarse levels onto this level
+			amrex::Print() << "Interpolating level " << level << " from coarse levels...\n";
+			
+			using GpuBndryFuncFab_t = amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>>;
+			using PhysBCFunct_t = amrex::PhysBCFunct<GpuBndryFuncFab_t>;
+			GpuBndryFuncFab_t boundaryFunctor(setBoundaryFunctor<AgoraGalaxy>{});
+			amrex::Vector<PhysBCFunct_t> bdryFuncts(level + 1);
+			for (int lev = 0; lev <= level; ++lev) {
+				bdryFuncts[lev] = PhysBCFunct_t(geom[lev], BCs_cc_, boundaryFunctor);
+			}
+
+			int const max_coarse = plotfile.finestLevel();
+			amrex::Vector<amrex::Vector<amrex::MultiFab *>> smf(max_coarse + 1);
+			amrex::Vector<amrex::Vector<amrex::Real>> st(max_coarse + 1);
+			for (int lev = 0; lev <= max_coarse; ++lev) {
+				amrex::Vector<amrex::MultiFab *> vec_mf;
+				amrex::Vector<amrex::Real> vec_t{0.};
+				vec_mf.push_back(&state_new_cc_[lev]);
+				smf[lev] = std::move(vec_mf);
+				st[lev] = std::move(vec_t);
+			}
+
+			amrex::FillPatchNLevels(state_new_cc_[level], level, amrex::IntVect{0}, 0., smf, st, 0, 0, state_new_cc_[level].nComp(), geom,
+						bdryFuncts, 0, ref_ratio, getAmrInterpolaterCellCentered(), BCs_cc_, 0);
 		}
 	}
 
 	// check that the valid state_new_cc_[level] is properly filled
 	const int ncomp_cc = Physics_Indices<AgoraGalaxy>::nvarTotal_cc;
-	AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
+	const bool level_contains_nan = state_new_cc_[level].contains_nan(0, ncomp_cc);
+	if (level_contains_nan) {
+		amrex::ParallelDescriptor::Barrier();
+		amrex::WriteSingleLevelPlotfile("debug_level_init", state_new_cc_[level], componentNames_cc_, geom[level], 0., 0);
+		amrex::ParallelDescriptor::Barrier();
+	}
+	AMREX_ALWAYS_ASSERT(!level_contains_nan);
 
 	// fill ghost zones
 	fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
