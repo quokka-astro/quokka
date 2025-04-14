@@ -299,8 +299,8 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 	if (plotfile_to_resample.empty()) {
 		// fill boxes from scratch
 		for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
-			quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
-					       geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
+			quokka::grid const grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
+						     geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
 			setInitialConditionsOnGrid(grid_elem);
 		}
 	} else {
@@ -308,9 +308,7 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 		amrex::PlotFileData plotfile(plotfile_to_resample);
 		AMREX_ALWAYS_ASSERT(plotfile.finestLevel() <= finestLevel());
 		if (level < plotfile.finestLevel()) {
-			amrex::MultiFab plot_mf = plotfile.get(level);
-			int const ng_src = plot_mf.nGrow();
-			int const ng_dst = state_new_cc_[level].nGrow();
+			amrex::MultiFab const plot_mf = plotfile.get(level);
 			int const ncomp = state_new_cc_[level].nComp();
 			amrex::ParallelCopy(state_new_cc_[level], plot_mf, 0, 0, ncomp);
 		} else {
