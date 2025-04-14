@@ -279,12 +279,26 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 	// read particles from ASCII file
 	amrex::ParmParse const pp("agora_galaxy");
 	std::string filename;
+	std::string plotfile_to_resample;
+	int particle_resample_factor = 0;
 	pp.query("particle_file", filename);
-	amrex::Print() << "Reading particles from file " << filename << "...\n";
+	pp.query("plotfile_to_resample", plotfile_to_resample);
+	pp.query("particle_resample_factor", particle_resample_factor);
 
-	CICParticles->SetVerbose(1);
-	const int nreal_extra = 4; // mass vx vy vz
-	CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
+	if (plotfile_to_resample.empty()) {
+		// read particles from ASCII file
+		amrex::Print() << "Reading particles from file " << filename << "...\n";
+		CICParticles->SetVerbose(1);
+		const int nreal_extra = 4; // mass vx vy vz
+		CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
+	} else {
+		// read particles from plotfile, then split them
+		amrex::PlotFileData plotfile(plotfile_to_resample);
+
+		// TODO(bwibking): read particles
+
+		// TODO(bwibking): split particles
+	}
 }
 
 template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int level, amrex::Real time)
@@ -450,9 +464,6 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
-
-	// TODO(bwibking): read particles
-	// TODO(bwibking): split particles
 
 	// evolve
 	sim.evolve();
