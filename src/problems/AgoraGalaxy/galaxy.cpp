@@ -287,17 +287,19 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 
 	if (plotfile_to_resample.empty()) {
 		// read particles from ASCII file
-		amrex::Print() << "Reading particles from file " << filename << "...\n";
+		amrex::Print() << "Reading particles from ASCII file " << filename << "...\n";
 		CICParticles->SetVerbose(1);
 		const int nreal_extra = 4; // mass vx vy vz
 		CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
 	} else {
 		// read particles from plotfile, then split them
-		amrex::PlotFileData plotfile(plotfile_to_resample);
-
-		// TODO(bwibking): read particles
+		amrex::Print() << "Reading particles from plotfile " << plotfile_to_resample << "...\n";
+		CICParticles->SetVerbose(1);
+		// PC->Restart only works if max_levels is the same
+		CICParticles->Restart(plotfile_to_resample, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
 
 		// TODO(bwibking): split particles
+		// ...
 	}
 }
 
