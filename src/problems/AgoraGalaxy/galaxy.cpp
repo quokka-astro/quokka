@@ -294,7 +294,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxA
 
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();
-	const auto state = state_new_cc_[lev].const_arrays();
 	const auto tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
