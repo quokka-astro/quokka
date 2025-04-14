@@ -317,30 +317,11 @@ template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int 
 
 		if (level > 0) {
 			// interpolate coarse levels onto this level
-			// (must be done for every refined level, since our level may be embiggened)
+			// (must be done for *every* refined level, since our level may be embiggened)
 			amrex::Print() << "Filling any gaps in level " << level << " from coarse levels...\n";
-			using GpuBndryFuncFab_t = amrex::GpuBndryFuncFab<setBoundaryFunctor<AgoraGalaxy>>;
-			using PhysBCFunct_t = amrex::PhysBCFunct<GpuBndryFuncFab_t>;
-			GpuBndryFuncFab_t const boundaryFunctor(setBoundaryFunctor<AgoraGalaxy>{});
-			amrex::Vector<PhysBCFunct_t> bdryFuncts(level + 1);
-			for (int lev = 0; lev <= level; ++lev) {
-				bdryFuncts[lev] = PhysBCFunct_t(geom[lev], BCs_cc_, boundaryFunctor);
-			}
-
-			int const max_coarse = level - 1;
-			amrex::Vector<amrex::Vector<amrex::MultiFab *>> smf(max_coarse + 1);
-			amrex::Vector<amrex::Vector<amrex::Real>> st(max_coarse + 1);
-			for (int lev = 0; lev <= max_coarse; ++lev) {
-				amrex::Vector<amrex::MultiFab *> vec_mf;
-				amrex::Vector<amrex::Real> vec_t{0.};
-				vec_mf.push_back(&state_new_cc_[lev]);
-				smf[lev] = std::move(vec_mf);
-				st[lev] = std::move(vec_t);
-			}
-
-			// (need to check this) grids may not be properly nested during initial condition generation
-			amrex::FillPatchNLevels(state_new_cc_[level], level, amrex::IntVect{0}, 0., smf, st, 0, 0, state_new_cc_[level].nComp(), geom,
-						bdryFuncts, 0, ref_ratio, getAmrInterpolaterCellCentered(), BCs_cc_, 0);
+			FillCoarsePatch(level, 0., state_new_cc_[level], 0, state_new_cc_[level].nComp(), BCs_cc_, quokka::centering::cc,
+					quokka::direction::na);
+			FixupState(level); // AMR interpolation may produce unphysical states
 		}
 	}
 
