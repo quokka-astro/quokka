@@ -75,15 +75,25 @@ enum class ParticleType {
 	Test		      // Test particles with all features enabled
 };
 
+// Enum for SN schemes: ThermalOnly, ThermalAndMomentum
+enum class SNScheme {
+	SN_thermal_only,			// pure thermal
+	SN_thermal_or_thermal_momentum,		// pure thermal (RM<1) or thermal+momentum (RM>=1)
+	SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
+	SN_pure_kinetic_or_thermal_momentum	// pure kinetic (RM<1) or thermal+momentum (RM>=1)
+};
+
 // Global particle parameters
 // The 'inline' keyword is used here to avoid multiple definition errors when this header
 // is included in multiple source files. It ensures that all translation units that include
 // this header will refer to the same instance of these variables, rather than creating
 // their own copies.
-inline amrex::Real particle_param1 = -1.0; // NOLINT
-inline amrex::Real particle_param2 = -1.0; // NOLINT
-inline amrex::Real particle_param3 = -1.0; // NOLINT
-inline int particle_verbose = 0;	   // NOLINT print particle logistics
+inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
+inline int SN_stencil_radius = 3;		       // NOLINT
+inline amrex::Real particle_param1 = -1.0;	       // NOLINT
+inline amrex::Real particle_param2 = -1.0;	       // NOLINT
+inline amrex::Real particle_param3 = -1.0;	       // NOLINT
+inline int particle_verbose = 0;		       // NOLINT print particle logistics
 
 //-------------------- Radiation particles --------------------
 
@@ -280,6 +290,15 @@ inline void particleParmParse()
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
 	pp.query("param3", particle_param3);
+
+	pp.query("SN_stencil_radius", SN_stencil_radius);
+
+	// Handle SNScheme enum
+	int sn_scheme_int = static_cast<int>(SN_scheme);
+	pp.query("SN_scheme", sn_scheme_int);
+	SN_scheme = static_cast<SNScheme>(sn_scheme_int);
+
+	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
 }
 
