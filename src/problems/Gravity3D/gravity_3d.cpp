@@ -5,22 +5,17 @@
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_Geometry.H"
-#include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
-
 #include "AMReX_REAL.H"
+
 #include "QuokkaSimulation.hpp"
 #include "gravity_3d.hpp"
 #include "hydro/hydro_system.hpp"
-#include <algorithm>
 
 struct BinaryOrbit {
 };
@@ -253,6 +248,24 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
 	CICParticles->InitFromAsciiFile("Gravity3D.txt", nreal_extra, nullptr);
+
+	// test particle splitting
+	// (this is intended to only be used when restarting at a higher resolution)
+	amrex::ParmParse const pp("particles");
+	bool do_split_particles = false;
+	int split_factor = 8;
+	pp.query("do_split_particles", do_split_particles);
+	pp.query("split_factor", split_factor);
+
+	if (do_split_particles) {
+		amrex::Print() << "Splitting CIC particles using split_factor = " << split_factor << "\n";
+		amrex::Print() << "CICParticles->finestLevel() = " << CICParticles->finestLevel() << "\n";
+		for (int lev = 0; lev <= CICParticles->finestLevel(); ++lev) {
+			amrex::Print() << "...splitting on level " << lev << "\n";
+			// FIXME(bwibking): this function does not see any of the particles read in above??
+			particleRegister_.splitParticles(lev, split_factor);
+		}
+	}
 }
 
 template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()

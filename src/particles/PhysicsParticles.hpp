@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "AMReX_Array4.H"
 #include "AMReX_MultiFab.H"
@@ -369,9 +370,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				auto &particle_tile = container_->DefineAndReturnParticleTile(lev, mfi);
 				auto &aos = particle_tile.GetArrayOfStructs();
 				const int npart_old = aos.size();
+				amrex::Print() << "...old particles on this tile = " << npart_old << "\n";
 
 				// Update NextID to include particles that will be created
 				const unsigned int max_new_particles = splitFactor * npart_old;
+				amrex::Print() << "...new particles on this tile = " << max_new_particles << "\n";
+
 				const amrex::Long pid = ContainerType::ParticleType::NextID();
 				ContainerType::ParticleType::NextID(pid + max_new_particles);
 
@@ -817,6 +821,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void splitParticles(int lev, int splitFactor)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
+			amrex::Print() << "...splitting " << getParticleTypeName(type) << "\n";
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->splitParticles(lev, splitFactor);
 			}
