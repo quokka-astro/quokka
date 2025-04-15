@@ -9,7 +9,6 @@
 #include <string>
 
 #include "AMReX_Array4.H"
-#include "AMReX_GpuLaunchFunctsC.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
