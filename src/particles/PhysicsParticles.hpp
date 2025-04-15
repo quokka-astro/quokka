@@ -403,8 +403,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						new_particles[pidx].pos(0) = 0; // NOLINT
 						new_particles[pidx].pos(1) = 0; // NOLINT
 						new_particles[pidx].pos(2) = 0; // NOLINT
-						// TODO(bwibking): set mass = oldMass / splitFactor
-						// TODO(bwibking): copy all other real + integer properties
+										// TODO(bwibking): set mass = oldMass / splitFactor
+										// TODO(bwibking): copy all other real + integer properties
 					}
 				});
 			}
