@@ -1343,12 +1343,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInteraction(amrex::Real time, amrex::Real dt)
-{
-	// Deal with level 0 for now
-	// TODO(cch): Deal with AMR subcycling
-	const int lev = 0;
+{ 
+	// Support up to 4 ghost cells for SN deposition. Default is 3, same as the TIGRESS model.
+	const int nghost = 3;
 
-	const int nghost = 4; // up to 4 ghost cells can be used for SN deposition. TIGRESS prescription uses 3
+	// Assume all SN progenitors are at the finest level
+	const int lev = finest_level;
 
 	// Create a MultiFab with 6 components (density, 3 x momentum, internal energy, energy) to hold the SN deposition
 	amrex::MultiFab state_buffer_at_level_cc(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
