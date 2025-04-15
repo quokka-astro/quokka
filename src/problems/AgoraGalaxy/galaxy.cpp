@@ -296,7 +296,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 		amrex::Print() << "Reading particles from plotfile " << plotfile_to_resample << "...\n";
 		CICParticles->SetVerbose(1);
 		// PC->Restart only works if max_levels is the same
-		CICParticles->Restart(plotfile_to_resample, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
+		CICParticles->Restart(plotfile_to_resample, quokka::PhysicsParticleRegister<AgoraGalaxy>::getParticleTypeName(quokka::ParticleType::CIC));
 
 		// TODO(bwibking): split particles
 		// ...
