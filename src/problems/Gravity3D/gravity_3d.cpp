@@ -38,6 +38,9 @@ constexpr int n_expected_test_particles = 8; // 8 low_mass particles created and
 constexpr int n_SN = 8;
 constexpr double m_SN = (n_SN * SN_mass) + init_test_particle_mass;
 
+static bool do_split_particles = false; // NOLINT
+static int split_factor = 8;		// NOLINT
+
 // locations of the particles: a 2x2x2 grids of particles
 constexpr int loc_x1 = 31;
 constexpr int loc_x2 = 32;
@@ -251,12 +254,6 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 
 	// test particle splitting
 	// (this is intended to only be used when restarting at a higher resolution)
-	amrex::ParmParse const pp("particles");
-	bool do_split_particles = false;
-	int split_factor = 8;
-	pp.query("do_split_particles", do_split_particles);
-	pp.query("split_factor", split_factor);
-
 	if (do_split_particles) {
 		amrex::Print() << "Splitting CICParticles using split_factor = " << split_factor << "\n";
 		for (int lev = 0; lev <= CICParticles->finestLevel(); ++lev) {
@@ -315,6 +312,11 @@ auto problem_main() -> int
 		}
 	}
 
+	// read in runtime parameters for this test problem
+	amrex::ParmParse const pp("particles");
+	pp.query("do_split_particles", do_split_particles);
+	pp.query("split_factor", split_factor);
+
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
@@ -352,6 +354,7 @@ auto problem_main() -> int
 
 	// particle actions must be called on all ranks
 	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
+	const int n_particle_CIC = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -394,17 +397,23 @@ auto problem_main() -> int
 		amrex::Print() << "Position norm: " << position_norm << "\n";
 		amrex::Print() << "Relative error: " << relative_error << "\n";
 
+		// ----- Check CIC particles -----
+		const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
+		amrex::Print() << "Expected number of CIC particles: " << n_expected_CIC_particles << "\n";
+		amrex::Print() << "Actual number of CIC particles: " << n_particle_CIC << "\n";
+
 		// ----- Check Test particles -----
 
-		amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
-		amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
+		amrex::Print() << "Expected number of test particles: " << n_expected_test_particles << "\n";
+		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 		// ----- Check SN remnant mass -----
 
-		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
-		const double max_err_tol_mass = 1.0e-8;			      // max error tol in mass
+		const double max_err_tol = ((sim.tNew_[0] < 1.0) && !do_split_particles) ? 0.001 : 0.05; // max error tol in cell widths
+		const double max_err_tol_mass = 1.0e-8;							 // max error tol in mass
 		status = 1;
-		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < max_err_tol_mass) {
+		if ((relative_error < max_err_tol) && (n_particle_test == n_expected_test_particles) && (n_particle_CIC == n_expected_CIC_particles) &&
+		    (SN_remnant_mass_rel_err < max_err_tol_mass)) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}

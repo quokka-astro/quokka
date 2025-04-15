@@ -37,3 +37,6 @@ max_timesteps = 4
 
 #restartfile = chk00003
 #max_timesteps = 6
+
+particles.do_split_particles = true
+particles.split_factor = 8

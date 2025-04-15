@@ -5,4 +5,5 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     add_test(NAME Gravity3D COMMAND gravity_3d Gravity3D.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME Gravity3DSplit COMMAND gravity_3d Gravity3D_split.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
