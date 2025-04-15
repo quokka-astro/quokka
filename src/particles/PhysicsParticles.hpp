@@ -384,6 +384,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				auto *pdata_old = aos.data();
 				auto *pdata_new = aos.data() + npart_old;
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
+				const int mass_idx = this->getMassIndex();
 
 				amrex::ParallelFor(npart_old, [=] AMREX_GPU_DEVICE(int n) {
 					// compute cell index of the old particle
@@ -393,18 +394,24 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const amrex::IntVect ngp_cell = amrex::IntVect(AMREX_D_DECL(i, j, k));
 
 					// mark old particle for deletion
-					pdata_old[n].id() = -1; // NOLINT
+					auto &p_old = pdata_old[n]; // NOLINT
+					p_old.id() = -1;
 
 					// create new particles
 					auto *new_particles = &pdata_new[n * splitFactor]; // NOLINT
 					for (int pidx = 0; pidx < splitFactor; ++pidx) {
-						new_particles[pidx].id() = cpu_id; // NOLINT
+						auto &p_new = new_particles[pidx]; // NOLINT
+						p_new.id() = cpu_id;
 						// TODO(bwibking): implement uniform random sampling within ngp_cell
-						new_particles[pidx].pos(0) = 0; // NOLINT
-						new_particles[pidx].pos(1) = 0; // NOLINT
-						new_particles[pidx].pos(2) = 0; // NOLINT
-										// TODO(bwibking): set mass = oldMass / splitFactor
-										// TODO(bwibking): copy all other real + integer properties
+						p_new.pos(0) = 0;
+						p_new.pos(1) = 0;
+						p_new.pos(2) = 0;
+						// copy all other Real particle properties
+						for (int r_idx = 0; r_idx < ContainerType::ParticleType::NReal; ++r_idx) {
+							p_new.rdata(r_idx) = p_old.rdata(r_idx);
+						}
+						// set mass (divide old mass by splitFactor)
+						p_new.rdata(mass_idx) = p_old.rdata(mass_idx) / static_cast<amrex::Real>(splitFactor);
 					}
 				});
 			}
