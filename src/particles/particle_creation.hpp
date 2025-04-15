@@ -261,8 +261,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(birth_time_index) = current_time;
 
 					// Set particle evolution stage to 0 if it is a low mass star
-					//This gets changed if there is a high mass star in the cell
-					p.idata(evolution_stage_index) = p_idx; 
+					// This gets changed if there is a high mass star in the cell
+					p.idata(evolution_stage_index) = p_idx;
 
 					// Low Mass particle position at cell center
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
