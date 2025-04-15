@@ -290,7 +290,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double rho_adj = NAN;
 						// Get the average velocity from the velocity dispersion of the surrounding cells
 						// We use the velocity dispersion of the surrounding cells to get the velocity of the high mass star...
-						//... from a log normal distribution 
+						//... from a log normal distribution
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
 								for (int kk = k - 1; kk <= k + 1; ++kk) {
@@ -318,14 +318,14 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						p.rdata(mass_idx + 2) = (std::abs(vy) / vy) * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
 						p.rdata(mass_idx + 3) = (std::abs(vz) / vz) * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
 
-						//Sample mass randomly from the IMF between m_star_high, which is the min mass and max mass in the Sukhbold table
-						double mass_of_star = NAN; 
+						// Sample mass randomly from the IMF between m_star_high, which is the min mass and max mass in the Sukhbold
+						// table
+						double mass_of_star = NAN;
 						const double xx = amrex::Random(engine);
 						mass_of_star = xx * (std::pow(m_imf_max, 1.0 - alpha) - std::pow(m_star_high, 1.0 - alpha)) +
-									std::pow(m_star_high, 1.0 - alpha);
+							       std::pow(m_star_high, 1.0 - alpha);
 						mass_of_star = std::pow(mass_of_star, 1. / (1. - alpha));
 						p.rdata(mass_idx) = mass_of_star;
-					
 
 						total_momx += p.rdata(mass_idx + 1) * p.rdata(mass_idx);
 						total_momy += p.rdata(mass_idx + 2) * p.rdata(mass_idx);
@@ -347,21 +347,20 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 				const double factor = NAN;
 				factor = (cell_mass - particle_mass) / cell_volume / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-				
-				//Update the cell density to reflect mass conversion into stars
-				state_arr(i, j, k, HydroSystem<problem_t>::density_index) *= factor ;
-				
-				// Update the cell momentum to make sure velocities don't change 	
+
+				// Update the cell density to reflect mass conversion into stars
+				state_arr(i, j, k, HydroSystem<problem_t>::density_index) *= factor;
+
+				// Update the cell momentum to make sure velocities don't change
 				state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= factor;
 				state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= factor;
 				state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= factor;
-				
-				//Update internal energy to relect mass change
+
+				// Update internal energy to relect mass change
 				state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= factor;
 
-				//Update total energy	
+				// Update total energy
 				state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= factor;
-				
 			}
 		}
 	};
