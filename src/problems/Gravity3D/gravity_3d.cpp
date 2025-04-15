@@ -263,16 +263,24 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
-	// Loop over all particles and set first integer component to SNProgenitor
+	// Get the particles at level 0
 	auto &particles = TestParticles->GetParticles(0);
+
+	// Loop over all particle tiles and set first integer component to SNProgenitor on GPU
 	for (auto &kv : particles) {
 		auto &particle_array = kv.second.GetArrayOfStructs();
 		const int np = particle_array.numParticles();
-		for (int i = 0; i < np; i++) {
-			auto &p = particle_array[i];
+		auto *pdata = particle_array().data();
+
+		// Launch GPU kernel to set integer components
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+			auto &p = pdata[i]; // NOLINT
 			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-		}
+		});
 	}
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
 }
 
 auto problem_main() -> int
