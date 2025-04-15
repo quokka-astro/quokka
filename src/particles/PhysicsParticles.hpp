@@ -25,7 +25,6 @@
 namespace quokka
 {
 
-
 // Forward declarations
 template <typename problem_t> class PhysicsParticleRegister;
 
@@ -513,7 +512,8 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
 			// Deposit supernova energy and momentum from all particles
-			SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+			SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getEvolutionStageIndex(),
+							       this->getBirthTimeIndex());
 			// Update particle evolution stages after deposition
 			updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}

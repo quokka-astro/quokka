@@ -72,12 +72,12 @@ template <> void QuokkaSimulation<SNProblem>::createInitialStochasticStellarPopP
 
 	// Loop over all particles and set first integer component to 0
 	const int lev = 0;
-	auto& particles = StochasticStellarPopParticles->GetParticles(lev);
-	for (auto& kv : particles) {
-		auto& particle_array = kv.second.GetArrayOfStructs();
+	auto &particles = StochasticStellarPopParticles->GetParticles(lev);
+	for (auto &kv : particles) {
+		auto &particle_array = kv.second.GetArrayOfStructs();
 		const int np = particle_array.numParticles();
 		for (int i = 0; i < np; i++) {
-			auto& p = particle_array[i];
+			auto &p = particle_array[i];
 			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 		}
 	}

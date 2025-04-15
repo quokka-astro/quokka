@@ -72,11 +72,11 @@ struct MassDeposition {
 //-------------------- Supernova depositions --------------------
 template <typename ContainerType, typename problem_t>
 void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
-				  int evolutionStageIndex, int birthTimeIndex)
+		  int evolutionStageIndex, int birthTimeIndex)
 {
 	const amrex::Real step_end_time = time + dt;
 	const int stencil_size = SN_stencil_radius;
-	AMREX_ALWAYS_ASSERT(stencil_size <= 4); // stencil_size must be <= 4
+	AMREX_ALWAYS_ASSERT(stencil_size <= 4);		 // stencil_size must be <= 4
 	const int particle_verbose_d = particle_verbose; // make a copy of the particle_verbose flag for device access
 
 	double RM_threshold = 1.0; // R_M factor = M_snr / M_sf
@@ -143,8 +143,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 							const double r_sq = (delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
 							if (r_sq <= stencil_radius * stencil_radius) {
 								n_cells++;
-								sum_density += local_state(ix + ii, iy + jj, iz + kk,
-													HydroSystem<problem_t>::density_index);
+								sum_density += local_state(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
 								// rsqr_sum += r_sq;
 							}
 						}
@@ -167,24 +166,19 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 								const double delta_x = (ii + 0.5) * dx[0] + plo[0] - p.pos(0);
 								const double delta_y = (jj + 0.5) * dx[1] + plo[1] - p.pos(1);
 								const double delta_z = (kk + 0.5) * dx[2] + plo[2] - p.pos(2);
-								const double r_sq =
-										(delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
+								const double r_sq = (delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
 								if (r_sq <= stencil_radius * stencil_radius) {
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index),
-											SNR_rho_per_cell);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index), SNR_rho_per_cell);
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index),
-											pmomentum);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), pmomentum);
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index),
-											pmomentum);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), pmomentum);
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index),
-											pmomentum);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), pmomentum);
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index),
-											SNR_energy_per_cell);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index),
+									    SNR_energy_per_cell);
 								}
 							}
 						}
@@ -212,7 +206,8 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 							if (RM > 0.027) {
 								f_factor = 0.529 * std::sqrt(RM); // f^2 = 0.28. 28% kinetic (Kim & Ostriker 2017)
 							} else {
-								f_factor = 1.414 * std::sqrt(RM); // pure kinetic in well-resolved limit: (f^2 / RM) * (p_snr^2 / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
+								f_factor = 1.414 * std::sqrt(RM); // pure kinetic in well-resolved limit: (f^2 / RM) * (p_snr^2
+												  // / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
 							}
 						}
 					} else if (SN_scheme == SNScheme::SN_pure_kinetic_or_thermal_momentum) {
@@ -226,7 +221,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 					// weighting
 					// const double weight = 1.0 / n_cells;
 					const double momentum_per_cell =
-							f_factor * p_snr * vol_factor; // vol_factor is already included in the uniform weighting
+					    f_factor * p_snr * vol_factor; // vol_factor is already included in the uniform weighting
 					const double e_snr_per_cell = E_blast * vol_factor;
 
 					for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
@@ -235,14 +230,13 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 								const double delta_x = (ii + 0.5) * dx[0] + plo[0] - p.pos(0);
 								const double delta_y = (jj + 0.5) * dx[1] + plo[1] - p.pos(1);
 								const double delta_z = (kk + 0.5) * dx[2] + plo[2] - p.pos(2);
-								const double r_sq =
-										(delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
+								const double r_sq = (delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
 								if (r_sq <= stencil_radius * stencil_radius) {
 									// const double weight = 1.0 / n_cells; // uniform weighting
 									// weight by r^2
 									// const double weight = r_sq / rsqr_sum;
 									const amrex::Real delta_rho_i =
-											m_ej * vol_factor; // uniform weighting. TODO: move outside
+									    m_ej * vol_factor; // uniform weighting. TODO: move outside
 
 									// Compute unit vector from particle to cell center
 									const double r = std::sqrt(r_sq);
@@ -253,46 +247,32 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 									const double r_hat_x = delta_x * inv_r;
 									const double r_hat_y = delta_y * inv_r;
 									const double r_hat_z = delta_z * inv_r;
-									AMREX_ASSERT(r_hat_x * r_hat_x + r_hat_y * r_hat_y + r_hat_z * r_hat_z >
-													1.0 - 1.0e-10);
-									AMREX_ASSERT(r_hat_x * r_hat_x + r_hat_y * r_hat_y + r_hat_z * r_hat_z <
-													1.0 + 1.0e-10);
+									AMREX_ASSERT(r_hat_x * r_hat_x + r_hat_y * r_hat_y + r_hat_z * r_hat_z > 1.0 - 1.0e-10);
+									AMREX_ASSERT(r_hat_x * r_hat_x + r_hat_y * r_hat_y + r_hat_z * r_hat_z < 1.0 + 1.0e-10);
 
-									const double rho =
-											local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									const double px =
-											local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
-									const double py =
-											local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
-									const double pz =
-											local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
+									const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+									const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
+									const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
+									const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
 
 									// Compute momentum directed along unit vector
-									const double dpx =
-											(delta_rho_i * px / rho) + (momentum_per_cell * r_hat_x);
-									const double dpy =
-											(delta_rho_i * py / rho) + (momentum_per_cell * r_hat_y);
-									const double dpz =
-											(delta_rho_i * pz / rho) + (momentum_per_cell * r_hat_z);
+									const double dpx = (delta_rho_i * px / rho) + (momentum_per_cell * r_hat_x);
+									const double dpy = (delta_rho_i * py / rho) + (momentum_per_cell * r_hat_y);
+									const double dpz = (delta_rho_i * pz / rho) + (momentum_per_cell * r_hat_z);
 
 									const double delta_e_i = e_snr_per_cell + SN_kin_energy_per_cell;
 									AMREX_ALWAYS_ASSERT(delta_e_i > 0.0);
 
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index),
-											delta_rho_i);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index), delta_rho_i);
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index),
-											dpx);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), dpx);
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index),
-											dpy);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), dpy);
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index),
-											dpz);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
 									amrex::Gpu::Atomic::AddNoRet(
-											&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index),
-											delta_e_i);
+									    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), delta_e_i);
 								}
 							}
 						}
@@ -314,16 +294,16 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			if (SN_scheme == SNScheme::SN_thermal_only) {
-				const double rho_new = local_state(i, j, k, HydroSystem<problem_t>::density_index) +
-										local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+				const double rho_new =
+				    local_state(i, j, k, HydroSystem<problem_t>::density_index) + local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 				const double px_new = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) +
-									local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+						      local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 				const double py_new = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) +
-									local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+						      local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 				const double pz_new = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) +
-									local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-				const double e_new = local_state(i, j, k, HydroSystem<problem_t>::energy_index) +
-									local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
+						      local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+				const double e_new =
+				    local_state(i, j, k, HydroSystem<problem_t>::energy_index) + local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
 				const double e_int_new = e_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
 
 				local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
@@ -354,8 +334,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 				const double d_e_int_d_rho = e_int / rho;
 				const double e_int_new_tmp = d_e_int_d_rho * rho_new;
-				const double e_int_plus_kinetic =
-						e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+				const double e_int_plus_kinetic = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
 
 				if (e_int_plus_kinetic <= e_tot_new * (1.0 + 1.0e-10)) {
 					e_tot_new = std::max(e_int_plus_kinetic, e_tot_new);
@@ -392,21 +371,20 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 					}
 
 					// assert that lambda is a valid solution
-					AMREX_ASSERT_WITH_MESSAGE(std::abs((0.5 *
-											((px + lambda * d_px) * (px + lambda * d_px) +
-												(py + lambda * d_py) * (py + lambda * d_py) +
-												(pz + lambda * d_pz) * (pz + lambda * d_pz)) /
-											rho_new) -
-											e_kinetic_max) < 1.0e-10 * e_kinetic_max,
-									"lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
+					AMREX_ASSERT_WITH_MESSAGE(
+					    std::abs((0.5 *
+						      ((px + lambda * d_px) * (px + lambda * d_px) + (py + lambda * d_py) * (py + lambda * d_py) +
+						       (pz + lambda * d_pz) * (pz + lambda * d_pz)) /
+						      rho_new) -
+						     e_kinetic_max) < 1.0e-10 * e_kinetic_max,
+					    "lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
 
 					px_new = px + lambda * d_px;
 					py_new = py + lambda * d_py;
 					pz_new = pz + lambda * d_pz;
 				}
 
-				const double e_int_new =
-						e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+				const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
 				local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
 				local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
 				local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
@@ -417,10 +395,9 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 				if (particle_verbose_d && d_rho / rho > 1.0e-12) {
 					// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
 					// e_tot_new
-					printf("original: rho = %e, px = %e, py = %e, pz = %e, e_int = %e, e_tot = %e\n", rho, px, py, pz,
-									e_int, e_tot);
-					printf("new: rho_new = %e, px_new = %e, py_new = %e, pz_new = %e, e_int_new = %e, e_tot_new = %e\n",
-									rho_new, px_new, py_new, pz_new, e_int_new, e_tot_new);
+					printf("original: rho = %e, px = %e, py = %e, pz = %e, e_int = %e, e_tot = %e\n", rho, px, py, pz, e_int, e_tot);
+					printf("new: rho_new = %e, px_new = %e, py_new = %e, pz_new = %e, e_int_new = %e, e_tot_new = %e\n", rho_new, px_new,
+					       py_new, pz_new, e_int_new, e_tot_new);
 					// print d e_int / d e_tot
 					printf("d e_int / d e_tot = %e\n", (e_int_new - e_int) / (e_tot_new - e_tot));
 					printf("e_int / rho = %e, e_int_new / rho_new = %e\n", e_int / rho, e_int_new / rho_new);
