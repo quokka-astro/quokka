@@ -258,11 +258,9 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	pp.query("split_factor", split_factor);
 
 	if (do_split_particles) {
-		amrex::Print() << "Splitting CIC particles using split_factor = " << split_factor << "\n";
-		amrex::Print() << "CICParticles->finestLevel() = " << CICParticles->finestLevel() << "\n";
+		amrex::Print() << "Splitting CICParticles using split_factor = " << split_factor << "\n";
 		for (int lev = 0; lev <= CICParticles->finestLevel(); ++lev) {
 			amrex::Print() << "...splitting on level " << lev << "\n";
-			// FIXME(bwibking): this function does not see any of the particles read in above??
 			particleRegister_.splitParticles(lev, split_factor);
 		}
 	}
