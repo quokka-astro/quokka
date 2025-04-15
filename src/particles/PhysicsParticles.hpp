@@ -370,30 +370,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				auto &aos = particle_tile.GetArrayOfStructs();
 				const int npart_old = aos.size();
 
-				// Count particles to be created in this box
-				amrex::Gpu::DeviceVector<unsigned int> counts(npart_old);	  // all equal to splitFactor
-				amrex::Gpu::DeviceVector<unsigned int> offset(npart_old);	  // stores starting index for each cell's particles
-				amrex::Gpu::DeviceVector<amrex::IntVect> cell_indices(npart_old); // stores the index for each cell
-				auto *pcounts = counts.data();
-				auto *poffset = offset.data();
-				auto *pindex = cell_indices.data();
-				auto *pdata_old = aos.data();
-				const auto &geom = container_->Geom(lev);
-				const auto dxinv = geom.InvCellSizeArray();
-				const auto plo = geom.ProbLoArray();
-
-				amrex::ParallelFor(npart_old, [=] AMREX_GPU_DEVICE(int n) {
-					const int i = static_cast<int>((pdata_old[n].pos(0) - plo[0]) * dxinv[0]); // NOLINT
-					const int j = static_cast<int>((pdata_old[n].pos(1) - plo[1]) * dxinv[1]); // NOLINT
-					const int k = static_cast<int>((pdata_old[n].pos(2) - plo[2]) * dxinv[2]); // NOLINT
-					// all particles are split into an equal number of new particles
-					pcounts[n] = splitFactor;
-					poffset[n] = n * splitFactor;
-					pindex[n] = amrex::IntVect(AMREX_D_DECL(i, j, k));
-					// mark old particle for deletion
-					pdata_old[n].id() = -1; // NOLINT
-				});
-
 				// Update NextID to include particles that will be created
 				const unsigned int max_new_particles = splitFactor * npart_old;
 				const amrex::Long pid = ContainerType::ParticleType::NextID();
@@ -403,20 +379,31 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				aos.resize(npart_old + max_new_particles);
 
 				// Create the particles
-				auto *pdata = aos.data() + npart_old;
+				const auto &geom = container_->Geom(lev);
+				const auto dxinv = geom.InvCellSizeArray();
+				const auto plo = geom.ProbLoArray();
+				auto *pdata_old = aos.data();
+				auto *pdata_new = aos.data() + npart_old;
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
-				const auto dx = geom.CellSizeArray();
 
-				amrex::ParallelFor(max_new_particles, [=] AMREX_GPU_DEVICE(int n) {
-					const int num_particles = pcounts[n]; // NOLINT
-					auto *particles = &pdata[poffset[n]]; // NOLINT
-					const amrex::IntVect ngp_cell = pindex[n];
-					for (int pidx = 0; pidx < num_particles; ++pidx) {
-						particles[pidx].id() = cpu_id;
+				amrex::ParallelFor(npart_old, [=] AMREX_GPU_DEVICE(int n) {
+					// compute cell index of the old particle
+					const int i = static_cast<int>((pdata_old[n].pos(0) - plo[0]) * dxinv[0]); // NOLINT
+					const int j = static_cast<int>((pdata_old[n].pos(1) - plo[1]) * dxinv[1]); // NOLINT
+					const int k = static_cast<int>((pdata_old[n].pos(2) - plo[2]) * dxinv[2]); // NOLINT
+					const amrex::IntVect ngp_cell = amrex::IntVect(AMREX_D_DECL(i, j, k));
+
+					// mark old particle for deletion
+					pdata_old[n].id() = -1; // NOLINT
+
+					// create new particles
+					auto *new_particles = &pdata_new[n * splitFactor]; // NOLINT
+					for (int pidx = 0; pidx < splitFactor; ++pidx) {
+						new_particles[pidx].id() = cpu_id; // NOLINT
 						// TODO(bwibking): implement uniform random sampling within ngp_cell
-						particles[pidx].pos(0) = 0;
-						particles[pidx].pos(1) = 0;
-						particles[pidx].pos(2) = 0;
+						new_particles[pidx].pos(0) = 0; // NOLINT
+						new_particles[pidx].pos(1) = 0; // NOLINT
+						new_particles[pidx].pos(2) = 0; // NOLINT
 						// TODO(bwibking): set mass = oldMass / splitFactor
 						// TODO(bwibking): copy all other real + integer properties
 					}
