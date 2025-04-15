@@ -306,6 +306,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void incrementFluxRegisters(amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
 				    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev);
 
+	void particleMeshInteraction(amrex::Real time, amrex::Real dt);
+
 	// boundary condition
 	AMREX_GPU_DEVICE static void setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
 								 amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr, int bcomp,
@@ -1031,7 +1033,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// Stellar evolution and SN deposition
 		// TODO(cch): Need to take care of AMR subcycling
-		particleRegister_.depositSN(state_new_cc_[0], 0, cur_time + dt_[0]);
+		particleMeshInteraction(cur_time, dt_[0]);
 
 		// Use the new type-aware particle destruction method
 		// TODO(cch): Need to take care of AMR subcycling
@@ -1338,6 +1340,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// Kick particles using the acceleration field
 		particleRegister_.kickParticlesAtLevel(dt, accel[lev], lev);
 	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInteraction(amrex::Real time, amrex::Real dt)
+{
+	// Deal with level 0 for now
+	// TODO(cch): Deal with AMR subcycling
+	const int lev = 0;
+
+	const int nghost = 4; // up to 4 ghost cells can be used for SN deposition. TIGRESS prescription uses 3
+
+	// Create a MultiFab with 6 components (density, 3 x momentum, internal energy, energy) to hold the SN deposition
+	amrex::MultiFab state_buffer_at_level_cc(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
+
+	// Deposit the SN particles into the MultiFab
+	particleRegister_.depositSN(state_new_cc_[lev], state_buffer_at_level_cc, lev, time, dt);
+
+	// Sink accretion, to be implemented
 }
 #endif // AMREX_SPACEDIM == 3
 
