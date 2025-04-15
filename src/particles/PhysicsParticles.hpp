@@ -9,9 +9,11 @@
 #include <string>
 
 #include "AMReX_Array4.H"
+#include "AMReX_GpuLaunchFunctsC.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
+#include "AMReX_RandomEngine.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 #include "hydro/hydro_system.hpp"
@@ -380,18 +382,21 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				// Create the particles
 				const auto &geom = container_->Geom(lev);
 				const auto dxinv = geom.InvCellSizeArray();
+				const auto dx = geom.CellSizeArray();
 				const auto plo = geom.ProbLoArray();
 				auto *pdata_old = aos.data();
 				auto *pdata_new = aos.data() + npart_old;
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 				const int mass_idx = this->getMassIndex();
 
-				amrex::ParallelFor(npart_old, [=] AMREX_GPU_DEVICE(int n) {
-					// compute cell index of the old particle
+				amrex::ParallelForRNG(npart_old, [=] AMREX_GPU_DEVICE(int n, amrex::RandomEngine const &rng) {
+					// compute cell position of the old particle
 					const int i = static_cast<int>((pdata_old[n].pos(0) - plo[0]) * dxinv[0]); // NOLINT
 					const int j = static_cast<int>((pdata_old[n].pos(1) - plo[1]) * dxinv[1]); // NOLINT
 					const int k = static_cast<int>((pdata_old[n].pos(2) - plo[2]) * dxinv[2]); // NOLINT
-					const amrex::IntVect ngp_cell = amrex::IntVect(AMREX_D_DECL(i, j, k));
+					amrex::Real const x0 = plo[0] + (i * dx[0]);
+					amrex::Real const y0 = plo[1] + (j * dx[1]);
+					amrex::Real const z0 = plo[2] + (k * dx[2]);
 
 					// mark old particle for deletion
 					auto &p_old = pdata_old[n]; // NOLINT
@@ -399,18 +404,22 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 					// create new particles
 					auto *new_particles = &pdata_new[n * splitFactor]; // NOLINT
+
 					for (int pidx = 0; pidx < splitFactor; ++pidx) {
 						auto &p_new = new_particles[pidx]; // NOLINT
-						p_new.id() = cpu_id;
-						// TODO(bwibking): implement uniform random sampling within ngp_cell
-						p_new.pos(0) = 0;
-						p_new.pos(1) = 0;
-						p_new.pos(2) = 0;
-						// copy all other Real particle properties
+						// copy real particle properties
 						for (int r_idx = 0; r_idx < ContainerType::ParticleType::NReal; ++r_idx) {
 							p_new.rdata(r_idx) = p_old.rdata(r_idx);
 						}
-						// set mass (divide old mass by splitFactor)
+						// copy integer particle properties
+						for (int i_idx = 0; i_idx < ContainerType::ParticleType::NInt; ++i_idx) {
+							p_new.idata(i_idx) = p_old.idata(i_idx);
+						}
+						p_new.id() = cpu_id;
+						p_new.pos(0) = x0 + dx[0] * amrex::Random(rng);
+						p_new.pos(1) = y0 + dx[1] * amrex::Random(rng);
+						p_new.pos(2) = z0 + dx[2] * amrex::Random(rng);
+						// override mass (divide old mass by splitFactor)
 						p_new.rdata(mass_idx) = p_old.rdata(mass_idx) / static_cast<amrex::Real>(splitFactor);
 					}
 				});
