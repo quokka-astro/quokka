@@ -22,4 +22,12 @@ The number of high mass stars is determined by the initial mass function, taken 
 
 The total number of star particles to be spwaned in a cell is $1+$ Poission distribution with an expectation value of \textit{num_high_mass_stars}. A fraction $1-f_{*,\rm{high}}$ goes into the particle representing low mass star while the mass of the high mass star particles is randomly drawn from the high mass part of the IMF.
 
-In the case there are no high mass stars in the cell, the low mass star particle gets spawned at the centre of the cell with a velocity identical to the gas velocity. In the presence of high mass stars, the high mass stars get spatially averaged velocities and the low mass stars get an equal and opposite kick to conserve momentum.
+In the case there are no high mass stars in the cell, the low mass star particle gets spawned at the centre of the cell with a velocity identical to the gas velocity. 
+
+
+
+## Estimating the Velocity of the High Mass Star(s)
+
+In the presence of high mass stars, we first assign momentum to these stars. The velocity of these particles is derived from a log normal distribution. The mean of this distribution is the cell velocity while its dispersion is obtained by mass-averaging over the neighbouring cells. 
+
+We track the total momentum of the high mass star particles in the three directions and in order to conserve momentum we impart an equal and opposite momentum to the low mass star. 
