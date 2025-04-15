@@ -274,7 +274,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 
 		// Launch GPU kernel to set integer components
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-			auto &p = pdata[i];
+			auto &p = pdata[i]; // NOLINT
 			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 		});
 	}
