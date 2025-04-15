@@ -193,5 +193,21 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	return 0;
+	// find the maximum internal energy in the state_new_cc_[0]
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	const amrex::Real vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	const amrex::Real max_internal_energy_density = sim.state_new_cc_[0].max(HydroSystem<SNProblem>::internalEnergy_index);
+	const amrex::Real max_internal_energy = max_internal_energy_density * vol;
+	const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
+	int status = 1;
+	if (max_internal_energy > expected_minimum_max_internal_energy) {
+		status = 0;
+		amrex::Print() << "Test passed. Max internal energy in cells: " << max_internal_energy << "\n";
+	} else {
+		status = 1;
+		amrex::Print() << "Test failed. Max internal energy in cells too low: " << max_internal_energy << "\n";
+		amrex::Print() << "Expected minimum max internal energy: " << expected_minimum_max_internal_energy << "\n";
+	}
+
+	return status;
 }
