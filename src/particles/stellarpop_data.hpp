@@ -21,6 +21,8 @@
 using Real = amrex::Real;
 static constexpr int FATE_ARR_SIZE = 200;
 static constexpr int AGE_ARR_SIZE = 196;
+static constexpr int YR_TO_SEC = 3.15576e7; // seconds in a year
+
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -> int
 {
@@ -47,7 +49,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 
 	};
 
-	// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
+	// Interpolate to find the accurate fates from array
 	auto const &x_arr = interp_mass_star;
 	auto const &y_arr = interp_star_fate;
 	amrex::Real fate_interp = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
@@ -74,6 +76,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 	    1.15e+02, 1.20e+02, 1.25e+02, 1.30e+02, 1.35e+02, 1.40e+02, 1.45e+02, 1.50e+02, 1.75e+02, 2.00e+02, 2.25e+02, 2.50e+02, 2.75e+02, 3.00e+02};
 
 	const amrex::GpuArray<Real, AGE_ARR_SIZE> interp_death_time{
+		//Age of star upon death in yr
 	    2.05637091e+12, 1.23431079e+12, 8.04320575e+11, 5.28141713e+11, 3.23462726e+11, 2.90832810e+11, 2.50741129e+11, 2.19855225e+11, 1.91893537e+11,
 	    1.58212735e+11, 1.47856310e+11, 1.39272077e+11, 1.31394380e+11, 1.24030878e+11, 1.17112455e+11, 8.65504379e+10, 6.11287818e+10, 4.38991462e+10,
 	    3.40965212e+10, 2.58942710e+10, 2.00010752e+10, 1.71445535e+10, 1.37414072e+10, 1.11618939e+10, 9.18190797e+09, 8.52317286e+09, 7.92367923e+09,
@@ -99,9 +102,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 
 	};
 
-	// Interpolate to find the accurate g-value from array-- because linterp doesn't work on Setonix
+	// Interpolate to find the lifetime of a star
 	auto const &x_arr = interp_mass_star;
 	auto const &y_arr = interp_death_time;
-	amrex::Real death_time = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
+	amrex::Real death_time = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE) * YR_TO_SEC; // NOLINT
 	return death_time;
 }
