@@ -1011,8 +1011,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		const int iteration = 1; // this is the first call to advance level 'lev'
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
-		particleRegister_.redistribute(0);
-
 #if AMREX_SPACEDIM == 3
 		// drift particles from t to (t + dt)
 		// N.B.: MUST be done *before* Poisson solve at new time!
@@ -1028,8 +1026,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			kickParticlesAllLevels(dt_[0]);
 		}
 
-		// Use the new type-aware particle creation method
-		// TODO(cch): Need to take care of AMR subscycling
+		// Only create particles at the finest level to avoid duplicate particle creation in regions where finer levels exist
 		particleRegister_.createParticlesFromState(state_new_cc_[finest_level], finest_level, cur_time, dt_[0]);
 
 		// Stellar evolution and SN deposition
