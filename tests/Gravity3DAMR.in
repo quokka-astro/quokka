@@ -34,3 +34,5 @@ stop_time = 5.0
 plotfile_interval = -1
 checkpoint_interval = -1
 max_timesteps = 4
+
+problem.refine_half_domain = true

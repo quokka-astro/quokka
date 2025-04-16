@@ -79,6 +79,7 @@ struct SNDeposition {
 	int evolutionStageIndex{}; // Index for particle evolution stage
 	double SN_time = particle_param2;
 
+	// For some unknown reason, stencil_width < 3 results in larger error in SNR mass when a particle is at the refinement boundary.
 	static constexpr int stencil_width = 3;
 
 	// Abort if stencil_width > nghost_cc_ - 1.

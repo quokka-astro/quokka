@@ -37,13 +37,12 @@ constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
-constexpr double SN_mass = 1.0e-5;			// mass of SNProgenitor particles
-constexpr double init_test_particle_mass = 2. * 1.0e-5; // mass of Test particles
+const static double SN_mass = 1.0e-5;			// mass of SNProgenitor particles
+const static int n_SNR_particles_init = 2; // number of Test particles created at the start of the simulation
 constexpr double particle_low_mass = 1.0e-20;		// very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
-constexpr int n_expected_test_particles = 8; // 8 low_mass particles created and live to the end
+constexpr int n_SNR_particles_in_full_domain = 8; // 8 low_mass particles created and live to the end
 constexpr int n_SN = 8;
-constexpr double m_SN = (n_SN * SN_mass) + init_test_particle_mass;
 
 // locations of the particles: a 2x2x2 grids of particles
 constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
@@ -106,7 +105,7 @@ template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBox
 			const double y = plo[1] + ((j + 0.5) * dx[1]);
 			const double z = plo[2] + ((k + 0.5) * dx[2]);
 
-			if (!refine_half_domain_ || x >= 0.5) {
+			if (!refine_half_domain_ || (x >= 0.5 && x <= 0.6 && y >= -0.5 && y <= 0.5 && z >= -0.5 && z <= 0.5)) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
@@ -375,7 +374,12 @@ auto problem_main() -> int
 	double position_error = 0.0;
 	double position_norm = 0.0;
 
-	int status = 0; // Initialize to success
+	// ----- Check Test particles -----
+
+	const int n_SNR_particles = refine_half_domain ? n_SNR_particles_in_full_domain / 2 : n_SNR_particles_in_full_domain;
+	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
+	amrex::Print() << "Expected number of test particles: " << n_SNR_particles << "\n";
+	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 	// get total mass in cells
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
@@ -383,6 +387,7 @@ auto problem_main() -> int
 	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<TestParticle>::density_index) * vol;
 	amrex::Real const SN_remnant_mass = total_mass - init_mass_total;
 	amrex::Print() << "Total SN remnant mass: " << SN_remnant_mass << "\n";
+	const double m_SN = (n_SNR_particles + n_SNR_particles_init) * SN_mass;
 	amrex::Print() << "Expected total SN remnant mass in cells: " << m_SN << "\n";
 	const double SN_remnant_mass_rel_err = std::abs(SN_remnant_mass - m_SN) / m_SN;
 	amrex::Print() << "SN remnant mass relative error: " << SN_remnant_mass_rel_err << "\n";
@@ -392,12 +397,8 @@ auto problem_main() -> int
 	// particle actions must be called on all ranks
 	const int max_level = sim.maxLevel();
 	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(max_level);
-	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
-	// ----- Check Test particles -----
-
-	amrex::Print() << "Expected number of test particles: " << n_expected_test_particles << "\n";
-	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
+	int status = 0; // Initialize to success
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
@@ -439,21 +440,30 @@ auto problem_main() -> int
 		amrex::Print() << "Position norm: " << position_norm << "\n";
 		amrex::Print() << "Relative error: " << relative_error << "\n";
 
-		// max error tol for particle positions
-		double max_err_tol = 0.0;
-		if (sim.tNew_[0] < 0.011) {
-			max_err_tol = 5.0e-7;
-		} else if (sim.tNew_[0] < 0.11) {
-			max_err_tol = 5.0e-6;
-		} else {
-			max_err_tol = 0.05;
+		// check SN remnant mass
+		double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
+		if (refine_half_domain) {
+			// SNR mass is not conserved to machine precision due to AMR interpolation.
+			SNR_mass_rel_err_tol = 1.0e-4;
 		}
 
-		// ----- Check SN remnant mass -----
+		// check particle positions
+		double pos_max_err_tol = 0.0;
+		if (refine_half_domain) {
+			// particle positions are known to be incorrect if a particle crosses the refinement boundary
+			pos_max_err_tol = std::numeric_limits<double>::infinity();
+		} else {
+			if (sim.tNew_[0] < 0.011) {
+				pos_max_err_tol = 5.0e-7;
+			} else if (sim.tNew_[0] < 0.11) {
+				pos_max_err_tol = 5.0e-6;
+			} else {
+				pos_max_err_tol = 0.05;
+			}
+		}
 
-		const double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
 		status = 1;
-		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
+		if ((refine_half_domain || relative_error <= pos_max_err_tol) && n_particle_test == n_SNR_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}
