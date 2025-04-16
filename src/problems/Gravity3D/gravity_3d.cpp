@@ -25,11 +25,11 @@
 struct TestParticle {
 };
 
-// This is an ad-hoc test of particle creation and destruction.
-// The initial condition consists of 2 CIC particles with a mass of 1.0. We keep track of their orbit and compare with the exact solution. In the second time
-// step, 3^3 * 2 particles are created. A third of them are LowMassStar and the rest are SNProgenitor. In the third time step, all SNProgenitor particles are
-// turned into SNRemnant. In the fourth time step, all SNRemnant particles are destroyed. In the end of the simulation, there are 2 CIC particles and 18 Test
-// particles.
+// This is a test of gravity, particle creation, supernova ejection, and stellar destruction in a static, fully refined mesh.
+// The initial condition consists of 2 CIC particles with a mass of 1.0 in circular orbit. We keep track of their orbit over the course of
+// the simulation and compare with the exact solution. In the second time step, 16 particles are created. Half them are LowMassStar and the
+// rest are SNProgenitor. In the third time step, all SNProgenitor particles are turned into SNRemnant. In the fourth time step, all
+// SNRemnant particles are destroyed. In the end of the simulation, there are a total of 2 CIC particles and 8 Test particles left.
 
 constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
@@ -85,6 +85,19 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
+
+template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// tag cells for refinement: static mesh refinement within 0 < x < 1.5 and -1.5 < y,z < 1.5
+	// Note that the particle are within r = 1.0 from the origin.
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+	}
+}
 
 namespace quokka
 {
@@ -360,8 +373,14 @@ auto problem_main() -> int
 	// ----- Check CIC particles -----
 
 	// particle actions must be called on all ranks
-	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
+	const int max_level = sim.maxLevel();
+	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(max_level);
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
+
+	// ----- Check Test particles -----
+
+	amrex::Print() << "Expected number of test particles: " << n_expected_test_particles << "\n";
+	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
@@ -403,19 +422,26 @@ auto problem_main() -> int
 		amrex::Print() << "Position norm: " << position_norm << "\n";
 		amrex::Print() << "Relative error: " << relative_error << "\n";
 
-		// ----- Check Test particles -----
-
-		amrex::Print() << "Expected number of particles: " << n_expected_test_particles << "\n";
-		amrex::Print() << "Actual number of particles: " << n_particle_test << "\n";
+		// max error tol for particle positions
+		double max_err_tol = 0.0;
+		if (sim.tNew_[0] < 0.011) {
+			max_err_tol = 5.0e-7;
+		} else if (sim.tNew_[0] < 0.11) {
+			max_err_tol = 5.0e-6;
+		} else {
+			max_err_tol = 0.05;
+		}
 
 		// ----- Check SN remnant mass -----
 
-		const double max_err_tol = sim.tNew_[0] < 1.0 ? 0.001 : 0.05; // max error tol in cell widths
-		const double max_err_tol_mass = 1.0e-8;			      // max error tol in mass
+		const double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
 		status = 1;
-		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < max_err_tol_mass) {
+		if (relative_error < max_err_tol && n_particle_test == n_expected_test_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
+		}
+		if (status > 0) {
+			amrex::Print() << "Test failed.\n";
 		}
 	}
 
