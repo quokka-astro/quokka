@@ -278,7 +278,7 @@ template <> void QuokkaSimulation<TestParticle>::createInitialCICParticles()
 	CICParticles->InitFromAsciiFile("Gravity3D.txt", nreal_extra, nullptr);
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
+template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components

@@ -761,7 +761,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		// isStarParticle() method returns true
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->isStarParticle()) {
-				descriptor->depositSN(state, lev, step_end_time);
+				descriptor->depositSN(state, lev_min, step_end_time);
 			}
 		}
 	}
