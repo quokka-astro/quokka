@@ -286,11 +286,10 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
-	// Get the particles at level 0
+	// Loop over all particle at all levels and set first integer component to SNProgenitor
 	for (int lev = 0; lev <= maxLevel(); ++lev) {
 		auto &particles = TestParticles->GetParticles(lev);
 
-		// Loop over all particle tiles and set first integer component to SNProgenitor on GPU
 		for (auto &kv : particles) {
 			auto &particle_array = kv.second.GetArrayOfStructs();
 			const int np = particle_array.numParticles();

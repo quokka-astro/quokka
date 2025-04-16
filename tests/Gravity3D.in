@@ -31,4 +31,4 @@ particles.param2 = 0.0015 # turn SNProgenitor into SNRemnant after this time
 particles.param3 = 0.0035 # destroy particles at this time, which is step 4
 particles.verbose = 1
 
-max_timesteps = 4
+max_timesteps = 40
