@@ -256,10 +256,8 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	// (this is intended to only be used when restarting at a higher resolution)
 	if (do_split_particles) {
 		amrex::Print() << "Splitting CICParticles using split_factor = " << split_factor << "\n";
-		for (int lev = 0; lev <= CICParticles->finestLevel(); ++lev) {
-			amrex::Print() << "...splitting on level " << lev << "\n";
-			particleRegister_.splitParticles(lev, split_factor);
-		}
+		int lev = 0; // all CICParticles are on level 0
+		particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, split_factor);
 	}
 }
 
