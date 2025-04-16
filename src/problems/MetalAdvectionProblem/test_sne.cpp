@@ -126,7 +126,7 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
+		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
 
 		// Calculate DM Potential
 		double prefac = NAN;
