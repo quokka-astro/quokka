@@ -356,7 +356,7 @@ auto problem_main() -> int
 	sim.maxDt_ = dt_;
 
 	// Read parameters from input file
-	amrex::ParmParse pp("problem");
+	const amrex::ParmParse pp("problem");
 	pp.query("refine_half_domain", refine_half_domain);
 
 	// initialize
