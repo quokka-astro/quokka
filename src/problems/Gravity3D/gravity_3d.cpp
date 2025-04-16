@@ -1,5 +1,5 @@
 /// \file gravity_3d.cpp
-/// \brief Defines a test problem for self-gravity in 3D.
+/// \brief Defines a test problem for self-gravity with particles and SN deposition in 3D.
 ///
 
 #include "AMReX.H"
@@ -25,7 +25,7 @@
 struct TestParticle {
 };
 
-// This is a test of gravity, particle creation, supernova ejection, and stellar destruction in a static, fully refined mesh.
+// This is a test of gravity, particle creation, supernova ejection, and stellar destruction in uniform, fully refined, or half-refined mesh.
 // The initial condition consists of 2 CIC particles with a mass of 1.0 in circular orbit. We keep track of their orbit over the course of
 // the simulation and compare with the exact solution. In the second time step, 16 particles are created. Half them are LowMassStar and the
 // rest are SNProgenitor. In the third time step, all SNProgenitor particles are turned into SNRemnant. In the fourth time step, all
