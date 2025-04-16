@@ -81,7 +81,7 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr int nGroups = 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gravitational_constant = 1.0e-5; // set a small value to keep the cells/particles from moving
+	static constexpr double gravitational_constant = 1.0;
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
