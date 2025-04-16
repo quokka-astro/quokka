@@ -22,7 +22,7 @@
 #include "hydro/hydro_system.hpp"
 #include <algorithm>
 
-struct BinaryOrbit {
+struct TestParticle {
 };
 
 // This is an ad-hoc test of particle creation and destruction.
@@ -44,14 +44,11 @@ constexpr int n_SN = 8;
 constexpr double m_SN = (n_SN * SN_mass) + init_test_particle_mass;
 
 // locations of the particles: a 2x2x2 grids of particles
-constexpr int loc_x1 = 31;
-constexpr int loc_x2 = 32;
-constexpr int loc_y1 = 31;
-constexpr int loc_y2 = 32;
-constexpr int loc_z1 = 31;
-constexpr int loc_z2 = 32;
+constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
+// need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
+constexpr double particle_offset_from_center_ = 0.01;
 
-template <> struct quokka::EOS_Traits<BinaryOrbit> {
+template <> struct quokka::EOS_Traits<TestParticle> {
 	static constexpr double gamma = 1.0;	     // isothermal
 	static constexpr double cs_isothermal = 3.0; //
 	static constexpr double mean_molecular_weight = 1.0;
@@ -62,7 +59,7 @@ enum class TestEnum : unsigned int {
 	MISTAKE = 0b00000100U,
 };
 
-template <> struct Particle_Traits<BinaryOrbit> {
+template <> struct Particle_Traits<TestParticle> {
 	// The following will cause a compile error
 	// static constexpr int particle_switch = 1;
 	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
@@ -71,11 +68,11 @@ template <> struct Particle_Traits<BinaryOrbit> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
 };
 
-template <> struct HydroSystem_Traits<BinaryOrbit> {
+template <> struct HydroSystem_Traits<TestParticle> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<BinaryOrbit> {
+template <> struct Physics_Traits<TestParticle> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
@@ -99,6 +96,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 
+		double x_L = box_left_edge_;
+		double offset = particle_offset_from_center_;
+
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
@@ -106,9 +106,19 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
-			amrex::ignore_unused(state_arr, dx);
+			amrex::ignore_unused(state_arr);
+
+			// Calculate cell indices for the particle locations
+			const int i_par1 = static_cast<int>(floor((-offset - x_L) / dx[0]));
+			const int j_par1 = static_cast<int>(floor((-offset - x_L) / dx[1]));
+			const int k_par1 = static_cast<int>(floor((-offset - x_L) / dx[2]));
+
+			const int i_par2 = static_cast<int>(floor((offset - x_L) / dx[0]));
+			const int j_par2 = static_cast<int>(floor((offset - x_L) / dx[1]));
+			const int k_par2 = static_cast<int>(floor((offset - x_L) / dx[2]));
+
 			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
-			if (is_create_particle && (i == loc_x1 || i == loc_x2) && (j == loc_y1 || j == loc_y2) && (k == loc_z1 || k == loc_z2)) {
+			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
 				return particle_per_cell;
 			}
 			return 0;
@@ -230,24 +240,24 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 
 } // namespace quokka
 
-template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::energy_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::internalEnergy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::density_index) = rho0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x1Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x2Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x3Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = 0;
 	});
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
+template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
+template <> void QuokkaSimulation<TestParticle>::createInitialCICParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
@@ -255,7 +265,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	CICParticles->InitFromAsciiFile("Gravity3D.txt", nreal_extra, nullptr);
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
+template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
@@ -264,19 +274,21 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
 	// Get the particles at level 0
-	auto &particles = TestParticles->GetParticles(0);
+	for (int lev = 0; lev <= maxLevel(); ++lev) {
+		auto &particles = TestParticles->GetParticles(lev);
 
-	// Loop over all particle tiles and set first integer component to SNProgenitor on GPU
-	for (auto &kv : particles) {
-		auto &particle_array = kv.second.GetArrayOfStructs();
-		const int np = particle_array.numParticles();
-		auto *pdata = particle_array().data();
+		// Loop over all particle tiles and set first integer component to SNProgenitor on GPU
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
 
-		// Launch GPU kernel to set integer components
-		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-			auto &p = pdata[i]; // NOLINT
-			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-		});
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+			});
+		}
 	}
 
 	// Ensure GPU operations are complete
@@ -286,19 +298,19 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<BinaryOrbit>::x1Momentum_index) && (dim == 0)) {
+		if ((n == HydroSystem<TestParticle>::x1Momentum_index) && (dim == 0)) {
 			return true;
 		}
-		if ((n == HydroSystem<BinaryOrbit>::x2Momentum_index) && (dim == 1)) {
+		if ((n == HydroSystem<TestParticle>::x2Momentum_index) && (dim == 1)) {
 			return true;
 		}
-		if ((n == HydroSystem<BinaryOrbit>::x3Momentum_index) && (dim == 2)) {
+		if ((n == HydroSystem<TestParticle>::x3Momentum_index) && (dim == 2)) {
 			return true;
 		}
 		return false;
 	};
 
-	const int ncomp_cc = Physics_Indices<BinaryOrbit>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<TestParticle>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -313,7 +325,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
+	QuokkaSimulation<TestParticle> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
@@ -338,7 +350,7 @@ auto problem_main() -> int
 	// get total mass in cells
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<BinaryOrbit>::density_index) * vol;
+	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<TestParticle>::density_index) * vol;
 	amrex::Real const SN_remnant_mass = total_mass - init_mass_total;
 	amrex::Print() << "Total SN remnant mass: " << SN_remnant_mass << "\n";
 	amrex::Print() << "Expected total SN remnant mass in cells: " << m_SN << "\n";
