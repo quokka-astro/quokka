@@ -79,12 +79,13 @@ struct SNDeposition {
 	int evolutionStageIndex{}; // Index for particle evolution stage
 	double SN_time = particle_param2;
 
-	static constexpr int stencil_width = 4;
+	static constexpr int stencil_width = 3;
 
-	// Abort if stencil_width > nghost_cc_.
-	// A stencil_width > nghost_cc_ would result in particles depositing energy/momentum outside the ghost zones.
-	// We can't use AMRSimulation<problem_t>::nghost_cc_ here because we don't have a problem_t template parameter.
-	static_assert(stencil_width <= 4, "stencil_width must be <= nghost_cc_");
+	// Abort if stencil_width > nghost_cc_ - 1.
+	// The particle can drift one cell out of the valid zone during kickParticlesAllLevels().
+	// A stencil_width > nghost_cc_ - 1 would result in particles depositing energy/momentum outside the ghost zones.
+	// We can't use AMRSimulation<problem_t>::nghost_cc_ and have to hard-code 3 here because we don't have a problem_t template parameter.
+	static_assert(stencil_width <= 3, "stencil_width must be <= nghost_cc_");
 
 	// Operator to perform supernova deposition using cloud-in-cell approach
 	template <typename ContainerType>
