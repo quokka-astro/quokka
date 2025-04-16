@@ -24,11 +24,12 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stop_time = 5.0
-
 particles.param1 = 0.0015 # create particles at this time, which is step 2
 particles.param2 = 0.0015 # turn SNProgenitor into SNRemnant after this time
 particles.param3 = 0.0035 # destroy particles at this time, which is step 4
 particles.verbose = 1
 
+stop_time = 5.0
 max_timesteps = 4
+plotfile_interval = -1
+checkpoint_interval = -1
