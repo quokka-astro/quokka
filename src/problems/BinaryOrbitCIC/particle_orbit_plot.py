@@ -19,6 +19,7 @@ def get_particle_dist(plotfiles):
     m0 = 2.0e34
 
     for pltfile in plotfiles:
+        print("processing {}".format(pltfile))
         ds = yt.load(pltfile)
         # print(ds.derived_field_list)
         Lx = ds.domain_right_edge[0] - ds.domain_left_edge[0]
@@ -71,8 +72,11 @@ def get_particle_orbit(plotfiles):
 
 def plot_orbit_and_error(pltdir):
 
-    files = glob.glob(pltdir + "/plt*")
-    files = sorted(files)
+    files0 = glob.glob(pltdir + "/plt*")
+    files = []
+    for i in sorted(files0):
+        if os.path.isdir(i):
+            files.append(i)
     t, err_dist, err_vel, pos_particle0, nx_frame0 = get_particle_dist(files)
 
     print("max rel_error distance: {:.1e}".format(np.max(np.abs(err_dist))))
