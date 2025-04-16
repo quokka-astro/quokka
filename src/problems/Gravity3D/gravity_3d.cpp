@@ -31,6 +31,8 @@ struct TestParticle {
 // rest are SNProgenitor. In the third time step, all SNProgenitor particles are turned into SNRemnant. In the fourth time step, all
 // SNRemnant particles are destroyed. In the end of the simulation, there are a total of 2 CIC particles and 8 Test particles left.
 
+static bool refine_half_domain = false;
+
 constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
@@ -88,14 +90,26 @@ template <> struct Physics_Traits<TestParticle> {
 
 template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement: static mesh refinement within 0 < x < 1.5 and -1.5 < y,z < 1.5
-	// Note that the particle are within r = 1.0 from the origin.
+	// tag cells for refinement: static mesh refinement for the whole domain (if refine_half_domain is false) or for x > 0 (if refine_half_domain is true)
+
+	auto const &dx = geom[lev].CellSizeArray();
+	auto const &plo = geom[lev].ProbLoArray();
+	const bool refine_half_domain_ = refine_half_domain;
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
+		// const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const double x = plo[0] + ((i + 0.5) * dx[0]);
+			const double y = plo[1] + ((j + 0.5) * dx[1]);
+			const double z = plo[2] + ((k + 0.5) * dx[2]);
+
+			if (!refine_half_domain_ || x >= 0.5) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
 	}
 }
 
@@ -341,6 +355,10 @@ auto problem_main() -> int
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
+
+	// Read parameters from input file
+	amrex::ParmParse pp("problem");
+	pp.query("refine_half_domain", refine_half_domain);
 
 	// initialize
 	sim.setInitialConditions();
