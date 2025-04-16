@@ -30,6 +30,6 @@ particles.param3 = 0.0035 # destroy particles at this time, which is step 4
 particles.verbose = 1
 
 stop_time = 5.0
-max_timesteps = 4
+max_timesteps = 40
 plotfile_interval = -1
 checkpoint_interval = -1

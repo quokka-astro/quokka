@@ -31,7 +31,7 @@ struct TestParticle {
 // rest are SNProgenitor. In the third time step, all SNProgenitor particles are turned into SNRemnant. In the fourth time step, all
 // SNRemnant particles are destroyed. In the end of the simulation, there are a total of 2 CIC particles and 8 Test particles left.
 
-static bool refine_half_domain = false;
+static bool refine_half_domain = false; // NOLINT
 
 constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
@@ -365,15 +365,6 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	// exact solution
-	const double theta = 0.5 * sim.tNew_[0];
-	const double exact_x = 1.0 * std::cos(theta);
-	const double exact_y = 1.0 * std::sin(theta);
-	const double exact_z = 0.0;
-
-	double position_error = 0.0;
-	double position_norm = 0.0;
-
 	// ----- Check Test particles -----
 
 	const int n_SNR_particles = refine_half_domain ? n_SNR_particles_in_full_domain / 2 : n_SNR_particles_in_full_domain;
@@ -402,68 +393,92 @@ auto problem_main() -> int
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
-		// assume the first particle is in the first plane quadrant
-		for (const auto &data : real_data) {
-			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
-			if (data[3] < 0.1) {
-				continue;
+		bool is_pos_check_pass = true;
+
+		if (!refine_half_domain) {
+			// exact solution
+			const double theta = 0.5 * sim.tNew_[0];
+			const double exact_x = 1.0 * std::cos(theta);
+			const double exact_y = 1.0 * std::sin(theta);
+			const double exact_z = 0.0;
+
+			double position_error = 0.0;
+			double position_norm = 0.0;
+
+			// assume the first particle is in the first plane quadrant
+			for (const auto &data : real_data) {
+				// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
+				if (data[3] < 0.1) {
+					continue;
+				}
+				// First 3 elements are positions (x,y,z)
+				if (data[0] * exact_x > 0.0) {
+					position_error += std::abs(data[0] - exact_x);
+					position_error += std::abs(data[1] - exact_y);
+					position_error += std::abs(data[2] - exact_z);
+				} else {
+					position_error += std::abs(data[0] - (-exact_x));
+					position_error += std::abs(data[1] - (-exact_y));
+					position_error += std::abs(data[2] - (-exact_z));
+				}
+				position_norm += std::abs(data[0]);
+				position_norm += std::abs(data[1]);
+				position_norm += std::abs(data[2]);
 			}
-			// First 3 elements are positions (x,y,z)
-			if (data[0] * exact_x > 0.0) {
-				position_error += std::abs(data[0] - exact_x);
-				position_error += std::abs(data[1] - exact_y);
-				position_error += std::abs(data[2] - exact_z);
+
+			amrex::Print() << "Particle positions and data are: \n";
+			for (const auto &data : real_data) {
+				// Print positions
+				amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
+				// Print additional data (mass, velocities)
+				amrex::Print() << " | Mass: " << data[3];
+				amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
+			}
+			amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+
+			// compute relative error
+			const double pos_relative_error = position_error / position_norm;
+
+			amrex::Print() << "Position error: " << position_error << "\n";
+			amrex::Print() << "Position norm: " << position_norm << "\n";
+			amrex::Print() << "Relative error: " << pos_relative_error << "\n";
+
+			// check particle positions
+			double pos_max_err_tol = 0.0;
+			if (refine_half_domain) {
+				// particle positions are known to be incorrect if a particle crosses the refinement boundary
+				pos_max_err_tol = std::numeric_limits<double>::infinity();
 			} else {
-				position_error += std::abs(data[0] - (-exact_x));
-				position_error += std::abs(data[1] - (-exact_y));
-				position_error += std::abs(data[2] - (-exact_z));
+				if (sim.tNew_[0] < 0.011) {
+					pos_max_err_tol = 5.0e-7;
+				} else if (sim.tNew_[0] < 0.11) {
+					pos_max_err_tol = 5.0e-6;
+				} else {
+					pos_max_err_tol = 0.05;
+				}
 			}
-			position_norm += std::abs(data[0]);
-			position_norm += std::abs(data[1]);
-			position_norm += std::abs(data[2]);
+
+			is_pos_check_pass = false;
+			if (pos_relative_error < pos_max_err_tol) {
+				is_pos_check_pass = true;
+			}
 		}
-
-		amrex::Print() << "Particle positions and data are: \n";
-		for (const auto &data : real_data) {
-			// Print positions
-			amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
-			// Print additional data (mass, velocities)
-			amrex::Print() << " | Mass: " << data[3];
-			amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
-		}
-		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
-
-		// compute relative error
-		const double relative_error = position_error / position_norm;
-
-		amrex::Print() << "Position error: " << position_error << "\n";
-		amrex::Print() << "Position norm: " << position_norm << "\n";
-		amrex::Print() << "Relative error: " << relative_error << "\n";
 
 		// check SN remnant mass
 		double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
 		if (refine_half_domain) {
 			// SNR mass is not conserved to machine precision due to AMR interpolation.
-			SNR_mass_rel_err_tol = 1.0e-4;
-		}
-
-		// check particle positions
-		double pos_max_err_tol = 0.0;
-		if (refine_half_domain) {
-			// particle positions are known to be incorrect if a particle crosses the refinement boundary
-			pos_max_err_tol = std::numeric_limits<double>::infinity();
-		} else {
-			if (sim.tNew_[0] < 0.011) {
-				pos_max_err_tol = 5.0e-7;
-			} else if (sim.tNew_[0] < 0.11) {
-				pos_max_err_tol = 5.0e-6;
+			// The relative error caused by AMR interpolation at coarse-fine boundary is exceptionally large. The relative error of SNR mass right
+			// after the SN explosion is within machine precision. However, it grows to 1e-4 after 4 steps, and goes to 1e-2 after 40 steps.
+			if (sim.tNew_[0] < 0.01) {
+				SNR_mass_rel_err_tol = 1.0e-4;
 			} else {
-				pos_max_err_tol = 0.05;
+				SNR_mass_rel_err_tol = 1.0e-2;
 			}
 		}
 
 		status = 1;
-		if ((refine_half_domain || relative_error <= pos_max_err_tol) && n_particle_test == n_SNR_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
+		if (is_pos_check_pass && n_particle_test == n_SNR_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}
