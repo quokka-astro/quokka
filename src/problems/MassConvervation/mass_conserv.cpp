@@ -15,16 +15,11 @@
 struct TheProblem {
 };
 
+constexpr double mass_loc = 0.5001;
+constexpr double mass_mass = 1.0e-2;
 constexpr double initial_Tgas = 1.0;
 constexpr double CV = 1.5;
 constexpr double initial_rho = 1.0;
-constexpr int nx_lev0 = 32;
-constexpr double Lx = 1.0;
-constexpr double dx_lev0 = Lx / nx_lev0;
-constexpr double mass_in_a_cell = initial_rho * dx_lev0 * dx_lev0 * dx_lev0;
-constexpr double mass_in_central_cell = 1.0 + mass_in_a_cell;
-constexpr double rho_in_central_cell = mass_in_central_cell / (dx_lev0 * dx_lev0 * dx_lev0);
-constexpr double expected_total_mass = 2.0;
 
 template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -51,15 +46,17 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
-	// find the index of the central cell
-	const int nx_central_cell = nx_lev0 / 2;
+	const auto prob_lo = grid_elem.prob_lo_;
+	const auto dx = grid_elem.dx_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const double xL = prob_lo[0] + (i * dx[0]);
+		const double yL = prob_lo[1] + (j * dx[1]);
+		const double zL = prob_lo[2] + (k * dx[2]);
 		double rho = initial_rho;
-		if (i == nx_central_cell && j == nx_central_cell && k == nx_central_cell) {
-			rho = rho_in_central_cell;
+		if (xL <= mass_loc && (xL + dx[0]) > mass_loc && yL <= mass_loc && (yL + dx[1]) > mass_loc && zL <= mass_loc && (zL + dx[2]) > mass_loc) {
+			rho = mass_mass / (AMREX_D_TERM(dx[0], *dx[1], *dx[2]));
 		}
 		const double Egas = rho * CV * initial_Tgas;
 		state_cc(i, j, k, RadSystem<TheProblem>::gasDensity_index) = rho;
@@ -71,28 +68,75 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	});
 }
 
+template <> void QuokkaSimulation<TheProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto prob_lo = geom[lev].ProbLoArray();
+		const auto dx = geom[lev].CellSizeArray();
+		const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+		const int nidx = HydroSystem<TheProblem>::density_index;
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const double x = prob_lo[0] + ((i + 0.5) * dx[0]);
+			// refine in the left half (x < 0.5). Use 0.4 to keep off the boundary
+			// if (x >= 0.7) {
+			if (x <= 0.3) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
 auto problem_main() -> int
 {
-	// Problem parameters
-	const double tmax = 1.0;
-	const int max_timesteps = 10;
 
-	// Boundary conditions
-	constexpr int nvars = RadSystem<TheProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	auto isNormalComp = [=](int n, int dim) {
+		if ((n == HydroSystem<TheProblem>::x1Momentum_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == HydroSystem<TheProblem>::x2Momentum_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == HydroSystem<TheProblem>::x3Momentum_index) && (dim == 2)) {
+			return true;
+		}
+		return false;
+	};
+
+	const int ncomp_cc = Physics_Indices<TheProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			if (isNormalComp(n, i)) {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+			} else {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+			}
 		}
 	}
+
+	// // Boundary conditions
+	// constexpr int nvars = RadSystem<TheProblem>::nvar_;
+	// amrex::Vector<amrex::BCRec> BCs_cc(nvars);
+	// for (int n = 0; n < nvars; ++n) {
+	// 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+	// 		BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+	// 		BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+	// 	}
+	// }
+
+	// Problem parameters
+	const double tmax = 1.0;
 
 	// Problem initialization
 	QuokkaSimulation<TheProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = tmax;
-	sim.maxTimesteps_ = max_timesteps;
 
 	// initialize
 	sim.setInitialConditions();
