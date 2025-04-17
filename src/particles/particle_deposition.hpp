@@ -139,7 +139,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 						for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
 							const double delta_x = (ii + ix + 0.5) * dx[0] + plo[0] - p.pos(0);
 							const double delta_y = (jj + iy + 0.5) * dx[1] + plo[1] - p.pos(1);
-							const double delta_z = (kk + iy + 0.5) * dx[2] + plo[2] - p.pos(2);
+							const double delta_z = (kk + iz + 0.5) * dx[2] + plo[2] - p.pos(2);
 							const double r_sq = (delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
 							if (r_sq <= stencil_radius * stencil_radius) {
 								n_cells++;

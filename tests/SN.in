@@ -44,6 +44,7 @@ problem.n_amb = 0.1
 problem.T_amb = 5802.240132462
 particles.SN_stencil_radius = 3
 particles.SN_scheme = 1 					# 1: SN_thermal_or_thermal_momentum
+particles.verbose = 1
 
 max_timesteps = 2
 plotfile_interval = 1
