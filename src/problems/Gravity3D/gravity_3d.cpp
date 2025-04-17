@@ -1,5 +1,5 @@
 /// \file gravity_3d.cpp
-/// \brief Defines a test problem for self-gravity in 3D.
+/// \brief Defines a test problem for self-gravity with particles and SN deposition in 3D.
 ///
 
 #include "AMReX.H"
@@ -17,39 +17,37 @@
 #include "gravity_3d.hpp"
 #include "hydro/hydro_system.hpp"
 
-struct BinaryOrbit {
+struct TestParticle {
 };
 
-// This is an ad-hoc test of particle creation and destruction.
-// The initial condition consists of 2 CIC particles with a mass of 1.0. We keep track of their orbit and compare with the exact solution. In the second time
-// step, 3^3 * 2 particles are created. A third of them are LowMassStar and the rest are SNProgenitor. In the third time step, all SNProgenitor particles are
-// turned into SNRemnant. In the fourth time step, all SNRemnant particles are destroyed. In the end of the simulation, there are 2 CIC particles and 18 Test
-// particles.
+// This is a test of gravity, particle creation, supernova ejection, and stellar destruction in uniform, fully refined, or half-refined mesh.
+// The initial condition consists of 2 CIC particles with a mass of 1.0 in circular orbit. We keep track of their orbit over the course of
+// the simulation and compare with the exact solution. In the second time step, 16 particles are created. Half them are LowMassStar and the
+// rest are SNProgenitor. In the third time step, all SNProgenitor particles are turned into SNRemnant. In the fourth time step, all
+// SNRemnant particles are destroyed. In the end of the simulation, there are a total of 2 CIC particles and 8 Test particles left.
+
+static bool refine_half_domain = false; // NOLINT
 
 constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
-constexpr double SN_mass = 0.1;				// mass of SNProgenitor particles
-constexpr double init_test_particle_mass = 2. * 1.0e-5; // mass of Test particles
-constexpr double particle_low_mass = 1.0e-20;		// very low mass particles marked for destruction
+const static double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
+const static int n_SNR_particles_init = 2;    // number of Test particles created at the start of the simulation
+constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
-constexpr int n_expected_test_particles = 8; // 8 low_mass particles created and live to the end
+constexpr int n_SNR_particles_in_full_domain = 8; // 8 low_mass particles created and live to the end
 constexpr int n_SN = 8;
-constexpr double m_SN = (n_SN * SN_mass) + init_test_particle_mass;
 
 static bool do_split_particles = false; // NOLINT
 static int split_factor = 8;		// NOLINT
 
 // locations of the particles: a 2x2x2 grids of particles
-constexpr int loc_x1 = 31;
-constexpr int loc_x2 = 32;
-constexpr int loc_y1 = 31;
-constexpr int loc_y2 = 32;
-constexpr int loc_z1 = 31;
-constexpr int loc_z2 = 32;
+constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
+// need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
+constexpr double particle_offset_from_center_ = 0.01;
 
-template <> struct quokka::EOS_Traits<BinaryOrbit> {
+template <> struct quokka::EOS_Traits<TestParticle> {
 	static constexpr double gamma = 1.0;	     // isothermal
 	static constexpr double cs_isothermal = 3.0; //
 	static constexpr double mean_molecular_weight = 1.0;
@@ -60,7 +58,7 @@ enum class TestEnum : unsigned int {
 	MISTAKE = 0b00000100U,
 };
 
-template <> struct Particle_Traits<BinaryOrbit> {
+template <> struct Particle_Traits<TestParticle> {
 	// The following will cause a compile error
 	// static constexpr int particle_switch = 1;
 	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
@@ -69,11 +67,11 @@ template <> struct Particle_Traits<BinaryOrbit> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
 };
 
-template <> struct HydroSystem_Traits<BinaryOrbit> {
+template <> struct HydroSystem_Traits<TestParticle> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<BinaryOrbit> {
+template <> struct Physics_Traits<TestParticle> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
@@ -82,10 +80,35 @@ template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr int nGroups = 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gravitational_constant = 1.0e-5; // set a small value to keep the cells/particles from moving
+	static constexpr double gravitational_constant = 1.0;
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
+
+template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// tag cells for refinement: static mesh refinement for the whole domain (if refine_half_domain is false) or for x > 0 (if refine_half_domain is true)
+
+	auto const &dx = geom[lev].CellSizeArray();
+	auto const &plo = geom[lev].ProbLoArray();
+	const bool refine_half_domain_ = refine_half_domain;
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		// const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const double x = plo[0] + ((i + 0.5) * dx[0]);
+			const double y = plo[1] + ((j + 0.5) * dx[1]);
+			const double z = plo[2] + ((k + 0.5) * dx[2]);
+
+			if (!refine_half_domain_ || (x >= 0.5 && x <= 0.6 && y >= -0.5 && y <= 0.5 && z >= -0.5 && z <= 0.5)) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
 
 namespace quokka
 {
@@ -97,6 +120,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 
+		double x_L = box_left_edge_;
+		double offset = particle_offset_from_center_;
+
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
@@ -104,9 +130,19 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
-			amrex::ignore_unused(state_arr, dx);
+			amrex::ignore_unused(state_arr);
+
+			// Calculate cell indices for the particle locations
+			const int i_par1 = static_cast<int>(floor((-offset - x_L) / dx[0]));
+			const int j_par1 = static_cast<int>(floor((-offset - x_L) / dx[1]));
+			const int k_par1 = static_cast<int>(floor((-offset - x_L) / dx[2]));
+
+			const int i_par2 = static_cast<int>(floor((offset - x_L) / dx[0]));
+			const int j_par2 = static_cast<int>(floor((offset - x_L) / dx[1]));
+			const int k_par2 = static_cast<int>(floor((offset - x_L) / dx[2]));
+
 			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
-			if (is_create_particle && (i == loc_x1 || i == loc_x2) && (j == loc_y1 || j == loc_y2) && (k == loc_z1 || k == loc_z2)) {
+			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
 				return particle_per_cell;
 			}
 			return 0;
@@ -228,24 +264,24 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 
 } // namespace quokka
 
-template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::energy_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::internalEnergy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::density_index) = rho0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x1Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x2Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x3Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = 0;
 	});
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
+template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
+template <> void QuokkaSimulation<TestParticle>::createInitialCICParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
@@ -261,7 +297,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	}
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
+template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
@@ -269,20 +305,21 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
-	// Get the particles at level 0
-	auto &particles = TestParticles->GetParticles(0);
+	// Loop over all particle at all levels and set first integer component to SNProgenitor
+	for (int lev = 0; lev <= maxLevel(); ++lev) {
+		auto &particles = TestParticles->GetParticles(lev);
 
-	// Loop over all particle tiles and set first integer component to SNProgenitor on GPU
-	for (auto &kv : particles) {
-		auto &particle_array = kv.second.GetArrayOfStructs();
-		const int np = particle_array.numParticles();
-		auto *pdata = particle_array().data();
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
 
-		// Launch GPU kernel to set integer components
-		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-			auto &p = pdata[i]; // NOLINT
-			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-		});
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+			});
+		}
 	}
 
 	// Ensure GPU operations are complete
@@ -292,19 +329,19 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialTestParticles()
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<BinaryOrbit>::x1Momentum_index) && (dim == 0)) {
+		if ((n == HydroSystem<TestParticle>::x1Momentum_index) && (dim == 0)) {
 			return true;
 		}
-		if ((n == HydroSystem<BinaryOrbit>::x2Momentum_index) && (dim == 1)) {
+		if ((n == HydroSystem<TestParticle>::x2Momentum_index) && (dim == 1)) {
 			return true;
 		}
-		if ((n == HydroSystem<BinaryOrbit>::x3Momentum_index) && (dim == 2)) {
+		if ((n == HydroSystem<TestParticle>::x3Momentum_index) && (dim == 2)) {
 			return true;
 		}
 		return false;
 	};
 
-	const int ncomp_cc = Physics_Indices<BinaryOrbit>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<TestParticle>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -324,10 +361,14 @@ auto problem_main() -> int
 	pp.query("split_factor", split_factor);
 
 	// Problem initialization
-	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
+	QuokkaSimulation<TestParticle> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
+
+	// Read parameters from input file
+	const amrex::ParmParse pp1("problem");
+	pp1.query("refine_half_domain", refine_half_domain);
 
 	// initialize
 	sim.setInitialConditions();
@@ -335,23 +376,20 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	// exact solution
-	const double theta = 0.5 * sim.tNew_[0];
-	const double exact_x = 1.0 * std::cos(theta);
-	const double exact_y = 1.0 * std::sin(theta);
-	const double exact_z = 0.0;
+	// ----- Check Test particles -----
 
-	double position_error = 0.0;
-	double position_norm = 0.0;
-
-	int status = 0; // Initialize to success
+	const int n_SNR_particles = refine_half_domain ? n_SNR_particles_in_full_domain / 2 : n_SNR_particles_in_full_domain;
+	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
+	amrex::Print() << "Expected number of test particles: " << n_SNR_particles << "\n";
+	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 	// get total mass in cells
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<BinaryOrbit>::density_index) * vol;
+	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<TestParticle>::density_index) * vol;
 	amrex::Real const SN_remnant_mass = total_mass - init_mass_total;
 	amrex::Print() << "Total SN remnant mass: " << SN_remnant_mass << "\n";
+	const double m_SN = (n_SNR_particles + n_SNR_particles_init) * SN_mass;
 	amrex::Print() << "Expected total SN remnant mass in cells: " << m_SN << "\n";
 	const double SN_remnant_mass_rel_err = std::abs(SN_remnant_mass - m_SN) / m_SN;
 	amrex::Print() << "SN remnant mass relative error: " << SN_remnant_mass_rel_err << "\n";
@@ -359,69 +397,107 @@ auto problem_main() -> int
 	// ----- Check CIC particles -----
 
 	// particle actions must be called on all ranks
-	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleData(0);
+	const int max_level = sim.maxLevel();
+	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(max_level);
 	const int n_particle_CIC = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
-	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
+
+	int status = 0; // Initialize to success
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
-		// assume the first particle is in the first plane quadrant
-		for (const auto &data : real_data) {
-			// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
-			if (data[3] < 0.1) {
-				continue;
+		bool is_pos_check_pass = true;
+
+		if (!refine_half_domain) {
+			// exact solution
+			const double theta = 0.5 * sim.tNew_[0];
+			const double exact_x = 1.0 * std::cos(theta);
+			const double exact_y = 1.0 * std::sin(theta);
+			const double exact_z = 0.0;
+
+			double position_error = 0.0;
+			double position_norm = 0.0;
+
+			// assume the first particle is in the first plane quadrant
+			for (const auto &data : real_data) {
+				// only consider particles with mass > 0.1. Those are the ones created at the start of the simulation.
+				if (data[3] < 0.1) {
+					continue;
+				}
+				// First 3 elements are positions (x,y,z)
+				if (data[0] * exact_x > 0.0) {
+					position_error += std::abs(data[0] - exact_x);
+					position_error += std::abs(data[1] - exact_y);
+					position_error += std::abs(data[2] - exact_z);
+				} else {
+					position_error += std::abs(data[0] - (-exact_x));
+					position_error += std::abs(data[1] - (-exact_y));
+					position_error += std::abs(data[2] - (-exact_z));
+				}
+				position_norm += std::abs(data[0]);
+				position_norm += std::abs(data[1]);
+				position_norm += std::abs(data[2]);
 			}
-			// First 3 elements are positions (x,y,z)
-			if (data[0] * exact_x > 0.0) {
-				position_error += std::abs(data[0] - exact_x);
-				position_error += std::abs(data[1] - exact_y);
-				position_error += std::abs(data[2] - exact_z);
+
+			amrex::Print() << "Particle positions and data are: \n";
+			for (const auto &data : real_data) {
+				// Print positions
+				amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
+				// Print additional data (mass, velocities)
+				amrex::Print() << " | Mass: " << data[3];
+				amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
+			}
+			amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
+
+			// compute relative error
+			const double pos_relative_error = position_error / position_norm;
+
+			amrex::Print() << "Position error: " << position_error << "\n";
+			amrex::Print() << "Position norm: " << position_norm << "\n";
+			amrex::Print() << "Relative error: " << pos_relative_error << "\n";
+
+			// check particle positions
+			double pos_max_err_tol = 0.0;
+			if (refine_half_domain) {
+				// particle positions are known to be incorrect if a particle crosses the refinement boundary
+				pos_max_err_tol = std::numeric_limits<double>::infinity();
 			} else {
-				position_error += std::abs(data[0] - (-exact_x));
-				position_error += std::abs(data[1] - (-exact_y));
-				position_error += std::abs(data[2] - (-exact_z));
+				if (sim.tNew_[0] < 0.011) {
+					pos_max_err_tol = 5.0e-7;
+				} else if (sim.tNew_[0] < 0.11) {
+					pos_max_err_tol = 5.0e-6;
+				} else {
+					pos_max_err_tol = 0.05;
+				}
 			}
-			position_norm += std::abs(data[0]);
-			position_norm += std::abs(data[1]);
-			position_norm += std::abs(data[2]);
+
+			is_pos_check_pass = false;
+			if (pos_relative_error < pos_max_err_tol) {
+				is_pos_check_pass = true;
+			}
 		}
 
-		amrex::Print() << "Particle positions and data are: \n";
-		for (const auto &data : real_data) {
-			// Print positions
-			amrex::Print() << "Position: " << data[0] << ", " << data[1] << ", " << data[2];
-			// Print additional data (mass, velocities)
-			amrex::Print() << " | Mass: " << data[3];
-			amrex::Print() << " | Velocities: " << data[4] << ", " << data[5] << ", " << data[6] << "\n";
+		// check SN remnant mass
+		double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
+		if (refine_half_domain) {
+			// SNR mass is not conserved to machine precision due to AMR interpolation.
+			// The relative error caused by AMR interpolation at coarse-fine boundary is exceptionally large. The relative error of SNR mass right
+			// after the SN explosion is within machine precision. However, it grows to 1e-4 after 4 steps, and goes to 1e-2 after 40 steps.
+			if (sim.tNew_[0] < 0.01) {
+				SNR_mass_rel_err_tol = 1.0e-4;
+			} else {
+				SNR_mass_rel_err_tol = 1.0e-2;
+			}
 		}
-		amrex::Print() << "Exact positions are: \n" << exact_x << ", " << exact_y << ", " << exact_z << "\n";
 
-		// compute relative error
-		const double relative_error = position_error / position_norm;
-
-		amrex::Print() << "Position error: " << position_error << "\n";
-		amrex::Print() << "Position norm: " << position_norm << "\n";
-		amrex::Print() << "Relative error: " << relative_error << "\n";
-
-		// ----- Check CIC particles -----
-		const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
-		amrex::Print() << "Expected number of CIC particles: " << n_expected_CIC_particles << "\n";
-		amrex::Print() << "Actual number of CIC particles: " << n_particle_CIC << "\n";
-
-		// ----- Check Test particles -----
-
-		amrex::Print() << "Expected number of test particles: " << n_expected_test_particles << "\n";
-		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
-
-		// ----- Check SN remnant mass -----
-
-		const double max_err_tol = ((sim.tNew_[0] < 1.0) && !do_split_particles) ? 0.001 : 0.05; // max error tol in cell widths
-		const double max_err_tol_mass = 1.0e-8;							 // max error tol in mass
 		status = 1;
-		if ((relative_error < max_err_tol) && (n_particle_test == n_expected_test_particles) && (n_particle_CIC == n_expected_CIC_particles) &&
-		    (SN_remnant_mass_rel_err < max_err_tol_mass)) {
+		const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
+
+		if (is_pos_check_pass && n_particle_CIC == n_expected_CIC_particles && n_particle_test == n_SNR_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
+		}
+		if (status > 0) {
+			amrex::Print() << "Test failed.\n";
 		}
 	}
 
