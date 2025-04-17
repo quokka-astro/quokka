@@ -400,6 +400,10 @@ auto problem_main() -> int
 	const int max_level = sim.maxLevel();
 	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(max_level);
 	const int n_particle_CIC = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
+	const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
+	amrex::Print () << "Actual number of CIC particles: " << n_particle_CIC << "\n";
+	amrex::Print () << "Expected number of CIC particles: " << n_particle_CIC << "\n";
+	amrex::Print () << "Size of particle data: " << real_data.size() << "\n";
 
 	int status = 0; // Initialize to success
 
@@ -490,8 +494,6 @@ auto problem_main() -> int
 		}
 
 		status = 1;
-		const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
-
 		if (is_pos_check_pass && n_particle_CIC == n_expected_CIC_particles && n_particle_test == n_SNR_particles &&
 		    SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
 			status = 0;
