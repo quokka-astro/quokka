@@ -403,7 +403,8 @@ auto problem_main() -> int
 	const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
 	amrex::Print() << "Actual number of CIC particles: " << n_particle_CIC << "\n";
 	amrex::Print() << "Expected number of CIC particles: " << n_particle_CIC << "\n";
-	amrex::Print() << "Size of particle data: " << real_data.size() << "\n";
+	amrex::Print() << "Size of real particle data: " << real_data.size() << "\n";
+	amrex::Print() << "Size of integer particle data: " << int_data.size() << "\n";
 
 	int status = 0; // Initialize to success
 
