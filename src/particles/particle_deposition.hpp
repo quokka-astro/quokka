@@ -79,12 +79,14 @@ struct SNDeposition {
 	int evolutionStageIndex{}; // Index for particle evolution stage
 	double SN_time = particle_param2;
 
-	static constexpr int stencil_width = 4;
+	// For some unknown reason, stencil_width < 3 results in larger error in SNR mass when a particle is at the refinement boundary.
+	static constexpr int stencil_width = 3;
 
-	// Abort if stencil_width > nghost_cc_.
-	// A stencil_width > nghost_cc_ would result in particles depositing energy/momentum outside the ghost zones.
-	// We can't use AMRSimulation<problem_t>::nghost_cc_ here because we don't have a problem_t template parameter.
-	static_assert(stencil_width <= 4, "stencil_width must be <= nghost_cc_");
+	// Abort if stencil_width > nghost_cc_ - 1.
+	// The particle can drift one cell out of the valid zone during kickParticlesAllLevels().
+	// A stencil_width > nghost_cc_ - 1 would result in particles depositing energy/momentum outside the ghost zones.
+	// We can't use AMRSimulation<problem_t>::nghost_cc_ and have to hard-code 3 here because we don't have a problem_t template parameter.
+	static_assert(stencil_width <= 3, "stencil_width must be <= nghost_cc_");
 
 	// Operator to perform supernova deposition using cloud-in-cell approach
 	template <typename ContainerType>
@@ -143,7 +145,7 @@ struct SNDeposition {
 
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
 template <typename ContainerType>
-void updateEvolutionStage(ContainerType *container, int lev, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
+void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
 {
 	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
 		return;
@@ -151,22 +153,24 @@ void updateEvolutionStage(ContainerType *container, int lev, amrex::Real step_en
 
 	const double SN_time = particle_param2;
 
-	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
-		const amrex::Long np = pti.numParticles();
+	for (int lev = lev_min; lev <= container->finestLevel(); ++lev) {
+		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+			auto &particles = pti.GetArrayOfStructs();
+			auto *pData = particles().data();
+			const amrex::Long np = pti.numParticles();
 
-		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
-			// Check if this is a supernova progenitor
-			bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+				// Check if this is a supernova progenitor
+				bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
-			// Update the particle's evolution stage if it's time
-			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex) + SN_time) {
-				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
-			}
-		});
+				// Update the particle's evolution stage if it's time
+				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex) + SN_time) {
+					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+				}
+			});
+		}
 	}
 }
 

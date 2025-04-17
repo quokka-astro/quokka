@@ -64,31 +64,57 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
 
-	// Virtual interface for particle operations
-	[[nodiscard]] virtual auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> = 0;
-
 	// New method to get particle positions and data
-	[[nodiscard]] virtual auto getParticleData(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
+	[[nodiscard]] virtual auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
+
+	// Get particle data at level lev
+	[[nodiscard]] virtual auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
 	// Pure virtual methods that must be implemented by derived classes
 	[[nodiscard]] virtual auto isStarParticle() -> bool = 0;
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
+
+	// Redistribute particles at level lev and above
 	virtual void redistribute(int lev) = 0;
+
+	// Redistribute particles at level lev and above with ngrow ghost cells
 	virtual void redistribute(int lev, int ngrow) = 0;
+
+	// Write particle data to plot file
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
+
+	// Write particle data to checkpoint file
 	virtual void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) = 0;
+
+	// Write units info of particles to checkpoint/plotfile
 	virtual void writeUnitsFile(const std::string &snapshot_name, const std::string &name) = 0;
+
+	// Print statistics of particles
+	virtual void printParticleStatistics(int lev) const = 0;
+
+	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
+
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
-	virtual void driftParticles(int lev, amrex::Real dt) const = 0;
-	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &acceleration) = 0;
+
+	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
+	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
+
+	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
+	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
+
+	// Create particles from hydro state at the finest level
+	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call.
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
-	virtual void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) = 0;
+
+	// Destroy particles at level lev_min and above
+	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
+
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
-	virtual void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) { /* Default empty implementation */ }
+	virtual void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) { /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -115,69 +141,26 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 	}
 
-	// Get particle positions from all ranks and gather them on rank 0.
-	// This method creates a temporary particle container on rank 0 and copies all particles to it.
-	// Only rank 0 will return the actual particle positions, other ranks return an empty vector.
-	// @param lev: level from which to get particles
-	// @return: vector of particle positions [x,y,z] on rank 0, empty vector on other ranks
-	[[nodiscard]] auto getParticlePositions(int lev) const -> std::vector<std::array<double, AMREX_SPACEDIM>> override
-	{
-		std::vector<std::array<double, AMREX_SPACEDIM>> positions;
-
-		// All ranks must participate in copyParticles
-		if (container_ != nullptr) {
-			// Create single-box particle container for analysis on all ranks
-			ContainerType analysisPC{};
-			// Define a single box [0,1]^3 that will hold all particles on rank 0
-			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
-			amrex::Geometry const geom(box);
-			amrex::BoxArray const boxArray(box);
-			// Force all particles to rank 0 by using a single-rank distribution
-			amrex::Vector<int> const ranks({0});
-			amrex::DistributionMapping const dmap(ranks);
-
-			// Initialize the analysis container and gather all particles to rank 0
-			analysisPC.Define(geom, dmap, boxArray);
-			analysisPC.copyParticles(*container_); // MPI communication happens here
-
-			// Only rank 0 processes the particles since they're all gathered there
-			if (amrex::ParallelDescriptor::IOProcessor()) {
-				// Get iterator for the single box on rank 0
-				typename ContainerType::ParIterType const pIter(analysisPC, lev);
-				if (pIter.isValid()) {
-					const amrex::Long np = pIter.numParticles();
-					auto &particles = pIter.GetArrayOfStructs();
-
-					// Transfer particle data from GPU to CPU for analysis
-					typename ContainerType::ParticleType *pData = particles().data();
-					amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
-					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
-
-					// Extract just the positions into the return vector
-					for (int i = 0; i < np; ++i) {
-						const auto &p = pData_h[i];
-						positions.push_back({AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))});
-					}
-				}
-			}
-		}
-
-		return positions; // Empty vector on non-root ranks
-	}
-
-	// Get particle positions and data from all ranks and gather them on rank 0.
+	// Get positions and fields data from all particles at level 0 from all ranks and gather them on rank 0.
 	// This method creates a temporary particle container on rank 0 and copies all particles to it.
 	// The returned data for each particle contains:
-	// - First AMREX_SPACEDIM elements are positions [x,y,z]
-	// - Remaining elements are particle data (e.g., mass, velocities, etc.)
+	// - first:
+	//   - First AMREX_SPACEDIM elements are positions [x,y,z]
+	//   - Remaining elements are particle data (e.g., mass, velocities, etc.)
+	// - second:
+	//   - Integer data (e.g., id, type, etc.)
 	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
-	// @param lev: level from which to get particles
-	// @return: vector of particle data on rank 0, empty vector on other ranks
-	[[nodiscard]] auto getParticleData(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
+	// @return: tuple of vectors of particle data on rank 0, empty vectors on other ranks
+	[[nodiscard]] auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
 		std::vector<std::vector<double>> real_data;
 		std::vector<std::vector<int>> int_data;
 
+		// // If max level > 0, return empty vectors. This function does not support multi-level particles.
+		// if (container_->finestLevel() > 0) {
+		// 	return {real_data, int_data};
+		// }
+
 		// All ranks must participate in copyParticles
 		if (container_ != nullptr) {
 			// Create single-box particle container for analysis on all ranks
@@ -197,7 +180,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Only rank 0 processes the particles since they're all gathered there
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				// Get iterator for the single box on rank 0
-				typename ContainerType::ParIterType const pIter(analysisPC, lev);
+				typename ContainerType::ParIterType const pIter(analysisPC, 0);
 				if (pIter.isValid()) {
 					const amrex::Long np = pIter.numParticles();
 					auto &particles = pIter.GetArrayOfStructs();
@@ -258,6 +241,95 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return {real_data, int_data}; // Empty vectors on non-root ranks
 	}
 
+	[[nodiscard]] auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
+	{
+		std::vector<std::vector<double>> real_data;
+		std::vector<std::vector<int>> int_data;
+
+		if (container_ != nullptr) {
+			// Create single-box particle container for analysis
+			ContainerType analysisPC{};
+			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
+			amrex::Geometry const geom(box);
+			amrex::BoxArray const boxArray(box);
+			amrex::Vector<int> const ranks({0}); // workaround nvcc bug
+			amrex::DistributionMapping const dmap(ranks);
+			analysisPC.Define(geom, dmap, boxArray);
+
+			// Create a single destination tile
+			auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
+
+			// Copy particles only from the specified level
+			const auto &particles = container_->GetParticles(lev);
+			for (const auto &kv : particles) {
+				const auto &src_tile = kv.second;
+				const int np = src_tile.numParticles();
+				if (np > 0) {
+					const int old_size = dst_tile.numParticles();
+					dst_tile.resize(old_size + np);
+					const auto &src_aos = src_tile.GetArrayOfStructs();
+					auto &dst_aos = dst_tile.GetArrayOfStructs();
+					amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + old_size);
+				}
+			}
+
+			// Copy particles from device to host and process them
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				typename ContainerType::ParIterType const pIter(analysisPC, 0);
+				if (pIter.isValid() && pIter.numParticles() > 0) {
+					auto &particles = pIter.GetArrayOfStructs();
+					typename ContainerType::ParticleType *pData = particles().data();
+					amrex::Vector<typename ContainerType::ParticleType> pData_h(pIter.numParticles());
+					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + pIter.numParticles(), pData_h.begin());
+
+					// Check if particles have integer components
+					constexpr bool has_int_components = (ContainerType::ParticleType::NInt > 0);
+
+					// Pre-size vectors to avoid reallocations
+					real_data.reserve(pIter.numParticles());
+					if constexpr (has_int_components) {
+						int_data.reserve(pIter.numParticles());
+					}
+
+					// Process each particle
+					for (int i = 0; i < pIter.numParticles(); ++i) {
+						const auto &p = pData_h[i];
+
+						// Process real data (positions and rdata)
+						std::vector<double> r_data;
+						r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
+
+						// Add position components
+						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+							r_data.push_back(p.pos(d));
+						}
+
+						// Add all real components
+						for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
+							r_data.push_back(p.rdata(d));
+						}
+
+						real_data.push_back(std::move(r_data));
+
+						// Process integer data if particles have integer components
+						if constexpr (has_int_components) {
+							std::vector<int> i_data;
+							i_data.reserve(ContainerType::ParticleType::NInt);
+
+							for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
+								i_data.push_back(p.idata(d));
+							}
+
+							int_data.push_back(std::move(i_data));
+						}
+					}
+				}
+			}
+		}
+
+		return {real_data, int_data}; // Empty vectors on non-root ranks
+	}
+
 	// Get the number of particles in the container
 	[[nodiscard]] auto getNumParticles() const -> int override
 	{
@@ -279,27 +351,28 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	// Implementation of particle drift (position update based on velocity)
-	void driftParticles(int lev, amrex::Real dt) const override
+	void driftParticles(int lev_min, int lev_max, amrex::Real dt) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
 
 			if (mass_idx >= 0) {
-				for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
+				for (int lev = lev_min; lev <= lev_max; ++lev) {
+					for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+						auto &particles = pIter.GetArrayOfStructs();
+						auto *pData = particles().data();
+						const amrex::Long np = pIter.numParticles();
 
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-						// update particle position based on velocity components
-						for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-							if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
-								p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+							// update particle position based on velocity components
+							for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+								if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
+									p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+								}
 							}
-						}
-					});
+						});
+					}
 				}
 			}
 		}
@@ -351,11 +424,11 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		    container_, this->getMassIndex(), state, lev, current_time, dt, this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 	}
 
-	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt) override
+	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) override
 	{
 		if (container_ != nullptr) {
 			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
-			    container_, this->getMassIndex(), lev, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+			    container_, this->getMassIndex(), lev_min, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 
@@ -489,6 +562,36 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 	}
+
+	void printParticleStatistics(int lev) const override
+	{
+		if (container_ != nullptr) {
+			amrex::Print() << "\n";
+			// TODO(cch): add a getParticleTypeName() method to PhysicsParticleDescriptor and call it here
+			amrex::Print() << std::left << std::setw(20) << PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_) << std::right
+				       << std::setw(15) << getNumParticles() << "\n";
+
+			// if max_level = 0 and has stellar evolution stage, print the mass and particle stage for all particles
+			if (getEvolutionStageIndex() >= 0) {
+				const auto [real_data, int_data] = getParticleDataAtLevel(lev);
+
+				if (!real_data.empty()) {
+					// Print header for detailed particle data
+					amrex::Print() << "  " << std::left << std::setw(15) << "Mass"
+						       << " | " << std::right << std::setw(20) << "Stellar evolution stage"
+						       << "\n";
+					amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
+
+					// Print each particle's data with aligned columns
+					for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
+						amrex::Print() << "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + getMassIndex()] << " | "
+							       << std::right << std::setw(20) << int_data[i][getEvolutionStageIndex()] << "\n";
+					}
+					amrex::Print() << "\n"; // Add extra line for readability between particle types
+				}
+			}
+		}
+	}
 };
 
 // New class for star particles that adds stellar evolution capabilities
@@ -508,18 +611,19 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 #if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
-	void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time) override
+	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) override
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
+			// Deposit supernova energy and momentum from level lev_min to finest level
 			// zero_out_input is false because we want to accumulate supernova contributions
 			// vol_weight is false because SNDeposition does the volume weighting
-			amrex::ParticleToMesh(*this->container_, state, lev,
+			amrex::ParticleToMesh(*this->container_, state, lev_min, -1,
 					      SNDeposition{step_end_time, this->getMassIndex(), HydroSystem<problem_t>::density_index,
 							   this->getBirthTimeIndex(), this->getEvolutionStageIndex()},
-					      false);
+					      false, false);
 
 			// Update particle evolution stages after deposition
-			updateEvolutionStage(this->container_, lev, step_end_time, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+			updateEvolutionStage(this->container_, lev_min, step_end_time, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
@@ -653,13 +757,13 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit supernova energy and momentum from all particles
-	void depositSN(amrex::MultiFab &state, int lev, amrex::Real step_end_time)
+	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time)
 	{
 		// this function is only implemented for particles that belong to the StarParticleDescriptor class whose unique signature is that the
 		// isStarParticle() method returns true
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->isStarParticle()) {
-				descriptor->depositSN(state, lev, step_end_time);
+				descriptor->depositSN(state, lev_min, step_end_time);
 			}
 		}
 	}
@@ -701,23 +805,21 @@ template <typename problem_t> class PhysicsParticleRegister
 
 #if AMREX_SPACEDIM == 3
 	// Update positions of all massive particles
-	void driftParticlesAllLevels(amrex::Real dt, int finest_level)
+	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					descriptor->driftParticles(lev, dt);
-				}
+				descriptor->driftParticles(0, lev_max, dt);
 			}
 		}
 	}
 
 	// Update velocities of all massive particles
-	void kickParticlesAtLevel(amrex::Real dt, amrex::MultiFab &acceleration, int lev)
+	void kickParticlesAtLevel(int lev, amrex::Real dt, amrex::MultiFab &accel)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				descriptor->kickParticles(lev, dt, acceleration);
+				descriptor->kickParticles(lev, dt, accel);
 			}
 		}
 	}
@@ -730,18 +832,21 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
 				descriptor->createParticlesFromState(state, lev, current_time, dt);
+
+				// redistribute particles
+				// descriptor->redistribute(lev);
 			}
 		}
 	}
 
 	// Destroy particles based on particle type
-	void destroyParticles(int lev, amrex::Real current_time, amrex::Real dt)
+	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only destroy particles if the descriptor allows destruction
 			if (descriptor->getAllowsDestruction()) {
 				// Call the appropriate particle destruction method based on the particle type
-				descriptor->destroyParticles(lev, current_time, dt);
+				descriptor->destroyParticles(lev_min, current_time, dt);
 			}
 		}
 	}
@@ -762,37 +867,14 @@ template <typename problem_t> class PhysicsParticleRegister
 #endif // AMREX_SPACEDIM == 3
 
 	// Print particle statistics
-	void printParticleStatistics() const
+	void printParticleStatistics(int lev) const
 	{
 		amrex::Print() << "Particle statistics:\n";
 		amrex::Print() << std::left << std::setw(20) << "Particle type" << std::right << std::setw(15) << "Number of particles"
 			       << "\n";
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			amrex::Print() << "\n";
-			amrex::Print() << std::left << std::setw(20) << getParticleTypeName(type) << std::right << std::setw(15)
-				       << descriptor->getNumParticles() << "\n";
-
-			// if has stellar evolution stage, print the mass and particle stage for all particles
-			if (descriptor->getEvolutionStageIndex() >= 0) {
-				const auto [real_data, int_data] = descriptor->getParticleData(0);
-
-				if (!real_data.empty()) {
-					// Print header for detailed particle data
-					amrex::Print() << "  " << std::left << std::setw(15) << "Mass"
-						       << " | " << std::right << std::setw(20) << "Stellar evolution stage"
-						       << "\n";
-					amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
-
-					// Print each particle's data with aligned columns
-					for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
-						amrex::Print()
-						    << "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + descriptor->getMassIndex()] << " | "
-						    << std::right << std::setw(20) << int_data[i][descriptor->getEvolutionStageIndex()] << "\n";
-					}
-					amrex::Print() << "\n"; // Add extra line for readability between particle types
-				}
-			}
+			descriptor->printParticleStatistics(lev);
 		}
 	}
 
