@@ -1011,6 +1011,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// hyperbolic advance over all levels
 		// (N.B. when AMR is enabled, regridding may happen during this function!)
+		// Particle redistribution is done here.
 		int lev = 0;		 // coarsest level
 		const int iteration = 1; // this is the first call to advance level 'lev'
 		timeStepWithSubcycling(lev, cur_time, iteration);
@@ -1030,13 +1031,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			kickParticlesAllLevels(dt_[0]);
 		}
 
-		// Use the new type-aware particle creation method
-		// TODO(cch): Need to take care of AMR subscycling
-		particleRegister_.createParticlesFromState(state_new_cc_[0], 0, cur_time, dt_[0]);
+		// Only create particles at the finest level to avoid duplicate particle creation in regions where finer levels exist
+		particleRegister_.createParticlesFromState(state_new_cc_[finest_level], finest_level, cur_time, dt_[0]);
 
 		// Stellar evolution and SN deposition
 		// TODO(cch): Need to take care of AMR subcycling
-		particleRegister_.depositSN(state_new_cc_[0], 0, cur_time + dt_[0]);
+		particleRegister_.depositSN(amrex::GetVecOfPtrs(state_new_cc_), 0, cur_time + dt_[0]);
 
 		// Use the new type-aware particle destruction method
 		// TODO(cch): Need to take care of AMR subcycling
@@ -1077,7 +1077,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// print particle statistics
 		if (quokka::particle_verbose > 0) {
-			particleRegister_.printParticleStatistics();
+			particleRegister_.printParticleStatistics(max_level);
 		}
 
 		// write diagnostics
@@ -1379,7 +1379,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		AMREX_ALWAYS_ASSERT(!accel_cc.contains_nan());
 
 		// Kick particles using the acceleration field
-		particleRegister_.kickParticlesAtLevel(dt, accel_cc, lev);
+		particleRegister_.kickParticlesAtLevel(lev, dt, accel_cc);
 	}
 }
 #endif // AMREX_SPACEDIM == 3
