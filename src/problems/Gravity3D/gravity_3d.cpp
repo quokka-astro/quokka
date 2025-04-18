@@ -398,18 +398,17 @@ auto problem_main() -> int
 
 	// particle actions must be called on all ranks
 	const int max_level = sim.maxLevel();
-	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(max_level);
 	const int n_particle_CIC = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
 	const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
 	amrex::Print() << "Actual number of CIC particles: " << n_particle_CIC << "\n";
 	amrex::Print() << "Expected number of CIC particles: " << n_particle_CIC << "\n";
-	amrex::Print() << "Size of real particle data: " << real_data.size() << "\n";
-	amrex::Print() << "Size of integer particle data: " << int_data.size() << "\n";
 
 	int status = 0; // Initialize to success
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
+	auto const *descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC);
+	auto [real_data, int_data] = descriptor->getParticleDataAtLevelZero();
 
+	if (amrex::ParallelDescriptor::IOProcessor()) {
 		bool is_pos_check_pass = true;
 
 		if (!refine_half_domain) {
@@ -466,9 +465,9 @@ auto problem_main() -> int
 				// particle positions are known to be incorrect if a particle crosses the refinement boundary
 				pos_max_err_tol = std::numeric_limits<double>::infinity();
 			} else {
-				if (sim.tNew_[0] < 0.011) {
+				if (sim.tNew_[0] < 0.011 && !do_split_particles) {
 					pos_max_err_tol = 5.0e-7;
-				} else if (sim.tNew_[0] < 0.11) {
+				} else if (sim.tNew_[0] < 0.11 && !do_split_particles) {
 					pos_max_err_tol = 5.0e-6;
 				} else {
 					pos_max_err_tol = 0.05;
@@ -485,8 +484,9 @@ auto problem_main() -> int
 		double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
 		if (refine_half_domain) {
 			// SNR mass is not conserved to machine precision due to AMR interpolation.
-			// The relative error caused by AMR interpolation at coarse-fine boundary is exceptionally large. The relative error of SNR mass right
-			// after the SN explosion is within machine precision. However, it grows to 1e-4 after 4 steps, and goes to 1e-2 after 40 steps.
+			// The relative error caused by AMR interpolation at coarse-fine boundary is exceptionally large. The relative error of SNR mass
+			// right after the SN explosion is within machine precision. However, it grows to 1e-4 after 4 steps, and goes to 1e-2 after 40
+			// steps.
 			if (sim.tNew_[0] < 0.01) {
 				SNR_mass_rel_err_tol = 1.0e-4;
 			} else {
@@ -502,6 +502,18 @@ auto problem_main() -> int
 		}
 		if (status > 0) {
 			amrex::Print() << "Test failed.\n";
+			if (!is_pos_check_pass) {
+				amrex::Print() << "...position check failed.\n";
+			}
+			if (!(n_particle_CIC == n_expected_CIC_particles)) {
+				amrex::Print() << "...wrong number of CIC particles.\n";
+			}
+			if (!(n_particle_test == n_SNR_particles)) {
+				amrex::Print() << "...wrong number of SN remnant particles.\n";
+			}
+			if (!(SN_remnant_mass_rel_err < SNR_mass_rel_err_tol)) {
+				amrex::Print() << "...SN remnant mass error above tolerance.\n";
+			}
 		}
 	}
 
