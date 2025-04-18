@@ -408,7 +408,7 @@ auto problem_main() -> int
 	int status = 0; // Initialize to success
 
 	auto const *descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC);
-	auto [real_data, int_data] = descriptor->getParticleDataAtLevelZero();
+	auto [real_data, _] = descriptor->getParticleDataAtLevel(max_level);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		bool is_pos_check_pass = true;
