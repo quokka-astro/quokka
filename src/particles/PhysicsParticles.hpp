@@ -289,7 +289,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 
 			// Now use MPI to gather all particles to rank 0
-			analysisPC.Redistribute();  // This handles the MPI communication
+			analysisPC.Redistribute(); // This handles the MPI communication
 
 			// Only rank 0 processes the particles since they're all gathered there
 			if (amrex::ParallelDescriptor::IOProcessor()) {
