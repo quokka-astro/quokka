@@ -313,7 +313,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						int_data.reserve(np);
 					}
 
-					// Extract positions, real components, and integer components from host data
+					// Process each particle
 					for (int i = 0; i < np; ++i) {
 						const auto &p = pData_h[i];
 
@@ -322,12 +322,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						// Pre-allocate to avoid reallocations
 						r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
 
-						// First add position components
+						// Add position components
 						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 							r_data.push_back(p.pos(d));
 						}
 
-						// Then add all real components (mass, velocities, etc)
+						// Add all real components
 						for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
 							r_data.push_back(p.rdata(d));
 						}
@@ -340,7 +340,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							// Pre-allocate to avoid reallocations
 							i_data.reserve(ContainerType::ParticleType::NInt);
 
-							// Add all integer components
 							for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
 								i_data.push_back(p.idata(d));
 							}
