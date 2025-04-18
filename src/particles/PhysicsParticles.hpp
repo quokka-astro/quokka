@@ -247,64 +247,57 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		std::vector<std::vector<int>> int_data;
 
 		if (container_ != nullptr) {
-			// Create single-box particle container for analysis
+			// Create single-box particle container for analysis on all ranks
 			ContainerType analysisPC{};
+			// Define a single box [0,1]^3 that will hold all particles on rank 0
 			amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
 			amrex::Geometry const geom(box);
 			amrex::BoxArray const boxArray(box);
-			amrex::Vector<int> const ranks({0}); // workaround nvcc bug
+			// Force all particles to rank 0 by using a single-rank distribution
+			amrex::Vector<int> const ranks({0});
 			amrex::DistributionMapping const dmap(ranks);
+
+			// Initialize the analysis container and gather all particles to rank 0
 			analysisPC.Define(geom, dmap, boxArray);
+			analysisPC.copyParticles(*container_, lev, lev); // MPI communication happens here, only copy particles from specified level
 
-			// Create a single destination tile
-			auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
-
-			// Copy particles only from the specified level
-			const auto &particles = container_->GetParticles(lev);
-			for (const auto &kv : particles) {
-				const auto &src_tile = kv.second;
-				const int np = src_tile.numParticles();
-				if (np > 0) {
-					const int old_size = dst_tile.numParticles();
-					dst_tile.resize(old_size + np);
-					const auto &src_aos = src_tile.GetArrayOfStructs();
-					auto &dst_aos = dst_tile.GetArrayOfStructs();
-					amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + old_size);
-				}
-			}
-
-			// Copy particles from device to host and process them
+			// Only rank 0 processes the particles since they're all gathered there
 			if (amrex::ParallelDescriptor::IOProcessor()) {
+				// Get iterator for the single box on rank 0
 				typename ContainerType::ParIterType const pIter(analysisPC, 0);
-				if (pIter.isValid() && pIter.numParticles() > 0) {
+				if (pIter.isValid()) {
+					const amrex::Long np = pIter.numParticles();
 					auto &particles = pIter.GetArrayOfStructs();
+
+					// Transfer particle data from GPU to CPU for analysis
 					typename ContainerType::ParticleType *pData = particles().data();
-					amrex::Vector<typename ContainerType::ParticleType> pData_h(pIter.numParticles());
-					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + pIter.numParticles(), pData_h.begin());
+					amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
+					amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
 
 					// Check if particles have integer components
 					constexpr bool has_int_components = (ContainerType::ParticleType::NInt > 0);
 
 					// Pre-size vectors to avoid reallocations
-					real_data.reserve(pIter.numParticles());
+					real_data.reserve(np);
 					if constexpr (has_int_components) {
-						int_data.reserve(pIter.numParticles());
+						int_data.reserve(np);
 					}
 
-					// Process each particle
-					for (int i = 0; i < pIter.numParticles(); ++i) {
+					// Extract positions, real components, and integer components from host data
+					for (int i = 0; i < np; ++i) {
 						const auto &p = pData_h[i];
 
 						// Process real data (positions and rdata)
 						std::vector<double> r_data;
+						// Pre-allocate to avoid reallocations
 						r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
 
-						// Add position components
+						// First add position components
 						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 							r_data.push_back(p.pos(d));
 						}
 
-						// Add all real components
+						// Then add all real components (mass, velocities, etc)
 						for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
 							r_data.push_back(p.rdata(d));
 						}
@@ -314,8 +307,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						// Process integer data if particles have integer components
 						if constexpr (has_int_components) {
 							std::vector<int> i_data;
+							// Pre-allocate to avoid reallocations
 							i_data.reserve(ContainerType::ParticleType::NInt);
 
+							// Add all integer components
 							for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
 								i_data.push_back(p.idata(d));
 							}
