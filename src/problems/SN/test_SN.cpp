@@ -24,6 +24,8 @@
 struct SNProblem {
 };
 
+static double max_Eint_global = 0.0;
+
 AMREX_GPU_MANAGED std::string SN_particles_file = "SN_particles.txt";
 
 constexpr double mu = 1.0 * C::m_u;
@@ -101,6 +103,13 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e;
 		state_cc(i, j, k, HydroSystem<SNProblem>::internalEnergy_index) = rho_e;
 	});
+}
+
+template <> void QuokkaSimulation<SNProblem>::computeAfterTimestep()
+{
+	// find the maximum temperature in the state_new_cc_[0]
+	const double max_internal_energy_density = state_new_cc_[0].max(HydroSystem<SNProblem>::internalEnergy_index);
+	max_Eint_global = std::max(max_Eint_global, max_internal_energy_density);
 }
 
 // template <> void QuokkaSimulation<SNProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
@@ -196,8 +205,8 @@ auto problem_main() -> int
 	// find the maximum internal energy in the state_new_cc_[0]
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	const amrex::Real vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	const amrex::Real max_internal_energy_density = sim.state_new_cc_[0].max(HydroSystem<SNProblem>::internalEnergy_index);
-	const amrex::Real max_internal_energy = max_internal_energy_density * vol;
+	// const amrex::Real max_internal_energy_density = sim.state_new_cc_[0].max(HydroSystem<SNProblem>::internalEnergy_index);
+	const amrex::Real max_internal_energy = max_Eint_global * vol;
 	const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
 	int status = 1;
 	if (max_internal_energy > expected_minimum_max_internal_energy) {
