@@ -38,6 +38,8 @@ constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
 constexpr int particle_per_cell = 2;
 const static double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
+const static double small_SN_mass = 1.0e-15; // mass of low-mass SNProgenitor particles
+const static int N_small_SN = 8; // number of low-mass SNProgenitor particles, one in each octant of the domain
 const static int n_SNR_particles_init = 2;    // number of Test particles created at the start of the simulation
 constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked for destruction
 constexpr double dt_ = 0.001;
@@ -378,7 +380,7 @@ auto problem_main() -> int
 	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<TestParticle>::density_index) * vol;
 	amrex::Real const SN_remnant_mass = total_mass - init_mass_total;
 	amrex::Print() << "Total SN remnant mass: " << SN_remnant_mass << "\n";
-	const double m_SN = (n_SNR_particles + n_SNR_particles_init) * SN_mass;
+	const double m_SN = (n_SNR_particles + n_SNR_particles_init) * SN_mass + N_small_SN * small_SN_mass;
 	amrex::Print() << "Expected total SN remnant mass in cells: " << m_SN << "\n";
 	const double SN_remnant_mass_rel_err = std::abs(SN_remnant_mass - m_SN) / m_SN;
 	amrex::Print() << "SN remnant mass relative error: " << SN_remnant_mass_rel_err << "\n";
