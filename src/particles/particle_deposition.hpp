@@ -121,6 +121,9 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 			is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
+				// Update the particle's evolution stage to SNRemnant
+				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+
 				// Find the cell containing the particle
 				int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 				int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
@@ -429,7 +432,8 @@ void updateEvolutionStage(ContainerType *container, int lev, amrex::Real step_en
 			bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 			// Update the particle's evolution stage if it's time
-			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex) + SN_time) {
+
+			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
 				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
 			}
 		});

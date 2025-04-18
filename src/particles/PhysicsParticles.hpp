@@ -514,8 +514,6 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 			// Deposit supernova energy and momentum from all particles
 			SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getEvolutionStageIndex(),
 							       this->getBirthTimeIndex());
-			// Update particle evolution stages after deposition
-			updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
