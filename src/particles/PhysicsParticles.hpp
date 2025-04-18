@@ -257,9 +257,39 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			amrex::Vector<int> const ranks({0});
 			amrex::DistributionMapping const dmap(ranks);
 
-			// Initialize the analysis container and gather all particles to rank 0
+			// Initialize the analysis container
 			analysisPC.Define(geom, dmap, boxArray);
-			analysisPC.copyParticles(*container_, lev, lev); // MPI communication happens here, only copy particles from specified level
+
+			// Create a single destination tile on rank 0
+			auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
+
+			// Get particles only from the specified level
+			const auto &particles = container_->GetParticles(lev);
+
+			// First count total particles at this level
+			int total_np = 0;
+			for (const auto &kv : particles) {
+				total_np += kv.second.numParticles();
+			}
+
+			// Pre-size the destination tile
+			dst_tile.resize(total_np);
+
+			// Copy particles from each tile
+			int particle_offset = 0;
+			for (const auto &kv : particles) {
+				const auto &src_tile = kv.second;
+				const int np = src_tile.numParticles();
+				if (np > 0) {
+					const auto &src_aos = src_tile.GetArrayOfStructs();
+					auto &dst_aos = dst_tile.GetArrayOfStructs();
+					amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + particle_offset);
+					particle_offset += np;
+				}
+			}
+
+			// Now use MPI to gather all particles to rank 0
+			analysisPC.Redistribute();  // This handles the MPI communication
 
 			// Only rank 0 processes the particles since they're all gathered there
 			if (amrex::ParallelDescriptor::IOProcessor()) {
