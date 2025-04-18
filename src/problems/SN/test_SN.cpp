@@ -157,7 +157,7 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if constexpr (true) { // periodic boundaries
+			if constexpr (false) { // periodic boundaries
 				BCs_cc[n].setLo(i, amrex::BCType::int_dir);
 				BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 			} else { // octant symmetry
