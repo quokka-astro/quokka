@@ -15,12 +15,9 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
 #include "AMReX_FabArrayUtility.H"
-#include "AMReX_FillPatchUtil.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelDescriptor.H"
-#include "AMReX_Parser_Y.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_REAL.H"
 
@@ -32,6 +29,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "math/quadrature.hpp"
+#include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 
 struct AgoraGalaxy {
@@ -280,10 +278,10 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 	amrex::ParmParse const pp("agora_galaxy");
 	std::string filename;
 	std::string plotfile_to_resample;
-	int particle_resample_factor = 0;
+	int particle_split_factor = 0;
 	pp.query("particle_file", filename);
 	pp.query("plotfile_to_resample", plotfile_to_resample);
-	pp.query("particle_resample_factor", particle_resample_factor);
+	pp.query("particle_split_factor", particle_split_factor);
 
 	if (plotfile_to_resample.empty()) {
 		// read particles from ASCII file
@@ -292,14 +290,17 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 		const int nreal_extra = 4; // mass vx vy vz
 		CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
 	} else {
-		// read particles from plotfile, then split them
+		// read particles from plotfile
 		amrex::Print() << "Reading particles from plotfile " << plotfile_to_resample << "...\n";
 		CICParticles->SetVerbose(1);
-		// PC->Restart only works if max_levels is the same
-		CICParticles->Restart(plotfile_to_resample, quokka::PhysicsParticleRegister<AgoraGalaxy>::getParticleTypeName(quokka::ParticleType::CIC));
+		std::string particleType_plotfile_name = quokka::PhysicsParticleRegister<AgoraGalaxy>::getParticleTypeName(quokka::ParticleType::CIC);
+		// NOTE: PC->Restart currently only works if max_levels is the same or less than before
+		CICParticles->Restart(plotfile_to_resample, particleType_plotfile_name);
 
-		// TODO(bwibking): split particles
-		// ...
+		// split particles
+		for (int lev = 0; lev < CICParticles->finestLevel(); ++lev) {
+			particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, particle_split_factor);
+		}
 	}
 }
 
