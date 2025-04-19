@@ -74,9 +74,13 @@ template <typename ContainerType, typename problem_t>
 void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
 		  int evolutionStageIndex, int birthTimeIndex)
 {
+	constexpr int stencil_size = 3;
+
+	static_assert(stencil_size <= 3,
+		      "stencil_size must be <= 3"); // stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
+
 	const amrex::Real step_end_time = time + dt;
-	const int stencil_size = SN_stencil_radius;
-	AMREX_ALWAYS_ASSERT(stencil_size <= 4);		 // stencil_size must be <= 4
+
 	const int particle_verbose_d = particle_verbose; // make a copy of the particle_verbose flag for device access
 
 	double RM_threshold = 1.0; // R_M factor = M_snr / M_sf

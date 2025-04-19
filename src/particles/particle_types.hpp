@@ -89,7 +89,6 @@ enum class SNScheme {
 // this header will refer to the same instance of these variables, rather than creating
 // their own copies.
 inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
-inline int SN_stencil_radius = 3;		       // NOLINT
 inline amrex::Real particle_param1 = -1.0;	       // NOLINT
 inline amrex::Real particle_param2 = -1.0;	       // NOLINT
 inline amrex::Real particle_param3 = -1.0;	       // NOLINT
@@ -290,8 +289,6 @@ inline void particleParmParse()
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
 	pp.query("param3", particle_param3);
-
-	pp.query("SN_stencil_radius", SN_stencil_radius);
 
 	// Handle SNScheme enum
 	int sn_scheme_int = static_cast<int>(SN_scheme);
