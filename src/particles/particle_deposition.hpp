@@ -77,22 +77,22 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	constexpr int stencil_size = 3;
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * stencil_size * stencil_size * stencil_size;
 	constexpr amrex::Real stencil_weights[4][4][4] = // NOLINT
-		{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
-		{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
-		{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
-		{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000}},
-		{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
-		{0.00884198143074, 0.00884198143074, 0.00861063982859, 0.00119306623841},
-		{0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
-		{0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000}},
-		{{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
-		{0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
-		{0.00596795726055, 0.00400459528385, 0.00045652034325, 0.00000000000000},
-		{0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000}},
-		{{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000},
-		{0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
-		{0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
-		{0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}};
+	    {{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
+	      {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
+	      {0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
+	      {0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000}},
+	     {{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
+	      {0.00884198143074, 0.00884198143074, 0.00861063982859, 0.00119306623841},
+	      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
+	      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000}},
+	     {{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
+	      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
+	      {0.00596795726055, 0.00400459528385, 0.00045652034325, 0.00000000000000},
+	      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000}},
+	     {{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000},
+	      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
+	      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
+	      {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}};
 
 	static_assert(stencil_size <= 3,
 		      "stencil_size must be <= 3"); // stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
@@ -175,9 +175,9 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 					const amrex::Real pmomentum = 0.0; // for testing: momentum = 0. TODO(cch): should be SNR_rho_per_cell * px
 
 					// Deposit mass evenly into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					for (int ii = - stencil_size; ii <= stencil_size; ++ii) {
-						for (int jj = - stencil_size; jj <= stencil_size; ++jj) {
-							for (int kk = - stencil_size; kk <= stencil_size; ++kk) {
+					for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
+						for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
+							for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
 								const int iii = std::abs(ii);
 								const int jjj = std::abs(jj);
 								const int kkk = std::abs(kk);
@@ -185,16 +185,20 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 								const amrex::Real SNR_rho_per_cell = m_ej * vol_inverse * kernel;
 								const amrex::Real SNR_energy_per_cell = E_blast * vol_inverse * kernel;
 								amrex::Gpu::Atomic::AddNoRet(
-									&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index), SNR_rho_per_cell);
+								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index),
+								    SNR_rho_per_cell);
 								amrex::Gpu::Atomic::AddNoRet(
-									&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x1Momentum_index), pmomentum);
+								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x1Momentum_index),
+								    pmomentum);
 								amrex::Gpu::Atomic::AddNoRet(
-									&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x2Momentum_index), pmomentum);
+								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x2Momentum_index),
+								    pmomentum);
 								amrex::Gpu::Atomic::AddNoRet(
-									&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x3Momentum_index), pmomentum);
+								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x3Momentum_index),
+								    pmomentum);
 								amrex::Gpu::Atomic::AddNoRet(
-									&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
-									SNR_energy_per_cell);
+								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
+								    SNR_energy_per_cell);
 							}
 						}
 					}
@@ -275,16 +279,16 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 								const double delta_e_i = e_snr_per_cell + SN_kin_energy_per_cell;
 								AMREX_ALWAYS_ASSERT(delta_e_i >= 0.0);
 
+								amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index),
+											     delta_rho_i);
 								amrex::Gpu::Atomic::AddNoRet(
-										&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index), delta_rho_i);
+								    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), dpx);
 								amrex::Gpu::Atomic::AddNoRet(
-										&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), dpx);
+								    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), dpy);
 								amrex::Gpu::Atomic::AddNoRet(
-										&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), dpy);
-								amrex::Gpu::Atomic::AddNoRet(
-										&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
-								amrex::Gpu::Atomic::AddNoRet(
-										&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), delta_e_i);
+								    &local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
+								amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index),
+											     delta_e_i);
 							}
 						}
 					}
@@ -440,11 +444,12 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 				// Check if this is a supernova progenitor
 				bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
-			// Update the particle's evolution stage if it's time
-			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
-				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
-			}
-		});
+				// Update the particle's evolution stage if it's time
+				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
+					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+				}
+			});
+		}
 	}
 }
 
