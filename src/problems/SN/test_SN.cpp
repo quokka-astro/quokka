@@ -35,8 +35,8 @@ const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 const double year = 3.15576e+07; // in seconds
 
-static double n_amb = 1.0;	 // ambient density (g cm^-3)
-static double T_amb = 100.0;	 // ambient temperature (K)
+static double n_amb = 1.0;    // ambient density (g cm^-3)
+static double T_amb = 100.0;  // ambient temperature (K)
 static double t_stop = 3.0e5; // stop time (yr)
 
 template <> struct Particle_Traits<SNProblem> {
@@ -111,41 +111,6 @@ template <> void QuokkaSimulation<SNProblem>::computeAfterTimestep()
 	const double max_internal_energy_density = state_new_cc_[0].max(HydroSystem<SNProblem>::internalEnergy_index);
 	max_Eint_global = std::max(max_Eint_global, max_internal_energy_density);
 }
-
-// template <> void QuokkaSimulation<SNProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-// {
-// 	// tag cells for refinement
-
-// 	const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
-// 	const amrex::Real P_min = 1.0e-3;      // minimum pressure for refinement
-
-// 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-// 		const amrex::Box &box = mfi.validbox();
-// 		const auto state = state_new_cc_[lev].const_array(mfi);
-// 		const auto tag = tags.array(mfi);
-
-// 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-// 			amrex::Real const P = HydroSystem<SNProblem>::ComputePressure(state, i, j, k);
-
-// 			amrex::Real const P_xplus = HydroSystem<SNProblem>::ComputePressure(state, i + 1, j, k);
-// 			amrex::Real const P_xminus = HydroSystem<SNProblem>::ComputePressure(state, i - 1, j, k);
-// 			amrex::Real const P_yplus = HydroSystem<SNProblem>::ComputePressure(state, i, j + 1, k);
-// 			amrex::Real const P_yminus = HydroSystem<SNProblem>::ComputePressure(state, i, j - 1, k);
-// 			amrex::Real const P_zplus = HydroSystem<SNProblem>::ComputePressure(state, i, j, k + 1);
-// 			amrex::Real const P_zminus = HydroSystem<SNProblem>::ComputePressure(state, i, j, k - 1);
-
-// 			amrex::Real const del_x = std::max(std::abs(P_xplus - P), std::abs(P - P_xminus));
-// 			amrex::Real const del_y = std::max(std::abs(P_yplus - P), std::abs(P - P_yminus));
-// 			amrex::Real const del_z = std::max(std::abs(P_zplus - P), std::abs(P - P_zminus));
-
-// 			amrex::Real const gradient_indicator = std::max({del_x, del_y, del_z}) / P;
-
-// 			if ((gradient_indicator > eta_threshold) && (P > P_min)) {
-// 				tag(i, j, k) = amrex::TagBox::SET;
-// 			}
-// 		});
-// 	}
-// }
 
 auto problem_main() -> int
 {
