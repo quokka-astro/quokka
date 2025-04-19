@@ -30,8 +30,6 @@
 #include "radiation/planck_integral.hpp"
 #include "util/valarray.hpp"
 
-using Real = amrex::Real;
-
 // Hyper parameters for the radiation solver
 static constexpr bool add_line_cooling_to_radiation_in_jac = false;
 static constexpr bool include_delta_B = true;
