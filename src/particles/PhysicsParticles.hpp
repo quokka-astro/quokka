@@ -507,7 +507,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							p_new.idata(ic) = p_old.idata(ic);
 						}
 						// set new particle properties
-						p_new.id() = cpu_id;
+						p_new.cpu() = cpu_id;
+						p_new.id() = pid + idx * splitFactor + idx_new;
 						p_new.pos(0) = x0 + dx[0] * amrex::Random(rng);
 						p_new.pos(1) = y0 + dx[1] * amrex::Random(rng);
 						p_new.pos(2) = z0 + dx[2] * amrex::Random(rng);
