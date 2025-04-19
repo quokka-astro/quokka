@@ -153,8 +153,8 @@ enum class FillPatchType { fillpatch_class, fillpatch_function };
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
       public:
-	Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
-	Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
+	Real maxDt_ = std::numeric_limits<Real>::max();  // no limit by default
+	Real initDt_ = std::numeric_limits<Real>::max(); // no limit by default
 	Real constantDt_ = 0.0;
 	amrex::Vector<int> istep;	      // which step?
 	amrex::Vector<int> nsubsteps;	      // how many substeps on each level?
@@ -964,8 +964,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	int last_projection_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
-	double next_plot_file_time = plotTimeInterval_;
-	double next_chk_file_time = checkpointTimeInterval_;
+	Real next_plot_file_time = plotTimeInterval_;
+	Real next_chk_file_time = checkpointTimeInterval_;
 	int last_chk_file_step = 0;
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 
@@ -1144,8 +1144,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	// compute zone-cycles/sec
 	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
-	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
-	const double megaupdates_per_second = 1.0 / microseconds_per_update;
+	const Real microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
+	const Real megaupdates_per_second = 1.0 / microseconds_per_update;
 	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
 	for (int lev = 0; lev <= max_level; ++lev) {
 		amrex::Print() << "Zone-updates on level " << lev << ": " << cellUpdatesEachLevel_[lev] << "\n";
@@ -2469,7 +2469,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AscentCustomActions
 	scenes["s1/renders/r1/image_prefix"] = "render_density%05d";
 
 	// set camera position
-	amrex::Array<double, 3> position = {-0.6, -0.6, -0.8};
+	amrex::Array<Real, 3> position = {-0.6, -0.6, -0.8};
 	scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
 
 	// setup actions
