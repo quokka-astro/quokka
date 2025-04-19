@@ -47,16 +47,16 @@ static const bool PPL_free_slope_st_total = false; // PPL with free slopes for a
 
 // Time integration scheme
 // IMEX PD-ARS
-static constexpr double IMEX_a22 = 1.0;
-static constexpr double IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
+static constexpr Real IMEX_a22 = 1.0;
+static constexpr Real IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
 // SSP-RK2 + implicit radiation-matter exchange
-// static constexpr double IMEX_a22 = 0.0;
-// static constexpr double IMEX_a32 = 0.0;
+// static constexpr Real IMEX_a22 = 0.0;
+// static constexpr Real IMEX_a32 = 0.0;
 
 // physical constants in CGS units
-static constexpr double c_light_cgs_ = C::c_light;	    // cgs
-static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
-static constexpr double inf = std::numeric_limits<double>::max();
+static constexpr Real c_light_cgs_ = C::c_light;	    // cgs
+static constexpr Real radiation_constant_cgs_ = C::a_rad; // cgs
+static constexpr Real inf = std::numeric_limits<Real>::max();
 
 // enum for opacity_model
 enum class OpacityModel {
@@ -70,11 +70,11 @@ enum class OpacityModel {
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct RadSystem_Traits {
-	static constexpr double c_hat_over_c = 1.0;
-	static constexpr double Erad_floor = 0.;
-	static constexpr double energy_unit = C::ev2erg;
-	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
-	static constexpr double beta_order = 1;
+	static constexpr Real c_hat_over_c = 1.0;
+	static constexpr Real Erad_floor = 0.;
+	static constexpr Real energy_unit = C::ev2erg;
+	static constexpr amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
+	static constexpr Real beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 };
 
@@ -83,60 +83,60 @@ template <typename problem_t> struct RadSystem_Traits {
 template <typename problem_t> struct ISM_Traits {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr Real gas_dust_coupling_threshold = 1.0e-6;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
 struct RadPressureResult {
-	quokka::valarray<double, 4> F; // components of radiation pressure tensor
-	double S;		       // maximum wavespeed for the radiation system
+	quokka::valarray<Real, 4> F; // components of radiation pressure tensor
+	Real S;		       // maximum wavespeed for the radiation system
 };
 
 // A struct to hold the opacity terms for the radiation-matter energy exchange, containing the following elements:
 // kappaE, kappaP, kappaF, kappaPoverE, delta_nu_kappa_B_at_edge, alpha_P, alpha_E
 template <typename problem_t> struct OpacityTerms {
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaE;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaP;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaF;
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> kappaPoverE;
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa * B)
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_P;
-	amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups> alpha_E;
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> kappaE;
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> kappaP;
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> kappaF;
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> kappaPoverE;
+	amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups> delta_nu_kappa_B_at_edge; // Delta (nu * kappa * B)
+	amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups> alpha_P;
+	amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups> alpha_E;
 };
 
 // A struct to hold the results of the Newton-Raphson iteration for energy update, containing the following elements:
 // Egas, T_gas, T_d, EradVec, work, opacity_terms
 template <typename problem_t> struct NewtonIterationResult {
-	double Egas;							      // gas internal energy
-	double T_gas;							      // gas temperature
-	double T_d;							      // dust temperature
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> work;    // work term
+	Real Egas;							      // gas internal energy
+	Real T_gas;							      // gas temperature
+	Real T_d;							      // dust temperature
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> EradVec; // radiation energy density
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> work;    // work term
 	OpacityTerms<problem_t> opacity_terms;
 };
 
 // A struct to hold the results of ComputeJacobian functions, containing the following elements:
 // J00, F0, Fg_abs_sum, J0g, Jg0, Jgg, Fg
 template <typename problem_t> struct JacobianResult {
-	double J00;	   // (0, 0) component of the Jacobian matrix
-	double F0;	   // (0) component of the residual
-	double Fg_abs_sum; // sum of the absolute values of the (g) components of the residual, g = 1, 2, ..., nGroups, and tau(g) > 0
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> J0g; // (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg0; // (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jgg; // (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Jg1; // (g, 1) components of the Jacobian matrix, g = 1, 2, ..., nGroups
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
+	Real J00;	   // (0, 0) component of the Jacobian matrix
+	Real F0;	   // (0) component of the residual
+	Real Fg_abs_sum; // sum of the absolute values of the (g) components of the residual, g = 1, 2, ..., nGroups, and tau(g) > 0
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> J0g; // (0, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> Jg0; // (g, 0) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> Jgg; // (g, g) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> Jg1; // (g, 1) components of the Jacobian matrix, g = 1, 2, ..., nGroups
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
 };
 
 // A struct to hold the results of UpdateFlux(), containing the following elements:
 // Erad, gasMomentum, Frad
 template <typename problem_t> struct FluxUpdateResult {
-	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad;			   // radiation energy density
-	amrex::GpuArray<double, 3> gasMomentum;							   // gas momentum
+	quokka::valarray<Real, Physics_Traits<problem_t>::nGroups> Erad;			   // radiation energy density
+	amrex::GpuArray<Real, 3> gasMomentum;							   // gas momentum
 	amrex::GpuArray<amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups>, 3> Frad; // radiation flux
 };
 
-[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
+[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(Real a, Real b) -> Real
 {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 }
@@ -154,7 +154,7 @@ struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Tra
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
 {
       public:
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(Real a, Real b) -> Real
 	{
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
@@ -197,9 +197,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 			return c_light_cgs_ / (Physics_Traits<problem_t>::unit_length / Physics_Traits<problem_t>::unit_time);
 		}
 	}();
-	static constexpr double c_hat_ = c_light_ * RadSystem_Traits<problem_t>::c_hat_over_c;
+	static constexpr Real c_hat_ = c_light_ * RadSystem_Traits<problem_t>::c_hat_over_c;
 
-	static constexpr double radiation_constant_ = []() constexpr {
+	static constexpr Real radiation_constant_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
 			return C::a_rad;
 		} else if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CONSTANTS) {
@@ -219,16 +219,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
-	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
+	static constexpr amrex::GpuArray<Real, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
 		} else {
-			amrex::GpuArray<double, 2> boundaries{0., inf};
+			amrex::GpuArray<Real, 2> boundaries{0., inf};
 			return boundaries;
 		}
 	}();
 
-	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
+	static constexpr Real Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
 
 	static constexpr OpacityModel opacity_model_ = []() constexpr {
 		if constexpr (RadSystem_Has_Opacity_Model<problem_t>::value) {
@@ -246,8 +246,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
 
-	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
+	static constexpr Real mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+	static constexpr Real gamma_ = quokka::EOS_Traits<problem_t>::gamma;
 
 	static constexpr Real boltzmann_constant_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
@@ -268,12 +268,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ConservedToPrimitive(amrex::Array4<const Real> const &cons, array_t &primVar, amrex::Box const &indexRange);
 
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
+				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, Real dt_in,
 				amrex::GpuArray<Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrayOld,
-				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
+				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, Real dt_in,
 				 amrex::GpuArray<Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
@@ -285,14 +285,14 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi,
 				       Real time);
 
-	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
-						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
+	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, Real dt,
+						Real gas_update_factor, Real Ekin0) -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt, int stage,
-					     double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
+					     Real dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt, int stage,
-					      double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
+					      Real dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -300,170 +300,170 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <typename ArrayType>
 	AMREX_GPU_DEVICE static auto ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(Real f) -> Real;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeNumberDensityH(double rho, amrex::GpuArray<Real, nmscalars_> const &massScalars) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeNumberDensityH(Real rho, amrex::GpuArray<Real, nmscalars_> const &massScalars) -> Real;
 
 	// Used for single-group RHD only. Not used for multi-group RHD.
-	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> Real;
-	AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacity(double rho, double Tgas) -> Real;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEnergyMeanOpacity(double rho, double Tgas) -> Real;
+	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(Real rho, Real Tgas) -> Real;
+	AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacity(Real rho, Real Tgas) -> Real;
+	AMREX_GPU_HOST_DEVICE static auto ComputeEnergyMeanOpacity(Real rho, Real Tgas) -> Real;
 
 	// For multi-group RHD, use DefineOpacityExponentsAndLowerValues to define the opacities.
-	AMREX_GPU_HOST_DEVICE static auto DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double rho, double Tgas)
-	    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>;
+	AMREX_GPU_HOST_DEVICE static auto DefineOpacityExponentsAndLowerValues(amrex::GpuArray<Real, nGroups_ + 1> rad_boundaries, Real rho, Real Tgas)
+	    -> amrex::GpuArray<amrex::GpuArray<Real, nGroups_ + 1>, 2>;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const &kappa_expo_and_lower_value,
-								  amrex::GpuArray<double, nGroups_> const &radBoundaryRatios,
-								  amrex::GpuArray<double, nGroups_> const &alpha_quant) -> quokka::valarray<double, nGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto ComputeBinCenterOpacity(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries,
-								  amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value)
-	    -> quokka::valarray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<Real, nGroups_ + 1>, 2> const &kappa_expo_and_lower_value,
+								  amrex::GpuArray<Real, nGroups_> const &radBoundaryRatios,
+								  amrex::GpuArray<Real, nGroups_> const &alpha_quant) -> quokka::valarray<Real, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeBinCenterOpacity(amrex::GpuArray<Real, nGroups_ + 1> rad_boundaries,
+								  amrex::GpuArray<amrex::GpuArray<Real, nGroups_ + 1>, 2> kappa_expo_and_lower_value)
+	    -> quokka::valarray<Real, nGroups_>;
 	// AMREX_GPU_HOST_DEVICE static auto
-	// ComputeGroupMeanOpacityWithMinusOneSlope(amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value,
-	// 					 amrex::GpuArray<double, nGroups_> radBoundaryRatios) -> quokka::valarray<double, nGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
-	AMREX_GPU_HOST_DEVICE static auto PlanckFunction(double nu, double T) -> double;
+	// ComputeGroupMeanOpacityWithMinusOneSlope(amrex::GpuArray<amrex::GpuArray<Real, nGroups_ + 1>, 2> kappa_expo_and_lower_value,
+	// 					 amrex::GpuArray<Real, nGroups_> radBoundaryRatios) -> quokka::valarray<Real, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(Real density, Real X1GasMom, Real X2GasMom, Real X3GasMom, Real Etot) -> Real;
+	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(Real density, Real X1GasMom, Real X2GasMom, Real X3GasMom, Real Eint) -> Real;
+	AMREX_GPU_HOST_DEVICE static auto PlanckFunction(Real nu, Real T) -> Real;
 	AMREX_GPU_HOST_DEVICE static auto
-	ComputeDiffusionFluxMeanOpacity(quokka::valarray<double, nGroups_> kappaPVec, quokka::valarray<double, nGroups_> kappaEVec,
-					quokka::valarray<double, nGroups_> fourPiBoverC, amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge,
-					amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge, amrex::GpuArray<double, nGroups_ + 1> kappa_slope)
-	    -> quokka::valarray<double, nGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto ComputeFluxInDiffusionLimit(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double T, double vel)
-	    -> amrex::GpuArray<double, nGroups_>;
+	ComputeDiffusionFluxMeanOpacity(quokka::valarray<Real, nGroups_> kappaPVec, quokka::valarray<Real, nGroups_> kappaEVec,
+					quokka::valarray<Real, nGroups_> fourPiBoverC, amrex::GpuArray<Real, nGroups_> delta_nu_kappa_B_at_edge,
+					amrex::GpuArray<Real, nGroups_> delta_nu_B_at_edge, amrex::GpuArray<Real, nGroups_ + 1> kappa_slope)
+	    -> quokka::valarray<Real, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeFluxInDiffusionLimit(amrex::GpuArray<Real, nGroups_ + 1> rad_boundaries, Real T, Real vel)
+	    -> amrex::GpuArray<Real, nGroups_>;
 
 	template <typename ArrayType>
-	AMREX_GPU_HOST_DEVICE static auto ComputeRadQuantityExponents(ArrayType const &quant, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-	    -> amrex::GpuArray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeRadQuantityExponents(ArrayType const &quant, amrex::GpuArray<Real, nGroups_ + 1> const &boundaries)
+	    -> amrex::GpuArray<Real, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static void SolveLinearEqs(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi);
+	AMREX_GPU_HOST_DEVICE static void SolveLinearEqs(JacobianResult<problem_t> const &jacobian, Real &x0, quokka::valarray<Real, nGroups_> &xi);
 
-	AMREX_GPU_HOST_DEVICE static void SolveLinearEqsWithLastColumn(JacobianResult<problem_t> const &jacobian, double &x0,
-								       quokka::valarray<double, nGroups_> &xi);
+	AMREX_GPU_HOST_DEVICE static void SolveLinearEqsWithLastColumn(JacobianResult<problem_t> const &jacobian, Real &x0,
+								       quokka::valarray<Real, nGroups_> &xi);
 
-	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21,
-							 double C22, double Y0, double Y1, double Y2) -> std::tuple<Real, Real, Real>;
+	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(Real C00, Real C01, Real C02, Real C10, Real C11, Real C12, Real C20, Real C21,
+							 Real C22, Real Y0, Real Y1, Real Y2) -> std::tuple<Real, Real, Real>;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, Real temperature)
+	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<Real, nGroups_ + 1> const &boundaries, Real temperature)
 	    -> quokka::valarray<Real, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationSingleGroup(Real temperature) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationSingleGroup(Real temperature) -> Real;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationMultiGroup(Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationMultiGroup(Real temperature, amrex::GpuArray<Real, nGroups_ + 1> const &boundaries)
 	    -> quokka::valarray<Real, nGroups_>;
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeSingleGroup(Real temperature) -> Real;
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeMultiGroup(Real temperature,
-											  amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+											  amrex::GpuArray<Real, nGroups_ + 1> const &boundaries)
 	    -> quokka::valarray<Real, nGroups_>;
 
 	template <typename RHSFunction, typename JacFunction>
-	AMREX_GPU_DEVICE static auto BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, double x0, double compare) -> double;
+	AMREX_GPU_DEVICE static auto BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, Real x0, Real compare) -> Real;
 
 	AMREX_GPU_DEVICE static auto
-	ComputeDustTemperatureBateKeto(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
-				       double R_sum, int n_step,
-				       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{}) -> double;
+	ComputeDustTemperatureBateKeto(Real T_gas, Real T_d_init, Real rho, quokka::valarray<Real, nGroups_> const &Erad, Real N_d, Real dt,
+				       Real R_sum, int n_step,
+				       amrex::GpuArray<Real, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<Real, nGroups_ + 1>{}) -> Real;
 
 	AMREX_GPU_DEVICE static auto
-	ComputeDustTemperatureGasOnly(double T_gas, double T_d_init, double rho, quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt,
-				      double R_sum, int n_step,
-				      amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
-				      amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
+	ComputeDustTemperatureGasOnly(Real T_gas, Real T_d_init, Real rho, quokka::valarray<Real, nGroups_> const &Erad, Real N_d, Real dt,
+				      Real R_sum, int n_step,
+				      amrex::GpuArray<Real, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<Real, nGroups_ + 1>{},
+				      amrex::GpuArray<Real, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<Real, nGroups_>{}) -> Real;
 
 	AMREX_GPU_HOST_DEVICE static auto DefinePhotoelectricHeatingE1Derivative(Real temperature, Real num_density) -> Real;
 
 	AMREX_GPU_HOST_DEVICE static auto DefineBackgroundHeatingRate(Real num_density) -> Real;
 
-	AMREX_GPU_HOST_DEVICE static auto DefineNetCoolingRate(Real temperature, Real num_density) -> quokka::valarray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto DefineNetCoolingRate(Real temperature, Real num_density) -> quokka::valarray<Real, nGroups_>;
 
 	AMREX_GPU_HOST_DEVICE static auto DefineNetCoolingRateTempDerivative(Real temperature, Real num_density)
-	    -> quokka::valarray<double, nGroups_>;
+	    -> quokka::valarray<Real, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto DefineCosmicRayHeatingRate(Real num_density) -> double;
+	AMREX_GPU_HOST_DEVICE static auto DefineCosmicRayHeatingRate(Real num_density) -> Real;
 
-	AMREX_GPU_DEVICE static void ComputeModelDependentKappaFAndDeltaTerms(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-									      quokka::valarray<double, nGroups_> const &fourPiBoverC,
+	AMREX_GPU_DEVICE static void ComputeModelDependentKappaFAndDeltaTerms(Real T, Real rho, amrex::GpuArray<Real, nGroups_ + 1> const &rad_boundaries,
+									      quokka::valarray<Real, nGroups_> const &fourPiBoverC,
 									      OpacityTerms<problem_t> &opacity_terms);
 
-	AMREX_GPU_DEVICE static auto ComputeModelDependentKappaEAndKappaP(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-									  amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
-									  quokka::valarray<double, nGroups_> const &fourPiBoverC,
-									  quokka::valarray<double, nGroups_> const &Erad, int n_iter,
-									  amrex::GpuArray<double, nGroups_> const &alpha_E = {},
-									  amrex::GpuArray<double, nGroups_> const &alpha_P = {}) -> OpacityTerms<problem_t>;
+	AMREX_GPU_DEVICE static auto ComputeModelDependentKappaEAndKappaP(Real T, Real rho, amrex::GpuArray<Real, nGroups_ + 1> const &rad_boundaries,
+									  amrex::GpuArray<Real, nGroups_> const &rad_boundary_ratios,
+									  quokka::valarray<Real, nGroups_> const &fourPiBoverC,
+									  quokka::valarray<Real, nGroups_> const &Erad, int n_iter,
+									  amrex::GpuArray<Real, nGroups_> const &alpha_E = {},
+									  amrex::GpuArray<Real, nGroups_> const &alpha_P = {}) -> OpacityTerms<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGas(double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
-							   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-							   quokka::valarray<double, nGroups_> const &tau, double c_v,
-							   quokka::valarray<double, nGroups_> const &kappaPoverE,
-							   quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt)
+	AMREX_GPU_DEVICE static auto ComputeJacobianForGas(Real T_d, Real Egas_diff, quokka::valarray<Real, nGroups_> const &Erad_diff,
+							   quokka::valarray<Real, nGroups_> const &Rvec, quokka::valarray<Real, nGroups_> const &Src,
+							   quokka::valarray<Real, nGroups_> const &tau, Real c_v,
+							   quokka::valarray<Real, nGroups_> const &kappaPoverE,
+							   quokka::valarray<Real, nGroups_> const &d_fourpiboverc_d_t, Real num_den, Real dt)
 	    -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff,
-								  quokka::valarray<double, nGroups_> const &Erad_diff,
-								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
-								  double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
-								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt)
+	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDust(Real T_gas, Real T_d, Real Egas_diff,
+								  quokka::valarray<Real, nGroups_> const &Erad_diff,
+								  quokka::valarray<Real, nGroups_> const &Rvec, quokka::valarray<Real, nGroups_> const &Src,
+								  Real coeff_n, quokka::valarray<Real, nGroups_> const &tau, Real c_v,
+								  Real lambda_gd_time_dt, quokka::valarray<Real, nGroups_> const &kappaPoverE,
+								  quokka::valarray<Real, nGroups_> const &d_fourpiboverc_d_t, Real num_den, Real dt)
 	    -> JacobianResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustDecoupled(
-	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
-	    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
-	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+	    Real T_gas, Real T_d, Real Egas_diff, quokka::valarray<Real, nGroups_> const &Erad_diff, quokka::valarray<Real, nGroups_> const &Rvec,
+	    quokka::valarray<Real, nGroups_> const &Src, Real coeff_n, quokka::valarray<Real, nGroups_> const &tau, Real c_v, Real lambda_gd_time_dt,
+	    quokka::valarray<Real, nGroups_> const &kappaPoverE, quokka::valarray<Real, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustWithPE(
-	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0,
-	    double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
-	    quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
-	    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt) -> JacobianResult<problem_t>;
+	    Real T_gas, Real T_d, Real Egas_diff, quokka::valarray<Real, nGroups_> const &Erad, quokka::valarray<Real, nGroups_> const &Erad0,
+	    Real PE_heating_energy_derivative, quokka::valarray<Real, nGroups_> const &Rvec, quokka::valarray<Real, nGroups_> const &Src, Real coeff_n,
+	    quokka::valarray<Real, nGroups_> const &tau, Real c_v, Real lambda_gd_time_dt, quokka::valarray<Real, nGroups_> const &kappaPoverE,
+	    quokka::valarray<Real, nGroups_> const &d_fourpiboverc_d_t, Real num_den, Real dt) -> JacobianResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto
-	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
-					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-					quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter)
+	SolveGasRadiationEnergyExchange(Real Egas0, quokka::valarray<Real, nGroups_> const &Erad0Vec, Real rho, Real dt,
+					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<Real, nGroups_> const &work,
+					quokka::valarray<Real, nGroups_> const &vel_times_F, quokka::valarray<Real, nGroups_> const &Src,
+					amrex::GpuArray<Real, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter)
 	    -> NewtonIterationResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
-									 double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
-									 int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-									 quokka::valarray<double, nGroups_> const &vel_times_F,
-									 quokka::valarray<double, nGroups_> const &Src,
-									 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
+	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchange(Real Egas0, quokka::valarray<Real, nGroups_> const &Erad0Vec, Real rho,
+									 Real coeff_n, Real dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
+									 int n_outer_iter, quokka::valarray<Real, nGroups_> const &work,
+									 quokka::valarray<Real, nGroups_> const &vel_times_F,
+									 quokka::valarray<Real, nGroups_> const &Src,
+									 amrex::GpuArray<Real, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
 									 int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto
-	SolveGasDustRadiationEnergyExchangeWithPE(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt,
+	SolveGasDustRadiationEnergyExchangeWithPE(Real Egas0, quokka::valarray<Real, nGroups_> const &Erad0Vec, Real rho, Real coeff_n, Real dt,
 						  amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter,
-						  quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F,
-						  quokka::valarray<double, nGroups_> const &Src, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+						  quokka::valarray<Real, nGroups_> const &work, quokka::valarray<Real, nGroups_> const &vel_times_F,
+						  quokka::valarray<Real, nGroups_> const &Src, amrex::GpuArray<Real, nGroups_ + 1> const &rad_boundaries,
 						  int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const Real, DIR> &consVar,
 							     amrex::GpuArray<Real, AMREX_SPACEDIM> dx, int i, int j, int k,
-							     const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
-	    -> quokka::valarray<double, nGroups_>;
+							     const amrex::GpuArray<Real, nGroups_ + 1> &group_boundaries)
+	    -> quokka::valarray<Real, nGroups_>;
 
 	AMREX_GPU_DEVICE static auto isStateValid(std::array<Real, nvarHyperbolic_> &cons) -> bool;
 
 	AMREX_GPU_DEVICE static void amendRadState(std::array<Real, nvarHyperbolic_> &cons);
 
 	template <FluxDir DIR>
-	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
+	AMREX_GPU_DEVICE static auto ComputeRadPressure(Real erad_L, Real Fx_L, Real Fy_L, Real Fz_L, Real fx_L, Real fy_L, Real fz_L)
 	    -> RadPressureResult;
 
-	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
+	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(Real fx_L, Real fy_L, Real fz_L) -> std::array<std::array<Real, 3>, 3>;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
 // This function enforces that the total fraction is 1.0, no matter what are the group boundaries
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, Real temperature)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<Real, nGroups_ + 1> const &boundaries, Real temperature)
     -> quokka::valarray<Real, nGroups_>
 {
 	quokka::valarray<Real, nGroups_> radEnergyFractions{};
@@ -494,7 +494,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(double rho, amrex::GpuArray<Real, nmscalars_> const & /*massScalars*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(Real rho, amrex::GpuArray<Real, nmscalars_> const & /*massScalars*/) -> Real
 {
 	return rho / mean_molecular_mass_;
 }
@@ -502,7 +502,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(double rh
 // define ComputeThermalRadiation for single-group, returns the thermal radiation power = a_r * T^4
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Real temperature) -> Real
 {
-	double power = radiation_constant_ * std::pow(temperature, 4);
+	Real power = radiation_constant_ * std::pow(temperature, 4);
 	// set floor
 	if (power < Erad_floor_) {
 		power = Erad_floor_;
@@ -513,10 +513,10 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 // define ComputeThermalRadiationMultiGroup, returns the thermal radiation power for each photon group. = a_r * T^4 * radEnergyFractions
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGroup(Real temperature,
-										   amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+										   amrex::GpuArray<Real, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<Real, nGroups_>
 {
-	const double power = radiation_constant_ * std::pow(temperature, 4);
+	const Real power = radiation_constant_ * std::pow(temperature, 4);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	auto Erad_g = power * radEnergyFractions;
 	// set floor
@@ -536,12 +536,12 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeMultiGroup(Real temperature,
-												 amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+												 amrex::GpuArray<Real, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<Real, nGroups_>
 {
 	// by default, d emission/dT = 4 emission / T
 	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	double d_power_dt = 4. * radiation_constant_ * std::pow(temperature, 3);
+	Real d_power_dt = 4. * radiation_constant_ * std::pow(temperature, 3);
 	return d_power_dt * radEnergyFractions;
 }
 
@@ -554,9 +554,9 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::D
 // Define the net cooling rate (line cooling + heating) for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRate(Real const /*temperature*/, Real const /*num_density*/)
-    -> quokka::valarray<double, nGroups_>
+    -> quokka::valarray<Real, nGroups_>
 {
-	quokka::valarray<double, nGroups_> cooling{};
+	quokka::valarray<Real, nGroups_> cooling{};
 	cooling.fillin(0.0);
 	return cooling;
 }
@@ -564,14 +564,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRate(Real const
 // Define the derivative of the net cooling rate with respect to temperature for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1 K^-1
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRateTempDerivative(Real const /*temperature*/, Real const /*num_density*/)
-    -> quokka::valarray<double, nGroups_>
+    -> quokka::valarray<Real, nGroups_>
 {
-	quokka::valarray<double, nGroups_> cooling{};
+	quokka::valarray<Real, nGroups_> cooling{};
 	cooling.fillin(0.0);
 	return cooling;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineCosmicRayHeatingRate(Real const /*num_density*/) -> double
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineCosmicRayHeatingRate(Real const /*num_density*/) -> Real
 {
 	return 0.0;
 }
@@ -582,7 +582,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::D
 //   [Jg0 Jgg] [xg] - [Fg] = 0
 // for x0 and xg, where g = 1, 2, ..., nGroups
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(JacobianResult<problem_t> const &jacobian, Real &x0, quokka::valarray<Real, nGroups_> &xi)
 {
 	auto ratios = jacobian.J0g / jacobian.Jgg;
 	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
@@ -590,9 +590,9 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(JacobianResult<p
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00, const double C01, const double C02, const double C10, const double C11,
-								const double C12, const double C20, const double C21, const double C22, const double Y0,
-								const double Y1, const double Y2) -> std::tuple<Real, Real, Real>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const Real C00, const Real C01, const Real C02, const Real C10, const Real C11,
+								const Real C12, const Real C20, const Real C21, const Real C22, const Real Y0,
+								const Real Y1, const Real Y2) -> std::tuple<Real, Real, Real>
 {
 	// Solve the 3x3 matrix equation: C * X = Y under the assumption that only the diagonal terms
 	// are guaranteed to be non-zero and are thus allowed to be divided by.
@@ -650,7 +650,7 @@ void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const Real> const
 {
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double signal_max = c_hat_;
+		const Real signal_max = c_hat_;
 		maxSignal(i, j, k) = signal_max;
 	});
 }
@@ -698,7 +698,7 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 
 template <typename problem_t>
 void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-				       amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const double dt_in,
+				       amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const Real dt_in,
 				       amrex::GpuArray<Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
@@ -745,7 +745,7 @@ template <typename problem_t>
 void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArrayOld*/,
-					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const double dt_in,
+					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const Real dt_in,
 					amrex::GpuArray<Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
@@ -774,17 +774,17 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 		// y^n+1 = (1 - a32) y^n + a32 y^(2) + dt * (0.5 - a32) * s(y^n) + dt * 0.5 * s(y^(2)) + dt * (1 - a32) * f(y^n+1)          // the last term is
 		// implicit and not used here
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
-			const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
-			const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
-			const double FxU_0 = (dt / dx) * (x1FluxOld(i, j, k, n) - x1FluxOld(i + 1, j, k, n));
-			const double FxU_1 = (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
+			const Real U_0 = U0(i, j, k, nstartHyperbolic_ + n);
+			const Real U_1 = U1(i, j, k, nstartHyperbolic_ + n);
+			const Real FxU_0 = (dt / dx) * (x1FluxOld(i, j, k, n) - x1FluxOld(i + 1, j, k, n));
+			const Real FxU_1 = (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
-			const double FyU_0 = (dt / dy) * (x2FluxOld(i, j, k, n) - x2FluxOld(i, j + 1, k, n));
-			const double FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
+			const Real FyU_0 = (dt / dy) * (x2FluxOld(i, j, k, n) - x2FluxOld(i, j + 1, k, n));
+			const Real FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
 #endif
 #if (AMREX_SPACEDIM == 3)
-			const double FzU_0 = (dt / dz) * (x3FluxOld(i, j, k, n) - x3FluxOld(i, j, k + 1, n));
-			const double FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
+			const Real FzU_0 = (dt / dz) * (x3FluxOld(i, j, k, n) - x3FluxOld(i, j, k + 1, n));
+			const Real FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
 			// save results in cons_new
 			cons_new[n] = (1.0 - IMEX_a32) * U_0 + IMEX_a32 * U_1 + ((0.5 - IMEX_a32) * (AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))) +
@@ -802,20 +802,20 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 	});
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(Real f_in) -> Real
 {
 	// f is the reduced flux == |F|/cE.
 	// compute Levermore (1984) closure [Eq. 25]
 	// the is the M1 closure that is derived from Lorentz invariance
-	const double f = clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
-	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
-	const double chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
+	const Real f = clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
+	const Real f_fac = std::sqrt(4.0 - 3.0 * (f * f));
+	const Real chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
 
 #if 0 // NOLINT
       // compute Minerbo (1978) closure [piecewise approximation]
       // (For unknown reasons, this closure tends to work better
       // than the Levermore/Lorentz closure on the Su & Olson 1997 test.)
-	const double chi = (f < 1. / 3.) ? (1. / 3.) : (0.5 - f + 1.5 * f*f);
+	const Real chi = (f < 1. / 3.) ? (1. / 3.) : (0.5 - f + 1.5 * f*f);
 #endif
 
 	return chi;
@@ -836,8 +836,8 @@ template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const Real, DIR> &consVar,
 								    amrex::GpuArray<Real, AMREX_SPACEDIM> dx, int i, int j, int k,
-								    const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
-    -> quokka::valarray<double, nGroups_>
+								    const amrex::GpuArray<Real, nGroups_ + 1> &group_boundaries)
+    -> quokka::valarray<Real, nGroups_>
 {
 	// compute interface-averaged cell optical depth
 
@@ -847,28 +847,28 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	// interface at the *left* edge of zone i.]
 
 	// piecewise-constant reconstruction
-	const double rho_L = consVar(i - 1, j, k, gasDensity_index);
-	const double rho_R = consVar(i, j, k, gasDensity_index);
+	const Real rho_L = consVar(i - 1, j, k, gasDensity_index);
+	const Real rho_R = consVar(i, j, k, gasDensity_index);
 
-	const double x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
-	const double x1GasMom_R = consVar(i, j, k, x1GasMomentum_index);
+	const Real x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
+	const Real x1GasMom_R = consVar(i, j, k, x1GasMomentum_index);
 
-	const double x2GasMom_L = consVar(i - 1, j, k, x2GasMomentum_index);
-	const double x2GasMom_R = consVar(i, j, k, x2GasMomentum_index);
+	const Real x2GasMom_L = consVar(i - 1, j, k, x2GasMomentum_index);
+	const Real x2GasMom_R = consVar(i, j, k, x2GasMomentum_index);
 
-	const double x3GasMom_L = consVar(i - 1, j, k, x3GasMomentum_index);
-	const double x3GasMom_R = consVar(i, j, k, x3GasMomentum_index);
+	const Real x3GasMom_L = consVar(i - 1, j, k, x3GasMomentum_index);
+	const Real x3GasMom_R = consVar(i, j, k, x3GasMomentum_index);
 
-	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
-	const double Egas_R = consVar(i, j, k, gasEnergy_index);
+	const Real Egas_L = consVar(i - 1, j, k, gasEnergy_index);
+	const Real Egas_R = consVar(i, j, k, gasEnergy_index);
 
 	auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(consVar, i - 1, j, k);
 	auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(consVar, i, j, k);
 
-	double Eint_L = NAN;
-	double Eint_R = NAN;
-	double Tgas_L = NAN;
-	double Tgas_R = NAN;
+	Real Eint_L = NAN;
+	Real Eint_R = NAN;
+	Real Tgas_L = NAN;
+	Real Tgas_R = NAN;
 
 	if constexpr (gamma_ != 1.0) {
 		Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
@@ -877,7 +877,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R, massScalars_R);
 	}
 
-	double dl = NAN;
+	Real dl = NAN;
 	if constexpr (DIR == FluxDir::X1) {
 		dl = dx[0];
 	} else if constexpr (DIR == FluxDir::X2) {
@@ -886,10 +886,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 		dl = dx[2];
 	}
 
-	quokka::valarray<double, nGroups_> optical_depths{};
+	quokka::valarray<Real, nGroups_> optical_depths{};
 	if constexpr (nGroups_ == 1) {
-		const double tau_L = dl * rho_L * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_L, Tgas_L);
-		const double tau_R = dl * rho_R * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_R, Tgas_R);
+		const Real tau_L = dl * rho_L * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_L, Tgas_L);
+		const Real tau_R = dl * rho_R * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_R, Tgas_R);
 		optical_depths[0] = (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean. Alternative: 0.5*(tau_L + tau_R)
 	} else {
 		const auto opacity_L = DefineOpacityExponentsAndLowerValues(group_boundaries, rho_L, Tgas_L);
@@ -903,7 +903,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double fx, const double fy, const double fz) -> std::array<std::array<double, 3>, 3>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const Real fx, const Real fy, const Real fz) -> std::array<std::array<Real, 3>, 3>
 {
 	// Compute the radiation pressure tensor
 
@@ -923,23 +923,23 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	}
 
 	// compute radiation pressure tensors
-	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
+	const Real chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
 
 	AMREX_ASSERT((chi >= 1. / 3.) && (chi <= 1.0)); // NOLINT
 
 	// diagonal term of Eddington tensor
-	const double Tdiag = (1.0 - chi) / 2.0;
+	const Real Tdiag = (1.0 - chi) / 2.0;
 
 	// anisotropic term of Eddington tensor (in the direction of the
 	// rad. flux)
-	const double Tf = (3.0 * chi - 1.0) / 2.0;
+	const Real Tf = (3.0 * chi - 1.0) / 2.0;
 
 	// assemble Eddington tensor
-	std::array<std::array<double, 3>, 3> T{};
+	std::array<std::array<Real, 3>, 3> T{};
 
 	for (int ii = 0; ii < 3; ++ii) {
 		for (int jj = 0; jj < 3; ++jj) {
-			const double delta_ij = (ii == jj) ? 1 : 0;
+			const Real delta_ij = (ii == jj) ? 1 : 0;
 			T[ii][jj] = Tdiag * delta_ij + Tf * (n[ii] * n[jj]);
 		}
 	}
@@ -949,8 +949,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
-							       const double fy, const double fz) -> RadPressureResult
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const Real erad, const Real Fx, const Real Fy, const Real Fz, const Real fx,
+							       const Real fy, const Real fz) -> RadPressureResult
 {
 	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct.
 
@@ -962,7 +962,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	// frozen Eddington tensor approximation, following Balsara
 	// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
-	double Tnormal = NAN;
+	Real Tnormal = NAN;
 	if constexpr (DIR == FluxDir::X1) {
 		Tnormal = T[0][0];
 	} else if constexpr (DIR == FluxDir::X2) {
@@ -975,10 +975,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 	// T_nx, T_ny, T_nz indicate components where 'n' is the direction of the
 	// face normal. F_n is the radiation flux component in the direction of the
 	// face normal
-	double Fn = NAN;
-	double Tnx = NAN;
-	double Tny = NAN;
-	double Tnz = NAN;
+	Real Fn = NAN;
+	Real Tnx = NAN;
+	Real Tny = NAN;
+	Real Tnz = NAN;
 
 	if constexpr (DIR == FluxDir::X1) {
 		Fn = Fx;
@@ -1038,7 +1038,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
+		amrex::GpuArray<Real, nGroups_ + 1> radBoundaries_g_copy{};
 		for (int g = 0; g < nGroups_ + 1; ++g) {
 			radBoundaries_g_copy[g] = radBoundaries_g[g];
 		}
@@ -1048,38 +1048,38 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// calculate cell optical depth for each photon group
 		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
-		quokka::valarray<double, nGroups_> tau_cell{};
+		quokka::valarray<Real, nGroups_> tau_cell{};
 		if (use_wavespeed_correction) {
 			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, radBoundaries_g_copy);
 		}
 
 		// gather left- and right- state variables
 		for (int g = 0; g < nGroups_; ++g) {
-			double erad_L = x1LeftState(i, j, k, primRadEnergy_index + numRadVars_ * g);
-			double erad_R = x1RightState(i, j, k, primRadEnergy_index + numRadVars_ * g);
+			Real erad_L = x1LeftState(i, j, k, primRadEnergy_index + numRadVars_ * g);
+			Real erad_R = x1RightState(i, j, k, primRadEnergy_index + numRadVars_ * g);
 
-			double fx_L = x1LeftState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
-			double fx_R = x1RightState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
+			Real fx_L = x1LeftState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
+			Real fx_R = x1RightState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
 
-			double fy_L = x1LeftState(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
-			double fy_R = x1RightState(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+			Real fy_L = x1LeftState(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+			Real fy_R = x1RightState(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
 
-			double fz_L = x1LeftState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
-			double fz_R = x1RightState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+			Real fz_L = x1LeftState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+			Real fz_R = x1RightState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
 
 			// compute scalar reduced flux f
-			double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
-			double f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
+			Real f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+			Real f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
 
 			// Compute "un-reduced" Fx, Fy, Fz
-			double Fx_L = fx_L * (c_light_ * erad_L);
-			double Fx_R = fx_R * (c_light_ * erad_R);
+			Real Fx_L = fx_L * (c_light_ * erad_L);
+			Real Fx_R = fx_R * (c_light_ * erad_R);
 
-			double Fy_L = fy_L * (c_light_ * erad_L);
-			double Fy_R = fy_R * (c_light_ * erad_R);
+			Real Fy_L = fy_L * (c_light_ * erad_L);
+			Real Fy_R = fy_R * (c_light_ * erad_R);
 
-			double Fz_L = fz_L * (c_light_ * erad_L);
-			double Fz_R = fz_R * (c_light_ * erad_R);
+			Real Fz_L = fz_L * (c_light_ * erad_L);
+			Real Fz_R = fz_R * (c_light_ * erad_R);
 
 			// check that states are physically admissible; if not, use first-order
 			// reconstruction
@@ -1125,17 +1125,17 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			S_L *= c_hat_;
 			S_R *= c_hat_;
 
-			const quokka::valarray<double, numRadVars_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
-			const quokka::valarray<double, numRadVars_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
+			const quokka::valarray<Real, numRadVars_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
+			const quokka::valarray<Real, numRadVars_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
 			// Adjusting wavespeeds is no longer necessary with the IMEX PD-ARS scheme.
 			// Read more in https://github.com/quokka-astro/quokka/pull/582
 			// However, we let the user optionally apply it to reduce odd-even instability.
-			quokka::valarray<double, numRadVars_> epsilon = {1.0, 1.0, 1.0, 1.0};
+			quokka::valarray<Real, numRadVars_> epsilon = {1.0, 1.0, 1.0, 1.0};
 			if (use_wavespeed_correction) {
 				// no correction for odd zones
 				if ((i + j + k) % 2 == 0) {
-					const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
+					const Real S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
 					epsilon = {S_corr, 1.0, 1.0, 1.0};			// Skinner et al. (2019)
 				}
 			}
@@ -1145,7 +1145,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// in the frozen Eddington tensor approximation, we are always
 			// in the star region, so F = F_star
-			const quokka::valarray<double, numRadVars_> F =
+			const quokka::valarray<Real, numRadVars_> F =
 			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
 			// check states are valid
@@ -1159,7 +1159,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			x1Flux(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[2];
 			x1Flux(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[3];
 
-			const quokka::valarray<double, numRadVars_> diffusiveF =
+			const quokka::valarray<Real, numRadVars_> diffusiveF =
 			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
 			x1FluxDiffusive(i, j, k, radEnergy_index + numRadVars_ * g - nstartHyperbolic_) = diffusiveF[0];
@@ -1170,27 +1170,27 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 	});
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacity(const Real /*rho*/, const Real /*Tgas*/) -> Real
 {
 	return NAN;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxMeanOpacity(const Real rho, const Real Tgas) -> Real
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEnergyMeanOpacity(const double rho, const double Tgas) -> Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEnergyMeanOpacity(const Real rho, const Real Tgas) -> Real
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/,
-										      const double /*rho*/, const double /*Tgas*/)
-    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<Real, nGroups_ + 1> /*rad_boundaries*/,
+										      const Real /*rho*/, const Real /*Tgas*/)
+    -> amrex::GpuArray<amrex::GpuArray<Real, nGroups_ + 1>, 2>
 {
-	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	amrex::GpuArray<amrex::GpuArray<Real, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int g = 0; g < nGroups_ + 1; ++g) {
 		exponents_and_values[0][g] = NAN;
 		exponents_and_values[1][g] = NAN;
@@ -1200,16 +1200,16 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponentsAndLowerV
 
 template <typename problem_t>
 template <typename ArrayType>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRadQuantityExponents(ArrayType const &quant, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-    -> amrex::GpuArray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRadQuantityExponents(ArrayType const &quant, amrex::GpuArray<Real, nGroups_ + 1> const &boundaries)
+    -> amrex::GpuArray<Real, nGroups_>
 {
 	// Compute the exponents for the radiation energy density, radiation flux, radiation pressure, or Planck function.
 
 	// Note: Could save some memory by using bin_center_previous and bin_center_current
-	amrex::GpuArray<double, nGroups_> bin_center{};
-	amrex::GpuArray<double, nGroups_> quant_mean{};
-	amrex::GpuArray<double, nGroups_ - 1> logslopes{};
-	amrex::GpuArray<double, nGroups_> exponents{};
+	amrex::GpuArray<Real, nGroups_> bin_center{};
+	amrex::GpuArray<Real, nGroups_> quant_mean{};
+	amrex::GpuArray<Real, nGroups_ - 1> logslopes{};
+	amrex::GpuArray<Real, nGroups_> exponents{};
 	for (int g = 0; g < nGroups_; ++g) {
 		bin_center[g] = std::sqrt(boundaries[g] * boundaries[g + 1]);
 		quant_mean[g] = quant[g] / (boundaries[g + 1] - boundaries[g]);
@@ -1262,8 +1262,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRadQuantityExponents(Arr
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(peak_idx < nGroups_ - 1,
 						 "Peak index not found. Here peak_index is the index at which the exponent changes its sign.");
-		double quant_sum = 0.0;
-		double part_sum = 0.0;
+		Real quant_sum = 0.0;
+		Real part_sum = 0.0;
 		for (int g = 0; g < nGroups_; ++g) {
 			quant_sum += quant[g];
 			if (g == peak_idx) {
@@ -1281,16 +1281,16 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRadQuantityExponents(Arr
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto
-RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const &kappa_expo_and_lower_value,
-					      amrex::GpuArray<double, nGroups_> const &radBoundaryRatios, amrex::GpuArray<double, nGroups_> const &alpha_quant)
-    -> quokka::valarray<double, nGroups_>
+RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<Real, nGroups_ + 1>, 2> const &kappa_expo_and_lower_value,
+					      amrex::GpuArray<Real, nGroups_> const &radBoundaryRatios, amrex::GpuArray<Real, nGroups_> const &alpha_quant)
+    -> quokka::valarray<Real, nGroups_>
 {
-	amrex::GpuArray<double, nGroups_ + 1> const &alpha_kappa = kappa_expo_and_lower_value[0];
-	amrex::GpuArray<double, nGroups_ + 1> const &kappa_lower = kappa_expo_and_lower_value[1];
+	amrex::GpuArray<Real, nGroups_ + 1> const &alpha_kappa = kappa_expo_and_lower_value[0];
+	amrex::GpuArray<Real, nGroups_ + 1> const &kappa_lower = kappa_expo_and_lower_value[1];
 
-	quokka::valarray<double, nGroups_> kappa{};
+	quokka::valarray<Real, nGroups_> kappa{};
 	for (int g = 0; g < nGroups_; ++g) {
-		double alpha = alpha_quant[g] + 1.0;
+		Real alpha = alpha_quant[g] + 1.0;
 		if (alpha > 100.) {
 			kappa[g] = kappa_lower[g] * std::pow(radBoundaryRatios[g], kappa_expo_and_lower_value[0][g]);
 			continue;
@@ -1299,14 +1299,14 @@ RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<do
 			kappa[g] = kappa_lower[g];
 			continue;
 		}
-		double part1 = 0.0;
+		Real part1 = 0.0;
 		if (std::abs(alpha) < 1e-8) {
 			part1 = std::log(radBoundaryRatios[g]);
 		} else {
 			part1 = (std::pow(radBoundaryRatios[g], alpha) - 1.0) / alpha;
 		}
 		alpha += alpha_kappa[g];
-		double part2 = 0.0;
+		Real part2 = 0.0;
 		if (std::abs(alpha) < 1e-8) {
 			part2 = std::log(radBoundaryRatios[g]);
 		} else {
@@ -1319,35 +1319,35 @@ RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<do
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
-								     const double Etot) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const Real density, const Real X1GasMom, const Real X2GasMom, const Real X3GasMom,
+								     const Real Etot) -> Real
 {
-	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
-	const double Ekin = p_sq / (2.0 * density);
-	const double Eint = Etot - Ekin;
+	const Real p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
+	const Real Ekin = p_sq / (2.0 * density);
+	const Real Eint = Etot - Ekin;
 	AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
 	return Eint;
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
-								     const double Eint) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const Real density, const Real X1GasMom, const Real X2GasMom, const Real X3GasMom,
+								     const Real Eint) -> Real
 {
-	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
-	const double Ekin = p_sq / (2.0 * density);
-	const double Etot = Eint + Ekin;
+	const Real p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
+	const Real Ekin = p_sq / (2.0 * density);
+	const Real Etot = Eint + Ekin;
 	return Etot;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::PlanckFunction(const double nu, const double T) -> double
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::PlanckFunction(const Real nu, const Real T) -> Real
 {
 	// returns 4 pi B(nu) / c
-	double const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
-	double const x = coeff * nu;
+	Real const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
+	Real const x = coeff * nu;
 	if (x > 100.) {
 		return 0.0;
 	}
-	double planck_integral = NAN;
+	Real planck_integral = NAN;
 	if (x <= 1.0e-10) {
 		// Taylor series
 		planck_integral = x * x - x * x * x / 2.;
@@ -1358,15 +1358,15 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::P
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDiffusionFluxMeanOpacity(const quokka::valarray<double, nGroups_> kappaPVec,
-										 const quokka::valarray<double, nGroups_> kappaEVec,
-										 const quokka::valarray<double, nGroups_> fourPiBoverC,
-										 const amrex::GpuArray<double, nGroups_> delta_nu_kappa_B_at_edge,
-										 const amrex::GpuArray<double, nGroups_> delta_nu_B_at_edge,
-										 const amrex::GpuArray<double, nGroups_ + 1> kappa_slope)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDiffusionFluxMeanOpacity(const quokka::valarray<Real, nGroups_> kappaPVec,
+										 const quokka::valarray<Real, nGroups_> kappaEVec,
+										 const quokka::valarray<Real, nGroups_> fourPiBoverC,
+										 const amrex::GpuArray<Real, nGroups_> delta_nu_kappa_B_at_edge,
+										 const amrex::GpuArray<Real, nGroups_> delta_nu_B_at_edge,
+										 const amrex::GpuArray<Real, nGroups_ + 1> kappa_slope)
+    -> quokka::valarray<Real, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaF{};
+	quokka::valarray<Real, nGroups_> kappaF{};
 	for (int g = 0; g < nGroups_; ++g) {
 		// kappaF[g] = 4. / 3. * kappaPVec[g] * fourPiBoverC[g] + 1. / 3. * kappa_slope[g] * kappaPVec[g] * fourPiBoverC[g] - 1. / 3. *
 		// delta_nu_kappa_B_at_edge[g];
@@ -1384,11 +1384,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeDiffusionFluxMeanOpacity
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeBinCenterOpacity(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries,
-									 amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeBinCenterOpacity(amrex::GpuArray<Real, nGroups_ + 1> rad_boundaries,
+									 amrex::GpuArray<amrex::GpuArray<Real, nGroups_ + 1>, 2> kappa_expo_and_lower_value)
+    -> quokka::valarray<Real, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappa_center{};
+	quokka::valarray<Real, nGroups_> kappa_center{};
 	for (int g = 0; g < nGroups_; ++g) {
 		kappa_center[g] =
 		    kappa_expo_and_lower_value[1][g] * std::pow(rad_boundaries[g + 1] / rad_boundaries[g], 0.5 * kappa_expo_and_lower_value[0][g]);
@@ -1397,12 +1397,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeBinCenterOpacity(amrex::
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(const amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, const double T,
-									     const double vel) -> amrex::GpuArray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(const amrex::GpuArray<Real, nGroups_ + 1> rad_boundaries, const Real T,
+									     const Real vel) -> amrex::GpuArray<Real, nGroups_>
 {
-	double const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
-	amrex::GpuArray<double, nGroups_ + 1> edge_values{};
-	amrex::GpuArray<double, nGroups_> flux{};
+	Real const coeff = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * T);
+	amrex::GpuArray<Real, nGroups_ + 1> edge_values{};
+	amrex::GpuArray<Real, nGroups_> flux{};
 	for (int g = 0; g < nGroups_ + 1; ++g) {
 		auto x = coeff * rad_boundaries[g];
 		edge_values[g] = 4. / 3. * integrate_planck_from_0_to_x(x) - 1. / 3. * x * (std::pow(x, 3) / (std::exp(x) - 1.0)) / gInf;
@@ -1417,12 +1417,12 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxInDiffusionLimit(con
 
 template <typename problem_t>
 template <typename RHSFunction, typename JacFunction>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, const double x0, const double compare)
-    -> double
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, const Real x0, const Real compare)
+    -> Real
 {
-	double x = x0;
-	const double rel_tol = 1.0e-8;
-	const double rel_change_tol = 1.0e-6;
+	Real x = x0;
+	const Real rel_tol = 1.0e-8;
+	const Real rel_change_tol = 1.0e-6;
 	const int max_iter_td = 100;
 	int iter_Td = 0;
 	for (; iter_Td < max_iter_td; ++iter_Td) {
@@ -1431,7 +1431,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 			break;
 		}
 
-		const double dT = -the_rhs / jac(x);
+		const Real dT = -the_rhs / jac(x);
 		x += dT;
 
 		if (iter_Td > 0) {
@@ -1450,9 +1450,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::BackwardEulerOneVariable(RHSFunction
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(double const T_gas, double const T_d_init, double const rho,
-									   quokka::valarray<double, nGroups_> const &Erad, double N_d, double dt, double R_sum,
-									   int n_step, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries) -> double
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(Real const T_gas, Real const T_d_init, Real const rho,
+									   quokka::valarray<Real, nGroups_> const &Erad, Real N_d, Real dt, Real R_sum,
+									   int n_step, amrex::GpuArray<Real, nGroups_ + 1> const &rad_boundaries) -> Real
 {
 	if (n_step > 0) {
 		const auto T_d = T_gas - R_sum / (N_d * std::sqrt(T_gas));
@@ -1460,7 +1460,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return T_d;
 	}
 
-	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
+	amrex::GpuArray<Real, nGroups_> rad_boundary_ratios{};
 
 	if constexpr (nGroups_ > 1 && opacity_model_ != OpacityModel::piecewise_constant_opacity) {
 		for (int g = 0; g < nGroups_; ++g) {
@@ -1469,8 +1469,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	}
 
 	// the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d)
-	auto rhs = [=](double T_d) -> double {
-		double LHS = NAN;
+	auto rhs = [=](Real T_d) -> Real {
+		Real LHS = NAN;
 
 		if constexpr (nGroups_ == 1) {
 			const auto fourPiBoverC = ComputeThermalRadiationSingleGroup(T_d);
@@ -1488,8 +1488,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	};
 
 	// the Jacobian of the RHS of the equation 0 = c_hat_ dt rho (kappa_E * E_g - kappa_P * B_g) + N_d sqrt(T_gas) (T_gas - T_d)
-	auto jac = [=](double T_d) -> double {
-		double dLHS_dTd = NAN;
+	auto jac = [=](Real T_d) -> Real {
+		Real dLHS_dTd = NAN;
 
 		if constexpr (nGroups_ == 1) {
 			const auto kappaP = ComputePlanckOpacity(rho, T_d);
@@ -1505,7 +1505,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 		return dLHS_dTd;
 	};
 
-	const double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
+	const Real Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
 
 	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
 	AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
