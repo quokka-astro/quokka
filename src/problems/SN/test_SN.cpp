@@ -1,15 +1,9 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file test_SN.cpp
 /// \brief Defines a test problem for supernova feedback.
 ///
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
@@ -19,7 +13,6 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
-#include "radiation/radiation_system.hpp"
 
 struct SNProblem {
 };

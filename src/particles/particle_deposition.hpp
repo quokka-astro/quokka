@@ -5,7 +5,6 @@
 #include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
-#include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
@@ -440,7 +439,6 @@ void updateEvolutionStage(ContainerType *container, int lev, amrex::Real step_en
 			bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 			// Update the particle's evolution stage if it's time
-
 			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
 				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
 			}
