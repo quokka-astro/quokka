@@ -419,7 +419,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
 template <typename ContainerType>
-void updateEvolutionStage(ContainerType *container, int lev, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
+void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
 {
 	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
 		return;
@@ -427,16 +427,17 @@ void updateEvolutionStage(ContainerType *container, int lev, amrex::Real step_en
 
 	const double SN_time = particle_param2;
 
-	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
-		const amrex::Long np = pti.numParticles();
+	for (int lev = lev_min; lev <= container->finestLevel(); ++lev) {
+		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+			auto &particles = pti.GetArrayOfStructs();
+			auto *pData = particles().data();
+			const amrex::Long np = pti.numParticles();
 
-		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
-			// Check if this is a supernova progenitor
-			bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+				// Check if this is a supernova progenitor
+				bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 			// Update the particle's evolution stage if it's time
 			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
