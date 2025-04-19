@@ -15,6 +15,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "hydro/hydro_system.hpp"
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
@@ -568,7 +569,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 
 				// Get the units data for this particle type
-				const auto &unitsData = quokka::get_units_data();
+				const auto &unitsData = get_units_data();
 				if (unitsData.find(particleType_) == unitsData.end()) {
 					amrex::Abort(
 					    "Error: Particle type not defined in units data map. Please add units for this particle type in get_units_data().");
