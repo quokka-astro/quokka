@@ -220,12 +220,10 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 						// keep f_factor = 1.0
 					}
 
-#if 0
-					// log RM and f_factor, for debugging on CPU.
-					if (particle_verbose) {
-						printf("SNR logging -- RM: %.2e, f_factor: %.2e\n", RM, f_factor);
-					}
-#endif
+					// // log RM and f_factor, for debugging on CPU.
+					// if (particle_verbose) {
+					// 	printf("SNR logging -- RM: %.2e, f_factor: %.2e\n", RM, f_factor);
+					// }
 
 					for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 						for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
@@ -393,19 +391,17 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 				local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 				local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
 
-#if 0
-				// log the state, for debugging on CPU.
-				if (d_rho / rho > 1.0e-12) {
-					// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
-					// e_tot_new
-					printf("original: rho = %e, px = %e, py = %e, pz = %e, e_int = %e, e_tot = %e\n", rho, px, py, pz, e_int, e_tot);
-					printf("new: rho_new = %e, px_new = %e, py_new = %e, pz_new = %e, e_int_new = %e, e_tot_new = %e\n", rho_new, px_new,
-					       py_new, pz_new, e_int_new, e_tot_new);
-					// print d e_int / d e_tot
-					printf("d e_int / d e_tot = %e\n", (e_int_new - e_int) / (e_tot_new - e_tot));
-					printf("e_int / rho = %e, e_int_new / rho_new = %e\n", e_int / rho, e_int_new / rho_new);
-				}
-#endif
+				// // log the state, for debugging on CPU.
+				// if (d_rho / rho > 1.0e-12) {
+				// 	// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
+				// 	// e_tot_new
+				// 	printf("original: rho = %e, px = %e, py = %e, pz = %e, e_int = %e, e_tot = %e\n", rho, px, py, pz, e_int, e_tot);
+				// 	printf("new: rho_new = %e, px_new = %e, py_new = %e, pz_new = %e, e_int_new = %e, e_tot_new = %e\n", rho_new, px_new,
+				// 	       py_new, pz_new, e_int_new, e_tot_new);
+				// 	// print d e_int / d e_tot
+				// 	printf("d e_int / d e_tot = %e\n", (e_int_new - e_int) / (e_tot_new - e_tot));
+				// 	printf("e_int / rho = %e, e_int_new / rho_new = %e\n", e_int / rho, e_int_new / rho_new);
+				// }
 			}
 		});
 	}

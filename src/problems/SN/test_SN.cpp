@@ -124,10 +124,10 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-#if 0 // periodic boundaries
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-#else // octant symmetry
+			// // periodic boundaries
+			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			// octant symmetry
 			if (isNormalComp(n, i)) {
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
 				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
@@ -135,7 +135,6 @@ auto problem_main() -> int
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
 				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
 			}
-#endif
 		}
 	}
 
