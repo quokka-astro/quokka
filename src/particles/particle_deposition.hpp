@@ -128,7 +128,6 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 		const auto plo = geom.ProbLoArray();
 		const auto dxi = geom.InvCellSizeArray();
 		const auto dx = geom.CellSizeArray();
-		const double stencil_radius = stencil_size * dx[0];
 
 		// Calculate inverse cell volume
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
@@ -150,10 +149,6 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 				int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 				int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 				int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
-
-				if (particle_verbose_d) {
-					printf("SNR logging -- stencil_size: %d, RM_threshold: %.2e\n", stencil_size, RM_threshold);
-				}
 
 				amrex::Real avg_density = 0.0;
 				for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
@@ -231,10 +226,13 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 					} else if (SN_scheme == SNScheme::SN_pure_kinetic_or_thermal_momentum) {
 						// keep f_factor = 1.0
 					}
-					// log RM and f_factor
+
+#if 0
+					// log RM and f_factor, for debugging on CPU.
 					if (particle_verbose_d) {
 						printf("SNR logging -- RM: %.2e, f_factor: %.2e\n", RM, f_factor);
 					}
+#endif
 
 					for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 						for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
@@ -380,10 +378,6 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 					AMREX_ASSERT(lambda >= 0.0);
 					AMREX_ASSERT(lambda <= 1.0);
 
-					if (particle_verbose_d) {
-						printf("SNR logging -- lambda = %.2e\n", lambda);
-					}
-
 					// assert that lambda is a valid solution
 					AMREX_ASSERT_WITH_MESSAGE(
 					    std::abs((0.5 *
@@ -406,6 +400,8 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 				local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 				local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
 
+#if 0
+				// log the state, for debugging on CPU.
 				if (particle_verbose_d && d_rho / rho > 1.0e-12) {
 					// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
 					// e_tot_new
@@ -416,6 +412,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 					printf("d e_int / d e_tot = %e\n", (e_int_new - e_int) / (e_tot_new - e_tot));
 					printf("e_int / rho = %e, e_int_new / rho_new = %e\n", e_int / rho, e_int_new / rho_new);
 				}
+#endif
 			}
 		});
 	}

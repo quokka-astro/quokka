@@ -17,9 +17,9 @@
 struct SNProblem {
 };
 
-static double max_Eint_global = 0.0;
+static double max_Eint_global = 0.0; // NOLINT
 
-static std::string SN_particles_file = "SN_particles.txt";
+static std::string SN_particles_file = "SN_particles.txt"; // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
 // constexpr double mu = 1.295 * C::m_u; // neutral gas
@@ -28,9 +28,9 @@ const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 const double year = 3.15576e+07; // in seconds
 
-static double n_amb = 1.0;    // ambient density (g cm^-3)
-static double T_amb = 100.0;  // ambient temperature (K)
-static double t_stop = 3.0e5; // stop time (yr)
+static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
+static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
+static double t_stop = 3.0e5; // stop time (yr) // NOLINT
 
 template <> struct Particle_Traits<SNProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -124,18 +124,18 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if constexpr (false) { // periodic boundaries
-				BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-				BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			} else { // octant symmetry
-				if (isNormalComp(n, i)) {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-				} else {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-				}
+#if 0 // periodic boundaries
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+#else // octant symmetry
+			if (isNormalComp(n, i)) {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+			} else {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
 			}
+#endif
 		}
 	}
 
