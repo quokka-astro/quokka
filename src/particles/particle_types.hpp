@@ -80,9 +80,9 @@ enum class ParticleType {
 // is included in multiple source files. It ensures that all translation units that include
 // this header will refer to the same instance of these variables, rather than creating
 // their own copies.
-inline amrex::Real particle_param1 = -1.0; // NOLINT
-inline amrex::Real particle_param2 = -1.0; // NOLINT
-inline amrex::Real particle_param3 = -1.0; // NOLINT
+inline Real particle_param1 = -1.0; // NOLINT
+inline Real particle_param2 = -1.0; // NOLINT
+inline Real particle_param3 = -1.0; // NOLINT
 inline int particle_verbose = 0;	   // NOLINT print particle logistics
 
 //-------------------- Radiation particles --------------------

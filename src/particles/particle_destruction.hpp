@@ -11,7 +11,7 @@ namespace ParticleDestructionImpl
 {
 // Common implementation of particle destruction logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType>
-static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev_min, amrex::Real current_time, amrex::Real dt, int birth_time_index,
+static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev_min, Real current_time, Real dt, int birth_time_index,
 				 int evolution_stage_index)
 {
 	if (container != nullptr) {
@@ -72,7 +72,7 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 		}
 
 		template <typename ParticleType>
-		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
+		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, Real current_time, Real dt) const -> bool
 		{
 			// Default implementation: destroy particles with mass < 1.0
 			amrex::ignore_unused(p, mass_idx, current_time, dt);
@@ -82,7 +82,7 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 
 	// Main method to destroy particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void destroyParticles(ContainerType *container, int mass_idx, int lev_min, amrex::Real current_time, amrex::Real dt, int birth_time_index,
+	static void destroyParticles(ContainerType *container, int mass_idx, int lev_min, Real current_time, Real dt, int birth_time_index,
 				     int evolution_stage_index)
 	{
 		// Use the common implementation with our checker type

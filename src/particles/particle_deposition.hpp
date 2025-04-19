@@ -16,7 +16,7 @@ namespace quokka
 
 // Functor for depositing radiation energy from particles onto the grid
 struct RadDeposition {
-	double current_time{}; // Current simulation time
+	Real current_time{}; // Current simulation time
 	int start_part_comp{}; // Starting component in particle data
 	int start_mesh_comp{}; // Starting component in mesh data
 	int num_comp{};	       // Number of components to deposit
@@ -24,9 +24,9 @@ struct RadDeposition {
 
 	// Operator to perform radiation deposition using linear interpolation
 	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &radEnergySource,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<Real> const &radEnergySource,
+							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit radiation energy only if particle is active
@@ -46,16 +46,16 @@ struct RadDeposition {
 
 // Functor for depositing particle mass onto the grid
 struct MassDeposition {
-	amrex::Real Gconst{};  // Gravitational constant
+	Real Gconst{};  // Gravitational constant
 	int start_part_comp{}; // Starting component in particle data
 	int start_mesh_comp{}; // Starting component in mesh data
 	int num_comp{};	       // Number of components to deposit
 
 	// Operator to perform mass deposition using linear interpolation
 	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &rho,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<Real> const &rho,
+							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit mass weighted by 4 pi G
@@ -72,12 +72,12 @@ struct MassDeposition {
 // to 5³ cells centered on the particle's cell. It is used for testing purposes.
 // Note: the deposition radius must be <= nghost_cc_
 struct SNDeposition {
-	double step_end_time{};	   // Current simulation time
+	Real step_end_time{};	   // Current simulation time
 	int start_part_comp{};	   // Starting component in particle data
 	int start_mesh_comp{};	   // Starting component in mesh data
 	int birthTimeIndex{};	   // Index for particle birth time
 	int evolutionStageIndex{}; // Index for particle evolution stage
-	double SN_time = particle_param2;
+	Real SN_time = particle_param2;
 
 	// For some unknown reason, stencil_width < 3 results in larger error in SNR mass when a particle is at the refinement boundary.
 	static constexpr int stencil_width = 3;
@@ -90,9 +90,9 @@ struct SNDeposition {
 
 	// Operator to perform supernova deposition using cloud-in-cell approach
 	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &state,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<Real> const &state,
+							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		// Check if the particle has an integer component for evolution stage
 		if constexpr (ContainerType::NInt > 0) {
@@ -110,12 +110,12 @@ struct SNDeposition {
 
 				// Calculate the volume factor for normalization (5³ cells)
 				const int num_cells = (2 * stencil_width + 1) * (2 * stencil_width + 1) * (2 * stencil_width + 1);
-				const amrex::Real vol_factor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])) / num_cells;
+				const Real vol_factor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])) / num_cells;
 
 				// Deposit evenly to 5³ cells centered on the particle's cell
-				const amrex::Real pdensity = p.rdata(start_part_comp) * vol_factor;
-				const amrex::Real penergy = pdensity; // for testing: energy = mass
-				const amrex::Real pmomentum = 0.0;    // for testing: momentum = 0
+				const Real pdensity = p.rdata(start_part_comp) * vol_factor;
+				const Real penergy = pdensity; // for testing: energy = mass
+				const Real pmomentum = 0.0;    // for testing: momentum = 0
 
 				for (int kk = -stencil_width; kk <= stencil_width; ++kk) {
 					for (int jj = -stencil_width; jj <= stencil_width; ++jj) {
@@ -145,13 +145,13 @@ struct SNDeposition {
 
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
 template <typename ContainerType>
-void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
+void updateEvolutionStage(ContainerType *container, int lev_min, Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
 {
 	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
 		return;
 	}
 
-	const double SN_time = particle_param2;
+	const Real SN_time = particle_param2;
 
 	for (int lev = lev_min; lev <= container->finestLevel(); ++lev) {
 		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
