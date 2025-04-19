@@ -8,6 +8,7 @@
 #include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
 #include "particles/particle_types.hpp"
+#include "physics_info.hpp"
 
 namespace quokka
 {
@@ -16,7 +17,7 @@ namespace quokka
 
 // Functor for depositing radiation energy from particles onto the grid
 struct RadDeposition {
-	Real current_time{}; // Current simulation time
+	Real current_time{};   // Current simulation time
 	int start_part_comp{}; // Starting component in particle data
 	int start_mesh_comp{}; // Starting component in mesh data
 	int num_comp{};	       // Number of components to deposit
@@ -46,7 +47,7 @@ struct RadDeposition {
 
 // Functor for depositing particle mass onto the grid
 struct MassDeposition {
-	Real Gconst{};  // Gravitational constant
+	Real Gconst{};	       // Gravitational constant
 	int start_part_comp{}; // Starting component in particle data
 	int start_mesh_comp{}; // Starting component in mesh data
 	int num_comp{};	       // Number of components to deposit

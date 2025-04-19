@@ -2,6 +2,7 @@
 #define PARTICLE_CREATION_HPP_
 
 #include "particle_types.hpp"
+#include "physics_info.hpp"
 
 namespace quokka
 {
@@ -115,8 +116,8 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+						 amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<Real, AMREX_SPACEDIM> const &plo,
+						 amrex::Long base_offset) const
 		{
 			// Default implementation does nothing
 			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset);

@@ -2,6 +2,7 @@
 #define PARTICLE_DESTRUCTION_HPP_
 
 #include "particle_types.hpp"
+#include "physics_info.hpp"
 
 namespace quokka
 {
@@ -71,8 +72,7 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 		{
 		}
 
-		template <typename ParticleType>
-		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, Real current_time, Real dt) const -> bool
+		template <typename ParticleType> AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, Real current_time, Real dt) const -> bool
 		{
 			// Default implementation: destroy particles with mass < 1.0
 			amrex::ignore_unused(p, mass_idx, current_time, dt);
