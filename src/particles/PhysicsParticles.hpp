@@ -72,7 +72,7 @@ class PhysicsParticleDescriptorBase
 
 	// Pure virtual methods that must be implemented by derived classes
 	[[nodiscard]] virtual auto isStarParticle() -> bool = 0;
-	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
+	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, Real current_time, int nGroups) = 0;
 
 	// Redistribute particles at level lev and above
 	virtual void redistribute(int lev) = 0;
@@ -96,25 +96,25 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
 #if AMREX_SPACEDIM == 3
-	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
+	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, Real Gconst) = 0;
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
-	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
+	virtual void driftParticles(int lev_min, int lev_max, Real dt) const = 0;
 
 	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
-	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
+	virtual void kickParticles(int lev, Real dt, amrex::MultiFab const &accel) = 0;
 
 	// Create particles from hydro state at the finest level
 	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call.
-	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
+	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, Real current_time, Real dt) const = 0;
 
 	// Destroy particles at level lev_min and above
-	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
+	virtual void destroyParticles(int lev_min, Real current_time, Real dt) = 0;
 
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
-	virtual void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) { /* Default empty implementation */ }
+	virtual void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, Real step_end_time) { /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -366,7 +366,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 #if AMREX_SPACEDIM == 3
 
 	// Implementation of mass deposition from particles to grid
-	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) override
+	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, Real Gconst) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			// zero_out_input is false because we want to accumulate mass
@@ -375,7 +375,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void driftParticles(int lev_min, int lev_max, amrex::Real dt) const override
+	void driftParticles(int lev_min, int lev_max, Real dt) const override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
@@ -403,7 +403,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Implementation of particle kick (velocity update based on acceleration)
-	void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) override
+	void kickParticles(int lev, Real dt, amrex::MultiFab const &accel) override
 	{
 		if (container_ != nullptr) {
 			const int mass_idx = this->getMassIndex(); // capture value instead of this pointer
@@ -429,7 +429,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
 							    return acc(i, j, k, comp); // no weighting
 						    },
-						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, Real acc_comp) {
 							    // kick particle by updating its velocity
 							    if (comp < ContainerType::ParticleType::NReal) {
 								    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
@@ -441,14 +441,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const override
+	void createParticlesFromState(amrex::MultiFab &state, int lev, Real current_time, Real dt) const override
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(
 		    container_, this->getMassIndex(), state, lev, current_time, dt, this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 	}
 
-	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) override
+	void destroyParticles(int lev_min, Real current_time, Real dt) override
 	{
 		if (container_ != nullptr) {
 			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
@@ -478,10 +478,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				    *container_, lev,
 				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> ResultType {
 					    // Compute velocity magnitude
-					    const amrex::Real vx = p_type.m_aos[i].rdata(mass_idx + 1);
-					    const amrex::Real vy = p_type.m_aos[i].rdata(mass_idx + 2);
-					    const amrex::Real vz = p_type.m_aos[i].rdata(mass_idx + 3);
-					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
+					    const Real vx = p_type.m_aos[i].rdata(mass_idx + 1);
+					    const Real vy = p_type.m_aos[i].rdata(mass_idx + 2);
+					    const Real vz = p_type.m_aos[i].rdata(mass_idx + 3);
+					    const Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
 					    const amrex::RealVect pos{p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2)};
 					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{std::sqrt(v2), pos};
 				    },
@@ -504,7 +504,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 #endif // AMREX_SPACEDIM == 3
 
 	// Implementation of radiation deposition from particles to grid
-	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
+	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, Real current_time, int nGroups) override
 	{
 		if (container_ != nullptr && this->getLumIndex() >= 0) {
 			amrex::ParticleToMesh(*container_, radEnergySource, lev,
@@ -635,7 +635,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 #if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
-	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) override
+	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, Real step_end_time) override
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
 			// Deposit supernova energy and momentum from level lev_min to finest level
@@ -760,7 +760,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit radiation from all luminous particles
-	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time)
+	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, Real current_time)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getLumIndex() >= 0) {
@@ -771,7 +771,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 #if AMREX_SPACEDIM == 3
 	// Deposit mass from all massive particles
-	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst)
+	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, Real Gconst)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
@@ -781,7 +781,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit supernova energy and momentum from all particles
-	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time)
+	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, Real step_end_time)
 	{
 		// this function is only implemented for particles that belong to the StarParticleDescriptor class whose unique signature is that the
 		// isStarParticle() method returns true
@@ -829,7 +829,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 #if AMREX_SPACEDIM == 3
 	// Update positions of all massive particles
-	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
+	void driftParticlesAllLevels(Real dt, int lev_max)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
@@ -839,7 +839,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Update velocities of all massive particles
-	void kickParticlesAtLevel(int lev, amrex::Real dt, amrex::MultiFab &accel)
+	void kickParticlesAtLevel(int lev, Real dt, amrex::MultiFab &accel)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
@@ -849,7 +849,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Create particles based on particle type
-	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	void createParticlesFromState(amrex::MultiFab &state, int lev, Real current_time, Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only create particles if the descriptor allows creation
@@ -864,7 +864,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Destroy particles based on particle type
-	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt)
+	void destroyParticles(int lev_min, Real current_time, Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only destroy particles if the descriptor allows destruction
