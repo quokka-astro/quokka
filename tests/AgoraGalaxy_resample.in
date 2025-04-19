@@ -61,4 +61,4 @@ agora_galaxy.halo_number_density = 1.0e-6   # cm^-3
 
 # resample existing plotfile
 agora_galaxy.plotfile_to_resample = "./coarse/plt00000"
-agora_galaxy.particle_split_factor = 1
+agora_galaxy.particle_split_factor = 8
