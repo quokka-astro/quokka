@@ -354,11 +354,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return {real_data, int_data}; // Empty vectors on non-root ranks
 	}
 
-	// Get the number of particles in the container
+	// Get the number of particles in the container on all levels
 	[[nodiscard]] auto getNumParticles() const -> int override
 	{
 		if (container_ != nullptr) {
-			return static_cast<int>(container_->TotalNumberOfParticles(true, false));
+			// only_valid=false: count invalid particles as well
+			// only_local=false: count particles on all ranks
+			return static_cast<int>(container_->TotalNumberOfParticles(false, false));
 		}
 		return 0;
 	}
