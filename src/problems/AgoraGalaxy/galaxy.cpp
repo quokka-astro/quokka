@@ -283,6 +283,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 	pp.query("plotfile_to_resample", plotfile_to_resample);
 	pp.query("particle_split_factor", particle_split_factor);
 
+	amrex::Print() << "\n";
 	if (plotfile_to_resample.empty()) {
 		// read particles from ASCII file
 		amrex::Print() << "Reading particles from ASCII file " << filename << "...\n";
@@ -294,14 +295,18 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 		amrex::Print() << "Reading particles from plotfile " << plotfile_to_resample << "...\n";
 		CICParticles->SetVerbose(1);
 		std::string const particleType_plotfile_name = quokka::PhysicsParticleRegister<AgoraGalaxy>::getParticleTypeName(quokka::ParticleType::CIC);
-		// NOTE: PC->Restart currently only works if max_levels is the same or less than before
 		CICParticles->Restart(plotfile_to_resample, particleType_plotfile_name);
-
+		for (int lev = 0; lev < CICParticles->finestLevel(); ++lev) {
+			amrex::Print() << "[Level " << lev << "] Number of valid particles: " << CICParticles->NumberOfParticlesAtLevel(lev) << "\n";
+			amrex::Print() << "[Level " << lev << "] Number of all particles: " << CICParticles->NumberOfParticlesAtLevel(lev, false) << "\n";
+		}
 		// split particles
 		for (int lev = 0; lev < CICParticles->finestLevel(); ++lev) {
+			amrex::Print() << "Splitting particles on level " << lev << "...\n";
 			particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, particle_split_factor);
 		}
 	}
+	amrex::Print() << "\n";
 }
 
 template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int level, amrex::Real time)
