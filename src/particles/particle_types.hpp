@@ -83,7 +83,7 @@ enum class ParticleType {
 inline Real particle_param1 = -1.0; // NOLINT
 inline Real particle_param2 = -1.0; // NOLINT
 inline Real particle_param3 = -1.0; // NOLINT
-inline int particle_verbose = 0;	   // NOLINT print particle logistics
+inline int particle_verbose = 0;    // NOLINT print particle logistics
 
 //-------------------- Radiation particles --------------------
 

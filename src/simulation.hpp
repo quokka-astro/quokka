@@ -153,18 +153,18 @@ enum class FillPatchType { fillpatch_class, fillpatch_function };
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
       public:
-	Real maxDt_ = std::numeric_limits<Real>::max();  // no limit by default
+	Real maxDt_ = std::numeric_limits<Real>::max();	 // no limit by default
 	Real initDt_ = std::numeric_limits<Real>::max(); // no limit by default
 	Real constantDt_ = 0.0;
-	amrex::Vector<int> istep;	      // which step?
-	amrex::Vector<int> nsubsteps;	      // how many substeps on each level?
-	amrex::Vector<amrex::Real> tNew_;     // for state_new_cc_
-	amrex::Vector<amrex::Real> tOld_;     // for state_old_cc_
-	amrex::Vector<amrex::Real> dt_;	      // timestep for each level
-	Real stopTime_ = 1.0;	      // default
-	Real cflNumber_ = 0.3;	      // default
-	Real particleCflNumber_ = 0.5; // default
-	Real dtToleranceFactor_ = 1.1; // default
+	amrex::Vector<int> istep;	  // which step?
+	amrex::Vector<int> nsubsteps;	  // how many substeps on each level?
+	amrex::Vector<amrex::Real> tNew_; // for state_new_cc_
+	amrex::Vector<amrex::Real> tOld_; // for state_old_cc_
+	amrex::Vector<amrex::Real> dt_;	  // timestep for each level
+	Real stopTime_ = 1.0;		  // default
+	Real cflNumber_ = 0.3;		  // default
+	Real particleCflNumber_ = 0.5;	  // default
+	Real dtToleranceFactor_ = 1.1;	  // default
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
 	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
@@ -173,17 +173,17 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int plotfileInterval_ = -1;				     // -1 == no output
 	int projectionInterval_ = -1;				     // -1 == no output
 	int statisticsInterval_ = -1;				     // -1 == no output
-	Real plotTimeInterval_ = -1.0;			     // time interval for plt file
-	Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
+	Real plotTimeInterval_ = -1.0;				     // time interval for plt file
+	Real checkpointTimeInterval_ = -1.0;			     // time interval for checkpoints
 	int checkpointInterval_ = -1;				     // -1 == no output
 	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
-	Real reltolPoisson_ = 1.0e-5;			     // default
-	Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
+	Real reltolPoisson_ = 1.0e-5;				     // default
+	Real abstolPoisson_ = 1.0e-5;				     // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;				     // 1 == self-gravity enabled, 0 == disabled
 	amrex::Vector<amrex::MultiFab> phi;
 
 	Real densityFloor_ = 0.0; // default
-	Real tempFloor_ = 0.0;	 // default
+	Real tempFloor_ = 0.0;	  // default
 
 	YAML::Node simulationMetadata_;
 
@@ -285,10 +285,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
 
 	template <typename PreInterpHook, typename PostInterpHook>
-	void FillPatchWithData(int lev, Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
-			       amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData, amrex::Vector<amrex::Real> &fineTime,
-			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, FillPatchType fptype,
-			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
+	void FillPatchWithData(int lev, Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData, amrex::Vector<amrex::Real> &coarseTime,
+			       amrex::Vector<amrex::MultiFab *> &fineData, amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp,
+			       amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, FillPatchType fptype, PreInterpHook const &pre_interp,
+			       PostInterpHook const &post_interp);
 
 	static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
 	virtual void FillPatch(int lev, Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -826,7 +826,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 	// compute maximum particle speed on level 'lev'
 	amrex::ValLocPair<Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(),
-								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+							    .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 #if AMREX_SPACEDIM == 3
 	if (particleRegister_.HasMassiveParticles()) {
 		const amrex::ValLocPair<Real, amrex::RealVect> max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
@@ -1273,8 +1273,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 
 struct setFunctorParticleAccel {
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
-					 amrex::GeometryData const &geom, const Real &time, const amrex::BCRec *bcr, int bcomp,
-					 const int &orig_comp) const
+					 amrex::GeometryData const &geom, const Real &time, const amrex::BCRec *bcr, int bcomp, const int &orig_comp) const
 	{
 		amrex::ignore_unused(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
 	}
@@ -1628,8 +1627,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, Real time, cons
 // Remake an existing level using provided BoxArray and DistributionMapping and
 // fill with existing fine and coarse data. Overrides the pure virtual function
 // in AmrCore
-template <typename problem_t>
-void AMRSimulation<problem_t>::RemakeLevel(int level, Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm)
+template <typename problem_t> void AMRSimulation<problem_t>::RemakeLevel(int level, Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm)
 {
 	BL_PROFILE("AMRSimulation::RemakeLevel()");
 
@@ -1700,8 +1698,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InterpHookNone(amre
 
 template <typename problem_t> struct setBoundaryFunctor {
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
-					 amrex::GeometryData const &geom, const Real &time, const amrex::BCRec *bcr, int bcomp,
-					 const int &orig_comp) const
+					 amrex::GeometryData const &geom, const Real &time, const amrex::BCRec *bcr, int bcomp, const int &orig_comp) const
 	{
 		AMRSimulation<problem_t>::setCustomBoundaryConditions(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
 	}
@@ -1709,18 +1706,16 @@ template <typename problem_t> struct setBoundaryFunctor {
 
 template <typename problem_t> struct setBoundaryFunctorFaceVar {
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
-					 amrex::GeometryData const &geom, const Real &time, const amrex::BCRec *bcr, int bcomp,
-					 const int &orig_comp) const
+					 amrex::GeometryData const &geom, const Real &time, const amrex::BCRec *bcr, int bcomp, const int &orig_comp) const
 	{
 		AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
 	}
 };
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
-											       int dcomp, int numcomp, amrex::GeometryData const &geom,
-											       const Real time, const amrex::BCRec *bcr, int bcomp,
-											       int orig_comp)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
+						      amrex::GeometryData const &geom, const Real time, const amrex::BCRec *bcr, int bcomp, int orig_comp)
 {
 	// user should implement if needed using template specialization
 	// (This is only called when amrex::BCType::ext_dir is set for a given
@@ -1872,9 +1867,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, Real time, con
 
 template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
-void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int const lev, Real const time,
-						      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
-						      PostInterpHook const &post_interp, FillPatchType fptype)
+void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int const lev, Real const time, quokka::centering cen,
+						      quokka::direction dir, PreInterpHook const &pre_interp, PostInterpHook const &post_interp,
+						      FillPatchType fptype)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
@@ -2062,8 +2057,8 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, Real time, amrex::MultiF
 // utility to copy in data from state_old_cc_[lev] and/or state_new_cc_[lev]
 // into another multifab
 template <typename problem_t>
-void AMRSimulation<problem_t>::GetData(int lev, Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime,
-				       quokka::centering cen, quokka::direction dir)
+void AMRSimulation<problem_t>::GetData(int lev, Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime, quokka::centering cen,
+				       quokka::direction dir)
 {
 	BL_PROFILE("AMRSimulation::GetData()");
 

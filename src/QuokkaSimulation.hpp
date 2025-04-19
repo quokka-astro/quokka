@@ -134,7 +134,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 
 	Real radiationCflNumber_ = 0.3;
-	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
+	int maxSubsteps_ = 10;			 // maximum number of radiation subcycles per hydro step
 	Real dustGasInteractionCoeff_ = 2.5e-34; // erg cm^3 s^−1 K^−3/2
 
 	bool computeReferenceSolution_ = false;
@@ -144,13 +144,13 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	bool use_wavespeed_correction_ = false;
 	bool print_rad_counter_ = false;
 
-	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
-	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
-	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default)
-	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default)
-	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
-	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
-	Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
+	int lowLevelDebuggingOutput_ = 0;      // 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
+	int integratorOrder_ = 2;	       // 1 == forward Euler; 2 == RK2-SSP (default)
+	int reconstructionOrder_ = 3;	       // 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int useDualEnergy_ = 1;		       // 0 == disabled; 1 == use auxiliary internal energy equation (default)
+	int abortOnFofcFailure_ = 1;	       // 0 == keep going, 1 == abort hydro advance if FOFC fails
+	Real artificialViscosityK_ = 0.;       // artificial viscosity coefficient (default == None)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -243,11 +243,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void printCoordinates(int lev, const amrex::IntVect &cell_idx);
 
-	void advanceHydroAtLevelWithRetries(int lev, Real time, Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
-					    amrex::YAFluxRegister *fr_as_fine);
+	void advanceHydroAtLevelWithRetries(int lev, Real time, Real dt_lev, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine);
 
-	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev,
-				 Real time, Real dt_lev) -> bool;
+	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev, Real time,
+				 Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, Real time, Real dt_lev);
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, Real time, Real dt_lev) -> bool;
@@ -257,15 +256,14 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// radiation subcycle
 	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
 	auto computeNumberOfRadiationSubsteps(int lev, Real dt_lev_hydro) -> int;
-	void advanceRadiationSubstepAtLevel(int lev, Real time, Real dt_radiation, int iter_count, int nsubsteps,
-					    amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine);
+	void advanceRadiationSubstepAtLevel(int lev, Real time, Real dt_radiation, int iter_count, int nsubsteps, amrex::YAFluxRegister *fr_as_crse,
+					    amrex::YAFluxRegister *fr_as_fine);
 	void advanceRadiationForwardEuler(int lev, Real time, Real dt_radiation, int iter_count, int nsubsteps, amrex::YAFluxRegister *fr_as_crse,
 					  amrex::YAFluxRegister *fr_as_fine);
 	void advanceRadiationMidpointRK2(int lev, Real time, Real dt_radiation, int iter_count, int nsubsteps, amrex::YAFluxRegister *fr_as_crse,
 					 amrex::YAFluxRegister *fr_as_fine);
 
-	void subcycleRadiationAtLevel(int lev, Real time, Real dt_lev_hydro, amrex::YAFluxRegister *fr_as_crse,
-				      amrex::YAFluxRegister *fr_as_fine);
+	void subcycleRadiationAtLevel(int lev, Real time, Real dt_lev_hydro, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine);
 
 	auto computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, int nvars,
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
@@ -646,8 +644,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSo
 	// (when Strang splitting is enabled, dt is actually 0.5*dt_lev)
 }
 
-template <typename problem_t>
-auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, Real time, Real dt) -> bool
+template <typename problem_t> auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, Real time, Real dt) -> bool
 {
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
@@ -1860,10 +1857,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, Real time, R
 				const auto n_cells = CountCells(lev);
 				amrex::Print() << "time_subcycle = " << time_subcycle << ", total number of cells updated is " << n_cells << "\n";
 				if (n_cells > 0 && global_solver_count > 0) {
-					const Real global_iteration_mean =
-					    static_cast<Real>(global_iteration_sum) / static_cast<Real>(global_solver_count);
-					const Real global_solving_mean =
-					    static_cast<Real>(global_solver_count) / static_cast<Real>(n_cells) / 2.0; // 2 stages
+					const Real global_iteration_mean = static_cast<Real>(global_iteration_sum) / static_cast<Real>(global_solver_count);
+					const Real global_solving_mean = static_cast<Real>(global_solver_count) / static_cast<Real>(n_cells) / 2.0; // 2 stages
 					const Real global_decoupled_iteration_mean =
 					    static_cast<Real>(global_decoupled_iteration_sum) / static_cast<Real>(global_solver_count);
 					amrex::Print() << "The average number of Newton-Raphson solvings per IMEX stage is " << global_solving_mean
@@ -1909,8 +1904,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, Real time, R
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, Real time, Real dt_radiation, int const iter_count,
-								 int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
+void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, Real time, Real dt_radiation, int const iter_count, int const /*nsubsteps*/,
+								 amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	if (Verbose()) {
 		amrex::Print() << "\tsubstep " << iter_count << " t = " << time << '\n';
@@ -1975,8 +1970,8 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, Real t
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, Real time, Real dt_radiation, int const /*iter_count*/,
-							       int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
+void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, Real time, Real dt_radiation, int const /*iter_count*/, int const /*nsubsteps*/,
+							       amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	// get cell sizes
 	auto const &dx = geom[lev].CellSizeArray();
@@ -2008,8 +2003,8 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, Real tim
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, Real time, Real dt_radiation, int const /*iter_count*/,
-							      int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
+void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, Real time, Real dt_radiation, int const /*iter_count*/, int const /*nsubsteps*/,
+							      amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	auto const &dx = geom[lev].CellSizeArray();
 
