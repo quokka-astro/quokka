@@ -133,7 +133,7 @@ template <typename problem_t> struct JacobianResult {
 template <typename problem_t> struct FluxUpdateResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Erad;			   // radiation energy density
 	amrex::GpuArray<double, 3> gasMomentum;							   // gas momentum
-	amrex::GpuArray<amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nGroups>, 3> Frad; // radiation flux
+	amrex::GpuArray<amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups>, 3> Frad; // radiation flux
 };
 
 [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod_func(double a, double b) -> double
@@ -187,7 +187,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// C++ standard does not allow constexpr to be uninitialized, even in a
 	// templated class!
 
-	static constexpr amrex::Real c_light_ = []() constexpr {
+	static constexpr Real c_light_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
 			return c_light_cgs_;
 		} else if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CONSTANTS) {
@@ -249,7 +249,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
 
-	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
+	static constexpr Real boltzmann_constant_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
 			return C::k_B;
 		} else if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CONSTANTS) {
@@ -264,34 +264,34 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	// static functions
 
-	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
-	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar, amrex::Box const &indexRange);
+	static void ComputeMaxSignalSpeed(amrex::Array4<const Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
+	static void ConservedToPrimitive(amrex::Array4<const Real> const &cons, array_t &primVar, amrex::Box const &indexRange);
 
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
-				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
+				amrex::GpuArray<Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrayOld,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
-				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
+				 amrex::GpuArray<Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
-	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
-				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
-				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool use_wavespeed_correction);
+	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const Real> const &x1LeftState_in,
+				  amrex::Array4<const Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
+				  amrex::GpuArray<Real, AMREX_SPACEDIM> dx, bool use_wavespeed_correction);
 
-	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
-				       amrex::Real time);
+	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+				       amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi,
+				       Real time);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
 						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
 
-	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
+	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt, int stage,
 					     double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
 
-	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
+	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt, int stage,
 					      double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
@@ -343,21 +343,21 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 								       quokka::valarray<double, nGroups_> &xi);
 
 	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21,
-							 double C22, double Y0, double Y1, double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
+							 double C22, double Y0, double Y1, double Y2) -> std::tuple<Real, Real, Real>;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
-	    -> quokka::valarray<amrex::Real, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, Real temperature)
+	    -> quokka::valarray<Real, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationSingleGroup(Real temperature) -> double;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationMultiGroup(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-	    -> quokka::valarray<amrex::Real, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationMultiGroup(Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+	    -> quokka::valarray<Real, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real;
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeSingleGroup(Real temperature) -> Real;
 
-	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivativeMultiGroup(Real temperature,
 											  amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-	    -> quokka::valarray<amrex::Real, nGroups_>;
+	    -> quokka::valarray<Real, nGroups_>;
 
 	template <typename RHSFunction, typename JacFunction>
 	AMREX_GPU_DEVICE static auto BackwardEulerOneVariable(RHSFunction const &rhs, JacFunction const &jac, double x0, double compare) -> double;
@@ -373,16 +373,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				      amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries = amrex::GpuArray<double, nGroups_ + 1>{},
 				      amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios = amrex::GpuArray<double, nGroups_>{}) -> double;
 
-	AMREX_GPU_HOST_DEVICE static auto DefinePhotoelectricHeatingE1Derivative(amrex::Real temperature, amrex::Real num_density) -> amrex::Real;
+	AMREX_GPU_HOST_DEVICE static auto DefinePhotoelectricHeatingE1Derivative(Real temperature, Real num_density) -> Real;
 
-	AMREX_GPU_HOST_DEVICE static auto DefineBackgroundHeatingRate(amrex::Real num_density) -> amrex::Real;
+	AMREX_GPU_HOST_DEVICE static auto DefineBackgroundHeatingRate(Real num_density) -> Real;
 
-	AMREX_GPU_HOST_DEVICE static auto DefineNetCoolingRate(amrex::Real temperature, amrex::Real num_density) -> quokka::valarray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto DefineNetCoolingRate(Real temperature, Real num_density) -> quokka::valarray<double, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto DefineNetCoolingRateTempDerivative(amrex::Real temperature, amrex::Real num_density)
+	AMREX_GPU_HOST_DEVICE static auto DefineNetCoolingRateTempDerivative(Real temperature, Real num_density)
 	    -> quokka::valarray<double, nGroups_>;
 
-	AMREX_GPU_HOST_DEVICE static auto DefineCosmicRayHeatingRate(amrex::Real num_density) -> double;
+	AMREX_GPU_HOST_DEVICE static auto DefineCosmicRayHeatingRate(Real num_density) -> double;
 
 	AMREX_GPU_DEVICE static void ComputeModelDependentKappaFAndDeltaTerms(double T, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
 									      quokka::valarray<double, nGroups_> const &fourPiBoverC,
@@ -444,14 +444,14 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 						  int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>
-	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
+	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const Real, DIR> &consVar,
+							     amrex::GpuArray<Real, AMREX_SPACEDIM> dx, int i, int j, int k,
 							     const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
 	    -> quokka::valarray<double, nGroups_>;
 
-	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
+	AMREX_GPU_DEVICE static auto isStateValid(std::array<Real, nvarHyperbolic_> &cons) -> bool;
 
-	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
+	AMREX_GPU_DEVICE static void amendRadState(std::array<Real, nvarHyperbolic_> &cons);
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
@@ -463,19 +463,19 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
 // This function enforces that the total fraction is 1.0, no matter what are the group boundaries
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
-    -> quokka::valarray<amrex::Real, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, Real temperature)
+    -> quokka::valarray<Real, nGroups_>
 {
-	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
+	quokka::valarray<Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {
-		amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-		amrex::Real y = NAN;
-		amrex::Real previous = 0.0;
+		Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
+		Real y = NAN;
+		Real previous = 0.0;
 		for (int g = 0; g < nGroups_ - 1; ++g) {
-			const amrex::Real x = boundaries[g + 1] * energy_unit_over_kT;
+			const Real x = boundaries[g + 1] * energy_unit_over_kT;
 			if (x >= 100.) { // 100. is the upper limit of x in the table
 				y = 1.0;
 			} else {
@@ -500,7 +500,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeNumberDensityH(double rh
 }
 
 // define ComputeThermalRadiation for single-group, returns the thermal radiation power = a_r * T^4
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(amrex::Real temperature) -> Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationSingleGroup(Real temperature) -> Real
 {
 	double power = radiation_constant_ * std::pow(temperature, 4);
 	// set floor
@@ -512,9 +512,9 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 
 // define ComputeThermalRadiationMultiGroup, returns the thermal radiation power for each photon group. = a_r * T^4 * radEnergyFractions
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGroup(amrex::Real temperature,
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGroup(Real temperature,
 										   amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-    -> quokka::valarray<amrex::Real, nGroups_>
+    -> quokka::valarray<Real, nGroups_>
 {
 	const double power = radiation_constant_ * std::pow(temperature, 4);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
@@ -528,16 +528,16 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 	return Erad_g;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeSingleGroup(amrex::Real temperature) -> Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeSingleGroup(Real temperature) -> Real
 {
 	// by default, d emission/dT = 4 emission / T
 	return 4. * radiation_constant_ * std::pow(temperature, 3);
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real temperature,
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivativeMultiGroup(Real temperature,
 												 amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-    -> quokka::valarray<amrex::Real, nGroups_>
+    -> quokka::valarray<Real, nGroups_>
 {
 	// by default, d emission/dT = 4 emission / T
 	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
@@ -546,14 +546,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDeri
 }
 
 // Define the background heating rate for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineBackgroundHeatingRate(amrex::Real const /*num_density*/) -> amrex::Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineBackgroundHeatingRate(Real const /*num_density*/) -> Real
 {
 	return 0.0;
 }
 
 // Define the net cooling rate (line cooling + heating) for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRate(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRate(Real const /*temperature*/, Real const /*num_density*/)
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
@@ -563,7 +563,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRate(amrex::Rea
 
 // Define the derivative of the net cooling rate with respect to temperature for the gas-dust-radiation system. Units in cgs: erg cm^-3 s^-1 K^-1
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRateTempDerivative(amrex::Real const /*temperature*/, amrex::Real const /*num_density*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRateTempDerivative(Real const /*temperature*/, Real const /*num_density*/)
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> cooling{};
@@ -571,7 +571,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRateTempDerivat
 	return cooling;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineCosmicRayHeatingRate(Real const /*num_density*/) -> double
 {
 	return 0.0;
 }
@@ -592,7 +592,7 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(JacobianResult<p
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00, const double C01, const double C02, const double C10, const double C11,
 								const double C12, const double C20, const double C21, const double C22, const double Y0,
-								const double Y1, const double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>
+								const double Y1, const double Y2) -> std::tuple<Real, Real, Real>
 {
 	// Solve the 3x3 matrix equation: C * X = Y under the assumption that only the diagonal terms
 	// are guaranteed to be non-zero and are thus allowed to be divided by.
@@ -611,15 +611,15 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time)
+void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+					      amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo,
+					      amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi, Real time)
 {
 	// do nothing -- user implemented
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar, amrex::Box const &indexRange)
+void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const Real> const &cons, array_t &primVar, amrex::Box const &indexRange)
 {
 	// keep radiation energy density as-is
 	// convert (Fx,Fy,Fz) into reduced flux components (fx,fy,fx):
@@ -646,7 +646,7 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)
+void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)
 {
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -655,7 +655,7 @@ void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real
 	});
 }
 
-template <typename problem_t> AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool
+template <typename problem_t> AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStateValid(std::array<Real, nvarHyperbolic_> &cons) -> bool
 {
 	// check if the state variable 'cons' is a valid state
 	bool isValid = true;
@@ -675,7 +675,7 @@ template <typename problem_t> AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStat
 	return isValid;
 }
 
-template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons)
+template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendRadState(std::array<Real, nvarHyperbolic_> &cons)
 {
 	// amend the state variable 'cons' to be a valid state
 	for (int g = 0; g < nGroups_; ++g) {
@@ -699,7 +699,7 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 template <typename problem_t>
 void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				       amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const double dt_in,
-				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
+				       amrex::GpuArray<Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -722,7 +722,7 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		std::array<amrex::Real, nvarHyperbolic_> cons{};
+		std::array<Real, nvarHyperbolic_> cons{};
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			cons[n] = consVarOld(i, j, k, nstartHyperbolic_ + n) + (AMREX_D_TERM((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
@@ -746,7 +746,7 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArrayOld*/,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const double dt_in,
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
+					amrex::GpuArray<Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -769,7 +769,7 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		std::array<amrex::Real, nvarHyperbolic_> cons_new{};
+		std::array<Real, nvarHyperbolic_> cons_new{};
 
 		// y^n+1 = (1 - a32) y^n + a32 y^(2) + dt * (0.5 - a32) * s(y^n) + dt * 0.5 * s(y^(2)) + dt * (1 - a32) * f(y^n+1)          // the last term is
 		// implicit and not used here
@@ -834,8 +834,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const Real, DIR> &consVar,
+								    amrex::GpuArray<Real, AMREX_SPACEDIM> dx, int i, int j, int k,
 								    const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
     -> quokka::valarray<double, nGroups_>
 {
@@ -911,12 +911,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
 	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
-	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
+	std::array<Real, 3> fvec = {fx, fy, fz};
 
 	// angle between interface and radiation flux \hat{n}
 	// If direction is undefined, just drop direction-dependent
 	// terms.
-	std::array<amrex::Real, 3> n{};
+	std::array<Real, 3> n{};
 
 	for (int ii = 0; ii < 3; ++ii) {
 		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
@@ -1016,17 +1016,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
-					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction)
+void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const Real> const &x1LeftState_in,
+					 amrex::Array4<const Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
+					 amrex::GpuArray<Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction)
 {
-	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
-	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
-	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
-	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
-	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
+	quokka::Array4View<const Real, DIR> x1LeftState(x1LeftState_in);
+	quokka::Array4View<const Real, DIR> x1RightState(x1RightState_in);
+	quokka::Array4View<Real, DIR> x1Flux(x1Flux_in);
+	quokka::Array4View<Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
+	quokka::Array4View<const Real, DIR> consVar(consVar_in);
 
-	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
+	amrex::GpuArray<Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
 
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
