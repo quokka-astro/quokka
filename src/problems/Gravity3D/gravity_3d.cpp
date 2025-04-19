@@ -403,12 +403,12 @@ auto problem_main() -> int
 	const int n_particle_CIC = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
 	const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
 	amrex::Print() << "Actual number of CIC particles: " << n_particle_CIC << "\n";
-	amrex::Print() << "Expected number of CIC particles: " << n_particle_CIC << "\n";
+	amrex::Print() << "Expected number of CIC particles: " << n_expected_CIC_particles << "\n";
 
 	int status = 0; // Initialize to success
 
 	auto const *descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC);
-	auto [real_data, _] = descriptor->getParticleDataAtLevel(max_level);
+	auto const &real_data = descriptor->getParticleDataAtLevel(max_level).first;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		bool is_pos_check_pass = true;
