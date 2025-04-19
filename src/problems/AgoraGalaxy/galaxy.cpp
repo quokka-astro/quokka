@@ -293,7 +293,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 		// read particles from plotfile
 		amrex::Print() << "Reading particles from plotfile " << plotfile_to_resample << "...\n";
 		CICParticles->SetVerbose(1);
-		std::string particleType_plotfile_name = quokka::PhysicsParticleRegister<AgoraGalaxy>::getParticleTypeName(quokka::ParticleType::CIC);
+		std::string const particleType_plotfile_name = quokka::PhysicsParticleRegister<AgoraGalaxy>::getParticleTypeName(quokka::ParticleType::CIC);
 		// NOTE: PC->Restart currently only works if max_levels is the same or less than before
 		CICParticles->Restart(plotfile_to_resample, particleType_plotfile_name);
 
