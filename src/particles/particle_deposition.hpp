@@ -98,13 +98,6 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 	const amrex::Real step_end_time = time + dt;
 
-	const int particle_verbose_d = particle_verbose; // make a copy of the particle_verbose flag for device access
-
-	double RM_threshold = 1.0; // R_M factor = M_snr / M_sf
-	if (particle_param2 > 0.0) {
-		RM_threshold = particle_param2;
-	}
-
 	constexpr double E_blast = 1.0e51;		       // ergs
 	constexpr double m_ej = 10.0 * C::M_solar;	       // ejecta mass in cgs
 	constexpr double p_snr_0 = 2.8e5 * C::M_solar * 1.0e5; // SN terminal momentum in cgs
@@ -229,7 +222,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 #if 0
 					// log RM and f_factor, for debugging on CPU.
-					if (particle_verbose_d) {
+					if (particle_verbose) {
 						printf("SNR logging -- RM: %.2e, f_factor: %.2e\n", RM, f_factor);
 					}
 #endif
@@ -402,7 +395,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 #if 0
 				// log the state, for debugging on CPU.
-				if (particle_verbose_d && d_rho / rho > 1.0e-12) {
+				if (d_rho / rho > 1.0e-12) {
 					// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
 					// e_tot_new
 					printf("original: rho = %e, px = %e, py = %e, pz = %e, e_int = %e, e_tot = %e\n", rho, px, py, pz, e_int, e_tot);
