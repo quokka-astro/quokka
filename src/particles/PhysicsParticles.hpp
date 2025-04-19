@@ -65,10 +65,10 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
 
 	// New method to get particle positions and data
-	[[nodiscard]] virtual auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
+	[[nodiscard]] virtual auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<Real>>, std::vector<std::vector<int>>> = 0;
 
 	// Get particle data at level lev
-	[[nodiscard]] virtual auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
+	[[nodiscard]] virtual auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<Real>>, std::vector<std::vector<int>>> = 0;
 
 	// Pure virtual methods that must be implemented by derived classes
 	[[nodiscard]] virtual auto isStarParticle() -> bool = 0;
@@ -151,9 +151,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	//   - Integer data (e.g., id, type, etc.)
 	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
 	// @return: tuple of vectors of particle data on rank 0, empty vectors on other ranks
-	[[nodiscard]] auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
+	[[nodiscard]] auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<Real>>, std::vector<std::vector<int>>> override
 	{
-		std::vector<std::vector<double>> real_data;
+		std::vector<std::vector<Real>> real_data;
 		std::vector<std::vector<int>> int_data;
 
 		// // If max level > 0, return empty vectors. This function does not support multi-level particles.
@@ -204,7 +204,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						const auto &p = pData_h[i];
 
 						// Process real data (positions and rdata)
-						std::vector<double> r_data;
+						std::vector<Real> r_data;
 						// Pre-allocate to avoid reallocations
 						r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
 
@@ -241,9 +241,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return {real_data, int_data}; // Empty vectors on non-root ranks
 	}
 
-	[[nodiscard]] auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
+	[[nodiscard]] auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<Real>>, std::vector<std::vector<int>>> override
 	{
-		std::vector<std::vector<double>> real_data;
+		std::vector<std::vector<Real>> real_data;
 		std::vector<std::vector<int>> int_data;
 
 		if (container_ != nullptr) {
@@ -318,7 +318,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						const auto &p = pData_h[i];
 
 						// Process real data (positions and rdata)
-						std::vector<double> r_data;
+						std::vector<Real> r_data;
 						// Pre-allocate to avoid reallocations
 						r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
 
