@@ -5,22 +5,17 @@
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_Geometry.H"
-#include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
-
 #include "AMReX_REAL.H"
+
 #include "QuokkaSimulation.hpp"
 #include "gravity_3d.hpp"
 #include "hydro/hydro_system.hpp"
-#include <algorithm>
 
 struct TestParticle {
 };
@@ -45,6 +40,9 @@ constexpr double particle_low_mass = 1.0e-20; // very low mass particles marked 
 constexpr double dt_ = 0.001;
 constexpr int n_SNR_particles_in_full_domain = 8; // 8 low_mass particles created and live to the end
 constexpr int n_SN = 8;
+
+static bool do_split_particles = false; // NOLINT
+static int split_factor = 8;		// NOLINT
 
 // locations of the particles: a 2x2x2 grids of particles
 constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
@@ -291,6 +289,14 @@ template <> void QuokkaSimulation<TestParticle>::createInitialCICParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
 	CICParticles->InitFromAsciiFile("Gravity3D.txt", nreal_extra, nullptr);
+
+	// test particle splitting
+	// (this is intended to only be used when restarting at a higher resolution)
+	if (do_split_particles) {
+		amrex::Print() << "Splitting CICParticles using split_factor = " << split_factor << "\n";
+		int const lev = 0; // all CICParticles are on level 0
+		particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, split_factor);
+	}
 }
 
 template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
@@ -351,6 +357,11 @@ auto problem_main() -> int
 		}
 	}
 
+	// read in runtime parameters for this test problem
+	amrex::ParmParse const pp("particles");
+	pp.query("do_split_particles", do_split_particles);
+	pp.query("split_factor", split_factor);
+
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
@@ -358,8 +369,8 @@ auto problem_main() -> int
 	sim.maxDt_ = dt_;
 
 	// Read parameters from input file
-	const amrex::ParmParse pp("problem");
-	pp.query("refine_half_domain", refine_half_domain);
+	const amrex::ParmParse pp1("problem");
+	pp1.query("refine_half_domain", refine_half_domain);
 
 	// initialize
 	sim.setInitialConditions();
@@ -389,12 +400,17 @@ auto problem_main() -> int
 
 	// particle actions must be called on all ranks
 	const int max_level = sim.maxLevel();
-	auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(max_level);
+	const int n_particle_CIC = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
+	const int n_expected_CIC_particles = do_split_particles ? 2 * split_factor : 2;
+	amrex::Print() << "Actual number of CIC particles: " << n_particle_CIC << "\n";
+	amrex::Print() << "Expected number of CIC particles: " << n_expected_CIC_particles << "\n";
 
 	int status = 0; // Initialize to success
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
+	auto const *descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC);
+	auto const &real_data = descriptor->getParticleDataAtLevel(max_level).first;
 
+	if (amrex::ParallelDescriptor::IOProcessor()) {
 		bool is_pos_check_pass = true;
 
 		if (!refine_half_domain) {
@@ -451,9 +467,9 @@ auto problem_main() -> int
 				// particle positions are known to be incorrect if a particle crosses the refinement boundary
 				pos_max_err_tol = std::numeric_limits<double>::infinity();
 			} else {
-				if (sim.tNew_[0] < 0.011) {
+				if (sim.tNew_[0] < 0.011 && !do_split_particles) {
 					pos_max_err_tol = 5.0e-7;
-				} else if (sim.tNew_[0] < 0.11) {
+				} else if (sim.tNew_[0] < 0.11 && !do_split_particles) {
 					pos_max_err_tol = 5.0e-6;
 				} else {
 					pos_max_err_tol = 0.05;
@@ -470,8 +486,9 @@ auto problem_main() -> int
 		double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
 		if (refine_half_domain) {
 			// SNR mass is not conserved to machine precision due to AMR interpolation.
-			// The relative error caused by AMR interpolation at coarse-fine boundary is exceptionally large. The relative error of SNR mass right
-			// after the SN explosion is within machine precision. However, it grows to 1e-4 after 4 steps, and goes to 1e-2 after 40 steps.
+			// The relative error caused by AMR interpolation at coarse-fine boundary is exceptionally large. The relative error of SNR mass
+			// right after the SN explosion is within machine precision. However, it grows to 1e-4 after 4 steps, and goes to 1e-2 after 40
+			// steps.
 			if (sim.tNew_[0] < 0.01) {
 				SNR_mass_rel_err_tol = 1.0e-4;
 			} else {
@@ -480,12 +497,25 @@ auto problem_main() -> int
 		}
 
 		status = 1;
-		if (is_pos_check_pass && n_particle_test == n_SNR_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
+		if (is_pos_check_pass && n_particle_CIC == n_expected_CIC_particles && n_particle_test == n_SNR_particles &&
+		    SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}
 		if (status > 0) {
 			amrex::Print() << "Test failed.\n";
+			if (!is_pos_check_pass) {
+				amrex::Print() << "...position check failed.\n";
+			}
+			if (!(n_particle_CIC == n_expected_CIC_particles)) {
+				amrex::Print() << "...wrong number of CIC particles.\n";
+			}
+			if (!(n_particle_test == n_SNR_particles)) {
+				amrex::Print() << "...wrong number of SN remnant particles.\n";
+			}
+			if (!(SN_remnant_mass_rel_err < SNR_mass_rel_err_tol)) {
+				amrex::Print() << "...SN remnant mass error above tolerance.\n";
+			}
 		}
 	}
 
