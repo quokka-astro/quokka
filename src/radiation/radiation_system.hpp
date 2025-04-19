@@ -19,7 +19,6 @@
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
-#include "AMReX_REAL.H"
 
 // internal headers
 #include "fundamental_constants.H"
