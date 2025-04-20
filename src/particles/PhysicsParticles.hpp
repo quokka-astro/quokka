@@ -671,6 +671,17 @@ template <typename problem_t> class PhysicsParticleRegister
 		return false;
 	}
 
+	// Check if registry contains any star particles
+	[[nodiscard]] auto HasStarParticles() const -> bool
+	{
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			if (descriptor->isStarParticle()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// Utility method to convert particle type to string name (for writing plotfiles/checkpoints)
 	[[nodiscard]] static auto getParticleTypeName(ParticleType type) -> std::string
 	{

@@ -1036,9 +1036,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// Only create particles at the finest level to avoid duplicate particle creation in regions where finer levels exist
 		particleRegister_.createParticlesFromState(state_new_cc_[finest_level], finest_level, cur_time, dt_[0]);
 
-		// Stellar evolution and SN deposition
-		// TODO(cch): Need to take care of AMR subcycling
-		particleMeshInteraction(cur_time, dt_[0]);
+		// Stellar evolution and SN deposition; only apply to star particles
+		if (particleRegister_.HasStarParticles()) {
+			// TODO(cch): Need to take care of AMR subcycling
+			particleMeshInteraction(cur_time, dt_[0]);
+		}
 
 		// Use the new type-aware particle destruction method
 		// TODO(cch): Need to take care of AMR subcycling
@@ -1387,6 +1389,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInteraction(amrex::Real time, amrex::Real dt)
 {
+	// Requires CGS units
+	static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for particleMeshInteraction");
+
 	// Support up to 4 ghost cells for SN deposition. Default is 3, same as the TIGRESS model.
 	const int nghost = 3;
 
