@@ -100,8 +100,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 		const int finest_level = finestLevel();
 		
 		// Get particle data using the physics particle descriptor
-		const auto particle_descriptor = this->particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC);
-		const auto [real_data, int_data] = particle_descriptor->getParticleDataAtLevel(finest_level);
+		const auto [real_data, int_data] = particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(finest_level);
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			if (real_data.size() >= 2) {
