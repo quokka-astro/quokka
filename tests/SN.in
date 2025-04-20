@@ -8,7 +8,7 @@ geometry.is_periodic =  1    1    1
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 0       # verbosity in Amr
+amr.v              = 1       # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
@@ -46,5 +46,5 @@ problem.T_amb = 718.0
 particles.SN_scheme = 1 					# 1: SN_thermal_or_thermal_momentum
 particles.verbose = 1
 
-max_timesteps = 20
+max_timesteps = 10
 plotfile_interval = -1

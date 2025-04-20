@@ -127,7 +127,7 @@ template <> void QuokkaSimulation<SNProblem>::ErrorEst(int lev, amrex::TagBoxArr
 			const double x_frac = ((i + 0.5) * dx[0]) / (phi[0] - plo[0]);
 			const double y_frac = ((j + 0.5) * dx[1]) / (phi[1] - plo[1]);
 			const double z_frac = ((k + 0.5) * dx[2]) / (phi[2] - plo[2]);
-			if (!refine_half_domain_ || (x_frac >= 0.7 && y_frac >= 0.7 && z_frac >= 0.7 && x_frac <= 0.8 && y_frac <= 0.8 && z_frac <= 0.8)) {
+			if (!refine_half_domain_ || (x_frac >= 0.7 && x_frac <= 0.8 && y_frac >= 0.3 && y_frac <= 0.7 && z_frac >= 0.3 && z_frac <= 0.7)) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
