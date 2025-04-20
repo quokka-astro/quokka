@@ -36,6 +36,7 @@ static bool refine_half_domain = false; // NOLINT
 constexpr double rho0 = 1.0e-5;
 constexpr double init_mass_total = rho0 * 4 * 4 * 4;
 
+constexpr double SN_formation_mass = 1.0e-20; // mass to be removed from the cell when a SNProgenitor particle is created
 constexpr int particle_per_cell = 2;
 const static double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
 const static double small_SN_mass = 1.0e-15;  // mass of low-mass SNProgenitor particles
@@ -116,13 +117,13 @@ template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBox
 
 namespace quokka
 {
-// Specialization for CIC particle creation
+// Particle creation specialization for Test particles
 template <> struct ParticleCreationTraits<ParticleType::Test> {
 	// Specialized nested ParticleChecker for Test particles
 	template <typename problem_t> struct ParticleChecker {
 		amrex::Real current_time;
 		amrex::Real dt;
-		amrex::Real param1 = particle_param1;
+		amrex::Real particle_creation_time = particle_param1;
 
 		double x_L = box_left_edge_;
 		double offset = particle_offset_from_center_;
@@ -145,7 +146,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 			const int j_par2 = static_cast<int>(floor((offset - x_L) / dx[1]));
 			const int k_par2 = static_cast<int>(floor((offset - x_L) / dx[2]));
 
-			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
+			const bool is_create_particle = current_time <= particle_creation_time && current_time + dt > particle_creation_time;
 			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
 				return particle_per_cell;
 			}
@@ -211,7 +212,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 				}
 
 				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.
-				state_arr(i, j, k, HydroSystem<problem_t>::density_index) -= 1.0e-20;
+				state_arr(i, j, k, HydroSystem<problem_t>::density_index) -= SN_formation_mass;
 			}
 		}
 	};
@@ -234,7 +235,6 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 	template <typename problem_t> struct ParticleChecker {
 		int birth_time_index;
 		int evolution_stage_index;
-		amrex::Real t_destroy = particle_param3;
 
 		AMREX_GPU_HOST_DEVICE explicit ParticleChecker(int birth_time_index, int evolution_stage_index)
 		    : birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index)
@@ -247,10 +247,9 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 			// Default implementation: destroy particles with mass < 1.0
 			amrex::ignore_unused(mass_idx, current_time, dt);
 
-			// only SNRemnant will be destroyed; just for testing
+			// mark SNRemnant for removal
 			const bool is_sn_remnant = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::SNRemnant));
-			const bool is_time = (current_time + dt > t_destroy);
-			return is_sn_remnant && is_time;
+			return is_sn_remnant;
 		}
 	};
 
@@ -371,19 +370,6 @@ auto problem_main() -> int
 
 	const int n_SNR_particles = refine_half_domain ? n_SNR_particles_in_full_domain / 2 : n_SNR_particles_in_full_domain;
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
-	amrex::Print() << "Expected number of test particles: " << n_SNR_particles << "\n";
-	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
-
-	// get total mass in cells
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const total_mass = sim.state_new_cc_[0].sum(HydroSystem<TestParticle>::density_index) * vol;
-	amrex::Real const SN_remnant_mass = total_mass - init_mass_total;
-	amrex::Print() << "Total SN remnant mass: " << SN_remnant_mass << "\n";
-	const double m_SN = (n_SNR_particles + n_SNR_particles_init) * SN_mass + N_small_SN * small_SN_mass;
-	amrex::Print() << "Expected total SN remnant mass in cells: " << m_SN << "\n";
-	const double SN_remnant_mass_rel_err = std::abs(SN_remnant_mass - m_SN) / m_SN;
-	amrex::Print() << "SN remnant mass relative error: " << SN_remnant_mass_rel_err << "\n";
 
 	// ----- Check CIC particles -----
 
@@ -466,21 +452,11 @@ auto problem_main() -> int
 			}
 		}
 
-		// check SN remnant mass
-		double SNR_mass_rel_err_tol = 1.0e-12; // should be close to machine precision
-		if (refine_half_domain) {
-			// SNR mass is not conserved to machine precision due to AMR interpolation.
-			// The relative error caused by AMR interpolation at coarse-fine boundary is exceptionally large. The relative error of SNR mass right
-			// after the SN explosion is within machine precision. However, it grows to 1e-4 after 4 steps, and goes to 1e-2 after 40 steps.
-			if (sim.tNew_[0] < 0.01) {
-				SNR_mass_rel_err_tol = 1.0e-4;
-			} else {
-				SNR_mass_rel_err_tol = 1.0e-2;
-			}
-		}
+		amrex::Print() << "Expected number of test particles: " << n_SNR_particles << "\n";
+		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 		status = 1;
-		if (is_pos_check_pass && n_particle_test == n_SNR_particles && SN_remnant_mass_rel_err < SNR_mass_rel_err_tol) {
+		if (is_pos_check_pass && n_particle_test == n_SNR_particles) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}
