@@ -272,18 +272,18 @@ inline auto get_units_data() -> const auto &
 // their own copies.
 
 // Disable SN feedback when a particle evolves from SNProgenitor to SNRemnant
-inline bool disable_SN_feedback = false;	       // NOLINT
+inline bool disable_SN_feedback = false; // NOLINT
 
 // Placeholder parameters for particles. Used in gravity_3d.cpp tests
-inline amrex::Real particle_param1 = -1.0;	       // NOLINT
-inline amrex::Real particle_param2 = -1.0;	       // NOLINT
-inline amrex::Real particle_param3 = -1.0;	       // NOLINT
+inline amrex::Real particle_param1 = -1.0; // NOLINT
+inline amrex::Real particle_param2 = -1.0; // NOLINT
+inline amrex::Real particle_param3 = -1.0; // NOLINT
 
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
 
 // Verbosity for particle operations
-inline int particle_verbose = 0;		       // NOLINT print particle logistics
+inline int particle_verbose = 0; // NOLINT print particle logistics
 
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without

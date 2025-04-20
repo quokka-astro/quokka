@@ -70,8 +70,8 @@ struct MassDeposition {
 
 //-------------------- Supernova depositions --------------------
 template <typename ContainerType, typename problem_t>
-void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
-		  int mass_index, int evolutionStageIndex, int birthTimeIndex)
+void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		  int evolutionStageIndex, int birthTimeIndex)
 {
 	constexpr int stencil_size = 3;
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * stencil_size * stencil_size * stencil_size;
@@ -303,8 +303,8 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
-				// For SN_thermal_only, the buffer contains only mass and energy (and a small amount of momentum), so it's safe to add the buffer
-				// directly to the state.
+				// For SN_thermal_only, the buffer contains only mass and energy (and a small amount of momentum), so it's safe to add the
+				// buffer directly to the state.
 				const double rho_new =
 				    local_state(i, j, k, HydroSystem<problem_t>::density_index) + local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 				const double px_new = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) +

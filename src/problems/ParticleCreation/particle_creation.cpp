@@ -7,8 +7,8 @@
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
-#include "particle_creation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "particle_creation.hpp"
 
 struct TestParticle {
 };
@@ -90,12 +90,12 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
-				// if (p.rdata(0) > 1.0e-10) {
-				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-				// } else {
-				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
-				// }
-					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
+						    // if (p.rdata(0) > 1.0e-10) {
+						    // 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+						    // } else {
+						    // 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
+						    // }
+				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
 			});
 		}
 	}

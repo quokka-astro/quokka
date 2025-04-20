@@ -595,7 +595,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// TODO(cch): add a getParticleTypeName() method to PhysicsParticleDescriptor and call it here
 			const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_);
 			amrex::Print() << fmt::format("{:<20}{:<15}\n", particle_type_name, getNumParticles());
-			
+
 			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
 				// if max_level = 0 and has stellar evolution stage, print the mass and particle stage for all particles
 				if (getEvolutionStageIndex() >= 0) {
@@ -609,9 +609,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 						// Print each particle's data with aligned columns
 						for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
-							amrex::Print() << fmt::format("  {:<15} | {:>20}\n", 
-								real_data[i][AMREX_SPACEDIM + getMassIndex()], 
-								int_data[i][getEvolutionStageIndex()]);
+							amrex::Print() << fmt::format("  {:<15} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
+										      int_data[i][getEvolutionStageIndex()]);
 						}
 						amrex::Print() << "\n"; // Add extra line for readability between particle types
 					}
@@ -643,11 +642,12 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
 			if (!quokka::disable_SN_feedback) {
 				// Requires CGS units
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for particleMeshInteraction");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
+								 "UnitSystem must be CGS for particleMeshInteraction");
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
-				SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex(),
-							       this->getBirthTimeIndex());
+				SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(),
+								       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
 				updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
