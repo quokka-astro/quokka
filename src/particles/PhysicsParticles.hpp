@@ -39,12 +39,14 @@ class PhysicsParticleDescriptorBase
 	bool allowsDestruction_{false};	 // Whether particles can be destroyed during simulation
 	int evolutionStageIndex_{-1};	 // Index for evolution stage (-1 if not used)
 	bool interactsWithHydro_{false}; // Whether particles interact with hydrodynamics
+	bool forceFinestLevel_{false};   // Whether particles are forced to live in the finest level
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
 				      int evolution_stage_idx = -1, bool hydro_interact = false)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), allowsCreation_(allows_creation),
-	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), interactsWithHydro_(hydro_interact)
+	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), interactsWithHydro_(hydro_interact),
+	      forceFinestLevel_(false)
 	{
 	}
 
@@ -64,6 +66,8 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsCreation() const -> bool { return allowsCreation_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getForceFinestLevel() const -> bool { return forceFinestLevel_; }
+	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
 
 	// New method to get particle positions and data
 	[[nodiscard]] virtual auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
@@ -750,7 +754,7 @@ template <typename problem_t> class PhysicsParticleRegister
 #endif // AMREX_SPACEDIM == 3
 
 	// Retrieve a particle descriptor by type
-	[[nodiscard]] auto getParticleDescriptor(ParticleType type) const -> const PhysicsParticleDescriptorBase *
+	[[nodiscard]] auto getParticleDescriptor(ParticleType type) -> PhysicsParticleDescriptorBase *
 	{
 		auto it = particleRegistry_.find(type);
 		if (it != particleRegistry_.end()) {
