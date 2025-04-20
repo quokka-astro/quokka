@@ -86,8 +86,8 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 			
 			// Print the total number of particles created at this time step
 			if (amrex::ParallelDescriptor::IOProcessor()) {
-				amrex::Print() << "Time: " << current_time << " - Created " << global_total_particles 
-						  << " particles at level " << lev << "\n";
+				amrex::Print() << ">>>Particle creation:\n\tTime: " << current_time << " - Created " << global_total_particles 
+						  << " particles at level " << lev << "\n\n";
 			}
 		}
 	}
