@@ -17,6 +17,8 @@
 struct SNProblem {
 };
 
+static bool refine_half_domain = false; // NOLINT
+
 static double max_Eint_global = 0.0; // NOLINT
 
 static std::string SN_particles_file = "SN_particles.txt"; // NOLINT
@@ -110,11 +112,25 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 
 template <> void QuokkaSimulation<SNProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
+	// tag cells for refinement: static mesh refinement for the whole domain (if refine_half_domain is false) or for x > 0 (if refine_half_domain is true)
+
+	auto const &dx = geom[lev].CellSizeArray();
+	auto const &plo = geom[lev].ProbLoArray();
+	auto const &phi = geom[lev].ProbHiArray();
+	const bool refine_half_domain_ = refine_half_domain;
+
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto tag = tags.array(mfi);
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const double x_frac = ((i + 0.5) * dx[0]) / (phi[0] - plo[0]);
+			const double y_frac = ((j + 0.5) * dx[1]) / (phi[1] - plo[1]);
+			const double z_frac = ((k + 0.5) * dx[2]) / (phi[2] - plo[2]);
+			if (!refine_half_domain_ || (x_frac >= 0.7 && y_frac >= 0.7 && z_frac >= 0.7 && x_frac <= 0.8 && y_frac <= 0.8 && z_frac <= 0.8)) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
 	}
 }
 
@@ -164,6 +180,7 @@ auto problem_main() -> int
 	pp.query("T_amb", T_amb);
 	pp.query("t_stop", t_stop);
 	pp.query("SN_particles_file", SN_particles_file);
+	pp.query("refine_half_domain", refine_half_domain);
 
 	// Problem initialization
 	QuokkaSimulation<SNProblem> sim(BCs_cc);
