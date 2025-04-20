@@ -212,45 +212,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
 	}
 };
-
-// Specialization for Test particles destruction
-template <> struct ParticleDestructionTraits<ParticleType::Test> {
-	// Default nested ParticleChecker - determines if a particle should be destroyed
-	template <typename problem_t> struct ParticleChecker {
-		int birth_time_index;
-		int evolution_stage_index;
-
-		AMREX_GPU_HOST_DEVICE explicit ParticleChecker(int birth_time_index, int evolution_stage_index)
-		    : birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index)
-		{
-		}
-
-		template <typename ParticleType>
-		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
-		{
-			// Default implementation: destroy particles with mass < 1.0
-			amrex::ignore_unused(mass_idx, current_time, dt);
-
-			// only particles with evolution stage Removed will be destroyed
-			const bool will_be_removed = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::Removed));
-			return will_be_removed;
-		}
-	};
-
-	// Main method to destroy particles - uses the helper implementation
-	template <typename problem_t, typename ContainerType>
-	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index,
-				     int evolution_stage_index)
-	{
-		// Use the common implementation with our checker type
-		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType,
-							      ParticleDestructionTraits<ParticleType::Test>::template ParticleChecker>(
-		    container, mass_idx, lev, current_time, dt, birth_time_index, evolution_stage_index);
-	}
-};
-
 } // namespace quokka
-
 
 template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {

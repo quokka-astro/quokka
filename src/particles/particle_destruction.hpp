@@ -98,9 +98,10 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 		template <typename ParticleType>
 		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
 		{
-			// Default implementation: will not remove any particles
-			amrex::ignore_unused(p, mass_idx, current_time, dt);
-			return false;
+			amrex::ignore_unused(mass_idx, current_time, dt);
+			// Remove particles with evolution stage Removed
+			const bool will_be_removed = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::Removed));
+			return will_be_removed;
 		}
 	};
 
