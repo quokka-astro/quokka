@@ -18,7 +18,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 		if (mass_idx >= 0) {
 			// Counter for total particles created at this time step
 			amrex::Long total_particles_created = 0;
-			
+
 			// Use the provided ParticleChecker type with global particle parameters
 			CheckerType<problem_t> particle_checker(current_time, dt);
 
@@ -46,7 +46,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				// Example: counts  = [1, 0, 1, 0, 1]
 				//         offset  = [0, 1, 1, 2, 2]
 				const amrex::Long max_new_particles = amrex::Scan::ExclusiveSum(counts.size(), counts.data(), offset.data());
-				
+
 				// Add to our counter
 				total_particles_created += max_new_particles;
 
@@ -79,15 +79,15 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					}
 				});
 			}
-			
+
 			// Sum up total particles created across all processors
 			amrex::Long global_total_particles = total_particles_created;
 			amrex::ParallelDescriptor::ReduceLongSum(global_total_particles);
-			
+
 			// Print the total number of particles created at this time step
 			if (amrex::ParallelDescriptor::IOProcessor()) {
-				amrex::Print() << ">>>Particle creation:\n\tTime: " << current_time << " - Created " << global_total_particles 
-						  << " particles at level " << lev << "\n\n";
+				amrex::Print() << ">>>Particle creation:\n\tTime: " << current_time << " - Created " << global_total_particles
+					       << " particles at level " << lev << "\n\n";
 			}
 		}
 	}

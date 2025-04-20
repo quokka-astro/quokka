@@ -163,8 +163,8 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 				// Check if this is a supernova progenitor
 				const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
-				// Update the particle's evolution stage to SNRemnant if it is a progenitor and the end of the current time step is greater than the
-				// death time.
+				// Update the particle's evolution stage to SNRemnant if it is a progenitor and the end of the current time step is greater than
+				// the death time.
 				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
 					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
 				}
