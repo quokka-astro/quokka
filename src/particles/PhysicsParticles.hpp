@@ -640,7 +640,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
 			// Deposit supernova energy and momentum from all particles
-			SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getEvolutionStageIndex(),
+			SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex(),
 							       this->getBirthTimeIndex());
 		}
 	}
