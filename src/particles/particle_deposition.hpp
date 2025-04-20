@@ -96,6 +96,9 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	static_assert(stencil_size <= 3,
 		      "stencil_size must be <= 3"); // stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
 
+	// copy host variables to device
+	const SNScheme SN_scheme_d = SN_scheme;
+
 	const amrex::Real step_end_time = time + dt;
 
 	constexpr double E_blast = 1.0e51;		       // ergs
@@ -157,7 +160,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 				}
 				// const amrex::Real vol_factor = vol_inverse / n_cells;
 
-				if (SN_scheme == SNScheme::SN_thermal_only) {
+				if (SN_scheme_d == SNScheme::SN_thermal_only) {
 					// Deposit evenly to 5³ cells centered on the particle's cell
 					const amrex::Real pmomentum = 0.0; // for testing: momentum = 0. TODO(cch): should be SNR_rho_per_cell * px
 
@@ -199,7 +202,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 					// fraction of terminal SN momentum to go to gas momentum
 					amrex::Real f_factor = 1.0;
-					if (SN_scheme == SNScheme::SN_thermal_or_thermal_momentum) {
+					if (SN_scheme_d == SNScheme::SN_thermal_or_thermal_momentum) {
 						if (RM < 1.0) {
 							if (RM > 0.027) {
 								f_factor = 0.529 * std::sqrt(RM); // f^2 = 0.28. 28% kinetic (Kim & Ostriker 2017)
@@ -207,7 +210,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 								f_factor = 0.0; // pure thermal in well-resolved limit
 							}
 						}
-					} else if (SN_scheme == SNScheme::SN_thermal_kinetic_or_thermal_momentum) {
+					} else if (SN_scheme_d == SNScheme::SN_thermal_kinetic_or_thermal_momentum) {
 						if (RM < 1.0) {
 							if (RM > 0.027) {
 								f_factor = 0.529 * std::sqrt(RM); // f^2 = 0.28. 28% kinetic (Kim & Ostriker 2017)
@@ -216,7 +219,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 												  // / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
 							}
 						}
-					} else if (SN_scheme == SNScheme::SN_pure_kinetic_or_thermal_momentum) {
+					} else if (SN_scheme_d == SNScheme::SN_pure_kinetic_or_thermal_momentum) {
 						// keep f_factor = 1.0
 					}
 
@@ -296,7 +299,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			if (SN_scheme == SNScheme::SN_thermal_only) {
+			if (SN_scheme_d == SNScheme::SN_thermal_only) {
 				const double rho_new =
 				    local_state(i, j, k, HydroSystem<problem_t>::density_index) + local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 				const double px_new = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) +
