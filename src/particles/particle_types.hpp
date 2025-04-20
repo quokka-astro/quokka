@@ -160,8 +160,8 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 enum class StellarEvolutionStage {
 	LowMassStar,  // Low mass star stage
 	SNProgenitor, // Supernova progenitor stage
-	SNRemnant,     // Supernova remnant stage
-	Removed       // Mark for removal
+	SNRemnant,    // Supernova remnant stage
+	Removed	      // Mark for removal
 };
 
 //-------------------- Stellar population particles --------------------
