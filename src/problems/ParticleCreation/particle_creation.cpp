@@ -70,6 +70,8 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 	});
 }
 
+template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
+
 template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
@@ -79,7 +81,7 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
 	// Loop over all particle at all levels and set first integer component to SNProgenitor
-	for (int lev = 0; lev <= maxLevel(); ++lev) {
+	for (int lev = 0; lev <= TestParticles->maxLevel(); ++lev) {
 		auto &particles = TestParticles->GetParticles(lev);
 
 		for (auto &kv : particles) {
