@@ -83,17 +83,6 @@ enum class SNScheme {
 	SN_pure_kinetic_or_thermal_momentum	// pure kinetic (RM<1) or thermal+momentum (RM>=1)
 };
 
-// Global particle parameters
-// The 'inline' keyword is used here to avoid multiple definition errors when this header
-// is included in multiple source files. It ensures that all translation units that include
-// this header will refer to the same instance of these variables, rather than creating
-// their own copies.
-inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
-inline amrex::Real particle_param1 = -1.0;	       // NOLINT
-inline amrex::Real particle_param2 = -1.0;	       // NOLINT
-inline amrex::Real particle_param3 = -1.0;	       // NOLINT
-inline int particle_verbose = 0;		       // NOLINT print particle logistics
-
 //-------------------- Radiation particles --------------------
 
 // Indices for radiation particles (Rad_particles), birth time + death time + radiation groups
@@ -276,6 +265,26 @@ inline auto get_units_data() -> const auto &
 // 1. For massive particles, velocity components start after mass
 // 2. Birth time, if existing, is always followed by death time
 
+// Global particle parameters
+// The 'inline' keyword is used here to avoid multiple definition errors when this header
+// is included in multiple source files. It ensures that all translation units that include
+// this header will refer to the same instance of these variables, rather than creating
+// their own copies.
+
+// Disable SN feedback when a particle evolves from SNProgenitor to SNRemnant
+inline bool disable_SN_feedback = false;	       // NOLINT
+
+// Placeholder parameters for particles. Used in gravity_3d.cpp tests
+inline amrex::Real particle_param1 = -1.0;	       // NOLINT
+inline amrex::Real particle_param2 = -1.0;	       // NOLINT
+inline amrex::Real particle_param3 = -1.0;	       // NOLINT
+
+// Scheme for SN feedback
+inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
+
+// Verbosity for particle operations
+inline int particle_verbose = 0;		       // NOLINT print particle logistics
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -286,6 +295,7 @@ inline void particleParmParse()
 {
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
+	pp.query("disable_SN_feedback", disable_SN_feedback);
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
 	pp.query("param3", particle_param3);

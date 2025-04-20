@@ -1389,9 +1389,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInteraction(amrex::Real time, amrex::Real dt)
 {
-	// Requires CGS units
-	static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for particleMeshInteraction");
-
 	// Support up to 4 ghost cells for SN deposition. Default is 3, same as the TIGRESS model.
 	const int nghost = 3;
 

@@ -427,8 +427,6 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 		return;
 	}
 
-	const double SN_time = particle_param2;
-
 	for (int lev = lev_min; lev <= container->finestLevel(); ++lev) {
 		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 			auto &particles = pti.GetArrayOfStructs();
@@ -441,7 +439,7 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 				// Check if this is a supernova progenitor
 				const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
-				// Update the particle's evolution stage if it's time
+				// Update the particle's evolution stage to SNRemnant if it's time
 				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
 					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
 				}
