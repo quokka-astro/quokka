@@ -219,9 +219,8 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 												  // / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
 							}
 						}
-					} else if (SN_scheme_d == SNScheme::SN_pure_kinetic_or_thermal_momentum) {
-						// keep f_factor = 1.0
 					}
+					// SNScheme::SN_pure_kinetic_or_thermal_momentum: keep f_factor = 1.0
 
 					// // log RM and f_factor, for debugging on CPU.
 					// if (particle_verbose) {
