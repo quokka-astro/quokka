@@ -27,6 +27,8 @@ constexpr double gamma_ = 5. / 3.;
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 const double year = 3.15576e+07; // in seconds
+const double mass_SNR = 10.0 * C::M_solar;
+const int n_SNR = 2;
 
 static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
 static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
@@ -65,17 +67,25 @@ template <> void QuokkaSimulation<SNProblem>::createInitialStochasticStellarPopP
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile(SN_particles_file, nreal_extra, nullptr);
 
-	// Loop over all particles and set first integer component to 0
-	const int lev = 0;
-	auto &particles = StochasticStellarPopParticles->GetParticles(lev);
-	for (auto &kv : particles) {
-		auto &particle_array = kv.second.GetArrayOfStructs();
-		const int np = particle_array.numParticles();
-		for (int i = 0; i < np; i++) {
-			auto &p = particle_array[i];
-			p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+	// Loop over all particle at all levels and set first integer component to SNProgenitor
+	for (int lev = 0; lev <= maxLevel(); ++lev) {
+		auto &particles = StochasticStellarPopParticles->GetParticles(lev);
+
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
+
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+			});
 		}
 	}
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
 }
 
 template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -96,6 +106,16 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e;
 		state_cc(i, j, k, HydroSystem<SNProblem>::internalEnergy_index) = rho_e;
 	});
+}
+
+template <> void QuokkaSimulation<SNProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+	}
 }
 
 template <> void QuokkaSimulation<SNProblem>::computeAfterTimestep()
@@ -156,17 +176,26 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SNProblem>::density_index) * vol;
+
 	// evolve
 	sim.evolve();
 
-	// find the maximum internal energy in the state_new_cc_[0]
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	const amrex::Real vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	// const amrex::Real max_internal_energy_density = sim.state_new_cc_[0].max(HydroSystem<SNProblem>::internalEnergy_index);
+	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SNProblem>::density_index) * vol;
+	const amrex::Real mass_increase = total_mass_final - total_mass_init;
+	amrex::Print() << "----------------- Problem diagnostics -----------------" << "\n";
+	amrex::Print() << "Total mass increase: " << mass_increase << "\n";
+	amrex::Print() << "Expected total mass increase: " << n_SNR * mass_SNR << "\n";
+	const double mass_increase_rel_err = std::abs(mass_increase - n_SNR * mass_SNR) / (n_SNR * mass_SNR);
+	amrex::Print() << "Mass increase relative error: " << mass_increase_rel_err << "\n";
+	const double mass_increase_rel_err_tol = 1.0e-10;
+
 	const amrex::Real max_internal_energy = max_Eint_global * vol;
 	const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
 	int status = 1;
-	if (max_internal_energy > expected_minimum_max_internal_energy) {
+	if (max_internal_energy > expected_minimum_max_internal_energy && mass_increase_rel_err < mass_increase_rel_err_tol) {
 		status = 0;
 		amrex::Print() << "Test passed. Max internal energy in cells: " << max_internal_energy << "\n";
 	} else {
@@ -174,6 +203,7 @@ auto problem_main() -> int
 		amrex::Print() << "Test failed. Max internal energy in cells too low: " << max_internal_energy << "\n";
 		amrex::Print() << "Expected minimum max internal energy: " << expected_minimum_max_internal_energy << "\n";
 	}
+	amrex::Print() << "---------------------------------------------------------" << "\n";
 
 	return status;
 }
