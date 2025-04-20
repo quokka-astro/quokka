@@ -74,7 +74,7 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 		template <typename ParticleType>
 		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
 		{
-			// Default implementation: destroy particles with mass < 1.0
+			// Default implementation: will not remove any particles
 			amrex::ignore_unused(p, mass_idx, current_time, dt);
 			return false;
 		}

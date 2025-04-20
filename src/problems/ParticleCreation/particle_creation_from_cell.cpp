@@ -188,6 +188,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 					// set birth time to current time
 					p.rdata(birth_time_index) = current_time;
+					p.rdata(birth_time_index + 1) = current_time + 0.0035;
 
 					// Set particle evolution stage
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
@@ -217,7 +218,6 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 	template <typename problem_t> struct ParticleChecker {
 		int birth_time_index;
 		int evolution_stage_index;
-		amrex::Real t_destroy = particle_param3;
 
 		AMREX_GPU_HOST_DEVICE explicit ParticleChecker(int birth_time_index, int evolution_stage_index)
 		    : birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index)
@@ -230,10 +230,9 @@ template <> struct ParticleDestructionTraits<ParticleType::Test> {
 			// Default implementation: destroy particles with mass < 1.0
 			amrex::ignore_unused(mass_idx, current_time, dt);
 
-			// only SNRemnant will be destroyed; just for testing
-			const bool is_sn_remnant = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::SNRemnant));
-			const bool is_time = (current_time + dt > t_destroy);
-			return is_sn_remnant && is_time;
+			// only particles with evolution stage Removed will be destroyed
+			const bool will_be_removed = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::Removed));
+			return will_be_removed;
 		}
 	};
 
