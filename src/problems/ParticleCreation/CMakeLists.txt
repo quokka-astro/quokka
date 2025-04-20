@@ -5,4 +5,5 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     add_test(NAME ParticleCreation COMMAND particle_creation ParticleCreation.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ParticleCreationAMR COMMAND particle_creation ParticleCreationAMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
