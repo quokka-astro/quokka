@@ -1,4 +1,4 @@
-/// \file particle_creation.cpp
+/// \file particle_creation_from_cell.cpp
 /// \brief Defines a test problem for particle creation.
 ///
 
@@ -7,7 +7,7 @@
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
-#include "particle_creation.hpp"
+#include "particle_creation_from_cell.hpp"
 #include "hydro/hydro_system.hpp"
 
 struct TestParticle {
@@ -63,6 +63,40 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
+
+template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
+{
+	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
+	// InitSetPhyParticles to set the integer components
+	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
+	TestParticles->SetVerbose(1);
+	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
+
+	// Loop over all particle at all levels and set first integer component to SNProgenitor
+	for (int lev = 0; lev <= TestParticles->maxLevel(); ++lev) {
+		auto &particles = TestParticles->GetParticles(lev);
+
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
+
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				// if (p.rdata(0) > 1.0e-10) {
+				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				// } else {
+				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
+				// }
+					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
+			});
+		}
+	}
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
+}
 
 namespace quokka
 {
@@ -234,40 +268,6 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 }
 
 template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
-
-template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
-{
-	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
-	// InitSetPhyParticles to set the integer components
-	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
-	TestParticles->SetVerbose(1);
-	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
-
-	// Loop over all particle at all levels and set first integer component to SNProgenitor
-	for (int lev = 0; lev <= TestParticles->maxLevel(); ++lev) {
-		auto &particles = TestParticles->GetParticles(lev);
-
-		for (auto &kv : particles) {
-			auto &particle_array = kv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
-			auto *pdata = particle_array().data();
-
-			// Launch GPU kernel to set integer components
-			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
-				// if (p.rdata(0) > 1.0e-10) {
-				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-				// } else {
-				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
-				// }
-					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
-			});
-		}
-	}
-
-	// Ensure GPU operations are complete
-	amrex::Gpu::streamSynchronize();
-}
 
 auto problem_main() -> int
 {
