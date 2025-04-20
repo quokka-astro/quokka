@@ -7,8 +7,8 @@
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
-#include "particle_creation_from_cell.hpp"
 #include "hydro/hydro_system.hpp"
+#include "particle_creation_from_cell.hpp"
 
 struct TestParticle {
 };
@@ -21,10 +21,9 @@ static bool refine_half_domain = false; // NOLINT
 constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
 // need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
 constexpr double particle_offset_from_center_ = 0.01;
-const static double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
-constexpr int n_test_particles_init = 8; // 8 test particles created at the start of the simulation
+const static double SN_mass = 1.0e-5;	    // mass of SNProgenitor particles
+constexpr int n_test_particles_init = 8;    // 8 test particles created at the start of the simulation
 constexpr int n_test_particles_created = 8; // 8 test particles created and live to the end
-
 
 template <> struct quokka::EOS_Traits<TestParticle> {
 	static constexpr double gamma = 1.0;	     // isothermal
@@ -87,7 +86,8 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 				if (p.rdata(0) > 1.0e-10) {
 					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 				} else {
-					// For testing purposes, we mark particles with mass < 1.0e-10 as Removed. These particles will be removed in current timestep.
+					// For testing purposes, we mark particles with mass < 1.0e-10 as Removed. These particles will be removed in current
+					// timestep.
 					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
 				}
 			});
