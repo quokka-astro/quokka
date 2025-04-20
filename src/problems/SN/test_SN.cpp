@@ -68,7 +68,7 @@ template <> void QuokkaSimulation<SNProblem>::createInitialStochasticStellarPopP
 	StochasticStellarPopParticles->InitFromAsciiFile(SN_particles_file, nreal_extra, nullptr);
 
 	// Loop over all particle at all levels and set first integer component to SNProgenitor
-	for (int lev = 0; lev <= maxLevel(); ++lev) {
+	for (int lev = 0; lev <= StochasticStellarPopParticles->finestLevel(); ++lev) {
 		auto &particles = StochasticStellarPopParticles->GetParticles(lev);
 
 		for (auto &kv : particles) {
