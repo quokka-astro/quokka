@@ -28,7 +28,7 @@ particles.param1 = 0.0015 # create particles at this time, which is step 2
 particles.verbose = 1
 particles.disable_SN_feedback = true
 
-stop_time = 5.0
-max_timesteps = 1
+stop_time = 1.0
+max_timesteps = 4
 plotfile_interval = -1
 checkpoint_interval = -1

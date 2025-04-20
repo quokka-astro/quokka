@@ -84,12 +84,12 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
-				// if (p.rdata(0) > 1.0e-10) {
-				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-				// } else {
-				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
-				// }
-					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
+				if (p.rdata(0) > 1.0e-10) {
+					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				} else {
+					// For testing purposes, we mark particles with mass < 1.0e-10 as Removed. These particles will be removed in current timestep.
+					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
+				}
 			});
 		}
 	}
@@ -188,7 +188,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 					// set birth time to current time
 					p.rdata(birth_time_index) = current_time;
-					p.rdata(birth_time_index + 1) = current_time + 0.0035;
+					// set death time to current time + 0.0025 (2.5 time steps, so will evolve into SNRemnant at step 3)
+					p.rdata(birth_time_index + 1) = current_time + 0.0025;
 
 					// Set particle evolution stage
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
@@ -315,18 +316,18 @@ auto problem_main() -> int
 
 	// ----- Check Test particles -----
 
-	const int n_SNR_particles = n_test_particles_init + n_test_particles_created;
+	const int n_particle_expected = n_test_particles_init / 2 + n_test_particles_created;
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 	int status = 0; // Initialize to success
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
-		amrex::Print() << "Expected number of test particles: " << n_SNR_particles << "\n";
+		amrex::Print() << "Expected number of test particles: " << n_particle_expected << "\n";
 		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
 		status = 1;
-		if (n_particle_test == n_SNR_particles) {
+		if (n_particle_test == n_particle_expected) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}
