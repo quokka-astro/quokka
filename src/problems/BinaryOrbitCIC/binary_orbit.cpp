@@ -98,7 +98,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 	if (cycle % 10 == 0) {
 		// get the finest level
 		const int finest_level = finestLevel();
-		
+
 		// Get particle data using the physics particle descriptor
 		const auto [real_data, int_data] = particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(finest_level);
 
@@ -107,8 +107,8 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 				amrex::Print() << "Computing particle statistics...\n";
 
 				// compute orbital elements
-				const auto& p1 = real_data[0];
-				const auto& p2 = real_data[1];
+				const auto &p1 = real_data[0];
+				const auto &p2 = real_data[1];
 				const double dx = p1[0] - p2[0]; // position x
 				const double dy = p1[1] - p2[1]; // position y
 				const double dz = p1[2] - p2[2]; // position z
