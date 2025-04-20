@@ -17,6 +17,15 @@ constexpr double rho0 = 1.0e-5;
 constexpr double dt_ = 0.001;
 static bool refine_half_domain = false; // NOLINT
 
+// locations of the particles: a 2x2x2 grids of particles
+constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
+// need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
+constexpr double particle_offset_from_center_ = 0.01;
+const static double SN_mass = 1.0e-5;	      // mass of SNProgenitor particles
+constexpr int n_test_particles_init = 8; // 8 test particles created at the start of the simulation
+constexpr int n_test_particles_created = 8; // 8 test particles created and live to the end
+
+
 template <> struct quokka::EOS_Traits<TestParticle> {
 	static constexpr double gamma = 1.0;	     // isothermal
 	static constexpr double cs_isothermal = 3.0; //
@@ -54,6 +63,160 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
+
+namespace quokka
+{
+// Specialization for Test particle creation
+template <> struct ParticleCreationTraits<ParticleType::Test> {
+	// Specialized nested ParticleChecker for Test particles
+	template <typename problem_t> struct ParticleChecker {
+		amrex::Real current_time;
+		amrex::Real dt;
+		amrex::Real param1 = particle_param1;
+
+		double x_L = box_left_edge_;
+		double offset = particle_offset_from_center_;
+
+		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
+
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+		{
+			// A simple demonstration of particle creation
+			// Could check density threshold or other state-based conditions
+			amrex::ignore_unused(state_arr);
+
+			// Calculate cell indices for the particle locations
+			const int i_par1 = static_cast<int>(floor((-offset - x_L) / dx[0]));
+			const int j_par1 = static_cast<int>(floor((-offset - x_L) / dx[1]));
+			const int k_par1 = static_cast<int>(floor((-offset - x_L) / dx[2]));
+
+			const int i_par2 = static_cast<int>(floor((offset - x_L) / dx[0]));
+			const int j_par2 = static_cast<int>(floor((offset - x_L) / dx[1]));
+			const int k_par2 = static_cast<int>(floor((offset - x_L) / dx[2]));
+
+			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
+			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
+				return 1;
+			}
+			return 0;
+		}
+	};
+
+	// Specialized nested ParticleCreator for Test particles
+	template <typename problem_t> struct ParticleCreator {
+		int mass_idx;
+		int birth_time_index;
+		int evolution_stage_index;
+		int cpu_id;
+		amrex::Long pid_start;
+		amrex::Real current_time;
+
+		AMREX_GPU_HOST_DEVICE
+		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
+				amrex::Real current_time)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
+		      pid_start(particle_id_start), current_time(current_time)
+		{
+		}
+
+		template <typename ParticleType, typename StateArray>
+		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+		{
+			if (mass_idx + 3 < ParticleType::NReal) {
+				// Calculate common values for all particles
+				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+
+				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+
+				// Create all particles
+				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
+					auto &p = particles[p_idx]; // NOLINT
+
+					// Set particle position at cell center
+					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+					p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+					p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+
+					// Set particle ID and CPU
+					p.id() = pid_start + base_offset + p_idx;
+					p.cpu() = cpu_id;
+
+					// Initialize particle properties
+					p.rdata(mass_idx) = SN_mass;
+					p.rdata(mass_idx + 1) = vx;
+					p.rdata(mass_idx + 2) = vy;
+					p.rdata(mass_idx + 3) = vz;
+
+					// set birth time to current time
+					p.rdata(birth_time_index) = current_time;
+
+					// Set particle evolution stage
+					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
+				}
+
+				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.
+				state_arr(i, j, k, HydroSystem<problem_t>::density_index) -= 1.0e-20;
+			}
+		}
+	};
+
+	// Main method to create particles - uses the helper implementation
+	template <typename problem_t, typename ContainerType>
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+				    int evolution_stage_index, int birth_time_index)
+	{
+		// Use the common implementation with our checker and creator types
+		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
+							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
+		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
+	}
+};
+
+// Specialization for Test particles destruction
+template <> struct ParticleDestructionTraits<ParticleType::Test> {
+	// Default nested ParticleChecker - determines if a particle should be destroyed
+	template <typename problem_t> struct ParticleChecker {
+		int birth_time_index;
+		int evolution_stage_index;
+		amrex::Real t_destroy = particle_param3;
+
+		AMREX_GPU_HOST_DEVICE explicit ParticleChecker(int birth_time_index, int evolution_stage_index)
+		    : birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index)
+		{
+		}
+
+		template <typename ParticleType>
+		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
+		{
+			// Default implementation: destroy particles with mass < 1.0
+			amrex::ignore_unused(mass_idx, current_time, dt);
+
+			// only SNRemnant will be destroyed; just for testing
+			const bool is_sn_remnant = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::SNRemnant));
+			const bool is_time = (current_time + dt > t_destroy);
+			return is_sn_remnant && is_time;
+		}
+	};
+
+	// Main method to destroy particles - uses the helper implementation
+	template <typename problem_t, typename ContainerType>
+	static void destroyParticles(ContainerType *container, int mass_idx, int lev, amrex::Real current_time, amrex::Real dt, int birth_time_index,
+				     int evolution_stage_index)
+	{
+		// Use the common implementation with our checker type
+		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType,
+							      ParticleDestructionTraits<ParticleType::Test>::template ParticleChecker>(
+		    container, mass_idx, lev, current_time, dt, birth_time_index, evolution_stage_index);
+	}
+};
+
+} // namespace quokka
+
 
 template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -153,7 +316,7 @@ auto problem_main() -> int
 
 	// ----- Check Test particles -----
 
-	const int n_SNR_particles = 8;
+	const int n_SNR_particles = n_test_particles_init + n_test_particles_created;
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
 	int status = 0; // Initialize to success
