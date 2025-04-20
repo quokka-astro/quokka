@@ -2,183 +2,124 @@
 /// \brief Defines a test problem for particle creation.
 ///
 
-#include <algorithm>
-
-#include "AMReX.H"
-#include "AMReX_BC_TYPES.H"
-#include "AMReX_DistributionMapping.H"
-#include "AMReX_Geometry.H"
-#include "AMReX_GpuContainers.H"
-#include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
-#include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
 #include "particle_creation.hpp"
 #include "hydro/hydro_system.hpp"
 
-struct BinaryOrbit {
+struct TestParticle {
 };
 
-template <> struct quokka::EOS_Traits<BinaryOrbit> {
-	static constexpr double gamma = 1.0;	       // isothermal
-	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
-	static constexpr double mean_molecular_weight = C::m_u;
+constexpr double rho0 = 1.0e-5;
+constexpr double dt_ = 0.001;
+static bool refine_half_domain = false; // NOLINT
+
+template <> struct quokka::EOS_Traits<TestParticle> {
+	static constexpr double gamma = 1.0;	     // isothermal
+	static constexpr double cs_isothermal = 3.0; //
+	static constexpr double mean_molecular_weight = 1.0;
 };
 
-template <> struct Particle_Traits<BinaryOrbit> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+// Test enum to demonstrate type checking of particle_switch
+enum class TestEnum : unsigned int {
+	MISTAKE = 0b00000100U,
 };
 
-template <> struct HydroSystem_Traits<BinaryOrbit> {
+template <> struct Particle_Traits<TestParticle> {
+	// The following will cause a compile error
+	// static constexpr int particle_switch = 1;
+	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
+	// This is the correct way to define the particle switch
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
+};
+
+template <> struct HydroSystem_Traits<TestParticle> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<BinaryOrbit> {
+template <> struct Physics_Traits<TestParticle> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double gravitational_constant = 1.0;
+	static constexpr double c_light = 1.0;
+	static constexpr double radiation_constant = 1.0;
 };
 
-template <> struct SimulationData<BinaryOrbit> {
-	std::vector<amrex::ParticleReal> time;
-	std::vector<amrex::ParticleReal> dist;
-};
-
-template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		double const rho = 1.0e-22; // g cm^{-3}
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::energy_index) = 0;
-		state_cc(i, j, k, HydroSystem<BinaryOrbit>::internalEnergy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::density_index) = rho0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x1Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x2Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x3Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = 0;
 	});
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
+template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 {
-	// read particles from ASCII file
-	const int nreal_extra = 4; // mass vx vy vz
-	CICParticles->SetVerbose(1);
-	CICParticles->InitFromAsciiFile("BinaryOrbit_particles.txt", nreal_extra, nullptr);
-}
+	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
+	// InitSetPhyParticles to set the integer components
+	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
+	TestParticles->SetVerbose(1);
+	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
-template <> void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
-{
-	// compute derived variables and save in 'mf'
-	if (dname == "gpot") {
-		const int ncomp = ncomp_cc_in;
-		auto const &phi_arr = phi[lev].const_arrays();
-		auto output = mf.arrays();
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k); });
-	}
-}
+	// Loop over all particle at all levels and set first integer component to SNProgenitor
+	for (int lev = 0; lev <= maxLevel(); ++lev) {
+		auto &particles = TestParticles->GetParticles(lev);
 
-template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
-{
-	// every N cycles, save particle statistics at the finest level
-	static int cycle = 1;
-	if (cycle % 10 == 0) {
-		// create particle container for analysis
-		amrex::ParticleContainer<quokka::CICParticleRealComps> analysisPC{};
-		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
-		amrex::Geometry const geom(box);
-		amrex::BoxArray const boxArray(box);
-		amrex::Vector<int> const ranks({0}); // workaround nvcc bug
-		amrex::DistributionMapping const dmap(ranks);
-		analysisPC.Define(geom, dmap, boxArray);
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
 
-		// Create a single destination tile and copy all particles from finest level
-		auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
-
-		// Copy particles from each source tile
-		const int finest_level = finestLevel();
-		const auto &particles = CICParticles->GetParticles(finest_level);
-		for (const auto &kv : particles) {
-			const auto &src_tile = kv.second;
-			const int np = src_tile.numParticles();
-			if (np > 0) {
-				// Get current size of destination tile
-				const int old_size = dst_tile.numParticles();
-				// Resize to accommodate new particles
-				dst_tile.resize(old_size + np);
-				// Get source and destination arrays
-				const auto &src_aos = src_tile.GetArrayOfStructs();
-				auto &dst_aos = dst_tile.GetArrayOfStructs();
-				// Copy particles
-				amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + old_size); // NOLINT
-			}
-		}
-
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			quokka::CICParticleIterator const pIter(analysisPC, 0);
-			if (pIter.isValid() && pIter.numParticles() >= 2) {
-				amrex::Print() << "Computing particle statistics...\n";
-				auto &particles = pIter.GetArrayOfStructs();
-
-				// copy particles from device to host
-				quokka::CICParticleContainer::ParticleType *pData = particles().data();
-				amrex::Vector<quokka::CICParticleContainer::ParticleType> pData_h(pIter.numParticles());
-				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + pIter.numParticles(), pData_h.begin()); // NOLINT
-
-				// compute orbital elements
-				quokka::CICParticleContainer::ParticleType &p1 = pData_h[0];
-				quokka::CICParticleContainer::ParticleType &p2 = pData_h[1];
-				const amrex::ParticleReal dx = p1.pos(0) - p2.pos(0);
-				const amrex::ParticleReal dy = p1.pos(1) - p2.pos(1);
-				const amrex::ParticleReal dz = p1.pos(2) - p2.pos(2);
-				const amrex::ParticleReal dist = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
-				const amrex::ParticleReal dist0 = 6.25e12; // cm
-				const amrex::Real cell_dx0 = this->geom[finest_level].CellSize(0);
-
-				// save statistics
-				userData_.time.push_back(tNew_[finest_level]);
-				userData_.dist.push_back((dist - dist0) / cell_dx0);
-				amrex::Print() << "Particle separation: " << dist << " cm, initial separation is " << dist0 << " cm.\n";
-			}
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				// if (p.rdata(0) > 1.0e-10) {
+				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				// } else {
+				// 	p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
+				// }
+					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::LowMassStar);
+			});
 		}
 	}
-	++cycle;
-}
 
-template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-{
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto tag = tags.array(mfi);
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
-	}
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
 }
 
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<BinaryOrbit>::x1Momentum_index) && (dim == 0)) {
+		if ((n == HydroSystem<TestParticle>::x1Momentum_index) && (dim == 0)) {
 			return true;
 		}
-		if ((n == HydroSystem<BinaryOrbit>::x2Momentum_index) && (dim == 1)) {
+		if ((n == HydroSystem<TestParticle>::x2Momentum_index) && (dim == 1)) {
 			return true;
 		}
-		if ((n == HydroSystem<BinaryOrbit>::x3Momentum_index) && (dim == 2)) {
+		if ((n == HydroSystem<TestParticle>::x3Momentum_index) && (dim == 2)) {
 			return true;
 		}
 		return false;
 	};
 
-	const int ncomp_cc = Physics_Indices<BinaryOrbit>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<TestParticle>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -193,8 +134,14 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
+	QuokkaSimulation<TestParticle> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
+	sim.initDt_ = dt_;
+	sim.maxDt_ = dt_;
+
+	// Read parameters from input file
+	const amrex::ParmParse pp("problem");
+	pp.query("refine_half_domain", refine_half_domain);
 
 	// initialize
 	sim.setInitialConditions();
@@ -202,24 +149,27 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	// check max abs particle distance
-	double max_err = 0.0;
+	// ----- Check Test particles -----
+
+	const int n_SNR_particles = 8;
+	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
+
+	int status = 0; // Initialize to success
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		if (!sim.userData_.dist.empty()) {
-			auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
-						       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
-			max_err = std::abs(*result);
-			amrex::Print() << "max particle separation = " << max_err << " cell widths.\n";
-		} else {
-			max_err = 1.0;
-			amrex::Print() << "No particles in userData_.dist.\n";
+
+		amrex::Print() << "Expected number of test particles: " << n_SNR_particles << "\n";
+		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
+
+		status = 1;
+		if (n_particle_test == n_SNR_particles) {
+			status = 0;
+			amrex::Print() << "Relative error within tolerance.\n";
+		}
+		if (status > 0) {
+			amrex::Print() << "Test failed.\n";
 		}
 	}
 
-	int status = 1;
-	const double max_err_tol = 0.18; // max error tol in cell widths
-	if (max_err < max_err_tol) {
-		status = 0;
-	}
 	return status;
 }
