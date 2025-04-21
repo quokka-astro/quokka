@@ -194,6 +194,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
 	void createInitialTestParticles() override;
+	void RefineGrid(int lev, amrex::TagBoxArray & tags, amrex::Real time, int ngrow) override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeBeforeTimestep() override;
@@ -623,6 +624,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTes
 	// beginning of the simulation.
 	// note: an implementation is only effective if Test_particles are used
 }
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::RefineGrid(int /*lev*/, amrex::TagBoxArray & /*tags*/, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+}
+
 #endif // AMREX_SPACEDIM == 3
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeBeforeTimestep()
