@@ -98,15 +98,15 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	// amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-{
-	// for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-	// 	const amrex::Box &box = mfi.validbox();
-	// 	const auto tag = tags.array(mfi);
+// template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+// {
+// 	// for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+// 	// 	const amrex::Box &box = mfi.validbox();
+// 	// 	const auto tag = tags.array(mfi);
 
-	// 	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
-	// }
-}
+// 	// 	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+// 	// }
+// }
 
 namespace quokka
 {
@@ -282,6 +282,9 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
+
+	// set force finest level to true for test particles
+	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->setForceFinestLevel(true);
 
 	// evolve
 	sim.evolve();
