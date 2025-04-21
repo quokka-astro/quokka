@@ -98,7 +98,7 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	// amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<TestParticle>::RefineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<TestParticle>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();

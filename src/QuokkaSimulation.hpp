@@ -188,7 +188,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
-	void RefineGrid(int lev, amrex::TagBoxArray & tags, amrex::Real time, int ngrow) override;
+	void refineGrid(int lev, amrex::TagBoxArray & tags, amrex::Real time, int ngrow) override;
 	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
 	void createInitialCICParticles() override;
@@ -697,7 +697,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistic
 	return std::map<std::string, amrex::Real>{};
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::RefineGrid(int /*lev*/, amrex::TagBoxArray & /*tags*/, amrex::Real /*time*/, int /*ngrow*/)
+template <typename problem_t> void QuokkaSimulation<problem_t>::refineGrid(int /*lev*/, amrex::TagBoxArray & /*tags*/, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
@@ -706,7 +706,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::RefineGrid(int /
 template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
 {
 	// call RefineGrid to set tags
-	RefineGrid(lev, tags, time, ngrow);
+	refineGrid(lev, tags, time, ngrow);
 }
 
 template <typename problem_t>

@@ -235,7 +235,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) = 0;
-	virtual void RefineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) = 0;
+	virtual void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) = 0;
 	virtual void createInitialRadParticles() = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void createInitialCICParticles() = 0;
