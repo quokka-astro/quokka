@@ -362,8 +362,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				// Update total energy
 				state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= factor;
 
-				//Update mass scalars
-				if(nscalars>0) {
+				// Update mass scalars
+				if (nscalars > 0) {
 					for (int nn = 0; nn < nscalars; ++nn) {
 						state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) *= factor;
 					}
