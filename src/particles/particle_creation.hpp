@@ -345,8 +345,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
 				}
 
-				double factor = NAN;
-				factor = (cell_mass - particle_mass) / cell_volume / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+				const double factor = (cell_mass - particle_mass) / cell_volume / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
 				// Update the cell density to reflect mass conversion into stars
 				state_arr(i, j, k, HydroSystem<problem_t>::density_index) *= factor;
