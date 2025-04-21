@@ -632,7 +632,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			return;
 		}
 
-		// keep empty for now
+		for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
+			const auto &box = mfi.validbox();
+			const auto &tag = tags.array(mfi);
+			const auto &geom = container_->Geom(lev);
+			const auto dx = geom.CellSizeArray();
+			const auto plo = geom.ProbLoArray();
+
+			// loop over all particles in the box
+		}
 	}
 #endif
 };
