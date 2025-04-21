@@ -188,13 +188,13 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
+	void RefineGrid(int lev, amrex::TagBoxArray & tags, amrex::Real time, int ngrow) override;
 	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
 	void createInitialTestParticles() override;
-	void RefineGrid(int lev, amrex::TagBoxArray & tags, amrex::Real time, int ngrow) override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeBeforeTimestep() override;
@@ -624,13 +624,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTes
 	// beginning of the simulation.
 	// note: an implementation is only effective if Test_particles are used
 }
-
-template <typename problem_t> void QuokkaSimulation<problem_t>::RefineGrid(int /*lev*/, amrex::TagBoxArray & /*tags*/, amrex::Real /*time*/, int /*ngrow*/)
-{
-	// default empty implementation
-	// user should implement using problem-specific template specialization
-}
-
 #endif // AMREX_SPACEDIM == 3
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeBeforeTimestep()
@@ -704,9 +697,16 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistic
 	return std::map<std::string, amrex::Real>{};
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <typename problem_t> void QuokkaSimulation<problem_t>::RefineGrid(int /*lev*/, amrex::TagBoxArray & /*tags*/, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement -- user should implement
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
+{
+	// call RefineGrid to set tags
+	RefineGrid(lev, tags, time, ngrow);
 }
 
 template <typename problem_t>

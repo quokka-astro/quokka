@@ -235,6 +235,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) = 0;
+	virtual void RefineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) = 0;
 	virtual void createInitialRadParticles() = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void createInitialCICParticles() = 0;
@@ -243,7 +244,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void createInitialTestParticles() = 0;
 	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
 	// of the simulation
-	virtual void RefineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) = 0;
 #endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
@@ -264,12 +264,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
 
-	// // tag cells for refinement
-	// void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override
-	// {
-	// 	// Call RefineGrid to set tags
-	// 	RefineGrid(lev, tags, time, ngrow);
-	// }
+	// tag cells for refinement
+	// TODO: not sure if this is needed
+	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
 
 	// Make a new level using provided BoxArray and DistributionMapping
 	void MakeNewLevelFromCoarse(int lev, amrex::Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm) override;
@@ -369,9 +366,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AscentCustomActions(conduit::Node const &blueprintMesh);
 	void RenderAscent();
 #endif
-
-	// // Virtual function to be implemented by derived classes to set refinement tags
-	// virtual void RefineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) = 0;
       protected:
 	amrex::Vector<amrex::BCRec> BCs_cc_; // on level 0
 	amrex::Vector<amrex::BCRec> BCs_fc_; // on level 0
