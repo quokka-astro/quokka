@@ -705,8 +705,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::refineGrid(int /
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
 {
-	// call RefineGrid to set tags
+	// call user-defined RefineGrid to set tags
 	refineGrid(lev, tags, time, ngrow);
+
+	// refine grids around particles
+	particleRegister_.refineGridsAroundParticles(lev, tags, time, ngrow);
 }
 
 template <typename problem_t>

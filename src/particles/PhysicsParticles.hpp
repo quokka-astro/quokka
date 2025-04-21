@@ -119,6 +119,9 @@ class PhysicsParticleDescriptorBase
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
 	virtual void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) { /* Default empty implementation */ }
+
+	// Tag cells around particles for refinement
+	virtual void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -620,6 +623,18 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 	}
+
+#if AMREX_SPACEDIM == 3
+	// Implement cell tagging around particles
+	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) const override
+	{
+		if (container_ == nullptr) {
+			return;
+		}
+
+		// keep empty for now
+	}
+#endif
 };
 
 // New class for star particles that adds stellar evolution capabilities
@@ -891,6 +906,16 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 		return max_speed;
+	}
+
+	// Refine grids around particles that require finest level
+	void refineGridsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getForceFinestLevel()) {
+				descriptor->tagCellsAroundParticles(lev, tags, time, ngrow);
+			}
+		}
 	}
 #endif // AMREX_SPACEDIM == 3
 
