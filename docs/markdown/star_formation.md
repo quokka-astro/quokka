@@ -3,7 +3,7 @@
 ## Checking for Jeans Violation
 The star formation recipe is implemented via the Stochastic Stellar Population specialisation. Every cell is checked for Jeans violation and star particles are added if $\lambda_J = c_s/\sqrt{G\rho} < J \times dx$, where J is $0.5$. 
 
-Adding star particle to every Jeans violating cell can lead to a large number of small mass stars which can be cumbersome. To alleviate this issue, we control the star formation rate through $\epsilon_{\rm ff}$ and $\epsilon_{*}$. $\epsilon_{\rm ff}$ is the efficiency per freefall time given by $\left( \frac{\dot{M} \cdot t_{\rm ff}}{M_{\rm cell}\cdot dt} \right) $
+Adding star particle to every Jeans violating cell can lead to a large number of small mass stars which can be cumbersome. To alleviate this issue, we control the star formation rate through $\epsilon_{\rm ff}$ and $\epsilon_{*}$. $\epsilon_{\rm ff}$ is the efficiency per freefall time given by $\left( \frac{\dot{M} t_{\rm ff}}{M_{\rm cell} dt} \right) $
 , while $\epsilon_{*}$ is the fraction of cell mass that gets converted into stars. 
 
 There are two equivalent ways of converting a certain mass from cell into stars. 
