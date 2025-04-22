@@ -193,6 +193,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
+	void createInitialSinkParticles() override;
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
@@ -614,6 +615,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSto
 	// StochasticStellarPop particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.
 	// note: an implementation is only effective if StochasticStellarPop_particles are used
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSinkParticles()
+{
+	// Optional implementation
+	// Sink particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
+	// beginning of the simulation.
+	// note: an implementation is only effective if Sink_particles are used
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTestParticles()
