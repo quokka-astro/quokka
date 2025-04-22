@@ -20,7 +20,8 @@ enum class ParticleSwitch : unsigned int {
 	Rad = bitflag<2>(),		     // Radiation particles, = 0b0010
 	CICRad = bitflag<3>(),		     // Combined gravitating-radiating particles, = 0b0100
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
-	Test = bitflag<5>()		     // Test particles with all features enabled, = 0b1000
+	Sink = bitflag<5>(),                 // Sink particles, = 0b10000
+	Test = bitflag<6>()		     // Test particles with all features enabled, = 0b100000
 };
 
 // Enable bitwise operations on the enum class
@@ -72,6 +73,7 @@ enum class ParticleType {
 	CIC,		      // Gravitating particles
 	CICRad,		      // Gravitating radiation particles
 	StochasticStellarPop, // Stellar population particles
+	Sink,                 // Sink particles
 	Test		      // Test particles with all features enabled
 };
 
@@ -163,7 +165,7 @@ enum class StellarEvolutionStage {
 
 //-------------------- Stellar population particles --------------------
 
-// Indices for stellar population particles (StochasticStellarPop_particles), mass + 3 velocity components + fate + luminosity
+// Indices for StochasticStellarPop_particles
 enum StochasticStellarPopParticleDataIdx {
 	StochasticStellarPopParticleMassIdx = 0,  // Mass of the particle
 	StochasticStellarPopParticleVxIdx,	  // Velocity in x direction
@@ -187,7 +189,7 @@ constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 }();
 
 // Number of integer components for StochasticStellarPop_particles
-constexpr int StochasticStellarPopParticleIntComps = 1; // fate
+constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
 
 // Type definitions for StochasticStellarPop_particles container and iterator
 template <typename problem_t>
@@ -211,7 +213,7 @@ enum TestParticleDataIdx {
 
 constexpr int TestParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
 
-// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
+// Number of real components for Test_particles
 template <typename problem_t>
 constexpr int TestParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -227,6 +229,41 @@ constexpr int TestParticleIntComps = 1; // stellar evolution stage
 // Type definitions for Test_particles container and iterator
 template <typename problem_t> using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps<problem_t>, TestParticleIntComps>;
 template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestParticleRealComps<problem_t>, TestParticleIntComps>;
+
+//-------------------- Sink particles --------------------
+
+// Indices for Sink_particles
+enum SinkParticleDataIdx {
+	SinkParticleMassIdx = 0,  // Mass of the particle
+	SinkParticleVxIdx,	  // Velocity in x direction
+	SinkParticleVyIdx,	  // Velocity in y direction
+	SinkParticleVzIdx,	  // Velocity in z direction
+	SinkParticleBirthTimeIdx, // Time when particle becomes active
+	SinkParticleDeathTimeIdx, // Time when particle becomes inactive
+	SinkParticleLumIdx	  // Base index for luminosity components
+};
+
+constexpr int SinkParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
+
+// Number of real components for Sink_particles
+template <typename problem_t>
+constexpr int SinkParticleRealComps = []() constexpr {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, lum[nGroups]
+	} else {
+		return 6; // mass, vx, vy, vz, birth_time, death_time
+	}
+}();
+
+// Number of integer components for Sink_particles
+constexpr int SinkParticleIntComps = 1; // evolution stage
+
+// Type definitions for Sink_particles container and iterator
+template <typename problem_t>
+using SinkParticleContainer =
+    amrex::AmrParticleContainer<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
+template <typename problem_t>
+using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
 
 #endif // AMREX_SPACEDIM == 3
 
@@ -245,6 +282,13 @@ inline auto get_units_data() -> const auto &
 	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::StochasticStellarPop,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
+	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::Sink,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
 	       {"vy", {0, 1, -1, 0}},
