@@ -71,18 +71,19 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
-	// Loop over all particle at all levels and set first integer component to SNProgenitor
-	for (int lev = 0; lev <= TestParticles->maxLevel(); ++lev) {
-		auto &particles = TestParticles->GetParticles(lev);
-
-		for (auto &kv : particles) {
-			auto &particle_array = kv.second.GetArrayOfStructs();
+	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because TestParticles->maxLevel() always returns the maximum
+	// level of the grid cells, but not all levels have particles, and when this happens, TestParticles->GetParticles(lev) will result in
+	// Segfault. Therefore, we loop over the actual particle container. 
+	for (auto &kv : TestParticles->GetParticles()) {
+		for (auto &ikv : kv) {
+			auto &particle_array = ikv.second.GetArrayOfStructs();
 			const int np = particle_array.numParticles();
-			auto *pdata = particle_array().data();
 
 			if (np == 0) {
 				continue;
 			}
+
+			auto *pdata = particle_array().data();
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
@@ -100,16 +101,6 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 
 	// Ensure GPU operations are complete
 	amrex::Gpu::streamSynchronize();
-}
-
-template <> void QuokkaSimulation<TestParticle>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-{
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto tag = tags.array(mfi);
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
-	}
 }
 
 namespace quokka
