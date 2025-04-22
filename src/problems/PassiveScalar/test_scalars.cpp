@@ -210,7 +210,7 @@ void QuokkaSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &
 #endif
 }
 
-template <> void QuokkaSimulation<ScalarProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ScalarProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 

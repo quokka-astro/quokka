@@ -167,7 +167,7 @@ template <> void QuokkaSimulation<StarCluster>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-template <> void QuokkaSimulation<StarCluster>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<StarCluster>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// refine on Jeans length
 	const int N_cells = 4; // inverse of the 'Jeans number' [Truelove et al. (1997)]

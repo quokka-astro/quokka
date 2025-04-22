@@ -87,7 +87,7 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::setInitialConditionsOn
 	});
 }
 
-template <> void QuokkaSimulation<KelvinHelmholzProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<KelvinHelmholzProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
