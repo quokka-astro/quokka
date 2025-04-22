@@ -4,6 +4,7 @@ add_subdirectory(AdvectionSemiellipse)
 
 add_subdirectory(ParticleCreation)
 add_subdirectory(SN)
+add_subdirectory(Sink)
 
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
