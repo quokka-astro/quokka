@@ -626,7 +626,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 #if AMREX_SPACEDIM == 3
 	// Implement cell tagging around particles
-	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) const override
+	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) const override
 	{
 		if (container_ == nullptr) {
 			return;
