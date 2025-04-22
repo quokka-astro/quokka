@@ -931,10 +931,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Refine grids around particles that require finest level
-	void refineGridsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
+	void refineGridsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow, const amrex::IntVect &n_error_buf)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getForceFinestLevel()) {
+				AMREX_ALWAYS_ASSERT(n_error_buf.min() >= 4);
 				descriptor->tagCellsAroundParticles(lev, tags, time, ngrow);
 			}
 		}

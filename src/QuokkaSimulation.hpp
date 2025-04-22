@@ -117,6 +117,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::tempFloor_;
 
 	using AMRSimulation<problem_t>::max_level;
+	using AMRSimulation<problem_t>::n_error_buf;
 
 	SimulationData<problem_t> userData_;
 
@@ -713,7 +714,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev
 #if AMREX_SPACEDIM == 3
 	// refine grids around particles
 	if (lev < max_level) {
-		particleRegister_.refineGridsAroundParticles(lev, tags, time, ngrow);
+		particleRegister_.refineGridsAroundParticles(lev, tags, time, ngrow, n_error_buf[lev]);
 	}
 #endif
 }
