@@ -710,10 +710,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev
 	// call user-defined RefineGrid to set tags
 	refineGrid(lev, tags, time, ngrow);
 
+#if AMREX_SPACEDIM == 3
 	// refine grids around particles
 	if (lev < max_level) {
 		particleRegister_.refineGridsAroundParticles(lev, tags, time, ngrow);
 	}
+#endif
 }
 
 template <typename problem_t>
