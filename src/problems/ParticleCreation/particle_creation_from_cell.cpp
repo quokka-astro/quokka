@@ -73,7 +73,7 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 
 	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because TestParticles->maxLevel() always returns the maximum
 	// level of the grid cells, but not all levels have particles, and when this happens, TestParticles->GetParticles(lev) will result in
-	// Segfault. Therefore, we loop over the actual particle container. 
+	// Segfault. Therefore, we loop over the actual particle container.
 	for (auto &kv : TestParticles->GetParticles()) {
 		for (auto &ikv : kv) {
 			auto &particle_array = ikv.second.GetArrayOfStructs();
