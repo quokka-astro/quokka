@@ -651,7 +651,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 				const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
 
-				tag(ix, iy, iz) = amrex::TagBox::SET;
+				// Use atomic operation to safely set the tag
+				amrex::Gpu::Atomic::Max(&tag(ix, iy, iz), static_cast<char>(amrex::TagBox::SET));
 			});
 		}
 	}
