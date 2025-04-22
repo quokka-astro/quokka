@@ -278,9 +278,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 					p.rdata(birth_time_index + 1) = LONG_MAX;
 					if (p_idx > 0) {
-						double sigma_sq_x = NAN;
-						double sigma_sq_y = NAN;
-						double sigma_sq_z = NAN;
 						double numx = 0.0;
 						double numy = 0.0;
 						double numz = 0.0;
@@ -311,9 +308,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 								}
 							}
 						}
-						sigma_sq_x = numx / denominator;
-						sigma_sq_y = numy / denominator;
-						sigma_sq_z = numz / denominator;
+						const double sigma_sq_x = numx / denominator;
+						const double sigma_sq_y = numy / denominator;
+						const double sigma_sq_z = numz / denominator;
 
 						p.rdata(mass_idx + 1) = (std::abs(vx) / vx) * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
 						p.rdata(mass_idx + 2) = (std::abs(vy) / vy) * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
