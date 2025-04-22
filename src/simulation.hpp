@@ -265,7 +265,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void FixupState(int level) = 0;
 
 	// tag cells for refinement
-	// TODO: not sure if this is needed
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
 
 	// Make a new level using provided BoxArray and DistributionMapping
