@@ -116,6 +116,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
 
+	using AMRSimulation<problem_t>::max_level;
+
 	SimulationData<problem_t> userData_;
 
 	int enableCooling_ = 0;
@@ -709,7 +711,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev
 	refineGrid(lev, tags, time, ngrow);
 
 	// refine grids around particles
-	particleRegister_.refineGridsAroundParticles(lev, tags, time, ngrow);
+	if (lev < max_level) {
+		particleRegister_.refineGridsAroundParticles(lev, tags, time, ngrow);
+	}
 }
 
 template <typename problem_t>

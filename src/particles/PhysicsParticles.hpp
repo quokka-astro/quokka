@@ -632,14 +632,27 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			return;
 		}
 
-		for (amrex::MFIter mfi = container_->MakeMFIter(lev); mfi.isValid(); ++mfi) {
-			const auto &box = mfi.validbox();
-			const auto &tag = tags.array(mfi);
-			const auto &geom = container_->Geom(lev);
-			const auto dx = geom.CellSizeArray();
-			const auto plo = geom.ProbLoArray();
+		for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
+			auto &particles = pti.GetArrayOfStructs();
+			auto *pData = particles().data();
+			const amrex::Long np = pti.numParticles();
 
-			// loop over all particles in the box
+			// Get geometry information for this level
+			const auto &geom = container_->Geom(lev);
+			const auto plo = geom.ProbLoArray();
+			const auto dxi = geom.InvCellSizeArray();
+
+			const auto tag = tags.array(pti);
+
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				// Find the cell containing the particle
+				const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+				const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+				const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+
+				tag(ix, iy, iz) = amrex::TagBox::SET;
+			});
 		}
 	}
 #endif
