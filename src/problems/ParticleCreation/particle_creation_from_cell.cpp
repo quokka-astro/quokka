@@ -71,31 +71,35 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
-	// // Loop over all particle at all levels and set first integer component to SNProgenitor
-	// for (int lev = 0; lev <= TestParticles->maxLevel(); ++lev) {
-	// 	auto &particles = TestParticles->GetParticles(lev);
+	// Loop over all particle at all levels and set first integer component to SNProgenitor
+	for (int lev = 0; lev <= TestParticles->maxLevel(); ++lev) {
+		auto &particles = TestParticles->GetParticles(lev);
 
-	// 	for (auto &kv : particles) {
-	// 		auto &particle_array = kv.second.GetArrayOfStructs();
-	// 		const int np = particle_array.numParticles();
-	// 		auto *pdata = particle_array().data();
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
 
-	// 		// Launch GPU kernel to set integer components
-	// 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-	// 			auto &p = pdata[i]; // NOLINT
-	// 			if (p.rdata(0) > 1.0e-10) {
-	// 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-	// 			} else {
-	// 				// For testing purposes, we mark particles with mass < 1.0e-10 as Removed. These particles will be removed in current
-	// 				// timestep.
-	// 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
-	// 			}
-	// 		});
-	// 	}
-	// }
+			if (np == 0) {
+				continue;
+			}
+
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				if (p.rdata(0) > 1.0e-10) {
+					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				} else {
+					// For testing purposes, we mark particles with mass < 1.0e-10 as Removed. These particles will be removed in current
+					// timestep.
+					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
+				}
+			});
+		}
+	}
 
 	// Ensure GPU operations are complete
-	// amrex::Gpu::streamSynchronize();
+	amrex::Gpu::streamSynchronize();
 }
 
 template <> void QuokkaSimulation<TestParticle>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
