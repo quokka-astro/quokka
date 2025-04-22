@@ -1,4 +1,4 @@
-/// \file test_sink.cpp
+/// \file test_particle_sink.cpp
 /// \brief Defines a test problem for sink particles.
 ///
 
@@ -13,7 +13,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
-#include "test_sink.hpp"
+#include "test_particle_sink.hpp"
 
 struct SinkProblem {
 };
