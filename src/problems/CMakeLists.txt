@@ -2,6 +2,8 @@ add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
 
+add_subdirectory(ParticleCreation)
+
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
 add_subdirectory(HydroContact)
@@ -67,4 +69,3 @@ add_subdirectory(PopIII)
 add_subdirectory(ShockCloud)
 add_subdirectory(StarCluster)
 add_subdirectory(SphericalCollapse)
-add_subdirectory(Gravity3D)
