@@ -312,9 +312,13 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						const double sigma_sq_y = numy / denominator;
 						const double sigma_sq_z = numz / denominator;
 
-						p.rdata(mass_idx + 1) = (std::abs(vx) / vx) * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
-						p.rdata(mass_idx + 2) = (std::abs(vy) / vy) * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
-						p.rdata(mass_idx + 3) = (std::abs(vz) / vz) * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
+						const double signx = vx == 0.0 ? 1.0 : (std::abs(vx) / vx);
+						const double signx = vy == 0.0 ? 1.0 : (std::abs(vy) / vy);
+						const double signx = vz == 0.0 ? 1.0 : (std::abs(vz) / vz);
+
+						p.rdata(mass_idx + 1) = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
+						p.rdata(mass_idx + 2) = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
+						p.rdata(mass_idx + 3) = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
 
 						// Sample mass randomly from the IMF between m_star_high, which is the min mass and max mass in the Sukhbold
 						// table
@@ -331,7 +335,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 						p.idata(evolution_stage_index) = interpolate_fate(p.rdata(mass_idx));
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
-						;
+						
 					}
 				}
 
@@ -343,7 +347,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
 				}
 
-				const double factor = (cell_mass - particle_mass) / cell_volume / state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+				const double factor = (1. - particle_mass/cell_mass); 
 
 				// Update the cell density to reflect mass conversion into stars
 				state_arr(i, j, k, HydroSystem<problem_t>::density_index) *= factor;
