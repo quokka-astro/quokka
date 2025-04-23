@@ -329,8 +329,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						const double sigma_sq_z = numz / denominator;
 
 						const double signx = vx == 0.0 ? 1.0 : (std::abs(vx) / vx);
-						const double signx = vy == 0.0 ? 1.0 : (std::abs(vy) / vy);
-						const double signx = vz == 0.0 ? 1.0 : (std::abs(vz) / vz);
+						const double signy = vy == 0.0 ? 1.0 : (std::abs(vy) / vy);
+						const double signz = vz == 0.0 ? 1.0 : (std::abs(vz) / vz);
 
 						p.rdata(mass_idx + 1) = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
 						p.rdata(mass_idx + 2) = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
