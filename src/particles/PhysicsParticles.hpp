@@ -22,6 +22,7 @@
 #include "particle_destruction.hpp"
 #include "particle_types.hpp"
 #include "physics_info.hpp"
+#include <fmt/format.h>
 
 namespace quokka
 {
@@ -92,7 +93,7 @@ class PhysicsParticleDescriptorBase
 	virtual void writeUnitsFile(const std::string &snapshot_name, const std::string &name) = 0;
 
 	// Print statistics of particles
-	virtual void printParticleStatistics(int lev) const = 0;
+	virtual void printParticleStatistics() const = 0;
 
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
@@ -652,31 +653,31 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void printParticleStatistics(int lev) const override
+	void printParticleStatistics() const override
 	{
 		if (container_ != nullptr) {
-			amrex::Print() << "\n";
 			// TODO(cch): add a getParticleTypeName() method to PhysicsParticleDescriptor and call it here
-			amrex::Print() << std::left << std::setw(20) << PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_) << std::right
-				       << std::setw(15) << getNumParticles() << "\n";
+			const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_);
+			amrex::Print() << fmt::format("{:<20}{:<15}\n", particle_type_name, getNumParticles());
 
-			// if max_level = 0 and has stellar evolution stage, print the mass and particle stage for all particles
-			if (getEvolutionStageIndex() >= 0) {
-				const auto [real_data, int_data] = getParticleDataAtLevel(lev);
+			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
+				// if max_level = 0 and has stellar evolution stage, print the mass and particle stage for all particles
+				if (getEvolutionStageIndex() >= 0) {
+					const auto [real_data, int_data] = getParticleDataAtLevel(lev);
 
-				if (!real_data.empty()) {
-					// Print header for detailed particle data
-					amrex::Print() << "  " << std::left << std::setw(15) << "Mass"
-						       << " | " << std::right << std::setw(20) << "Stellar evolution stage"
-						       << "\n";
-					amrex::Print() << "  " << std::string(15 + 3 + 20, '-') << "\n";
+					if (!real_data.empty()) {
+						amrex::Print() << "Level " << lev << "\n";
+						// Print header for detailed particle data
+						amrex::Print() << fmt::format("  {:<15} | {:>20}\n", "Mass", "Stellar evolution stage");
+						// amrex::Print() << fmt::format("  {}\n", std::string(15 + 3 + 20, '-'));
 
-					// Print each particle's data with aligned columns
-					for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
-						amrex::Print() << "  " << std::left << std::setw(15) << real_data[i][AMREX_SPACEDIM + getMassIndex()] << " | "
-							       << std::right << std::setw(20) << int_data[i][getEvolutionStageIndex()] << "\n";
+						// Print each particle's data with aligned columns
+						for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
+							amrex::Print() << fmt::format("  {:<15} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
+										      int_data[i][getEvolutionStageIndex()]);
+						}
+						amrex::Print() << "\n"; // Add extra line for readability between particle types
 					}
-					amrex::Print() << "\n"; // Add extra line for readability between particle types
 				}
 			}
 		}
@@ -956,14 +957,13 @@ template <typename problem_t> class PhysicsParticleRegister
 #endif // AMREX_SPACEDIM == 3
 
 	// Print particle statistics
-	void printParticleStatistics(int lev) const
+	void printParticleStatistics() const
 	{
-		amrex::Print() << "Particle statistics:\n";
-		amrex::Print() << std::left << std::setw(20) << "Particle type" << std::right << std::setw(15) << "Number of particles"
-			       << "\n";
+		amrex::Print() << ">>> Particle statistics:\n";
+		amrex::Print() << fmt::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->printParticleStatistics(lev);
+			descriptor->printParticleStatistics();
 		}
 	}
 
