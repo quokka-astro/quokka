@@ -741,7 +741,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
-	amrex::ParmParse pp_amr("amr");
+	amrex::ParmParse const pp_amr("amr");
 
 	// Default max number of binary files per multifab when writing plotfiles
 	pp_amr.query("plot_nfiles", plot_nfiles);
