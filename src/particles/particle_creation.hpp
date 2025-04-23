@@ -351,7 +351,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 						p.idata(evolution_stage_index) = interpolate_fate(p.rdata(mass_idx));
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
-						
 					}
 				}
 
@@ -363,7 +362,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
 				}
 
-				const double factor = (1. - particle_mass/cell_mass); 
+				const double factor = (1. - particle_mass / cell_mass);
 
 				// Update the cell density to reflect mass conversion into stars
 				state_arr(i, j, k, HydroSystem<problem_t>::density_index) *= factor;
@@ -402,7 +401,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
 
-inline double ParticleCreationTraits<ParticleType::StochasticStellarPop>::fstar_high;	    // NOLINT
+inline double ParticleCreationTraits<ParticleType::StochasticStellarPop>::fstar_high;	   // NOLINT
 inline double ParticleCreationTraits<ParticleType::StochasticStellarPop>::m_star_high_avg; // NOLINT
 
 #endif // AMREX_SPACEDIM == 3
