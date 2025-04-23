@@ -301,30 +301,30 @@ auto problem_main() -> int
 	auto const *descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC);
 	auto const &real_data = descriptor->getParticleDataAtLevel(max_level).first;
 
-		amrex::Print() << "Expected number of test particles: " << n_particle_expected << "\n";
-		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
+	amrex::Print() << "Expected number of test particles: " << n_particle_expected << "\n";
+	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
-		status = 1;
-		if (n_particle_test == n_particle_expected) {
-			status = 0;
-			amrex::Print() << "Relative error within tolerance.\n";
+	status = 1;
+	if (n_particle_test == n_particle_expected) {
+		status = 0;
+		amrex::Print() << "Relative error within tolerance.\n";
+	}
+	if (status > 0) {
+		amrex::Print() << "Test failed.\n";
+		if (!is_pos_check_pass) {
+			amrex::Print() << "...position check failed.\n";
 		}
-		if (status > 0) {
-			amrex::Print() << "Test failed.\n";
-			if (!is_pos_check_pass) {
-				amrex::Print() << "...position check failed.\n";
-			}
-			if (!(n_particle_CIC == n_expected_CIC_particles)) {
-				amrex::Print() << "...wrong number of CIC particles.\n";
-			}
-			if (!(n_particle_test == n_SNR_particles)) {
-				amrex::Print() << "...wrong number of SN remnant particles.\n";
-			}
-			if (!(SN_remnant_mass_rel_err < SNR_mass_rel_err_tol)) {
-				amrex::Print() << "...SN remnant mass error above tolerance.\n";
-			}
+		if (!(n_particle_CIC == n_expected_CIC_particles)) {
+			amrex::Print() << "...wrong number of CIC particles.\n";
+		}
+		if (!(n_particle_test == n_SNR_particles)) {
+			amrex::Print() << "...wrong number of SN remnant particles.\n";
+		}
+		if (!(SN_remnant_mass_rel_err < SNR_mass_rel_err_tol)) {
+			amrex::Print() << "...SN remnant mass error above tolerance.\n";
 		}
 	}
+}
 
-	return status;
+return status;
 }
