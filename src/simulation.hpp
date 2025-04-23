@@ -2584,9 +2584,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	// sets the maximum number of binary files per MultiFab
-	// IMPORTANT: on Lustre, this MUST be set to either:
-	//   1. -1 (this writes one file per process), or
-	//   2. the number of OSTs (i.e., the stripe count)
 	amrex::VisMF::SetNOutFiles(plot_nfiles);
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
@@ -2821,9 +2818,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	WriteMetadataFile(checkpointname + "/metadata.yaml");
 
 	// set the maximum number of binary files per MultiFab
-	// IMPORTANT: on Lustre, this MUST be set to either:
-	//   1. -1 (this writes one file per process), or
-	//   2. the number of OSTs (i.e., the stripe count)
 	amrex::VisMF::SetNOutFiles(checkpoint_nfiles);
 
 	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
