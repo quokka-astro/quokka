@@ -710,7 +710,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction
 		if (type == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(container, -1, RadParticleLumIdx,
-															      -1, false, false);
+															      RadParticleBirthTimeIdx, false, false);
 		}
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
