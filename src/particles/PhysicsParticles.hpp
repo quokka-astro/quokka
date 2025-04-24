@@ -710,15 +710,15 @@ template <typename problem_t> class PhysicsParticleRegister
 		// Create the appropriate descriptor based on the particle type
 		if (type == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    container, mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction);
+			    container, -1, RadParticleLumIdx, false, RadParticleBirthTimeIdx, false);
 		}
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    container, mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction);
+			    container, CICParticleMassIdx, -1, false, -1, false);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    container, mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction);
+			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, false, CICRadParticleBirthTimeIdx, false);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
@@ -738,12 +738,14 @@ template <typename problem_t> class PhysicsParticleRegister
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate star particle descriptor based on the particle type
-		if (type == ParticleType::Test) {
-			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    container, mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion);
-		} else if (type == ParticleType::StochasticStellarPop) {
+		if (type == ParticleType::StochasticStellarPop) {
+			const bool StochasticStellarPop_allows_destruction = false;
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
-			    container, mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion);
+			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
+			    StochasticStellarPop_allows_destruction, StochasticStellarPopParticleStageIdx, true);
+		} else if (type == ParticleType::Test) {
+			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
+			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, true);
 		} else {
 			amrex::Abort("Unknown particle type for star particles");
 		}
