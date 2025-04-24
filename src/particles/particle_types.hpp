@@ -158,7 +158,8 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 enum class StellarEvolutionStage {
 	LowMassStar,  // Low mass star stage
 	SNProgenitor, // Supernova progenitor stage
-	SNRemnant     // Supernova remnant stage
+	SNRemnant,    // Supernova remnant stage
+	Removed	      // Mark for removal
 };
 
 //-------------------- Stellar population particles --------------------
@@ -250,6 +251,7 @@ inline auto get_units_data() -> const auto &
 	       {"vy", {0, 1, -1, 0}},
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
+	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
@@ -257,6 +259,7 @@ inline auto get_units_data() -> const auto &
 	       {"vy", {0, 1, -1, 0}},
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
+	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}}};
 	return units_data;
 }
