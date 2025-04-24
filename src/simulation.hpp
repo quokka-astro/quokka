@@ -2190,7 +2190,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Register with particle register - Rad particles do not allow creation
 		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad, -1, quokka::RadParticleLumIdx, false,
-						       quokka::RadParticleBirthTimeIdx);
+						       quokka::RadParticleBirthTimeIdx, false);
 
 		// Initialize particles through user-defined function
 		createInitialRadParticles();
@@ -2205,7 +2205,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICParticles->SetVerbose(0);
 
 		// Register with particle register - CIC particles allow creation
-		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1);
+		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC, quokka::CICParticleMassIdx, -1, false, -1, false);
 
 		// Initialize particles through user-defined function
 		createInitialCICParticles();
@@ -2220,7 +2220,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Register with particle register - CICRad particles do not allow creation
 		particleRegister_.registerParticleType(CICRadParticles.get(), quokka::ParticleType::CICRad, quokka::CICRadParticleMassIdx,
-						       quokka::CICRadParticleLumIdx, false, quokka::CICRadParticleBirthTimeIdx);
+						       quokka::CICRadParticleLumIdx, false, quokka::CICRadParticleBirthTimeIdx, false);
 
 		// Initialize particles through user-defined function
 		createInitialCICRadParticles();
