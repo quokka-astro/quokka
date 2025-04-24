@@ -702,8 +702,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
-	void registerParticleType(ContainerType *container, ParticleType type, int mass_idx, int lum_idx, bool allows_creation = false, int birth_time_idx = -1,
-				  bool allows_destruction = false)
+	void registerParticleType(ContainerType *container, ParticleType type)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
@@ -732,8 +731,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Register a new star particle type with specified properties
 	// Star particles have additional stellar evolution capabilities including supernova feedback
 	template <typename ContainerType>
-	void registerStarParticleType(ContainerType *container, ParticleType type, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation = false,
-				      bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false)
+	void registerStarParticleType(ContainerType *container, ParticleType type)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
