@@ -32,13 +32,13 @@ template <typename problem_t> class PhysicsParticleRegister;
 class PhysicsParticleDescriptorBase
 {
       protected:
-	int massIndex_{-1};		 // Index for particle mass (-1 if not used)
-	int lumIndex_{-1};		 // Index for radiation luminosity (-1 if not used)
-	int birthTimeIndex_{-1};	 // Index for birth time (-1 if not used)
-	bool allowsCreation_{false};	 // Whether particles can be created during simulation
-	bool allowsDestruction_{false};	 // Whether particles can be destroyed during simulation
-	int evolutionStageIndex_{-1};	 // Index for evolution stage (-1 if not used)
-	bool allowsAccretion_{false}; // Whether particles can accrete gas
+	int massIndex_{-1};		// Index for particle mass (-1 if not used)
+	int lumIndex_{-1};		// Index for radiation luminosity (-1 if not used)
+	int birthTimeIndex_{-1};	// Index for birth time (-1 if not used)
+	bool allowsCreation_{false};	// Whether particles can be created during simulation
+	bool allowsDestruction_{false}; // Whether particles can be destroyed during simulation
+	int evolutionStageIndex_{-1};	// Index for evolution stage (-1 if not used)
+	bool allowsAccretion_{false};	// Whether particles can accrete gas
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false)
@@ -138,7 +138,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
 	// Constructor initializing descriptor with container and particle properties
-	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false)
+	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation,
+				  bool allows_destruction = false)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction), container_(container)
 	{
 	}
@@ -701,21 +702,20 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Register a new particle type with specified properties
-	template <typename ContainerType>
-	void registerParticleType(ContainerType *container, ParticleType type)
+	template <typename ContainerType> void registerParticleType(ContainerType *container, ParticleType type)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
 		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction
 		if (type == ParticleType::Rad) {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    container, -1, RadParticleLumIdx, -1, false, false);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(container, -1, RadParticleLumIdx,
+															      -1, false, false);
 		}
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    container, CICParticleMassIdx, -1, -1, false, false);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
+															      -1, false, false);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, false, false);
@@ -731,16 +731,17 @@ template <typename problem_t> class PhysicsParticleRegister
 #if AMREX_SPACEDIM == 3
 	// Register a new star particle type with specified properties
 	// Star particles have additional stellar evolution capabilities including supernova feedback
-	template <typename ContainerType>
-	void registerStarParticleType(ContainerType *container, ParticleType type)
+	template <typename ContainerType> void registerStarParticleType(ContainerType *container, ParticleType type)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate star particle descriptor based on the particle type
-		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion
+		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
+		// allows_accretion
 		if (type == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
-			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true, false, StochasticStellarPopParticleStageIdx, true);
+			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
+			    false, StochasticStellarPopParticleStageIdx, true);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, true);
