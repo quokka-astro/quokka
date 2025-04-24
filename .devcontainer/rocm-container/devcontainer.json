@@ -1,12 +1,7 @@
 // devcontainer.json
     {
       "name": "Quokka ROCm Dev Container",
-      // (NOTE: using the cloud image is temporarily disabled, since it doesn't exist yet)
-      // "image": "ghcr.io/quokka-astro/quokka:development",
-      "build": {
-        // Path is relative to the devcontainer.json file.
-        "dockerfile": "Dockerfile"
-      },
+      "image": "ghcr.io/chongchonghe/quokka-linux-amd64-rocm:development",
       "hostRequirements": {
         "cpus": 4
       },
