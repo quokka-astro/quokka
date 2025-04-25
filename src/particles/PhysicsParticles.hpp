@@ -15,6 +15,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "particle_accretion.hpp"
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
@@ -114,8 +115,12 @@ class PhysicsParticleDescriptorBase
 
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
-	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
+	//----- Methods that are implemented for some but not all particle types, so they cannot be pure virtual -----
+
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	{ /* Default empty implementation */ }
+
+	virtual void doMassAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
@@ -654,6 +659,14 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 			}
 		}
 	}
+
+	// Implementation of mass accretion from particles to grid
+	void doMassAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
+	{
+		if (this->container_ != nullptr && this->getMassIndex() >= 0) {
+			MassAccretion<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
+		}
+	}
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -716,23 +729,23 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Register a new particle type with specified properties
 	template <typename ContainerType>
-	void registerParticleType(ContainerType *container, ParticleType type, int mass_idx, int lum_idx, bool allows_creation = false, int birth_time_idx = -1,
-				  bool allows_destruction = false, int evolution_stage_idx = -1, bool hydro_interact = false)
+	void registerParticleType(ContainerType *container, ParticleType type, int mass_idx, int lum_idx, int birth_time_idx = -1,
+				  bool allows_destruction = false, bool hydro_interact = false)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
 		if (type == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    mass_idx, lum_idx, birth_time_idx, allows_creation, container, allows_destruction, evolution_stage_idx, hydro_interact);
+			    mass_idx, lum_idx, birth_time_idx, container, allows_destruction, hydro_interact);
 		}
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    mass_idx, lum_idx, birth_time_idx, allows_creation, container, allows_destruction, evolution_stage_idx, hydro_interact);
+			    mass_idx, lum_idx, birth_time_idx, container, allows_destruction, hydro_interact);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    mass_idx, lum_idx, birth_time_idx, allows_creation, container, allows_destruction, evolution_stage_idx, hydro_interact);
+			    mass_idx, lum_idx, birth_time_idx, container, allows_destruction, hydro_interact);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
@@ -809,6 +822,14 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->isStarParticle()) {
 				descriptor->depositSN(state, state_buffer, lev, time, dt);
 			}
+		}
+	}
+
+	// Implementation of mass accretion from particles to grid
+	void doMassAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->doMassAccretion(state, state_buffer, lev, time, dt);
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
