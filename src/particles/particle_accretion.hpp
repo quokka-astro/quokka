@@ -91,14 +91,15 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 			int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
 
 			// set accreted mass and momentum in the buffer
-			for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
-				for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
-					for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-						const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+			for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
+				for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
+					for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
+						const double weight = kernel_weights[std::abs(ii)][std::abs(jj)][std::abs(kk)];
+						const double rho = local_state(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
 						if (rho > rho_sink) {
-							const double delta_rho = get_delta_rho(rho, rho_sink);
+							const double delta_rho = get_delta_rho(rho, rho_sink) * weight;
 							// use atomic operation to avoid race conditions
-							amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk), delta_rho);
+							amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ix + ii, iy + jj, iz + kk), delta_rho);
 						}
 					}
 				}
@@ -133,7 +134,7 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 		}
 	});
 
-	// Step 4: Update particle mass and momentum. Re-compute accretion rate from each particle and apply the acrreted mass and momentum
+	// Step 4: Update particle mass and momentum: Re-compute accretion rate from each particle and apply the acrreted mass and momentum
 	// to the particles, subject to scale_down.
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the particle array of structs
@@ -180,13 +181,14 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 			for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 				for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 					for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
+						const double weight = kernel_weights[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
 						const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 						const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
 						const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
 						const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
 						if (rho > rho_sink) {
 							// the original accretion rate
-							const double delta_rho = get_delta_rho(rho, rho_sink);
+							const double delta_rho = get_delta_rho(rho, rho_sink) * weight;
 							// the scaled accretion rate
 							const double actual_delta_rho = local_scale_down(ii, jj, kk) * delta_rho;
 							// sum up the accreted mass and momentum
