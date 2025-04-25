@@ -830,7 +830,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	void doMassAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->doMassAccretion(state, state_buffer, lev, time, dt);
+			if (descriptor->getAllowsAccretion()) {
+				descriptor->doMassAccretion(state, state_buffer, lev, time, dt);
+			}
 		}
 	}
 #endif // AMREX_SPACEDIM == 3

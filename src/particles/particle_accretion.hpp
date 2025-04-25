@@ -2,9 +2,7 @@
 #define PARTICLE_ACCRETION_HPP_
 
 #include "AMReX_Array4.H"
-#include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
@@ -98,10 +96,10 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 		});
 	}
 
-	// Step 2: Sum boundary values
+	// Step 2: Sum boundary cell values to real cells
 	accretion_rate.SumBoundary(container->Geom(lev).periodicity());
 
-	// Step 3: Compute the scale_down factor. We scale down the accretion rate by scale_state to prevent accretion rates from exceeding 100%
+	// Step 3: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
 	// of the available mass.
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
@@ -198,10 +196,11 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		AMREX_ASSERT(accretion_rate_cell <= 0.0);
 		AMREX_ASSERT(accretion_rate_cell > -1.0);
-		state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index) *= (1.0 + accretion_rate_cell);
-		state_arr[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= (1.0 + accretion_rate_cell);
-		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= (1.0 + accretion_rate_cell);
-		state_arr[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= (1.0 + accretion_rate_cell);
+		const double accretion_down_factor = 1.0 + accretion_rate_cell;
+		state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index) *= accretion_down_factor;
+		state_arr[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= accretion_down_factor;
+		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= accretion_down_factor;
+		state_arr[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= accretion_down_factor;
 	});
 
 }
