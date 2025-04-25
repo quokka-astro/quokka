@@ -17,7 +17,7 @@ RUN apt-get update -qq && apt-get upgrade -y -qq && \
     rocrand-dev hiprand-dev rocprim-dev rocsparse-dev \
     build-essential wget curl git ninja-build gcc g++ \
     python3-dev python3-numpy python3-matplotlib python3-pip \
-    libhdf5-dev libopenmpi-dev && \
+    libhdf5-dev libopenmpi-dev netbase && \
     apt-get --yes -qq clean && \
     rm -rf /var/lib/apt/lists/*
 
