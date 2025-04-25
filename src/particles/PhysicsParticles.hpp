@@ -771,7 +771,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		if (type == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
-			    false, StochasticStellarPopParticleStageIdx, true);
+			    false, StochasticStellarPopParticleStageIdx, false);
 		} else if (type == ParticleType::Sink) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
 			    container, SinkParticleMassIdx, SinkParticleLumIdx, SinkParticleBirthTimeIdx, true, false, SinkParticleStageIdx, true);
