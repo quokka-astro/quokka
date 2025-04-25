@@ -71,9 +71,8 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
-	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because TestParticles->maxLevel() always returns the maximum
-	// level of the grid cells, but not all levels have particles, and when this happens, TestParticles->GetParticles(lev) will result in
-	// Segfault. Therefore, we loop over the actual particle container.
+	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
+	// do not have particles, TestParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
 	for (auto &kv : TestParticles->GetParticles()) {
 		for (auto &ikv : kv) {
 			auto &particle_array = ikv.second.GetArrayOfStructs();
@@ -283,8 +282,6 @@ auto problem_main() -> int
 
 	// evolve
 	sim.evolve();
-
-	return 0;
 
 	// ----- Check Test particles -----
 
