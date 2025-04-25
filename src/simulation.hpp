@@ -2269,9 +2269,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		SinkParticles->SetVerbose(0);
 
 		// Register with particle register - Sink particles allow creation
-		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink, quokka::SinkParticleMassIdx,
-							   quokka::SinkParticleLumIdx, quokka::SinkParticleBirthTimeIdx, true, true,
-							   quokka::SinkParticleStageIdx, true);
+		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
 
 		// Initialize particles through user-defined function
 		createInitialSinkParticles();
@@ -3052,11 +3050,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
 		AMREX_ASSERT(SinkParticles == nullptr);
-		const bool Sink_allows_destruction = true;
 		SinkParticles = std::make_unique<quokka::SinkParticleContainer<problem_t>>(this);
-		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink, quokka::SinkParticleMassIdx,
-							   quokka::SinkParticleLumIdx, quokka::SinkParticleBirthTimeIdx, true, Sink_allows_destruction,
-							   quokka::SinkParticleStageIdx, true);
+		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
 		SinkParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Sink));
 	}
 
