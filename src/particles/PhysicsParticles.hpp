@@ -40,7 +40,7 @@ class PhysicsParticleDescriptorBase
 	int evolutionStageIndex_{-1};	// Index for evolution stage (-1 if not used)
 	bool allowsAccretion_{false};	// Whether particles can accrete gas
 
-	bool forceFinestLevel_{false};	 // Whether particles are forced to live in the finest level
+	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false)
