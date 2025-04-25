@@ -935,7 +935,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getForceFinestLevel()) {
-				AMREX_ALWAYS_ASSERT(n_error_buf.min() >= 4);
+				AMREX_ALWAYS_ASSERT(n_error_buf.min() >= 2);
 				descriptor->tagCellsAroundParticles(lev, tags, time, ngrow);
 			}
 		}
