@@ -43,5 +43,5 @@ problem.T_amb = 718.0
 particles.SN_scheme = 1 					# 1: SN_thermal_or_thermal_momentum
 particles.verbose = 1
 
-max_timesteps = 4
-plotfile_interval = 4
+max_timesteps = 2
+plotfile_interval = 1

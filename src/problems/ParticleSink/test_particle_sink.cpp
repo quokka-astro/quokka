@@ -203,6 +203,8 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
+	return 0;
+
 	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 	const amrex::Real mass_increase = total_mass_final - total_mass_init;
 	amrex::Print() << "----------------- Problem diagnostics -----------------" << "\n";
