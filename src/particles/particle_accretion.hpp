@@ -43,6 +43,7 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 	static_assert(stencil_size <= 3, "stencil_size must be <= 3");
 
 	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
 
 	// copy host variables to device
 	const amrex::Real step_end_time = time + dt;

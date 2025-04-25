@@ -6,7 +6,10 @@
 namespace quokka::ParticleUtils
 {
 
-using kernel_weights_array_t = double[4][4][4]; // NOLINT
+constexpr int stencil_size = 3;
+static_assert(stencil_size <= 3, "stencil_size must be <= 3");
+
+using kernel_weights_array_t = double[stencil_size + 1][stencil_size + 1][stencil_size + 1]; // NOLINT
 
 AMREX_GPU_DEVICE_MANAGED
 constexpr kernel_weights_array_t kernel_spherical_3_weights = 
