@@ -17,6 +17,14 @@ enum class AccretionScheme {
 #if AMREX_SPACEDIM == 3
 
 //-------------------- Mass accretion --------------------
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+auto get_delta_rho(double rho, double rho_sink) -> double
+{
+	// return -0.5 * (rho - rho_sink) / rho;
+	return -0.6 * (rho - rho_sink) / rho;
+}
+
 // Functor for accreting mass and momentum from gas onto particles.
 // For testing purposes, we implement a simplified version of the threshold scheme from Federrath et al. (2010).
 // For every cell near the particle, we accrete an amount of mass given by
@@ -27,16 +35,14 @@ template <typename ContainerType, typename problem_t>
 void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &/*state_buffer*/, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		  int evolutionStageIndex)
 {
-	constexpr int stencil_size = 3;
-
-	static_assert(stencil_size <= 3, "stencil_size must be <= 3");
-
 	const AccretionScheme accretion_scheme = AccretionScheme::Threshold;
+	const double rho_sink = 0.1 * C::m_u;
+
+	constexpr int stencil_size = 3;
+	static_assert(stencil_size <= 3, "stencil_size must be <= 3");
 
 	// copy host variables to device
 	const amrex::Real step_end_time = time + dt;
-
-	const double rho_sink = 0.5;
 
 	// Accretion rate state. This state stores the *fractional* change in density or momentum. 
 	amrex::MultiFab accretion_rate(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
@@ -86,7 +92,7 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 					for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
 						const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 						if (rho > rho_sink) {
-							const double delta_rho = -0.5 * (rho - rho_sink) / rho;
+							const double delta_rho = get_delta_rho(rho, rho_sink);
 							// use atomic operation to avoid race conditions
 							amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk), delta_rho);
 						}
@@ -113,7 +119,13 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		if (accretion_rate_cell < accretion_rate_floor) {
+			// scale down the accretion rate to the maximum allowed value
 			scale_down_arr[bx](i, j, k) = accretion_rate_floor / accretion_rate_cell;
+
+			// update the accretion rate
+			local_accretion_rate_arr[bx](i, j, k) = accretion_rate_floor;
+			// or, equivalently,
+			// local_accretion_rate_arr[bx](i, j, k) *= scale_down_arr[bx](i, j, k);
 		}
 	});
 
@@ -170,7 +182,7 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 						const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
 						if (rho > rho_sink) {
 							// the original accretion rate
-							const double delta_rho = -0.5 * (rho - rho_sink) / rho;
+							const double delta_rho = get_delta_rho(rho, rho_sink);
 							// the scaled accretion rate
 							const double actual_delta_rho = local_scale_down(ii, jj, kk) * delta_rho;
 							// sum up the accreted mass and momentum

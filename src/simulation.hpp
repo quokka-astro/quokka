@@ -1404,6 +1404,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.depositSN(state_new_cc_[lev], state_buffer_at_level_cc, lev, time, dt);
 
 	// Sink accretion, to be implemented
+	particleRegister_.doMassAccretion(state_new_cc_[lev], state_buffer_at_level_cc, lev, time, dt);
 }
 #endif // AMREX_SPACEDIM == 3
 
