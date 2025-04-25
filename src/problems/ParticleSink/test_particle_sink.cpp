@@ -22,7 +22,7 @@ static bool refine_half_domain = false; // NOLINT
 
 static double max_Eint_global = 0.0; // NOLINT
 
-static std::string SN_particles_file = "SN_particles.txt"; // NOLINT
+static std::string particles_file = "Sink.txt"; // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
 // constexpr double mu = 1.295 * C::m_u; // neutral gas
@@ -68,15 +68,17 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile(SN_particles_file, nreal_extra, nullptr);
+	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
 
-	// Loop over all particle at all levels and set first integer component to SNProgenitor
-	for (int lev = 0; lev <= SinkParticles->finestLevel(); ++lev) {
-		auto &particles = SinkParticles->GetParticles(lev);
-
-		for (auto &kv : particles) {
-			auto &particle_array = kv.second.GetArrayOfStructs();
+	for (auto &kv : SinkParticles->GetParticles()) {
+		for (auto &ikv : kv) {
+			auto &particle_array = ikv.second.GetArrayOfStructs();
 			const int np = particle_array.numParticles();
+
+			if (np == 0) {
+				continue;
+			}
+
 			auto *pdata = particle_array().data();
 
 			// Launch GPU kernel to set integer components
@@ -180,7 +182,7 @@ auto problem_main() -> int
 	pp.query("n_amb", n_amb);
 	pp.query("T_amb", T_amb);
 	pp.query("t_stop", t_stop);
-	pp.query("SN_particles_file", SN_particles_file);
+	pp.query("particles_file", particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
 
 	// Problem initialization

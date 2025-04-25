@@ -14,7 +14,7 @@ amr.v              = 1       # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 32 32 32
-amr.max_level       = 1     # number of levels = max_level + 1
+amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 32    # grid size must be divisible by this
 amr.max_grid_size   = 32    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
@@ -35,7 +35,7 @@ quokka.slice_z.int    = 1                   # Output cadence (in number of coars
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
 
-problem.SN_particles_file = "SN.txt"
+problem.particles_file = "Sink.txt"
 problem.refine_half_domain = false
 
 problem.n_amb = 1.0
