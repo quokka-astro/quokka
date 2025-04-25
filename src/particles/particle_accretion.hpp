@@ -6,6 +6,7 @@
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "particles/particle_utils.hpp"
 
 namespace quokka
 {
@@ -40,6 +41,8 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 
 	constexpr int stencil_size = 3;
 	static_assert(stencil_size <= 3, "stencil_size must be <= 3");
+
+	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
 
 	// copy host variables to device
 	const amrex::Real step_end_time = time + dt;
