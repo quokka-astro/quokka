@@ -250,7 +250,7 @@ void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
 }
 
 template <typename ContainerType, typename problem_t>
-void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &/*state_buffer*/, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+void ComputeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &/*state_buffer*/, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		  int evolutionStageIndex)
 {
 }

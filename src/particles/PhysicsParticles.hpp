@@ -670,7 +670,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	// compute accretion rate
 	void computeAccretionRate(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
 	{
-		ParticleAccretionImpl::ComputeAccretionRate<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
+		ParticleAccretionImpl::ComputeAccretion<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
 	}
 
 	// apply accretion
