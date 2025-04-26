@@ -116,8 +116,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 }
 
 template <typename ContainerType, typename problem_t>
-void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate,
-                                  amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index, int evolutionStageIndex)
+void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index, int evolutionStageIndex)
 {
 	constexpr int stencil_size = 3;
 	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
@@ -244,8 +243,7 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 	ParticleAccretionImpl::ComputeScaleDown<problem_t>(state, accretion_rate, scale_down, rho_sink);
 
 	// Step 3: Update particle mass and momentum
-	ParticleAccretionImpl::UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, accretion_rate, scale_down, 
-                                                         lev, rho_sink, mass_index, evolutionStageIndex);
+	ParticleAccretionImpl::UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index, evolutionStageIndex);
 	
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	ParticleAccretionImpl::UpdateHydroState<problem_t>(state, accretion_rate);
