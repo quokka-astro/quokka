@@ -1400,6 +1400,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
 	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
 
+	accretion_rate_at_level.setVal(0.0);
+
 	// Sink accretion, stage 1: compute the accretion rate
 	particleRegister_.computeAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
