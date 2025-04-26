@@ -22,7 +22,7 @@ enum class AccretionScheme {
 namespace ParticleAccretionImpl
 {
 
-constexpr bool use_uniform_kernel = false;
+constexpr bool use_uniform_kernel = true;
 
 constexpr auto get_kernel_weights() -> const ParticleUtils::kernel_weights_array_t&
 {
@@ -211,9 +211,6 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index, int evolutionStageIndex)
 {
-	constexpr int stencil_size = 3;
-	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = get_kernel_weights();
-
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
