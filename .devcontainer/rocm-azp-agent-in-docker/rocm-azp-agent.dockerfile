@@ -11,15 +11,23 @@ ENV AMREX_AMD_ARCH=gfx908
 ENV CC=hipcc
 ENV CXX=hipcc
 
+# Set Azure Pipeline agent environment variables
+ENV TARGETARCH="linux-x64"
+# Also can be "linux-arm", "linux-arm64"
+
 # Update package lists and install necessary dependencies
 RUN apt-get update -qq && apt-get upgrade -y -qq && \
     apt-get install -y -qq --no-install-recommends \
     rocrand-dev hiprand-dev rocprim-dev rocsparse-dev \
     build-essential wget curl git ninja-build gcc g++ \
     python3-dev python3-numpy python3-matplotlib python3-pip \
-    libhdf5-dev libopenmpi-dev netbase && \
+    libhdf5-dev libopenmpi-dev netbase \
+    jq libicu74 && \
     apt-get --yes -qq clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Install Azure CLI
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # Install Clang 19.x
 RUN mkdir -m 0755 -p /etc/apt/keyrings/ && \
@@ -54,9 +62,17 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
     cd / && \
     rm -rf /tmp/build-adios2
 
-# Set the working directory and user
-WORKDIR /home/ubuntu
-USER ubuntu
+# Set up Azure Pipelines agent
+WORKDIR /azp/
 
-# Set the default command to bash
-CMD [ "/bin/bash" ]
+COPY ./start.sh ./
+RUN chmod +x ./start.sh
+
+# Create agent user and set up home directory
+RUN useradd -m -d /home/agent agent
+RUN chown -R agent:agent /azp /home/agent
+
+USER agent
+
+# Set entry point
+ENTRYPOINT [ "./start.sh" ]
