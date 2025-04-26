@@ -47,6 +47,23 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
     cd / && \
     rm -rf /tmp/build-adios2
 
+## Install Ascent
+RUN mkdir /tmp/build-ascent
+COPY ascent_build.patch /tmp/build-ascent
+
+# commit version is dev branch on 2025-04-10
+# NOTE: with enable_cuda=ON, you need a Docker VM with a LARGE amount of RAM (at least 15 GB RAM, 4 GB swap)
+RUN cd /tmp/build-ascent && \
+    wget https://github.com/Alpine-DAV/ascent/archive/4da1379.tar.gz && \
+    tar xzf 4da1379.tar.gz -C . --strip-components=1 && \
+    wget https://github.com/LLNL/blt/archive/refs/tags/v0.6.2.tar.gz && \
+    tar xzf v0.6.2.tar.gz -C ./src/blt --strip-components=1 && \
+    cd ./scripts/build_ascent && \
+    patch -p1 build_ascent.sh /tmp/build-ascent/ascent_build.patch && \
+    env enable_cuda=ON enable_mpi=ON build_hdf5=true build_silo=false bash build_ascent.sh && \
+    cd / && \
+    rm -rf /tmp/ascent_build
+
 # Set the working directory and user
 WORKDIR /home/ubuntu
 USER ubuntu
