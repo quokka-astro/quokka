@@ -17,9 +17,10 @@ enum class AccretionScheme {
 
 #if AMREX_SPACEDIM == 3
 
-//-------------------- Mass accretion --------------------
-
 namespace ParticleAccretionImpl
+{
+
+namespace Utils
 {
 
 constexpr bool use_uniform_kernel = true;
@@ -249,6 +250,8 @@ void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
 	});
 }
 
+} // namespace Utils
+
 template <typename ContainerType, typename problem_t>
 void ComputeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		  int evolutionStageIndex)
@@ -258,7 +261,7 @@ void ComputeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 
 	// Step 1: Compute accretion rate
 	// TODO: add mass_index, time, dt
-	ParticleAccretionImpl::ComputeAccretionRate<ContainerType, problem_t>(container, state, state_accretion_rate, lev, rho_sink, evolutionStageIndex);
+	Utils::ComputeAccretionRate<ContainerType, problem_t>(container, state, state_accretion_rate, lev, rho_sink, evolutionStageIndex);
 }
 
 // Functor for accreting mass and momentum from gas onto particles.
@@ -278,18 +281,18 @@ void ApplyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
 	// Update accretion_rate and compute scale_down
-	ParticleAccretionImpl::ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, rho_sink);
+	Utils::ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, rho_sink);
 
 	// Step 3: Update particle mass and momentum
-	ParticleAccretionImpl::UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index, evolutionStageIndex);
+	Utils::UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index, evolutionStageIndex);
 	
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
-	ParticleAccretionImpl::UpdateHydroState<problem_t>(state, state_accretion_rate);
+	Utils::UpdateHydroState<problem_t>(state, state_accretion_rate);
 }
 
-#endif // AMREX_SPACEDIM == 3
-
 } // namespace ParticleAccretionImpl
+
+#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 
