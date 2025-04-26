@@ -1397,14 +1397,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
-	// Create a MultiFab with 6 components (density, 3 x momentum, internal energy, energy) to hold the SN deposition
-	amrex::MultiFab state_buffer_at_level_cc(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
+	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
+	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
+
+	// Sink accretion, stage 1: compute the accretion rate
+	particleRegister_.computeAccretionRate(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+
+	// Sink formation. To be implemented
+	// particleRegister_.formSinks(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+
+	// Sink accretion, stage 2: update the particle states
+	particleRegister_.applyAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
-	particleRegister_.depositSN(state_new_cc_[lev], state_buffer_at_level_cc, lev, time, dt);
-
-	// Sink accretion, to be implemented
-	particleRegister_.doMassAccretion(state_new_cc_[lev], state_buffer_at_level_cc, lev, time, dt);
+	particleRegister_.depositSN(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 }
 #endif // AMREX_SPACEDIM == 3
 

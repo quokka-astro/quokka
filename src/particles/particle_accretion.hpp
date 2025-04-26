@@ -249,7 +249,11 @@ void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
 	});
 }
 
-} // namespace ParticleAccretionImpl
+template <typename ContainerType, typename problem_t>
+void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &/*state_buffer*/, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		  int evolutionStageIndex)
+{
+}
 
 // Functor for accreting mass and momentum from gas onto particles.
 // For testing purposes, we implement a simplified version of the threshold scheme from Federrath et al. (2010).
@@ -258,7 +262,7 @@ void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
 // in one time step. rho_sink is a constant threshold density.
 // The accreted mass and momentum are added to the particle's mass and momentum.
 template <typename ContainerType, typename problem_t>
-void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &/*state_buffer*/, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+void ApplyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &/*state_buffer*/, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		  int evolutionStageIndex)
 {
 	const AccretionScheme accretion_scheme = AccretionScheme::Threshold;
@@ -289,6 +293,8 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 }
 
 #endif // AMREX_SPACEDIM == 3
+
+} // namespace ParticleAccretionImpl
 
 } // namespace quokka
 

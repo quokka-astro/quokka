@@ -123,7 +123,10 @@ class PhysicsParticleDescriptorBase
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
-	virtual void doMassAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	virtual void computeAccretionRate(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	{ /* Default empty implementation */ }
+
+	virtual void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
@@ -664,12 +667,16 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 		}
 	}
 
-	// Implementation of mass accretion from particles to grid
-	void doMassAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
+	// compute accretion rate
+	void computeAccretionRate(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
 	{
-		if (this->container_ != nullptr && this->getMassIndex() >= 0) {
-			MassAccretion<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
-		}
+		ParticleAccretionImpl::ComputeAccretionRate<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
+	}
+
+	// apply accretion
+	void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
+	{
+		ParticleAccretionImpl::ApplyAccretion<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
 	}
 #endif // AMREX_SPACEDIM == 3
 };
@@ -829,12 +836,22 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Implementation of mass accretion from particles to grid
-	void doMassAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	// Implementation of computeAccretionRate
+	void computeAccretionRate(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
-				descriptor->doMassAccretion(state, state_buffer, lev, time, dt);
+				descriptor->computeAccretionRate(state, state_buffer, lev, time, dt);
+			}
+		}
+	}
+
+	// Implementation of applyAccretion
+	void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getAllowsAccretion()) {
+				descriptor->applyAccretion(state, state_buffer, lev, time, dt);
 			}
 		}
 	}
