@@ -649,7 +649,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 #if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
-	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
+	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
 			if (!quokka::disable_SN_feedback) {
@@ -658,7 +658,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 								 "UnitSystem must be CGS for particleMeshInteraction");
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
-				SNDeposition<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt, this->getMassIndex(),
+				SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(),
 								       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
