@@ -19,6 +19,9 @@ enum class AccretionScheme {
 
 //-------------------- Mass accretion --------------------
 
+namespace ParticleAccretionImpl
+{
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 auto get_delta_rho(double rho, double rho_sink) -> double
 {
@@ -26,33 +29,14 @@ auto get_delta_rho(double rho, double rho_sink) -> double
 	// return -0.6 * (rho - rho_sink) / rho;
 }
 
-// Functor for accreting mass and momentum from gas onto particles.
-// For testing purposes, we implement a simplified version of the threshold scheme from Federrath et al. (2010).
-// For every cell near the particle, we accrete an amount of mass given by
-// $ \Delta m = \max(0, 0.5 (rho - rho_sink) * dx^3) $
-// in one time step. rho_sink is a constant threshold density.
-// The accreted mass and momentum are added to the particle's mass and momentum.
 template <typename ContainerType, typename problem_t>
-void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &/*state_buffer*/, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex)
+void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, 
+                          int lev, double rho_sink, int evolutionStageIndex)
 {
-	const AccretionScheme accretion_scheme = AccretionScheme::Threshold;
-	const double rho_sink = 0.1 * C::m_u;
-
 	constexpr int stencil_size = 3;
-	static_assert(stencil_size <= 3, "stencil_size must be <= 3");
-
 	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
 	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
 
-	// copy host variables to device
-	const amrex::Real step_end_time = time + dt;
-
-	// Accretion rate state. This state stores the *fractional* change in density or momentum. 
-	amrex::MultiFab accretion_rate(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
-	accretion_rate.setVal(0.0);
-
-	// Step 1: Local deposition within each box
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the particle array of structs
 		auto &particles = pti.GetArrayOfStructs();
@@ -73,7 +57,7 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-		// Step 1: Deposit particle data into the local buffer
+		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
@@ -107,21 +91,17 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 		});
 	}
 
-	// Step 2: Sum boundary cell values to real cells
+	// Sum boundary cell values to real cells
 	accretion_rate.SumBoundary(container->Geom(lev).periodicity());
+}
 
-	// Step 3: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
-	// of the available mass.
-	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
-	scale_down.setVal(1.0);
-
-	// const double accretion_rate_floor = -0.9;
-
-	// We have to MFIter over the hydro state instead of over particles because a particle can accrete from ghost cells, which is then
-	// passed to real cells in a neighboring box.
+template <typename problem_t>
+void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, double rho_sink)
+{
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &scale_down_arr = scale_down.arrays();
 	const auto &state_arr = state.arrays();
+	
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		const double accretion_rate_floor = -(1.0 - rho_sink / state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index));
@@ -131,13 +111,17 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 
 			// update the accretion rate
 			local_accretion_rate_arr[bx](i, j, k) = accretion_rate_floor;
-			// or, equivalently,
-			// local_accretion_rate_arr[bx](i, j, k) *= scale_down_arr[bx](i, j, k);
 		}
 	});
+}
 
-	// Step 4: Update particle mass and momentum: Re-compute accretion rate from each particle and apply the acrreted mass and momentum
-	// to the particles, subject to scale_down.
+template <typename ContainerType, typename problem_t>
+void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate,
+                                  amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index, int evolutionStageIndex)
+{
+	constexpr int stencil_size = 3;
+	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the particle array of structs
 		auto &particles = pti.GetArrayOfStructs();
@@ -146,7 +130,6 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
-		const auto &local_accretion_rate = accretion_rate.array(pti);
 		const auto &local_scale_down = scale_down.array(pti);
 		
 		// Get geometry information for this level
@@ -155,8 +138,7 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 		const auto dxi = geom.InvCellSizeArray();
 		const auto dx = geom.CellSizeArray();
 
-		// Calculate inverse cell volume
-		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
+		// Calculate cell volume
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
@@ -209,8 +191,14 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 			p.rdata(mass_index + 3) -= accreted_momentum_z;
 		});
 	}
+}
+
+template <typename problem_t>
+void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
+{
+	const auto &local_accretion_rate_arr = accretion_rate.arrays();
+	const auto &state_arr = state.arrays();
 	
-	// Step 5: Update the hydro state. We do this at last because the original state is needed for updating particles in step 4.
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		AMREX_ASSERT(accretion_rate_cell <= 0.0);
@@ -221,7 +209,46 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= accretion_down_factor;
 	});
+}
 
+} // namespace ParticleAccretionImpl
+
+// Functor for accreting mass and momentum from gas onto particles.
+// For testing purposes, we implement a simplified version of the threshold scheme from Federrath et al. (2010).
+// For every cell near the particle, we accrete an amount of mass given by
+// $ \Delta m = \max(0, 0.5 (rho - rho_sink) * dx^3) $
+// in one time step. rho_sink is a constant threshold density.
+// The accreted mass and momentum are added to the particle's mass and momentum.
+template <typename ContainerType, typename problem_t>
+void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &/*state_buffer*/, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		  int evolutionStageIndex)
+{
+	const AccretionScheme accretion_scheme = AccretionScheme::Threshold;
+	const double rho_sink = 0.1 * C::m_u;
+
+	// copy host variables to device
+	const amrex::Real step_end_time = time + dt;
+
+	// Accretion rate state. This state stores the *fractional* change in density or momentum. 
+	amrex::MultiFab accretion_rate(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
+	accretion_rate.setVal(0.0);
+
+	// Step 1: Compute accretion rate
+	ParticleAccretionImpl::ComputeAccretionRate<ContainerType, problem_t>(container, state, accretion_rate, lev, rho_sink, evolutionStageIndex);
+
+	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
+	// of the available mass.
+	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
+	scale_down.setVal(1.0);
+	// Update accretion_rate and compute scale_down
+	ParticleAccretionImpl::ComputeScaleDown<problem_t>(state, accretion_rate, scale_down, rho_sink);
+
+	// Step 3: Update particle mass and momentum
+	ParticleAccretionImpl::UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, accretion_rate, scale_down, 
+                                                         lev, rho_sink, mass_index, evolutionStageIndex);
+	
+	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
+	ParticleAccretionImpl::UpdateHydroState<problem_t>(state, accretion_rate);
 }
 #endif // AMREX_SPACEDIM == 3
 
