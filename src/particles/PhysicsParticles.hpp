@@ -123,7 +123,7 @@ class PhysicsParticleDescriptorBase
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
-	virtual void computeAccretionRate(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	virtual void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
 	virtual void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
@@ -668,7 +668,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	}
 
 	// compute accretion rate
-	void computeAccretionRate(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
+	void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
 	{
 		ParticleAccretionImpl::ComputeAccretion<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
 	}
@@ -836,12 +836,12 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Implementation of computeAccretionRate
-	void computeAccretionRate(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	// Implementation of computeAccretion
+	void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
-				descriptor->computeAccretionRate(state, state_buffer, lev, time, dt);
+				descriptor->computeAccretion(state, state_buffer, lev, time, dt);
 			}
 		}
 	}

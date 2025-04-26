@@ -1401,7 +1401,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
 
 	// Sink accretion, stage 1: compute the accretion rate
-	particleRegister_.computeAccretionRate(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+	particleRegister_.computeAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Sink formation. To be implemented
 	// particleRegister_.formSinks(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
