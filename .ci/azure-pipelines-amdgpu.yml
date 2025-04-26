@@ -17,6 +17,12 @@ jobs:
     pool: amdgpu
     timeoutInMinutes: 120
     steps:
+    - shell: bash
+      env:
+        SUPER_SECRET: ${{ secrets.SuperSecret }}
+      run: |
+        docker run -e AZP_URL="https://dev.azure.com/quokka-code" -e AZP_TOKEN="$SUPER_SECRET" -e AZP_AGENT_NAME="Docker Agent - ROCm" --name "azp-agent-rocm" quokka-linux-amd64-rocm-azp-agent.sif
+
     - task: CMake@1
       displayName: 'Configure CMake'
       inputs:
