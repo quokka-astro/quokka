@@ -1,6 +1,6 @@
 site_name: Quokka
 docs_dir: markdown
-copyright: © Copyright 2020-2024, Ben Wibking and Quokka Developers.
+copyright: © Copyright 2020-2025, Ben Wibking and Quokka Developers.
 theme:
   name: readthedocs
   font:
