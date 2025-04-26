@@ -22,6 +22,16 @@ enum class AccretionScheme {
 namespace ParticleAccretionImpl
 {
 
+constexpr bool use_uniform_kernel = false;
+
+constexpr auto get_kernel_weights() -> const ParticleUtils::kernel_weights_array_t&
+{
+	if constexpr (use_uniform_kernel) {
+		return ParticleUtils::kernel_spherical_uniform_3_weights;
+	}
+	return ParticleUtils::kernel_spherical_3_weights;
+}
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 auto get_delta_rho(double rho, double rho_sink) -> double
 {
@@ -45,7 +55,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti,
 
 	constexpr int stencil_size = 3;
 	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
-	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = get_kernel_weights();
 
 	// Deposit particle data into the local buffer
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
@@ -145,7 +155,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 	
 	constexpr int stencil_size = 3;
 	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
-	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = get_kernel_weights();
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -202,7 +212,7 @@ template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index, int evolutionStageIndex)
 {
 	constexpr int stencil_size = 3;
-	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = get_kernel_weights();
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
