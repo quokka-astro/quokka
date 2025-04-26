@@ -22,8 +22,8 @@ enum class AccretionScheme {
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 auto get_delta_rho(double rho, double rho_sink) -> double
 {
-	// return -0.5 * (rho - rho_sink) / rho;
-	return -0.6 * (rho - rho_sink) / rho;
+	return -0.5 * (rho - rho_sink) / rho;
+	// return -0.6 * (rho - rho_sink) / rho;
 }
 
 // Functor for accreting mass and momentum from gas onto particles.
@@ -115,14 +115,16 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
 
-	const double accretion_rate_floor = -0.9;
+	// const double accretion_rate_floor = -0.9;
 
 	// We have to MFIter over the hydro state instead of over particles because a particle can accrete from ghost cells, which is then
 	// passed to real cells in a neighboring box.
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &scale_down_arr = scale_down.arrays();
+	const auto &state_arr = state.arrays();
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
+		const double accretion_rate_floor = -(1.0 - rho_sink / state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index));
 		if (accretion_rate_cell < accretion_rate_floor) {
 			// scale down the accretion rate to the maximum allowed value
 			scale_down_arr[bx](i, j, k) = accretion_rate_floor / accretion_rate_cell;
@@ -209,7 +211,6 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 	}
 	
 	// Step 5: Update the hydro state. We do this at last because the original state is needed for updating particles in step 4.
-	const auto &state_arr = state.arrays();
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		AMREX_ASSERT(accretion_rate_cell <= 0.0);
