@@ -11,9 +11,7 @@
 namespace quokka
 {
 
-enum class AccretionScheme {
-	Threshold = 0
-};
+enum class AccretionScheme { Threshold = 0 };
 
 #if AMREX_SPACEDIM == 3
 
@@ -25,7 +23,7 @@ namespace Utils
 
 constexpr bool use_uniform_kernel = true;
 
-constexpr auto get_kernel_weights() -> const ParticleUtils::kernel_weights_array_t&
+constexpr auto get_kernel_weights() -> const ParticleUtils::kernel_weights_array_t &
 {
 	if constexpr (use_uniform_kernel) {
 		return ParticleUtils::kernel_spherical_uniform_3_weights;
@@ -33,8 +31,7 @@ constexpr auto get_kernel_weights() -> const ParticleUtils::kernel_weights_array
 	return ParticleUtils::kernel_spherical_3_weights;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto get_delta_rho(double rho, double rho_sink) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double
 {
 	return -0.5 * (rho - rho_sink) / rho;
 	// return -0.6 * (rho - rho_sink) / rho;
@@ -42,12 +39,9 @@ auto get_delta_rho(double rho, double rho_sink) -> double
 
 // Function to compute accretion rate for particles in a box, including the ParallelFor call
 template <typename ContainerType, typename problem_t>
-void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, 
-                            const amrex::Array4<const amrex::Real> &local_state,
-                            const amrex::Array4<amrex::Real> &local_accretion_rate,
-                            const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-                            const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi,
-                            double rho_sink, int evolutionStageIndex)
+void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
+			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
+			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, double rho_sink, int evolutionStageIndex)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
@@ -64,7 +58,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti,
 
 		// Check if this is a supernova progenitor
 		const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
-														p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+					   p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 		if (!is_accreting) {
 			return;
@@ -93,14 +87,13 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti,
 }
 
 template <typename ContainerType, typename problem_t>
-void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, 
-                          int lev, double rho_sink, int evolutionStageIndex)
+void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, double rho_sink, int evolutionStageIndex)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
 		const auto &local_accretion_rate = accretion_rate.array(pti);
-		
+
 		// Get geometry information for this level
 		const auto &geom = container->Geom(lev);
 		const auto plo = geom.ProbLoArray();
@@ -112,21 +105,19 @@ void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amre
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		ComputeAccretionRateInBox<ContainerType, problem_t>(
-			pti, local_state, local_accretion_rate, plo, dxi, rho_sink, evolutionStageIndex);
+		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dxi, rho_sink, evolutionStageIndex);
 	}
 
 	// Sum boundary cell values to real cells
 	accretion_rate.SumBoundary(container->Geom(lev).periodicity());
 }
 
-template <typename problem_t>
-void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, double rho_sink)
+template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, double rho_sink)
 {
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &scale_down_arr = scale_down.arrays();
 	const auto &state_arr = state.arrays();
-	
+
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		const double accretion_rate_floor = -(1.0 - rho_sink / state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index));
@@ -142,28 +133,26 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 
 // Function to update particle mass and momentum for particles in a box, including the ParallelFor call
 template <typename ContainerType, typename problem_t>
-void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti,
-                                   const amrex::Array4<const amrex::Real> &local_state,
-                                   const amrex::Array4<const amrex::Real> &local_scale_down,
-                                   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-                                   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi,
-                                   double rho_sink, int mass_index, int evolutionStageIndex, amrex::Real vol)
+void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
+					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
+					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, double rho_sink, int mass_index, int evolutionStageIndex,
+					amrex::Real vol)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
 	auto *pData = particles().data();
 	const amrex::Long np = pti.numParticles();
-	
+
 	constexpr int stencil_size = 3;
 	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
 	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = get_kernel_weights();
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-		
+
 		// Check if this is a supernova progenitor
 		const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
-								p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+					   p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 		if (!is_accreting) {
 			return;
@@ -210,13 +199,14 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 }
 
 template <typename ContainerType, typename problem_t>
-void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index, int evolutionStageIndex)
+void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index,
+				   int evolutionStageIndex)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
 		const auto &local_scale_down = scale_down.array(pti);
-		
+
 		// Get geometry information for this level
 		const auto &geom = container->Geom(lev);
 		const auto plo = geom.ProbLoArray();
@@ -227,17 +217,16 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(
-			pti, local_state, local_scale_down, plo, dxi, rho_sink, mass_index, evolutionStageIndex, vol);
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, rho_sink, mass_index,
+									     evolutionStageIndex, vol);
 	}
 }
 
-template <typename problem_t>
-void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
+template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
 {
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &state_arr = state.arrays();
-	
+
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		AMREX_ASSERT(accretion_rate_cell <= 0.0);
@@ -253,8 +242,8 @@ void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
 } // namespace Utils
 
 template <typename ContainerType, typename problem_t>
-void ComputeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex)
+void ComputeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
+		      int mass_index, int evolutionStageIndex)
 {
 	const AccretionScheme accretion_scheme = AccretionScheme::Threshold;
 	const double rho_sink = 0.1 * C::m_u;
@@ -271,8 +260,8 @@ void ComputeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 // in one time step. rho_sink is a constant threshold density.
 // The accreted mass and momentum are added to the particle's mass and momentum.
 template <typename ContainerType, typename problem_t>
-void ApplyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex)
+void ApplyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
+		    int mass_index, int evolutionStageIndex)
 {
 	const double rho_sink = 0.1 * C::m_u;
 
@@ -285,7 +274,7 @@ void ApplyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 
 	// Step 3: Update particle mass and momentum
 	Utils::UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index, evolutionStageIndex);
-	
+
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	Utils::UpdateHydroState<problem_t>(state, state_accretion_rate);
 }

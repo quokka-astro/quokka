@@ -20,7 +20,7 @@ enum class ParticleSwitch : unsigned int {
 	Rad = bitflag<2>(),		     // Radiation particles, = 0b0010
 	CICRad = bitflag<3>(),		     // Combined gravitating-radiating particles, = 0b0100
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
-	Sink = bitflag<5>(),                 // Sink particles, = 0b10000
+	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
 	Test = bitflag<6>()		     // Test particles with all features enabled, = 0b100000
 };
 
@@ -73,7 +73,7 @@ enum class ParticleType {
 	CIC,		      // Gravitating particles
 	CICRad,		      // Gravitating radiation particles
 	StochasticStellarPop, // Stellar population particles
-	Sink,                 // Sink particles
+	Sink,		      // Sink particles
 	Test		      // Test particles with all features enabled
 };
 
@@ -260,11 +260,8 @@ constexpr int SinkParticleRealComps = []() constexpr {
 constexpr int SinkParticleIntComps = 1; // evolution stage
 
 // Type definitions for Sink_particles container and iterator
-template <typename problem_t>
-using SinkParticleContainer =
-    amrex::AmrParticleContainer<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
-template <typename problem_t>
-using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
+template <typename problem_t> using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
+template <typename problem_t> using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
 
 #endif // AMREX_SPACEDIM == 3
 
