@@ -29,20 +29,63 @@ auto get_delta_rho(double rho, double rho_sink) -> double
 	// return -0.6 * (rho - rho_sink) / rho;
 }
 
+// Function to compute accretion rate for particles in a box, including the ParallelFor call
+template <typename ContainerType, typename problem_t>
+void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, 
+                            const amrex::Array4<const amrex::Real> &local_state,
+                            const amrex::Array4<amrex::Real> &local_accretion_rate,
+                            const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
+                            const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi,
+                            double rho_sink, int evolutionStageIndex)
+{
+	// Get the particle array of structs
+	auto &particles = pti.GetArrayOfStructs();
+	auto *pData = particles().data();
+	const amrex::Long np = pti.numParticles();
+
+	constexpr int stencil_size = 3;
+	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
+	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+
+	// Deposit particle data into the local buffer
+	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+		// Check if this is a supernova progenitor
+		const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
+														p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+
+		if (!is_accreting) {
+			return;
+		}
+
+		// Find the cell containing the particle
+		int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+		int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+		int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+
+		// set accreted mass and momentum in the buffer
+		for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
+			for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
+				for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
+					const double weight = kernel_weights[std::abs(ii)][std::abs(jj)][std::abs(kk)];
+					const double rho = local_state(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
+					if (rho > rho_sink) {
+						const double delta_rho = get_delta_rho(rho, rho_sink) * weight;
+						// use atomic operation to avoid race conditions
+						amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ix + ii, iy + jj, iz + kk), delta_rho);
+					}
+				}
+			}
+		}
+	});
+}
+
 template <typename ContainerType, typename problem_t>
 void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, 
                           int lev, double rho_sink, int evolutionStageIndex)
 {
-	constexpr int stencil_size = 3;
-	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
-	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
-
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		// Get the particle array of structs
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
-		const amrex::Long np = pti.numParticles();
-
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
 		const auto &local_accretion_rate = accretion_rate.array(pti);
@@ -57,38 +100,9 @@ void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amre
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-		// Deposit particle data into the local buffer
-		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
-			// Check if this is a supernova progenitor
-			const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
-						    p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
-
-			if (!is_accreting) {
-				return;
-			}
-
-			// Find the cell containing the particle
-			int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-			int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-			int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
-
-			// set accreted mass and momentum in the buffer
-			for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
-				for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
-					for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
-						const double weight = kernel_weights[std::abs(ii)][std::abs(jj)][std::abs(kk)];
-						const double rho = local_state(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
-						if (rho > rho_sink) {
-							const double delta_rho = get_delta_rho(rho, rho_sink) * weight;
-							// use atomic operation to avoid race conditions
-							amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ix + ii, iy + jj, iz + kk), delta_rho);
-						}
-					}
-				}
-			}
-		});
+		// Process particles in this box
+		ComputeAccretionRateInBox<ContainerType, problem_t>(
+			pti, local_state, local_accretion_rate, plo, dxi, rho_sink, evolutionStageIndex);
 	}
 
 	// Sum boundary cell values to real cells
@@ -115,6 +129,75 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	});
 }
 
+// Function to update particle mass and momentum for particles in a box, including the ParallelFor call
+template <typename ContainerType, typename problem_t>
+void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti,
+                                   const amrex::Array4<const amrex::Real> &local_state,
+                                   const amrex::Array4<const amrex::Real> &local_scale_down,
+                                   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
+                                   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi,
+                                   double rho_sink, int mass_index, int evolutionStageIndex, amrex::Real vol)
+{
+	// Get the particle array of structs
+	auto &particles = pti.GetArrayOfStructs();
+	auto *pData = particles().data();
+	const amrex::Long np = pti.numParticles();
+	
+	constexpr int stencil_size = 3;
+	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
+	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+
+	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		
+		// Check if this is a supernova progenitor
+		const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
+								p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+
+		if (!is_accreting) {
+			return;
+		}
+
+		// Find the cell containing the particle
+		int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+		int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+		int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+
+		// set accreted mass and momentum in the buffer
+		double accreted_mass = 0.0;
+		double accreted_momentum_x = 0.0;
+		double accreted_momentum_y = 0.0;
+		double accreted_momentum_z = 0.0;
+		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
+			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
+				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
+					const double weight = kernel_weights[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+					const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
+					const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
+					const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
+					if (rho > rho_sink) {
+						// the original accretion rate
+						const double delta_rho = get_delta_rho(rho, rho_sink) * weight;
+						// the scaled accretion rate
+						const double actual_delta_rho = local_scale_down(ii, jj, kk) * delta_rho;
+						// sum up the accreted mass and momentum
+						accreted_mass += actual_delta_rho * rho * vol;
+						accreted_momentum_x += actual_delta_rho * px * vol;
+						accreted_momentum_y += actual_delta_rho * py * vol;
+						accreted_momentum_z += actual_delta_rho * pz * vol;
+					}
+				}
+			}
+		}
+		// the accretion rates are negative, so we 'subtract' them
+		p.rdata(mass_index) -= accreted_mass;
+		p.rdata(mass_index + 1) -= accreted_momentum_x;
+		p.rdata(mass_index + 2) -= accreted_momentum_y;
+		p.rdata(mass_index + 3) -= accreted_momentum_z;
+	});
+}
+
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index, int evolutionStageIndex)
 {
@@ -122,11 +205,6 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 	constexpr const ParticleUtils::kernel_weights_array_t &kernel_weights = ParticleUtils::kernel_spherical_3_weights;
 
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		// Get the particle array of structs
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
-		const amrex::Long np = pti.numParticles();
-
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
 		const auto &local_scale_down = scale_down.array(pti);
@@ -140,55 +218,9 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		// Calculate cell volume
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
-			// Check if this is a supernova progenitor
-			const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
-						    p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
-
-			if (!is_accreting) {
-				return;
-			}
-
-			// Find the cell containing the particle
-			int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-			int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-			int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
-
-			// set accreted mass and momentum in the buffer
-			double accreted_mass = 0.0;
-			double accreted_momentum_x = 0.0;
-			double accreted_momentum_y = 0.0;
-			double accreted_momentum_z = 0.0;
-			for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
-				for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
-					for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-						const double weight = kernel_weights[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
-						const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-						const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
-						const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
-						const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
-						if (rho > rho_sink) {
-							// the original accretion rate
-							const double delta_rho = get_delta_rho(rho, rho_sink) * weight;
-							// the scaled accretion rate
-							const double actual_delta_rho = local_scale_down(ii, jj, kk) * delta_rho;
-							// sum up the accreted mass and momentum
-							accreted_mass += actual_delta_rho * rho * vol;
-							accreted_momentum_x += actual_delta_rho * px * vol;
-							accreted_momentum_y += actual_delta_rho * py * vol;
-							accreted_momentum_z += actual_delta_rho * pz * vol;
-						}
-					}
-				}
-			}
-			// the accretion rates are negative, so we 'subtract' them
-			p.rdata(mass_index) -= accreted_mass;
-			p.rdata(mass_index + 1) -= accreted_momentum_x;
-			p.rdata(mass_index + 2) -= accreted_momentum_y;
-			p.rdata(mass_index + 3) -= accreted_momentum_z;
-		});
+		// Process particles in this box
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(
+			pti, local_state, local_scale_down, plo, dxi, rho_sink, mass_index, evolutionStageIndex, vol);
 	}
 }
 
@@ -248,6 +280,7 @@ void MassAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mult
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	ParticleAccretionImpl::UpdateHydroState<problem_t>(state, accretion_rate);
 }
+
 #endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
