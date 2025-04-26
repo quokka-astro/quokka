@@ -123,10 +123,10 @@ class PhysicsParticleDescriptorBase
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
-	virtual void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	virtual void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
-	virtual void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	virtual void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
@@ -649,7 +649,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 #if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
-	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
+	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
 			if (!quokka::disable_SN_feedback) {
@@ -658,7 +658,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 								 "UnitSystem must be CGS for particleMeshInteraction");
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
-				SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(),
+				SNDeposition<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt, this->getMassIndex(),
 								       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
@@ -668,15 +668,15 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	}
 
 	// compute accretion rate
-	void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
+	void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
 	{
-		ParticleAccretionImpl::ComputeAccretion<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
+		ParticleAccretionImpl::ComputeAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
 	}
 
 	// apply accretion
-	void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
+	void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
 	{
-		ParticleAccretionImpl::ApplyAccretion<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
+		ParticleAccretionImpl::ApplyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt, this->getMassIndex(), this->getEvolutionStageIndex());
 	}
 #endif // AMREX_SPACEDIM == 3
 };
@@ -837,21 +837,21 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Implementation of computeAccretion
-	void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
-				descriptor->computeAccretion(state, state_buffer, lev, time, dt);
+				descriptor->computeAccretion(state, state_accretion_rate, lev, time, dt);
 			}
 		}
 	}
 
 	// Implementation of applyAccretion
-	void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
-				descriptor->applyAccretion(state, state_buffer, lev, time, dt);
+				descriptor->applyAccretion(state, state_accretion_rate, lev, time, dt);
 			}
 		}
 	}
