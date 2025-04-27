@@ -124,9 +124,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(const 
 									amrex::Array4<amrex::Real> const &local_buffer,
 									const int stencil_size,
 									const amrex::Real stencil_volume,
-									const amrex::Real p_vx,
-									const amrex::Real p_vy,
-									const amrex::Real p_vz,
+									const amrex::Real px,
+									const amrex::Real py,
+									const amrex::Real pz,
 									const amrex::Real m_ej,
 									const amrex::Real E_blast,
 									const amrex::Real SN_kin_energy,
@@ -180,9 +180,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(const 
 				const int kkk = std::abs(kk - iz);
 				const double kernel_times_vol_inverse = stencil_weights[iii][jjj][kkk] * vol_inverse;
 
-				const double delta_x = (ii + 0.5) * dx[0] + plo[0] - p_vx; // NOLINT
-				const double delta_y = (jj + 0.5) * dx[1] + plo[1] - p_vy; // NOLINT
-				const double delta_z = (kk + 0.5) * dx[2] + plo[2] - p_vz; // NOLINT
+				const double delta_x = (ii + 0.5) * dx[0] + plo[0] - px; // NOLINT
+				const double delta_y = (jj + 0.5) * dx[1] + plo[1] - py; // NOLINT
+				const double delta_z = (kk + 0.5) * dx[2] + plo[2] - pz; // NOLINT
 				const double r_sq = (delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
 
 				const amrex::Real delta_rho_i = m_ej * kernel_times_vol_inverse;
@@ -301,10 +301,14 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 				const amrex::Real p_vz = p.rdata(mass_index + 3);
 				const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
 
+				const amrex::Real px = p.pos(0);
+				const amrex::Real py = p.pos(1);
+				const amrex::Real pz = p.pos(2);
+
 				// Find the cell containing the particle
-				int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-				int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-				int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+				int ix = static_cast<int>(amrex::Math::floor((px - plo[0]) * dxi[0]));
+				int iy = static_cast<int>(amrex::Math::floor((py - plo[1]) * dxi[1]));
+				int iz = static_cast<int>(amrex::Math::floor((pz - plo[2]) * dxi[2]));
 
 				amrex::Real avg_density = 0.0;
 				for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
@@ -325,7 +329,7 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 								   p_vx, p_vy, p_vz, vol_inverse, stencil_weights, local_buffer);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalKineticMomentumSNR<problem_t>(ix, iy, iz, local_state, local_buffer, stencil_size, stencil_volume, p_vx, p_vy, p_vz, m_ej, E_blast, SN_kin_energy, vol_inverse, stencil_weights, avg_density, vol, dx, plo, SN_scheme_d);
+					depositThermalKineticMomentumSNR<problem_t>(ix, iy, iz, local_state, local_buffer, stencil_size, stencil_volume, px, py, pz, m_ej, E_blast, SN_kin_energy, vol_inverse, stencil_weights, avg_density, vol, dx, plo, SN_scheme_d);
 				}
 			}
 		});
