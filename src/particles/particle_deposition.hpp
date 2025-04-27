@@ -13,6 +13,9 @@
 namespace quokka
 {
 
+constexpr int SN_stencil_size = 3;
+constexpr int SN_stencil_array_size = SN_stencil_size + 1;
+
 constexpr double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr double m_u = C::m_u;
 
@@ -79,7 +82,7 @@ template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz, const int stencil_size, const amrex::Real m_ej,
 		  const amrex::Real E_blast, const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy, const amrex::Real p_vz,
-		  const amrex::Real vol_inverse, const amrex::Real (&stencil_weights)[4][4][4]) noexcept
+		  const amrex::Real vol_inverse, const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size> &stencil_weights_gpu) noexcept
 {
 	for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
 		for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
@@ -87,7 +90,7 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 				const int iii = std::abs(ii);
 				const int jjj = std::abs(jj);
 				const int kkk = std::abs(kk);
-				const double kernel_times_vol_inverse = stencil_weights[iii][jjj][kkk] * vol_inverse; // NOLINT
+				const double kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse; // NOLINT
 				const amrex::Real SNR_rho_per_cell = m_ej * kernel_times_vol_inverse;
 				const amrex::Real SNR_energy_per_cell = (E_blast + SN_kin_energy) * kernel_times_vol_inverse;
 				const amrex::Real SNR_px_per_cell = m_ej * p_vx * kernel_times_vol_inverse;
@@ -112,7 +115,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy,
 				 const int iz, const int stencil_size, const amrex::Real stencil_volume, const amrex::Real px, const amrex::Real py,
 				 const amrex::Real pz, const amrex::Real m_ej, const amrex::Real E_blast, const amrex::Real SN_kin_energy,
-				 const amrex::Real p_snr_0, const amrex::Real vol_inverse, const amrex::Real (&stencil_weights)[4][4][4],
+				 const amrex::Real p_snr_0, const amrex::Real vol_inverse, const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size> &stencil_weights_gpu,
 				 const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
 				 const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d)
 {
@@ -155,7 +158,7 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				const int iii = std::abs(ii - ix);
 				const int jjj = std::abs(jj - iy);
 				const int kkk = std::abs(kk - iz);
-				const double kernel_times_vol_inverse = stencil_weights[iii][jjj][kkk] * vol_inverse;
+				const double kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse;
 
 				const double delta_x = (ii + 0.5) * dx[0] + plo[0] - px; // NOLINT
 				const double delta_y = (jj + 0.5) * dx[1] + plo[1] - py; // NOLINT
@@ -200,26 +203,8 @@ template <typename ContainerType, typename problem_t>
 void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
 		       int mass_index, int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
 {
-	constexpr int stencil_size = 3;
-	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * stencil_size * stencil_size * stencil_size;
-	constexpr amrex::Real stencil_weights[4][4][4] = // NOLINT
-	    {{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
-	      {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
-	      {0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
-	      {0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000}},
-	     {{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
-	      {0.00884198143074, 0.00884198143074, 0.00861063982859, 0.00119306623841},
-	      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
-	      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000}},
-	     {{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
-	      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
-	      {0.00596795726055, 0.00400459528385, 0.00045652034325, 0.00000000000000},
-	      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000}},
-	     {{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000},
-	      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
-	      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
-	      {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}};
-	const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, 4>, 4>, 4> stencil_weights_gpu = {
+	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
+	const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size> stencil_weights_gpu = {
 	    {{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
 	       {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
 	       {0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
@@ -236,9 +221,6 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 	       {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
 	       {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
 	       {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}}}};
-
-	static_assert(stencil_size <= 3,
-		      "stencil_size must be <= 3"); // stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
 
 	const amrex::Real step_end_time = time + dt;
 
@@ -300,9 +282,9 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 				int iz = static_cast<int>(amrex::Math::floor((pz - plo[2]) * dxi[2]));
 
 				amrex::Real avg_density = 0.0;
-				for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
-					for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
-						for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
+				for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
+					for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
+						for (int kk = -SN_stencil_size; kk <= SN_stencil_size; ++kk) {
 							const int iii = std::abs(ii);
 							const int jjj = std::abs(jj);
 							const int kkk = std::abs(kk);
@@ -314,12 +296,12 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 
 				if (SN_scheme_d == SNScheme::SN_thermal_only) {
 					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, stencil_size, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz,
-								     vol_inverse, stencil_weights);
+					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, SN_stencil_size, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz,
+								     vol_inverse, stencil_weights_gpu);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_size, stencil_volume, px, py,
-										    pz, m_ej, E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights,
+					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, SN_stencil_size, stencil_volume, px, py,
+										    pz, m_ej, E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights_gpu,
 										    avg_density, vol, dx, plo, SN_scheme_d);
 				}
 			}
@@ -496,6 +478,9 @@ template <typename ContainerType, typename problem_t>
 void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		  int evolutionStageIndex, int birthTimeIndex)
 {
+	static_assert(SN_stencil_size <= 3,
+		      "SN_stencil_size must be <= 3"); // SN_stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
+
 	// Zero the buffer for each particle type
 	state_buffer.setVal(0.0);
 
