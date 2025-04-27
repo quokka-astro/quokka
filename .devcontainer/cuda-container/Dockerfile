@@ -1,5 +1,5 @@
 # Use the NVIDIA CUDA image as the base image
-FROM nvcr.io/nvidia/nvhpc:25.1-devel-cuda12.6-ubuntu24.04@sha256:6556aa06655bd91c46633266dcfeccb3fbfb1c589dc184ad2ce8b603e5215403
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66
 
 # Set environment variables for NVIDIA
 ENV NVIDIA_VISIBLE_DEVICES=all
@@ -10,7 +10,7 @@ RUN apt-get update -qq && apt-get upgrade -y -qq && \
     apt-get install -y -qq --no-install-recommends \
     build-essential wget curl git ninja-build gcc g++ \
     python3-dev python3-numpy python3-matplotlib python3-pip \
-    libhdf5-dev && \
+    libhdf5-dev openmpi-bin libopenmpi-dev && \
     apt-get --yes -qq clean && \
     rm -rf /var/lib/apt/lists/*
 
