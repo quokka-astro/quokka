@@ -80,9 +80,10 @@ namespace SNDepositionUtils
 // Function to deposit thermal supernova remnant quantities
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz, const amrex::Real m_ej,
-		  const amrex::Real E_blast, const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy, const amrex::Real p_vz,
-		  const amrex::Real vol_inverse, const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size> &stencil_weights_gpu) noexcept
+depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz, const amrex::Real m_ej, const amrex::Real E_blast,
+		  const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy, const amrex::Real p_vz, const amrex::Real vol_inverse,
+		  const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+		      &stencil_weights_gpu) noexcept
 {
 	for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
 		for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
@@ -111,13 +112,14 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy,
-				 const int iz, const amrex::Real stencil_volume, const amrex::Real px, const amrex::Real py,
-				 const amrex::Real pz, const amrex::Real m_ej, const amrex::Real E_blast, const amrex::Real SN_kin_energy,
-				 const amrex::Real p_snr_0, const amrex::Real vol_inverse, const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size> &stencil_weights_gpu,
-				 const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-				 const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
+    amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
+    const amrex::Real stencil_volume, const amrex::Real px, const amrex::Real py, const amrex::Real pz, const amrex::Real m_ej, const amrex::Real E_blast,
+    const amrex::Real SN_kin_energy, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
+    const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+	&stencil_weights_gpu,
+    const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
 	const amrex::Real M_snr = (avg_density * stencil_volume * vol) + m_ej;	 // SNR mass
@@ -204,23 +206,23 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 		       int mass_index, int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
 {
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
-	const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size> stencil_weights_gpu = {
-	    {{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
-	       {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
-	       {0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
-	       {0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000}}},
-	     {{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
-	       {0.00884198143074, 0.00884198143074, 0.00861063982859, 0.00119306623841},
-	       {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
-	       {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000}}},
-	     {{{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
-	       {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
-	       {0.00596795726055, 0.00400459528385, 0.00045652034325, 0.00000000000000},
-	       {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000}}},
-	     {{{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000},
-	       {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
-	       {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
-	       {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}}}};
+	const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+	    stencil_weights_gpu = {{{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
+				      {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
+				      {0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
+				      {0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000}}},
+				    {{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
+				      {0.00884198143074, 0.00884198143074, 0.00861063982859, 0.00119306623841},
+				      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
+				      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000}}},
+				    {{{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
+				      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
+				      {0.00596795726055, 0.00400459528385, 0.00045652034325, 0.00000000000000},
+				      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000}}},
+				    {{{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000},
+				      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
+				      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
+				      {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}}}};
 
 	const amrex::Real step_end_time = time + dt;
 
@@ -296,12 +298,12 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 
 				if (SN_scheme_d == SNScheme::SN_thermal_only) {
 					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz,
-								     vol_inverse, stencil_weights_gpu);
+					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
+								     stencil_weights_gpu);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, px, py,
-										    pz, m_ej, E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights_gpu,
+					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, px, py, pz, m_ej,
+										    E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights_gpu,
 										    avg_density, vol, dx, plo, SN_scheme_d);
 				}
 			}
