@@ -68,7 +68,10 @@ struct MassDeposition {
 	}
 };
 
+namespace SNDepositionUtils {
+
 //-------------------- Supernova depositions --------------------
+
 template <typename ContainerType, typename problem_t>
 void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
                       int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
@@ -413,26 +416,6 @@ void SNAddBufferToState(ContainerType *container, amrex::MultiFab &state, amrex:
 	}
 }
 
-template <typename ContainerType, typename problem_t>
-void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex, int birthTimeIndex)
-{
-	// Zero the buffer for each particle type
-	state_buffer.setVal(0.0);
-
-	// copy host variables to device
-	const SNScheme SN_scheme_d = SN_scheme;
-
-	// Step 1: Local deposition within each box
-	SNLocalDeposition<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex, birthTimeIndex, SN_scheme_d);
-
-	// Step 2: Sum boundary values
-	state_buffer.SumBoundary(container->Geom(lev).periodicity());
-
-	// Step 3: Add the buffer to the state
-	SNAddBufferToState<ContainerType, problem_t>(container, state, state_buffer, lev, SN_scheme_d);
-}
-
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
 template <typename ContainerType>
 void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
@@ -460,6 +443,28 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 			});
 		}
 	}
+}
+
+} // namespace SNDepositionUtils
+
+template <typename ContainerType, typename problem_t>
+void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		  int evolutionStageIndex, int birthTimeIndex)
+{
+	// Zero the buffer for each particle type
+	state_buffer.setVal(0.0);
+
+	// copy host variables to device
+	const SNScheme SN_scheme_d = SN_scheme;
+
+	// Step 1: Local deposition within each box
+	SNDepositionUtils::SNLocalDeposition<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex, birthTimeIndex, SN_scheme_d);
+
+	// Step 2: Sum boundary values
+	state_buffer.SumBoundary(container->Geom(lev).periodicity());
+
+	// Step 3: Add the buffer to the state
+	SNDepositionUtils::SNAddBufferToState<ContainerType, problem_t>(container, state, state_buffer, lev, SN_scheme_d);
 }
 
 #endif // AMREX_SPACEDIM == 3
