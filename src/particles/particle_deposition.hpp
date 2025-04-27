@@ -437,9 +437,6 @@ template <typename problem_t> void SNAddBufferToState(amrex::MultiFab &state, am
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
 				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k);
 			} else {
-				// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
-				// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
-				// that the internal energy is positive. In fact, we demand that the cell temperature should not decrease.
 				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k);
 			}
 		});
