@@ -9,12 +9,12 @@
 #include <string>
 
 #include "AMReX_Array4.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
-#include "hydro/hydro_system.hpp"
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
@@ -118,7 +118,8 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
-	virtual void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) { /* Default empty implementation */ }
+	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	{ /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -570,7 +571,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 
 				// Get the units data for this particle type
-				const auto &unitsData = quokka::get_units_data();
+				const auto &unitsData = get_units_data();
 				if (unitsData.find(particleType_) == unitsData.end()) {
 					amrex::Abort(
 					    "Error: Particle type not defined in units data map. Please add units for this particle type in get_units_data().");
@@ -640,19 +641,21 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 #if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
-	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time) override
+	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
 	{
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
-			// Deposit supernova energy and momentum from level lev_min to finest level
-			// zero_out_input is false because we want to accumulate supernova contributions
-			// vol_weight is false because SNDeposition does the volume weighting
-			amrex::ParticleToMesh(*this->container_, state, lev_min, -1,
-					      SNDeposition{step_end_time, this->getMassIndex(), HydroSystem<problem_t>::density_index,
-							   this->getBirthTimeIndex(), this->getEvolutionStageIndex()},
-					      false, false);
+			if (!quokka::disable_SN_feedback) {
+				// Requires CGS units
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
+								 "UnitSystem must be CGS for particleMeshInteraction");
 
-			// Update particle evolution stages after deposition
-			updateEvolutionStage(this->container_, lev_min, step_end_time, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
+				SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(),
+								       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+			} else {
+				// Only update evolution stage but not deposit energy/momentum
+				updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+			}
 		}
 	}
 #endif // AMREX_SPACEDIM == 3
@@ -676,6 +679,17 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		for (const auto &[name, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Check if registry contains any star particles
+	[[nodiscard]] auto HasStarParticles() const -> bool
+	{
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			if (descriptor->isStarParticle()) {
 				return true;
 			}
 		}
@@ -786,13 +800,12 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit supernova energy and momentum from all particles
-	void depositSN(const amrex::Vector<amrex::MultiFab *> &state, int lev_min, amrex::Real step_end_time)
+	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{
-		// this function is only implemented for particles that belong to the StarParticleDescriptor class whose unique signature is that the
-		// isStarParticle() method returns true
+		// this function is only implemented for some particle types, so we specify the particle type manually here
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->isStarParticle()) {
-				descriptor->depositSN(state, lev_min, step_end_time);
+				descriptor->depositSN(state, state_buffer, lev, time, dt);
 			}
 		}
 	}
