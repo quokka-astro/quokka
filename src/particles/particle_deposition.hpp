@@ -311,8 +311,8 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AddCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AddCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state,
+								   amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
 {
 	// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
 	// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
@@ -372,13 +372,12 @@ AddCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 		AMREX_ASSERT(lambda <= 1.0);
 
 		// assert that lambda is a valid solution
-		AMREX_ASSERT_WITH_MESSAGE(
-				std::abs((0.5 *
-						((px + lambda * d_px) * (px + lambda * d_px) + (py + lambda * d_py) * (py + lambda * d_py) +
-							(pz + lambda * d_pz) * (pz + lambda * d_pz)) /
-						rho_new) -
-						e_kinetic_max) <= 1.0e-10 * e_kinetic_max,
-				"lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
+		AMREX_ASSERT_WITH_MESSAGE(std::abs((0.5 *
+						    ((px + lambda * d_px) * (px + lambda * d_px) + (py + lambda * d_py) * (py + lambda * d_py) +
+						     (pz + lambda * d_pz) * (pz + lambda * d_pz)) /
+						    rho_new) -
+						   e_kinetic_max) <= 1.0e-10 * e_kinetic_max,
+					  "lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
 
 		px_new = px + lambda * d_px;
 		py_new = py + lambda * d_py;
@@ -404,11 +403,9 @@ AddCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 	// 	printf("d e_int / d e_tot = %e\n", (e_int_new - e_int) / (e_tot_new - e_tot));
 	// 	printf("e_int / rho = %e, e_int_new / rho_new = %e\n", e_int / rho, e_int_new / rho_new);
 	// }
-
 }
 
-template <typename problem_t>
-void SNAddBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
+template <typename problem_t> void SNAddBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
 {
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
