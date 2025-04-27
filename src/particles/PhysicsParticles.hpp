@@ -122,11 +122,11 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
-  
+
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
-  // Tag cells around particles for refinement
+	// Tag cells around particles for refinement
 	virtual void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
