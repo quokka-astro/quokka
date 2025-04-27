@@ -76,9 +76,9 @@ namespace SNDepositionUtils
 // Function to deposit thermal supernova remnant quantities
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz, const int stencil_size,
-		  const amrex::Real m_ej, const amrex::Real E_blast, const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy,
-		  const amrex::Real p_vz, const amrex::Real vol_inverse, const amrex::Real (&stencil_weights)[4][4][4]) noexcept
+depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz, const int stencil_size, const amrex::Real m_ej,
+		  const amrex::Real E_blast, const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy, const amrex::Real p_vz,
+		  const amrex::Real vol_inverse, const amrex::Real (&stencil_weights)[4][4][4]) noexcept
 {
 	for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
 		for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
@@ -296,8 +296,8 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 
 				if (SN_scheme_d == SNScheme::SN_thermal_only) {
 					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, stencil_size, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
-								     stencil_weights);
+					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, stencil_size, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz,
+								     vol_inverse, stencil_weights);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_size, stencil_volume, px, py,
@@ -310,7 +310,7 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AddCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state,
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state,
 								   amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
 {
 	// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
@@ -404,6 +404,27 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AddCompositeBufferToState(amrex::Array4
 	// }
 }
 
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state,
+								     amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
+{
+	// For SN_thermal_only, the buffer contains only mass and energy (and a small amount of momentum), so it's safe to add the
+	// buffer directly to the state.
+	const double rho_new = local_state(i, j, k, HydroSystem<problem_t>::density_index) + local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+	const double px_new = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const double py_new = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const double pz_new = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const double e_new = local_state(i, j, k, HydroSystem<problem_t>::energy_index) + local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
+	const double e_int_new = e_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+
+	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
+	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
+	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_new;
+}
+
 template <typename problem_t> void SNAddBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
 {
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
@@ -414,31 +435,12 @@ template <typename problem_t> void SNAddBufferToState(amrex::MultiFab &state, am
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
-				// For SN_thermal_only, the buffer contains only mass and energy (and a small amount of momentum), so it's safe to add the
-				// buffer directly to the state.
-				const double rho_new =
-				    local_state(i, j, k, HydroSystem<problem_t>::density_index) + local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
-				const double px_new = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) +
-						      local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-				const double py_new = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) +
-						      local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-				const double pz_new = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) +
-						      local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-				const double e_new =
-				    local_state(i, j, k, HydroSystem<problem_t>::energy_index) + local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
-				const double e_int_new = e_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
-
-				local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
-				local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
-				local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
-				local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
-				local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
-				local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_new;
+				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k);
 			} else {
 				// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
 				// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
 				// that the internal energy is positive. In fact, we demand that the cell temperature should not decrease.
-				AddCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k);
+				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k);
 			}
 		});
 	}
