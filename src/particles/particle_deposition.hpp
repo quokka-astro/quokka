@@ -70,8 +70,8 @@ struct MassDeposition {
 
 //-------------------- Supernova depositions --------------------
 template <typename ContainerType, typename problem_t>
-void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex, int birthTimeIndex)
+void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+                      int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
 {
 	constexpr int stencil_size = 3;
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * stencil_size * stencil_size * stencil_size;
@@ -96,18 +96,12 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	static_assert(stencil_size <= 3,
 		      "stencil_size must be <= 3"); // stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
 
-	// copy host variables to device
-	const SNScheme SN_scheme_d = SN_scheme;
-
 	const amrex::Real step_end_time = time + dt;
 
 	constexpr double E_blast = 1.0e51;		       // ergs
 	constexpr double m_ej = 10.0 * C::M_solar;	       // ejecta mass in cgs
 	constexpr double m_dead_min = 1.4 * C::M_solar;	       // minimum mass of a dead star
 	constexpr double p_snr_0 = 2.8e5 * C::M_solar * 1.0e5; // SN terminal momentum in cgs
-
-	// Zero the buffer for each particle type
-	state_buffer.setVal(0.0);
 
 	// Step 1: Local deposition within each box
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
@@ -290,11 +284,11 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 			}
 		});
 	}
+}
 
-	// Step 2: Sum boundary values
-	state_buffer.SumBoundary(container->Geom(lev).periodicity());
-
-	// Step 3: Add the buffer to the state
+template <typename ContainerType, typename problem_t>
+void SNAddBufferToState(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, const SNScheme SN_scheme_d)
+{
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		auto const &local_state = state.array(mfi);
@@ -417,6 +411,26 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 			}
 		});
 	}
+}
+
+template <typename ContainerType, typename problem_t>
+void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		  int evolutionStageIndex, int birthTimeIndex)
+{
+	// Zero the buffer for each particle type
+	state_buffer.setVal(0.0);
+
+	// copy host variables to device
+	const SNScheme SN_scheme_d = SN_scheme;
+
+	// Step 1: Local deposition within each box
+	SNLocalDeposition<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex, birthTimeIndex, SN_scheme_d);
+
+	// Step 2: Sum boundary values
+	state_buffer.SumBoundary(container->Geom(lev).periodicity());
+
+	// Step 3: Add the buffer to the state
+	SNAddBufferToState<ContainerType, problem_t>(container, state, state_buffer, lev, SN_scheme_d);
 }
 
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
