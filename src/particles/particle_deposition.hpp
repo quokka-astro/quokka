@@ -68,9 +68,55 @@ struct MassDeposition {
 	}
 };
 
+//-------------------- Supernova depositions --------------------
+
 namespace SNDepositionUtils {
 
-//-------------------- Supernova depositions --------------------
+// Function to deposit thermal supernova remnant quantities
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalSNR(const int ix, const int iy, const int iz,
+							   const int stencil_size,
+							   const amrex::Real m_ej,
+							   const amrex::Real E_blast,
+							   const amrex::Real SN_kin_energy,
+							   const amrex::Real p_vx,
+							   const amrex::Real p_vy,
+							   const amrex::Real p_vz,
+							   const amrex::Real vol_inverse,
+							   const amrex::Real (&stencil_weights)[4][4][4],
+							   amrex::Array4<amrex::Real> const &local_buffer) noexcept
+{
+	for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
+		for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
+			for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
+				const int iii = std::abs(ii);
+				const int jjj = std::abs(jj);
+				const int kkk = std::abs(kk);
+				const double kernel_times_vol_inverse = stencil_weights[iii][jjj][kkk] * vol_inverse; // NOLINT
+				const amrex::Real SNR_rho_per_cell = m_ej * kernel_times_vol_inverse;
+				const amrex::Real SNR_energy_per_cell = (E_blast + SN_kin_energy) * kernel_times_vol_inverse;
+				const amrex::Real SNR_px_per_cell = m_ej * p_vx * kernel_times_vol_inverse;
+				const amrex::Real SNR_py_per_cell = m_ej * p_vy * kernel_times_vol_inverse;
+				const amrex::Real SNR_pz_per_cell = m_ej * p_vz * kernel_times_vol_inverse;
+				amrex::Gpu::Atomic::AddNoRet(
+				    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index),
+				    SNR_rho_per_cell);
+				amrex::Gpu::Atomic::AddNoRet(
+				    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x1Momentum_index),
+				    SNR_px_per_cell);
+				amrex::Gpu::Atomic::AddNoRet(
+				    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x2Momentum_index),
+				    SNR_py_per_cell);
+				amrex::Gpu::Atomic::AddNoRet(
+				    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x3Momentum_index),
+				    SNR_pz_per_cell);
+				amrex::Gpu::Atomic::AddNoRet(
+				    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
+				    SNR_energy_per_cell);
+			}
+		}
+	}
+}
 
 template <typename ContainerType, typename problem_t>
 void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
@@ -169,36 +215,8 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 
 				if (SN_scheme_d == SNScheme::SN_thermal_only) {
 					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
-						for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
-							for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
-								const int iii = std::abs(ii);
-								const int jjj = std::abs(jj);
-								const int kkk = std::abs(kk);
-								const double kernel_times_vol_inverse = stencil_weights[iii][jjj][kkk] * vol_inverse;
-								const amrex::Real SNR_rho_per_cell = m_ej * kernel_times_vol_inverse;
-								const amrex::Real SNR_energy_per_cell = (E_blast + SN_kin_energy) * kernel_times_vol_inverse;
-								const amrex::Real SNR_px_per_cell = m_ej * p_vx * kernel_times_vol_inverse;
-								const amrex::Real SNR_py_per_cell = m_ej * p_vy * kernel_times_vol_inverse;
-								const amrex::Real SNR_pz_per_cell = m_ej * p_vz * kernel_times_vol_inverse;
-								amrex::Gpu::Atomic::AddNoRet(
-								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index),
-								    SNR_rho_per_cell);
-								amrex::Gpu::Atomic::AddNoRet(
-								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x1Momentum_index),
-								    SNR_px_per_cell);
-								amrex::Gpu::Atomic::AddNoRet(
-								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x2Momentum_index),
-								    SNR_py_per_cell);
-								amrex::Gpu::Atomic::AddNoRet(
-								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x3Momentum_index),
-								    SNR_pz_per_cell);
-								amrex::Gpu::Atomic::AddNoRet(
-								    &local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
-								    SNR_energy_per_cell);
-							}
-						}
-					}
+					depositThermalSNR<problem_t>(ix, iy, iz, stencil_size, m_ej, E_blast, SN_kin_energy,
+								   p_vx, p_vy, p_vz, vol_inverse, stencil_weights, local_buffer);
 				} else {
 					const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
 					const amrex::Real M_snr = (avg_density * stencil_volume * vol) + m_ej;	 // SNR mass
