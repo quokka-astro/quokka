@@ -310,8 +310,105 @@ void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::
 	}
 }
 
-template <typename ContainerType, typename problem_t>
-void SNAddBufferToState(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, const SNScheme SN_scheme_d)
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AddCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
+{
+	// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
+	// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
+	// that the internal energy is positive. In fact, we demand that the cell temperature should not decrease.
+	const double rho = local_state(i, j, k, HydroSystem<problem_t>::density_index);
+	const double px = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const double py = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const double pz = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const double e_int = local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+	const double e_tot = local_state(i, j, k, HydroSystem<problem_t>::energy_index);
+
+	const double d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+	const double d_px = local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const double d_py = local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const double d_pz = local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const double d_e = local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
+
+	const double rho_new = rho + d_rho;
+	double px_new = px + d_px;
+	double py_new = py + d_py;
+	double pz_new = pz + d_pz;
+	double e_tot_new = e_tot + d_e;
+
+	const double d_e_int_d_rho = e_int / rho;
+	const double e_int_new_tmp = d_e_int_d_rho * rho_new;
+	const double e_int_plus_kinetic = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+
+	if (e_int_plus_kinetic <= e_tot_new * (1.0 + 1.0e-10)) {
+		e_tot_new = std::max(e_int_plus_kinetic, e_tot_new);
+	} else {
+		// find the lambda such that e_int_plus_kinetic == e_tot_new
+		const double e_kinetic_max = e_tot_new - e_int_new_tmp;
+		AMREX_ASSERT(e_kinetic_max >= 0.0);
+
+		// If this assertion fails, it means the SN energy (10^51 erg) is not enough to accelerate the
+		// SNR to match the velocity of the gas. This may ONLY happen when the SN star is nearly static
+		// at first and the background gas is moving at a speed >3171 km/s. This should NOT happen in
+		// practice.
+		// TODO(cch): deal with the special case where this assertion fails.
+		AMREX_ASSERT(0.5 * (px * px + py * py + pz * pz) / rho_new <= e_kinetic_max);
+
+		// Find analytical solution of the following equation:
+		// d_p^2 lambda^2 + 2 d_p p lambda + p^2 - 2 rho_new e_kinetic_max = 0
+		// This quadratic equation, denoted as F(x) = 0, has some known properties which make the
+		// solution well constrained:
+		// 1. F(0) < 0 (see assertion above)
+		// 2. F(1) > 0 (otherwise we won't be in this else clause)
+		// Therefore, there must be one and only one solution in the range [0, 1], and it's the bigger
+		// one of the two solutions (so we take the plus sign in the quadratic formula).
+		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);
+		const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);
+		const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max);
+		const double discriminant = (b * b) - (4.0 * a * c);
+		AMREX_ASSERT(discriminant >= 0.0);
+		const double lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
+		AMREX_ASSERT(lambda >= 0.0);
+		AMREX_ASSERT(lambda <= 1.0);
+
+		// assert that lambda is a valid solution
+		AMREX_ASSERT_WITH_MESSAGE(
+				std::abs((0.5 *
+						((px + lambda * d_px) * (px + lambda * d_px) + (py + lambda * d_py) * (py + lambda * d_py) +
+							(pz + lambda * d_pz) * (pz + lambda * d_pz)) /
+						rho_new) -
+						e_kinetic_max) <= 1.0e-10 * e_kinetic_max,
+				"lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
+
+		px_new = px + lambda * d_px;
+		py_new = py + lambda * d_py;
+		pz_new = pz + lambda * d_pz;
+	}
+
+	const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
+	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
+	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
+
+	// // log the state, for debugging on CPU.
+	// if (d_rho / rho > 1.0e-12) {
+	// 	// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
+	// 	// e_tot_new
+	// 	printf("original: rho = %e, px = %e, py = %e, pz = %e, e_int = %e, e_tot = %e\n", rho, px, py, pz, e_int, e_tot);
+	// 	printf("new: rho_new = %e, px_new = %e, py_new = %e, pz_new = %e, e_int_new = %e, e_tot_new = %e\n", rho_new, px_new,
+	// 	       py_new, pz_new, e_int_new, e_tot_new);
+	// 	// print d e_int / d e_tot
+	// 	printf("d e_int / d e_tot = %e\n", (e_int_new - e_int) / (e_tot_new - e_tot));
+	// 	printf("e_int / rho = %e, e_int_new / rho_new = %e\n", e_int / rho, e_int_new / rho_new);
+	// }
+
+}
+
+template <typename problem_t>
+void SNAddBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
 {
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -345,93 +442,7 @@ void SNAddBufferToState(ContainerType *container, amrex::MultiFab &state, amrex:
 				// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
 				// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
 				// that the internal energy is positive. In fact, we demand that the cell temperature should not decrease.
-				const double rho = local_state(i, j, k, HydroSystem<problem_t>::density_index);
-				const double px = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-				const double py = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-				const double pz = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-				const double e_int = local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
-				const double e_tot = local_state(i, j, k, HydroSystem<problem_t>::energy_index);
-
-				const double d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
-				const double d_px = local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-				const double d_py = local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-				const double d_pz = local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-				const double d_e = local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
-
-				const double rho_new = rho + d_rho;
-				double px_new = px + d_px;
-				double py_new = py + d_py;
-				double pz_new = pz + d_pz;
-				double e_tot_new = e_tot + d_e;
-
-				const double d_e_int_d_rho = e_int / rho;
-				const double e_int_new_tmp = d_e_int_d_rho * rho_new;
-				const double e_int_plus_kinetic = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
-
-				if (e_int_plus_kinetic <= e_tot_new * (1.0 + 1.0e-10)) {
-					e_tot_new = std::max(e_int_plus_kinetic, e_tot_new);
-				} else {
-					// find the lambda such that e_int_plus_kinetic == e_tot_new
-					const double e_kinetic_max = e_tot_new - e_int_new_tmp;
-					AMREX_ASSERT(e_kinetic_max >= 0.0);
-
-					// If this assertion fails, it means the SN energy (10^51 erg) is not enough to accelerate the
-					// SNR to match the velocity of the gas. This may ONLY happen when the SN star is nearly static
-					// at first and the background gas is moving at a speed >3171 km/s. This should NOT happen in
-					// practice.
-					// TODO(cch): deal with the special case where this assertion fails.
-					AMREX_ASSERT(0.5 * (px * px + py * py + pz * pz) / rho_new <= e_kinetic_max);
-
-					// Find analytical solution of the following equation:
-					// d_p^2 lambda^2 + 2 d_p p lambda + p^2 - 2 rho_new e_kinetic_max = 0
-					// This quadratic equation, denoted as F(x) = 0, has some known properties which make the
-					// solution well constrained:
-					// 1. F(0) < 0 (see assertion above)
-					// 2. F(1) > 0 (otherwise we won't be in this else clause)
-					// Therefore, there must be one and only one solution in the range [0, 1], and it's the bigger
-					// one of the two solutions (so we take the plus sign in the quadratic formula).
-					const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);
-					const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);
-					const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max);
-					const double discriminant = (b * b) - (4.0 * a * c);
-					AMREX_ASSERT(discriminant >= 0.0);
-					const double lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
-					AMREX_ASSERT(lambda >= 0.0);
-					AMREX_ASSERT(lambda <= 1.0);
-
-					// assert that lambda is a valid solution
-					AMREX_ASSERT_WITH_MESSAGE(
-					    std::abs((0.5 *
-						      ((px + lambda * d_px) * (px + lambda * d_px) + (py + lambda * d_py) * (py + lambda * d_py) +
-						       (pz + lambda * d_pz) * (pz + lambda * d_pz)) /
-						      rho_new) -
-						     e_kinetic_max) <= 1.0e-10 * e_kinetic_max,
-					    "lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
-
-					px_new = px + lambda * d_px;
-					py_new = py + lambda * d_py;
-					pz_new = pz + lambda * d_pz;
-				}
-
-				const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
-				local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
-				local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
-				local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
-				local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
-				local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
-				local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
-
-				// // log the state, for debugging on CPU.
-				// if (d_rho / rho > 1.0e-12) {
-				// 	// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
-				// 	// e_tot_new
-				// 	printf("original: rho = %e, px = %e, py = %e, pz = %e, e_int = %e, e_tot = %e\n", rho, px, py, pz, e_int, e_tot);
-				// 	printf("new: rho_new = %e, px_new = %e, py_new = %e, pz_new = %e, e_int_new = %e, e_tot_new = %e\n", rho_new, px_new,
-				// 	       py_new, pz_new, e_int_new, e_tot_new);
-				// 	// print d e_int / d e_tot
-				// 	printf("d e_int / d e_tot = %e\n", (e_int_new - e_int) / (e_tot_new - e_tot));
-				// 	printf("e_int / rho = %e, e_int_new / rho_new = %e\n", e_int / rho, e_int_new / rho_new);
-				// }
+				AddCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k);
 			}
 		});
 	}
@@ -486,7 +497,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 
 	// Step 3: Add the buffer to the state
-	SNDepositionUtils::SNAddBufferToState<ContainerType, problem_t>(container, state, state_buffer, lev, SN_scheme_d);
+	SNDepositionUtils::SNAddBufferToState<problem_t>(state, state_buffer, SN_scheme_d);
 }
 
 #endif // AMREX_SPACEDIM == 3
