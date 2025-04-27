@@ -20,6 +20,9 @@ __pycache__
 *.sarif
 Backtrace.*
 
+# Singularity Docker images
+*.sif
+
 *.aux
 *.dbl
 *.bbl
