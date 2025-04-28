@@ -180,9 +180,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	{
 		// Here we calculate the fraction of high mass stars and the average mass of high mass stars
 		//... by assuming a Chabrier IMF which has a lognormal distribution for masses above m_imf_break
-		//... and a powerlaw before larger masses. 
+		//... and a powerlaw before larger masses.
 		// fstar_high sets the mass of the high mass stars in a cell (=particle mass * fstar_high)
-		// m_star_high_avg is the average mass of the high mass stars in a cell 
+		// m_star_high_avg is the average mass of the high mass stars in a cell
 		// Checkout docs/star_formation for more details
 
 		auto arg = [](double mass) -> double { return (std::log10(mass) - imf_mu) / std::sqrt(2.0 * imf_disp * imf_disp); };
@@ -220,7 +220,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
 
-			// Check if the cell violates the Jeans condition but create a particle only if prob_star_formation > random draw	
+			// Check if the cell violates the Jeans condition but create a particle only if prob_star_formation > random draw
 			// eps_star is the fraction of gas mass that goes into star particles
 			// Checkout docs/star_formation for more details
 			if (LambdaJ < J * dx[0] &&
@@ -259,7 +259,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
 		{
-			
+
 			auto engine = amrex::RandomEngine();
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
@@ -286,7 +286,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.id() = pid_start + base_offset + p_idx;
 					p.cpu() = cpu_id;
 
-					// Set particle birth time 
+					// Set particle birth time
 					p.rdata(birth_time_index) = current_time;
 
 					// Set particle evolution stage to 0 if it is a low mass star
@@ -305,7 +305,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(mass_idx + 3) = vz;
 
 					p.rdata(birth_time_index + 1) = LONG_MAX;
-					if (p_idx > 0) { 
+					if (p_idx > 0) {
 						// This is the loop that sets the velocity of the high mass stars
 						double numx = 0.0;
 						double numy = 0.0;
