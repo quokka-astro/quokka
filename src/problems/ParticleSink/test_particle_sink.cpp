@@ -209,9 +209,9 @@ auto problem_main() -> int
 
 			// exact solution
 			if (std::abs(xs[i]) <= overlap_loc) {
-				exact_den[i] = 0.2;
+				exact_den[i] = 0.1;
 			} else if (std::abs(xs[i]) <= outer_radius) {
-				exact_den[i] = 0.6;
+				exact_den[i] = 0.2;
 			} else {
 				exact_den[i] = 1.0;
 			}
@@ -233,7 +233,7 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.1, 1.1);
+	matplotlibcpp::ylim(0.0, 1.1);
 	std::map<std::string, std::string> exact_den_args;
 	exact_den_args["label"] = "exact";
 	exact_den_args["color"] = "black";

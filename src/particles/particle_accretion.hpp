@@ -117,18 +117,16 @@ void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amre
 }
 
 // Compute the scale down factor for the accretion rate. This is used to prevent accretion rates from exceeding 100% of the available mass.
-// Current implementation: the maximum allowed accretion rate is 90%. 
+// Current implementation: the maximum allowed relative accretion rate is 90% (gas density cannot drop more than 90% in one time step)
 template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down)
 {
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &scale_down_arr = scale_down.arrays();
 	const auto &state_arr = state.arrays();
 
-	const double rho_sink = 0.2 * C::m_u;
-
 	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
-		const double accretion_rate_floor = -(1.0 - rho_sink / state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index));
+		const double accretion_rate_floor = -0.9;
 		if (accretion_rate_cell < accretion_rate_floor) {
 			// scale down the accretion rate to the maximum allowed value
 			scale_down_arr[bx](i, j, k) = accretion_rate_floor / accretion_rate_cell;
