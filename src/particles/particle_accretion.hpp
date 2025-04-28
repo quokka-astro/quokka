@@ -136,7 +136,7 @@ template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, double rho_sink, int mass_index, int evolutionStageIndex,
-					amrex::Real vol)
+					amrex::Real /*time*/, amrex::Real /*dt*/, amrex::Real vol)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
@@ -200,7 +200,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, double rho_sink, int mass_index,
-				   int evolutionStageIndex)
+				   int evolutionStageIndex, amrex::Real time, amrex::Real dt)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
@@ -218,7 +218,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 
 		// Process particles in this box
 		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, rho_sink, mass_index,
-									     evolutionStageIndex, vol);
+									     evolutionStageIndex, time, dt, vol);
 	}
 }
 
@@ -247,7 +247,6 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 	const double rho_sink = 0.1 * C::m_u;
 
 	// Step 1: Compute accretion rate
-	// TODO: add mass_index, time, dt
 	ComputeAccretionRate<ContainerType, problem_t>(container, state, state_accretion_rate, lev, rho_sink, evolutionStageIndex, time, dt, mass_index);
 }
 
@@ -271,7 +270,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, rho_sink);
 
 	// Step 3: Update particle mass and momentum
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index, evolutionStageIndex);
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index, evolutionStageIndex, time, dt);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);
