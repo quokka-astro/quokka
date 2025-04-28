@@ -1229,7 +1229,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// sync before rhs
 		{
 			BL_PROFILE("SyncGravitySolver: PreDepositMass");
-			ParallelDescriptor::Barrier(ParallelContext::CommunicatorSub());
+			amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 		}
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1245,7 +1245,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// sync after rhs
 		{
 			BL_PROFILE("SyncGravitySolver: PostDepositMass");
-			ParallelDescriptor::Barrier(ParallelContext::CommunicatorSub());
+			amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 		}
 
 		// check for NaN
@@ -1256,7 +1256,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// sync before solve
 		{
 			BL_PROFILE("SyncGravitySolver: PreSolve");
-			ParallelDescriptor::Barrier(ParallelContext::CommunicatorSub());
+			amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 		}
 
 		amrex::Real abstol = abstolPoisson_ * rhs_min;
@@ -1268,7 +1268,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// sync after solve
 		{
 			BL_PROFILE("SyncGravitySolver: PostSolve");
-			ParallelDescriptor::Barrier(ParallelContext::CommunicatorSub());
+			amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 		}
 
 		// check for NaN
