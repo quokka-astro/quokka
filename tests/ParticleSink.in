@@ -35,9 +35,8 @@ quokka.slice_z.int    = 1                   # Output cadence (in number of coars
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
 
-#problem.particles_file = "Sink1.txt"
-problem.particles_file = "Sink2-twoloc.txt"
-#problem.particles_file = "Sink20-randomloc.txt"
+problem.particles_file = "Sink_2.txt"
+#problem.particles_file = "Sink_40.txt"
 problem.refine_half_domain = false
 
 problem.n_amb = 1.0
