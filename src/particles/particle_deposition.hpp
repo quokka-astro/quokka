@@ -74,7 +74,7 @@ struct MassDeposition {
 
 //-------------------- Supernova depositions --------------------
 
-namespace SNDepositionUtils
+namespace SNFeedbackUtils
 {
 
 // Function to deposit thermal supernova remnant quantities
@@ -202,7 +202,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 }
 
 template <typename ContainerType, typename problem_t>
-void SNLocalDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
+void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
 		       int mass_index, int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
 {
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
@@ -427,7 +427,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_new;
 }
 
-template <typename problem_t> void SNAddBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
+template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
 {
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -474,7 +474,7 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 	}
 }
 
-} // namespace SNDepositionUtils
+} // namespace SNFeedbackUtils
 
 template <typename ContainerType, typename problem_t>
 void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
@@ -490,14 +490,14 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	const SNScheme SN_scheme_d = SN_scheme;
 
 	// Step 1: Local deposition within each box
-	SNDepositionUtils::SNLocalDeposition<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
+	SNFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
 								       birthTimeIndex, SN_scheme_d);
 
 	// Step 2: Sum boundary values
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 
 	// Step 3: Add the buffer to the state
-	SNDepositionUtils::SNAddBufferToState<problem_t>(state, state_buffer, SN_scheme_d);
+	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d);
 }
 
 #endif // AMREX_SPACEDIM == 3
