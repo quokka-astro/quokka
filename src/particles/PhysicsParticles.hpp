@@ -655,7 +655,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
 				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
-									this->getEvolutionStageIndex());
+								      this->getEvolutionStageIndex());
 			}
 		}
 	}

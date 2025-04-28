@@ -114,8 +114,8 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
     amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
-    const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z, const amrex::Real m_ej, const amrex::Real E_blast,
-    const amrex::Real SN_kin_energy, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
+    const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z, const amrex::Real m_ej,
+    const amrex::Real E_blast, const amrex::Real SN_kin_energy, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
     const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 	&stencil_weights_gpu,
     const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
@@ -202,8 +202,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 }
 
 template <typename ContainerType, typename problem_t>
-void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt,
-		       int mass_index, int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
+void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
 {
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
 	const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
@@ -302,8 +302,8 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 								     stencil_weights_gpu);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z, m_ej,
-										    E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights_gpu,
+					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
+										    m_ej, E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights_gpu,
 										    avg_density, vol, dx, plo, SN_scheme_d);
 				}
 			}
@@ -491,7 +491,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 	// Step 1: Local deposition within each box
 	SNFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
-								       birthTimeIndex, SN_scheme_d);
+								   birthTimeIndex, SN_scheme_d);
 
 	// Step 2: Sum boundary values
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
