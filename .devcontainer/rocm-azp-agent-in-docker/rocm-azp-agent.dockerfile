@@ -1,68 +1,16 @@
 # Use the AMD ROCm image as the base image
-FROM rocm/dev-ubuntu-24.04@sha256:708bbb9e2031a81e949a0847f0655c4fb1a790f8ac7cd0031116f56b04ada7d5
-
-# Set environment variables for CMake
-ENV hip_DIR=/opt/rocm/lib/cmake/hip
-ENV rocrand_DIR=/opt/rocm-6.3.4/lib/cmake/rocrand
-ENV hiprand_DIR=/opt/rocm-6.3.4/lib/cmake/hiprand
-ENV rocprim_DIR=/opt/rocm-6.3.4/lib/cmake/rocprim
-ENV rocsparse_DIR=/opt/rocm-6.3.4/lib/cmake/rocsparse
-ENV AMREX_AMD_ARCH=gfx908
-ENV CC=hipcc
-ENV CXX=hipcc
-
-# Set Azure Pipeline agent environment variables
+FROM ghcr.io/quokka-astro/quokka-linux-amd64-rocm:development
 ENV TARGETARCH="linux-x64"
-# Also can be "linux-arm", "linux-arm64"
+# Also can be "linux-arm", "linux-arm64".
 
-# Update package lists and install necessary dependencies
-RUN apt-get update -qq && apt-get upgrade -y -qq && \
-    apt-get install -y -qq --no-install-recommends \
-    rocrand-dev hiprand-dev rocprim-dev rocsparse-dev \
-    build-essential wget curl git ninja-build gcc g++ \
-    python3-dev python3-numpy python3-matplotlib python3-pip \
-    libhdf5-dev libopenmpi-dev netbase \
-    jq libicu74 && \
-    apt-get --yes -qq clean && \
-    rm -rf /var/lib/apt/lists/*
+USER root
+RUN apt update && \
+  apt upgrade -y && \
+  apt install -y curl git jq libicu74
 
 # Install Azure CLI
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
-# Install Clang 19.x
-RUN mkdir -m 0755 -p /etc/apt/keyrings/ && \
- curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg.key && \
- echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | tee /etc/apt/sources.list.d/llvm.list > /dev/null
-
-RUN apt-get clean && apt-get update -y && \
- apt-get install -y --no-install-recommends clang-19 llvm-19 libomp-19-dev libclang-rt-19-dev clangd-19 && \
- rm -rf /var/lib/apt/lists/*
-
-# Create symlink for clangd
-RUN ln -s /usr/bin/clangd-19 /usr/bin/clangd
-
-# Install the latest version of CMake
-RUN test -f /usr/share/doc/kitware-archive-keyring/copyright || wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null && \
-    echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ noble main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null
-
-RUN apt-get clean && apt-get update -y && \
-    apt-get install -y --no-install-recommends cmake && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install blosc2 (needed for ADIOS2)
-RUN pip3 install blosc2 --break-system-packages
-
-# Install ADIOS2 (needed for OpenPMD)
-RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
-    wget -q https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.10.1.tar.gz && \
-    tar xzf v2.10.1.tar.gz && \
-    mkdir adios2-build && cd adios2-build && \
-    cmake ../ADIOS2-2.10.1 -DADIOS2_USE_Blosc2=ON -DADIOS2_USE_Fortran=OFF && \
-    make -j$(nproc) && make install && \
-    cd / && \
-    rm -rf /tmp/build-adios2
-
-# Set up Azure Pipelines agent
 WORKDIR /azp/
 
 COPY ./start.sh ./
@@ -72,7 +20,13 @@ RUN chmod +x ./start.sh
 RUN useradd -m -d /home/agent agent
 RUN chown -R agent:agent /azp /home/agent
 
+WORKDIR /home/agent
 USER agent
+# Another option is to run the agent as root.
+# ENV AGENT_ALLOW_RUNASROOT="true"
 
-# Set entry point
+# WORKDIR /home/agent
+# RUN touch /home/agent/.token
+# RUN chmod 666 /home/agent/.token
+
 ENTRYPOINT [ "./start.sh" ]
