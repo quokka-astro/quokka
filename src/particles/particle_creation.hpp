@@ -178,6 +178,13 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 	ParticleCreationTraits()
 	{
+		// Here we calculate the fraction of high mass stars and the average mass of high mass stars
+		//... by assuming a Chabrier IMF which has a lognormal distribution for masses above m_imf_break
+		//... and a powerlaw before larger masses. 
+		// fstar_high sets the mass of the high mass stars in a cell (=particle mass * fstar_high)
+		// m_star_high_avg is the average mass of the high mass stars in a cell 
+		// Checkout docs/star_formation for more details
+
 		auto arg = [](double mass) -> double { return (std::log10(mass) - imf_mu) / std::sqrt(2.0 * imf_disp * imf_disp); };
 		double const norm_ratio =
 		    std::pow(m_imf_break, (1 - alpha)) * imf_disp * std::sqrt(2.0 * M_PI) / std::exp(-arg(m_imf_break) * arg(m_imf_break));
@@ -185,7 +192,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		double const total_stars = ((1. - alpha) * norm_ratio * (std::erf(arg(m_imf_break)) - std::erf(arg(m_imf_min)))) +
 					   std::pow(m_imf_max, 1.0 - alpha) - std::pow(m_imf_break, 1.0 - alpha);
 		double const num_high_mass_stars = std::pow(m_imf_max, 1.0 - alpha) - std::pow(m_star_high, 1.0 - alpha);
-		;
 
 		fstar_high = num_high_mass_stars / total_stars;
 		m_star_high_avg = m_imf_max * ((alpha - 1.0) / (alpha - 2.0)) * (1. - std::pow(m_star_high / m_imf_max, 2.0 - alpha)) /
@@ -214,6 +220,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
 
+			// Check if the cell violates the Jeans condition but create a particle only if prob_star_formation > random draw	
+			// eps_star is the fraction of gas mass that goes into star particles
+			// Checkout docs/star_formation for more details
 			if (LambdaJ < J * dx[0] &&
 			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
@@ -250,8 +259,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
 		{
-			// A simple demonstration of particle creation
-
+			
 			auto engine = amrex::RandomEngine();
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
@@ -269,12 +277,16 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				double total_momy = 0.0;
 				double total_momz = 0.0;
 
+				// p_idx = 0 represents the low mass star and p_idx = 1, 2..  represent the high mass stars
+
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
 					auto &p = particles[p_idx]; // NOLINT
 
 					// Set particle ID and CPU
 					p.id() = pid_start + base_offset + p_idx;
 					p.cpu() = cpu_id;
+
+					// Set particle birth time 
 					p.rdata(birth_time_index) = current_time;
 
 					// Set particle evolution stage to 0 if it is a low mass star
@@ -293,7 +305,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(mass_idx + 3) = vz;
 
 					p.rdata(birth_time_index + 1) = LONG_MAX;
-					if (p_idx > 0) {
+					if (p_idx > 0) { 
+						// This is the loop that sets the velocity of the high mass stars
 						double numx = 0.0;
 						double numy = 0.0;
 						double numz = 0.0;
@@ -302,9 +315,12 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double vy_adj = NAN;
 						double vz_adj = NAN;
 						double rho_adj = NAN;
+
 						// Get the average velocity from the velocity dispersion of the surrounding cells
 						// We use the velocity dispersion of the surrounding cells to get the velocity of the high mass star...
 						//... from a log normal distribution
+						// Checkout docs/star_formation for more details
+
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
 								for (int kk = k - 1; kk <= k + 1; ++kk) {
@@ -378,7 +394,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				// Update total energy
 				state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= factor;
 
-				// Update mass scalars
+				// Update mass scalars including passive scalars
 				if (nscalars > 0) {
 					for (int nn = 0; nn < nscalars; ++nn) {
 						state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) *= factor;
