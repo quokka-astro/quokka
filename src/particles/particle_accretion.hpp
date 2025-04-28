@@ -18,14 +18,14 @@ enum class AccretionScheme { Threshold = 0 };
 namespace SinkAccretionUtils
 {
 
+constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
+
 constexpr double rho_sink_ = 0.2 * C::m_u;
 
-constexpr const auto& kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+// constexpr ParticleUtils::kernel_weights_array_t kernel_weights = ParticleUtils::kernel_spherical_3_weights;
+constexpr ParticleUtils::kernel_weights_array_t kernel_weights = ParticleUtils::kernel_spherical_uniform_3_weights;
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double
-{
-	return -0.5 * (rho - rho_sink) / rho;
-}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
 // Function to compute accretion rate for particles in a box, including the ParallelFor call
 template <typename ContainerType, typename problem_t>
@@ -38,9 +38,6 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	auto &particles = pti.GetArrayOfStructs();
 	auto *pData = particles().data();
 	const amrex::Long np = pti.numParticles();
-
-	constexpr int stencil_size = 3;
-	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
 
 	// Deposit particle data into the local buffer
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
@@ -134,9 +131,6 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 	auto &particles = pti.GetArrayOfStructs();
 	auto *pData = particles().data();
 	const amrex::Long np = pti.numParticles();
-
-	constexpr int stencil_size = 3;
-	static_assert(stencil_size == ParticleUtils::stencil_size, "stencil_size must be equal to ParticleUtils::stencil_size");
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
