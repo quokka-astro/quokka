@@ -88,7 +88,7 @@ void AdvectionSimulation<SquareProblem>::computeReferenceSolution(amrex::MultiFa
 	}
 }
 
-template <> void AdvectionSimulation<SquareProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void AdvectionSimulation<SquareProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 

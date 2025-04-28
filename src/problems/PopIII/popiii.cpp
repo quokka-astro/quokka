@@ -323,7 +323,7 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 	});
 }
 
-template <> void QuokkaSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<PopIII>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 
 	// read-in jeans length refinement runtime params

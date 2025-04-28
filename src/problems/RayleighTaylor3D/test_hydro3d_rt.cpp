@@ -127,7 +127,7 @@ void QuokkaSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state_m
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<RTProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<RTProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
