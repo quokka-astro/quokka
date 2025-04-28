@@ -114,7 +114,7 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
     amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
-    const amrex::Real stencil_volume, const amrex::Real px, const amrex::Real py, const amrex::Real pz, const amrex::Real m_ej, const amrex::Real E_blast,
+    const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z, const amrex::Real m_ej, const amrex::Real E_blast,
     const amrex::Real SN_kin_energy, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
     const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 	&stencil_weights_gpu,
@@ -162,9 +162,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				const int kkk = std::abs(kk - iz);
 				const double kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse;
 
-				const double delta_x = (ii + 0.5) * dx[0] + plo[0] - px; // NOLINT
-				const double delta_y = (jj + 0.5) * dx[1] + plo[1] - py; // NOLINT
-				const double delta_z = (kk + 0.5) * dx[2] + plo[2] - pz; // NOLINT
+				const double delta_x = (ii + 0.5) * dx[0] + plo[0] - pos_x; // NOLINT
+				const double delta_y = (jj + 0.5) * dx[1] + plo[1] - pos_y; // NOLINT
+				const double delta_z = (kk + 0.5) * dx[2] + plo[2] - pos_z; // NOLINT
 				const double r_sq = (delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
 
 				const amrex::Real delta_rho_i = m_ej * kernel_times_vol_inverse;
@@ -274,14 +274,14 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 				const amrex::Real p_vz = p.rdata(mass_index + 3);
 				const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
 
-				const amrex::Real px = p.pos(0);
-				const amrex::Real py = p.pos(1);
-				const amrex::Real pz = p.pos(2);
+				const amrex::Real pos_x = p.pos(0);
+				const amrex::Real pos_y = p.pos(1);
+				const amrex::Real pos_z = p.pos(2);
 
 				// Find the cell containing the particle
-				int ix = static_cast<int>(amrex::Math::floor((px - plo[0]) * dxi[0]));
-				int iy = static_cast<int>(amrex::Math::floor((py - plo[1]) * dxi[1]));
-				int iz = static_cast<int>(amrex::Math::floor((pz - plo[2]) * dxi[2]));
+				int ix = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
+				int iy = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
+				int iz = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
 
 				amrex::Real avg_density = 0.0;
 				for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
@@ -302,7 +302,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 								     stencil_weights_gpu);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, px, py, pz, m_ej,
+					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z, m_ej,
 										    E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights_gpu,
 										    avg_density, vol, dx, plo, SN_scheme_d);
 				}
