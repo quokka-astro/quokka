@@ -126,7 +126,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 	++cycle;
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<BinaryOrbit>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();

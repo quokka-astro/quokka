@@ -100,7 +100,7 @@ template <> void QuokkaSimulation<SedovProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void QuokkaSimulation<SedovProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<SedovProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 

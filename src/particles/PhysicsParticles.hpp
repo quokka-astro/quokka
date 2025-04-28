@@ -40,6 +40,8 @@ class PhysicsParticleDescriptorBase
 	int evolutionStageIndex_{-1};	// Index for evolution stage (-1 if not used)
 	bool allowsAccretion_{false};	// Whether particles can accrete gas
 
+	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
+
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), allowsCreation_(allows_creation),
@@ -63,10 +65,12 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsAccretion() const -> bool { return allowsAccretion_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getForceFinestLevel() const -> bool { return forceFinestLevel_; }
 
 	// setter methods for particle properties
-	void setEvolutionStageIndex(int evolution_stage_idx) { evolutionStageIndex_ = evolution_stage_idx; }
-	void setAllowsAccretion(bool allows_accretion) { allowsAccretion_ = allows_accretion; }
+	AMREX_FORCE_INLINE void setEvolutionStageIndex(int evolution_stage_idx) { evolutionStageIndex_ = evolution_stage_idx; }
+	AMREX_FORCE_INLINE void setAllowsAccretion(bool allows_accretion) { allowsAccretion_ = allows_accretion; }
+	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
 
 	// New method to get particle positions and data
 	[[nodiscard]] virtual auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
@@ -118,8 +122,12 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
 	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
+
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
+
+	// Tag cells around particles for refinement
+	virtual void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) const = 0;
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -620,6 +628,39 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 	}
+
+#if AMREX_SPACEDIM == 3
+	// Implement cell tagging around particles
+	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) const override
+	{
+		if (container_ == nullptr) {
+			return;
+		}
+
+		for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
+			auto &particles = pti.GetArrayOfStructs();
+			auto *pData = particles().data();
+			const amrex::Long np = pti.numParticles();
+
+			// Get geometry information for this level
+			const auto &geom = container_->Geom(lev);
+			const auto plo = geom.ProbLoArray();
+			const auto dxi = geom.InvCellSizeArray();
+
+			const auto tag = tags.array(pti);
+
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				// Find the cell containing the particle
+				const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+				const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+				const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+
+				tag(ix, iy, iz) = amrex::TagBox::SET;
+			});
+		}
+	}
+#endif
 };
 
 // New class for star particles that adds stellar evolution capabilities
@@ -654,7 +695,8 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 								       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
-				updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
+								      this->getEvolutionStageIndex());
 			}
 		}
 	}
@@ -768,7 +810,7 @@ template <typename problem_t> class PhysicsParticleRegister
 #endif // AMREX_SPACEDIM == 3
 
 	// Retrieve a particle descriptor by type
-	[[nodiscard]] auto getParticleDescriptor(ParticleType type) const -> const PhysicsParticleDescriptorBase *
+	[[nodiscard]] auto getParticleDescriptor(ParticleType type) -> PhysicsParticleDescriptorBase *
 	{
 		auto it = particleRegistry_.find(type);
 		if (it != particleRegistry_.end()) {
@@ -905,6 +947,17 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 		return max_speed;
+	}
+
+	// Refine grids around particles that require finest level
+	void refineGridsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow, const amrex::IntVect &n_error_buf)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getForceFinestLevel()) {
+				AMREX_ALWAYS_ASSERT(n_error_buf.min() >= 2);
+				descriptor->tagCellsAroundParticles(lev, tags, time, ngrow);
+			}
+		}
 	}
 #endif // AMREX_SPACEDIM == 3
 

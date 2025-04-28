@@ -244,7 +244,7 @@ template <> void QuokkaSimulation<ShellProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void QuokkaSimulation<ShellProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShellProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 

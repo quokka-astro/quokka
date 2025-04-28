@@ -58,6 +58,9 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::boxArray;
 	using AMRSimulation<problem_t>::DistributionMap;
 
+	using AMRSimulation<problem_t>::max_level;
+	using AMRSimulation<problem_t>::n_error_buf;
+
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
 
 	void computeMaxSignalLocal(int level) override;
@@ -92,6 +95,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void FixupState(int lev) override;
 
 	// tag cells for refinement
+	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
+
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
 	auto computeFluxes(amrex::MultiFab const &consVar, int nvars, int lev) -> std::array<amrex::MultiFab, AMREX_SPACEDIM>;
@@ -219,9 +224,16 @@ template <typename problem_t> auto AdvectionSimulation<problem_t>::ComputeStatis
 	return std::map<std::string, amrex::Real>{};
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <typename problem_t> void AdvectionSimulation<problem_t>::refineGrid(int /*lev*/, amrex::TagBoxArray & /*tags*/, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement -- implement in problem generator
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
+{
+	// call user-defined RefineGrid to set tags
+	refineGrid(lev, tags, time, ngrow);
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::FixupState(int lev)
