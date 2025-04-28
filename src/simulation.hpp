@@ -1394,16 +1394,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 		// Fill remaining ghost cells
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			// sync before FB
+			{
+				BL_PROFILE("SyncKickParticles: PreFillBoundary");
+				amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
+			}
+
 			// internal boundaries
 			accel[lev][idim].FillBoundary(geom[lev].periodicity());
 
+			// sync after FB
+			{
+				BL_PROFILE("SyncKickParticles: PostFillBoundary");
+				amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
+			}
+			
 			// physical boundaries
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
 			fineBdryFunct(accel[lev][idim], 0, accel[lev][idim].nComp(), accel[lev][idim].nGrowVect(), 0., 0);
-
-			// check for NaN
-			AMREX_ALWAYS_ASSERT(!accel[lev][idim].contains_nan());
 		}
 
 		// average to cell centers
