@@ -123,10 +123,10 @@ class PhysicsParticleDescriptorBase
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
-	virtual void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
-	virtual void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
@@ -668,16 +668,16 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	}
 
 	// compute accretion rate
-	void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
+	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
 	{
-		computeSinkAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
+		SinkAccretionUtils::computeAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
 										  this->getMassIndex(), this->getEvolutionStageIndex());
 	}
 
 	// apply accretion
-	void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
+	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
 	{
-		applySinkAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
+		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
 										this->getMassIndex(), this->getEvolutionStageIndex());
 	}
 #endif // AMREX_SPACEDIM == 3
@@ -838,22 +838,22 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Implementation of computeAccretion
-	void computeAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	// Implementation of computeSinkAccretion
+	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
-				descriptor->computeAccretion(state, state_accretion_rate, lev, time, dt);
+				descriptor->computeSinkAccretion(state, state_accretion_rate, lev, time, dt);
 			}
 		}
 	}
 
-	// Implementation of applyAccretion
-	void applyAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	// Implementation of applySinkAccretion
+	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
-				descriptor->applyAccretion(state, state_accretion_rate, lev, time, dt);
+				descriptor->applySinkAccretion(state, state_accretion_rate, lev, time, dt);
 			}
 		}
 	}

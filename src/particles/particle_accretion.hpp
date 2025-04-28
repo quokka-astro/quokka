@@ -15,7 +15,7 @@ enum class AccretionScheme { Threshold = 0 };
 
 #if AMREX_SPACEDIM == 3
 
-namespace ParticleAccretionUtils
+namespace SinkAccretionUtils
 {
 
 constexpr bool use_uniform_kernel = true;
@@ -236,10 +236,8 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 	});
 }
 
-} // namespace ParticleAccretionUtils
-
 template <typename ContainerType, typename problem_t>
-void computeSinkAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
+void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
 		      int mass_index, int evolutionStageIndex)
 {
 	const AccretionScheme accretion_scheme = AccretionScheme::Threshold;
@@ -247,7 +245,7 @@ void computeSinkAccretion(ContainerType *container, amrex::MultiFab &state, amre
 
 	// Step 1: Compute accretion rate
 	// TODO: add mass_index, time, dt
-	ParticleAccretionUtils::ComputeAccretionRate<ContainerType, problem_t>(container, state, state_accretion_rate, lev, rho_sink, evolutionStageIndex);
+	ComputeAccretionRate<ContainerType, problem_t>(container, state, state_accretion_rate, lev, rho_sink, evolutionStageIndex);
 }
 
 // Functor for accreting mass and momentum from gas onto particles.
@@ -257,7 +255,7 @@ void computeSinkAccretion(ContainerType *container, amrex::MultiFab &state, amre
 // in one time step. rho_sink is a constant threshold density.
 // The accreted mass and momentum are added to the particle's mass and momentum.
 template <typename ContainerType, typename problem_t>
-void applySinkAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
+void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
 		    int mass_index, int evolutionStageIndex)
 {
 	const double rho_sink = 0.1 * C::m_u;
@@ -267,17 +265,19 @@ void applySinkAccretion(ContainerType *container, amrex::MultiFab &state, amrex:
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
 	// Update accretion_rate and compute scale_down
-	ParticleAccretionUtils::ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, rho_sink);
+	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, rho_sink);
 
 	// Step 3: Update particle mass and momentum
-	ParticleAccretionUtils::UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index,
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index,
 										  evolutionStageIndex);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
-	ParticleAccretionUtils::UpdateHydroState<problem_t>(state, state_accretion_rate);
+	UpdateHydroState<problem_t>(state, state_accretion_rate);
 }
 
 #endif // AMREX_SPACEDIM == 3
+
+} // namespace SinkAccretionUtils
 
 } // namespace quokka
 

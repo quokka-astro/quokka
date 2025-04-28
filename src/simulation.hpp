@@ -1403,13 +1403,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	accretion_rate_at_level.setVal(0.0);
 
 	// Sink accretion, stage 1: compute the accretion rate
-	particleRegister_.computeAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Sink formation. To be implemented
 	// particleRegister_.formSinks(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Sink accretion, stage 2: update the particle states
-	particleRegister_.applyAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
 	particleRegister_.depositSN(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
