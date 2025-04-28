@@ -14,7 +14,7 @@ amr.v              = 1       # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 32 32 32
-amr.max_level       = 1     # number of levels = max_level + 1
+amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 16    # grid size must be divisible by this
 amr.max_grid_size   = 16    # at least 128 for GPUs
 amr.n_error_buf     = 2     # minimum 3 cell buffer around tagged cells
@@ -36,8 +36,8 @@ quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Int
 quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
 
 #problem.particles_file = "Sink1.txt"
-#problem.particles_file = "Sink2-twoloc.txt"
-problem.particles_file = "Sink20-randomloc.txt"
+problem.particles_file = "Sink2-twoloc.txt"
+#problem.particles_file = "Sink20-randomloc.txt"
 problem.refine_half_domain = false
 
 problem.n_amb = 1.0
@@ -45,5 +45,5 @@ problem.T_amb = 718.0
 particles.SN_scheme = 1 					# 1: SN_thermal_or_thermal_momentum
 particles.verbose = 1
 
-max_timesteps = 2
+max_timesteps = 1
 plotfile_interval = 1

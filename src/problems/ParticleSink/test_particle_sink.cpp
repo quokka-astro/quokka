@@ -8,6 +8,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
+#include "util/fextract.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -15,24 +16,23 @@
 #include "particles/particle_types.hpp"
 #include "test_particle_sink.hpp"
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+
 struct SinkProblem {
 };
 
 static bool refine_half_domain = false; // NOLINT
 
-static double max_Eint_global = 0.0; // NOLINT
-
-static std::string particles_file = "Sink.txt"; // NOLINT
-
+static double rho0 = 1.0 * C::m_u; // g cm^-3
+static double T0 = 10.0; // K
 constexpr double mu = 1.0 * C::m_u;
-// constexpr double mu = 1.295 * C::m_u; // neutral gas
 constexpr double gamma_ = 5. / 3.;
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
-// const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
-const double cloudy_H_mass_fraction = 1.0;
 const double year = 3.15576e+07; // in seconds
-const double mass_SNR = 10.0 * C::M_solar;
-const int n_SNR = 2;
+
+static std::string particles_file = "Sink.txt"; // NOLINT
 
 static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
 static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
@@ -98,14 +98,11 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const double rho_bg = n_amb * C::m_u / cloudy_H_mass_fraction;
-	const double E0 = CV * T_amb * rho_bg;
-	const double rho = rho_bg;
-	const double rho_e = E0;
+	const double rho_e = CV * T0 * rho0;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = 0.0;
@@ -136,13 +133,6 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 			}
 		});
 	}
-}
-
-template <> void QuokkaSimulation<SinkProblem>::computeAfterTimestep()
-{
-	// find the maximum temperature in the state_new_cc_[0]
-	const double max_internal_energy_density = state_new_cc_[0].max(HydroSystem<SinkProblem>::internalEnergy_index);
-	max_Eint_global = std::max(max_Eint_global, max_internal_energy_density);
 }
 
 auto problem_main() -> int
@@ -192,7 +182,7 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.stopTime_ = t_stop * year;
 	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
-	sim.initDt_ = 0.001 * year;
+	sim.initDt_ = 1.0 * year;
 
 	// initialize
 	sim.setInitialConditions();
@@ -204,29 +194,52 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	const int nx = static_cast<int>(position.size());
+
+	// plot density at rank 0
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::vector<double> xs(nx);
+		std::vector<double> rho(nx);
+		std::vector<double> num_den(nx);
+		for (int i = 0; i < nx; ++i) {
+			xs[i] = position[i] / C::parsec;
+			rho[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
+			num_den[i] = rho[i] / C::m_u; // cm^-3
+		}
+
+#ifdef HAVE_PYTHON
+	matplotlibcpp::clf();
+	matplotlibcpp::ylim(0.1, 1.1);
+	matplotlibcpp::plot(xs, num_den);
+	matplotlibcpp::xlabel("x (pc)");
+	matplotlibcpp::ylabel("n (cm^-3)");
+	matplotlibcpp::save("./sink_density.pdf");
+#endif
+	}
+
 	return 0;
 
-	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	const amrex::Real mass_increase = total_mass_final - total_mass_init;
-	amrex::Print() << "----------------- Problem diagnostics -----------------" << "\n";
-	amrex::Print() << "Total mass increase: " << mass_increase << "\n";
-	amrex::Print() << "Expected total mass increase: " << n_SNR * mass_SNR << "\n";
-	const double mass_increase_rel_err = std::abs(mass_increase - n_SNR * mass_SNR) / (n_SNR * mass_SNR);
-	amrex::Print() << "Mass increase relative error: " << mass_increase_rel_err << "\n";
-	const double mass_increase_rel_err_tol = 1.0e-10;
+	// amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	// const amrex::Real mass_increase = total_mass_final - total_mass_init;
+	// amrex::Print() << "----------------- Problem diagnostics -----------------" << "\n";
+	// amrex::Print() << "Total mass increase: " << mass_increase << "\n";
+	// amrex::Print() << "Expected total mass increase: " << n_SNR * mass_SNR << "\n";
+	// const double mass_increase_rel_err = std::abs(mass_increase - n_SNR * mass_SNR) / (n_SNR * mass_SNR);
+	// amrex::Print() << "Mass increase relative error: " << mass_increase_rel_err << "\n";
+	// const double mass_increase_rel_err_tol = 1.0e-10;
 
-	const amrex::Real max_internal_energy = max_Eint_global * vol;
-	const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
-	int status = 1;
-	if (max_internal_energy > expected_minimum_max_internal_energy && mass_increase_rel_err < mass_increase_rel_err_tol) {
-		status = 0;
-		amrex::Print() << "Test passed. Max internal energy in cells: " << max_internal_energy << "\n";
-	} else {
-		status = 1;
-		amrex::Print() << "Test failed. Max internal energy in cells too low: " << max_internal_energy << "\n";
-		amrex::Print() << "Expected minimum max internal energy: " << expected_minimum_max_internal_energy << "\n";
-	}
-	amrex::Print() << "---------------------------------------------------------" << "\n";
+	// const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
+	// int status = 1;
+	// if (max_internal_energy > expected_minimum_max_internal_energy && mass_increase_rel_err < mass_increase_rel_err_tol) {
+	// 	status = 0;
+	// 	amrex::Print() << "Test passed. Max internal energy in cells: " << max_internal_energy << "\n";
+	// } else {
+	// 	status = 1;
+	// 	amrex::Print() << "Test failed. Max internal energy in cells too low: " << max_internal_energy << "\n";
+	// 	amrex::Print() << "Expected minimum max internal energy: " << expected_minimum_max_internal_energy << "\n";
+	// }
+	// amrex::Print() << "---------------------------------------------------------" << "\n";
 
-	return status;
+	// return status;
 }
