@@ -1226,9 +1226,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].setVal(0);
 		}
 
+		// sync before rhs
+		{
+			BL_PROFILE("SyncGravitySolver: PreDepositMass");
+			ParallelDescriptor::Barrier(ParallelContext::CommunicatorSub());
+		}
+
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			fillPoissonRhsAtLevel(rhs[lev], lev);
-			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
@@ -1237,15 +1242,33 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
 #endif
 
+		// sync after rhs
+		{
+			BL_PROFILE("SyncGravitySolver: PostDepositMass");
+			ParallelDescriptor::Barrier(ParallelContext::CommunicatorSub());
+		}
+
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
+		}
+
+		// sync before solve
+		{
+			BL_PROFILE("SyncGravitySolver: PreSolve");
+			ParallelDescriptor::Barrier(ParallelContext::CommunicatorSub());
 		}
 
 		amrex::Real abstol = abstolPoisson_ * rhs_min;
 		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		if (verbose) {
 			amrex::Print() << "\n";
+		}
+
+		// sync after solve
+		{
+			BL_PROFILE("SyncGravitySolver: PostSolve");
+			ParallelDescriptor::Barrier(ParallelContext::CommunicatorSub());
 		}
 
 		// check for NaN
