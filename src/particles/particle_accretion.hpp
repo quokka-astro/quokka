@@ -38,7 +38,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double r
 template <typename ContainerType, typename problem_t>
 void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, double rho_sink, int evolutionStageIndex)
+			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, double rho_sink, int evolutionStageIndex, amrex::Real /*time*/,
+			       amrex::Real /*dt*/, int /*mass_index*/)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
@@ -84,7 +85,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 }
 
 template <typename ContainerType, typename problem_t>
-void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, double rho_sink, int evolutionStageIndex)
+void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, double rho_sink, int evolutionStageIndex,
+			  amrex::Real time, amrex::Real dt, int mass_index)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
@@ -102,7 +104,8 @@ void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amre
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dxi, rho_sink, evolutionStageIndex);
+		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dxi, rho_sink, evolutionStageIndex, time, dt,
+								    mass_index);
 	}
 
 	// Sum boundary cell values to real cells
@@ -245,7 +248,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 
 	// Step 1: Compute accretion rate
 	// TODO: add mass_index, time, dt
-	ComputeAccretionRate<ContainerType, problem_t>(container, state, state_accretion_rate, lev, rho_sink, evolutionStageIndex);
+	ComputeAccretionRate<ContainerType, problem_t>(container, state, state_accretion_rate, lev, rho_sink, evolutionStageIndex, time, dt, mass_index);
 }
 
 // Functor for accreting mass and momentum from gas onto particles.
@@ -268,8 +271,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, rho_sink);
 
 	// Step 3: Update particle mass and momentum
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index,
-										  evolutionStageIndex);
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, rho_sink, mass_index, evolutionStageIndex);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);
