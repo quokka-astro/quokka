@@ -89,34 +89,6 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	});
 }
 
-template <typename ContainerType, typename problem_t>
-void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, int evolutionStageIndex, amrex::Real time,
-			  amrex::Real dt, int mass_index)
-{
-	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-		// Get the local deposit array for this box
-		const auto &local_state = state.array(pti);
-		const auto &local_accretion_rate = accretion_rate.array(pti);
-
-		// Get geometry information for this level
-		const auto &geom = container->Geom(lev);
-		const auto plo = geom.ProbLoArray();
-		const auto dxi = geom.InvCellSizeArray();
-		const auto dx = geom.CellSizeArray();
-
-		// Calculate inverse cell volume
-		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
-		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-
-		// Process particles in this box
-		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dxi, evolutionStageIndex, time, dt,
-								    mass_index);
-	}
-
-	// Sum boundary cell values to real cells
-	accretion_rate.SumBoundary(container->Geom(lev).periodicity());
-}
-
 // Compute the scale down factor for the accretion rate. This is used to prevent accretion rates from exceeding 100% of the available mass.
 // Current implementation: the maximum allowed relative accretion rate is 90% (gas density cannot drop more than 90% in one time step)
 template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Periodicity &periodicity)
@@ -249,13 +221,26 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 }
 
 template <typename ContainerType, typename problem_t>
-void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
-		      int mass_index, int evolutionStageIndex)
+void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real time,
+			  amrex::Real dt, int mass_index, int evolutionStageIndex)
 {
-	const AccretionScheme accretion_scheme = AccretionScheme::Threshold;
+	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+		// Get the local deposit array for this box
+		const auto &local_state = state.array(pti);
+		const auto &local_accretion_rate = accretion_rate.array(pti);
 
-	// Step 1: Compute accretion rate
-	ComputeAccretionRate<ContainerType, problem_t>(container, state, state_accretion_rate, lev, evolutionStageIndex, time, dt, mass_index);
+		// Get geometry information for this level
+		const auto &geom = container->Geom(lev);
+		const auto plo = geom.ProbLoArray();
+		const auto dxi = geom.InvCellSizeArray();
+
+		// Process particles in this box
+		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dxi, evolutionStageIndex, time, dt,
+								    mass_index);
+	}
+
+	// Sum boundary cell values to real cells
+	accretion_rate.SumBoundary(container->Geom(lev).periodicity());
 }
 
 // Functor for accreting mass and momentum from gas onto particles.
