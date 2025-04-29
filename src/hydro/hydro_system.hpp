@@ -946,11 +946,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	}
 
 	amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(0, 0, 0));
-	// if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-	//   ng = amrex::IntVect(AMREX_D_DECL(1, 1, 1));
-	// } else {
-	//   ng = amrex::IntVect(AMREX_D_DECL(0, 0, 0));
-	// }
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+	  ng = amrex::IntVect(AMREX_D_DECL(1, 1, 1)); //  - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR))
+	}
 
 	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_cc_in[bx]);
@@ -1143,19 +1141,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_in[bx]);
-			// if (DIR == FluxDir::X1) {
-			//   double dx = 1./128.;
-			//   bx1 = 10.0;
-			//   sL.by = 0.0;
-			//   // sL.bz = 1e-6 * std::cos(40 * M_PI * time - 4 * M_PI * i * dx);
-			// }
 			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;
-			if ((((i == 0) || (i == 128)) && ((j == 0) && (k == 0))) && (DIR == FluxDir::X1)) {
-				int tmp = 0;
-			}
 		}
 
 		quokka::valarray<double, nvar_> F = F_canonical;
