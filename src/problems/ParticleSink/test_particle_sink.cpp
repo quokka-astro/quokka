@@ -66,9 +66,6 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
 	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
-
-	// Ensure GPU operations are complete
-	amrex::Gpu::streamSynchronize();
 }
 
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
