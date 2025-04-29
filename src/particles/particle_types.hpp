@@ -235,33 +235,18 @@ template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestPa
 
 // Indices for Sink_particles
 enum SinkParticleDataIdx {
-	SinkParticleMassIdx = 0,  // Mass of the particle
-	SinkParticleVxIdx,	  // Velocity in x direction
-	SinkParticleVyIdx,	  // Velocity in y direction
-	SinkParticleVzIdx,	  // Velocity in z direction
-	SinkParticleBirthTimeIdx, // Time when particle becomes active
-	SinkParticleDeathTimeIdx, // Time when particle becomes inactive
-	SinkParticleLumIdx	  // Base index for luminosity components
+	SinkParticleMassIdx = 0, // Mass of the particle
+	SinkParticleVxIdx,	 // Velocity in x direction
+	SinkParticleVyIdx,	 // Velocity in y direction
+	SinkParticleVzIdx,	 // Velocity in z direction
 };
 
-constexpr int SinkParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
-
 // Number of real components for Sink_particles
-template <typename problem_t>
-constexpr int SinkParticleRealComps = []() constexpr {
-	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, lum[nGroups]
-	} else {
-		return 6; // mass, vx, vy, vz, birth_time, death_time
-	}
-}();
-
-// Number of integer components for Sink_particles
-constexpr int SinkParticleIntComps = 1; // evolution stage
+constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
 
 // Type definitions for Sink_particles container and iterator
-template <typename problem_t> using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
-template <typename problem_t> using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
+using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
+using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 #endif // AMREX_SPACEDIM == 3
 

@@ -483,7 +483,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
-	std::unique_ptr<quokka::SinkParticleContainer<problem_t>> SinkParticles;
+	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 #endif // AMREX_SPACEDIM == 3
 #endif
@@ -2276,7 +2276,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		AMREX_ASSERT(SinkParticles == nullptr);
 
 		// Create particle container
-		SinkParticles = std::make_unique<quokka::SinkParticleContainer<problem_t>>(this);
+		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
 		SinkParticles->SetVerbose(0);
 
 		// Register with particle register - Sink particles allow creation
@@ -3061,7 +3061,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
 		AMREX_ASSERT(SinkParticles == nullptr);
-		SinkParticles = std::make_unique<quokka::SinkParticleContainer<problem_t>>(this);
+		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
 		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
 		SinkParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Sink));
 	}
