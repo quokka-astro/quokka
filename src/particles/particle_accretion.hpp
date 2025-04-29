@@ -267,9 +267,9 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	UpdateHydroState<problem_t>(state, state_accretion_rate);
 }
 
-#endif // AMREX_SPACEDIM == 3
-
 } // namespace SinkAccretionUtils
+
+#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 
