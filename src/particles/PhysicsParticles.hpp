@@ -15,6 +15,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "particle_accretion.hpp"
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
@@ -121,13 +122,19 @@ class PhysicsParticleDescriptorBase
 
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
-	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
+	// Tag cells around particles for refinement
+	virtual void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) const = 0;
+
+	//----- Methods that are implemented for some but not all particle types, so they cannot be pure virtual -----
 
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
-	// Tag cells around particles for refinement
-	virtual void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) const = 0;
+	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	{ /* Default empty implementation */ }
+
+	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	{ /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -700,6 +707,20 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 			}
 		}
 	}
+
+	// compute accretion rate
+	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
+	{
+		SinkAccretionUtils::computeAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
+									       this->getMassIndex());
+	}
+
+	// apply accretion
+	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
+	{
+		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
+									     this->getMassIndex());
+	}
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -752,7 +773,10 @@ template <typename problem_t> class PhysicsParticleRegister
 				return "Test_particles";
 			case ParticleType::StochasticStellarPop:
 				return "StochasticStellarPop_particles";
+			case ParticleType::Sink:
+				return "Sink_particles";
 			default:
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
 				return "Unknown_particles";
 		}
 	}
@@ -797,7 +821,10 @@ template <typename problem_t> class PhysicsParticleRegister
 		if (type == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
-			    false, StochasticStellarPopParticleStageIdx, true);
+			    false, StochasticStellarPopParticleStageIdx, false);
+		} else if (type == ParticleType::Sink) {
+			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx, -1,
+															    -1, true, false, -1, true);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, true);
@@ -848,6 +875,26 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->isStarParticle()) {
 				descriptor->depositSN(state, state_buffer, lev, time, dt);
+			}
+		}
+	}
+
+	// Implementation of computeSinkAccretion
+	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getAllowsAccretion()) {
+				descriptor->computeSinkAccretion(state, state_accretion_rate, lev, time, dt);
+			}
+		}
+	}
+
+	// Implementation of applySinkAccretion
+	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getAllowsAccretion()) {
+				descriptor->applySinkAccretion(state, state_accretion_rate, lev, time, dt);
 			}
 		}
 	}
