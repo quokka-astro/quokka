@@ -60,7 +60,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
-		// Check if this is a supernova progenitor
+		// Check if this particle accretes
 		const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
 					   p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
@@ -94,6 +94,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 
 // Compute the scale down factor for the accretion rate. This is used to prevent accretion rates from exceeding 100% of the available mass.
 // Current implementation: the maximum allowed relative accretion rate is 90% (gas density cannot drop more than 90% in one time step)
+// TODO(cch): compute a local accretion_rate_floor
 template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Periodicity &periodicity)
 {
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();

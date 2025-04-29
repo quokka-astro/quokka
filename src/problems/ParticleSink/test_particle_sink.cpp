@@ -188,7 +188,7 @@ auto problem_main() -> int
 	double total_particle_mass = 0.0;
 
 	// get total particle mass
-	const auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0);
+	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
 		// d[3]; });
@@ -217,7 +217,7 @@ auto problem_main() -> int
 	int status = 0;
 
 	// get total mass of the final particles
-	const auto [real_data_final, int_data_final] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0);
+	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		double total_particle_mass_final = 0.0;
 		for (const auto &p : real_data_final) {
