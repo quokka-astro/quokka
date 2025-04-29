@@ -53,6 +53,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	auto *pData = particles().data();
 	const amrex::Long np = pti.numParticles();
 
+	// make a copy of kernel_weights for device
+	const auto kernel_weights_d = kernel_weights;
+
 	// Deposit particle data into the local buffer
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -76,7 +79,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
 			for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
 				for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
-					const double weight = kernel_weights[std::abs(ii)][std::abs(jj)][std::abs(kk)];
+					const double weight = kernel_weights_d[std::abs(ii)][std::abs(jj)][std::abs(kk)];
 					const double rho = local_state(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
 					if (rho > rho_sink) {
 						const double delta_rho = get_delta_rho(rho, rho_sink) * weight;
@@ -126,6 +129,9 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 	auto *pData = particles().data();
 	const amrex::Long np = pti.numParticles();
 
+	// make a copy of kernel_weights for device
+	const auto kernel_weights_d = kernel_weights;
+
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
@@ -152,7 +158,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double weight = kernel_weights[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 					const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
 					const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
