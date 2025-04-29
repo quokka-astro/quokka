@@ -1392,8 +1392,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInteraction(amrex::Real time, amrex::Real dt)
 {
-	// Support up to 4 ghost cells for SN deposition. Default is 3, same as the TIGRESS model.
-	const int nghost = 3;
+	// Need 4 ghost cells for SN deposition with a SNR radius of 3 dx.
+	const int nghost = 4;
 
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;

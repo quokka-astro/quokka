@@ -279,6 +279,8 @@ auto problem_main() -> int
 
 		if (status == 1) {
 			amrex::Print() << "Test failed\n";
+		} else {
+			amrex::Print() << "Test passed\n";
 		}
 
 #ifdef HAVE_PYTHON

@@ -37,7 +37,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Arra
 	// Jeans criterion, density threshold, etc.
 
 	// A single density threshold for testing
-	return 0.2 * C::m_u;
+	return 0.2 * C::m_p;
 }
 
 // Function to compute accretion rate for particles in a box, including the ParallelFor call
@@ -118,13 +118,12 @@ void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amre
 
 // Compute the scale down factor for the accretion rate. This is used to prevent accretion rates from exceeding 100% of the available mass.
 // Current implementation: the maximum allowed relative accretion rate is 90% (gas density cannot drop more than 90% in one time step)
-template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down)
+template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Periodicity &periodicity)
 {
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &scale_down_arr = scale_down.arrays();
-	const auto &state_arr = state.arrays();
 
-	amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(accretion_rate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		const double accretion_rate_floor = -0.9;
 		if (accretion_rate_cell < accretion_rate_floor) {
@@ -134,7 +133,12 @@ template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &state, amre
 			// update the accretion rate
 			local_accretion_rate_arr[bx](i, j, k) = accretion_rate_floor;
 		}
+		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
+		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
 	});
+
+	// synchronize scale_down
+	scale_down.FillBoundary(periodicity);
 }
 
 // Function to update particle mass and momentum for particles in a box, including the ParallelFor call
@@ -268,7 +272,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
 	// Update accretion_rate and compute scale_down
-	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down);
+	ComputeScaleDown<problem_t>(state_accretion_rate, scale_down, container->Geom(lev).periodicity());
 
 	// Step 3: Update particle mass and momentum
 	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, evolutionStageIndex, time, dt);
