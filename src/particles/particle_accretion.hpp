@@ -187,8 +187,8 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 }
 
 template <typename ContainerType, typename problem_t>
-void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, int mass_index,
-				   int is_accreting_idx, amrex::Real time, amrex::Real dt)
+void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, int mass_index, int is_accreting_idx,
+				   amrex::Real time, amrex::Real dt)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
@@ -205,8 +205,8 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, mass_index, is_accreting_idx,
-									     time, dt, vol);
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, mass_index, is_accreting_idx, time,
+									     dt, vol);
 	}
 }
 

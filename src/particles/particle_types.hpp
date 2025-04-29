@@ -248,7 +248,7 @@ enum SinkParticleDataIdx {
 constexpr int SinkParticleIntComps = 2; // evolution stage, is accreting
 
 enum SinkParticleIntDataIdx {
-	SinkParticleStageIdx = 0, // Evolution stage of the particle
+	SinkParticleStageIdx = 0,  // Evolution stage of the particle
 	SinkParticleIsAccretingIdx // Whether the particle accretes
 };
 
