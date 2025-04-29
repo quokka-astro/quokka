@@ -33,7 +33,8 @@ static constexpr ParticleUtils::kernel_weights_array_t kernel_weights = []() con
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Array4<const amrex::Real> &/*state*/, int /*i*/, int /*j*/, int /*k*/) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Array4<const amrex::Real> & /*state*/, int /*i*/, int /*j*/, int /*k*/) -> double
+{
 	// Jeans criterion, density threshold, etc.
 
 	// A single density threshold for testing
@@ -44,8 +45,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Arra
 template <typename ContainerType, typename problem_t>
 void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int evolutionStageIndex, amrex::Real /*time*/,
-			       amrex::Real /*dt*/, int /*mass_index*/)
+			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int evolutionStageIndex, amrex::Real /*time*/, amrex::Real /*dt*/,
+			       int /*mass_index*/)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
@@ -89,8 +90,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 }
 
 template <typename ContainerType, typename problem_t>
-void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, int evolutionStageIndex,
-			  amrex::Real time, amrex::Real dt, int mass_index)
+void ComputeAccretionRate(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, int evolutionStageIndex, amrex::Real time,
+			  amrex::Real dt, int mass_index)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
@@ -145,8 +146,8 @@ template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &accretion_r
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int mass_index, int evolutionStageIndex,
-					amrex::Real /*time*/, amrex::Real /*dt*/, amrex::Real vol)
+					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int mass_index, int evolutionStageIndex, amrex::Real /*time*/,
+					amrex::Real /*dt*/, amrex::Real vol)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
@@ -225,8 +226,8 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, mass_index,
-									     evolutionStageIndex, time, dt, vol);
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, mass_index, evolutionStageIndex,
+									     time, dt, vol);
 	}
 }
 

@@ -28,7 +28,7 @@ static bool refine_half_domain = false; // NOLINT
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 const double rho0 = 1.0 * C::m_p; // g cm^-3
-const double T0 = 10.0; // K
+const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
@@ -172,7 +172,7 @@ auto problem_main() -> int
 	QuokkaSimulation<SinkProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
+	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 100.0 * year;
 	sim.initDt_ = 1.0 * year;
 
@@ -190,7 +190,8 @@ auto problem_main() -> int
 	// get total particle mass
 	const auto [real_data, int_data] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum + d[3]; });
+		// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
+		// d[3]; });
 		for (const auto &p : real_data) {
 			total_particle_mass += p[3];
 		}
@@ -210,7 +211,7 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
 	const int nx = static_cast<int>(position.size());
 
-	const double overlap_loc = 12.01; // parsec
+	const double overlap_loc = 12.01;	// parsec
 	const double outer_radius = 5.0 * 8.01; // parsec
 
 	int status = 0;
@@ -284,33 +285,32 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
-	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 1.1);
-	std::map<std::string, std::string> exact_den_args;
-	exact_den_args["label"] = "exact";
-	exact_den_args["color"] = "black";
-	matplotlibcpp::plot(xs, exact_den, exact_den_args);
-	std::map<std::string, std::string> num_den_args;
-	num_den_args["label"] = "simulation";
-	num_den_args["color"] = "red";
-	matplotlibcpp::plot(xs, num_den, num_den_args);
-	matplotlibcpp::xlabel("x (pc)");
-	matplotlibcpp::ylabel("n (cm^-3)");
-	matplotlibcpp::legend();
-	matplotlibcpp::save("./sink_density.png");
+		matplotlibcpp::clf();
+		matplotlibcpp::ylim(0.0, 1.1);
+		std::map<std::string, std::string> exact_den_args;
+		exact_den_args["label"] = "exact";
+		exact_den_args["color"] = "black";
+		matplotlibcpp::plot(xs, exact_den, exact_den_args);
+		std::map<std::string, std::string> num_den_args;
+		num_den_args["label"] = "simulation";
+		num_den_args["color"] = "red";
+		matplotlibcpp::plot(xs, num_den, num_den_args);
+		matplotlibcpp::xlabel("x (pc)");
+		matplotlibcpp::ylabel("n (cm^-3)");
+		matplotlibcpp::legend();
+		matplotlibcpp::save("./sink_density.png");
 
-	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 1.1);
-	matplotlibcpp::xlim(-12, 12);
-	num_den_args["label"] = "simulation";
-	num_den_args["color"] = "red";
-	matplotlibcpp::plot(xs_over_dx, num_den);
-	matplotlibcpp::xlabel("x / dx");
-	matplotlibcpp::ylabel("n (cm^-3)");
-	matplotlibcpp::legend();
-	matplotlibcpp::save("./sink_density_vs_x_over_dx.png");
+		matplotlibcpp::clf();
+		matplotlibcpp::ylim(0.0, 1.1);
+		matplotlibcpp::xlim(-12, 12);
+		num_den_args["label"] = "simulation";
+		num_den_args["color"] = "red";
+		matplotlibcpp::plot(xs_over_dx, num_den);
+		matplotlibcpp::xlabel("x / dx");
+		matplotlibcpp::ylabel("n (cm^-3)");
+		matplotlibcpp::legend();
+		matplotlibcpp::save("./sink_density_vs_x_over_dx.png");
 #endif
-
 	}
 
 	return status;
