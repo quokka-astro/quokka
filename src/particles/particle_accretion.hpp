@@ -221,8 +221,8 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 }
 
 template <typename ContainerType, typename problem_t>
-void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real time,
-			  amrex::Real dt, int mass_index, int evolutionStageIndex)
+void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real time, amrex::Real dt,
+		      int mass_index, int evolutionStageIndex)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
