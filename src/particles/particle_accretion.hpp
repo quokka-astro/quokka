@@ -60,7 +60,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
-		// Check if this particle accretes
+		// Check if this particle accretes. There are 4 possible evolutionary stages: LowMassStar, SNProgenitor, SNRemnant, Removed.
+		// We only consider the first two stages for accretion.
 		const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
 					   p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
