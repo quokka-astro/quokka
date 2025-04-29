@@ -204,6 +204,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 
+		double fstar_high_d = fstar_high;
+		double m_star_high_avg_d = m_star_high_avg;
+
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
@@ -226,8 +229,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			if (LambdaJ < J * dx[0] &&
 			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
-				const amrex::Real m_high_tot = particle_mass * fstar_high;
-				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
+				const amrex::Real m_high_tot = particle_mass * fstar_high_d;
+				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg_d;
 				num_star = static_cast<int>(1 + (amrex::RandomPoisson(num_high_mass_stars_exp, engine)));
 			}
 			return num_star;
@@ -245,6 +248,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
+
+		double fstar_high_d = fstar_high;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
@@ -272,7 +277,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const int nscalars = Physics_Traits<problem_t>::numPassiveScalars;
 				const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_ff * dt / t_ff;
-				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
+				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high_d);
 				double total_momx = 0.0;
 				double total_momy = 0.0;
 				double total_momz = 0.0;
