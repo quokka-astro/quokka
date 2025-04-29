@@ -206,6 +206,13 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= accretion_down_factor;
+		state_arr[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= accretion_down_factor;
+		state_arr[bx](i, j, k, HydroSystem<problem_t>::energy_index) *= accretion_down_factor;
+
+		// update passive scalars
+		for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+			state_arr[bx](i, j, k, HydroSystem<problem_t>::scalar0_index + n) *= accretion_down_factor;
+		}
 	});
 }
 
