@@ -123,7 +123,7 @@ template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &accretion_r
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int mass_index, int evolutionStageIndex, amrex::Real /*time*/,
+					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int mass_index, int is_accreting_idx, amrex::Real /*time*/,
 					amrex::Real /*dt*/, amrex::Real vol)
 {
 	// Get the particle array of structs
@@ -137,9 +137,8 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
-		// Check if this is a supernova progenitor
-		const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
-					   p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+		// Check if this particle is accreting
+		const bool is_accreting = (p.idata(is_accreting_idx) == 1);
 
 		if (!is_accreting) {
 			return;
@@ -189,7 +188,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, int mass_index,
-				   int evolutionStageIndex, amrex::Real time, amrex::Real dt)
+				   int is_accreting_idx, amrex::Real time, amrex::Real dt)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
@@ -206,7 +205,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, mass_index, evolutionStageIndex,
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, mass_index, is_accreting_idx,
 									     time, dt, vol);
 	}
 }
@@ -259,7 +258,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 // The accreted mass and momentum are added to the particle's mass and momentum.
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
-		    int mass_index, int evolutionStageIndex)
+		    int mass_index, int is_accreting_idx)
 {
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
 	// of the available mass.
@@ -269,7 +268,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	ComputeScaleDown<problem_t>(state_accretion_rate, scale_down, container->Geom(lev).periodicity());
 
 	// Step 3: Update particle mass and momentum
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, evolutionStageIndex, time, dt);
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, is_accreting_idx, time, dt);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);

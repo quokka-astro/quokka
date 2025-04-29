@@ -82,6 +82,7 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				p.idata(1) = 1; // is accreting
 			});
 		}
 	}

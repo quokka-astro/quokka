@@ -244,7 +244,13 @@ enum SinkParticleDataIdx {
 	SinkParticleLumIdx	  // Base index for luminosity components
 };
 
-constexpr int SinkParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
+// Number of integer components for Sink_particles
+constexpr int SinkParticleIntComps = 2; // evolution stage, is accreting
+
+enum SinkParticleIntDataIdx {
+	SinkParticleStageIdx = 0, // Evolution stage of the particle
+	SinkParticleIsAccretingIdx // Whether the particle accretes
+};
 
 // Number of real components for Sink_particles
 template <typename problem_t>
@@ -255,9 +261,6 @@ constexpr int SinkParticleRealComps = []() constexpr {
 		return 6; // mass, vx, vy, vz, birth_time, death_time
 	}
 }();
-
-// Number of integer components for Sink_particles
-constexpr int SinkParticleIntComps = 1; // evolution stage
 
 // Type definitions for Sink_particles container and iterator
 template <typename problem_t> using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps<problem_t>, SinkParticleIntComps>;
