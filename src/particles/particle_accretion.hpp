@@ -45,7 +45,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Arra
 template <typename ContainerType, typename problem_t>
 void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int evolutionStageIndex, amrex::Real /*time*/, amrex::Real /*dt*/,
+			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, amrex::Real /*time*/, amrex::Real /*dt*/,
 			       int /*mass_index*/)
 {
 	// Get the particle array of structs
@@ -59,15 +59,6 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	// Deposit particle data into the local buffer
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
-		// Check if this particle accretes. There are 4 possible evolutionary stages: LowMassStar, SNProgenitor, SNRemnant, Removed.
-		// We only consider the first two stages for accretion.
-		const bool is_accreting = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::LowMassStar) ||
-					   p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
-
-		if (!is_accreting) {
-			return;
-		}
 
 		// Find the cell containing the particle
 		int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
@@ -123,8 +114,7 @@ template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &accretion_r
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int mass_index, int is_accreting_idx, amrex::Real /*time*/,
-					amrex::Real /*dt*/, amrex::Real vol)
+					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, int mass_index, amrex::Real /*time*/, amrex::Real /*dt*/, amrex::Real vol)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
@@ -136,13 +126,6 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
-		// Check if this particle is accreting
-		const bool is_accreting = (p.idata(is_accreting_idx) == 1);
-
-		if (!is_accreting) {
-			return;
-		}
 
 		// Find the cell containing the particle
 		int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
@@ -188,7 +171,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, int mass_index,
-				   int is_accreting_idx, amrex::Real time, amrex::Real dt)
+				   amrex::Real time, amrex::Real dt)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
@@ -205,8 +188,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, mass_index, is_accreting_idx,
-									     time, dt, vol);
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dxi, mass_index, time, dt, vol);
 	}
 }
 
@@ -229,7 +211,7 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 
 template <typename ContainerType, typename problem_t>
 void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real time, amrex::Real dt,
-		      int mass_index, int evolutionStageIndex)
+		      int mass_index)
 {
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
@@ -242,8 +224,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 		const auto dxi = geom.InvCellSizeArray();
 
 		// Process particles in this box
-		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dxi, evolutionStageIndex, time, dt,
-								    mass_index);
+		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dxi, time, dt, mass_index);
 	}
 
 	// Sum boundary cell values to real cells
@@ -258,7 +239,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 // The accreted mass and momentum are added to the particle's mass and momentum.
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
-		    int mass_index, int is_accreting_idx)
+		    int mass_index)
 {
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
 	// of the available mass.
@@ -268,7 +249,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	ComputeScaleDown<problem_t>(state_accretion_rate, scale_down, container->Geom(lev).periodicity());
 
 	// Step 3: Update particle mass and momentum
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, is_accreting_idx, time, dt);
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, time, dt);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);

@@ -40,7 +40,6 @@ class PhysicsParticleDescriptorBase
 	bool allowsDestruction_{false}; // Whether particles can be destroyed during simulation
 	int evolutionStageIndex_{-1};	// Index for evolution stage (-1 if not used)
 	bool allowsAccretion_{false};	// Whether particles can accrete gas
-	int isAccretingIdx_{-1};	// Integer-component index for whether the particle is accreting (-1 if not used)
 
 	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
 
@@ -68,12 +67,10 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsAccretion() const -> bool { return allowsAccretion_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getForceFinestLevel() const -> bool { return forceFinestLevel_; }
-	[[nodiscard]] AMREX_FORCE_INLINE auto getIsAccretingIdx() const -> int { return isAccretingIdx_; }
 
 	// setter methods for particle properties
 	AMREX_FORCE_INLINE void setEvolutionStageIndex(int evolution_stage_idx) { evolutionStageIndex_ = evolution_stage_idx; }
 	AMREX_FORCE_INLINE void setAllowsAccretion(bool allows_accretion) { allowsAccretion_ = allows_accretion; }
-	AMREX_FORCE_INLINE void setIsAccretingIdx(int is_accreting_idx) { isAccretingIdx_ = is_accreting_idx; }
 	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
 
 	// New method to get particle positions and data
@@ -682,13 +679,12 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 	// Constructor - forwards all arguments to the base class
 	StarParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
-			       int evolution_stage_idx = -1, bool allows_accretion = false, int is_accreting_idx = -1)
+			       int evolution_stage_idx = -1, bool allows_accretion = false)
 	    : PhysicsParticleDescriptor<ContainerType, problem_t, particleType>(container, mass_idx, lum_idx, birth_time_idx, allows_creation,
 										allows_destruction)
 	{
 		this->setEvolutionStageIndex(evolution_stage_idx);
 		this->setAllowsAccretion(allows_accretion);
-		this->setIsAccretingIdx(is_accreting_idx);
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -716,14 +712,14 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
 	{
 		SinkAccretionUtils::computeAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
-									       this->getMassIndex(), this->getEvolutionStageIndex());
+									       this->getMassIndex());
 	}
 
 	// apply accretion
 	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
 	{
-		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt, this->getMassIndex(),
-									     this->getEvolutionStageIndex());
+		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
+									     this->getMassIndex());
 	}
 #endif // AMREX_SPACEDIM == 3
 };
@@ -821,15 +817,14 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		// Create the appropriate star particle descriptor based on the particle type
 		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
-		// allows_accretion, is_accreting_idx
+		// allows_accretion
 		if (type == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
 			    false, StochasticStellarPopParticleStageIdx, false);
 		} else if (type == ParticleType::Sink) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
-			    container, SinkParticleMassIdx, SinkParticleLumIdx, SinkParticleBirthTimeIdx, true, false, SinkParticleStageIdx, true,
-			    SinkParticleIsAccretingIdx);
+			    container, SinkParticleMassIdx, SinkParticleLumIdx, SinkParticleBirthTimeIdx, true, false, SinkParticleStageIdx, true);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, true);
