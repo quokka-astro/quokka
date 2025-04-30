@@ -298,9 +298,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 		CICParticles->Restart(plotfile_to_resample, particleType_plotfile_name);
 
 		for (int lev = 0; lev < CICParticles->finestLevel(); ++lev) {
-			// FIXME(bwibking): when restarting with max_level > max_level_in_file, this reports 0 on all levels:
 			amrex::Print() << "[Level " << lev << "] Number of valid particles: " << CICParticles->NumberOfParticlesAtLevel(lev) << "\n";
-			amrex::Print() << "[Level " << lev << "] Number of all particles: " << CICParticles->NumberOfParticlesAtLevel(lev, false) << "\n";
 		}
 
 		// split particles
