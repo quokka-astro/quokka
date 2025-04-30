@@ -4,7 +4,6 @@
 /// \brief Defines a test problem for particle creation from cells
 ///
 
-#include "math/interpolate.hpp"
 // function definitions
 auto problem_main() -> int;
 

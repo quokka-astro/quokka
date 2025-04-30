@@ -4,7 +4,6 @@
 /// \brief Defines a test problem for supernova feedback.
 ///
 
-#include "math/interpolate.hpp"
 // function definitions
 auto testproblem_SN() -> int;
 
