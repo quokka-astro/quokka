@@ -211,7 +211,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
 								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 
-				int tmp = 0; // TODO(nkriel): for debuging. remove
+				const int tmp = 0; // TODO(nkriel): for debuging. remove
 			}
 
 			// indexing: field[4: quadrant around edge]
@@ -237,10 +237,10 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 					const double uxb = u0 * b1 - u1 * b0;
 					E2_qi(i, j, k) = uxb;
 
-					int tmp = 0;
+					const int tmp = 0;
 				});
 
-				int tmp = 0; // TODO(nkriel): for debuging. remove
+				const int tmp = 0; // TODO(nkriel): for debuging. remove
 			}
 
 			// extract wavespeeds
@@ -291,7 +291,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 						   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
 			});
 
-			int tmp = 0; // TODO(nkriel): for debuging. remove
+			const int tmp = 0; // TODO(nkriel): for debuging. remove
 		}
 	}
 
@@ -352,7 +352,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder); 			MHDSystem<problem_t>::ReconstructTo(dir2edge,
 	// fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(), ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 
-	// 			int tmp = 0; // TODO(nkriel): for debuging. remove
+	// 			const int tmp = 0; // TODO(nkriel): for debuging. remove
 	// 		}
 
 	// 		// indexing: field[4: quadrant around edge]
@@ -394,10 +394,10 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// 				double uxb = u0 * b1 - u1 * b0;
 	// 				E2_Qi(i, j, k) = uxb;
 
-	// 				int tmp = 0;
+	// 				const int tmp = 0;
 	// 			});
 
-	// 			int tmp = 0; // TODO(nkriel): for debuging. remove
+	// 			const int tmp = 0; // TODO(nkriel): for debuging. remove
 	// 		}
 
 	// 		// extract wavespeeds
@@ -448,14 +448,14 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// 					   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
 	// 		});
 
-	// 		int tmp = 0; // TODO(nkriel): for debuging. remove
+	// 		const int tmp = 0; // TODO(nkriel): for debuging. remove
 	// 	}
 	// }
 }
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid,
-					 const int reconstructionOrder)
+					 int reconstructionOrder)
 {
 	amrex::Box const &box_r = amrex::grow(box_cValid, 1);
 	amrex::Box const &box_r_x1 = amrex::surroundingNodes(box_r, static_cast<int>(dir));
@@ -505,7 +505,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, double dt,
-					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo, double time)
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*prob_lo*/, double /*time*/)
 {
 	// compute the total right-hand-side for the MOL integration
 
@@ -550,7 +550,7 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 			    fc_consVarOld[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + dt * db_dt;
 		});
 
-		int tmp = 0; // TODO(nkriel): for debuging. remove
+		const int tmp = 0; // TODO(nkriel): for debuging. remove
 	}
 }
 
