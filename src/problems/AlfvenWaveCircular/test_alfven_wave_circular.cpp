@@ -69,10 +69,7 @@ AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/,
 	return -bg_mag_amplitude * delta_b / k_amplitude * std::sin(omega * time - k_amplitude * x1);
 }
 
-AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double x2, double /*x3*/, double /*time*/) -> double
-{
-  return bg_mag_amplitude * x2;
-}
+AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double x2, double /*x3*/, double /*time*/) -> double { return bg_mag_amplitude * x2; }
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
