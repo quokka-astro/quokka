@@ -335,7 +335,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
 
-					p.rdata(birth_time_index + 1) = LONG_MAX;
+					p.rdata(birth_time_index + 1) = std::numeric_limits<amrex::Real>::max();
 					if (p_idx > 0) {
 						// This is the loop that sets the velocity of the high mass stars
 						double numx = 0.0;
