@@ -7,6 +7,8 @@
 /// \brief Defines a test problem for a binary orbit.
 ///
 
+#include <algorithm>
+
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_DistributionMapping.H"
@@ -18,11 +20,9 @@
 #include "AMReX_Print.H"
 
 #include "AMReX_REAL.H"
-#include "AMReX_ccse-mpi.H"
 #include "QuokkaSimulation.hpp"
 #include "binary_orbit.hpp"
 #include "hydro/hydro_system.hpp"
-#include <algorithm>
 
 struct BinaryOrbit {
 };
@@ -31,6 +31,10 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
 	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
 	static constexpr double mean_molecular_weight = C::m_u;
+};
+
+template <> struct Particle_Traits<BinaryOrbit> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
 template <> struct HydroSystem_Traits<BinaryOrbit> {
@@ -48,8 +52,8 @@ template <> struct Physics_Traits<BinaryOrbit> {
 };
 
 template <> struct SimulationData<BinaryOrbit> {
-	std::vector<amrex::ParticleReal> time{};
-	std::vector<amrex::ParticleReal> dist{};
+	std::vector<amrex::ParticleReal> time;
+	std::vector<amrex::ParticleReal> dist;
 };
 
 template <> void QuokkaSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -89,48 +93,47 @@ template <> void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::
 
 template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 {
-	// every N cycles, save particle statistics
+	// every N cycles, save particle statistics at the finest level
 	static int cycle = 1;
 	if (cycle % 10 == 0) {
-		// create single-box particle container
-		amrex::ParticleContainer<quokka::CICParticleRealComps> analysisPC{};
-		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
-		amrex::Geometry const geom(box);
-		amrex::BoxArray const boxArray(box);
-		amrex::Vector<int> const ranks({0}); // workaround nvcc bug
-		amrex::DistributionMapping const dmap(ranks);
-		analysisPC.Define(geom, dmap, boxArray);
-		analysisPC.copyParticles(*CICParticles);
+		// get the finest level
+		const int finest_level = finestLevel();
+
+		// Get particle data using the physics particle descriptor
+		const auto [real_data, int_data] = particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(finest_level);
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
-			quokka::CICParticleIterator const pIter(analysisPC, 0);
-			if (pIter.isValid()) {
+			if (real_data.size() >= 2) {
 				amrex::Print() << "Computing particle statistics...\n";
-				const amrex::Long np = pIter.numParticles();
-				auto &particles = pIter.GetArrayOfStructs();
-
-				// copy particles from device to host
-				quokka::CICParticleContainer::ParticleType *pData = particles().data();
-				amrex::Vector<quokka::CICParticleContainer::ParticleType> pData_h(np);
-				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
 
 				// compute orbital elements
-				quokka::CICParticleContainer::ParticleType &p1 = pData_h[0];
-				quokka::CICParticleContainer::ParticleType &p2 = pData_h[1];
-				const amrex::ParticleReal dx = p1.pos(0) - p2.pos(0);
-				const amrex::ParticleReal dy = p1.pos(1) - p2.pos(1);
-				const amrex::ParticleReal dz = p1.pos(2) - p2.pos(2);
-				const amrex::ParticleReal dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-				const amrex::ParticleReal dist0 = 6.25e12; // cm
-				const amrex::Real cell_dx0 = this->geom[0].CellSize(0);
+				const auto &p1 = real_data[0];
+				const auto &p2 = real_data[1];
+				const double dx = p1[0] - p2[0]; // position x
+				const double dy = p1[1] - p2[1]; // position y
+				const double dz = p1[2] - p2[2]; // position z
+				const double dist = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+				const double dist0 = 6.25e12; // cm
+				const amrex::Real cell_dx0 = this->geom[finest_level].CellSize(0);
 
 				// save statistics
-				userData_.time.push_back(tNew_[0]);
+				userData_.time.push_back(tNew_[finest_level]);
 				userData_.dist.push_back((dist - dist0) / cell_dx0);
+				amrex::Print() << "Particle separation: " << dist << " cm, initial separation is " << dist0 << " cm.\n";
 			}
 		}
 	}
 	++cycle;
+}
+
+template <> void QuokkaSimulation<BinaryOrbit>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+	}
 }
 
 auto problem_main() -> int
@@ -165,7 +168,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
-	sim.initDt_ = 1.0e3;	 // s
 
 	// initialize
 	sim.setInitialConditions();
@@ -174,15 +176,18 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// check max abs particle distance
-	double max_err = NAN;
-	if (amrex::ParallelDescriptor::IOProcessor() && (!sim.userData_.dist.empty())) {
-		auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
-					       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
-		max_err = std::abs(*result);
+	double max_err = 0.0;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		if (!sim.userData_.dist.empty()) {
+			auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
+						       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
+			max_err = std::abs(*result);
+			amrex::Print() << "max particle separation = " << max_err << " cell widths.\n";
+		} else {
+			max_err = 1.0;
+			amrex::Print() << "No particles in userData_.dist.\n";
+		}
 	}
-	amrex::ParallelDescriptor::Bcast(&max_err, 1, amrex::ParallelDescriptor::Mpi_typemap<double>::type(), amrex::ParallelDescriptor::ioProcessor,
-					 amrex::ParallelDescriptor::Communicator());
-	amrex::Print() << "max particle separation = " << max_err << " cell widths.\n";
 
 	int status = 1;
 	const double max_err_tol = 0.18; // max error tol in cell widths

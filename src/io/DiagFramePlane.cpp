@@ -3,6 +3,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_VisMF.H"
+#include "yaml-cpp/yaml.h"
 
 void printLowerDimIntVect(std::ostream &a_File, const amrex::IntVect &a_IntVect, int skipDim)
 {
@@ -191,7 +192,7 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 }
 
 void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-				 const amrex::Vector<std::string> & /*a_stateVar*/)
+				 const amrex::Vector<std::string> & /*a_stateVar*/, const YAML::Node &simulationMetadata)
 {
 	// Interpolate data to slice
 	amrex::Vector<amrex::MultiFab> planeData(a_state.size());
@@ -258,13 +259,15 @@ void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const a
 			diagfile = m_diagfile + std::to_string(a_time);
 		}
 		amrex::Vector<int> const step_array(nlevs, a_nstep);
-		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio);
+		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio,
+					  simulationMetadata);
 	}
 }
 
 void DiagFramePlane::Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, const amrex::Vector<const amrex::MultiFab *> &a_slice,
 					       const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
-					       const amrex::Real &a_time, const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref)
+					       const amrex::Real &a_time, const amrex::Vector<int> &a_steps, const amrex::Vector<amrex::IntVect> &a_rref,
+					       const YAML::Node &simulationMetadata)
 {
 	const std::string levelPrefix = "Level_";
 	const std::string mfPrefix = "Cell";
@@ -310,6 +313,20 @@ void DiagFramePlane::Write2DMultiLevelPlotfile(const std::string &a_pltfile, int
 
 		PlaneFile.flush();
 		PlaneFile.close();
+
+		// Write metadata file
+		// The slices are always in AMReX plotfile format, so we can always use /metadata.yaml.
+		std::string const MetadataFileName(a_pltfile + "/metadata.yaml");
+		std::ofstream MetadataFile;
+		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		MetadataFile.open(MetadataFileName.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!MetadataFile.good()) {
+			amrex::FileOpenFailed(MetadataFileName);
+		}
+
+		// write YAML to MetadataFile
+		MetadataFile << simulationMetadata << '\n';
+		MetadataFile.close();
 	}
 
 	// Write a 2D version of the MF at each level

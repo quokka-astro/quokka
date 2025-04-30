@@ -31,6 +31,10 @@ template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
+template <> struct Particle_Traits<CollapseProblem> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+};
+
 template <> struct HydroSystem_Traits<CollapseProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
@@ -100,7 +104,7 @@ template <> void QuokkaSimulation<CollapseProblem>::createInitialCICParticles()
 	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
 }
 
-template <> void QuokkaSimulation<CollapseProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<CollapseProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 	const Real q_min = 5.0; // minimum density for refinement

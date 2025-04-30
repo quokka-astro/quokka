@@ -24,7 +24,6 @@ constexpr bool dust_on = true;
 constexpr bool PE_on = true;
 constexpr double gas_dust_coupling_threshold_ = 1.0e-4;
 
-constexpr double stop_time = 0.5;
 constexpr double c = 1.0; // speed of light
 constexpr double c_hat_over_c_ = 0.1;
 constexpr double c_hat_ = c * c_hat_over_c_;
@@ -216,7 +215,6 @@ auto problem_main() -> int
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxDt_ = dt_max;
 	sim.maxTimesteps_ = max_timesteps;
-	// sim.stopTime_ = stop_time;
 	sim.plotfileInterval_ = -1;
 
 	// initialize

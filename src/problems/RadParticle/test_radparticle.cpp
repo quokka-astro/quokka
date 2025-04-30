@@ -10,6 +10,7 @@
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
+#include "particles/PhysicsParticles.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
@@ -34,6 +35,10 @@ const double lum3 = 0.0;
 template <> struct quokka::EOS_Traits<ParticleProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
+};
+
+template <> struct Particle_Traits<ParticleProblem> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Rad;
 };
 
 template <> struct Physics_Traits<ParticleProblem> {

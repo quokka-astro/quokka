@@ -25,6 +25,10 @@ template <> struct quokka::EOS_Traits<ParticleProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
+template <> struct Particle_Traits<ParticleProblem> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Rad;
+};
+
 template <> struct Physics_Traits<ParticleProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;

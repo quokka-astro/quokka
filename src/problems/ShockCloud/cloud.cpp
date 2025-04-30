@@ -227,8 +227,8 @@ template <> void QuokkaSimulation<ShockCloud>::computeAfterTimestep()
 		const Real vx_cm = xmom / cloud_mass;
 
 		// save cumulative position, velocity offsets in simulationMetadata_
-		const Real delta_x_prev = std::get<Real>(simulationMetadata_["delta_x"]);
-		const Real delta_vx_prev = std::get<Real>(simulationMetadata_["delta_vx"]);
+		const Real delta_x_prev = simulationMetadata_["delta_x"].as<Real>();
+		const Real delta_vx_prev = simulationMetadata_["delta_vx"].as<Real>();
 		const Real delta_x = delta_x_prev + dt_coarse * delta_vx_prev;
 		const Real delta_vx = delta_vx_prev + vx_cm;
 		simulationMetadata_["delta_x"] = delta_x;
@@ -457,13 +457,13 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	std::map<std::string, amrex::Real> stats;
 
 	// save time
-	const Real t_cc = std::get<Real>(simulationMetadata_["t_cc"]);
+	const Real t_cc = simulationMetadata_["t_cc"].as<Real>();
 	const Real time = tNew_[0];
 	stats["t_over_tcc"] = time / t_cc;
 
 	// save cloud position, velocity
-	const Real dx_cgs = std::get<Real>(simulationMetadata_["delta_x"]);
-	const Real dvx_cgs = std::get<Real>(simulationMetadata_["delta_vx"]);
+	const Real dx_cgs = simulationMetadata_["delta_x"].as<Real>();
+	const Real dvx_cgs = simulationMetadata_["delta_vx"].as<Real>();
 	const Real v_wind = ::v_wind;
 
 	stats["delta_x"] = dx_cgs / parsec_in_cm;	 // pc
@@ -632,7 +632,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	return proj;
 }
 
-template <> void QuokkaSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 	const int Ncells_per_lcool = 10;

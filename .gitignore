@@ -10,6 +10,7 @@ docs/doxygen/
 tests/last_chk
 tests/plt*
 tests/chk*
+tests/slice*
 tests/*.csv
 tests/plt*
 sims/
@@ -18,6 +19,9 @@ __pycache__
 *.code-workspace
 *.sarif
 Backtrace.*
+
+# Singularity Docker images
+*.sif
 
 *.aux
 *.dbl
@@ -47,8 +51,7 @@ docs/doxyoutput/
 _build/
 
 # Include image and pdf files inside docs
-!/docs/docs/flowchart-v2.pdf
-!/docs/docs/tests/attach/*.png
+!/docs/markdown/tests/attach/*.png
 
 # Kokkos build files
 KokkosCore_config.h

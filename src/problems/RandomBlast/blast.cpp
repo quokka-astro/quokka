@@ -37,8 +37,6 @@ struct RandomBlast {
 
 constexpr double seconds_in_year = 3.1536e7; // s == 1 yr
 constexpr double parsec_in_cm = 3.086e18;    // cm == 1 pc
-constexpr double solarmass_in_g = 1.99e33;   // g == 1 Msun
-constexpr double keV_in_ergs = 1.60218e-9;   // ergs == 1 keV
 constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
 
 template <> struct Physics_Traits<RandomBlast> {
@@ -253,7 +251,7 @@ template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::
 	}
 }
 
-template <> void QuokkaSimulation<RandomBlast>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<RandomBlast>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 	const Real q_min = 1e-5 * rho0; // minimum density for refinement

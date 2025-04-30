@@ -4,6 +4,7 @@
 #include "AMReX_MultiFab.H"
 #include "DiagFilter.H"
 #include "Factory.H"
+#include "yaml-cpp/yaml.h"
 
 class DiagBase : public quokka::Factory<DiagBase>
 {
@@ -24,7 +25,7 @@ class DiagBase : public quokka::Factory<DiagBase>
 			     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames);
 
 	virtual void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-				 const amrex::Vector<std::string> &a_varNames) = 0;
+				 const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata) = 0;
 
 	virtual void addVars(amrex::Vector<std::string> &a_varList);
 

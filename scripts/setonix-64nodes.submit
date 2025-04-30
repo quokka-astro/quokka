@@ -11,22 +11,8 @@
 ##SBATCH --core-spec=8
 #SBATCH -N 64
 
-# WARNING: jobs with 64 nodes hang after "AMReX initialized" (July 2024)
-# (It's probably a network issue.)
-#
-# Example output:
-#
-#  Initializing AMReX (24.06-26-g7418556773c7)...
-#  MPI initialized with 512 MPI processes
-#  MPI initialized with thread support level 0
-#  Initializing HIP...
-#  HIP initialized with 512 devices.
-#  AMReX (24.06-26-g7418556773c7) initialized
-#
-# [job hangs here]
-
-# multi-node MPI communication will hang without this (memhooks does NOT work)
-export FI_MR_CACHE_MAX_COUNT=0  # libfabric disable caching
+# *MUST* load environment modules setup script inside the SLURM script, otherwise job will fail
+. scripts/setonix-gpu.profile
 
 # always run with GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
