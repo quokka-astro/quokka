@@ -1,11 +1,11 @@
 #ifndef PARTICLE_CREATION_HPP_
 #define PARTICLE_CREATION_HPP_
 
+#include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
 #include "stellarpop_data.hpp"
 #include <cmath>
-#include "gcem.hpp"
 
 namespace quokka
 {
@@ -175,15 +175,14 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr amrex::Real alpha = 2.35;		     // slope of the powerlaw
 
 	// Write out expression because compiler error for nested gcem
-	static constexpr double log_m_imf_break = 33.298634783124434 ; //Log10 (m_imf_break)
-	static constexpr double log_m_imf_min   = 32.20172477011638;  // Log(m_imf_min) 
-	static constexpr double sqrt_2 = 1.4142135623730951 ; // sqrt(2.0) 
+	static constexpr double log_m_imf_break = 33.298634783124434; // Log10 (m_imf_break)
+	static constexpr double log_m_imf_min = 32.20172477011638;    // Log(m_imf_min)
+	static constexpr double sqrt_2 = 1.4142135623730951;	      // sqrt(2.0)
 	static constexpr double arg_m_imf_break = 0.8986298725672532; //(log_m_imf_break - imf_mu) / (sqrt_2 * imf_disp);
-	static constexpr double arg_m_imf_min   = (log_m_imf_min - imf_mu) / (sqrt_2 * imf_disp);
-	static constexpr double pow_alpha_m_imf_max = 4.147289859088856e-13; // pow(m_imf_max, 2.0 - alpha);
-	static constexpr double pow_alpha_m_imf_break = 2.215530973426628e-12 ; //pow(m_imf_break, 2.0 - alpha);
+	static constexpr double arg_m_imf_min = (log_m_imf_min - imf_mu) / (sqrt_2 * imf_disp);
+	static constexpr double pow_alpha_m_imf_max = 4.147289859088856e-13;	// pow(m_imf_max, 2.0 - alpha);
+	static constexpr double pow_alpha_m_imf_break = 2.215530973426628e-12;	// pow(m_imf_break, 2.0 - alpha);
 	static constexpr double pow_alpha_m_star_high = 1.0700309275455029e-12; // pow(m_star_high, 2.0 - alpha);
-
 
 	// Here we calculate the fraction of high mass stars and the average mass of high mass stars
 	//... by assuming a Chabrier IMF which has a lognormal distribution for masses above m_imf_break
@@ -193,19 +192,20 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	// Checkout docs/star_formation for more details
 
 	static constexpr double norm_ratio =
-		    gcem::pow(m_imf_break, (1 - alpha)) * imf_disp * gcem::sqrt(2.0 * M_PI)  / gcem::exp(-(arg_m_imf_break*arg_m_imf_break)); 
+	    gcem::pow(m_imf_break, (1 - alpha)) * imf_disp * gcem::sqrt(2.0 * M_PI) / gcem::exp(-(arg_m_imf_break * arg_m_imf_break));
 
-	static constexpr double total_star_mass = ((2. - alpha) * norm_ratio) * gcem::exp(imf_mu + imf_disp*imf_disp/2) * (gcem::erf(arg_m_imf_break - imf_disp/sqrt_2) - gcem::erf(arg_m_imf_min - imf_disp/sqrt_2))
-	 		+  pow_alpha_m_imf_max - pow_alpha_m_imf_break;
+	static constexpr double total_star_mass = ((2. - alpha) * norm_ratio) * gcem::exp(imf_mu + imf_disp * imf_disp / 2) *
+						      (gcem::erf(arg_m_imf_break - imf_disp / sqrt_2) - gcem::erf(arg_m_imf_min - imf_disp / sqrt_2)) +
+						  pow_alpha_m_imf_max - pow_alpha_m_imf_break;
 
-	static constexpr double mass_highmass_stars = pow_alpha_m_imf_max - pow_alpha_m_star_high ; 
+	static constexpr double mass_highmass_stars = pow_alpha_m_imf_max - pow_alpha_m_star_high;
 
 	// // fstar is the fraction of number of high mass stars from the IMF
-	static constexpr double fstar_high = mass_highmass_stars / total_star_mass;;      
+	static constexpr double fstar_high = mass_highmass_stars / total_star_mass;
+	;
 
 	static constexpr double m_star_high_avg = m_imf_max * ((alpha - 1.0) / (alpha - 2.0)) * (1. - gcem::pow(m_star_high / m_imf_max, 2.0 - alpha)) /
-	(1. - gcem::pow(m_star_high / m_imf_max, 1.0 - alpha)); // average mass of high mass stars
-
+						  (1. - gcem::pow(m_star_high / m_imf_max, 1.0 - alpha)); // average mass of high mass stars
 
 	ParticleCreationTraits()
 	{
@@ -447,7 +447,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
-
 
 #endif // AMREX_SPACEDIM == 3
 
