@@ -2358,6 +2358,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 	const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
 	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
 
+	// TODO(cch): this if loop has changed w.r.t. the dev branch. Is this intentional?
 	if (included_ghosts > 0) {
 		// Fill ghost zones for state_new_cc_
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
