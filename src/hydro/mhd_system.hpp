@@ -503,7 +503,7 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 template <typename problem_t>
 void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
-					     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, const double dt,
+					     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, double dt,
 					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo,
 					     double time)
 {
