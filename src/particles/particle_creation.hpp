@@ -5,6 +5,7 @@
 #include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
 #include "stellarpop_data.hpp"
+#include "math/interpolate.hpp"
 #include <cmath>
 
 namespace quokka
