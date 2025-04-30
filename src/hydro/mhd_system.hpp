@@ -49,9 +49,9 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int nghost_fc, int reconstructionOrder,
-				      amrex::Geometry geom, double time)
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &/*fcx_mf_vel*/,
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int /*nghost_fc*/, int reconstructionOrder,
+				      amrex::Geometry /*geom*/, double /*time*/)
 {
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
 
@@ -210,7 +210,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
 								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 
-				int tmp = 0; // TODO: for debuging. remove
+				int tmp = 0; // TODO(nkriel): for debuging. remove
 			}
 
 			// indexing: field[4: quadrant around edge]
@@ -226,25 +226,25 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				// define EMF FArrayBox
 				ec_fabs_E_q[iquad].resize(box_ec, 1);
 				const auto &E2_qi = ec_fabs_E_q[iquad].array();
-				int w0_comp = extrap_dirs[0];
-				int w1_comp = extrap_dirs[1];
+				const int w0_comp = extrap_dirs[0];
+				const int w1_comp = extrap_dirs[1];
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const double u0 = U0_qi(i, j, k);
 					const double u1 = U1_qi(i, j, k);
 					const double b0 = B0_qi(i, j, k);
 					const double b1 = B1_qi(i, j, k);
-					double uxb = u0 * b1 - u1 * b0;
+					const double uxb = u0 * b1 - u1 * b0;
 					E2_qi(i, j, k) = uxb;
 
 					int tmp = 0;
 				});
 
-				int tmp = 0; // TODO: for debuging. remove
+				int tmp = 0; // TODO(nkriel): for debuging. remove
 			}
 
 			// extract wavespeeds
-			int w0_comp = extrap_dirs[0];
-			int w1_comp = extrap_dirs[1];
+			const int w0_comp = extrap_dirs[0];
+			const int w1_comp = extrap_dirs[1];
 			std::array<int, 3> delta_w0 = {0, 0, 0};
 			std::array<int, 3> delta_w1 = {0, 0, 0};
 			delta_w0[w0_comp] = 1;
@@ -290,7 +290,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 						   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
 			});
 
-			int tmp = 0; // TODO: for debuging. remove
+			int tmp = 0; // TODO(nkriel): for debuging. remove
 		}
 	}
 
@@ -351,7 +351,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder); 			MHDSystem<problem_t>::ReconstructTo(dir2edge,
 	// fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(), ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 
-	// 			int tmp = 0; // TODO: for debuging. remove
+	// 			int tmp = 0; // TODO(nkriel): for debuging. remove
 	// 		}
 
 	// 		// indexing: field[4: quadrant around edge]
@@ -396,7 +396,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// 				int tmp = 0;
 	// 			});
 
-	// 			int tmp = 0; // TODO: for debuging. remove
+	// 			int tmp = 0; // TODO(nkriel): for debuging. remove
 	// 		}
 
 	// 		// extract wavespeeds
@@ -447,7 +447,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// 					   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
 	// 		});
 
-	// 		int tmp = 0; // TODO: for debuging. remove
+	// 		int tmp = 0; // TODO(nkriel): for debuging. remove
 	// 	}
 	// }
 }
@@ -504,7 +504,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, double dt,
-					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo,
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
 					     double time)
 {
 	// compute the total right-hand-side for the MOL integration
@@ -517,8 +517,8 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 	// loop over faces pointing in the w0-direction
 	for (int w0 = 0; w0 < 3; ++w0) {
 		// you have two edges on the perimeter of this face
-		int w1 = (w0 + 1) % 3; // vec_fc(w0) + vec_fc(w1)
-		int w2 = (w0 + 2) % 3; // vec_fc(w0) + vec_fc(w2)
+		const int w1 = (w0 + 1) % 3; // vec_fc(w0) + vec_fc(w1)
+		const int w2 = (w0 + 2) % 3; // vec_fc(w0) + vec_fc(w2)
 		// direction to find the edges either side of the face. this depends on the direction the face points
 		std::array<int, 3> delta_w1 = {0, 0, 0};
 		std::array<int, 3> delta_w2 = {0, 0, 0};
@@ -541,16 +541,16 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 
 		amrex::ParallelFor(fc_consVarNew_mf[w0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// the ec emfs sit in the opposite fc directions relative to the face
-			double emf_w1_m = ec_emf_w1[bx](i, j, k);
-			double emf_w2_m = ec_emf_w2[bx](i, j, k);
-			double emf_w1_p = ec_emf_w1[bx](i + delta_w2[0], j + delta_w2[1], k + delta_w2[2]);
-			double emf_w2_p = ec_emf_w2[bx](i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
-			double db_dt = (dx1 * (emf_w1_m - emf_w1_p) + dx2 * (emf_w2_p - emf_w2_m)) / (dx1 * dx2);
+			const double emf_w1_m = ec_emf_w1[bx](i, j, k);
+			const double emf_w2_m = ec_emf_w2[bx](i, j, k);
+			const double emf_w1_p = ec_emf_w1[bx](i + delta_w2[0], j + delta_w2[1], k + delta_w2[2]);
+			const double emf_w2_p = ec_emf_w2[bx](i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
+			const double db_dt = (dx1 * (emf_w1_m - emf_w1_p) + dx2 * (emf_w2_p - emf_w2_m)) / (dx1 * dx2);
 			fc_consVarNew[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) =
 			    fc_consVarOld[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + dt * db_dt;
 		});
 
-		int tmp = 0; // TODO: for debuging. remove
+		int tmp = 0; // TODO(nkriel): for debuging. remove
 	}
 }
 
