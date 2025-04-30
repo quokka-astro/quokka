@@ -7,10 +7,9 @@
 /// \brief Defines a test problem for magnetosonic waves of the fast type.
 ///
 
-
+#include <bitset>
 #include <cassert>
 #include <cmath>
-#include <bitset>
 #include <iostream>
 #include <stdexcept>
 #include <valarray>
@@ -21,12 +20,12 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "util/fextract.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "test_fast_wave.hpp"
+#include "util/fextract.hpp"
 
-struct FastWave{
+struct FastWave {
 };
 
 template <> struct quokka::EOS_Traits<FastWave> {
@@ -54,7 +53,7 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double bg_mag_amplitude = 1.;
 
-//theta is the angle between k and background magnetic field bg_mag
+// theta is the angle between k and background magnetic field bg_mag
 constexpr double theta_degrees = 90.0; // degrees
 const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
 const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
@@ -68,40 +67,32 @@ constexpr double k_amplitude = 2 * M_PI * num_modes;
 constexpr double delta_b = 1e-6;
 
 const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
-const double magnetosonic_speed = std::sqrt(std::pow(alfven_speed,2)+std::pow(sound_speed,2));
+const double magnetosonic_speed = std::sqrt(std::pow(alfven_speed, 2) + std::pow(sound_speed, 2));
 const double bg_mag_x1 = 0.0;
 const double bg_mag_x2 = 0.0;
 const double bg_mag_x3 = bg_mag_amplitude;
 
+const double omega =
+    std::sqrt(std::pow(k_amplitude, 2) / 2.0 *
+	      (std::pow(magnetosonic_speed, 2) +
+	       std::sqrt(std::pow(magnetosonic_speed, 4) - 4.0 * std::pow(alfven_speed, 2) * std::pow(sound_speed, 2) * std::pow(cos_theta, 2))));
 
-
-
-
-const double omega  = std::sqrt( std::pow(k_amplitude,2)/2.0 * (
-	std::pow(magnetosonic_speed,2) + 
-	std::sqrt(std::pow(magnetosonic_speed,4) - 4.0*std::pow(alfven_speed,2)*
-	std::pow(sound_speed,2) * std::pow(cos_theta,2))));
-
-
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_x(double x1, double x2, double x3, double time) 
-{ 
-	//return -bg_mag_x3 * x2;
-	return -x2 / 2.0 * (bg_mag_amplitude + delta_b * std::cos(omega * time - k_amplitude * x1)); 
+AMREX_GPU_DEVICE double computeMagneticVectorPotential_x(double x1, double x2, double x3, double time)
+{
+	// return -bg_mag_x3 * x2;
+	return -x2 / 2.0 * (bg_mag_amplitude + delta_b * std::cos(omega * time - k_amplitude * x1));
 }
 AMREX_GPU_DEVICE double computeMagneticVectorPotential_y(double x1, double x2, double x3, double time)
 {
-	//return delta_b / k_amplitude * std::sin(omega * time - k_amplitude * x1);
-	return bg_mag_amplitude * x1 / 2.0 + ((delta_b)*std::sin(omega * time - k_amplitude * x1)/(-2.0*k_amplitude));
+	// return delta_b / k_amplitude * std::sin(omega * time - k_amplitude * x1);
+	return bg_mag_amplitude * x1 / 2.0 + ((delta_b)*std::sin(omega * time - k_amplitude * x1) / (-2.0 * k_amplitude));
 }
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_z(double x1, double x2, double x3, double time) 
-{ 
-	return 0.0;
-}
+AMREX_GPU_DEVICE double computeMagneticVectorPotential_z(double x1, double x2, double x3, double time) { return 0.0; }
 
 ////////////////////////////////////
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
-	double time)
+					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
+					  double time)
 {
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
@@ -114,17 +105,16 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	if (cen == quokka::centering::cc) {
 		const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
 
-
 		// magnetic field at the center of the cell
 		const double x1mag = 0.0;
 		const double x2mag = 0.0;
-		const double x3mag = bg_mag_amplitude + delta_b * cos_wave_C; 
+		const double x3mag = bg_mag_amplitude + delta_b * cos_wave_C;
 		// std::cout << std::fixed;
-    	// std::cout << std::setprecision(54);
+		// std::cout << std::setprecision(54);
 		// std::cout << "Bmag: " << x3mag << '\n';
-		
+
 		const double density = bg_density + bg_density * delta_b / bg_mag_amplitude * cos_wave_C;
-		const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude  * cos_wave_C;
+		const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude * cos_wave_C;
 		const double x1vel = magnetosonic_speed * delta_b / bg_mag_amplitude * cos_wave_C;
 		const double x2vel = 0.0;
 		const double x3vel = 0.0;
@@ -144,50 +134,47 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		state(i, j, k, HydroSystem<FastWave>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
 		const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2, time) -
-			computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
-		   dx[1] -
-		   (computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L + dx[2], time) -
-			computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L, time)) /
-		   dx[2];
+				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
+					 dx[1] -
+				     (computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L + dx[2], time) -
+				      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L, time)) /
+					 dx[2];
 		const double x2mag = (computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L + dx[2], time) -
-			computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L, time)) /
-		   dx[2] -
-		   (computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2, time) -
-			computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
-		   dx[0];
-		   
-		const double x3mag = ((computeMagneticVectorPotential_y(x1_L + dx[0], x2_L + (dx[1] / 2), x3_L, time) -
-			computeMagneticVectorPotential_y(x1_L, x2_L + (dx[1] / 2), x3_L, time)) /
-		   dx[0]) -
-		   ((computeMagneticVectorPotential_x(x1_L + (dx[0] / 2), x2_L + dx[1], x3_L, time) -
-			computeMagneticVectorPotential_x(x1_L + (dx[0] / 2), x2_L, x3_L, time)) /
-		   dx[1]);
+				      computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L, time)) /
+					 dx[2] -
+				     (computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2, time) -
+				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
+					 dx[0];
 
-			// std::cout << std::fixed;
-			// std::cout << std::setprecision(54);
-			// std::cout << "Bmag: " << x3mag << '\n';
-			if (i==0){
-				std::cout << i << ' ' << j << ' ' << k;
-				std::cout << std::fixed;
-				std::cout << std::setprecision(4);
-				std::cout <<  ": x1_L, x2_L, x3_L: " << x1_L << '\t' << x2_L << '\t' << x3_L << '\n';
-				std::cout << std::fixed;
-				std::cout << std::setprecision(52);
-				std::cout << "Bmag: " << x3mag << "\n\n";	
-			}
+		const double x3mag = ((computeMagneticVectorPotential_y(x1_L + dx[0], x2_L + (dx[1] / 2), x3_L, time) -
+				       computeMagneticVectorPotential_y(x1_L, x2_L + (dx[1] / 2), x3_L, time)) /
+				      dx[0]) -
+				     ((computeMagneticVectorPotential_x(x1_L + (dx[0] / 2), x2_L + dx[1], x3_L, time) -
+				       computeMagneticVectorPotential_x(x1_L + (dx[0] / 2), x2_L, x3_L, time)) /
+				      dx[1]);
+
+		// std::cout << std::fixed;
+		// std::cout << std::setprecision(54);
+		// std::cout << "Bmag: " << x3mag << '\n';
+		if (i == 0) {
+			std::cout << i << ' ' << j << ' ' << k;
+			std::cout << std::fixed;
+			std::cout << std::setprecision(4);
+			std::cout << ": x1_L, x2_L, x3_L: " << x1_L << '\t' << x2_L << '\t' << x3_L << '\n';
+			std::cout << std::fixed;
+			std::cout << std::setprecision(52);
+			std::cout << "Bmag: " << x3mag << "\n\n";
+		}
 
 		if (dir == quokka::direction::x) {
-		state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
 		} else if (dir == quokka::direction::y) {
-		state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
 		} else if (dir == quokka::direction::z) {
-		state(i, j, k, MHDSystem<FastWave>::bfield_index) = x3mag;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x3mag;
 		}
 	}
 }
-
-
-
 
 template <> void QuokkaSimulation<FastWave>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -231,7 +218,7 @@ template <> void QuokkaSimulation<FastWave>::setInitialConditionsOnGridFaceVars(
 
 template <>
 void QuokkaSimulation<FastWave>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+							  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -249,22 +236,21 @@ void QuokkaSimulation<FastWave>::computeReferenceSolution(amrex::MultiFab &ref, 
 
 template <>
 void QuokkaSimulation<FastWave>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
-for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-const amrex::Box &indexRange = iter.validbox();
-auto const &stateExact = ref.array(iter);
-auto const ncomp = ref.nComp();
+	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateExact = ref.array(iter);
+		auto const ncomp = ref.nComp();
 
-amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-for (int n = 0; n < ncomp; ++n) {
-stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < ncomp; ++n) {
+				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
+			}
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, 0);
+		});
+	}
 }
-computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, 0);
-});
-}
-}
-
 
 auto problem_main() -> int
 {
@@ -287,11 +273,11 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<FastWave> sim(BCs_cc, BCs_fc);
-  sim.computeReferenceSolution_ = true;
+	sim.computeReferenceSolution_ = true;
 	sim.setInitialConditions();
 	sim.evolve();
 
-  // Compute test success condition
+	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.002;
 	if (sim.errorNorm_ > error_tol) {

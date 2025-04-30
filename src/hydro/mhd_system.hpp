@@ -34,7 +34,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
-             std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int nghost_fc, int reconstructionOrder, amrex::Geometry geom, double time);
+			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int nghost_fc, int reconstructionOrder, amrex::Geometry geom,
+			       double time);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &reconstructRange,
 				  int reconstructionOrder);
@@ -48,8 +49,10 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
-              std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int nghost_fc, int reconstructionOrder, amrex::Geometry geom, double time)
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int nghost_fc, int reconstructionOrder,
+				      amrex::Geometry geom, double time)
 {
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
 
@@ -63,15 +66,15 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 		// use the prefix x- when the w- and i- indexes are the same. We also choose to minimise the storage footprint by only computing and holding
 		// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
 		// significantly reduces the total memory used, which is a much bigger bottleneck.
-    
-    // indexing: field[3: x-component/x-face]
-    // create a view of all the b-field data (+ghost cells; do not make another copy)
-    std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
-        amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-        amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-        amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-    };
-    
+
+		// indexing: field[3: x-component/x-face]
+		// create a view of all the b-field data (+ghost cells; do not make another copy)
+		std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
+		    amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		    amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		    amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		};
+
 		// extract cell-centered velocity fields
 		// indexing: field[3: x-component]
 		std::array<amrex::FArrayBox, 3> cc_fabs_Ux;
@@ -102,12 +105,13 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 			// define the two directions we need to extrapolate cell-centered velocity fields to get them to the cell-edge
 			// we will want to compute E2 = (U0 * B1 - U1 * B0) along the cell-edge
 			std::array<int, 2> extrap_dirs = {(iedge + 1) % 3, (iedge + 2) % 3};
-			const amrex::IntVect vec_cc2ec = amrex::IntVect::TheDimensionVector(extrap_dirs[0]) + amrex::IntVect::TheDimensionVector(extrap_dirs[1]);
+			const amrex::IntVect vec_cc2ec =
+			    amrex::IntVect::TheDimensionVector(extrap_dirs[0]) + amrex::IntVect::TheDimensionVector(extrap_dirs[1]);
 			const amrex::Box box_ec = amrex::convert(box_cc, vec_cc2ec);
 			const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
 
-			// initialise FArrayBox for storing the temporary edge-centered velocity fields created in each permutation of reconstructing from the cell-face.
-			// indexing: field[2: i-side of edge]
+			// initialise FArrayBox for storing the temporary edge-centered velocity fields created in each permutation of reconstructing from the
+			// cell-face. indexing: field[2: i-side of edge]
 			std::array<amrex::FArrayBox, 2> ec_fabs_U_ieside;
 			// define the four possible velocity field quantities that could be reconstructed at the cell-edge
 			// also define the temporary velocity field quantities that will be used for computing the extrapolation
@@ -194,7 +198,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					ec_fabs_Ui_q[icomp][iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 				}
-      }
+			}
 
 			// extrapolate the two required face-centered magnetic field components to the cell-edge
 			for (int icomp = 0; icomp < 2; ++icomp) {
@@ -289,11 +293,9 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 
 			int tmp = 0; // TODO: for debuging. remove
 		}
-  }
+	}
 
-
-
-  // // loop over each box-array on the level
+	// // loop over each box-array on the level
 	// // note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// // note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 	// for (amrex::MFIter mfi(cc_mf_cVars); mfi.isValid(); ++mfi) {
@@ -303,29 +305,29 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// 	// use the prefix x- when the w- and i- indexes are the same. We also choose to minimise the storage footprint by only computing and holding
 	// 	// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
 	// 	// significantly reduces the total memory used, which is a much bigger bottleneck.
-    
-  //   // indexing: field[3: x-component/x-face]
-  //   // create a view of all the u-field data (+ghost cells; do not make another copy)
-  //   std::array<amrex::FArrayBox, 3> fc_fabs_Ux = {
-  //     amrex::FArrayBox(fcx_mf_vel[0][mfi], amrex::make_alias, 0, 1),
-  //     amrex::FArrayBox(fcx_mf_vel[1][mfi], amrex::make_alias, 0, 1),
-  //     amrex::FArrayBox(fcx_mf_vel[2][mfi], amrex::make_alias, 0, 1),
-  //   };
-  //   // indexing: field[3: x-component/x-face]
-  //   // create a view of all the b-field data (+ghost cells; do not make another copy)
-  //   std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
-  //       amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-  //       amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-  //       amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-  //   };
+
+	//   // indexing: field[3: x-component/x-face]
+	//   // create a view of all the u-field data (+ghost cells; do not make another copy)
+	//   std::array<amrex::FArrayBox, 3> fc_fabs_Ux = {
+	//     amrex::FArrayBox(fcx_mf_vel[0][mfi], amrex::make_alias, 0, 1),
+	//     amrex::FArrayBox(fcx_mf_vel[1][mfi], amrex::make_alias, 0, 1),
+	//     amrex::FArrayBox(fcx_mf_vel[2][mfi], amrex::make_alias, 0, 1),
+	//   };
+	//   // indexing: field[3: x-component/x-face]
+	//   // create a view of all the b-field data (+ghost cells; do not make another copy)
+	//   std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
+	//       amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+	//       amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+	//       amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+	//   };
 	// 	// compute the emf components on the cell-edge to inform how much magnetic flux travels through each cell-face
 	// 	for (int iedge = 0; iedge < 3; ++iedge) {
 
 	// 		// define the two face-centered velocity/magnetic field components we need at the cell-edge
 	// 		// we will want to compute E2 = (U0 * B1 - U1 * B0) along the cell-edge
 	// 		std::array<int, 2> field_w_indices = {(iedge + 1) % 3, (iedge + 2) % 3};
-	// 		const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(field_w_indices[0]) + amrex::IntVect::TheDimensionVector(field_w_indices[1]));
-	// 		const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
+	// 		const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(field_w_indices[0]) +
+	// amrex::IntVect::TheDimensionVector(field_w_indices[1])); 		const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
 
 	// 		// FArrayBoxes for storing the edge-centered fields produced by reconstructing from the cell-face to the cell-edge
 	// 		// indexing: field[2: i-component][2: i-side of edge]
@@ -333,43 +335,44 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// 		std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
 	// 		// define quantities
 	// 		for (int icomp = 0; icomp < 2; ++icomp) {
-  //       for (int ieside = 0; ieside < 2; ++ieside) {
-  //         ec_fabs_Ui_ieside[icomp][ieside].resize(box_ec_r, 1);
-  //         ec_fabs_Bi_ieside[icomp][ieside].resize(box_ec_r, 1);
-  //       }
+	//       for (int ieside = 0; ieside < 2; ++ieside) {
+	//         ec_fabs_Ui_ieside[icomp][ieside].resize(box_ec_r, 1);
+	//         ec_fabs_Bi_ieside[icomp][ieside].resize(box_ec_r, 1);
+	//       }
 	// 		}
 
-  //     // extrapolate the face-centered velocity field that is normal to the cell-face to the cell-edge
+	//     // extrapolate the face-centered velocity field that is normal to the cell-face to the cell-edge
 	// 		for (int icomp = 0; icomp < 2; ++icomp) {
 	// 			const auto dir2edge = static_cast<FluxDir>(field_w_indices[(icomp + 1) % 2]);
 	// 			const int wcomp = field_w_indices[icomp];
 	// 			const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
 	// 			const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 	// 			// extrapolate face-centered components to the cell-edge
-	// 			MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ux[wcomp].array(), ec_fabs_Ui_ieside[icomp][0].array(), ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder);
-	// 			MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(), ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+	// 			MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ux[wcomp].array(), ec_fabs_Ui_ieside[icomp][0].array(),
+	// ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder); 			MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(),
+	// ec_fabs_Bi_ieside[icomp][0].array(), ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 
 	// 			int tmp = 0; // TODO: for debuging. remove
 	// 		}
 
 	// 		// indexing: field[4: quadrant around edge]
 	// 		std::array<amrex::FArrayBox, 4> ec_fabs_E_Q;
-  //     // note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-  //     // |---------------------------------------------------------------------------------------------|
-  //     // |          q_2                                                                                |
-  //     // |       u,b_{0,T}                 |                                                           |
-  //     // |       \       /       q_1 + q_2 | q_2 + q_3                                                 |
-  //     // |        \     /             Q_1  |  Q_2          Q_0 = u_{0,B} * b_{1,L} - u_{1,L} * b_{0,B} |
-  //     // |         \   /             (-,+) | (+,+)                                                     |
-  //     // |    q_1   \ /   q_3              |               Q_1 = u_{0,T} * b_{1,L} - u_{1,L} * b_{0,T} |
-  //     // | u,b_{1,L} . u,b_{1,R} -> --------------- where:                                             |
-  //     // |          / \                    |               Q_2 = u_{0,T} * b_{1,R} - u_{1,R} * b_{0,T} |
-  //     // |         /   \              Q_0  |  Q_3                                                      |
-  //     // |        /     \            (-,-) | (+,-)         Q_3 = u_{0,B} * b_{1,R} - u_{1,R} * b_{0,B} |
-  //     // |       /       \       q_1 + q_2 | q_3 + q_0                                                 |
-  //     // |       u,b_{0,B}                 |                                                           |
-  //     // |          q_0                                                                                |
-  //     // |---------------------------------------------------------------------------------------------|
+	//     // note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
+	//     // |---------------------------------------------------------------------------------------------|
+	//     // |          q_2                                                                                |
+	//     // |       u,b_{0,T}                 |                                                           |
+	//     // |       \       /       q_1 + q_2 | q_2 + q_3                                                 |
+	//     // |        \     /             Q_1  |  Q_2          Q_0 = u_{0,B} * b_{1,L} - u_{1,L} * b_{0,B} |
+	//     // |         \   /             (-,+) | (+,+)                                                     |
+	//     // |    q_1   \ /   q_3              |               Q_1 = u_{0,T} * b_{1,L} - u_{1,L} * b_{0,T} |
+	//     // | u,b_{1,L} . u,b_{1,R} -> --------------- where:                                             |
+	//     // |          / \                    |               Q_2 = u_{0,T} * b_{1,R} - u_{1,R} * b_{0,T} |
+	//     // |         /   \              Q_0  |  Q_3                                                      |
+	//     // |        /     \            (-,-) | (+,-)         Q_3 = u_{0,B} * b_{1,R} - u_{1,R} * b_{0,B} |
+	//     // |       /       \       q_1 + q_2 | q_3 + q_0                                                 |
+	//     // |       u,b_{0,B}                 |                                                           |
+	//     // |          q_0                                                                                |
+	//     // |---------------------------------------------------------------------------------------------|
 	// 		// compute the EMF along the cell-edge
 	// 		for (int iQuad = 0; iQuad < 4; ++iQuad) {
 	// 			// extract relevant velocity and magnetic field components
@@ -448,8 +451,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// 		int tmp = 0; // TODO: for debuging. remove
 	// 	}
 	// }
-
-
 }
 
 template <typename problem_t>

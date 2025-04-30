@@ -287,8 +287,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
-	auto computeHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int lev) -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
-							   std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+	auto computeHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int lev)
+	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
+			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	auto computeFOHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int lev)
 	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
@@ -300,7 +301,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	template <FluxDir DIR>
 	void hydroFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &x1Flux,
 			       amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
-			       amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, int ng_reconstruct_total, int nvars);
+			       amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, int ng_reconstruct_total,
+			       int nvars);
 
 	template <FluxDir DIR>
 	void hydroFOFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab const *x1ConsVar_fc_mf, amrex::MultiFab &leftState,
@@ -1765,13 +1767,13 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		nghost_extra_mhd = 0;
 	}
 	for (int idim = 0; idim < 3; ++idim) {
-		flatCoefs[idim] = amrex::MultiFab(ba_cc, dm, 1, nghost_flattening+nghost_extra_mhd);
+		flatCoefs[idim] = amrex::MultiFab(ba_cc, dm, 1, nghost_flattening + nghost_extra_mhd);
 	}
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
-		leftState[idim] = amrex::MultiFab(ba_fc, dm, nvars, nghost_reconstruct_base+nghost_extra_mhd);
-		rightState[idim] = amrex::MultiFab(ba_fc, dm, nvars, nghost_reconstruct_base+nghost_extra_mhd);
+		leftState[idim] = amrex::MultiFab(ba_fc, dm, nvars, nghost_reconstruct_base + nghost_extra_mhd);
+		rightState[idim] = amrex::MultiFab(ba_fc, dm, nvars, nghost_reconstruct_base + nghost_extra_mhd);
 		flux[idim] = amrex::MultiFab(ba_fc, dm, nvars, 0 + nghost_extra_mhd);
 		facevel[idim] = amrex::MultiFab(ba_fc, dm, 1, 0 + nghost_extra_mhd);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1783,17 +1785,18 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
 
 	// compute flattening coefficients
-	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], nghost_flattening+nghost_extra_mhd);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], nghost_flattening+nghost_extra_mhd);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], nghost_flattening+nghost_extra_mhd);)
+	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], nghost_flattening + nghost_extra_mhd);
+		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], nghost_flattening + nghost_extra_mhd);
+		     ,
+		     HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], nghost_flattening + nghost_extra_mhd);)
 
 	// compute flux functions
 	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, flatCoefs[0],
-						    flatCoefs[1], flatCoefs[2], nghost_reconstruct_base+nghost_extra_mhd, nvars);
+						    flatCoefs[1], flatCoefs[2], nghost_reconstruct_base + nghost_extra_mhd, nvars);
 		     , hydroFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc,
-						      flatCoefs[0], flatCoefs[1], flatCoefs[2], nghost_reconstruct_base+nghost_extra_mhd, nvars);
+						      flatCoefs[0], flatCoefs[1], flatCoefs[2], nghost_reconstruct_base + nghost_extra_mhd, nvars);
 		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc,
-						      flatCoefs[0], flatCoefs[1], flatCoefs[2], nghost_reconstruct_base+nghost_extra_mhd, nvars);)
+						      flatCoefs[0], flatCoefs[1], flatCoefs[2], nghost_reconstruct_base + nghost_extra_mhd, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -1842,7 +1845,8 @@ template <FluxDir DIR>
 void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &flux,
 						    amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds,
 						    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat,
-						    amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct_total, const int nvars)
+						    amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct_total,
+						    const int nvars)
 {
 	amrex::MultiArray4<const amrex::Real> x2State_fc_in;
 	amrex::MultiArray4<const amrex::Real> x3State_fc_in;
@@ -1881,7 +1885,8 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	if (reconstructionOrder_ == 3) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
 	} else if (reconstructionOrder_ == 2) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState, ng_reconstruct_total,
+												      nvars);
 	} else if (reconstructionOrder_ == 1) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
 	} else {
@@ -1893,8 +1898,8 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(
-		    flux, faceVel, leftState, rightState, primVar_mf, artificialViscosityK_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)]);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar_mf,
+											 artificialViscosityK_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)]);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar_mf,
 											 artificialViscosityK_, nullptr, nullptr);
@@ -1945,8 +1950,8 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 template <typename problem_t>
 template <FluxDir DIR>
 void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &primVar, amrex::MultiFab const *x1ConsVar_fc_mf, amrex::MultiFab &leftState,
-						      amrex::MultiFab &rightState, amrex::MultiFab &flux, amrex::MultiFab &faceVel, const int ng_reconstruct_total,
-						      const int nvars)
+						      amrex::MultiFab &rightState, amrex::MultiFab &flux, amrex::MultiFab &faceVel,
+						      const int ng_reconstruct_total, const int nvars)
 {
 	// donor-cell reconstruction
 	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct_total, nvars);

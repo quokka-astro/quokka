@@ -947,7 +947,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 	amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(0, 0, 0));
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-	  ng = amrex::IntVect(AMREX_D_DECL(1, 1, 1)); //  - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR))
+		ng = amrex::IntVect(AMREX_D_DECL(1, 1, 1)); //  - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR))
 	}
 
 	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
