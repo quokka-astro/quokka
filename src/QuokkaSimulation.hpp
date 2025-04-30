@@ -116,6 +116,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
 
+	using AMRSimulation<problem_t>::max_level;
+	using AMRSimulation<problem_t>::n_error_buf;
+
 	SimulationData<problem_t> userData_;
 
 	int enableCooling_ = 0;
@@ -188,11 +191,13 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
+	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
+	void createInitialSinkParticles() override;
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
@@ -616,6 +621,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSto
 	// note: an implementation is only effective if StochasticStellarPop_particles are used
 }
 
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSinkParticles()
+{
+	// Optional implementation
+	// Sink particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
+	// beginning of the simulation.
+	// note: an implementation is only effective if Sink_particles are used
+}
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTestParticles()
 {
 	// Optional implementation
@@ -696,9 +709,23 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistic
 	return std::map<std::string, amrex::Real>{};
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <typename problem_t> void QuokkaSimulation<problem_t>::refineGrid(int /*lev*/, amrex::TagBoxArray & /*tags*/, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement -- user should implement
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
+{
+	// call user-defined RefineGrid to set tags
+	refineGrid(lev, tags, time, ngrow);
+
+#if AMREX_SPACEDIM == 3
+	// refine grids around particles
+	if (lev < max_level) {
+		particleRegister_.refineGridsAroundParticles(lev, tags, time, ngrow, n_error_buf[lev]);
+	}
+#endif
 }
 
 template <typename problem_t>

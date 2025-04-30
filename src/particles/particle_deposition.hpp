@@ -1,16 +1,23 @@
 #ifndef PARTICLE_DEPOSITION_HPP_
 #define PARTICLE_DEPOSITION_HPP_
 
+#include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
-#include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
+#include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 
 namespace quokka
 {
+
+constexpr int SN_stencil_size = 3;
+constexpr int SN_stencil_array_size = SN_stencil_size + 1;
+
+constexpr double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
+constexpr double m_u = C::m_u;
 
 //-------------------- Radiation depositions --------------------
 
@@ -67,81 +74,376 @@ struct MassDeposition {
 
 //-------------------- Supernova depositions --------------------
 
-// Functor for depositing supernova energy and momentum from particles onto the grid
-// This is a simplified version of the SNDeposition functor that deposits mass and energy uniformly
-// to 5³ cells centered on the particle's cell. It is used for testing purposes.
-// Note: the deposition radius must be <= nghost_cc_
-struct SNDeposition {
-	double step_end_time{};	   // Current simulation time
-	int start_part_comp{};	   // Starting component in particle data
-	int start_mesh_comp{};	   // Starting component in mesh data
-	int birthTimeIndex{};	   // Index for particle birth time
-	int evolutionStageIndex{}; // Index for particle evolution stage
-	double SN_time = particle_param2;
+namespace SNFeedbackUtils
+{
 
-	// For some unknown reason, stencil_width < 3 results in larger error in SNR mass when a particle is at the refinement boundary.
-	static constexpr int stencil_width = 3;
-
-	// Abort if stencil_width > nghost_cc_ - 1.
-	// The particle can drift one cell out of the valid zone during kickParticlesAllLevels().
-	// A stencil_width > nghost_cc_ - 1 would result in particles depositing energy/momentum outside the ghost zones.
-	// We can't use AMRSimulation<problem_t>::nghost_cc_ and have to hard-code 3 here because we don't have a problem_t template parameter.
-	static_assert(stencil_width <= 3, "stencil_width must be <= nghost_cc_");
-
-	// Operator to perform supernova deposition using cloud-in-cell approach
-	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &state,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
-	{
-		// Check if the particle has an integer component for evolution stage
-		if constexpr (ContainerType::NInt > 0) {
-			// Check if this is a supernova progenitor
-			bool is_sn_progenitor = false;
-			if (evolutionStageIndex >= 0) {
-				is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+// Function to deposit thermal supernova remnant quantities
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz, const amrex::Real m_ej, const amrex::Real E_blast,
+		  const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy, const amrex::Real p_vz, const amrex::Real vol_inverse,
+		  const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+		      &stencil_weights_gpu) noexcept
+{
+	for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
+		for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
+			for (int kk = -SN_stencil_size; kk <= SN_stencil_size; ++kk) {
+				const int iii = std::abs(ii);
+				const int jjj = std::abs(jj);
+				const int kkk = std::abs(kk);
+				const double kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse; // NOLINT
+				const amrex::Real SNR_rho_per_cell = m_ej * kernel_times_vol_inverse;
+				const amrex::Real SNR_energy_per_cell = (E_blast + SN_kin_energy) * kernel_times_vol_inverse;
+				const amrex::Real SNR_px_per_cell = m_ej * p_vx * kernel_times_vol_inverse;
+				const amrex::Real SNR_py_per_cell = m_ej * p_vy * kernel_times_vol_inverse;
+				const amrex::Real SNR_pz_per_cell = m_ej * p_vz * kernel_times_vol_inverse;
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index), SNR_rho_per_cell);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x1Momentum_index),
+							     SNR_px_per_cell);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x2Momentum_index),
+							     SNR_py_per_cell);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::x3Momentum_index),
+							     SNR_pz_per_cell);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
+							     SNR_energy_per_cell);
 			}
+		}
+	}
+}
 
-			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex) + SN_time) {
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
+    amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
+    const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z, const amrex::Real m_ej,
+    const amrex::Real E_blast, const amrex::Real SN_kin_energy, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
+    const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+	&stencil_weights_gpu,
+    const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d)
+{
+	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
+	const amrex::Real M_snr = (avg_density * stencil_volume * vol) + m_ej;	 // SNR mass
+	const amrex::Real M_sf = 1679.0 * C::M_solar * std::pow(n_H_amb, -0.26); // Shell-formation mass
+	const amrex::Real RM = M_snr / M_sf;					 // R_M factor = M_snr / M_sf
+	const amrex::Real p_snr = p_snr_0 * std::pow(n_H_amb, -0.17);		 // = 1.89e5 when n = 10
+
+	// fraction of terminal SN momentum to go to gas momentum
+	amrex::Real f_factor = 1.0;
+	if (SN_scheme_d == SNScheme::SN_thermal_or_thermal_momentum) {
+		if (RM < 1.0) {
+			if (RM > 0.027) {
+				f_factor = 0.529 * std::sqrt(RM); // f^2 = 0.28. 28% kinetic (Kim & Ostriker 2017)
+			} else {
+				f_factor = 0.0; // pure thermal in well-resolved limit
+			}
+		}
+	} else if (SN_scheme_d == SNScheme::SN_thermal_kinetic_or_thermal_momentum) {
+		if (RM < 1.0) {
+			if (RM > 0.027) {
+				f_factor = 0.529 * std::sqrt(RM); // f^2 = 0.28. 28% kinetic (Kim & Ostriker 2017)
+			} else {
+				f_factor = 1.414 * std::sqrt(RM); // pure kinetic in well-resolved limit: (f^2 / RM) * (p_snr^2
+								  // / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
+			}
+		}
+	}
+	// SNScheme::SN_pure_kinetic_or_thermal_momentum: keep f_factor = 1.0
+
+	// // log RM and f_factor, for debugging on CPU.
+	// if (particle_verbose) {
+	// 	printf("SNR logging -- RM: %.2e, f_factor: %.2e\n", RM, f_factor);
+	// }
+
+	for (int ii = ix - SN_stencil_size; ii <= ix + SN_stencil_size; ++ii) {
+		for (int jj = iy - SN_stencil_size; jj <= iy + SN_stencil_size; ++jj) {
+			for (int kk = iz - SN_stencil_size; kk <= iz + SN_stencil_size; ++kk) {
+				const int iii = std::abs(ii - ix);
+				const int jjj = std::abs(jj - iy);
+				const int kkk = std::abs(kk - iz);
+				const double kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse;
+
+				const double delta_x = (ii + 0.5) * dx[0] + plo[0] - pos_x; // NOLINT
+				const double delta_y = (jj + 0.5) * dx[1] + plo[1] - pos_y; // NOLINT
+				const double delta_z = (kk + 0.5) * dx[2] + plo[2] - pos_z; // NOLINT
+				const double r_sq = (delta_x * delta_x) + (delta_y * delta_y) + (delta_z * delta_z);
+
+				const amrex::Real delta_rho_i = m_ej * kernel_times_vol_inverse;
+				const amrex::Real e_snr_per_cell = (E_blast + SN_kin_energy) * kernel_times_vol_inverse;
+				const amrex::Real momentum_per_cell = f_factor * p_snr * kernel_times_vol_inverse;
+
+				// Compute unit vector from particle to cell center
+				const amrex::Real r = std::sqrt(r_sq);
+				// Avoid division by zero
+				const amrex::Real inv_r = (r > 0.0) ? 1.0 / r : 0.0;
+
+				// unit vector from particle to cell center
+				const amrex::Real r_hat_x = delta_x * inv_r;
+				const amrex::Real r_hat_y = delta_y * inv_r;
+				const amrex::Real r_hat_z = delta_z * inv_r;
+
+				const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+				const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
+				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
+				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
+
+				// Compute momentum directed along unit vector
+				const double dpx = (delta_rho_i * px / rho) + (momentum_per_cell * r_hat_x);
+				const double dpy = (delta_rho_i * py / rho) + (momentum_per_cell * r_hat_y);
+				const double dpz = (delta_rho_i * pz / rho) + (momentum_per_cell * r_hat_z);
+
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index), delta_rho_i);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), dpx);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), dpy);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
+			}
+		}
+	}
+}
+
+template <typename ContainerType, typename problem_t>
+void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
+{
+	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
+	constexpr amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
+	    stencil_weights_gpu = {{{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
+				      {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
+				      {0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
+				      {0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000}}},
+				    {{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},
+				      {0.00884198143074, 0.00884198143074, 0.00861063982859, 0.00119306623841},
+				      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
+				      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000}}},
+				    {{{0.00884198143074, 0.00884198143074, 0.00596795726055, 0.00005052308190},
+				      {0.00884198143074, 0.00861063982859, 0.00400459528385, 0.00000136166514},
+				      {0.00596795726055, 0.00400459528385, 0.00045652034325, 0.00000000000000},
+				      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000}}},
+				    {{{0.00416240696843, 0.00262865918549, 0.00005052308190, 0.00000000000000},
+				      {0.00262865918549, 0.00119306623841, 0.00000136166514, 0.00000000000000},
+				      {0.00005052308190, 0.00000136166514, 0.00000000000000, 0.00000000000000},
+				      {0.00000000000000, 0.00000000000000, 0.00000000000000, 0.00000000000000}}}}};
+
+	const amrex::Real step_end_time = time + dt;
+
+	constexpr double E_blast = 1.0e51;		       // ergs
+	constexpr double m_ej = 10.0 * C::M_solar;	       // ejecta mass in cgs
+	constexpr double m_dead_min = 1.4 * C::M_solar;	       // minimum mass of a dead star
+	constexpr double p_snr_0 = 2.8e5 * C::M_solar * 1.0e5; // SN terminal momentum in cgs
+
+	// Step 1: Local deposition within each box
+	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+		// Get the particle array of structs
+		auto &particles = pti.GetArrayOfStructs();
+		auto *pData = particles().data();
+		const amrex::Long np = pti.numParticles();
+
+		// Get the local deposit array for this box
+		const auto &local_buffer = state_buffer.array(pti);
+		const auto &local_state = state.array(pti);
+
+		// Get geometry information for this level
+		const auto &geom = container->Geom(lev);
+		const auto plo = geom.ProbLoArray();
+		const auto dxi = geom.InvCellSizeArray();
+		const auto dx = geom.CellSizeArray();
+
+		// Calculate inverse cell volume
+		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
+		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+
+		// Deposit particle data into the local buffer
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+			// Check if this is a supernova progenitor
+			const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+
+			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
+				// Update the particle's evolution stage to SNRemnant
+				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+
+				// update the particle's mass: subtract ejecta mass
+				const amrex::Real mass_dead_star = p.rdata(mass_index) - m_ej;
+				// AMREX_ASSERT_WITH_MESSAGE(mass_dead_star > 0.0, "SN progenitor mass should be greater than ejecta mass (10 M_sun)");
+				p.rdata(mass_index) = std::max(m_dead_min, mass_dead_star);
+
+				// get particle velocity and kinetic energy
+				const amrex::Real p_vx = p.rdata(mass_index + 1);
+				const amrex::Real p_vy = p.rdata(mass_index + 2);
+				const amrex::Real p_vz = p.rdata(mass_index + 3);
+				const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
+
+				const amrex::Real pos_x = p.pos(0);
+				const amrex::Real pos_y = p.pos(1);
+				const amrex::Real pos_z = p.pos(2);
+
 				// Find the cell containing the particle
-				int base_i = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-				int base_j = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-				int base_k = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+				int ix = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
+				int iy = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
+				int iz = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
 
-				// Calculate the volume factor for normalization (5³ cells)
-				const int num_cells = (2 * stencil_width + 1) * (2 * stencil_width + 1) * (2 * stencil_width + 1);
-				const amrex::Real vol_factor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2])) / num_cells;
-
-				// Deposit evenly to 5³ cells centered on the particle's cell
-				const amrex::Real pdensity = p.rdata(start_part_comp) * vol_factor;
-				const amrex::Real penergy = pdensity; // for testing: energy = mass
-				const amrex::Real pmomentum = 0.0;    // for testing: momentum = 0
-
-				for (int kk = -stencil_width; kk <= stencil_width; ++kk) {
-					for (int jj = -stencil_width; jj <= stencil_width; ++jj) {
-						for (int ii = -stencil_width; ii <= stencil_width; ++ii) {
-							// Add the contribution to each cell
-							// We assume start_mesh_comp is the density index followed by the momentum indices and then the energy
-							// index
-							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp), pdensity);
-							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp + 1),
-										     pmomentum);
-							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp + 2),
-										     pmomentum);
-							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp + 3),
-										     pmomentum);
-							amrex::Gpu::Atomic::AddNoRet(&state(base_i + ii, base_j + jj, base_k + kk, start_mesh_comp + 4),
-										     penergy);
+				amrex::Real avg_density = 0.0;
+				for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
+					for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
+						for (int kk = -SN_stencil_size; kk <= SN_stencil_size; ++kk) {
+							const int iii = std::abs(ii);
+							const int jjj = std::abs(jj);
+							const int kkk = std::abs(kk);
+							const double kernel = stencil_weights_gpu[iii][jjj][kkk];
+							avg_density += kernel * local_state(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
 						}
 					}
 				}
 
-				// Note: We cannot modify the particle here because it's passed as const reference
-				// The evolution stage update is now handled by the updateEvolutionStage function
+				if (SN_scheme_d == SNScheme::SN_thermal_only) {
+					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
+					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
+								     stencil_weights_gpu);
+				} else {
+					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
+					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
+										    m_ej, E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights_gpu,
+										    avg_density, vol, dx, plo, SN_scheme_d);
+				}
 			}
-		}
+		});
 	}
-};
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state,
+								   amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
+{
+	// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
+	// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
+	// that the internal energy is positive. In fact, we demand that the cell temperature should not decrease.
+	const double rho = local_state(i, j, k, HydroSystem<problem_t>::density_index);
+	const double px = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const double py = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const double pz = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const double e_int = local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+	const double e_tot = local_state(i, j, k, HydroSystem<problem_t>::energy_index);
+
+	const double d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+	const double d_px = local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const double d_py = local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const double d_pz = local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const double d_e = local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
+
+	const double rho_new = rho + d_rho;
+	double px_new = px + d_px;
+	double py_new = py + d_py;
+	double pz_new = pz + d_pz;
+	double e_tot_new = e_tot + d_e;
+
+	const double d_e_int_d_rho = e_int / rho;
+	const double e_int_new_tmp = d_e_int_d_rho * rho_new;
+	const double e_int_plus_kinetic = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+
+	if (e_int_plus_kinetic <= e_tot_new * (1.0 + 1.0e-10)) {
+		e_tot_new = std::max(e_int_plus_kinetic, e_tot_new);
+	} else {
+		// find the lambda such that e_int_plus_kinetic == e_tot_new
+		const double e_kinetic_max = e_tot_new - e_int_new_tmp;
+		AMREX_ASSERT(e_kinetic_max >= 0.0);
+
+		// If this assertion fails, it means the SN energy (10^51 erg) is not enough to accelerate the
+		// SNR to match the velocity of the gas. This may ONLY happen when the SN star is nearly static
+		// at first and the background gas is moving at a speed >3171 km/s. This should NOT happen in
+		// practice.
+		// TODO(cch): deal with the special case where this assertion fails.
+		AMREX_ASSERT(0.5 * (px * px + py * py + pz * pz) / rho_new <= e_kinetic_max);
+
+		// Find analytical solution of the following equation:
+		// d_p^2 lambda^2 + 2 d_p p lambda + p^2 - 2 rho_new e_kinetic_max = 0
+		// This quadratic equation, denoted as F(x) = 0, has some known properties which make the
+		// solution well constrained:
+		// 1. F(0) < 0 (see assertion above)
+		// 2. F(1) > 0 (otherwise we won't be in this else clause)
+		// Therefore, there must be one and only one solution in the range [0, 1], and it's the bigger
+		// one of the two solutions (so we take the plus sign in the quadratic formula).
+		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);
+		const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);
+		const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max);
+		const double discriminant = (b * b) - (4.0 * a * c);
+		AMREX_ASSERT(discriminant >= 0.0);
+		const double lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
+		AMREX_ASSERT(lambda >= 0.0);
+		AMREX_ASSERT(lambda <= 1.0);
+
+		// assert that lambda is a valid solution
+		AMREX_ASSERT_WITH_MESSAGE(std::abs((0.5 *
+						    ((px + lambda * d_px) * (px + lambda * d_px) + (py + lambda * d_py) * (py + lambda * d_py) +
+						     (pz + lambda * d_pz) * (pz + lambda * d_pz)) /
+						    rho_new) -
+						   e_kinetic_max) <= 1.0e-10 * e_kinetic_max,
+					  "lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
+
+		px_new = px + lambda * d_px;
+		py_new = py + lambda * d_py;
+		pz_new = pz + lambda * d_pz;
+	}
+
+	const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
+	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
+	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
+
+	// // log the state, for debugging on CPU.
+	// if (d_rho / rho > 1.0e-12) {
+	// 	// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
+	// 	// e_tot_new
+	// 	printf("original: rho = %e, px = %e, py = %e, pz = %e, e_int = %e, e_tot = %e\n", rho, px, py, pz, e_int, e_tot);
+	// 	printf("new: rho_new = %e, px_new = %e, py_new = %e, pz_new = %e, e_int_new = %e, e_tot_new = %e\n", rho_new, px_new,
+	// 	       py_new, pz_new, e_int_new, e_tot_new);
+	// 	// print d e_int / d e_tot
+	// 	printf("d e_int / d e_tot = %e\n", (e_int_new - e_int) / (e_tot_new - e_tot));
+	// 	printf("e_int / rho = %e, e_int_new / rho_new = %e\n", e_int / rho, e_int_new / rho_new);
+	// }
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state,
+								     amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
+{
+	// For SN_thermal_only, the buffer contains only mass and energy (and a small amount of momentum), so it's safe to add the
+	// buffer directly to the state.
+	const double rho_new = local_state(i, j, k, HydroSystem<problem_t>::density_index) + local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+	const double px_new = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+	const double py_new = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+	const double pz_new = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+	const double e_new = local_state(i, j, k, HydroSystem<problem_t>::energy_index) + local_buffer(i, j, k, HydroSystem<problem_t>::energy_index);
+	const double e_int_new = e_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+
+	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
+	local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
+	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
+	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_new;
+}
+
+template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
+{
+	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		auto const &local_state = state.array(mfi);
+		auto const &local_buffer = state_buffer.array(mfi);
+
+		// add buffer to state
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			if (SN_scheme_d == SNScheme::SN_thermal_only) {
+				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k);
+			} else {
+				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k);
+			}
+		});
+	}
+}
 
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
 template <typename ContainerType>
@@ -163,14 +465,39 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 				// Check if this is a supernova progenitor
 				const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
-				// Update the particle's evolution stage to SNRemnant if it is a progenitor and the end of the current time step is greater than
-				// the death time.
+				// Update the particle's evolution stage to SNRemnant if it's time
 				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
 					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
 				}
 			});
 		}
 	}
+}
+
+} // namespace SNFeedbackUtils
+
+template <typename ContainerType, typename problem_t>
+void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		  int evolutionStageIndex, int birthTimeIndex)
+{
+	static_assert(SN_stencil_size <= 3,
+		      "SN_stencil_size must be <= 3"); // SN_stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
+
+	// Zero the buffer for each particle type
+	state_buffer.setVal(0.0);
+
+	// copy host variables to device
+	const SNScheme SN_scheme_d = SN_scheme;
+
+	// Step 1: Local deposition within each box
+	SNFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
+								   birthTimeIndex, SN_scheme_d);
+
+	// Step 2: Sum boundary values
+	state_buffer.SumBoundary(container->Geom(lev).periodicity());
+
+	// Step 3: Add the buffer to the state
+	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d);
 }
 
 #endif // AMREX_SPACEDIM == 3

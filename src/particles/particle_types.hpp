@@ -20,7 +20,8 @@ enum class ParticleSwitch : unsigned int {
 	Rad = bitflag<2>(),		     // Radiation particles, = 0b0010
 	CICRad = bitflag<3>(),		     // Combined gravitating-radiating particles, = 0b0100
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
-	Test = bitflag<5>()		     // Test particles with all features enabled, = 0b1000
+	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
+	Test = bitflag<6>()		     // Test particles with all features enabled, = 0b100000
 };
 
 // Enable bitwise operations on the enum class
@@ -72,18 +73,17 @@ enum class ParticleType {
 	CIC,		      // Gravitating particles
 	CICRad,		      // Gravitating radiation particles
 	StochasticStellarPop, // Stellar population particles
+	Sink,		      // Sink particles
 	Test		      // Test particles with all features enabled
 };
 
-// Global particle parameters
-// The 'inline' keyword is used here to avoid multiple definition errors when this header
-// is included in multiple source files. It ensures that all translation units that include
-// this header will refer to the same instance of these variables, rather than creating
-// their own copies.
-inline amrex::Real particle_param1 = -1.0; // NOLINT
-inline amrex::Real particle_param2 = -1.0; // NOLINT
-inline amrex::Real particle_param3 = -1.0; // NOLINT
-inline int particle_verbose = 0;	   // NOLINT print particle logistics
+// Enum for SN schemes: ThermalOnly, ThermalAndMomentum
+enum class SNScheme {
+	SN_thermal_only,			// pure thermal
+	SN_thermal_or_thermal_momentum,		// pure thermal (RM<1) or thermal+momentum (RM>=1)
+	SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
+	SN_pure_kinetic_or_thermal_momentum	// pure kinetic (RM<1) or thermal+momentum (RM>=1)
+};
 
 //-------------------- Radiation particles --------------------
 
@@ -166,7 +166,7 @@ enum class StellarEvolutionStage {
 
 //-------------------- Stellar population particles --------------------
 
-// Indices for stellar population particles (StochasticStellarPop_particles), mass + 3 velocity components + fate + luminosity
+// Indices for StochasticStellarPop_particles
 enum StochasticStellarPopParticleDataIdx {
 	StochasticStellarPopParticleMassIdx = 0,  // Mass of the particle
 	StochasticStellarPopParticleVxIdx,	  // Velocity in x direction
@@ -190,7 +190,7 @@ constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 }();
 
 // Number of integer components for StochasticStellarPop_particles
-constexpr int StochasticStellarPopParticleIntComps = 1; // fate
+constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
 
 // Type definitions for StochasticStellarPop_particles container and iterator
 template <typename problem_t>
@@ -214,7 +214,7 @@ enum TestParticleDataIdx {
 
 constexpr int TestParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
 
-// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
+// Number of real components for Test_particles
 template <typename problem_t>
 constexpr int TestParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -230,6 +230,23 @@ constexpr int TestParticleIntComps = 1; // stellar evolution stage
 // Type definitions for Test_particles container and iterator
 template <typename problem_t> using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps<problem_t>, TestParticleIntComps>;
 template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestParticleRealComps<problem_t>, TestParticleIntComps>;
+
+//-------------------- Sink particles --------------------
+
+// Indices for Sink_particles
+enum SinkParticleDataIdx {
+	SinkParticleMassIdx = 0, // Mass of the particle
+	SinkParticleVxIdx,	 // Velocity in x direction
+	SinkParticleVyIdx,	 // Velocity in y direction
+	SinkParticleVzIdx,	 // Velocity in z direction
+};
+
+// Number of real components for Sink_particles
+constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
+
+// Type definitions for Sink_particles container and iterator
+using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
+using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 #endif // AMREX_SPACEDIM == 3
 
@@ -255,6 +272,14 @@ inline auto get_units_data() -> const auto &
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::Sink,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
+	       {"death_time", {0, 0, 1, 0}},
+	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
@@ -270,6 +295,26 @@ inline auto get_units_data() -> const auto &
 // 1. For massive particles, velocity components start after mass
 // 2. Birth time, if existing, is always followed by death time
 
+// Global particle parameters
+// The 'inline' keyword is used here to avoid multiple definition errors when this header
+// is included in multiple source files. It ensures that all translation units that include
+// this header will refer to the same instance of these variables, rather than creating
+// their own copies.
+
+// Disable SN feedback when a particle evolves from SNProgenitor to SNRemnant
+inline bool disable_SN_feedback = false; // NOLINT
+
+// Placeholder parameters for particles. Used in gravity_3d.cpp tests
+inline amrex::Real particle_param1 = -1.0; // NOLINT
+inline amrex::Real particle_param2 = -1.0; // NOLINT
+inline amrex::Real particle_param3 = -1.0; // NOLINT
+
+// Scheme for SN feedback
+inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
+
+// Verbosity for particle operations
+inline int particle_verbose = 0; // NOLINT print particle logistics
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -280,9 +325,17 @@ inline void particleParmParse()
 {
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
+	pp.query("disable_SN_feedback", disable_SN_feedback);
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
 	pp.query("param3", particle_param3);
+
+	// Handle SNScheme enum
+	int sn_scheme_int = static_cast<int>(SN_scheme);
+	pp.query("SN_scheme", sn_scheme_int);
+	SN_scheme = static_cast<SNScheme>(sn_scheme_int);
+
+	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
 }
 
