@@ -259,8 +259,7 @@ auto problem_main() -> int
 	const int idim = 0;
 	const int ncomp = sim.state_new_fc_[0][idim].nComp();
 	const int nghost = sim.state_new_fc_[0][idim].nGrow();
-	amrex::MultiFab state_ref_level0(amrex::convert(sim.boxArray(0), amrex::IntVect::TheDimensionVector(idim)), sim.DistributionMap(0),
-						ncomp, nghost);
+	amrex::MultiFab state_ref_level0(amrex::convert(sim.boxArray(0), amrex::IntVect::TheDimensionVector(idim)), sim.DistributionMap(0), ncomp, nghost);
 	sim.computeReferenceSolution_fc(state_ref_level0, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), quokka::direction{1});
 
 	// extract the exact solution at y = z = 0
