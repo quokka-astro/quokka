@@ -1415,7 +1415,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				BL_PROFILE("SyncKickParticles: PostFillBoundary");
 				amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 			}
-			
+
 			// physical boundaries
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
