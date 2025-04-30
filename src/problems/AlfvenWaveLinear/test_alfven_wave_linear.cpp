@@ -273,6 +273,7 @@ auto problem_main() -> int
 		for (int i = 0; i < position.size(); ++i) {
 			xs[i] = position[i];
 			bfield[i] = values[MHDSystem<AlfvenWaveLinear>::bfield_index + 1][i];
+			amrex::Print() << "x = " << xs[i] << ", bfield = " << bfield[i] << "\n";
 		}
 
 #ifdef HAVE_PYTHON
