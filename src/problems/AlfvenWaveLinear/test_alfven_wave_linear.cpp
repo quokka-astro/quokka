@@ -17,6 +17,10 @@
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include "physics_info.hpp"
+#include "util/fextract.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 struct AlfvenWaveLinear {
 };
@@ -146,6 +150,11 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	}
 }
 
+// void ComputeExactSolution(double x, double time)
+// {
+
+// }
+
 template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract grid information
@@ -246,6 +255,33 @@ auto problem_main() -> int
 	sim.computeReferenceSolution_ = true;
 	sim.setInitialConditions();
 	sim.evolve();
+
+	const int idim = 0;
+	const int ncomp = sim.state_new_fc_[0][idim].nComp();
+	const int nghost = sim.state_new_fc_[0][idim].nGrow();
+	amrex::MultiFab state_ref_level0(amrex::convert(sim.boxArray(0), amrex::IntVect::TheDimensionVector(idim)), sim.DistributionMap(0),
+						ncomp, nghost);
+	sim.computeReferenceSolution_fc(state_ref_level0, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), quokka::direction{1});
+
+	// extract the exact solution at y = z = 0
+	auto [position, values] = fextract(state_ref_level0, sim.geom[0], 0, 0.0);
+
+	// plot the exact solution
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::vector<double> xs(position.size());
+		std::vector<double> bfield(position.size());
+		for (int i = 0; i < position.size(); ++i) {
+			xs[i] = position[i];
+			bfield[i] = values[MHDSystem<AlfvenWaveLinear>::bfield_index + 1][i];
+		}
+
+#ifdef HAVE_PYTHON
+		matplotlibcpp::plot(xs, bfield);
+		matplotlibcpp::xlabel("x");
+		matplotlibcpp::ylabel("B");
+		matplotlibcpp::save("./bfield.pdf");
+#endif
+	}
 
 	// Compute test success condition
 	int status = 0;
