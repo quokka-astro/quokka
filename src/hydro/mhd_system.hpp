@@ -349,8 +349,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// 			const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 	// 			// extrapolate face-centered components to the cell-edge
 	// 			MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ux[wcomp].array(), ec_fabs_Ui_ieside[icomp][0].array(),
-	// ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder); 			MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(),
-	// ec_fabs_Bi_ieside[icomp][0].array(), ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+	// ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder); 			MHDSystem<problem_t>::ReconstructTo(dir2edge,
+	// fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(), ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 
 	// 			int tmp = 0; // TODO: for debuging. remove
 	// 		}
