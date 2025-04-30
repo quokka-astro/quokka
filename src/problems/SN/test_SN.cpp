@@ -8,6 +8,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
+#include "math/interpolate.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
