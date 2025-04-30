@@ -58,6 +58,7 @@ add_subdirectory(RadhydroBB)
 add_subdirectory(AlfvenWaveLinear)
 add_subdirectory(AlfvenWaveCircular)
 add_subdirectory(CurrentSheet)
+add_subdirectory(FastWave)
 
 add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(Cooling)
