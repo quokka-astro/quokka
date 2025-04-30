@@ -4,6 +4,8 @@
 /// \brief Defines a test problem for sink particles.
 ///
 
+#include "math/interpolate.hpp"
+
 // function definitions
 auto problem_main() -> int;
 
