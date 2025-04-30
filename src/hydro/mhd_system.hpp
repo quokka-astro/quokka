@@ -210,8 +210,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				// extrapolate face-centered magnetic components to the cell-edge
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
 								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
-
-				int tmp = 0; // TODO: for debuging. remove
 			}
 
 			// indexing: field[4: quadrant around edge]
@@ -236,11 +234,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 					const double b1 = B1_qi(i, j, k);
 					double uxb = u0 * b1 - u1 * b0;
 					E2_qi(i, j, k) = uxb;
-
-					int tmp = 0;
 				});
-
-				int tmp = 0; // TODO: for debuging. remove
 			}
 
 			// extract wavespeeds
@@ -290,8 +284,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 						   fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
 						   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
 			});
-
-			int tmp = 0; // TODO: for debuging. remove
 		}
 	}
 
@@ -352,7 +344,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder); 			MHDSystem<problem_t>::ReconstructTo(dir2edge,
 	// fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(), ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 
-	// 			int tmp = 0; // TODO: for debuging. remove
 	// 		}
 
 	// 		// indexing: field[4: quadrant around edge]
@@ -551,7 +542,6 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 			    fc_consVarOld[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + dt * db_dt;
 		});
 
-		int tmp = 0; // TODO: for debuging. remove
 	}
 }
 
