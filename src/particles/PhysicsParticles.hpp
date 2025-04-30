@@ -892,7 +892,7 @@ template <typename problem_t> class PhysicsParticleRegister
 															    -1, true, false, -1, true);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, true);
+			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
 		} else {
 			amrex::Abort("Unknown particle type for star particles");
 		}
