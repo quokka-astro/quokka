@@ -37,7 +37,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int nghost_fc, int reconstructionOrder, amrex::Geometry geom,
 			       double time);
 
-	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, const int reconstructionOrder);
+	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid,
+				  const int reconstructionOrder);
 
 	static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
@@ -49,7 +50,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &/*fcx_mf_vel*/,
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const & /*fcx_mf_vel*/,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int /*nghost_fc*/, int reconstructionOrder,
 				      amrex::Geometry /*geom*/, double /*time*/)
 {
@@ -504,8 +505,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, double dt,
-					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
-					     double time)
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo, double time)
 {
 	// compute the total right-hand-side for the MOL integration
 
