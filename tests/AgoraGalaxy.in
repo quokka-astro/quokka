@@ -25,7 +25,7 @@ do_reflux = 1
 do_subcycle = 0
 
 cfl = 0.3
-max_timesteps = 100
+max_timesteps = 1000
 stop_time = 6.3e15         # 200 Myr
 
 cooling.enabled = 1
@@ -33,8 +33,9 @@ cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = grackle
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012.h5"
 temperature_floor = 1e4
+density_floor = 1e-30
 
-checkpoint_interval = -1
+checkpoint_interval = 100
 plotfile_interval = 10
 derived_vars = temperature gpot
 
@@ -57,4 +58,4 @@ agora_galaxy.disk_perturb_amplitude = 1.0   # dimensionless
 agora_galaxy.disk_perturb_Rmax_kpc = 20.0   # kpc
 
 agora_galaxy.halo_temperature = 1.0e6       # K
-agora_galaxy.halo_number_density = 1.0e-6   # cm^-3
+agora_galaxy.halo_number_density = 1.0e-4   # cm^-3
