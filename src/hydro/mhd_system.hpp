@@ -505,7 +505,8 @@ template <typename problem_t>
 void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
 					     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, double dt,
-					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*prob_lo*/, double /*time*/)
+					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*prob_lo*/,
+					     double /*time*/)
 {
 	// compute the total right-hand-side for the MOL integration
 
