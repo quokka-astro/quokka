@@ -209,7 +209,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						  (1. - gcem::pow(m_star_high / m_imf_max, 1.0 - alpha)); // average mass of high mass stars
 
 	ParticleCreationTraits() = default;
-	
+
 	template <typename problem_t> struct ParticleChecker {
 		amrex::Real current_time;
 		amrex::Real dt;
