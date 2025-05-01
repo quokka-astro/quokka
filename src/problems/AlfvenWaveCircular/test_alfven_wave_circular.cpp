@@ -59,17 +59,17 @@ const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
 
 const double omega = std::sqrt(std::pow(alfven_speed, 2.0) * std::pow(k_amplitude, 2.0));
 
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_x(double x1, double x2, double x3, double time)
+AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double /*x2*/, double x3, double time) -> double
 {
 	return bg_mag_amplitude * delta_b * x3 * std::sin(omega * time - k_amplitude * x1);
 }
 
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_y(double x1, double x2, double x3, double time)
+AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/, double /*x3*/, double time) -> double
 {
 	return -bg_mag_amplitude * delta_b / k_amplitude * std::sin(omega * time - k_amplitude * x1);
 }
 
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_z(double x1, double x2, double x3, double time) { return bg_mag_amplitude * x2; }
+AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double x2, double /*x3*/, double /*time*/) -> double { return bg_mag_amplitude * x2; }
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
@@ -80,8 +80,6 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real x3_L = prob_lo[2] + k * dx[2];
 
 	const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
-	const amrex::Real x2_C = x2_L + static_cast<amrex::Real>(0.5) * dx[1];
-	const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
 
 	if (cen == quokka::centering::cc) {
 		const double sin_wave_C = std::sin(omega * time - k_amplitude * x1_C);

@@ -1755,11 +1755,9 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fast_mhd_wavespeeds;
 
-	int nghost_extra_mhd;
+	int nghost_extra_mhd = 0;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		nghost_extra_mhd = 1;
-	} else {
-		nghost_extra_mhd = 0;
 	}
 	for (int idim = 0; idim < 3; ++idim) {
 		flatCoefs[idim] = amrex::MultiFab(ba_cc, dm, 1, nghost_flattening + nghost_extra_mhd);
