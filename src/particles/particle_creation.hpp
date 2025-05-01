@@ -179,7 +179,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr double log_m_imf_break = 33.298634783124434; // Log10 (m_imf_break)
 	static constexpr double log_m_imf_min = 32.20172477011638;    // Log(m_imf_min)
 	static constexpr double sqrt_2 = 1.4142135623730951;	      // sqrt(2.0)
-	static constexpr double arg_m_imf_break = 0.8986298725672532; //(log_m_imf_break - imf_mu) / (sqrt_2 * imf_disp);
+	static constexpr double arg_m_imf_break = (log_m_imf_break - imf_mu) / (sqrt_2 * imf_disp);
 	static constexpr double arg_m_imf_min = (log_m_imf_min - imf_mu) / (sqrt_2 * imf_disp);
 	static constexpr double pow_alpha_m_imf_max = 4.147289859088856e-13;	// pow(m_imf_max, 2.0 - alpha);
 	static constexpr double pow_alpha_m_imf_break = 2.215530973426628e-12;	// pow(m_imf_break, 2.0 - alpha);
