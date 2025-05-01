@@ -11,7 +11,7 @@ In the first, we assume that every cell that is Jeans unstable definitely forms 
 
 We circumvent this by associating a probability P to the process of spawning a star in the cell. A choice for P $=\epsilon_{\rm ff} \cdot dt/\epsilon_{*}$, which is ratio of the expected from the star formation rate in the cell over the timestep dt ($\epsilon_{\rm ff} dt/t_{\rm ff}$) to the fraction of mass available for star formation ($\epsilon_{\rm ff} M$). It should be noted that this is the probability for $\epsilon_{\rm ff}$ averaged over the timestep rather than for the instantaneous star formation rate, which should be integrated over the timestep dt. 
 
-Both the descriptions of P, from assuming a star formation rate averaged over timestep or an instantaneous star formation rate, lead to identical expression of P if $dt<t_{\rm ff}$. However, if we are in the regime of $dt>t_{\rm ff}$ neither prescriptions of P offer the correct answer because they rely on conditions at the beginning of the timestep. 
+Both the descriptions of P, from assuming a star formation rate averaged over timestep or an instantaneous star formation rate, lead to identical expression of P if $dt<t_{\rm ff}$. Because we operator-split the process of star formation from the hydrodynamic update, it is important to note that we should not expect to get exactly the correct star formation rate for time steps that are large compared to $t_{\rm ff}. We do not explicitly enforce this as a constraint on the time step, but in practice the CFL condition will almost always guarantee that $dt << t_{\rm ff}$.
 
 
 ## Estimating number and type of stars
