@@ -179,7 +179,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr double log_m_imf_break = 33.298634783124434; // Log10 (m_imf_break)
 	static constexpr double log_m_imf_min = 32.20172477011638;    // Log(m_imf_min)
 	static constexpr double sqrt_2 = 1.4142135623730951;	      // sqrt(2.0)
-	static constexpr double arg_m_imf_break = 0.8986298725672532; //(log_m_imf_break - imf_mu) / (sqrt_2 * imf_disp);
+	static constexpr double arg_m_imf_break = (log_m_imf_break - imf_mu) / (sqrt_2 * imf_disp);
 	static constexpr double arg_m_imf_min = (log_m_imf_min - imf_mu) / (sqrt_2 * imf_disp);
 	static constexpr double pow_alpha_m_imf_max = 4.147289859088856e-13;	// pow(m_imf_max, 2.0 - alpha);
 	static constexpr double pow_alpha_m_imf_break = 2.215530973426628e-12;	// pow(m_imf_break, 2.0 - alpha);
@@ -209,24 +209,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						  (1. - gcem::pow(m_star_high / m_imf_max, 1.0 - alpha)); // average mass of high mass stars
 
 	ParticleCreationTraits() = default;
-	// Here we calculate the fraction of high mass stars and the average mass of high mass stars
-	//... by assuming a Chabrier IMF which has a lognormal distribution for masses above m_imf_break
-	//... and a powerlaw before larger masses.
-	// fstar_high sets the mass of the high mass stars in a cell (=particle mass * fstar_high)
-	// m_star_high_avg is the average mass of the high mass stars in a cell
-	// Checkout docs/star_formation for more details
-
-	// auto arg = [](double mass) -> double { return (std::log10(mass) - imf_mu) / std::sqrt(2.0 * imf_disp * imf_disp); };
-	// double const norm_ratio =
-	//     std::pow(m_imf_break, (1 - alpha)) * imf_disp * std::sqrt(2.0 * M_PI) / std::exp(-arg(m_imf_break) * arg(m_imf_break));
-
-	// double const total_stars = ((1. - alpha) * norm_ratio * (std::erf(arg(m_imf_break)) - std::erf(arg(m_imf_min)))) +
-	// 			   std::pow(m_imf_max, 1.0 - alpha) - std::pow(m_imf_break, 1.0 - alpha);
-	// double const num_high_mass_stars = std::pow(m_imf_max, 1.0 - alpha) - std::pow(m_star_high, 1.0 - alpha);
-
-	// fstar_high = num_high_mass_stars / total_stars;
-	// m_star_high_avg = m_imf_max * ((alpha - 1.0) / (alpha - 2.0)) * (1. - std::pow(m_star_high / m_imf_max, 2.0 - alpha)) /
-	// 		  (1. - std::pow(m_star_high / m_imf_max, 1.0 - alpha));
 
 	template <typename problem_t> struct ParticleChecker {
 		amrex::Real current_time;
