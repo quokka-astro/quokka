@@ -235,11 +235,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) = 0;
+	virtual void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) = 0;
 	virtual void createInitialRadParticles() = 0;
 #if AMREX_SPACEDIM == 3
 	virtual void createInitialCICParticles() = 0;
 	virtual void createInitialCICRadParticles() = 0;
 	virtual void createInitialStochasticStellarPopParticles() = 0;
+	virtual void createInitialSinkParticles() = 0;
 	virtual void createInitialTestParticles() = 0;
 	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
 	// of the simulation
@@ -481,6 +483,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
+	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 #endif // AMREX_SPACEDIM == 3
 #endif
@@ -1389,19 +1392,29 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInteraction(amrex::Real time, amrex::Real dt)
 {
-	// Support up to 4 ghost cells for SN deposition. Default is 3, same as the TIGRESS model.
-	const int nghost = 3;
+	// Need 4 ghost cells for SN deposition with a SNR radius of 3 dx.
+	const int nghost = 4;
 
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
-	// Create a MultiFab with 6 components (density, 3 x momentum, internal energy, energy) to hold the SN deposition
-	amrex::MultiFab state_buffer_at_level_cc(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
+	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
+	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
+
+	accretion_rate_at_level.setVal(0.0);
+
+	// Sink accretion, stage 1: compute the accretion rate
+	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+
+	// Sink formation. To be implemented later. We use accretion_rate_at_level to limit star formation at accretion sites. One way to do this
+	// is to disallow star formation if at least one of the cells in the formation region has a positive accretion rate.
+	// particleRegister_.applySinkFormation(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+
+	// Sink accretion, stage 2: update the particle states
+	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
-	particleRegister_.depositSN(state_new_cc_[lev], state_buffer_at_level_cc, lev, time, dt);
-
-	// Sink accretion, to be implemented
+	particleRegister_.depositSN(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 }
 #endif // AMREX_SPACEDIM == 3
 
@@ -2259,6 +2272,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		createInitialStochasticStellarPopParticles();
 	}
 
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
+		AMREX_ASSERT(SinkParticles == nullptr);
+
+		// Create particle container
+		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
+		SinkParticles->SetVerbose(0);
+
+		// Register with particle register - Sink particles allow creation
+		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
+
+		// Initialize particles through user-defined function
+		createInitialSinkParticles();
+	}
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
 		AMREX_ASSERT(TestParticles == nullptr);
 
@@ -3031,6 +3057,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
 		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
 		StochasticStellarPopParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::StochasticStellarPop));
+	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
+		AMREX_ASSERT(SinkParticles == nullptr);
+		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
+		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
+		SinkParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Sink));
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
