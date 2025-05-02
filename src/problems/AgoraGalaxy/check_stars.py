@@ -3,7 +3,6 @@ import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 from math import *
-import sys
 
 Msun = 1.99e33
 seconds_in_yr = 3.15e7
