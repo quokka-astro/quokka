@@ -1233,11 +1233,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].setVal(0);
 		}
 
+#if 0
 		// sync before rhs
 		{
 			BL_PROFILE("SyncGravitySolver: PreDepositMass");
 			amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 		}
+#endif
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			fillPoissonRhsAtLevel(rhs[lev], lev);
@@ -1249,22 +1251,26 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
 #endif
 
+#if 0
 		// sync after rhs
 		{
 			BL_PROFILE("SyncGravitySolver: PostDepositMass");
 			amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 		}
+#endif
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 		}
 
+#if 0
 		// sync before solve
 		{
 			BL_PROFILE("SyncGravitySolver: PreSolve");
 			amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 		}
+#endif
 
 		amrex::Real abstol = abstolPoisson_ * rhs_min;
 		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
@@ -1272,11 +1278,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::Print() << "\n";
 		}
 
+#if 0
 		// sync after solve
 		{
 			BL_PROFILE("SyncGravitySolver: PostSolve");
 			amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 		}
+#endif
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1401,21 +1409,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 		// Fill remaining ghost cells
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+#if 0
 			// sync before FB
 			{
 				BL_PROFILE("SyncKickParticles: PreFillBoundary");
 				amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 			}
-
+#endif
 			// internal boundaries
 			accel[lev][idim].FillBoundary(geom[lev].periodicity());
-
+#if 0
 			// sync after FB
 			{
 				BL_PROFILE("SyncKickParticles: PostFillBoundary");
 				amrex::ParallelDescriptor::Barrier(amrex::ParallelContext::CommunicatorSub());
 			}
-
+#endif
 			// physical boundaries
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
