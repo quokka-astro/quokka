@@ -62,8 +62,8 @@ if __name__ == "__main__":
         # sum mass below, above the mass cut
         max_death_time = np.max(death_time)
         print(f"max death time: {max_death_time:e}")
-        is_composite = (death_time > 1e300) # this is a hack
-        print(f"number of low-mass particles (death_time > 1e300): {np.count_nonzero(is_composite)}")
+        is_composite = (death_time > 1e100) # this is a hack
+        print(f"number of low-mass particles (death_time > 1e100): {np.count_nonzero(is_composite)}")
 
         total_mass = np.sum(mass)
         total_low_mass = np.sum(mass[is_composite])
