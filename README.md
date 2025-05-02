@@ -39,3 +39,4 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 
 ## Problems?
 If you run into problems, please start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support. If you discover a bug, please let us know by opening an [Issue](https://github.com/BenWibking/quokka/issues).
+
