@@ -1,9 +1,9 @@
 import yt
 import numpy as np
 import argparse
-import matplotlib
 import matplotlib.pyplot as plt
 from math import *
+import sys
 
 Msun = 1.99e33
 seconds_in_yr = 3.15e7
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("plotfiles", nargs='*')
     args = parser.parse_args()
 
-    for my_plotfile in args.plotfiles:
+    for i, my_plotfile in enumerate(args.plotfiles):
         # load data
         ds = yt.load(my_plotfile)
         field_prefix, field_name = zip(*ds.field_list)
@@ -50,24 +50,41 @@ if __name__ == "__main__":
         vz = ad[('StochasticStellarPop_particles', 'particle_real_comp3')]
         birth_time = ad[('StochasticStellarPop_particles', 'particle_real_comp4')].value
         death_time = ad[('StochasticStellarPop_particles', 'particle_real_comp5')].value
-
+        stage = ad[('StochasticStellarPop_particles', 'particle_int_comp0')].value
+        
         # filter by age
         print(f"current time: {ds.current_time.value/seconds_in_yr/1.0e6:f} Myr")
         age = np.ones_like(birth_time) * ds.current_time.value - birth_time
-        age_cut = 3.0e6 * seconds_in_yr
-        mass = mass[age < age_cut]
+        age_cut = age < (3.0e6 * seconds_in_yr)
+        mass = mass[age_cut]
+        stage = stage[age_cut]
         print(f"number of young stars (< 3 Myr): {len(mass)}")
         
         # sum mass below, above the mass cut
-        mass_cut = 8.0 * Msun
+        max_death_time = np.max(death_time)
+        print(max_death_time)
+        is_composite = (death_time == max_death_time) # this is a hack
+        print(f"number of low-mass particles: {np.count_nonzero(is_composite)}")
+
         total_mass = np.sum(mass)
-        total_low_mass = np.sum(mass[mass < mass_cut])
-        total_high_mass = np.sum(mass[mass >= mass_cut])
-        print(f"total mass of low mass stars: {total_low_mass / Msun:e} Msun")
+        total_low_mass = np.sum(mass[is_composite])
+        mean_low_mass = np.mean(mass[is_composite])
+        median_low_mass = np.median(mass[is_composite])
+        total_high_mass = np.sum(mass[~is_composite])
+        mean_high_mass = np.mean(mass[~is_composite])
+        median_high_mass = np.median(mass[~is_composite])
+        print(f"total mass of low mass star particles: {total_low_mass / Msun:e} Msun")
+        print(f"mean mass of low mass star particles: {mean_low_mass / Msun:.3f} Msun")
+        print(f"median mass of low mass star particles: {median_low_mass / Msun:.3f} Msun")
         print(f"total mass of high mass stars: {total_high_mass / Msun:e} Msun")
+        print(f"mean mass of high mass stars: {mean_high_mass / Msun:.3f} Msun")
+        print(f"median mass of high mass stars: {median_high_mass / Msun:.3f} Msun")
         print(f"high mass / total mass: {total_high_mass / total_mass:.3f}")
         print(f"(expected) high mass / total mass: {compute_fstar_high():.3f}")
 
+        # filter out low-mass particles
+        mass = mass[~is_composite]
+        
         # make histogram of stellar masses
         mass_in_Msun = mass / Msun
 
@@ -84,6 +101,7 @@ if __name__ == "__main__":
         alpha = -2.35 # Salpeter dN/dM power-law slope
         norm = 1e6 # arbitrary
         m = np.logspace(0, np.log10(max_mass), nbins)
+        plt.title(f"t = {ds.current_time.value / 1.0e6 / seconds_in_yr:.2f} Myr")
         plt.plot(m, norm * m**alpha, '--', label='Salpeter IMF')
         plt.errorbar(bin_cen, dN_dM, yerr=dNdM_err, label='stellar masses')
         plt.legend()
@@ -92,4 +110,5 @@ if __name__ == "__main__":
         plt.ylabel(r'$dN/dM$')
         plt.xlabel(r'stellar mass ($M_{\odot}$)')
         plt.tight_layout()
-        plt.savefig("stellar_mf.pdf")
+        plt.savefig(f"stellar_mf_{i:05}.png")
+        plt.clf()
