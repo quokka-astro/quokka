@@ -31,7 +31,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
-const double sf_cell_density = 1.0e8 * C::m_p; // g cm^-3
+const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
@@ -73,7 +73,7 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 		const double x = prob_lo[0] + (i * dx[0]);
 		const double y = prob_lo[1] + (j * dx[1]);
 		const double z = prob_lo[2] + (k * dx[2]);
-		if (x < sf_cell_loc && x + dx[0] > sf_cell_loc && y < sf_cell_loc && y + dx[1] > sf_cell_loc && z < sf_cell_loc && z + dx[2] > sf_cell_loc) {
+		if (x <= sf_cell_loc && x + dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
 			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density;
 		} else {
 			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
