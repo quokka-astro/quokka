@@ -76,9 +76,9 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 
-					if (pcounts[index] > 0) {									 // NOLINT
-						const int num_particles = pcounts[index];						 // NOLINT
-						auto *particles = &pdata[poffset[index]];						 // NOLINT
+					if (pcounts[index] > 0) {										 // NOLINT
+						const int num_particles = pcounts[index];							 // NOLINT
+						auto *particles = &pdata[poffset[index]];							 // NOLINT
 						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index], engine); // NOLINT
 					}
 				});
@@ -137,7 +137,8 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset, amrex::RandomEngine const &engine) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::RandomEngine const &engine) const
 		{
 			// Default implementation does nothing
 			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset, engine);
@@ -267,7 +268,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset, amrex::RandomEngine const &engine) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::RandomEngine const &engine) const
 		{
 
 			if (mass_idx + 3 < ParticleType::NReal) {
