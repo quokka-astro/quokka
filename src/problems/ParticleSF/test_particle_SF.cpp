@@ -23,16 +23,12 @@
 struct SinkProblem {
 };
 
-static bool refine_half_domain = false; // NOLINT
-
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 const double rho0 = 1.0 * C::m_p; // g cm^-3
 const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
-
-static std::string particles_file = "Sink.txt"; // NOLINT
 
 template <> struct Particle_Traits<SinkProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -60,14 +56,6 @@ template <> struct Physics_Traits<SinkProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
-{
-	// read particles from ASCII file
-	const int nreal_extra = 4; // mass vx vy vz
-	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
-}
-
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -87,24 +75,18 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 
 template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement: static mesh refinement for the whole domain (if refine_half_domain is false) or for x > 0 (if refine_half_domain is true)
+	// tag cells for refinement: static mesh refinement for the whole domain
 
 	auto const &dx = geom[lev].CellSizeArray();
 	auto const &plo = geom[lev].ProbLoArray();
 	auto const &phi = geom[lev].ProbHiArray();
-	const bool refine_half_domain_ = refine_half_domain;
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto tag = tags.array(mfi);
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const double x_frac = ((i + 0.5) * dx[0]) / (phi[0] - plo[0]);
-			const double y_frac = ((j + 0.5) * dx[1]) / (phi[1] - plo[1]);
-			const double z_frac = ((k + 0.5) * dx[2]) / (phi[2] - plo[2]);
-			if (!refine_half_domain_ || (x_frac >= 0.7 && x_frac <= 0.8 && y_frac >= 0.3 && y_frac <= 0.7 && z_frac >= 0.3 && z_frac <= 0.7)) {
-				tag(i, j, k) = amrex::TagBox::SET;
-			}
+			tag(i, j, k) = amrex::TagBox::SET;
 		});
 	}
 }
@@ -128,23 +110,13 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// // periodic boundaries
-			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			// octant symmetry
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
+			// periodic boundaries
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
-	amrex::ParmParse const pp("problem");
-	pp.query("particles_file", particles_file);
-	pp.query("refine_half_domain", refine_half_domain);
+	// amrex::ParmParse const pp("problem");
 
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim(BCs_cc);
@@ -157,31 +129,33 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	// get total mass of the initial gas
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	double total_total_mass = NAN;
-	double total_total_mass_final = NAN;
-	double total_particle_mass = 0.0;
+	// // get total mass of the initial gas
+	// amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	// amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	// amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	// double total_total_mass = NAN;
+	// double total_total_mass_final = NAN;
+	// double total_particle_mass = 0.0;
 
-	// get total particle mass
-	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
-		// d[3]; });
-		for (const auto &p : real_data) {
-			total_particle_mass += p[3];
-		}
-		total_total_mass = total_mass_init + total_particle_mass;
-		amrex::Print() << "\nBefore evolution:\n";
-		amrex::Print() << "Total gas mass = " << total_mass_init << "\n";
-		amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";
-		amrex::Print() << "Total total mass = " << total_total_mass << "\n";
-	}
+	// // get total particle mass
+	// const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	// if (amrex::ParallelDescriptor::IOProcessor()) {
+	// 	// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
+	// 	// d[3]; });
+	// 	for (const auto &p : real_data) {
+	// 		total_particle_mass += p[3];
+	// 	}
+	// 	total_total_mass = total_mass_init + total_particle_mass;
+	// 	amrex::Print() << "\nBefore evolution:\n";
+	// 	amrex::Print() << "Total gas mass = " << total_mass_init << "\n";
+	// 	amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";
+	// 	amrex::Print() << "Total total mass = " << total_total_mass << "\n";
+	// }
 
 	// evolve
 	sim.evolve();
+
+	return 0;
 
 	// get total mass of the final gas
 	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
