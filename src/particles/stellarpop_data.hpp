@@ -38,7 +38,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	    29.8, 29.9, 30.,  31.,  32.,  33.,	 35.,  40.,   45.,  50.,   55.,	 60.,	70.,  80.,   100., 120., 3.00e2};
 
 	const amrex::GpuArray<Real, FATE_ARR_SIZE> interp_star_fate{
-	    // if fate==1, star goes SN, inject energy!
+	    // if fate==1, star will go SN, inject energy!
+			// if fate==0, star is a low mass star
 	    0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
 	    1., 1., 0., 0., 1., 0., 0., 0., 0., 1., 1., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0., 1., 1., 1., 1., 0., 0., 1., 0., 1.,
 	    1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 1., 1., 1., 1., 1., 0., 0., 1., 0., 1., 1., 1., 0., 0., 1.,
