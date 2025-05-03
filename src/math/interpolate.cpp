@@ -158,10 +158,6 @@ double interpolate_value(double x, double const *arr_x, double const *arr_y, int
 		const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
 		y = slope * (x - arr_x[j]) + arr_y[j];
 	}
-	// TODO: remove
-	if (std::isnan(y)) {
-		printf("x = %f, arr_x = %f, arr_y = %f, j = %lld, arr_len = %d\n", x, arr_x[j], arr_y[j], j, arr_len);
-	}
 	AMREX_ASSERT(!std::isnan(y));
 	return y;
 }
