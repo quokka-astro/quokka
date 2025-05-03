@@ -309,7 +309,7 @@ inline bool disable_SN_feedback = false; // NOLINT
 inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 inline amrex::Real particle_param3 = -1.0; // NOLINT
-inline amrex::Real eps_ff = 0.01; // NOLINT
+inline amrex::Real eps_ff = 0.01;	   // NOLINT
 
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
