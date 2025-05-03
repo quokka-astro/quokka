@@ -17,8 +17,8 @@ constexpr double rho0 = 1.0e-5;
 constexpr double dt_ = 0.001;
 static bool refine_half_domain = false; // NOLINT
 
-static bool do_split_particles = false; // NOLINT
 // locations of the particles: a 2x2x2 grids of particles
+constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
 // need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
 constexpr double particle_offset_from_center_ = 0.01;
 const static double SN_mass = 1.0e-5;	    // mass of SNProgenitor particles
@@ -118,7 +118,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const & /*engine*/) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
@@ -162,7 +162,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::RandomEngine const & /*engine*/) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
@@ -265,11 +266,6 @@ auto problem_main() -> int
 		}
 	}
 
-	// read in runtime parameters for this test problem
-	amrex::ParmParse const pp("particles");
-	pp.query("do_split_particles", do_split_particles);
-	pp.query("split_factor", split_factor);
-
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
@@ -277,8 +273,8 @@ auto problem_main() -> int
 	sim.maxDt_ = dt_;
 
 	// Read parameters from input file
-	const amrex::ParmParse pp1("problem");
-	pp1.query("refine_half_domain", refine_half_domain);
+	const amrex::ParmParse pp("problem");
+	pp.query("refine_half_domain", refine_half_domain);
 
 	// initialize
 	sim.setInitialConditions();
@@ -296,33 +292,20 @@ auto problem_main() -> int
 
 	int status = 0; // Initialize to success
 
-	auto const *descriptor = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC);
-	auto const &real_data = descriptor->getParticleDataAtLevel(max_level).first;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
 
-	amrex::Print() << "Expected number of test particles: " << n_particle_expected << "\n";
-	amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
+		amrex::Print() << "Expected number of test particles: " << n_particle_expected << "\n";
+		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
 
-	status = 1;
-	if (n_particle_test == n_particle_expected) {
-		status = 0;
-		amrex::Print() << "Relative error within tolerance.\n";
-	}
-	if (status > 0) {
-		amrex::Print() << "Test failed.\n";
-		if (!is_pos_check_pass) {
-			amrex::Print() << "...position check failed.\n";
+		status = 1;
+		if (n_particle_test == n_particle_expected) {
+			status = 0;
+			amrex::Print() << "Relative error within tolerance.\n";
 		}
-		if (!(n_particle_CIC == n_expected_CIC_particles)) {
-			amrex::Print() << "...wrong number of CIC particles.\n";
-		}
-		if (!(n_particle_test == n_SNR_particles)) {
-			amrex::Print() << "...wrong number of SN remnant particles.\n";
-		}
-		if (!(SN_remnant_mass_rel_err < SNR_mass_rel_err_tol)) {
-			amrex::Print() << "...SN remnant mass error above tolerance.\n";
+		if (status > 0) {
+			amrex::Print() << "Test failed.\n";
 		}
 	}
-}
 
-return status;
+	return status;
 }

@@ -3,7 +3,6 @@
 
 #include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 #include "particle_types.hpp"
 #include "stellarpop_data.hpp"
 #include <cmath>
@@ -40,11 +39,11 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				auto *pcounts = counts.data();
 
 				// Count potential particles per cell
-				amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+				amrex::ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &engine) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
-					pcounts[index] = particle_checker(state_arr, i, j, k, dx); // NOLINT
+					pcounts[index] = particle_checker(state_arr, i, j, k, dx, engine); // NOLINT
 				});
 
 				// Calculate exclusive prefix sum to get unique position for each particle
@@ -73,14 +72,14 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				// Initialize particle creator functor using the provided ParticleCreator type
 				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, cpu_id, pid, evolution_stage_index, current_time, dt);
 
-				amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+				amrex::ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &engine) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 
-					if (pcounts[index] > 0) {									 // NOLINT
-						const int num_particles = pcounts[index];						 // NOLINT
-						auto *particles = &pdata[poffset[index]];						 // NOLINT
-						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
+					if (pcounts[index] > 0) {										 // NOLINT
+						const int num_particles = pcounts[index];							 // NOLINT
+						auto *particles = &pdata[poffset[index]];							 // NOLINT
+						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index], engine); // NOLINT
 					}
 				});
 			}
@@ -109,10 +108,10 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const &engine) const -> int
 		{
 			// Default implementation creates no particles
-			amrex::ignore_unused(state_arr, i, j, k, dx);
+			amrex::ignore_unused(state_arr, i, j, k, dx, engine);
 			return 0;
 		}
 	};
@@ -138,10 +137,11 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::RandomEngine const &engine) const
 		{
 			// Default implementation does nothing
-			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset);
+			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset, engine);
 		}
 	};
 
@@ -219,9 +219,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const &engine) const -> int
 		{
-			auto engine = amrex::RandomEngine();
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -269,10 +268,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::RandomEngine const &engine) const
 		{
 
-			auto engine = amrex::RandomEngine();
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
@@ -301,9 +300,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					// Set particle birth time
 					p.rdata(birth_time_index) = current_time;
 
-					// Set particle evolution stage to 0 if it is a low mass star
-					// This gets changed if there is a high mass star in the cell
-					p.idata(evolution_stage_index) = p_idx;
+					// Set particle evolution stage to LowMassComposite if it is a low-mass stellar composite
+					// This gets changed in the for loop below if this is a high mass star
+					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::LowMassComposite);
 
 					// Low Mass particle position at cell center
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
