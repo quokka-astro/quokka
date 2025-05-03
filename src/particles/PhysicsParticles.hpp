@@ -759,21 +759,19 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) override
 	{
-		if (this->container_ != nullptr) {
-			if (this->getEvolutionStageIndex() == static_cast<int>(StellarEvolutionStage::SNProgenitor)) {
-				if (!quokka::disable_SN_feedback) {
-					// Requires CGS units
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
-									 "UnitSystem must be CGS for particleMeshInteraction");
+		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
+			if (!quokka::disable_SN_feedback) {
+				// Requires CGS units
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
+								 "UnitSystem must be CGS for particleMeshInteraction");
 
-					// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
-					SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(),
-									       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
-				} else {
-					// Only update evolution stage but not deposit energy/momentum
-					SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
-									      this->getEvolutionStageIndex());
-				}
+				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
+				SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(),
+								       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+			} else {
+				// Only update evolution stage but not deposit energy/momentum
+				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
+								      this->getEvolutionStageIndex());
 			}
 		}
 	}
