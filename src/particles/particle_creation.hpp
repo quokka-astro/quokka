@@ -360,9 +360,24 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						const double signy = vy == 0.0 ? 1.0 : (std::abs(vy) / vy);
 						const double signz = vz == 0.0 ? 1.0 : (std::abs(vz) / vz);
 
-						p.rdata(mass_idx + 1) = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
-						p.rdata(mass_idx + 2) = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
-						p.rdata(mass_idx + 3) = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
+						double vx_new = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
+						double vy_new = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
+						double vz_new = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
+
+						// Enforce maximum speed limit of 1000 km/s
+						{
+							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
+							constexpr double max_speed = 1.0e8; // cm s^{-1}
+							if (speed > max_speed) {
+								double scale = max_speed / speed;
+								vx_new *= scale;
+								vy_new *= scale;
+								vz_new *= scale;
+								p.rdata(mass_idx + 1) = vx_new;
+								p.rdata(mass_idx + 2) = vy_new;
+								p.rdata(mass_idx + 3) = vz_new;
+							}
+						}
 
 						// Sample mass randomly from the IMF between m_star_high, which is the min mass and max mass in the Sukhbold
 						// table
