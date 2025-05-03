@@ -31,7 +31,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
-const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
+const double sf_cell_density = 1.0e8 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
@@ -134,7 +134,7 @@ auto problem_main() -> int
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 1.0e7 * year; // 10 Myr
+	sim.stopTime_ = 1.0e6 * year; // 1 Myr
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 
 	// initialize
@@ -174,8 +174,9 @@ auto problem_main() -> int
 		double high_mass_stars_total_mass = 0.0;
 		double all_stars_total_mass = 0.0;
 		int num_high_mass_stars = 0;
-		for (int i = 0; i < real_data_final.size(); ++i) {
-			if (idata_final[i][0] == static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor)) {
+		const int num_all_stars = static_cast<int>(real_data_final.size());
+		for (int i = 0; i < num_all_stars; ++i) {
+			if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
 				high_mass_stars_total_mass += real_data_final[i][mass_idx];
 				num_high_mass_stars++;
 			}
@@ -185,6 +186,8 @@ auto problem_main() -> int
 		const double mass_fraction_high_mass_stars = high_mass_stars_total_mass / all_stars_total_mass;
 		const double mean_mass_high_mass_stars_Msun = mean_mass_high_mass_stars / M_sol;
 		amrex::Print() << "Total particle mass = " << all_stars_total_mass / M_sol << " Msun\n";
+		amrex::Print() << "Number of high mass stars = " << num_high_mass_stars << "\n";
+		amrex::Print() << "Number of all stars = " << num_all_stars << "\n";
 		amrex::Print() << "Mstar_high_mean = " << mean_mass_high_mass_stars_Msun << " Msun\n";
 		amrex::Print() << "fstar_high = " << mass_fraction_high_mass_stars << "\n";
 
