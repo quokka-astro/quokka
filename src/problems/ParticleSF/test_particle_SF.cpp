@@ -157,113 +157,113 @@ auto problem_main() -> int
 
 	return 0;
 
-	// get total mass of the final gas
-	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+// 	// get total mass of the final gas
+// 	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-	const int nx = static_cast<int>(position.size());
+// 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+// 	const int nx = static_cast<int>(position.size());
 
-	const double overlap_loc = 12.01;	// parsec
-	const double outer_radius = 5.0 * 8.01; // parsec
+// 	const double overlap_loc = 12.01;	// parsec
+// 	const double outer_radius = 5.0 * 8.01; // parsec
 
-	int status = 0;
+// 	int status = 0;
 
-	// get total mass of the final particles
-	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		double total_particle_mass_final = 0.0;
-		for (const auto &p : real_data_final) {
-			total_particle_mass_final += p[3];
-		}
-		total_total_mass_final = total_mass_final + total_particle_mass_final;
-		amrex::Print() << "\nAfter evolution:\n";
-		amrex::Print() << "Total gas mass = " << total_mass_final << "\n";
-		amrex::Print() << "Total particle mass = " << total_particle_mass_final << "\n";
-		amrex::Print() << "Total total mass = " << total_total_mass_final << "\n";
+// 	// get total mass of the final particles
+// 	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+// 	if (amrex::ParallelDescriptor::IOProcessor()) {
+// 		double total_particle_mass_final = 0.0;
+// 		for (const auto &p : real_data_final) {
+// 			total_particle_mass_final += p[3];
+// 		}
+// 		total_total_mass_final = total_mass_final + total_particle_mass_final;
+// 		amrex::Print() << "\nAfter evolution:\n";
+// 		amrex::Print() << "Total gas mass = " << total_mass_final << "\n";
+// 		amrex::Print() << "Total particle mass = " << total_particle_mass_final << "\n";
+// 		amrex::Print() << "Total total mass = " << total_total_mass_final << "\n";
 
-		const double gas_mass_change = total_mass_final - total_mass_init;
-		const double particle_mass_change = total_particle_mass_final - total_particle_mass;
-		amrex::Print() << "\nGas mass change = " << gas_mass_change << "\n";
-		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
+// 		const double gas_mass_change = total_mass_final - total_mass_init;
+// 		const double particle_mass_change = total_particle_mass_final - total_particle_mass;
+// 		amrex::Print() << "\nGas mass change = " << gas_mass_change << "\n";
+// 		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
 
-		const double rel_mass_change = (total_total_mass_final - total_total_mass) / total_total_mass;
-		amrex::Print() << "Total relative mass change = " << rel_mass_change << "\n";
-		const double rel_mass_error = std::abs(rel_mass_change);
+// 		const double rel_mass_change = (total_total_mass_final - total_total_mass) / total_total_mass;
+// 		amrex::Print() << "Total relative mass change = " << rel_mass_change << "\n";
+// 		const double rel_mass_error = std::abs(rel_mass_change);
 
-		const double rel_error_tol = 1.0e-8;
-		if (!(rel_mass_error < rel_error_tol)) {
-			status = 1;
-		}
+// 		const double rel_error_tol = 1.0e-8;
+// 		if (!(rel_mass_error < rel_error_tol)) {
+// 			status = 1;
+// 		}
 
-		std::vector<double> xs(nx);
-		std::vector<double> xs_over_dx(nx);
-		std::vector<double> rho(nx);
-		std::vector<double> num_den(nx);
-		std::vector<double> exact_den(nx);
-		double err_norm = 0.0;
-		double sol_norm = 0.0;
-		for (int i = 0; i < nx; ++i) {
-			xs[i] = position[i] / C::parsec;
-			xs_over_dx[i] = position[i] / dx0[0];
-			rho[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
-			num_den[i] = rho[i] / C::m_p; // cm^-3
+// 		std::vector<double> xs(nx);
+// 		std::vector<double> xs_over_dx(nx);
+// 		std::vector<double> rho(nx);
+// 		std::vector<double> num_den(nx);
+// 		std::vector<double> exact_den(nx);
+// 		double err_norm = 0.0;
+// 		double sol_norm = 0.0;
+// 		for (int i = 0; i < nx; ++i) {
+// 			xs[i] = position[i] / C::parsec;
+// 			xs_over_dx[i] = position[i] / dx0[0];
+// 			rho[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
+// 			num_den[i] = rho[i] / C::m_p; // cm^-3
 
-			// exact solution
-			if (std::abs(xs[i]) <= overlap_loc) {
-				exact_den[i] = 0.1;
-			} else if (std::abs(xs[i]) <= outer_radius) {
-				exact_den[i] = 0.2;
-			} else {
-				exact_den[i] = 1.0;
-			}
+// 			// exact solution
+// 			if (std::abs(xs[i]) <= overlap_loc) {
+// 				exact_den[i] = 0.1;
+// 			} else if (std::abs(xs[i]) <= outer_radius) {
+// 				exact_den[i] = 0.2;
+// 			} else {
+// 				exact_den[i] = 1.0;
+// 			}
 
-			sol_norm += exact_den[i];
-			err_norm += std::abs(num_den[i] - exact_den[i]);
-		}
+// 			sol_norm += exact_den[i];
+// 			err_norm += std::abs(num_den[i] - exact_den[i]);
+// 		}
 
-		const double rel_error = err_norm / sol_norm;
-		amrex::Print() << "Error norm = " << err_norm << "\n";
-		amrex::Print() << "Solution norm = " << sol_norm << "\n";
-		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
+// 		const double rel_error = err_norm / sol_norm;
+// 		amrex::Print() << "Error norm = " << err_norm << "\n";
+// 		amrex::Print() << "Solution norm = " << sol_norm << "\n";
+// 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
-		if (!(rel_error < rel_error_tol)) {
-			status = 1;
-		}
+// 		if (!(rel_error < rel_error_tol)) {
+// 			status = 1;
+// 		}
 
-		if (status == 1) {
-			amrex::Print() << "Test failed\n";
-		} else {
-			amrex::Print() << "Test passed\n";
-		}
+// 		if (status == 1) {
+// 			amrex::Print() << "Test failed\n";
+// 		} else {
+// 			amrex::Print() << "Test passed\n";
+// 		}
 
-#ifdef HAVE_PYTHON
-		matplotlibcpp::clf();
-		matplotlibcpp::ylim(0.0, 1.1);
-		std::map<std::string, std::string> exact_den_args;
-		exact_den_args["label"] = "exact";
-		exact_den_args["color"] = "black";
-		matplotlibcpp::plot(xs, exact_den, exact_den_args);
-		std::map<std::string, std::string> num_den_args;
-		num_den_args["label"] = "simulation";
-		num_den_args["color"] = "red";
-		matplotlibcpp::plot(xs, num_den, num_den_args);
-		matplotlibcpp::xlabel("x (pc)");
-		matplotlibcpp::ylabel("n (cm^-3)");
-		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_density.png");
+// #ifdef HAVE_PYTHON
+// 		matplotlibcpp::clf();
+// 		matplotlibcpp::ylim(0.0, 1.1);
+// 		std::map<std::string, std::string> exact_den_args;
+// 		exact_den_args["label"] = "exact";
+// 		exact_den_args["color"] = "black";
+// 		matplotlibcpp::plot(xs, exact_den, exact_den_args);
+// 		std::map<std::string, std::string> num_den_args;
+// 		num_den_args["label"] = "simulation";
+// 		num_den_args["color"] = "red";
+// 		matplotlibcpp::plot(xs, num_den, num_den_args);
+// 		matplotlibcpp::xlabel("x (pc)");
+// 		matplotlibcpp::ylabel("n (cm^-3)");
+// 		matplotlibcpp::legend();
+// 		matplotlibcpp::save("./sink_density.png");
 
-		matplotlibcpp::clf();
-		matplotlibcpp::ylim(0.0, 1.1);
-		matplotlibcpp::xlim(-12, 12);
-		num_den_args["label"] = "simulation";
-		num_den_args["color"] = "red";
-		matplotlibcpp::plot(xs_over_dx, num_den);
-		matplotlibcpp::xlabel("x / dx");
-		matplotlibcpp::ylabel("n (cm^-3)");
-		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_density_vs_x_over_dx.png");
-#endif
-	}
+// 		matplotlibcpp::clf();
+// 		matplotlibcpp::ylim(0.0, 1.1);
+// 		matplotlibcpp::xlim(-12, 12);
+// 		num_den_args["label"] = "simulation";
+// 		num_den_args["color"] = "red";
+// 		matplotlibcpp::plot(xs_over_dx, num_den);
+// 		matplotlibcpp::xlabel("x / dx");
+// 		matplotlibcpp::ylabel("n (cm^-3)");
+// 		matplotlibcpp::legend();
+// 		matplotlibcpp::save("./sink_density_vs_x_over_dx.png");
+// #endif
+// 	}
 
-	return status;
+	// return status;
 }
