@@ -699,15 +699,15 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 				if (!quokka::disable_SN_feedback) {
 					// Requires CGS units
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
-									"UnitSystem must be CGS for particleMeshInteraction");
+									 "UnitSystem must be CGS for particleMeshInteraction");
 
 					// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
 					SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(),
-												this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+									       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 				} else {
 					// Only update evolution stage but not deposit energy/momentum
 					SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
-												this->getEvolutionStageIndex());
+									      this->getEvolutionStageIndex());
 				}
 			}
 		}
