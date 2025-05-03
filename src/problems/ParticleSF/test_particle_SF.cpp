@@ -23,6 +23,7 @@
 struct SinkProblem {
 };
 
+constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 const double rho0 = 1.0 * C::m_p; // g cm^-3
@@ -167,68 +168,41 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-// 	// get total mass of the final gas
-// 	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-
-// 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-// 	const int nx = static_cast<int>(position.size());
-
-// 	const double overlap_loc = 12.01;	// parsec
-// 	const double outer_radius = 5.0 * 8.01; // parsec
-
-// 	int status = 0;
-
 	// get total mass of the final particles
-	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0).first;
+	const auto [real_data_final, idata_final] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		double total_particle_mass_final = 0.0;
-		for (const auto &p : real_data_final) {
-			total_particle_mass_final += p[3];
+		const int mass_idx = 3;
+		double high_mass_stars_total_mass = 0.0;
+		double all_stars_total_mass = 0.0;
+		int num_high_mass_stars = 0;
+		for (int i = 0; i < real_data_final.size(); ++i) {
+			if (idata_final[i][0] == static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor)) {
+				high_mass_stars_total_mass += real_data_final[i][mass_idx];
+				num_high_mass_stars++;
+			}
+			all_stars_total_mass += real_data_final[i][mass_idx];
 		}
-		amrex::Print() << "\nAfter evolution:\n";
-		amrex::Print() << "Total particle mass = " << total_particle_mass_final << "\n";
+		const double mean_mass_high_mass_stars = high_mass_stars_total_mass / num_high_mass_stars;
+		const double mass_fraction_high_mass_stars = high_mass_stars_total_mass / all_stars_total_mass;
+		const double mean_mass_high_mass_stars_Msun = mean_mass_high_mass_stars / M_sol;
+		amrex::Print() << "Total particle mass = " << all_stars_total_mass / M_sol << " Msun\n";
+		amrex::Print() << "Mstar_high_mean = " << mean_mass_high_mass_stars_Msun << " Msun\n";
+		amrex::Print() << "fstar_high = " << mass_fraction_high_mass_stars << "\n";
+
+		// expectations
+		const double exp_Mstar_high_mean = 19.39;
+		const double exp_fstar_high = 0.220;
+		amrex::Print() << "\nExpected values:\n";
+		amrex::Print() << "Mstar_high_mean = " << exp_Mstar_high_mean << " Msun\n";
+		amrex::Print() << "fstar_high = " << exp_fstar_high << "\n";
+
+		// relative error
+		const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / exp_Mstar_high_mean;
+		const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
+		amrex::Print() << "\nRelative error:\n";
+		amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
+		amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
 	}
 
 	return 0;
-
-// 		if (!(rel_error < rel_error_tol)) {
-// 			status = 1;
-// 		}
-
-// 		if (status == 1) {
-// 			amrex::Print() << "Test failed\n";
-// 		} else {
-// 			amrex::Print() << "Test passed\n";
-// 		}
-
-// #ifdef HAVE_PYTHON
-// 		matplotlibcpp::clf();
-// 		matplotlibcpp::ylim(0.0, 1.1);
-// 		std::map<std::string, std::string> exact_den_args;
-// 		exact_den_args["label"] = "exact";
-// 		exact_den_args["color"] = "black";
-// 		matplotlibcpp::plot(xs, exact_den, exact_den_args);
-// 		std::map<std::string, std::string> num_den_args;
-// 		num_den_args["label"] = "simulation";
-// 		num_den_args["color"] = "red";
-// 		matplotlibcpp::plot(xs, num_den, num_den_args);
-// 		matplotlibcpp::xlabel("x (pc)");
-// 		matplotlibcpp::ylabel("n (cm^-3)");
-// 		matplotlibcpp::legend();
-// 		matplotlibcpp::save("./sink_density.png");
-
-// 		matplotlibcpp::clf();
-// 		matplotlibcpp::ylim(0.0, 1.1);
-// 		matplotlibcpp::xlim(-12, 12);
-// 		num_den_args["label"] = "simulation";
-// 		num_den_args["color"] = "red";
-// 		matplotlibcpp::plot(xs_over_dx, num_den);
-// 		matplotlibcpp::xlabel("x / dx");
-// 		matplotlibcpp::ylabel("n (cm^-3)");
-// 		matplotlibcpp::legend();
-// 		matplotlibcpp::save("./sink_density_vs_x_over_dx.png");
-// #endif
-// 	}
-
-	// return status;
 }
