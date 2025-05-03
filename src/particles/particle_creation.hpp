@@ -163,7 +163,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	// Specialized nested ParticleChecker for StochasticStellarPop particles
 
 	static constexpr amrex::Real eps_star = 0.5; // fraction of gas mass that goes into star particles
-	static constexpr amrex::Real eps_ff = 0.5;   // efficiency per free fall time
 	static constexpr amrex::Real J = 0.5;	     // Jeans parameter
 
 	// Constants for the Chabrier IMF
@@ -215,6 +214,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
+		amrex::Real eps_ff_ = eps_ff;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
@@ -227,7 +227,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-			const amrex::Real prob_star_formation = eps_ff * dt / eps_star / t_ff;
+			const amrex::Real prob_star_formation = eps_ff_ * dt / eps_star / t_ff;
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
 
@@ -256,6 +256,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
+		amrex::Real eps_ff_ = eps_ff;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
@@ -282,7 +283,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
 				const int nscalars = Physics_Traits<problem_t>::numPassiveScalars;
 				const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-				const amrex::Real particle_mass = cell_density * cell_volume * eps_ff * dt / t_ff;
+				const amrex::Real particle_mass = cell_density * cell_volume * eps_ff_ * dt / t_ff;
 				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
 				double total_momx = 0.0;
 				double total_momy = 0.0;

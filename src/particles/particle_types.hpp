@@ -309,6 +309,7 @@ inline bool disable_SN_feedback = false; // NOLINT
 inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 inline amrex::Real particle_param3 = -1.0; // NOLINT
+inline amrex::Real eps_ff = 0.01; // NOLINT
 
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
@@ -335,6 +336,9 @@ inline void particleParmParse()
 	int sn_scheme_int = static_cast<int>(SN_scheme);
 	pp.query("SN_scheme", sn_scheme_int);
 	SN_scheme = static_cast<SNScheme>(sn_scheme_int);
+
+	// Stochastic SF parameters
+	pp.query("eps_ff", eps_ff);
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
