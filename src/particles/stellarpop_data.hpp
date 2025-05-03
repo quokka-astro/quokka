@@ -19,15 +19,15 @@
 #include "math/interpolate.hpp"
 
 using Real = amrex::Real;
-static constexpr int FATE_ARR_SIZE = 200;
-static constexpr int AGE_ARR_SIZE = 196;
+static constexpr int FATE_ARR_SIZE = 202;
+static constexpr int AGE_ARR_SIZE = 197;
 static constexpr int YR_TO_SEC = 3.15576e7; // seconds in a year
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -> int
 {
 	const amrex::GpuArray<Real, FATE_ARR_SIZE> interp_mass_star = {
 	    // mass of stars in Msun
-	    9.,	  9.25, 9.5,  9.75, 10.,  10.25, 10.5, 10.75, 11.,  11.25, 11.5, 11.75, 12.,  12.25, 12.5, 12.75, 13.,	13.1, 13.2, 13.3, 13.4, 13.5, 13.6,
+	    0.0, 9.,	  9.25, 9.5,  9.75, 10.,  10.25, 10.5, 10.75, 11.,  11.25, 11.5, 11.75, 12.,  12.25, 12.5, 12.75, 13.,	13.1, 13.2, 13.3, 13.4, 13.5, 13.6,
 	    13.7, 13.8, 13.9, 14.,  14.1, 14.2,	 14.3, 14.4,  14.5, 14.6,  14.7, 14.8,	14.9, 15.,   15.1, 15.2,  15.3, 15.4, 15.5, 15.6, 15.7, 15.8, 15.9,
 	    16.,  16.1, 16.2, 16.3, 16.4, 16.5,	 16.6, 16.7,  16.8, 16.9,  17.,	 17.1,	17.2, 17.3,  17.4, 17.5,  17.6, 17.7, 17.8, 17.9, 18.,	18.1, 18.2,
 	    18.3, 18.4, 18.5, 18.6, 18.7, 18.8,	 18.9, 19.,   19.1, 19.2,  19.3, 19.4,	19.5, 19.6,  19.7, 19.8,  19.9, 20.,  20.1, 20.2, 20.3, 20.4, 20.5,
@@ -35,23 +35,26 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	    22.9, 23.,	23.1, 23.2, 23.3, 23.4,	 23.5, 23.6,  23.7, 23.8,  23.9, 24.,	24.1, 24.2,  24.3, 24.4,  24.5, 24.6, 24.7, 24.8, 24.9, 25.,  25.1,
 	    25.2, 25.3, 25.4, 25.5, 25.6, 25.7,	 25.8, 25.9,  26.,  26.1,  26.2, 26.3,	26.4, 26.5,  26.6, 26.7,  26.8, 26.9, 27.,  27.1, 27.2, 27.3, 27.4,
 	    27.5, 27.6, 27.7, 27.8, 27.9, 28.,	 28.1, 28.2,  28.3, 28.4,  28.5, 28.6,	28.7, 28.8,  28.9, 29.,	  29.1, 29.2, 29.3, 29.4, 29.5, 29.6, 29.7,
-	    29.8, 29.9, 30.,  31.,  32.,  33.,	 35.,  40.,   45.,  50.,   55.,	 60.,	70.,  80.,   100., 120.};
+	    29.8, 29.9, 30.,  31.,  32.,  33.,	 35.,  40.,   45.,  50.,   55.,	 60.,	70.,  80.,   100., 120., 3.00e2};
 
 	const amrex::GpuArray<Real, FATE_ARR_SIZE> interp_star_fate{
 	    // if fate==1, star goes SN, inject energy!
-	    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+	    0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
 	    1., 1., 0., 0., 1., 0., 0., 0., 0., 1., 1., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0., 1., 1., 1., 1., 0., 0., 1., 0., 1.,
 	    1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 1., 1., 1., 1., 1., 0., 0., 1., 0., 1., 1., 1., 0., 0., 1.,
 	    1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
 	    0., 0., 1., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0., 0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-	    0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 1.
+	    0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 1., 1.
 
 	};
 
 	// Interpolate to find the accurate fates from array
 	auto const &x_arr = interp_mass_star;
 	auto const &y_arr = interp_star_fate;
-	amrex::Real fate_interp = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
+	const double mass_in_Msun = mass_star / C::M_solar;
+	AMREX_ASSERT(mass_in_Msun >= 0.0);
+	AMREX_ASSERT(mass_in_Msun <= 3.00e2);
+	amrex::Real fate_interp = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
 	return (fate_interp < 0.5 ? 0 : 1);
 }
 
@@ -59,7 +62,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 {
 	const amrex::GpuArray<Real, AGE_ARR_SIZE> interp_mass_star = {
 	    // mass of stars in Msun
-	    1.00e-01, 1.50e-01, 2.00e-01, 2.50e-01, 3.00e-01, 3.10e-01, 3.20e-01, 3.30e-01, 3.40e-01, 3.50e-01, 3.60e-01, 3.70e-01, 3.80e-01, 3.90e-01,
+	    0.0, 1.00e-01, 1.50e-01, 2.00e-01, 2.50e-01, 3.00e-01, 3.10e-01, 3.20e-01, 3.30e-01, 3.40e-01, 3.50e-01, 3.60e-01, 3.70e-01, 3.80e-01, 3.90e-01,
 	    4.00e-01, 4.50e-01, 5.00e-01, 5.50e-01, 6.00e-01, 6.50e-01, 7.00e-01, 7.50e-01, 8.00e-01, 8.50e-01, 9.00e-01, 9.20e-01, 9.40e-01, 9.60e-01,
 	    9.80e-01, 1.00e+00, 1.02e+00, 1.04e+00, 1.06e+00, 1.08e+00, 1.10e+00, 1.12e+00, 1.14e+00, 1.16e+00, 1.18e+00, 1.20e+00, 1.22e+00, 1.24e+00,
 	    1.26e+00, 1.28e+00, 1.30e+00, 1.32e+00, 1.34e+00, 1.36e+00, 1.38e+00, 1.40e+00, 1.42e+00, 1.44e+00, 1.46e+00, 1.48e+00, 1.50e+00, 1.52e+00,
@@ -76,7 +79,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 
 	const amrex::GpuArray<Real, AGE_ARR_SIZE> interp_death_time{
 	    // Age of star upon death in yr
-	    2.05637091e+12, 1.23431079e+12, 8.04320575e+11, 5.28141713e+11, 3.23462726e+11, 2.90832810e+11, 2.50741129e+11, 2.19855225e+11, 1.91893537e+11,
+			// quick hack: assume the age of stars below 0.1 Msun is the same as that of 0.1 Msun. To avoid out-of-bounds interpolation.
+	    2.05637091e+12, 2.05637091e+12, 1.23431079e+12, 8.04320575e+11, 5.28141713e+11, 3.23462726e+11, 2.90832810e+11, 2.50741129e+11, 2.19855225e+11, 1.91893537e+11,
 	    1.58212735e+11, 1.47856310e+11, 1.39272077e+11, 1.31394380e+11, 1.24030878e+11, 1.17112455e+11, 8.65504379e+10, 6.11287818e+10, 4.38991462e+10,
 	    3.40965212e+10, 2.58942710e+10, 2.00010752e+10, 1.71445535e+10, 1.37414072e+10, 1.11618939e+10, 9.18190797e+09, 8.52317286e+09, 7.92367923e+09,
 	    7.38317517e+09, 6.88750285e+09, 6.43787571e+09, 6.02635418e+09, 5.65256243e+09, 5.30792038e+09, 4.99571866e+09, 4.70398362e+09, 4.43604634e+09,
@@ -104,6 +108,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 	// Interpolate to find the lifetime of a star
 	auto const &x_arr = interp_mass_star;
 	auto const &y_arr = interp_death_time;
-	amrex::Real death_time = interpolate_value(mass_star / C::M_solar, x_arr.data(), y_arr.data(), FATE_ARR_SIZE) * YR_TO_SEC; // NOLINT
+	const double mass_in_Msun = mass_star / C::M_solar;
+	AMREX_ASSERT(mass_in_Msun >= 0.0);
+	AMREX_ASSERT(mass_in_Msun <= 3.00e2);
+	amrex::Real death_time = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), AGE_ARR_SIZE) * YR_TO_SEC; // NOLINT
 	return death_time;
 }

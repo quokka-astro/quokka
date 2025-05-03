@@ -3,7 +3,6 @@
 
 #include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 #include "particle_types.hpp"
 #include "stellarpop_data.hpp"
 #include <cmath>
@@ -224,6 +223,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			auto engine = amrex::RandomEngine();
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+
+			if (i == 16 && j == 16 && k == 16) {
+				amrex::Print() << "cell_density: " << cell_density << "\n";
+			}
 
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);

@@ -30,12 +30,12 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
-const double sf_cell_density = 1.0e5 * C::m_p; // g cm^-3
+const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0; // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
 template <> struct quokka::EOS_Traits<SinkProblem> {
@@ -135,8 +135,8 @@ auto problem_main() -> int
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 100.0 * year;
-	sim.initDt_ = 1.0 * year;
+	sim.stopTime_ = 1.0e7 * year; // 10 Myr
+	sim.initDt_ = 1.0e5 * year; // 0.1 Myr
 
 	// initialize
 	sim.setInitialConditions();
