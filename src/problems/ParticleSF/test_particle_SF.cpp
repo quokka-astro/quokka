@@ -32,7 +32,7 @@ const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
 const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
-const double sf_cell_loc = 1.0; // in x,y,z direction, cm
+const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -98,9 +98,7 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 		const amrex::Box &box = mfi.validbox();
 		const auto tag = tags.array(mfi);
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			tag(i, j, k) = amrex::TagBox::SET;
-		});
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
 	}
 }
 
@@ -137,7 +135,7 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 1.0e7 * year; // 10 Myr
-	sim.initDt_ = 1.0e5 * year; // 0.1 Myr
+	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 
 	// initialize
 	sim.setInitialConditions();
@@ -169,7 +167,8 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// get total mass of the final particles
-	const auto [real_data_final, idata_final] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
+	const auto [real_data_final, idata_final] =
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const int mass_idx = 3;
 		double high_mass_stars_total_mass = 0.0;
