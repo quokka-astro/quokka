@@ -369,7 +369,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
 							constexpr double max_speed = 1.0e8; // cm s^{-1}
 							if (speed > max_speed) {
-								double scale = max_speed / speed;
+								double const scale = max_speed / speed;
 								vx_new *= scale;
 								vy_new *= scale;
 								vz_new *= scale;
