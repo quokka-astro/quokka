@@ -369,7 +369,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
 							constexpr double max_speed = 1.0e8; // cm s^{-1}
 							if (speed > max_speed) {
-								double scale = max_speed / speed;
+								const double scale = max_speed / speed;
 								vx_new *= scale;
 								vy_new *= scale;
 								vz_new *= scale;
@@ -403,6 +403,24 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					plow.rdata(mass_idx + 1) = -total_momx / plow.rdata(mass_idx);
 					plow.rdata(mass_idx + 2) = -total_momy / plow.rdata(mass_idx);
 					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
+
+					// Enforce maximum speed limit of 3000 km/s
+					{
+						double vx_new = plow.rdata(mass_idx + 1);
+						double vy_new = plow.rdata(mass_idx + 2);
+						double vz_new = plow.rdata(mass_idx + 3);
+						const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
+						constexpr double max_speed = 3.0e8; // cm s^{-1}
+						if (speed > max_speed) {
+							const double scale = max_speed / speed;
+							vx_new *= scale;
+							vy_new *= scale;
+							vz_new *= scale;
+							plow.rdata(mass_idx + 1) = vx_new;
+							plow.rdata(mass_idx + 2) = vy_new;
+							plow.rdata(mass_idx + 3) = vz_new;
+						}
+					}
 				}
 
 				const double factor = (1. - particle_mass / cell_mass);
