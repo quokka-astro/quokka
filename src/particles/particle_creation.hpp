@@ -163,6 +163,8 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 // Specialization for Sink particles
 template <> struct ParticleCreationTraits<ParticleType::Sink> {
+	static constexpr amrex::Real n_thresh = 1.0e3 * C::m_p; // 1e3 cm^-3
+
 	// Default nested ParticleChecker - determines if a particle should be created at a location
 	template <typename problem_t> struct ParticleChecker {
 		amrex::Real current_time;
@@ -173,8 +175,10 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
-			// Default implementation creates no particles
-			amrex::ignore_unused(state_arr, accretion_rate_arr, i, j, k, dx);
+			// simple implementation: create a particle if the density is above a threshold n_thresh
+			if (state_arr(i, j, k, HydroSystem<problem_t>::density_index) > n_thresh) {
+				return 1;
+			}
 			return 0;
 		}
 	};
@@ -203,7 +207,44 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
 		{
 			// Default implementation does nothing
-			amrex::ignore_unused(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, base_offset);
+			// amrex::ignore_unused(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, base_offset);
+
+			// Calculate common values for all particles
+			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+			const amrex::Real particle_mass = (cell_density - n_thresh) * cell_volume;
+
+			const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+			const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+			const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+
+			for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
+				auto &p = particles[p_idx]; // NOLINT
+
+				// Set particle position at cell center
+				p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+				p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+				p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+
+				// Set particle ID and CPU
+				p.id() = pid_start + base_offset + p_idx;
+				p.cpu() = cpu_id;
+
+				// Initialize particle properties
+				p.rdata(mass_idx) = particle_mass / num_particles;
+				p.rdata(mass_idx + 1) = vx;
+				p.rdata(mass_idx + 2) = vy;
+				p.rdata(mass_idx + 3) = vz;
+			}
+
+			// update cell density to be the threshold density
+			const amrex::Real scale_factor = n_thresh / cell_density;
+			state_arr(i, j, k, HydroSystem<problem_t>::density_index) = n_thresh;
+			state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
 		}
 	};
 
