@@ -31,7 +31,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
-const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
+const double sf_cell_density = 1.00000000001e3 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
@@ -143,35 +143,39 @@ auto problem_main() -> int
 	// get total gas mass of the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
 	// evolve
 	sim.evolve();
 
 	// get total gas mass of the final state
-	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
-	// get total mass of the final particles
+	// get total particle mass of the final state
 	const auto [real_data_final, idata_final] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		const int mass_idx = 3;
-		double all_stars_total_mass = 0.0;
-		const int num_all_stars = static_cast<int>(real_data_final.size());
-		for (int i = 0; i < num_all_stars; ++i) {
-			all_stars_total_mass += real_data_final[i][mass_idx];
-		}
-		amrex::Print() << "Total particle mass = " << all_stars_total_mass / M_sol << " Msun\n";
-		amrex::Print() << "Number of stars = " << num_all_stars << "\n";
+		amrex::Print() << "Initial state:\n";
+		amrex::Print() << "Gas mass = " << m_gas_init / M_sol << " Msun\n";
 
-		amrex::Print() << "\nIn the initial state, gas mass = " << total_mass_init / M_sol << " Msun\n";
+		amrex::Print() << "Final state:\n";
+
+		const int mass_idx = 3;
+		double m_stars_final = 0.0;
+		const int num_stars = static_cast<int>(real_data_final.size());
+		for (int i = 0; i < num_stars; ++i) {
+			m_stars_final += real_data_final[i][mass_idx];
+		}
+		amrex::Print() << "Gas mass = " << m_gas_final / M_sol << " Msun\n";
+		amrex::Print() << "Particle mass = " << m_stars_final / M_sol << " Msun\n";
+		amrex::Print() << "Number of particles = " << num_stars << "\n";
 
 		// get gas+particle mass
-		const double total_mass = total_mass_final + all_stars_total_mass;
-		amrex::Print() << "In the final state, gas+particle mass = " << total_mass / M_sol << " Msun\n";
+		const double m_final = m_gas_final + m_stars_final;
+		amrex::Print() << "gas+particle mass = " << m_final / M_sol << " Msun\n";
 
 		// relative error
-		const double rel_error_gas_mass = std::abs(total_mass_init - total_mass_final) / total_mass_init;
+		const double rel_error_gas_mass = std::abs(m_gas_init - m_final) / m_gas_init;
 		amrex::Print() << "\nRelative error:\n";
 		amrex::Print() << "rel_err(gas_mass) = " << rel_error_gas_mass << "\n";
 	}

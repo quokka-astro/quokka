@@ -37,5 +37,5 @@ quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMom
 
 particles.verbose = 1
 
-max_timesteps = 2
+max_timesteps = 1
 plotfile_interval = 1
