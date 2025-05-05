@@ -1408,8 +1408,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// particleRegister_.applySinkFormation(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Only create particles at the finest level to avoid duplicate particle creation in regions where finer levels exist
-	// particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
-	particleRegister_.createParticlesFromState(state_new_cc_[lev], lev, time, dt);
+	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Sink accretion, stage 2: update the particle states
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
