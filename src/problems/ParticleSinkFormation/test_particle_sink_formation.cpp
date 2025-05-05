@@ -1,5 +1,5 @@
-/// \file test_particle_SF.cpp
-/// \brief Defines a test problem for stochastic star formation.
+/// \file test_particle_sink_formation.cpp
+/// \brief Defines a test problem for sink particle formation.
 ///
 
 #include "AMReX.H"
@@ -14,7 +14,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
-#include "test_particle_SF.hpp"
+#include "test_particle_sink_formation.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -36,7 +36,7 @@ const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
 
 template <> struct quokka::EOS_Traits<SinkProblem> {
@@ -140,70 +140,40 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	// // get total mass of the initial gas
-	// amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	// amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	// amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	// double total_total_mass = NAN;
-	// double total_total_mass_final = NAN;
-	// double total_particle_mass = 0.0;
-
-	// // get total particle mass
-	// const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
-	// if (amrex::ParallelDescriptor::IOProcessor()) {
-	// 	// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
-	// 	// d[3]; });
-	// 	for (const auto &p : real_data) {
-	// 		total_particle_mass += p[3];
-	// 	}
-	// 	total_total_mass = total_mass_init + total_particle_mass;
-	// 	amrex::Print() << "\nBefore evolution:\n";
-	// 	amrex::Print() << "Total gas mass = " << total_mass_init << "\n";
-	// 	amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";
-	// 	amrex::Print() << "Total total mass = " << total_total_mass << "\n";
-	// }
+	// get total gas mass of the initial state
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
 	// evolve
 	sim.evolve();
 
+	// get total gas mass of the final state
+	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+
 	// get total mass of the final particles
 	const auto [real_data_final, idata_final] =
-	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const int mass_idx = 3;
-		double high_mass_stars_total_mass = 0.0;
 		double all_stars_total_mass = 0.0;
-		int num_high_mass_stars = 0;
 		const int num_all_stars = static_cast<int>(real_data_final.size());
 		for (int i = 0; i < num_all_stars; ++i) {
-			if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
-				high_mass_stars_total_mass += real_data_final[i][mass_idx];
-				num_high_mass_stars++;
-			}
 			all_stars_total_mass += real_data_final[i][mass_idx];
 		}
-		const double mean_mass_high_mass_stars = high_mass_stars_total_mass / num_high_mass_stars;
-		const double mass_fraction_high_mass_stars = high_mass_stars_total_mass / all_stars_total_mass;
-		const double mean_mass_high_mass_stars_Msun = mean_mass_high_mass_stars / M_sol;
 		amrex::Print() << "Total particle mass = " << all_stars_total_mass / M_sol << " Msun\n";
-		amrex::Print() << "Number of high mass stars = " << num_high_mass_stars << "\n";
-		amrex::Print() << "Number of all stars = " << num_all_stars << "\n";
-		amrex::Print() << "Mstar_high_mean = " << mean_mass_high_mass_stars_Msun << " Msun\n";
-		amrex::Print() << "fstar_high = " << mass_fraction_high_mass_stars << "\n";
+		amrex::Print() << "Number of stars = " << num_all_stars << "\n";
 
-		// expectations
-		const double exp_Mstar_high_mean = 19.39;
-		const double exp_fstar_high = 0.220;
-		amrex::Print() << "\nExpected values:\n";
-		amrex::Print() << "Mstar_high_mean = " << exp_Mstar_high_mean << " Msun\n";
-		amrex::Print() << "fstar_high = " << exp_fstar_high << "\n";
+		amrex::Print() << "\nIn the initial state, gas mass = " << total_mass_init / M_sol << " Msun\n";
+
+		// get gas+particle mass
+		const double total_mass = total_mass_final + all_stars_total_mass;
+		amrex::Print() << "In the final state, gas+particle mass = " << total_mass / M_sol << " Msun\n";
 
 		// relative error
-		const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / exp_Mstar_high_mean;
-		const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
+		const double rel_error_gas_mass = std::abs(total_mass_init - total_mass_final) / total_mass_init;
 		amrex::Print() << "\nRelative error:\n";
-		amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
-		amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
+		amrex::Print() << "rel_err(gas_mass) = " << rel_error_gas_mass << "\n";
 	}
 
 	return 0;
