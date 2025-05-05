@@ -158,6 +158,66 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 };
 
 #if AMREX_SPACEDIM == 3
+
+// Specialization for Sink particles
+template <> struct ParticleCreationTraits<ParticleType::Sink> {
+	// Default nested ParticleChecker - determines if a particle should be created at a location
+	template <typename problem_t> struct ParticleChecker {
+		amrex::Real current_time;
+		amrex::Real dt;
+
+		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
+
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+		{
+			// Default implementation creates no particles
+			amrex::ignore_unused(state_arr, i, j, k, dx);
+			return 0;
+		}
+	};
+
+	// Default nested ParticleCreator - initializes a particle's properties
+	template <typename problem_t> struct ParticleCreator {
+		int mass_idx;
+		int birth_time_index;
+		int evolution_stage_index;
+		int cpu_id;
+		amrex::Long pid_start;
+		amrex::Real current_time;
+		amrex::Real dt;
+
+		AMREX_GPU_HOST_DEVICE
+		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
+				amrex::Real current_time, amrex::Real dt)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
+		      pid_start(particle_id_start), current_time(current_time), dt(dt)
+		{
+		}
+
+		template <typename ParticleType, typename StateArray>
+		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+		{
+			// Default implementation does nothing
+			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset);
+		}
+	};
+
+	// Main method to create particles - uses the helper implementation
+	template <typename problem_t, typename ContainerType>
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
+				    int evolution_stage_index = -1, int birth_time_index = -1)
+	{
+		// Use the common implementation with our checker and creator types
+		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Sink>::template ParticleChecker,
+							  ParticleCreationTraits<ParticleType::Sink>::template ParticleCreator>(
+		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
+	}
+};
+
+
 // Specialization for StochasticStellarPop particles
 template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	// Specialized nested ParticleChecker for StochasticStellarPop particles
