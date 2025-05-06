@@ -71,7 +71,7 @@ const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
 const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
 const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
 
-const double omega = std::sqrt(std::pow(alfven_speed, 2) * std::pow(k_amplitude, 2) * std::pow(cos_theta, 2));
+const double omega = std::sqrt(alfven_speed*alfven_speed * k_amplitude*k_amplitude * cos_theta*cos_theta);
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double /*x1*/, double /*x2*/, double /*x3*/, double /*time*/) -> double { return 0.0; }
 
@@ -91,8 +91,6 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real x3_L = prob_lo[2] + k * dx[2];
 
 	const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
-	const amrex::Real x2_C = x2_L + static_cast<amrex::Real>(0.5) * dx[1];
-	const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
 
 	if (cen == quokka::centering::cc) {
 		const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);

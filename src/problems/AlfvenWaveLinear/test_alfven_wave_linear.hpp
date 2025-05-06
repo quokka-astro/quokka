@@ -12,7 +12,6 @@
 #include <fmt/format.h>
 
 // internal headers
-#include "hydro_system.hpp"
 #include "mhd_system.hpp"
 
 // function definitions
