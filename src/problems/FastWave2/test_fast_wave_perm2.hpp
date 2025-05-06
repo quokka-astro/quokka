@@ -1,5 +1,5 @@
-#ifndef TEST_FAST_WAVE_HPP_ // NOLINT
-#define TEST_FAST_WAVE_HPP_
+#ifndef TEST_FAST_WAVE_2_HPP_ // NOLINT
+#define TEST_FAST_WAVE_2_HPP_
 //==============================================================================
 // Copyright 2025 Neco Elizabeth Cole-Kodikara.
 // Credit to Nico Kriel for creating the MHD module and Alfven wave test
@@ -18,4 +18,4 @@
 
 // function definitions
 
-#endif // TEST_FAST_WAVE_HPP_
+#endif // TEST_FAST_WAVE_2_HPP_
