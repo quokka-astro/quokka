@@ -225,8 +225,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				// define EMF FArrayBox
 				ec_fabs_E_q[iquad].resize(box_ec, 1);
 				const auto &E2_qi = ec_fabs_E_q[iquad].array();
-				const int w0_comp = extrap_dirs[0];
-				const int w1_comp = extrap_dirs[1];
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const double u0 = U0_qi(i, j, k);
 					const double u1 = U1_qi(i, j, k);
