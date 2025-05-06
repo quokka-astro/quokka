@@ -34,8 +34,9 @@ const double year = 3.15576e+07; // in seconds
 const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
-AMREX_GPU_MANAGED Real T0 = 10.0 ; // K
-AMREX_GPU_MANAGED Real sigma1 = 700000.0;; 
+AMREX_GPU_MANAGED Real T0 = 10.0; // K
+AMREX_GPU_MANAGED Real sigma1 = 700000.0;
+;
 
 template <> struct Particle_Traits<ParticleSFProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -70,34 +71,36 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 	const double rho_e = CV * T0 * rho0;
 	const auto prob_lo = geom[0].ProbLoArray();
 	const auto prob_hi = geom[0].ProbHiArray();
-	
+
 	const auto dx = geom[0].CellSizeArray();
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		int imid = std::floor( prob_hi[0]/ 2 / dx[0]);
-		int jmid = std::floor( prob_hi[1]/ 2 / dx[1]);
-		int kmid = std::floor( prob_hi[2]/ 2 / dx[2]);
+		int imid = std::floor(prob_hi[0] / 2 / dx[0]);
+		int jmid = std::floor(prob_hi[1] / 2 / dx[1]);
+		int kmid = std::floor(prob_hi[2] / 2 / dx[2]);
 		double rho = 1.0e-23; // g cm^{-3}
 
-		double P = rho * std::pow(sigma1, 2.0) ;
+		double P = rho * std::pow(sigma1, 2.0);
 		const auto gamma = HydroSystem<ParticleSFProblem>::gamma_;
-		
-		if(i==imid && j==jmid && (k==kmid)){
-			double cs = std::sqrt(C::k_B*T0/0.6/C::m_u);
+
+		if (i == imid && j == jmid && (k == kmid)) {
+			double cs = std::sqrt(C::k_B * T0 / 0.6 / C::m_u);
 			rho = 5.0 * cs * cs / (dx[0] * dx[0] * Gconst_);
-			P = rho * std::pow(cs, 2.0) ;
-			double LambaJ = cs/std::sqrt(Gconst_*rho);
-			double Jdx = 0.5 * dx[0] ;
-			amrex::Print() << "rho = " << rho << " lambdaJ="<< LambaJ << " J*dx = " << Jdx << " P = " << P << "\n";
+			P = rho * std::pow(cs, 2.0);
+			double LambaJ = cs / std::sqrt(Gconst_ * rho);
+			double Jdx = 0.5 * dx[0];
+			amrex::Print() << "rho = " << rho << " lambdaJ=" << LambaJ << " J*dx = " << Jdx << " P = " << P << "\n";
 			amrex::Print() << "imid = " << imid << " jmid = " << jmid << " kmid = " << k << "\n";
 		}
-		state_cc(i, j, k,    HydroSystem<ParticleSFProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::energy_index) = P / (gamma - 1.);;
-		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::internalEnergy_index) = P / (gamma - 1.);;
+		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::energy_index) = P / (gamma - 1.);
+		;
+		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::internalEnergy_index) = P / (gamma - 1.);
+		;
 	});
 }
 
@@ -185,40 +188,40 @@ auto problem_main() -> int
 	const auto [real_data_final, idata_final] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
 	// if (amrex::ParallelDescriptor::IOProcessor()) {
-		const int mass_idx = 3;
-		double high_mass_stars_total_mass = 0.0;
-		double all_stars_total_mass = 0.0;
-		int num_high_mass_stars = 0;
-		const int num_all_stars = static_cast<int>(real_data_final.size());
-		for (int i = 0; i < num_all_stars; ++i) {
-			if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
-				high_mass_stars_total_mass += real_data_final[i][mass_idx];
-				num_high_mass_stars++;
-			}
-			all_stars_total_mass += real_data_final[i][mass_idx];
+	const int mass_idx = 3;
+	double high_mass_stars_total_mass = 0.0;
+	double all_stars_total_mass = 0.0;
+	int num_high_mass_stars = 0;
+	const int num_all_stars = static_cast<int>(real_data_final.size());
+	for (int i = 0; i < num_all_stars; ++i) {
+		if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
+			high_mass_stars_total_mass += real_data_final[i][mass_idx];
+			num_high_mass_stars++;
 		}
-		const double mean_mass_high_mass_stars = high_mass_stars_total_mass / num_high_mass_stars;
-		const double mass_fraction_high_mass_stars = high_mass_stars_total_mass / all_stars_total_mass;
-		const double mean_mass_high_mass_stars_Msun = mean_mass_high_mass_stars / M_sol;
-		amrex::Print() << "Total particle mass = " << all_stars_total_mass / M_sol << " Msun\n";
-		amrex::Print() << "Number of high mass stars = " << num_high_mass_stars << "\n";
-		amrex::Print() << "Number of all stars = " << num_all_stars << "\n";
-		amrex::Print() << "Mstar_high_mean = " << mean_mass_high_mass_stars_Msun << " Msun\n";
-		amrex::Print() << "fstar_high = " << mass_fraction_high_mass_stars << "\n";
+		all_stars_total_mass += real_data_final[i][mass_idx];
+	}
+	const double mean_mass_high_mass_stars = high_mass_stars_total_mass / num_high_mass_stars;
+	const double mass_fraction_high_mass_stars = high_mass_stars_total_mass / all_stars_total_mass;
+	const double mean_mass_high_mass_stars_Msun = mean_mass_high_mass_stars / M_sol;
+	amrex::Print() << "Total particle mass = " << all_stars_total_mass / M_sol << " Msun\n";
+	amrex::Print() << "Number of high mass stars = " << num_high_mass_stars << "\n";
+	amrex::Print() << "Number of all stars = " << num_all_stars << "\n";
+	amrex::Print() << "Mstar_high_mean = " << mean_mass_high_mass_stars_Msun << " Msun\n";
+	amrex::Print() << "fstar_high = " << mass_fraction_high_mass_stars << "\n";
 
-		// expectations
-		const double exp_Mstar_high_mean = 19.39;
-		const double exp_fstar_high = 0.220;
-		amrex::Print() << "\nExpected values:\n";
-		amrex::Print() << "Mstar_high_mean = " << exp_Mstar_high_mean << " Msun\n";
-		amrex::Print() << "fstar_high = " << exp_fstar_high << "\n";
+	// expectations
+	const double exp_Mstar_high_mean = 19.39;
+	const double exp_fstar_high = 0.220;
+	amrex::Print() << "\nExpected values:\n";
+	amrex::Print() << "Mstar_high_mean = " << exp_Mstar_high_mean << " Msun\n";
+	amrex::Print() << "fstar_high = " << exp_fstar_high << "\n";
 
-		// relative error
-		const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / exp_Mstar_high_mean;
-		const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
-		amrex::Print() << "\nRelative error:\n";
-		amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
-		amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
+	// relative error
+	const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / exp_Mstar_high_mean;
+	const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
+	amrex::Print() << "\nRelative error:\n";
+	amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
+	amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
 	// }
 
 	return 0;
