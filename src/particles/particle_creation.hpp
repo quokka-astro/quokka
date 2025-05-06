@@ -166,7 +166,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr amrex::Real J = 0.5;	     // Jeans parameter
 
 	// Constants for the Chabrier IMF
-	//These are the parameters used in ChabrierIMGCalculation.nb
+	// These are the parameters used in ChabrierIMGCalculation.nb
 	static constexpr amrex::Real m_star_high = 8.0 * C::M_solar; // all stars above this mass are considered high mass stars
 	static constexpr amrex::Real m_imf_max = 120.0 * C::M_solar; // high mass limit of the IMF
 	static constexpr amrex::Real alpha = 2.35;		     // slope of the powerlaw
@@ -177,7 +177,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	// of fstar_high and m_star_high_avg
 
 	// // fstar is the fraction of number of high mass stars from the IMF
-	static constexpr double fstar_high = 0.2055 ;
+	static constexpr double fstar_high = 0.2055;
 	static constexpr double m_star_high_avg = 19.39 * C::M_solar; // average mass of high mass stars
 
 	ParticleCreationTraits() = default;
@@ -209,7 +209,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			// Checkout docs/star_formation for more details
 
 			if (LambdaJ < J * dx[0]) { // &&
-			    // random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
+				// random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star * dt / t_ff;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
@@ -310,7 +310,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						//... from a log normal distribution
 						// Checkout docs/star_formation for more details
 
-
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
 								for (int kk = k - 1; kk <= k + 1; ++kk) {
@@ -330,7 +329,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 							}
 						}
 
-						//Compute the centre of mass velocity
+						// Compute the centre of mass velocity
 						v_cm_x = numx / denominator;
 						v_cm_y = numy / denominator;
 						v_cm_z = numz / denominator;
@@ -380,7 +379,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						total_momy += p.rdata(mass_idx + 2) * p.rdata(mass_idx);
 						total_momz += p.rdata(mass_idx + 3) * p.rdata(mass_idx);
 
-						p.idata(evolution_stage_index) = interpolate_fate(p.rdata(mass_idx)) == 1 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : 0 ;;
+						p.idata(evolution_stage_index) =
+						    interpolate_fate(p.rdata(mass_idx)) == 1 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : 0;
+						;
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
 					}
 				}
