@@ -20,35 +20,38 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct SinkProblem {
+struct ParticleSFProblem {
 };
 
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 const double rho0 = 1.0 * C::m_p; // g cm^-3
-const double T0 = 10.0;		  // K
+// const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
 const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
-template <> struct Particle_Traits<SinkProblem> {
+AMREX_GPU_MANAGED Real T0 = 10.0 ; // K
+AMREX_GPU_MANAGED Real sigma1 = 700000.0;; 
+
+template <> struct Particle_Traits<ParticleSFProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
-template <> struct quokka::EOS_Traits<SinkProblem> {
+template <> struct quokka::EOS_Traits<ParticleSFProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
 };
 
-template <> struct HydroSystem_Traits<SinkProblem> {
+template <> struct HydroSystem_Traits<ParticleSFProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<SinkProblem> {
+template <> struct Physics_Traits<ParticleSFProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -60,33 +63,45 @@ template <> struct Physics_Traits<SinkProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const double rho_e = CV * T0 * rho0;
 	const auto prob_lo = geom[0].ProbLoArray();
+	const auto prob_hi = geom[0].ProbHiArray();
+	
 	const auto dx = geom[0].CellSizeArray();
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double x = prob_lo[0] + (i * dx[0]);
-		const double y = prob_lo[1] + (j * dx[1]);
-		const double z = prob_lo[2] + (k * dx[2]);
-		if (x <= sf_cell_loc && x + dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
-			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density;
-		} else {
-			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
+		int imid = std::floor( prob_hi[0]/ 2 / dx[0]);
+		int jmid = std::floor( prob_hi[1]/ 2 / dx[1]);
+		int kmid = std::floor( prob_hi[2]/ 2 / dx[2]);
+		double rho = 1.0e-23; // g cm^{-3}
+
+		double P = rho * std::pow(sigma1, 2.0) ;
+		const auto gamma = HydroSystem<ParticleSFProblem>::gamma_;
+		
+		if(i==imid && j==jmid && (k==kmid)){
+			double cs = std::sqrt(C::k_B*T0/0.6/C::m_u);
+			rho = 5.0 * cs * cs / (dx[0] * dx[0] * Gconst_);
+			P = rho * std::pow(cs, 2.0) ;
+			double LambaJ = cs/std::sqrt(Gconst_*rho);
+			double Jdx = 0.5 * dx[0] ;
+			amrex::Print() << "rho = " << rho << " lambdaJ="<< LambaJ << " J*dx = " << Jdx << " P = " << P << "\n";
+			amrex::Print() << "imid = " << imid << " jmid = " << jmid << " kmid = " << k << "\n";
 		}
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::internalEnergy_index) = rho_e;
+		state_cc(i, j, k,    HydroSystem<ParticleSFProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x1Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x2Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x3Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::energy_index) = P / (gamma - 1.);;
+		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::internalEnergy_index) = P / (gamma - 1.);;
 	});
 }
 
-template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement: static mesh refinement for the whole domain
 
@@ -105,19 +120,19 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<SinkProblem>::x1Momentum_index) && (dim == 0)) {
+		if ((n == HydroSystem<ParticleSFProblem>::x1Momentum_index) && (dim == 0)) {
 			return true;
 		}
-		if ((n == HydroSystem<SinkProblem>::x2Momentum_index) && (dim == 1)) {
+		if ((n == HydroSystem<ParticleSFProblem>::x2Momentum_index) && (dim == 1)) {
 			return true;
 		}
-		if ((n == HydroSystem<SinkProblem>::x3Momentum_index) && (dim == 2)) {
+		if ((n == HydroSystem<ParticleSFProblem>::x3Momentum_index) && (dim == 2)) {
 			return true;
 		}
 		return false;
 	};
 
-	const int ncomp_cc = Physics_Indices<SinkProblem>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<ParticleSFProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -130,7 +145,7 @@ auto problem_main() -> int
 	// amrex::ParmParse const pp("problem");
 
 	// Problem initialization
-	QuokkaSimulation<SinkProblem> sim(BCs_cc);
+	QuokkaSimulation<ParticleSFProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
@@ -169,7 +184,7 @@ auto problem_main() -> int
 	// get total mass of the final particles
 	const auto [real_data_final, idata_final] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
-	if (amrex::ParallelDescriptor::IOProcessor()) {
+	// if (amrex::ParallelDescriptor::IOProcessor()) {
 		const int mass_idx = 3;
 		double high_mass_stars_total_mass = 0.0;
 		double all_stars_total_mass = 0.0;
@@ -204,7 +219,7 @@ auto problem_main() -> int
 		amrex::Print() << "\nRelative error:\n";
 		amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
 		amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
-	}
+	// }
 
 	return 0;
 }
