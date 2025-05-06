@@ -987,6 +987,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	if (plotTimeInterval_ > 0) {
 		while (next_plot_file_time < cur_time) {
 			// advance next_plot_file_time until it is >= cur_time
+			// this is needed for restarts
 			next_plot_file_time += plotTimeInterval_;
 		}
 	}
@@ -994,6 +995,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	if (checkpointTimeInterval_ > 0) {
 		while (next_chk_file_time < cur_time) {
 			// advance next_chk_file_time until it is >= cur_time
+			// this is needed for restarts
 			next_chk_file_time += checkpointTimeInterval_;
 		}
 	}
