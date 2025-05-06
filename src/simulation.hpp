@@ -2399,25 +2399,16 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int included_ghosts) -> amrex::MultiFab //make fc version, refer to notes
 {
-	// Combine state_new_cc_[lev] and derived variables in a new MF
-	//const int ncomp_cc = state_new_cc_[lev].nComp();
-	//int comp = 0;
-	// const int ncomp_cc = state_new_cc_[lev].nComp();
-	// int comp = 0;
-	 //int ncomp_per_dim_fc = 0;
-	 int ncomp_tot_fc = 0;
-	 if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-	 	//ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
-	 	ncomp_tot_fc = Physics_Indices<problem_t>::nvarTotal_fc;
-	 }
+	// get number of 
+	int comp = 0;
+	int ncomp_tot_fc = 0;
+	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
+	 	ncomp_tot_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
+	}
 	// const int ncomp_deriv = derivedNames_.size();
-	// const int ncomp_plotMF_fc = ncomp_tot_fc;
+	const int ncomp_plotMF_fc = ncomp_tot_fc;
 
-
-	amrex::MultiFab plotMF_fc(grids[lev], dmap[lev], ncomp_tot_fc, nghost_fc_);
-	// Fill ghost zones for state_new_fc_
-
-
+	amrex::MultiFab plotMF_fc(grids[lev], dmap[lev], ncomp_plotMF_fc, nghost_fc_);
 
 	// Fill ghost zones for state_new_fc_
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -2425,8 +2416,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 	}
 
-
-
+	// copy data from face-centred state variables
+	for (int i = 0; i < ncomp_plotMF_fc; i++) {
+		amrex::MultiFab::Copy(plotMF_fc, state_new_fc_[lev][idim], i, comp, 1, nghost_fc_);
+		comp++;
+	}
 	return plotMF_fc;
 }
 
