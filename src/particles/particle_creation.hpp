@@ -166,46 +166,19 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr amrex::Real J = 0.5;	     // Jeans parameter
 
 	// Constants for the Chabrier IMF
+	//These are the parameters used in ChabrierIMGCalculation.nb
 	static constexpr amrex::Real m_star_high = 8.0 * C::M_solar; // all stars above this mass are considered high mass stars
-	static constexpr amrex::Real m_imf_min = 0.08 * C::M_solar;  // lower limit of the IMF
 	static constexpr amrex::Real m_imf_max = 120.0 * C::M_solar; // high mass limit of the IMF
-	static constexpr amrex::Real m_imf_break = 1.0 * C::M_solar; // IMF is lognormal below this mass and powerlaw above
-	static constexpr amrex::Real imf_disp = 0.55;		     // dispersion of the lognormal IMF
-	static constexpr amrex::Real imf_mu = 32.599;		     //=log10(0.2 * C::M_solar), mean of the lognormal IMF, avoid compiler error
 	static constexpr amrex::Real alpha = 2.35;		     // slope of the powerlaw
 
-	// Write out expression because compiler error for nested gcem
-	static constexpr double log_m_imf_break = 33.298634783124434; // Log10 (m_imf_break)
-	static constexpr double log_m_imf_min = 32.20172477011638;    // Log(m_imf_min)
-	static constexpr double sqrt_2 = 1.4142135623730951;	      // sqrt(2.0)
-	static constexpr double arg_m_imf_break = (log_m_imf_break - imf_mu) / (sqrt_2 * imf_disp);
-	static constexpr double arg_m_imf_min = (log_m_imf_min - imf_mu) / (sqrt_2 * imf_disp);
-	static constexpr double pow_alpha_m_imf_max = 4.147289859088856e-13;	// pow(m_imf_max, 2.0 - alpha);
-	static constexpr double pow_alpha_m_imf_break = 2.215530973426628e-12;	// pow(m_imf_break, 2.0 - alpha);
-	static constexpr double pow_alpha_m_star_high = 1.0700309275455029e-12; // pow(m_star_high, 2.0 - alpha);
-
-	// Here we calculate the fraction of high mass stars and the average mass of high mass stars
-	//... by assuming a Chabrier IMF which has a lognormal distribution for masses above m_imf_break
-	//... and a powerlaw before larger masses.
 	// fstar_high sets the mass of the high mass stars in a cell (=particle mass * fstar_high)
 	// m_star_high_avg is the average mass of the high mass stars in a cell
-	// Checkout docs/star_formation for more details
-
-	static constexpr double norm_ratio =
-	    gcem::pow(m_imf_break, (1 - alpha)) * imf_disp * gcem::sqrt(2.0 * M_PI) / gcem::exp(-(arg_m_imf_break * arg_m_imf_break));
-
-	static constexpr double total_star_mass = ((2. - alpha) * norm_ratio) * gcem::exp(imf_mu + imf_disp * imf_disp / 2) *
-						      (gcem::erf(arg_m_imf_break - imf_disp / sqrt_2) - gcem::erf(arg_m_imf_min - imf_disp / sqrt_2)) +
-						  pow_alpha_m_imf_max - pow_alpha_m_imf_break;
-
-	static constexpr double mass_highmass_stars = pow_alpha_m_imf_max - pow_alpha_m_star_high;
+	// Checkout docs/star_formation for more details on the physics and ChabrierIMGCalculation.nb for the derivation
+	// of fstar_high and m_star_high_avg
 
 	// // fstar is the fraction of number of high mass stars from the IMF
-	static constexpr double fstar_high = mass_highmass_stars / total_star_mass;
-	;
-
-	static constexpr double m_star_high_avg = m_imf_max * ((alpha - 1.0) / (alpha - 2.0)) * (1. - gcem::pow(m_star_high / m_imf_max, 2.0 - alpha)) /
-						  (1. - gcem::pow(m_star_high / m_imf_max, 1.0 - alpha)); // average mass of high mass stars
+	static constexpr double fstar_high = 0.2055 ;
+	static constexpr double m_star_high_avg = 19.39 * C::M_solar; // average mass of high mass stars
 
 	ParticleCreationTraits() = default;
 
@@ -234,8 +207,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			// Check if the cell violates the Jeans condition but create a particle only if prob_star_formation > random draw
 			// eps_star is the fraction of gas mass that goes into star particles
 			// Checkout docs/star_formation for more details
-			if (LambdaJ < J * dx[0] &&
-			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
+
+			if (LambdaJ < J * dx[0]) { // &&
+			    // random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star * dt / t_ff;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
@@ -327,11 +301,15 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double vy_adj = NAN;
 						double vz_adj = NAN;
 						double rho_adj = NAN;
+						double v_cm_x = NAN;
+						double v_cm_y = NAN;
+						double v_cm_z = NAN;
 
 						// Get the average velocity from the velocity dispersion of the surrounding cells
 						// We use the velocity dispersion of the surrounding cells to get the velocity of the high mass star...
 						//... from a log normal distribution
 						// Checkout docs/star_formation for more details
+
 
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
@@ -344,9 +322,34 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) /
 										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
 									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									numx += rho_adj * (vx_adj - (vx)) * (vx_adj - (vx));
-									numy += rho_adj * (vy_adj - (vy)) * (vy_adj - (vy));
-									numz += rho_adj * (vz_adj - (vz)) * (vz_adj - (vz));
+									numx += rho_adj * vx_adj;
+									numy += rho_adj * vy_adj;
+									numz += rho_adj * vz_adj;
+									denominator += rho_adj;
+								}
+							}
+						}
+
+						//Compute the centre of mass velocity
+						v_cm_x = numx / denominator;
+						v_cm_y = numy / denominator;
+						v_cm_z = numz / denominator;
+
+						// Use the centre of mass velocity to get the velocity dispersion
+						for (int ii = i - 1; ii <= i + 1; ++ii) {
+							for (int jj = j - 1; jj <= j + 1; ++jj) {
+								for (int kk = k - 1; kk <= k + 1; ++kk) {
+
+									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) /
+										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) /
+										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) /
+										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+									numx += rho_adj * (vx_adj - v_cm_x) * (vx_adj - v_cm_x);
+									numy += rho_adj * (vy_adj - v_cm_y) * (vy_adj - v_cm_y);
+									numz += rho_adj * (vz_adj - v_cm_z) * (vz_adj - v_cm_z);
 
 									denominator += rho_adj;
 								}
@@ -356,9 +359,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						const double sigma_sq_y = numy / denominator;
 						const double sigma_sq_z = numz / denominator;
 
-						const double signx = vx == 0.0 ? 1.0 : (std::abs(vx) / vx);
-						const double signy = vy == 0.0 ? 1.0 : (std::abs(vy) / vy);
-						const double signz = vz == 0.0 ? 1.0 : (std::abs(vz) / vz);
+						const double signx = v_cm_x == 0.0 ? 1.0 : (std::abs(v_cm_x) / v_cm_x);
+						const double signy = v_cm_y == 0.0 ? 1.0 : (std::abs(v_cm_y) / v_cm_y);
+						const double signz = v_cm_z == 0.0 ? 1.0 : (std::abs(v_cm_z) / v_cm_z);
 
 						p.rdata(mass_idx + 1) = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
 						p.rdata(mass_idx + 2) = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
@@ -377,7 +380,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						total_momy += p.rdata(mass_idx + 2) * p.rdata(mass_idx);
 						total_momz += p.rdata(mass_idx + 3) * p.rdata(mass_idx);
 
-						p.idata(evolution_stage_index) = interpolate_fate(p.rdata(mass_idx));
+						p.idata(evolution_stage_index) = interpolate_fate(p.rdata(mass_idx)) == 1 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : 0 ;;
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
 					}
 				}
