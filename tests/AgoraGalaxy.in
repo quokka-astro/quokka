@@ -25,7 +25,7 @@ do_reflux = 1
 do_subcycle = 0
 
 cfl = 0.3
-max_timesteps = 1000
+max_timesteps = 100
 stop_time = 6.3e15         # 200 Myr
 
 cooling.enabled = 1
@@ -35,8 +35,8 @@ cooling.hdf5_data_file = "./CloudyData_UVB=HM2012.h5"
 temperature_floor = 1e4
 density_floor = 1e-30
 
-checkpoint_interval = 100
-plotfile_interval = 10
+checkpoint_interval = 1000
+plottime_interval = 7.885e13	# 2.5 Myr
 derived_vars = temperature gpot
 
 # max_level = 7 implies a maximum resolution of dx =  73.2 pc (LOW res).
