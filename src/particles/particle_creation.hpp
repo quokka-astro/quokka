@@ -208,8 +208,13 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			// eps_star is the fraction of gas mass that goes into star particles
 			// Checkout docs/star_formation for more details
 
+<<<<<<< HEAD
 			if (LambdaJ < J * dx[0]) { // &&
 				// random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
+=======
+			if ((LambdaJ < J * dx[0]) &&
+			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
+>>>>>>> 08620ea7 (remove commented part)
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star * dt / t_ff;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
