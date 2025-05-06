@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <gcem.hpp>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -57,8 +58,8 @@ constexpr double k_amplitude = 2.0 * M_PI * num_modes;
 // alignment between the background magnetic field and the direction of wave propogation (in the x1-x2 plane). recall that hat(k) = (1, 0, 0) and hat(delta_u) =
 // (0, 1, 0)
 constexpr double theta_degrees = 0.0; // degrees
-const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
-const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
+constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
+constexpr double sin_theta = gcem::sin(theta_degrees * M_PI / 180.0);
 
 // background states
 constexpr double bg_density = 1.0;
@@ -67,11 +68,11 @@ constexpr double bg_mag_amplitude = 1.0;
 
 // magnetic field properties
 constexpr double delta_b = 1e-6;
-const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
-const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
-const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
+constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
+constexpr double bg_mag_x1 = bg_mag_amplitude * cos_theta;
+constexpr double bg_mag_x2 = bg_mag_amplitude * sin_theta;
 
-const double omega = std::sqrt(alfven_speed * alfven_speed * k_amplitude * k_amplitude * cos_theta * cos_theta);
+constexpr double omega = gcem::sqrt(alfven_speed * alfven_speed * k_amplitude * k_amplitude * cos_theta * cos_theta);
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double /*x1*/, double /*x2*/, double /*x3*/, double /*time*/) -> double { return 0.0; }
 
