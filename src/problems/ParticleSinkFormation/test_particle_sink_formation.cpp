@@ -181,12 +181,14 @@ auto problem_main() -> int
 		amrex::Print() << "\nRelative error:\n";
 		amrex::Print() << "rel_err(gas_mass) = " << rel_error_gas_mass << "\n";
 
-		status = 1;
-		if (rel_error_gas_mass < 1.0e-10) {
-			status = 0;
-			amrex::Print() << "Test passed\n";
+		if (num_stars == 0) {
+			status = 1;
+			amrex::Print() << "Test failed: no particles created !!!\n";
+		} else if (std::isnan(rel_error_gas_mass) || rel_error_gas_mass > 1.0e-10) {
+			status = 1;
+			amrex::Print() << "Test failed: mass not conserved !!!\n";
 		} else {
-			amrex::Print() << "Test failed !!!\n";
+			amrex::Print() << "Test passed\n";
 		}
 	}
 
