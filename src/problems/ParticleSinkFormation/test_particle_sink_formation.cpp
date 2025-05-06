@@ -31,7 +31,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
-const double sf_cell_density = 1.00000000001e3 * C::m_p; // g cm^-3
+const double sf_cell_density = 1.0e5 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
@@ -153,7 +153,7 @@ auto problem_main() -> int
 
 	// get total particle mass of the final state
 	const auto [real_data_final, idata_final] =
-	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0);
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "Initial state:\n";
 		amrex::Print() << "Gas mass = " << m_gas_init / M_sol << " Msun\n";
