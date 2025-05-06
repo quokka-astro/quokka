@@ -71,7 +71,7 @@ const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
 const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
 const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
 
-const double omega = std::sqrt(alfven_speed*alfven_speed * k_amplitude*k_amplitude * cos_theta*cos_theta);
+const double omega = std::sqrt(alfven_speed * alfven_speed * k_amplitude * k_amplitude * cos_theta * cos_theta);
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double /*x1*/, double /*x2*/, double /*x3*/, double /*time*/) -> double { return 0.0; }
 
