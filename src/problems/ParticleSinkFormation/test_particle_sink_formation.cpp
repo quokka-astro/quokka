@@ -151,6 +151,8 @@ auto problem_main() -> int
 	// get total gas mass of the final state
 	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
+	int status = 0;
+
 	// get total particle mass of the final state
 	const auto [real_data_final, idata_final] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero();
@@ -178,7 +180,15 @@ auto problem_main() -> int
 		const double rel_error_gas_mass = std::abs(m_gas_init - m_final) / m_gas_init;
 		amrex::Print() << "\nRelative error:\n";
 		amrex::Print() << "rel_err(gas_mass) = " << rel_error_gas_mass << "\n";
+
+		status = 1;
+		if (rel_error_gas_mass < 1.0e-10) {
+			status = 0;
+			amrex::Print() << "Test passed\n";
+		} else {
+			amrex::Print() << "Test failed !!!\n";
+		}
 	}
 
-	return 0;
+	return status;
 }
