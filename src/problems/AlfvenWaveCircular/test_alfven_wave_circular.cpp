@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <gcem.hpp>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -55,13 +56,13 @@ constexpr double bg_mag_amplitude = 1.0;
 
 // magnetic field properties
 constexpr double delta_b = 1e-6;
-const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
+constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
 
-const double omega = std::sqrt(std::pow(alfven_speed, 2.0) * std::pow(k_amplitude, 2.0));
+constexpr double omega = gcem::sqrt(gcem::pow(alfven_speed, 2.0) * gcem::pow(k_amplitude, 2.0));
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double /*x2*/, double x3, double time) -> double
 {
-	return bg_mag_amplitude * delta_b * x3 * std::sin(omega * time - k_amplitude * x1);
+	return bg_mag_amplitude * delta_b * x3 * gcem::sin(omega * time - k_amplitude * x1);
 }
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/, double /*x3*/, double time) -> double
