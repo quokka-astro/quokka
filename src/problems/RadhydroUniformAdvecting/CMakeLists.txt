@@ -1,4 +1,4 @@
-add_executable(test_radhydro_uniform_advecting test_radhydro_uniform_advecting.cpp ../../util/fextract.cpp ${QuokkaObjSources})
+add_executable(test_radhydro_uniform_advecting test_radhydro_uniform_advecting.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radhydro_uniform_advecting)

@@ -969,9 +969,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	int last_projection_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
-	double next_plot_file_time = plotTimeInterval_;
-	double next_chk_file_time = checkpointTimeInterval_;
 	int last_chk_file_step = 0;
+
+	double next_plot_file_time = 0;
+	if (plotTimeInterval_ > 0) {
+		while (next_plot_file_time < cur_time) {
+			// advance next_plot_file_time until it is >= cur_time
+			// this is needed for restarts
+			next_plot_file_time += plotTimeInterval_;
+		}
+	}
+	double next_chk_file_time = 0;
+	if (checkpointTimeInterval_ > 0) {
+		while (next_chk_file_time < cur_time) {
+			// advance next_chk_file_time until it is >= cur_time
+			// this is needed for restarts
+			next_chk_file_time += checkpointTimeInterval_;
+		}
+	}
+
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
