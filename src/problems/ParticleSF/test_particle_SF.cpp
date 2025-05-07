@@ -102,9 +102,9 @@ template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::T
 {
 	// tag cells for refinement: static mesh refinement for the whole domain
 
-	auto const &dx = geom[lev].CellSizeArray();
-	auto const &plo = geom[lev].ProbLoArray();
-	auto const &phi = geom[lev].ProbHiArray();
+	// auto const &dx = geom[lev].CellSizeArray();
+	// auto const &plo = geom[lev].ProbLoArray();
+	// auto const &phi = geom[lev].ProbHiArray();
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -116,18 +116,18 @@ template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::T
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<ParticleSFProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<ParticleSFProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<ParticleSFProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
+	// auto isNormalComp = [=](int n, int dim) {
+	// 	if ((n == HydroSystem<ParticleSFProblem>::x1Momentum_index) && (dim == 0)) {
+	// 		return true;
+	// 	}
+	// 	if ((n == HydroSystem<ParticleSFProblem>::x2Momentum_index) && (dim == 1)) {
+	// 		return true;
+	// 	}
+	// 	if ((n == HydroSystem<ParticleSFProblem>::x3Momentum_index) && (dim == 2)) {
+	// 		return true;
+	// 	}
+	// 	return false;
+	// };
 
 	const int ncomp_cc = Physics_Indices<ParticleSFProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
