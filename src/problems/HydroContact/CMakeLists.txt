@@ -1,4 +1,4 @@
-add_executable(test_hydro_contact test_hydro_contact.cpp ../../util/fextract.cpp ${QuokkaObjSources})
+add_executable(test_hydro_contact test_hydro_contact.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_hydro_contact)
