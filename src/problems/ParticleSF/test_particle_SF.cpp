@@ -26,6 +26,7 @@ struct ParticleSFProblem {
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
+//NOLINT
 double rho0 = NAN; // g cm^-3
 // const double T0 = 10.0;		  // K
 // const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
@@ -34,7 +35,7 @@ const double year = 3.15576e+07; // in seconds
 // const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
 // const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
-AMREX_GPU_MANAGED Real T0 = 10.0; // K
+AMREX_GPU_MANAGED Real Tamb = 10.0; // K
 // AMREX_GPU_MANAGED Real sigma1 = 700000.0;
 ;
 
@@ -80,7 +81,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 		double P = NAN;
 		double rho = NAN;
 		const auto gamma = HydroSystem<ParticleSFProblem>::gamma_;
-		double cs = std::sqrt(C::k_B * T0 / C::m_u);
+		const double cs = std::sqrt(C::k_B * Tamb / C::m_u);
 		rho = 5.0 * cs * cs / (dx[0] * dx[0] * Gconst_);
 		rho0 = rho;
 		P = rho * std::pow(cs, 2.0) / gamma;
@@ -187,9 +188,9 @@ auto problem_main() -> int
 	const auto prob_lo = sim.geom[0].ProbLoArray();
 	const auto prob_hi = sim.geom[0].ProbHiArray();
 
-	const int nx = (prob_hi[0] - prob_lo[0]) / dx0[0];
-	const int ny = (prob_hi[1] - prob_lo[1]) / dx0[1];
-	const int nz = (prob_hi[2] - prob_lo[2]) / dx0[2];
+	const int nx = int (prob_hi[0] - prob_lo[0]) / dx0[0];
+	const int ny = int (prob_hi[1] - prob_lo[1]) / dx0[1];
+	const int nz = int (prob_hi[2] - prob_lo[2]) / dx0[2];
 
 	const amrex::Real eps_star = 0.5;
 	const double exp_Mstar_high_mean = 19.39;
