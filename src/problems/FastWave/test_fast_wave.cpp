@@ -10,6 +10,7 @@
 #include <bitset>
 #include <cassert>
 #include <cmath>
+#include <gcem.hpp>
 #include <iostream>
 #include <stdexcept>
 #include <valarray>
@@ -55,8 +56,8 @@ constexpr double bg_mag_amplitude = 1.;
 
 // theta is the angle between k and background magnetic field bg_mag
 constexpr double theta_degrees = 90.0; // degrees
-const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
-const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
+constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
+// const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
 
 // k = 2 pi / wave length
 // box length = 1, so |k| in [1, inf)
@@ -66,11 +67,11 @@ constexpr double k_amplitude = 2 * M_PI * num_modes;
 // input perturbation: choose to do this via the relative denisty field in [0, 1]. remember, the linear regime is valid when this perturbation is small
 constexpr double delta_b = 1e-6;
 
-const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
-const double magnetosonic_speed = std::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
-const double bg_mag_x1 = 0.0;
-const double bg_mag_x2 = 0.0;
-const double bg_mag_x3 = bg_mag_amplitude;
+constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
+constexpr double magnetosonic_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
+// const double bg_mag_x1 = 0.0;
+// const double bg_mag_x2 = 0.0;
+constexpr double bg_mag_x3 = bg_mag_amplitude;
 
 double compute_omega(double k_amplitude, double magnetosonic_speed, double alfven_speed, double sound_speed, double cos_theta)
 {
