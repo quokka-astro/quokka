@@ -83,8 +83,8 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 		double cs = std::sqrt(C::k_B * T0 / C::m_u);
 		rho = 5.0 * cs * cs / (dx[0] * dx[0] * Gconst_);
 		rho0 = rho;
-		P = rho * std::pow(cs, 2.0)/ gamma;
-		if(i== 0 && j == 0 && k == 0) {
+		P = rho * std::pow(cs, 2.0) / gamma;
+		if (i == 0 && j == 0 && k == 0) {
 			amrex::Print() << "cs: " << cs << "\n";
 		}
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::density_index) = rho;
@@ -183,13 +183,13 @@ auto problem_main() -> int
 	pp.query("eps_ff", eps_ff);
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	const amrex::Real cell_volume   = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	const auto prob_lo = sim.geom[0].ProbLoArray();
 	const auto prob_hi = sim.geom[0].ProbHiArray();
 
 	const int nx = (prob_hi[0] - prob_lo[0]) / dx0[0];
-	const int ny = (prob_hi[1] - prob_lo[1]) / dx0[1];	
-	const int nz = (prob_hi[2] - prob_lo[2]) / dx0[2];	
+	const int ny = (prob_hi[1] - prob_lo[1]) / dx0[1];
+	const int nz = (prob_hi[2] - prob_lo[2]) / dx0[2];
 
 	const amrex::Real eps_star = 0.5;
 	const double exp_Mstar_high_mean = 19.39;
@@ -198,9 +198,9 @@ auto problem_main() -> int
 	const amrex::Real prob_star_formation = eps_ff * sim.initDt_ / eps_star / t_ff;
 
 	const amrex::Real particle_mass = rho0 * cell_volume * eps_star * sim.initDt_ / t_ff;
-	const amrex::Real m_high_tot    = particle_mass * exp_fstar_high;
+	const amrex::Real m_high_tot = particle_mass * exp_fstar_high;
 	const amrex::Real num_high_mass_stars_exp = m_high_tot / (exp_Mstar_high_mean * C::M_solar);
-	const amrex::Real exp_num_stars   = prob_star_formation * (1 + num_high_mass_stars_exp) * nx * ny * nz;
+	const amrex::Real exp_num_stars = prob_star_formation * (1 + num_high_mass_stars_exp) * nx * ny * nz;
 
 	// get total mass of the final particles
 	const auto [real_data_final, idata_final] =
@@ -228,9 +228,9 @@ auto problem_main() -> int
 	amrex::Print() << "fstar_high = " << mass_fraction_high_mass_stars << "\n";
 
 	// expectations
-	
+
 	amrex::Print() << "\nExpected values:\n";
-	amrex::Print() << "Expected number of stars = " << exp_num_stars << "\n"; 
+	amrex::Print() << "Expected number of stars = " << exp_num_stars << "\n";
 	amrex::Print() << "Mstar_high_mean = " << exp_Mstar_high_mean << " Msun\n";
 	amrex::Print() << "fstar_high = " << exp_fstar_high << "\n";
 
