@@ -26,7 +26,7 @@ struct ParticleSFProblem {
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-//NOLINT
+// NOLINT
 double rho0 = NAN; // g cm^-3
 // const double T0 = 10.0;		  // K
 // const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
@@ -188,9 +188,9 @@ auto problem_main() -> int
 	const auto prob_lo = sim.geom[0].ProbLoArray();
 	const auto prob_hi = sim.geom[0].ProbHiArray();
 
-	const int nx = int (prob_hi[0] - prob_lo[0]) / dx0[0];
-	const int ny = int (prob_hi[1] - prob_lo[1]) / dx0[1];
-	const int nz = int (prob_hi[2] - prob_lo[2]) / dx0[2];
+	const int nx = int(prob_hi[0] - prob_lo[0]) / dx0[0];
+	const int ny = int(prob_hi[1] - prob_lo[1]) / dx0[1];
+	const int nz = int(prob_hi[2] - prob_lo[2]) / dx0[2];
 
 	const amrex::Real eps_star = 0.5;
 	const double exp_Mstar_high_mean = 19.39;
