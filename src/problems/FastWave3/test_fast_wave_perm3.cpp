@@ -70,7 +70,7 @@ constexpr double bg_mag_x3 = 0.0;
 constexpr double omega =
     gcem::sqrt(gcem::pow(k_amplitude, 2) / 2.0 *
 	       (gcem::pow(magnetosonic_speed, 2) +
-	        gcem::sqrt(gcem::pow(magnetosonic_speed, 4) - 4.0 * gcem::pow(alfven_speed, 2) * gcem::pow(sound_speed, 2) * gcem::pow(cos_theta, 2))));
+		gcem::sqrt(gcem::pow(magnetosonic_speed, 4) - 4.0 * gcem::pow(alfven_speed, 2) * gcem::pow(sound_speed, 2) * gcem::pow(cos_theta, 2))));
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double x1, double /*x2*/, double x3, double time) -> double
 {
