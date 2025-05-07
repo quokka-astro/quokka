@@ -26,16 +26,16 @@ struct ParticleSFProblem {
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-const double rho0 = 1.0 * C::m_p; // g cm^-3
+double rho0 = NAN; // g cm^-3
 // const double T0 = 10.0;		  // K
-const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
+// const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
-const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
-const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
+// const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
+// const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 AMREX_GPU_MANAGED Real T0 = 10.0; // K
-AMREX_GPU_MANAGED Real sigma1 = 700000.0;
+// AMREX_GPU_MANAGED Real sigma1 = 700000.0;
 ;
 
 template <> struct Particle_Traits<ParticleSFProblem> {
@@ -68,30 +68,24 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const double rho_e = CV * T0 * rho0;
-	const auto prob_lo = geom[0].ProbLoArray();
-	const auto prob_hi = geom[0].ProbHiArray();
+	// const double rho_e = CV * T0 * rho0;
+	// const auto prob_lo = geom[0].ProbLoArray();
+	// const auto prob_hi = geom[0].ProbHiArray();
 
 	const auto dx = geom[0].CellSizeArray();
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		int imid = std::floor(prob_hi[0] / 2 / dx[0]);
-		int jmid = std::floor(prob_hi[1] / 2 / dx[1]);
-		int kmid = std::floor(prob_hi[2] / 2 / dx[2]);
-		double rho = 1.0e-23; // g cm^{-3}
-
-		double P = rho * std::pow(sigma1, 2.0);
+		// All cells are Jeans unstable
+		double P = NAN;
+		double rho = NAN;
 		const auto gamma = HydroSystem<ParticleSFProblem>::gamma_;
-
-		if (i == imid && j == jmid && (k == kmid)) {
-			double cs = std::sqrt(C::k_B * T0 / 0.6 / C::m_u);
-			rho = 5.0 * cs * cs / (dx[0] * dx[0] * Gconst_);
-			P = rho * std::pow(cs, 2.0);
-			double LambaJ = cs / std::sqrt(Gconst_ * rho);
-			double Jdx = 0.5 * dx[0];
-			amrex::Print() << "rho = " << rho << " lambdaJ=" << LambaJ << " J*dx = " << Jdx << " P = " << P << "\n";
-			amrex::Print() << "imid = " << imid << " jmid = " << jmid << " kmid = " << k << "\n";
+		double cs = std::sqrt(C::k_B * T0 / C::m_u);
+		rho = 5.0 * cs * cs / (dx[0] * dx[0] * Gconst_);
+		rho0 = rho;
+		P = rho * std::pow(cs, 2.0)/ gamma;
+		if(i== 0 && j == 0 && k == 0) {
+			amrex::Print() << "cs: " << cs << "\n";
 		}
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x1Momentum_index) = 0;
@@ -184,6 +178,30 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
+	amrex::Real eps_ff = 0.0;
+	amrex::ParmParse const pp("particles");
+	pp.query("eps_ff", eps_ff);
+
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	const amrex::Real cell_volume   = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	const auto prob_lo = sim.geom[0].ProbLoArray();
+	const auto prob_hi = sim.geom[0].ProbHiArray();
+
+	const int nx = (prob_hi[0] - prob_lo[0]) / dx0[0];
+	const int ny = (prob_hi[1] - prob_lo[1]) / dx0[1];	
+	const int nz = (prob_hi[2] - prob_lo[2]) / dx0[2];	
+
+	const amrex::Real eps_star = 0.5;
+	const double exp_Mstar_high_mean = 19.39;
+	const double exp_fstar_high = 0.220;
+	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
+	const amrex::Real prob_star_formation = eps_ff * sim.initDt_ / eps_star / t_ff;
+
+	const amrex::Real particle_mass = rho0 * cell_volume * eps_star * sim.initDt_ / t_ff;
+	const amrex::Real m_high_tot    = particle_mass * exp_fstar_high;
+	const amrex::Real num_high_mass_stars_exp = m_high_tot / (exp_Mstar_high_mean * C::M_solar);
+	const amrex::Real exp_num_stars   = prob_star_formation * (1 + num_high_mass_stars_exp) * nx * ny * nz;
+
 	// get total mass of the final particles
 	const auto [real_data_final, idata_final] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
@@ -210,16 +228,19 @@ auto problem_main() -> int
 	amrex::Print() << "fstar_high = " << mass_fraction_high_mass_stars << "\n";
 
 	// expectations
-	const double exp_Mstar_high_mean = 19.39;
-	const double exp_fstar_high = 0.220;
+	
 	amrex::Print() << "\nExpected values:\n";
+	amrex::Print() << "Expected number of stars = " << exp_num_stars << "\n"; 
 	amrex::Print() << "Mstar_high_mean = " << exp_Mstar_high_mean << " Msun\n";
 	amrex::Print() << "fstar_high = " << exp_fstar_high << "\n";
 
 	// relative error
 	const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / exp_Mstar_high_mean;
 	const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
+	const double rel_error_num_stars = std::abs(num_all_stars - exp_num_stars) / exp_num_stars;
+
 	amrex::Print() << "\nRelative error:\n";
+	amrex::Print() << "rel_err(num_stars) = " << rel_error_num_stars << "\n";
 	amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
 	amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
 	// }
