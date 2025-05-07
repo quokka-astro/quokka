@@ -10,6 +10,7 @@ theme:
 nav:
   - About: about.md
   - Equations: equations.md
+  - Star Formation: star_formation.md
   - Citation: citation.md
   - Simulation gallery:
     - Hydro : gallery.md
