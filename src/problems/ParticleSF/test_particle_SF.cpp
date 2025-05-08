@@ -185,9 +185,9 @@ auto problem_main() -> int
 	const auto prob_lo = sim.geom[0].ProbLoArray();
 	const auto prob_hi = sim.geom[0].ProbHiArray();
 
-	const int nx = static_cast<int> ((prob_hi[0] - prob_lo[0]) / dx0[0]);
-	const int ny = static_cast<int> ((prob_hi[1] - prob_lo[1]) / dx0[1]);
-	const int nz = static_cast<int> ((prob_hi[2] - prob_lo[2]) / dx0[2]);
+	const int nx = static_cast<int>((prob_hi[0] - prob_lo[0]) / dx0[0]);
+	const int ny = static_cast<int>((prob_hi[1] - prob_lo[1]) / dx0[1]);
+	const int nz = static_cast<int>((prob_hi[2] - prob_lo[2]) / dx0[2]);
 
 	const amrex::Real eps_star = 0.5;
 	const double exp_Mstar_high_mean = 19.39;
