@@ -1,4 +1,4 @@
-add_executable(test_hydro_leblanc test_hydro_leblanc.cpp ../../util/fextract.cpp ../../math/interpolate.cpp ${QuokkaObjSources})
+add_executable(test_hydro_leblanc test_hydro_leblanc.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_hydro_leblanc)
