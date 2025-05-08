@@ -336,11 +336,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto CustomPlotFileName(const char *base, int lev) const -> std::string;
 	[[nodiscard]] auto GetPlotfileVarNames() const -> amrex::Vector<std::string>;
-	[[nodiscard]] auto GetPlotfileVarNames_fc() const -> amrex::Vector<std::string>;
+	[[nodiscard]] auto GetPlotfileVarNames_fc() const -> std::array<amrex::Vector<std::string>,AMREX_SPACEDIM>;
 	[[nodiscard]] auto PlotFileMF_cc(int included_ghosts) -> amrex::Vector<amrex::MultiFab>;
 	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts) -> amrex::MultiFab;
-	[[nodiscard]] auto PlotFileMF_fc(int included_ghosts) -> std::array<amrex::Vector<amrex::MultiFab>,AMREX_SPACEDIM>;
-	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int included_ghosts) -> amrex::MultiFab;
+	[[nodiscard]] auto PlotFileMF_fc(int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>,AMREX_SPACEDIM>;
+	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
 		void createDiagnostics();
 	void updateDiagnostics();
 	void doDiagnostics();
@@ -396,7 +396,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int nghost_cc_ = 4;						    // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
-	amrex::Vector<std::string> componentNames_fc_;
+	amrex::Vector<std::string> componentNames_fc_flatten_;
+	std::array<amrex::Vector<std::string>,AMREX_SPACEDIM> componentNames_fc_;
 	amrex::Vector<std::string> derivedNames_;
 	bool areInitialConditionsDefined_ = false;
 
@@ -2399,7 +2400,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 	return plotMF_cc;
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int included_ghosts) -> amrex::MultiFab //make fc version, refer to notes
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_) -> amrex::MultiFab //make fc version, refer to notes
 {
 	// get number of variables, includes framework for adding derived vars in future 
 	int comp = 0;
@@ -2615,22 +2616,24 @@ template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames
 	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
-			varnames.push_back(componentNames_fc_[icomp]);
+			varnames.push_back(componentNames_fc_flatten_[icomp]);
 		}
 	}
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 	return varnames;
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames_fc() const -> amrex::Vector<std::string>
+template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames_fc() const -> std::array<amrex::Vector<std::string>,AMREX_SPACEDIM>
 {
-	amrex::Vector<std::string> varnames_fc;   //nvarTotal or perDim?
+	std::array<amrex::Vector<std::string>,AMREX_SPACEDIM> varnames_fc;   //nvarTotal or perDim?
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
-			varnames_fc.push_back(componentNames_fc_[icomp]);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim){
+			for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarPerDim_fc; ++icomp) {
+				varnames_fc[idim].push_back(componentNames_fc_[idim][icomp]);
+			}
 		}
 	}
-	varnames_fc.insert(varnames_fc.end(), derivedNames_.begin(), derivedNames_.end());
+	//varnames_fc.insert(varnames_fc.end(), derivedNames_.begin(), derivedNames_.end());
 	return varnames_fc;
 }
 
@@ -2669,16 +2672,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #else
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());//add fc version
 	//write fc quantities to subdirectory "fcvars" within "pltNNNNN" directory
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {	
 		std::array<amrex::Vector<amrex::MultiFab>,AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_); //fc version, needs check if fc quantities exist
 		std::vector<std::string> dimNames = {"x", "y", "z"};
-		auto plotfilename_base = plotfilename + "/fcvars";
-		const std::string &plotfilename_fc = CustomPlotFileName( plotfilename_base.c_str(), istep[0]);
+		//auto plotfilename_base = plotfilename + "/fcvars";
+		//const std::string &plotfilename_fc = CustomPlotFileName( plotfilename_base.c_str(), istep[0]);
 		auto varnames_fc = GetPlotfileVarNames_fc();
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) { 
 			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
-			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc, Geom(), tNew_[0], istep, refRatio(),"HyperCLaw-V1.1", dimNames[idim]);			
+			auto plotfilename_base = plotfilename + "/fcvars/" + dimNames[idim];
+			const std::string &plotfilename_fc = CustomPlotFileName( plotfilename_base.c_str(), istep[0]);	
+			auto varnames_fc_dim = varnames_fc[idim];
+			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc_dim, Geom(), tNew_[0], istep, refRatio());			
 		}
 	}
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
