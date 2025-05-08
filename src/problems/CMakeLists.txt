@@ -72,5 +72,4 @@ add_subdirectory(ShockCloud)
 add_subdirectory(StarCluster)
 add_subdirectory(SphericalCollapse)
 
-add_subdirectory(Gravity3D)
 add_subdirectory(MetalAdvectionProblem)
