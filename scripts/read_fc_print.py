@@ -31,18 +31,23 @@ def read_data_after_marker(filename, marker="DDEBUG", data_shape=(4, 4, 4), line
             num_of_lines = np.prod(data_shape)
             data = np.loadtxt(filename, skiprows=start_line, max_rows=num_of_lines)
             print(f"Data loaded successfully starting with '{marker}'. Data size: {data.shape}")
-            check_data(data)
+            check_data(data, data_shape)
         except Exception as e:
             raise Exception(f"Error loading data: {str(e)}")
 
     return
 
-def check_data(data):
+def check_data(data_raw, data_shape):
+
+    data = data_raw.reshape(data_shape)
 
     # is there a nan?
     print("Checking for nan in the data: ", end="")
     if np.isnan(data).any():
         print("fail")
+        # find the index of the nan
+        nan_index = np.where(np.isnan(data))
+        print(f"First nan found at index ({nan_index[0][0]}, {nan_index[1][0]}, {nan_index[2][0]})")
     else:
         print("pass")
 
@@ -50,8 +55,14 @@ def check_data(data):
     print("Checking for inf in the data: ", end="")
     if np.isinf(data).any():
         print("fail")
+        # find the index of the inf
+        inf_index = np.where(np.isinf(data))
+        print(f"First Inf found at index ({inf_index[0][0]}, {inf_index[1][0]}, {inf_index[2][0]})")
     elif np.any(data > 1e100):
         print("fail")
+        # find the index of the inf
+        inf_index = np.where(data > 1e100)
+        print(f"First Inf found at index ({inf_index[0][0]}, {inf_index[1][0]}, {inf_index[2][0]})")
     else:
         print("pass")
 
