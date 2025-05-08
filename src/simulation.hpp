@@ -2650,13 +2650,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #else
 	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
 #endif
-	amrex::Vector<amrex::MultiFab> mf = PlotFileMF_cc(included_ghosts);//create fc version, triggered in next line
+	amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts);//create fc version, triggered in next line
 	// Adding plotfileMF fc
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		std::array<amrex::Vector<amrex::MultiFab>,AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_); //fc version, needs check if fc quantities exist
+		
 	}
 	//
-	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 
 	const std::string &plotfilename = PlotFileName(istep[0]);
 	auto varnames = GetPlotfileVarNames();
@@ -2670,12 +2670,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());//add fc version
 	//write fc quantities to subdirectory "fcvars" within "pltNNNNN" directory
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		std::array<amrex::Vector<amrex::MultiFab>,AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_); //fc version, needs check if fc quantities exist
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		auto plotfilename_base = plotfilename + "/fcvars";
 		const std::string &plotfilename_fc = CustomPlotFileName( plotfilename_base.c_str(), istep[0]);
 		auto varnames_fc = GetPlotfileVarNames_fc();
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) { 
-			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_ptr, varnames_fc, Geom(), tNew_[0], istep, refRatio(),"HyperCLaw-V1.1", dimNames[idim]);			
+			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
+			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc, Geom(), tNew_[0], istep, refRatio(),"HyperCLaw-V1.1", dimNames[idim]);			
 		}
 	}
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
