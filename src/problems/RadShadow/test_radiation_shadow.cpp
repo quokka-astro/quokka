@@ -144,7 +144,7 @@ template <> void QuokkaSimulation<ShadowProblem>::setInitialConditionsOnGrid(quo
 	});
 }
 
-template <> void QuokkaSimulation<ShadowProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShadowProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 

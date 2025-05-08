@@ -176,7 +176,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	}
 }
 
-template <> void QuokkaSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShocktubeProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 

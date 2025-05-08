@@ -2,6 +2,10 @@ add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
 
+add_subdirectory(ParticleCreation)
+add_subdirectory(SN)
+add_subdirectory(ParticleSink)
+
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
 add_subdirectory(HydroContact)
@@ -70,4 +74,3 @@ add_subdirectory(SphericalCollapse)
 
 add_subdirectory(Gravity3D)
 add_subdirectory(MetalAdvectionProblem)
-

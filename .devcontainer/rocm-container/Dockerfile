@@ -1,12 +1,12 @@
 # Use the AMD ROCm image as the base image
-FROM rocm/dev-ubuntu-24.04@sha256:708bbb9e2031a81e949a0847f0655c4fb1a790f8ac7cd0031116f56b04ada7d5
+FROM rocm/dev-ubuntu-24.04@sha256:4fbcf879d22aaca65b756c7c6c3586ee75090ae55953c4e44e7e88960fbb1e1c
 
 # Set environment variables for CMake
-ENV hip_DIR=/opt/rocm/lib/cmake/hip
-ENV rocrand_DIR=/opt/rocm-6.3.4/lib/cmake/rocrand
-ENV hiprand_DIR=/opt/rocm-6.3.4/lib/cmake/hiprand
-ENV rocprim_DIR=/opt/rocm-6.3.4/lib/cmake/rocprim
-ENV rocsparse_DIR=/opt/rocm-6.3.4/lib/cmake/rocsparse
+ENV hip_DIR=/opt/rocm-6.4.0/lib/cmake/hip
+ENV rocrand_DIR=/opt/rocm-6.4.0/lib/cmake/rocrand
+ENV hiprand_DIR=/opt/rocm-6.4.0/lib/cmake/hiprand
+ENV rocprim_DIR=/opt/rocm-6.4.0/lib/cmake/rocprim
+ENV rocsparse_DIR=/opt/rocm-6.4.0/lib/cmake/rocsparse
 ENV AMREX_AMD_ARCH=gfx908
 ENV CC=hipcc
 ENV CXX=hipcc
@@ -17,7 +17,7 @@ RUN apt-get update -qq && apt-get upgrade -y -qq && \
     rocrand-dev hiprand-dev rocprim-dev rocsparse-dev \
     build-essential wget curl git ninja-build gcc g++ \
     python3-dev python3-numpy python3-matplotlib python3-pip \
-    libhdf5-dev libopenmpi-dev && \
+    libhdf5-dev libopenmpi-dev netbase && \
     apt-get --yes -qq clean && \
     rm -rf /var/lib/apt/lists/*
 

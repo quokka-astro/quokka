@@ -1,5 +1,5 @@
 
-add_executable(test_radiation_marshak_cgs test_radiation_marshak_cgs.cpp ../../util/fextract.cpp ../../math/interpolate.cpp ${QuokkaObjSources})
+add_executable(test_radiation_marshak_cgs test_radiation_marshak_cgs.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radiation_marshak_cgs)

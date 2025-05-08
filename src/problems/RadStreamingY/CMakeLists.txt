@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-	add_executable(test_radiation_streaming_y test_radiation_streaming_y.cpp ../../util/fextract.cpp ${QuokkaObjSources})
+	add_executable(test_radiation_streaming_y test_radiation_streaming_y.cpp ${QuokkaObjSources})
 
 	if(AMReX_GPU_BACKEND MATCHES "CUDA")
 			setup_target_for_cuda_compilation(test_radiation_streaming_y)

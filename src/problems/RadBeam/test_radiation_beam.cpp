@@ -230,7 +230,7 @@ template <> void QuokkaSimulation<BeamProblem>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-template <> void QuokkaSimulation<BeamProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<BeamProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
