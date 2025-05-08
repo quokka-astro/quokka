@@ -255,38 +255,42 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 	sim.evolve();
 
-	const int idim = 0;
-	const int ncomp = sim.state_new_fc_[0][idim].nComp();
-	const int nghost = sim.state_new_fc_[0][idim].nGrow();
-	amrex::MultiFab state_ref_level0(amrex::convert(sim.boxArray(0), amrex::IntVect::TheDimensionVector(idim)), sim.DistributionMap(0), ncomp, nghost);
-	sim.computeReferenceSolution_fc(state_ref_level0, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), quokka::direction{1});
+// 	const int idim = 0;
+// 	const int ncomp = sim.state_new_fc_[0][idim].nComp();
+// 	const int nghost = sim.state_new_fc_[0][idim].nGrow();
+// 	amrex::MultiFab state_ref_level0(amrex::convert(sim.boxArray(0), amrex::IntVect::TheDimensionVector(idim)), sim.DistributionMap(0), ncomp, nghost);
+// 	sim.computeReferenceSolution_fc(state_ref_level0, sim.geom[0].CellSizeArray(), sim.geom[0].ProbLoArray(), quokka::direction{1});
 
-	// extract the exact solution at y = z = 0
-	auto [position, values] = fextract(state_ref_level0, sim.geom[0], 0, 0.0);
+// 	// extract the exact solution at y = z = 0
+// 	auto [position, values] = fextract(state_ref_level0, sim.geom[0], 0, 0.0);
 
-	// plot the exact solution
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::vector<double> xs(position.size());
-		std::vector<double> bfield(position.size());
-		for (int i = 0; i < position.size(); ++i) {
-			xs[i] = position[i];
-			bfield[i] = values[MHDSystem<AlfvenWaveLinear>::bfield_index + 1][i];
-			amrex::Print() << "x = " << xs[i] << ", bfield = " << bfield[i] << "\n";
-		}
+// 	// plot the exact solution
+// 	if (amrex::ParallelDescriptor::IOProcessor()) {
+// 		std::vector<double> xs(position.size());
+// 		std::vector<double> bfield(position.size());
+// 		for (int i = 0; i < position.size(); ++i) {
+// 			xs[i] = position[i];
+// 			bfield[i] = values[MHDSystem<AlfvenWaveLinear>::bfield_index + 1][i];
+// 			amrex::Print() << "x = " << xs[i] << ", bfield = " << bfield[i] << "\n";
+// 		}
 
-#ifdef HAVE_PYTHON
-		matplotlibcpp::plot(xs, bfield);
-		matplotlibcpp::xlabel("x");
-		matplotlibcpp::ylabel("B");
-		matplotlibcpp::save("./bfield.pdf");
-#endif
-	}
+// #ifdef HAVE_PYTHON
+// 		matplotlibcpp::plot(xs, bfield);
+// 		matplotlibcpp::xlabel("x");
+// 		matplotlibcpp::ylabel("B");
+// 		matplotlibcpp::save("./bfield.pdf");
+// #endif
+// 	}
 
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.002;
 	if (sim.errorNorm_ > error_tol) {
 		status = 1;
+		amrex::Print() << "Error norm = " << sim.errorNorm_ << "\n";
+		amrex::Print() << "test failed\n";
+	} else {
+		amrex::Print() << "test passed\n";
 	}
 
 	return status;
