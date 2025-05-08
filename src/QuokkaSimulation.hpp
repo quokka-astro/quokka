@@ -758,14 +758,12 @@ void QuokkaSimulation<problem_t>::computeReferenceSolution_fc(amrex::MultiFab &r
 	// user should implement
 }
 
-template <typename problem_t> 
-void QuokkaSimulation<problem_t>::print_multifab_fc(amrex::MultiFab &mf, std::string const &name, int lev, int idim)
+template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_fc(amrex::MultiFab &mf, std::string const &name, int lev, int idim)
 {
 	amrex::Print() << "\nDDEBUG fc at direction " << idim << "\n";
 	auto mf_fc = mf.arrays();
-	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		printf("%f\n", mf_fc[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
-	});
+	amrex::ParallelFor(
+	    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { printf("%f\n", mf_fc[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)); });
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
@@ -863,7 +861,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 				errorNorm_ = rel_error;
 				amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
 					       << " and sol_norm = " << sol_norm << "\n";
-								
+
 				print_multifab_fc(state_new_fc_[0][idim], "state_new_fc", 0, idim);
 			}
 		}
