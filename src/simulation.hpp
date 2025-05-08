@@ -2670,6 +2670,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());//add fc version
 	//write fc quantities to subdirectory "fcvars" within "pltNNNNN" directory
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		
 		std::array<amrex::Vector<amrex::MultiFab>,AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_); //fc version, needs check if fc quantities exist
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		auto plotfilename_base = plotfilename + "/fcvars";
