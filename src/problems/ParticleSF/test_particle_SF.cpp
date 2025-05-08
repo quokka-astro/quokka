@@ -26,8 +26,8 @@ struct ParticleSFProblem {
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-AMREX_GPU_MANAGED Real rho0 = NAN; // NOLINT
-const double year = 3.15576e+07; // in seconds
+AMREX_GPU_MANAGED Real rho0 = NAN;  // NOLINT
+const double year = 3.15576e+07;    // in seconds
 AMREX_GPU_MANAGED Real Tamb = 10.0; // NOLINT
 // AMREX_GPU_MANAGED Real sigma1 = 700000.0;
 ;
