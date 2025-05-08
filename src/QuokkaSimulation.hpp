@@ -758,7 +758,7 @@ void QuokkaSimulation<problem_t>::computeReferenceSolution_fc(amrex::MultiFab &r
 	// user should implement
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_fc(amrex::MultiFab &mf, std::string const &name, int lev, int idim)
+template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_fc(amrex::MultiFab &mf, std::string const &/*name*/, int /*lev*/, int idim)
 {
 	amrex::Print() << "\nDDEBUG fc at direction " << idim << "\n";
 	auto mf_fc = mf.arrays();

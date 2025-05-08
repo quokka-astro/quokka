@@ -98,8 +98,6 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
 	const amrex::Real x3_L = prob_lo[2] + k * dx[2];
 
-	const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
-	const amrex::Real x2_C = x2_L + static_cast<amrex::Real>(0.5) * dx[1];
 	const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
 
 	if (cen == quokka::centering::cc) {
