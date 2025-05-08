@@ -26,16 +26,9 @@ struct ParticleSFProblem {
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-// NOLINT
-AMREX_GPU_MANAGED Real rho0 = NAN; // g cm^-3
-// const double T0 = 10.0;		  // K
-// const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
+AMREX_GPU_MANAGED Real rho0 = NAN; // NOLINT
 const double year = 3.15576e+07; // in seconds
-
-// const double sf_cell_density = 1.0e6 * C::m_p; // g cm^-3
-// const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
-
-AMREX_GPU_MANAGED Real Tamb = 10.0; // K
+AMREX_GPU_MANAGED Real Tamb = 10.0; // NOLINT
 // AMREX_GPU_MANAGED Real sigma1 = 700000.0;
 ;
 
