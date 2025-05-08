@@ -283,14 +283,15 @@ auto problem_main() -> int
 // 	}
 
 	// Compute test success condition
-	int status = 0;
+	int status = 1;
 	const double error_tol = 0.002;
-	if (sim.errorNorm_ > error_tol) {
-		status = 1;
+	if (sim.errorNorm_ < error_tol) {
+		status = 0;
+		amrex::Print() << "Error norm = " << sim.errorNorm_ << "\n";
+		amrex::Print() << "test passed\n";
+	} else {
 		amrex::Print() << "Error norm = " << sim.errorNorm_ << "\n";
 		amrex::Print() << "test failed\n";
-	} else {
-		amrex::Print() << "test passed\n";
 	}
 
 	return status;
