@@ -26,8 +26,8 @@ struct ParticleSFProblem {
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-// NOLINT
-double rho0 = NAN; // g cm^-3
+//NOLINT
+AMREX_GPU_MANAGED Real = rho0 = NAN; // g cm^-3
 // const double T0 = 10.0;		  // K
 // const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
@@ -85,9 +85,6 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 		rho = 5.0 * cs * cs / (dx[0] * dx[0] * Gconst_);
 		rho0 = rho;
 		P = rho * std::pow(cs, 2.0) / gamma;
-		if (i == 0 && j == 0 && k == 0) {
-			amrex::Print() << "cs: " << cs << "\n";
-		}
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x2Momentum_index) = 0;
