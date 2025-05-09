@@ -60,9 +60,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 		// Find the cell containing the particle
-		int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-		int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-		int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+		int ix = static_cast<int>((p.pos(0) - plo[0]) * dxi[0]);
+		int iy = static_cast<int>((p.pos(1) - plo[1]) * dxi[1]);
+		int iz = static_cast<int>((p.pos(2) - plo[2]) * dxi[2]);
 
 		const double rho_sink = compute_rho_sink(local_state, ix, iy, iz);
 
@@ -128,9 +128,9 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 		// Find the cell containing the particle
-		int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-		int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-		int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+		int ix = static_cast<int>((p.pos(0) - plo[0]) * dxi[0]);
+		int iy = static_cast<int>((p.pos(1) - plo[1]) * dxi[1]);
+		int iz = static_cast<int>((p.pos(2) - plo[2]) * dxi[2]);
 
 		const double rho_sink = compute_rho_sink(local_state, ix, iy, iz);
 
