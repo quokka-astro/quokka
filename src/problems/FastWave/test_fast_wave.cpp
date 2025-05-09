@@ -113,9 +113,6 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		const double x1mag = 0.0;
 		const double x2mag = 0.0;
 		const double x3mag = bg_mag_amplitude + delta_b * cos_wave_C;
-		// std::cout << std::fixed;
-		// std::cout << std::setprecision(54);
-		// std::cout << "Bmag: " << x3mag << '\n';
 
 		const double density = bg_density + bg_density * delta_b / bg_mag_amplitude * cos_wave_C;
 		const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude * cos_wave_C;
@@ -156,19 +153,6 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 				     ((computeMagneticVectorPotential_x(x1_L + (dx[0] / 2), x2_L + dx[1], x3_L, time) -
 				       computeMagneticVectorPotential_x(x1_L + (dx[0] / 2), x2_L, x3_L, time)) /
 				      dx[1]);
-
-		// std::cout << std::fixed;
-		// std::cout << std::setprecision(54);
-		// std::cout << "Bmag: " << x3mag << '\n';
-		if (i == 0) {
-			std::cout << i << ' ' << j << ' ' << k;
-			std::cout << std::fixed;
-			std::cout << std::setprecision(4);
-			std::cout << ": x1_L, x2_L, x3_L: " << x1_L << '\t' << x2_L << '\t' << x3_L << '\n';
-			std::cout << std::fixed;
-			std::cout << std::setprecision(52);
-			std::cout << "Bmag: " << x3mag << "\n\n";
-		}
 
 		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
