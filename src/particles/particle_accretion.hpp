@@ -165,9 +165,13 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 						w = 1.0;
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
+
+		 			//------------------------ This is different from UpdateParticleMassAndMomentumInBox -----------------------
+					// Compute the relative accretion rate and add it to local_accretion_rate
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-					const double rel_accretion_rate = M_dot_cell * dt / vol / rho;
+					const double rel_accretion_rate = M_dot_cell * dt / (vol * rho);
 					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk), rel_accretion_rate);
+					//----------------------------------------------------------------------------------------------------------
 				}
 			}
 		}
@@ -283,28 +287,29 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 						w = 1.0;
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
-					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-					const double rel_accretion_rate = M_dot_cell * dt / vol / rho;
 
+		 			//------------------------ This is different from ComputeAccretionRateInBox ----------------------------
+					// Compute the accreted mass and momentum onto the particle
 					const double scale_down_factor = local_scale_down(ii, jj, kk);
-
-					// TODO: simpify here
-					const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
-					const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
-					const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
-					accreted_mass += rel_accretion_rate * rho * vol * scale_down_factor;
-					accreted_momentum_x += rel_accretion_rate * px * vol * scale_down_factor;
-					accreted_momentum_y += rel_accretion_rate * py * vol * scale_down_factor;
-					accreted_momentum_z += rel_accretion_rate * pz * vol * scale_down_factor;
+					const double accreted_mass_cell = M_dot_cell * dt * scale_down_factor;
+					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+					const double vx = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index) / rho;
+					const double vy = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index) / rho;
+					const double vz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index) / rho;
+					accreted_mass += accreted_mass_cell;
+					accreted_momentum_x += accreted_mass_cell * vx;
+					accreted_momentum_y += accreted_mass_cell * vy;
+					accreted_momentum_z += accreted_mass_cell * vz;
+					//-----------------------------------------------------------------------------------------------------
 				}
 			}
 		}
 
 		// the accretion rates are negative, so we 'subtract' them
 		p.rdata(mass_index) -= accreted_mass;
-		p.rdata(mass_index + 1) -= accreted_momentum_x;
-		p.rdata(mass_index + 2) -= accreted_momentum_y;
-		p.rdata(mass_index + 3) -= accreted_momentum_z;
+		p.rdata(mass_index + 1) -= accreted_momentum_x / accreted_mass;
+		p.rdata(mass_index + 2) -= accreted_momentum_y / accreted_mass;
+		p.rdata(mass_index + 3) -= accreted_momentum_z / accreted_mass;
 	});
 }
 
