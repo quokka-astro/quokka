@@ -26,14 +26,6 @@ namespace SinkAccretionUtils
 
 constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
 
-static constexpr ParticleUtils::kernel_weights_array_t kernel_weights = []() constexpr {
-	if constexpr (accretion_scheme == AccretionScheme::Threshold) {
-		return ParticleUtils::kernel_spherical_uniform_3_weights;
-	} else {
-		return ParticleUtils::kernel_spherical_3_weights;
-	}
-}();
-
 static constexpr ParticleUtils::kernel_weights_array_t kernel_weights_normalized = ParticleUtils::kernel_spherical_3_weights_normalized;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
@@ -231,7 +223,7 @@ template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, int mass_index, amrex::Real /*time*/, amrex::Real dt,
-					amrex::Real vol)
+					amrex::Real /*vol*/)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
