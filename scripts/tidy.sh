@@ -1,14 +1,38 @@
 #!/bin/bash
 
-# Script: tidy2.sh
-# Purpose: Run clang-tidy on C++ source files that have been modified in git
-# Usage: ./tidy2.sh <build_directory> [target]
-# Arguments:
-#   build_directory: Path to the build directory containing compile_commands.json
-#   target: Optional argument to specify which files to check (default: "changed")
-#           - "changed": Files modified in current working directory
-#           - "previous": Files modified in the last commit
-#           - "origin": Files different from the remote branch
+# Function to display help message
+show_help() {
+    echo "Usage: $0 <build_directory> [target]"
+    echo
+    echo "Arguments:"
+    echo "  build_directory   Path to the build directory containing compile_commands.json"
+    echo "  target            Optional argument to specify which files to check (default: 'changed')"
+    echo "                    - 'changed': Files modified in current working directory"
+    echo "                    - 'previous': Files modified in the last commit"
+    echo "                    - 'origin': Files different from the remote branch"
+    echo
+    echo "Options:"
+    echo "  -h, --help        Show this help message"
+    exit 0
+}
+
+# Check for help flag
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
+# Check if at least one argument is provided
+if [ $# -lt 1 ]; then
+    echo "Error: Missing required argument 'build_directory'"
+    echo "Use -h or --help for usage information"
+    exit 1
+fi
+
+# check if the first argument is a valid directory
+if [ ! -d "$1" ]; then
+    echo "Invalid build directory. Please provide a valid directory path."
+    exit 1
+fi
 
 # Store the build directory path from first argument
 BUILD_DIR="$1"
