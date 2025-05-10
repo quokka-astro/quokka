@@ -103,6 +103,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	return std::make_tuple(M_dot, r_K);
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_accretion_kernel(const double r_sqr, const double r_K) -> double
+{
+	return std::exp(-r_sqr / (r_K * r_K));
+}
 
 // Function to compute accretion rate for particles in a box, including the ParallelFor call
 template <typename ContainerType, typename problem_t>
@@ -142,7 +146,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					const double y = p.pos(1) - plo[1] - jj * dx[1];
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
-					double w = weight * std::exp(-r_sqr / (r_K * r_K));
+					double w = weight * compute_accretion_kernel(r_sqr, r_K);
 					if constexpr (uniform_box_test == 1) {
 						w = 1.0;
 					}
@@ -160,7 +164,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					const double y = p.pos(1) - plo[1] - jj * dx[1];
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
-					double w = weight * std::exp(-r_sqr / (r_K * r_K));
+					double w = weight * compute_accretion_kernel(r_sqr, r_K);
 					if constexpr (uniform_box_test == 1) {
 						w = 1.0;
 					}
