@@ -35,7 +35,6 @@ static constexpr ParticleUtils::kernel_weights_array_t kernel_weights = []() con
 }();
 
 static constexpr ParticleUtils::kernel_weights_array_t kernel_weights_normalized = ParticleUtils::kernel_spherical_3_weights_normalized;
-static constexpr ParticleUtils::kernel_weights_array_t kernel_uniform_weights_normalized = ParticleUtils::kernel_spherical_uniform_3_weights_normalized;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
@@ -48,7 +47,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Arra
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> & local_state, int ix, int iy, int iz, double par_mass, double dx_max) -> std::tuple<double, double>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass,
+								   double dx_max) -> std::tuple<double, double>
 {
 	// compute the average density, momentum, and sound speed in the accretion zone
 	double rho_infty = 0.0;
@@ -170,7 +170,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
 
-		 			//------------------------ This is different from UpdateParticleMassAndMomentumInBox -----------------------
+					//------------------------ This is different from UpdateParticleMassAndMomentumInBox -----------------------
 					// Compute the relative accretion rate and add it to local_accretion_rate
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 					const double rel_accretion_rate = M_dot_cell * dt / (vol * rho);
@@ -292,7 +292,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
 
-		 			//------------------------ This is different from ComputeAccretionRateInBox ----------------------------
+					//------------------------ This is different from ComputeAccretionRateInBox ----------------------------
 					// Compute the accreted mass and momentum onto the particle
 					const double scale_down_factor = local_scale_down(ii, jj, kk);
 					const double accreted_mass_cell = M_dot_cell * dt * scale_down_factor;
