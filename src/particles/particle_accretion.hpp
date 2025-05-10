@@ -73,7 +73,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	const double v_infty_sqr = vx_infty * vx_infty + vy_infty * vy_infty + vz_infty * vz_infty;
 	const double r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_infty * cs_infty);
 
-	// Compute the accretion rate in the accretion zone, 
+	// Compute the accretion rate in the accretion zone,
 	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
 	constexpr double lambda = gcem::exp(1.5) / 4.0;
 	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
@@ -165,7 +165,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
 
-					//------------------------ This is the part that is different from UpdateParticleMassAndMomentumInBox -----------------------
+					//------------------------ This is the part that is different from UpdateParticleMassAndMomentumInBox
+					//-----------------------
 					// Compute the relative accretion rate and add it to local_accretion_rate
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 					const double rel_accretion_rate = M_dot_cell * dt / (vol * rho);
