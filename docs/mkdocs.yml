@@ -29,6 +29,7 @@ nav:
     - Uniform advecting radiation in diffusive limit: tests/radhydro_uniform_adv.md
     - Advecting radiation pulse test: tests/radhydro_pulse.md
   - DEVELOPER GUIDE:
+    - Contributing: contributing.md
     - Flowchart: flowchart.md
     - Debugging: debugging.md
     - Assertions and error checking: error_checking.md
