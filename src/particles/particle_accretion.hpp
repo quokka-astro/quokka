@@ -155,7 +155,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					if constexpr (uniform_box_test == 1) {
 						w = 1.0;
 					}
-					const double M_dot_cell = - M_dot * w / w_sum;
+					const double M_dot_cell = -M_dot * w / w_sum;
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 					const double rel_accretion_rate = M_dot_cell * dt / vol / rho;
 					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk), rel_accretion_rate);
@@ -168,7 +168,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 // Compute the scale down factor for the accretion rate. This is used to prevent accretion rates from exceeding 100% of the available mass.
 // Current implementation: the maximum allowed relative accretion rate is 90% (gas density cannot drop more than 90% in one time step)
 // TODO(cch): compute a local accretion_rate_floor
-template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom)
+template <typename problem_t>
+void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom)
 {
 	const auto &local_state_arr = state.arrays();
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
@@ -320,7 +321,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					if constexpr (uniform_box_test == 1) {
 						w = 1.0;
 					}
-					const double M_dot_cell = - M_dot * w / w_sum;
+					const double M_dot_cell = -M_dot * w / w_sum;
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 					const double rel_accretion_rate = M_dot_cell * dt / vol / rho;
 
@@ -423,8 +424,8 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 // in one time step. rho_sink is a constant threshold density.
 // The accreted mass and momentum are added to the particle's mass and momentum.
 template <typename ContainerType, typename problem_t>
-void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
-		    int mass_index)
+void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev,
+		    amrex::Real time, amrex::Real dt, int mass_index)
 {
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
 	// of the available mass.
