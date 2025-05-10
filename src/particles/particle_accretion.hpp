@@ -112,9 +112,6 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const amrex::Long np = pti.numParticles();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-	const double something = 3.3;
-	double something_else = 3.3;
-	double something_else_else = 3.3 + something_else;
 
 	// make a copy of kernel_weights_normalized for device
 	const auto kernel_weights_normalized_d = kernel_weights_normalized_;
