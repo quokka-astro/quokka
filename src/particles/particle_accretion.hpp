@@ -4,12 +4,15 @@
 #include "AMReX_Array4.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
+#include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
 namespace quokka
 {
+
+constexpr int uniform_box_test = 1; // If set to 1, test accretion scheme in a (7 dx)^3 box with uniform accretion kernel
 
 enum class AccretionScheme { Threshold = 0 };
 
@@ -31,6 +34,9 @@ static constexpr ParticleUtils::kernel_weights_array_t kernel_weights = []() con
 	}
 }();
 
+static constexpr ParticleUtils::kernel_weights_array_t kernel_weights_normalized = ParticleUtils::kernel_spherical_3_weights_normalized;
+static constexpr ParticleUtils::kernel_weights_array_t kernel_uniform_weights_normalized = ParticleUtils::kernel_spherical_uniform_3_weights_normalized;
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Array4<const amrex::Real> & /*state*/, int /*i*/, int /*j*/, int /*k*/) -> double
@@ -45,38 +51,114 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Arra
 template <typename ContainerType, typename problem_t>
 void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dxi, amrex::Real /*time*/, amrex::Real /*dt*/, int /*mass_index*/)
+			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
 {
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
 	auto *pData = particles().data();
 	const amrex::Long np = pti.numParticles();
+	const double dx_max = std::max({dx[0], dx[1], dx[2]});
+	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	// make a copy of kernel_weights for device
-	const auto kernel_weights_d = kernel_weights;
+	auto kernel_weights_d = kernel_weights_normalized;
 
-	// Deposit particle data into the local buffer
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
-		// Find the cell containing the particle
-		int ix = static_cast<int>((p.pos(0) - plo[0]) * dxi[0]);
-		int iy = static_cast<int>((p.pos(1) - plo[1]) * dxi[1]);
-		int iz = static_cast<int>((p.pos(2) - plo[2]) * dxi[2]);
+		const double par_mass = p.rdata(0);
 
-		const double rho_sink = compute_rho_sink(local_state, ix, iy, iz);
+		// Find the cell containing the particle
+		int ix = static_cast<int>((p.pos(0) - plo[0]) / dx[0]);
+		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
+		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
 		// set accreted mass and momentum in the buffer
-		for (int ii = -stencil_size; ii <= stencil_size; ++ii) {
-			for (int jj = -stencil_size; jj <= stencil_size; ++jj) {
-				for (int kk = -stencil_size; kk <= stencil_size; ++kk) {
-					const double weight = kernel_weights_d[std::abs(ii)][std::abs(jj)][std::abs(kk)];
-					const double rho = local_state(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
-					if (rho > rho_sink) {
-						const double delta_rho = get_delta_rho(rho, rho_sink) * weight;
-						// use atomic operation to avoid race conditions
-						amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ix + ii, iy + jj, iz + kk), delta_rho);
+		double rho_infty = 0.0;
+		double px_infty = 0.0;
+		double py_infty = 0.0;
+		double pz_infty = 0.0;
+		double cs_infty = 0.0;
+		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
+			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
+				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
+					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+					const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
+					const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
+					const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
+					const double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk);
+					rho_infty += rho * weight;
+					px_infty += px * weight;
+					py_infty += py * weight;
+					pz_infty += pz * weight;
+					cs_infty += cs * weight;
+				}
+			}
+		}
+		const double vx_infty = px_infty / rho_infty;
+		const double vy_infty = py_infty / rho_infty;
+		const double vz_infty = pz_infty / rho_infty;
+
+		// compute Bondi-Hoyle accretion radius, r_BH = G M / (v^2 + c^2)
+		const double v_infty_sqr = vx_infty * vx_infty + vy_infty * vy_infty + vz_infty * vz_infty;
+		const double r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_infty * cs_infty);
+
+		// Compute the accretion rate in the accretion zone, M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) /
+		// 4
+		constexpr double lambda = gcem::exp(1.5) / 4.0;
+		const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
+
+		// Compute accretion kernel radius,
+		// r_K = dx / 4, if r_BH < dx / 4
+		//       r_BH, if dx/4 <= r_BH <= stencil_size * dx / 2
+		//       stencil_size * dx / 2, if r_BH > stencil_size * dx / 2
+		const double r_acc = stencil_size * dx_max;
+		double r_K = NAN;
+		if (r_BH < dx_max / 4.0) {
+			r_K = dx_max / 4.0;
+		} else if (r_BH <= r_acc / 2.0) {
+			r_K = r_BH;
+		} else {
+			r_K = r_acc / 2.0;
+		}
+
+		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
+		double w_sum = 0.0;
+		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
+			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
+				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
+					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double x = p.pos(0) - plo[0] - ii * dx[0];
+					const double y = p.pos(1) - plo[1] - jj * dx[1];
+					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double r_sqr = x * x + y * y + z * z;
+					double w = weight * std::exp(-r_sqr / (r_K * r_K));
+					if constexpr (uniform_box_test == 1) {
+						w = 1.0;
 					}
+					w_sum += w;
+				}
+			}
+		}
+
+		// compute the accretion rate at each cell; use atomic operations
+		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
+			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
+				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
+					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double x = p.pos(0) - plo[0] - ii * dx[0];
+					const double y = p.pos(1) - plo[1] - jj * dx[1];
+					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double r_sqr = x * x + y * y + z * z;
+					double w = weight * std::exp(-r_sqr / (r_K * r_K));
+					if constexpr (uniform_box_test == 1) {
+						w = 1.0;
+					}
+					const double M_dot_cell = - M_dot * w / w_sum;
+					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+					const double rel_accretion_rate = M_dot_cell * dt / vol / rho;
+					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk), rel_accretion_rate);
 				}
 			}
 		}
@@ -229,9 +311,10 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 		const auto &geom = container->Geom(lev);
 		const auto plo = geom.ProbLoArray();
 		const auto dxi = geom.InvCellSizeArray();
+		const auto dx = geom.CellSizeArray();
 
 		// Process particles in this box
-		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dxi, time, dt, mass_index);
+		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dx, time, dt, mass_index);
 	}
 
 	// Sum boundary cell values to real cells
@@ -253,10 +336,10 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
 	// Update accretion_rate and compute scale_down
-	ComputeScaleDown<problem_t>(state_accretion_rate, scale_down, container->Geom(lev).periodicity());
+	// ComputeScaleDown<problem_t>(state_accretion_rate, scale_down, container->Geom(lev).periodicity());
 
 	// Step 3: Update particle mass and momentum
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, time, dt);
+	// UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, time, dt);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);
