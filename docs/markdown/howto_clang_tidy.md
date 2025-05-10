@@ -24,7 +24,7 @@ To see the `clang-tidy` warnings that are relevant only to the code changes you'
 bash ./scripts/tidy.sh build
 ```
 
-This will run `clang-tidy` on all the files that have been modified in the current working directory.
+This will run `clang-tidy` on all the files that have been modified with respect to the previous commit.
 
 ```bash
 bash ./scripts/tidy.sh build previous
