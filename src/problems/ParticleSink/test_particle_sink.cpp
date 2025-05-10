@@ -158,7 +158,7 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	// get total mass of the initial gas
+	// get total gas mass in the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
@@ -178,13 +178,12 @@ auto problem_main() -> int
 		amrex::Print() << "\nBefore evolution:\n";
 		amrex::Print() << "Total gas mass = " << total_mass_init << "\n";
 		amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";
-		amrex::Print() << "Total total mass = " << total_total_mass << "\n";
 	}
 
 	// evolve
 	sim.evolve();
 
-	// get total mass of the final gas
+	// get total gas mass in the final state
 	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
@@ -204,23 +203,20 @@ auto problem_main() -> int
 		for (const auto &p : real_data_final) {
 			total_particle_mass_final += p[3];
 		}
-		total_total_mass_final = total_mass_final + total_particle_mass_final;
-		amrex::Print() << "\nAfter evolution:\n";
-		amrex::Print() << "Total gas mass = " << total_mass_final << "\n";
-		amrex::Print() << "Total particle mass = " << total_particle_mass_final << "\n";
-		amrex::Print() << "Total total mass = " << total_total_mass_final << "\n";
 
+		// change in gas mass
 		const double gas_mass_change = total_mass_final - total_mass_init;
 		const double particle_mass_change = total_particle_mass_final - total_particle_mass;
-		amrex::Print() << "\nGas mass change = " << gas_mass_change << "\n";
+		const double rel_mass_error = std::abs(gas_mass_change + particle_mass_change) / std::abs(gas_mass_change);
+		amrex::Print() << "\nAfter evolution:\n";
+		amrex::Print() << "Gas mass change = " << gas_mass_change << "\n";
 		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
+		amrex::Print() << "Total mass change = " << gas_mass_change + particle_mass_change << "\n";
+		amrex::Print() << "Relative mass error = " << rel_mass_error << "\n";
 
-		const double rel_mass_change = (total_total_mass_final - total_total_mass) / total_total_mass;
-		amrex::Print() << "Total relative mass change = " << rel_mass_change << "\n";
-		const double rel_mass_error = std::abs(rel_mass_change);
-
-		const double rel_error_tol = 1.0e-6;
-		if (!(rel_mass_error < rel_error_tol)) {
+		// should be machine precision (1e-14), but the change is 5 orders of magnitude smaller than the initial mass, so an error of 1e-9 is expected
+		const double rel_mass_error_tol = 1.0e-8;
+		if (!(rel_mass_error < rel_mass_error_tol)) {
 			status = 1;
 		}
 
@@ -258,10 +254,12 @@ auto problem_main() -> int
 		}
 
 		const double rel_error = err_norm / sol_norm;
+		amrex::Print() << "\nCheck density profile:\n";
 		amrex::Print() << "Error norm = " << err_norm << "\n";
 		amrex::Print() << "Solution norm = " << sol_norm << "\n";
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
+		const double rel_error_tol = 1.0e-6;
 		if (!(rel_error < rel_error_tol)) {
 			status = 1;
 		}
