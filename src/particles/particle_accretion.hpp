@@ -244,55 +244,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		// compute the average density, momentum, and sound speed in the accretion zone
-		double rho_infty = 0.0;
-		double px_infty = 0.0;
-		double py_infty = 0.0;
-		double pz_infty = 0.0;
-		double cs_infty = 0.0;
-		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
-			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
-				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
-					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-					const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
-					const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
-					const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
-					const double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk);
-					rho_infty += rho * weight;
-					px_infty += px * weight;
-					py_infty += py * weight;
-					pz_infty += pz * weight;
-					cs_infty += cs * weight;
-				}
-			}
-		}
-		const double vx_infty = px_infty / rho_infty;
-		const double vy_infty = py_infty / rho_infty;
-		const double vz_infty = pz_infty / rho_infty;
-
-		// compute Bondi-Hoyle accretion radius, r_BH = G M / (v^2 + c^2)
-		const double v_infty_sqr = vx_infty * vx_infty + vy_infty * vy_infty + vz_infty * vz_infty;
-		const double r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_infty * cs_infty);
-
-		// Compute the accretion rate in the accretion zone, M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) /
-		// 4
-		constexpr double lambda = gcem::exp(1.5) / 4.0;
-		const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
-
-		// Compute accretion kernel radius,
-		// r_K = dx / 4, if r_BH < dx / 4
-		//       r_BH, if dx/4 <= r_BH <= stencil_size * dx / 2
-		//       stencil_size * dx / 2, if r_BH > stencil_size * dx / 2
-		const double r_acc = stencil_size * dx_max;
-		double r_K = NAN;
-		if (r_BH < dx_max / 4.0) {
-			r_K = dx_max / 4.0;
-		} else if (r_BH <= r_acc / 2.0) {
-			r_K = r_BH;
-		} else {
-			r_K = r_acc / 2.0;
-		}
+		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, par_mass, dx_max);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
