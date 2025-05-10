@@ -16,13 +16,13 @@ nav:
   - User guide:
     - Installation: installation.md
     - Running on HPC clusters: running_on_hpc_clusters.md
-    - Test problems: tests/index.md
+    - Test problems:
       - Radiative shock test: tests/radshock.md
       - Shu-Osher shock test: tests/shu_osher.md
       - Slow-moving shock test: tests/sms.md
       - Matter-radiation temperature equilibrium test: tests/energy_exchange.md
       - Uniform advecting radiation in diffusive limit: tests/radhydro_uniform_adv.md
-    - Advecting radiation pulse test: tests/radhydro_pulse.md
+      - Advecting radiation pulse test: tests/radhydro_pulse.md
     - Runtime parameters: parameters.md
     - In-situ analysis: insitu_analysis.md
     - Postprocessing: postprocessing.md
