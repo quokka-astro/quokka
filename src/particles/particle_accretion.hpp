@@ -6,7 +6,6 @@
 #include "AMReX_REAL.H"
 #include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
-#include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
 namespace quokka
@@ -112,6 +111,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const amrex::Long np = pti.numParticles();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+	const double something = 3.3;
+	double something_else = 3.3;
+	double something_else_else = 3.3 + something_else;
 
 	// make a copy of kernel_weights_normalized for device
 	const auto kernel_weights_normalized_d = kernel_weights_normalized_;
@@ -185,7 +187,6 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	const auto &local_scale_down_arr = scale_down.arrays();
 	const auto &dx = geom.CellSizeArray();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
-	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	amrex::ParallelFor(accretion_rate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
@@ -321,7 +322,6 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		// Get geometry information for this level
 		const auto &geom = container->Geom(lev);
 		const auto plo = geom.ProbLoArray();
-		const auto dxi = geom.InvCellSizeArray();
 		const auto dx = geom.CellSizeArray();
 
 		// Calculate cell volume
@@ -368,7 +368,6 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 		// Get geometry information for this level
 		const auto &geom = container->Geom(lev);
 		const auto plo = geom.ProbLoArray();
-		const auto dxi = geom.InvCellSizeArray();
 		const auto dx = geom.CellSizeArray();
 
 		// Process particles in this box
