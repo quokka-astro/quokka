@@ -168,7 +168,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 // Compute the scale down factor for the accretion rate. This is used to prevent accretion rates from exceeding 100% of the available mass.
 // Current implementation: the maximum allowed relative accretion rate is 90% (gas density cannot drop more than 90% in one time step)
 // TODO(cch): compute a local accretion_rate_floor
-template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Periodicity &periodicity)
+template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom)
 {
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &scale_down_arr = scale_down.arrays();
@@ -188,7 +188,7 @@ template <typename problem_t> void ComputeScaleDown(amrex::MultiFab &accretion_r
 	});
 
 	// synchronize scale_down
-	scale_down.FillBoundary(periodicity);
+	scale_down.FillBoundary(geom.periodicity());
 }
 
 // Function to update particle mass and momentum for particles in a box, including the ParallelFor call
@@ -328,7 +328,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 // in one time step. rho_sink is a constant threshold density.
 // The accreted mass and momentum are added to the particle's mass and momentum.
 template <typename ContainerType, typename problem_t>
-void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt,
+void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
 		    int mass_index)
 {
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
@@ -336,7 +336,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
 	// Update accretion_rate and compute scale_down
-	// ComputeScaleDown<problem_t>(state_accretion_rate, scale_down, container->Geom(lev).periodicity());
+	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom);
 
 	// Step 3: Update particle mass and momentum
 	// UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, time, dt);
