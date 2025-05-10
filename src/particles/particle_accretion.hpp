@@ -39,7 +39,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Arra
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass,
-								   double dx_max, ParticleUtils::kernel_weights_array_t kernel_weights_normalized) -> std::tuple<double, double>
+								   double dx_max, ParticleUtils::kernel_weights_array_t kernel_weights_normalized)
+    -> std::tuple<double, double>
 {
 	// compute the average density, momentum, and sound speed in the accretion zone
 	double rho_infty = 0.0;
