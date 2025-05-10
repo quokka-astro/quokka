@@ -72,8 +72,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	const double v_infty_sqr = vx_infty * vx_infty + vy_infty * vy_infty + vz_infty * vz_infty;
 	const double r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_infty * cs_infty);
 
-	// Compute the accretion rate in the accretion zone, M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) /
-	// 4
+	// Compute the accretion rate in the accretion zone, 
+	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
 	constexpr double lambda = gcem::exp(1.5) / 4.0;
 	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
 
@@ -164,7 +164,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
 
-					//------------------------ This is different from UpdateParticleMassAndMomentumInBox -----------------------
+					//------------------------ This is the part that is different from UpdateParticleMassAndMomentumInBox -----------------------
 					// Compute the relative accretion rate and add it to local_accretion_rate
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 					const double rel_accretion_rate = M_dot_cell * dt / (vol * rho);
@@ -176,9 +176,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	});
 }
 
-// Compute the scale down factor for the accretion rate. This is used to prevent accretion rates from exceeding 100% of the available mass.
-// Current implementation: the maximum allowed relative accretion rate is 90% (gas density cannot drop more than 90% in one time step)
-// TODO(cch): compute a local accretion_rate_floor
+// Compute the scale down factor for the accretion rate. We first prevent the gas density from dropping below 75% of its initial value.
+// Then, if the density in the end state is above the Jeans density, we increase the accretion rate so that the density in the end state is
+// equal to the Jeans density.
 template <typename problem_t>
 void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom)
 {
@@ -285,7 +285,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
 
-					//------------------------ This is different from ComputeAccretionRateInBox ----------------------------
+					//----------------- This is the part that is different from ComputeAccretionRateInBox ---------------
 					// Compute the accreted mass and momentum onto the particle
 					const double scale_down_factor = local_scale_down(ii, jj, kk);
 					const double accreted_mass_cell = M_dot_cell * dt * scale_down_factor;
@@ -356,6 +356,7 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 	});
 }
 
+// Functor for computing the accretion rate and store it in a buffer state `accretion_rate`.
 template <typename ContainerType, typename problem_t>
 void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real time, amrex::Real dt,
 		      int mass_index)
@@ -378,12 +379,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 	accretion_rate.SumBoundary(container->Geom(lev).periodicity());
 }
 
-// Functor for accreting mass and momentum from gas onto particles.
-// For testing purposes, we implement a simplified version of the threshold scheme from Federrath et al. (2010).
-// For every cell near the particle, we accrete an amount of mass given by
-// $ \Delta m = \max(0, 0.5 (rho - rho_sink) * dx^3) $
-// in one time step. rho_sink is a constant threshold density.
-// The accreted mass and momentum are added to the particle's mass and momentum.
+// Functor for applying accretion.
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev,
 		    amrex::Real time, amrex::Real dt, int mass_index)
