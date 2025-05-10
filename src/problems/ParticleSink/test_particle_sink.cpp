@@ -162,8 +162,6 @@ auto problem_main() -> int
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	double total_total_mass = NAN;
-	double total_total_mass_final = NAN;
 	double total_particle_mass = 0.0;
 
 	// get total particle mass
@@ -174,7 +172,6 @@ auto problem_main() -> int
 		for (const auto &p : real_data) {
 			total_particle_mass += p[3];
 		}
-		total_total_mass = total_mass_init + total_particle_mass;
 		amrex::Print() << "\nBefore evolution:\n";
 		amrex::Print() << "Total gas mass = " << total_mass_init << "\n";
 		amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";

@@ -26,7 +26,7 @@ namespace SinkAccretionUtils
 
 constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
 
-static constexpr ParticleUtils::kernel_weights_array_t kernel_weights_normalized = ParticleUtils::kernel_spherical_3_weights_normalized;
+static constexpr ParticleUtils::kernel_weights_array_t kernel_weights_normalized_ = ParticleUtils::kernel_spherical_3_weights_normalized;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
@@ -40,7 +40,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Arra
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass,
-								   double dx_max) -> std::tuple<double, double>
+								   double dx_max, ParticleUtils::kernel_weights_array_t kernel_weights_normalized) -> std::tuple<double, double>
 {
 	// compute the average density, momentum, and sound speed in the accretion zone
 	double rho_infty = 0.0;
@@ -113,8 +113,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-	// make a copy of kernel_weights for device
-	auto kernel_weights_d = kernel_weights_normalized;
+	// make a copy of kernel_weights_normalized for device
+	const auto kernel_weights_normalized_d = kernel_weights_normalized_;
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -126,14 +126,14 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, par_mass, dx_max);
+		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, par_mass, dx_max, kernel_weights_normalized_d);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double weight = kernel_weights_normalized_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
 					const double x = p.pos(0) - plo[0] - ii * dx[0];
 					const double y = p.pos(1) - plo[1] - jj * dx[1];
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
@@ -151,7 +151,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double weight = kernel_weights_normalized_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
 					const double x = p.pos(0) - plo[0] - ii * dx[0];
 					const double y = p.pos(1) - plo[1] - jj * dx[1];
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
@@ -231,8 +231,8 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const amrex::Long np = pti.numParticles();
 
-	// make a copy of kernel_weights for device
-	const auto kernel_weights_d = kernel_weights_normalized;
+	// make a copy of kernel_weights_normalized for device
+	const auto kernel_weights_normalized_d = kernel_weights_normalized_;
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -244,14 +244,14 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, par_mass, dx_max);
+		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, par_mass, dx_max, kernel_weights_normalized_d);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double weight = kernel_weights_normalized_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
 					const double x = p.pos(0) - plo[0] - ii * dx[0];
 					const double y = p.pos(1) - plo[1] - jj * dx[1];
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
@@ -273,7 +273,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double weight = kernel_weights_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
+					const double weight = kernel_weights_normalized_d[std::abs(ii - ix)][std::abs(jj - iy)][std::abs(kk - iz)];
 					const double x = p.pos(0) - plo[0] - ii * dx[0];
 					const double y = p.pos(1) - plo[1] - jj * dx[1];
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
