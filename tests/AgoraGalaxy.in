@@ -23,6 +23,7 @@ regrid_interval     = -1    # static refinement only (do not regrid)
 
 do_reflux = 1
 do_subcycle = 0
+poisson_supercycle_interval = 2
 
 cfl = 0.3
 max_timesteps = 100
