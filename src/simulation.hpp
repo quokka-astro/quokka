@@ -1333,6 +1333,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 {
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_ != 0) {
+		if (poissonSupercycleInterval_ > 1) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(regrid_int <= 0, "Poisson supercycling is only allowed for static meshes!");
+		}
 		if (istep[0] % poissonSupercycleInterval_ == 0) {
 			// do Poisson solve every poissonSupercycleInterval_ coarse steps
 			calculateGpotAllLevels();
