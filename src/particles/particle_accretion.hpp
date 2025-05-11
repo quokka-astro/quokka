@@ -38,8 +38,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Arra
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass,
-								   double par_x, double par_y, double par_z, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx)
-    -> std::tuple<double, double>
+								   double par_x, double par_y, double par_z,
+								   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
+								   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> std::tuple<double, double>
 {
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
