@@ -24,17 +24,7 @@ namespace SinkAccretionUtils
 
 constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
 
-static constexpr ParticleUtils::kernel_weights_array_t kernel_weights_normalized_ = ParticleUtils::kernel_spherical_3_weights_normalized;
-
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_rho_sink(const amrex::Array4<const amrex::Real> & /*state*/, int /*i*/, int /*j*/, int /*k*/) -> double
-{
-	// Jeans criterion, density threshold, etc.
-
-	// A single density threshold for testing
-	return 0.2 * C::m_p;
-}
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass,
@@ -135,9 +125,6 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const amrex::Long np = pti.numParticles();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-
-	// make a copy of kernel_weights_normalized for device
-	const auto kernel_weights_normalized_d = kernel_weights_normalized_;
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
 
@@ -266,9 +253,6 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 	auto *pData = particles().data();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const amrex::Long np = pti.numParticles();
-
-	// make a copy of kernel_weights_normalized for device
-	const auto kernel_weights_normalized_d = kernel_weights_normalized_;
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
 
