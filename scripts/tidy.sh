@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # Function to display help message
 show_help() {
     echo "Usage: $0 <build_directory> [target]"
