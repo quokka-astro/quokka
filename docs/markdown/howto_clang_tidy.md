@@ -21,25 +21,25 @@ which will run `clang-tidy` on all the files in the `src/particles` directory.
 To see the `clang-tidy` warnings that are relevant only to the code changes you've made, you can use `scripts/tidy.sh`. Example usage:
 
 ```bash
-bash ./scripts/tidy.sh ./build
+./scripts/tidy.sh ./build
 ```
 
 This will run `clang-tidy` on all the files that have been modified with respect to the previous commit.
 
 ```bash
-bash ./scripts/tidy.sh ./build previous
+./scripts/tidy.sh ./build previous
 ```
 
 This will run `clang-tidy` on all the files that have been modified in the last commit.
 
 ```bash
-bash ./scripts/tidy.sh ./build origin
+./scripts/tidy.sh ./build origin
 ```
 
 This will run `clang-tidy` on all the files that have been modified with respect to the remote branch.
 
 ```bash
-bash ./scripts/tidy.sh ./build dev
+./scripts/tidy.sh ./build dev
 ```
 
 This will run `clang-tidy` on all the files that have been modified with respect to the local development branch.
