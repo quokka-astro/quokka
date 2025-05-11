@@ -7,7 +7,7 @@ show_help() {
     echo "Usage: $0 <build_directory> [target]"
     echo
     echo "Arguments:"
-    echo "  build_directory   Path to the build directory containing compile_commands.json"
+    echo "  build_directory   Path to the build directory containing compile_commands.json. clang-tidy will use this to find the compile commands for the files."
     echo "  target            Optional argument to specify which files to check (default: 'changed')"
     echo "                    - 'changed': Files modified in current working directory"
     echo "                    - 'previous': Files modified in the last commit"
