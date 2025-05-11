@@ -321,7 +321,8 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					//----------------- This is the part that is different from ComputeAccretionRateInBox ---------------
 					// Compute the accreted mass and momentum onto the particle
 					const double scale_down_factor = local_scale_down(ii, jj, kk);
-					const double accreted_mass_cell = M_dot_cell * dt * scale_down_factor;
+					// M_dot_cell is negative, so we multiply it by -1 to get the accreted mass
+					const double accreted_mass_cell = -M_dot_cell * dt * scale_down_factor;
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
 					const double vx = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index) / rho;
 					const double vy = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index) / rho;
@@ -335,13 +336,12 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 			}
 		}
 
-		// the accretion rates are negative, so we 'subtract' them
 		const double par_m = p.rdata(mass_index);
-		const double par_m_new = par_m - accreted_mass;
+		const double par_m_new = par_m + accreted_mass;
 		p.rdata(mass_index) = par_m_new;
-		p.rdata(mass_index + 1) = (par_m * p.rdata(mass_index + 1) - accreted_momentum_x) / par_m_new;
-		p.rdata(mass_index + 2) = (par_m * p.rdata(mass_index + 2) - accreted_momentum_y) / par_m_new;
-		p.rdata(mass_index + 3) = (par_m * p.rdata(mass_index + 3) - accreted_momentum_z) / par_m_new;
+		p.rdata(mass_index + 1) = (par_m * p.rdata(mass_index + 1) + accreted_momentum_x) / par_m_new;
+		p.rdata(mass_index + 2) = (par_m * p.rdata(mass_index + 2) + accreted_momentum_y) / par_m_new;
+		p.rdata(mass_index + 3) = (par_m * p.rdata(mass_index + 3) + accreted_momentum_z) / par_m_new;
 	});
 }
 
