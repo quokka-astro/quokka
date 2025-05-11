@@ -180,6 +180,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;				     // 1 == self-gravity enabled, 0 == disabled
+	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
 	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -705,6 +706,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default do_subcycle = 1
 	pp.query("do_subcycle", do_subcycle);
+
+	// Default poisson_supercycle_interval = 1
+	pp.query("poisson_supercycle_interval", poissonSupercycleInterval_);
 
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
@@ -1329,9 +1333,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 {
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_ != 0) {
-
-		calculateGpotAllLevels();
-
+		if (istep[0] % poissonSupercycleInterval_ == 0) {
+			// do Poisson solve every poissonSupercycleInterval_ coarse steps
+			calculateGpotAllLevels();
+		}
+		// this must be done every step
 		gravAccelAllLevels(dt);
 	}
 #endif
