@@ -1,15 +1,18 @@
 #!/bin/bash
 
+set -e
+
 # Function to display help message
 show_help() {
     echo "Usage: $0 <build_directory> [target]"
     echo
     echo "Arguments:"
-    echo "  build_directory   Path to the build directory containing compile_commands.json"
+    echo "  build_directory   Path to the build directory containing compile_commands.json. clang-tidy will use this to find the compile commands for the files."
     echo "  target            Optional argument to specify which files to check (default: 'changed')"
     echo "                    - 'changed': Files modified in current working directory"
     echo "                    - 'previous': Files modified in the last commit"
     echo "                    - 'origin': Files different from the remote branch"
+    echo "                    - 'dev': Files different from the development branch"
     echo
     echo "Options:"
     echo "  -h, --help        Show this help message"
@@ -54,29 +57,28 @@ elif [ "$target" = "previous" ]; then
 elif [ "$target" = "origin" ]; then
     # Get files that differ from the remote branch
     files=$(git diff --name-only "origin/$CURRENT_BRANCH")
+elif [ "$target" = "dev" ]; then
+    # Get files that differ from the development branch
+    files=$(git diff --name-only development)
 else
-    echo "Invalid target argument. Use 'changed', 'previous' or 'origin'"
+    echo "Invalid target argument. Use 'changed', 'previous', 'origin' or 'dev'"
     exit 1
 fi
 
 # Display the list of files that will be processed
 echo "Will process the following files with clang-tidy:"
+files_select=()
 for file in $files; do
     # Only process C++ source and header files
     if [[ "$file" == *.cpp || "$file" == *.hpp ]]; then
         echo "$file"
+        files_select+=("$file")
     fi
 done
 
 echo
 
-# Process each file with clang-tidy
-for file in $files; do
-    # Only process C++ source and header files
-    if [[ "$file" == *.cpp || "$file" == *.hpp ]]; then
-        echo "Processing $file..."
-        # Run clang-tidy on the file using the specified build directory
-        # -p flag points to the build directory containing compile_commands.json
-        clang-tidy "$file" -p "$BUILD_DIR"
-    fi
-done
+# Only run clang-tidy if there are files to process
+if [ ${#files_select[@]} -gt 0 ]; then
+    clang-tidy "${files_select[@]}" -p "$BUILD_DIR"
+fi
