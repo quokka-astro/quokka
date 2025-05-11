@@ -65,15 +65,18 @@ fi
 
 # Display the list of files that will be processed
 echo "Will process the following files with clang-tidy:"
-files_select=""
+files_select=()
 for file in $files; do
     # Only process C++ source and header files
     if [[ "$file" == *.cpp || "$file" == *.hpp ]]; then
         echo "$file"
-        files_select="$files_select $file"
+        files_select+=("$file")
     fi
 done
 
 echo
 
-clang-tidy $files_select -p "$BUILD_DIR"
+# Only run clang-tidy if there are files to process
+if [ ${#files_select[@]} -gt 0 ]; then
+    clang-tidy "${files_select[@]}" -p "$BUILD_DIR"
+fi
