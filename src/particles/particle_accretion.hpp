@@ -6,12 +6,11 @@
 #include "AMReX_REAL.H"
 #include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
 namespace quokka
 {
-
-constexpr int uniform_box_test = 1; // If set to 1, test accretion scheme in a (7 dx)^3 box with uniform accretion kernel
 
 enum class AccretionScheme { Threshold = 0, BondiHoyle = 1 };
 
@@ -116,6 +115,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	// make a copy of kernel_weights_normalized for device
 	const auto kernel_weights_normalized_d = kernel_weights_normalized_;
 
+	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
+
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
@@ -139,7 +140,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double w = weight * compute_accretion_kernel(r_sqr, r_K);
-					if constexpr (uniform_box_test == 1) {
+					if (use_uniform_kernel) {
 						w = 1.0;
 					}
 					w_sum += w;
@@ -157,7 +158,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double w = weight * compute_accretion_kernel(r_sqr, r_K);
-					if constexpr (uniform_box_test == 1) {
+					if (use_uniform_kernel) {
 						w = 1.0;
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
@@ -234,6 +235,8 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 	// make a copy of kernel_weights_normalized for device
 	const auto kernel_weights_normalized_d = kernel_weights_normalized_;
 
+	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
+
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
@@ -257,7 +260,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double w = weight * std::exp(-r_sqr / (r_K * r_K));
-					if constexpr (uniform_box_test == 1) {
+					if (use_uniform_kernel) {
 						w = 1.0;
 					}
 					w_sum += w;
@@ -279,7 +282,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					const double z = p.pos(2) - plo[2] - kk * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double w = weight * std::exp(-r_sqr / (r_K * r_K));
-					if constexpr (uniform_box_test == 1) {
+					if (use_uniform_kernel) {
 						w = 1.0;
 					}
 					const double M_dot_cell = -M_dot * w / w_sum;
