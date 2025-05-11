@@ -305,10 +305,12 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		}
 
 		// the accretion rates are negative, so we 'subtract' them
-		p.rdata(mass_index) -= accreted_mass;
-		p.rdata(mass_index + 1) -= accreted_momentum_x / accreted_mass;
-		p.rdata(mass_index + 2) -= accreted_momentum_y / accreted_mass;
-		p.rdata(mass_index + 3) -= accreted_momentum_z / accreted_mass;
+		const double par_m = p.rdata(mass_index);
+		const double par_m_new = par_m - accreted_mass;
+		p.rdata(mass_index) = par_m_new;
+		p.rdata(mass_index + 1) = (par_m * p.rdata(mass_index + 1) - accreted_momentum_x) / par_m_new;
+		p.rdata(mass_index + 2) = (par_m * p.rdata(mass_index + 2) - accreted_momentum_y) / par_m_new;
+		p.rdata(mass_index + 3) = (par_m * p.rdata(mass_index + 3) - accreted_momentum_z) / par_m_new;
 	});
 }
 
