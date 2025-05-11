@@ -65,22 +65,15 @@ fi
 
 # Display the list of files that will be processed
 echo "Will process the following files with clang-tidy:"
+files_select=""
 for file in $files; do
     # Only process C++ source and header files
     if [[ "$file" == *.cpp || "$file" == *.hpp ]]; then
         echo "$file"
+        files_select="$files_select $file"
     fi
 done
 
 echo
 
-# Process each file with clang-tidy
-for file in $files; do
-    # Only process C++ source and header files
-    if [[ "$file" == *.cpp || "$file" == *.hpp ]]; then
-        echo "Processing $file..."
-        # Run clang-tidy on the file using the specified build directory
-        # -p flag points to the build directory containing compile_commands.json
-        clang-tidy "$file" -p "$BUILD_DIR"
-    fi
-done
+clang-tidy $files_select -p "$BUILD_DIR"
