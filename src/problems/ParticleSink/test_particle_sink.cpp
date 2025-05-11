@@ -31,6 +31,7 @@ const double rho0 = 1.0 * C::m_p; // g cm^-3
 const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
+const double dt_init = 3.0 * year;
 
 static std::string particles_file = "Sink.txt"; // NOLINT
 
@@ -151,18 +152,16 @@ auto problem_main() -> int
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 100.0 * year;
-	sim.initDt_ = 1.0 * year;
+	sim.stopTime_ = 10.0 * dt_init;
+	sim.initDt_ = dt_init;
 
 	// initialize
 	sim.setInitialConditions();
 
-	// get total mass of the initial gas
+	// get total gas mass in the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	double total_total_mass = NAN;
-	double total_total_mass_final = NAN;
 	double total_particle_mass = 0.0;
 
 	// get total particle mass
@@ -173,85 +172,91 @@ auto problem_main() -> int
 		for (const auto &p : real_data) {
 			total_particle_mass += p[3];
 		}
-		total_total_mass = total_mass_init + total_particle_mass;
 		amrex::Print() << "\nBefore evolution:\n";
 		amrex::Print() << "Total gas mass = " << total_mass_init << "\n";
 		amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";
-		amrex::Print() << "Total total mass = " << total_total_mass << "\n";
 	}
 
 	// evolve
 	sim.evolve();
 
-	// get total mass of the final gas
+	// get total gas mass in the final state
 	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
 	const int nx = static_cast<int>(position.size());
 
-	const double overlap_loc = 12.01;	// parsec
-	const double outer_radius = 5.0 * 8.01; // parsec
+	// get dx
+	const double overlap_loc = 1.5001 * dx0[0];
+	const double outer_radius = 5.0001 * dx0[0];
 
 	int status = 0;
 
-	// get total mass of the final particles
 	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// compute total particle mass and error
 		double total_particle_mass_final = 0.0;
 		for (const auto &p : real_data_final) {
 			total_particle_mass_final += p[3];
 		}
-		total_total_mass_final = total_mass_final + total_particle_mass_final;
-		amrex::Print() << "\nAfter evolution:\n";
-		amrex::Print() << "Total gas mass = " << total_mass_final << "\n";
-		amrex::Print() << "Total particle mass = " << total_particle_mass_final << "\n";
-		amrex::Print() << "Total total mass = " << total_total_mass_final << "\n";
 
+		// change in gas mass
 		const double gas_mass_change = total_mass_final - total_mass_init;
 		const double particle_mass_change = total_particle_mass_final - total_particle_mass;
-		amrex::Print() << "\nGas mass change = " << gas_mass_change << "\n";
+		const double rel_mass_error = std::abs(gas_mass_change + particle_mass_change) / std::abs(gas_mass_change);
+		amrex::Print() << "\nAfter evolution:\n";
+		amrex::Print() << "Gas mass change = " << gas_mass_change << "\n";
 		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
+		amrex::Print() << "Total mass change = " << gas_mass_change + particle_mass_change << "\n";
+		amrex::Print() << "Relative mass error = " << rel_mass_error << "\n";
 
-		const double rel_mass_change = (total_total_mass_final - total_total_mass) / total_total_mass;
-		amrex::Print() << "Total relative mass change = " << rel_mass_change << "\n";
-		const double rel_mass_error = std::abs(rel_mass_change);
-
-		const double rel_error_tol = 1.0e-8;
-		if (!(rel_mass_error < rel_error_tol)) {
+		// should be machine precision (1e-14), but the change is 5 orders of magnitude smaller than the initial mass, so an error of 1e-9 is expected
+		const double rel_mass_error_tol = 1.0e-8;
+		if (!(rel_mass_error < rel_mass_error_tol)) {
 			status = 1;
 		}
 
+		// exact solution
+		const double rhodot = 7.078494865e-34; // g / cm3 / s
+		const double drho = rhodot * dt_init;
+
+		// compute density error
 		std::vector<double> xs(nx);
 		std::vector<double> xs_over_dx(nx);
 		std::vector<double> rho(nx);
 		std::vector<double> num_den(nx);
 		std::vector<double> exact_den(nx);
+		std::vector<double> exact_num_den(nx);
 		double err_norm = 0.0;
 		double sol_norm = 0.0;
 		for (int i = 0; i < nx; ++i) {
-			xs[i] = position[i] / C::parsec;
+			xs[i] = position[i];
 			xs_over_dx[i] = position[i] / dx0[0];
 			rho[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
 			num_den[i] = rho[i] / C::m_p; // cm^-3
 
 			// exact solution
 			if (std::abs(xs[i]) <= overlap_loc) {
-				exact_den[i] = 0.1;
+				exact_den[i] = rho0 - 4 * drho; // two particles at a position; overlapping
 			} else if (std::abs(xs[i]) <= outer_radius) {
-				exact_den[i] = 0.2;
+				exact_den[i] = rho0 - 2 * drho; // two particles at a position; non-overlapping
 			} else {
-				exact_den[i] = 1.0;
+				exact_den[i] = rho0;
 			}
+			exact_num_den[i] = exact_den[i] / C::m_p; // cm^-3
 
-			sol_norm += exact_den[i];
-			err_norm += std::abs(num_den[i] - exact_den[i]);
+			sol_norm += exact_num_den[i];
+			err_norm += std::abs(num_den[i] - exact_num_den[i]);
 		}
 
 		const double rel_error = err_norm / sol_norm;
+		amrex::Print() << "\nCheck density profile:\n";
 		amrex::Print() << "Error norm = " << err_norm << "\n";
 		amrex::Print() << "Solution norm = " << sol_norm << "\n";
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
+		const double rel_error_tol = 1.0e-6;
 		if (!(rel_error < rel_error_tol)) {
 			status = 1;
 		}
@@ -265,15 +270,16 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 		matplotlibcpp::clf();
 		matplotlibcpp::ylim(0.0, 1.1);
-		std::map<std::string, std::string> exact_den_args;
-		exact_den_args["label"] = "exact";
-		exact_den_args["color"] = "black";
-		matplotlibcpp::plot(xs, exact_den, exact_den_args);
+		std::map<std::string, std::string> exact_num_den_args;
+		exact_num_den_args["label"] = "exact";
+		exact_num_den_args["color"] = "black";
+		matplotlibcpp::plot(xs, exact_num_den, exact_num_den_args);
 		std::map<std::string, std::string> num_den_args;
 		num_den_args["label"] = "simulation";
 		num_den_args["color"] = "red";
+		num_den_args["linestyle"] = "--";
 		matplotlibcpp::plot(xs, num_den, num_den_args);
-		matplotlibcpp::xlabel("x (pc)");
+		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("n (cm^-3)");
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./sink_density.png");
@@ -283,7 +289,8 @@ auto problem_main() -> int
 		matplotlibcpp::xlim(-12, 12);
 		num_den_args["label"] = "simulation";
 		num_den_args["color"] = "red";
-		matplotlibcpp::plot(xs_over_dx, num_den);
+		num_den_args["linestyle"] = "--";
+		matplotlibcpp::plot(xs_over_dx, num_den, num_den_args);
 		matplotlibcpp::xlabel("x / dx");
 		matplotlibcpp::ylabel("n (cm^-3)");
 		matplotlibcpp::legend();
