@@ -140,6 +140,8 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+
 	// get total gas mass of the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
@@ -147,6 +149,9 @@ auto problem_main() -> int
 
 	// evolve
 	sim.evolve();
+
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	const int nx = static_cast<int>(position.size());
 
 	// get total gas mass of the final state
 	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
@@ -189,6 +194,32 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "Test passed\n";
 		}
+	
+		// plot
+		std::vector<double> xs(nx);
+		std::vector<double> rho(nx);
+		std::vector<double> rho0(nx);
+		for (int i = 0; i < nx; ++i) {
+			xs[i] = position[i];
+			rho[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
+			rho0[i] = values0.at(HydroSystem<SinkProblem>::density_index)[i];
+		}
+
+#ifdef HAVE_PYTHON
+		matplotlibcpp::clf();
+		std::map<std::string, std::string> rho0_args;
+		rho0_args["label"] = "rho0";
+		rho0_args["color"] = "blue";
+		matplotlibcpp::plot(xs, rho0, rho0_args);
+		std::map<std::string, std::string> rho_args;
+		rho_args["label"] = "rho";
+		rho_args["color"] = "red";
+		matplotlibcpp::plot(xs, rho, rho_args);
+		matplotlibcpp::xlabel("x (cm)");
+		matplotlibcpp::ylabel("rho (g cm^-3)");
+		matplotlibcpp::legend();
+		matplotlibcpp::save("./sink_formation_density.png");
+#endif
 	}
 
 	return status;
