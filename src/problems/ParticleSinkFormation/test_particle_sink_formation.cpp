@@ -218,7 +218,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("rho (g cm^-3)");
 		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_formation_density.png");
+		matplotlibcpp::save("./sink_formation_density.pdf");
 #endif
 	}
 
