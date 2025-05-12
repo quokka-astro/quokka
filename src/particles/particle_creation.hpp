@@ -163,7 +163,7 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 // Specialization for Sink particles
 template <> struct ParticleCreationTraits<ParticleType::Sink> {
-	static constexpr amrex::Real n_thresh = 1.0e3 * C::m_p; // 1e3 cm^-3
+  //        static constexpr amrex::Real n_thresh = 1.0e3 * C::m_p; // 1e3 cm^-3
 
 	// Default nested ParticleChecker - determines if a particle should be created at a location
 	template <typename problem_t> struct ParticleChecker {
@@ -175,8 +175,37 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
+		        amrex::Real Gconst = C::Gconst;
+			Real rho, x1Mom, x2Mom, x3Mom, x1B, x2B, x3B, cs, rho_J;
+			Real b2, beta, pres, especific, vol, small_pr = 1.e-100, Eint = 0;
+                        const Real FLOOR_T_CREATEPARTICLE = 5.0, jeansNo = 0.25;
+                        const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
+
+			// Determine sound speed.
+			const Real Egas = state_arr(i, j, k, HydroSystem<problem_t>::energy_index);
+			if constexpr(HydroSystem<problem_t>::is_eos_isothermal()) {
+			    cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+			  }
+			else {
+			  rho = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+			  x1Mom = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			  x2Mom = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			  x3Mom = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		 //		 x1B = state(i, j, k, HydroSystem<problem_t>::x1Bfield_index);
+		 //		 x2B = state(i, j, k, HydroSystem<problem_t>::x2Bfield_index);
+		 //		 x3B = state(i, j, k, HydroSystem<problem_t>::x3Bfield_index);
+		 //		 Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, x1B, x2B, x3B, Egas);
+			  Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			  cs = sqrt(gamma*(gamma-1.0)*std::max(Eint,small_pr)/rho);
+			  cs = std::max(cs,sqrt(gamma*FLOOR_T_CREATEPARTICLE*C::k_B/(2.33*C::m_p)));
+			}
+
+			// Jeans density.
+			rho_J = M_PI * pow(cs/(sqrt(Gconst)*dx[0]/jeansNo),2);
+	   
 			// simple implementation: create a particle if the density is above a threshold n_thresh
-			if (state_arr(i, j, k, HydroSystem<problem_t>::density_index) > n_thresh) {
+			//			if (state_arr(i, j, k, HydroSystem<problem_t>::density_index) > n_thresh) {
+			if (state_arr(i, j, k, HydroSystem<problem_t>::density_index) > rho_J) {
 				return 1;
 			}
 			return 0;
@@ -209,10 +238,40 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			// Default implementation does nothing
 			// amrex::ignore_unused(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, base_offset);
 
+		        // Compute Jeans density
+		        amrex::Real Gconst = C::Gconst;
+			Real rho, x1Mom, x2Mom, x3Mom, x1B, x2B, x3B, cs, rho_J;
+			Real b2, beta, pres, especific, vol, small_pr = 1.e-100, Eint = 0;
+                        const Real FLOOR_T_CREATEPARTICLE = 5.0, jeansNo = 0.25;
+                        const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
+
+			// Determine sound speed.
+			const Real Egas = state_arr(i, j, k, HydroSystem<problem_t>::energy_index);
+			if constexpr(HydroSystem<problem_t>::is_eos_isothermal()) {
+			    cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+			  }
+			else {
+			  rho = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+			  x1Mom = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			  x2Mom = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			  x3Mom = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		 //		 x1B = state(i, j, k, HydroSystem<problem_t>::x1Bfield_index);
+		 //		 x2B = state(i, j, k, HydroSystem<problem_t>::x2Bfield_index);
+		 //		 x3B = state(i, j, k, HydroSystem<problem_t>::x3Bfield_index);
+		 //		 Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, x1B, x2B, x3B, Egas);
+			  Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			  cs = sqrt(gamma*(gamma-1.0)*std::max(Eint,small_pr)/rho);
+			  cs = std::max(cs,sqrt(gamma*FLOOR_T_CREATEPARTICLE*C::k_B/(2.33*C::m_p)));
+			}
+
+			// Jeans density.
+			rho_J = M_PI * pow(cs/(sqrt(Gconst)*dx[0]/jeansNo),2);
+	   		  
 			// Calculate common values for all particles
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-			const amrex::Real particle_mass = (cell_density - n_thresh) * cell_volume;
+			//	const amrex::Real particle_mass = (cell_density - n_thresh) * cell_volume;
+			const amrex::Real particle_mass = (cell_density - rho_J) * cell_volume;
 
 			const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
 			const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
@@ -238,8 +297,9 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			}
 
 			// update cell density to be the threshold density
-			const amrex::Real scale_factor = n_thresh / cell_density;
-			state_arr(i, j, k, HydroSystem<problem_t>::density_index) = n_thresh;
+			//	const amrex::Real scale_factor = n_thresh / cell_density;
+			const amrex::Real scale_factor = rho_J / cell_density;
+			state_arr(i, j, k, HydroSystem<problem_t>::density_index) = rho_J;
 			state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
