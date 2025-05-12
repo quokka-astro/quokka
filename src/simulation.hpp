@@ -790,7 +790,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 #endif
 
-	if (plotfileInterval_ > 0) {
+	if (plotfileInterval_ > 0 || plotTimeInterval_ > 0) {
 		WritePlotFile();
 	}
 
@@ -977,6 +977,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	double next_plot_file_time = 0;
 	if (plotTimeInterval_ > 0) {
+		// We have one plotfile at the start of the simulation, so we set next_plot_file_time to plotTimeInterval_
+		next_plot_file_time = plotTimeInterval_;
 		while (next_plot_file_time < cur_time) {
 			// advance next_plot_file_time until it is >= cur_time
 			// this is needed for restarts
@@ -1111,7 +1113,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		doDiagnostics();
 
 		// Writing Plot files at time intervals
-		if (plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
+		if (last_plot_file_step != step + 1 && plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
 			next_plot_file_time += plotTimeInterval_;
 			WritePlotFile();
 		}
@@ -1180,7 +1182,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	amrex::Print() << '\n';
 
 	// write final plotfile
-	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
+	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && istep[0] > last_plot_file_step) {
 		WritePlotFile();
 	}
 
