@@ -977,6 +977,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	double next_plot_file_time = 0;
 	if (plotTimeInterval_ > 0) {
+		// We have one plotfile at the start of the simulation, so we set next_plot_file_time to plotTimeInterval_
+		next_plot_file_time = plotTimeInterval_;
 		while (next_plot_file_time < cur_time) {
 			// advance next_plot_file_time until it is >= cur_time
 			// this is needed for restarts
