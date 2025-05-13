@@ -144,7 +144,7 @@ auto problem_main() -> int
 	int status = 0;
 
 	// get total particle mass of the final state
-	const auto [real_data_final, idata_final] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero();
+	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "Initial state:\n";
 		amrex::Print() << "Gas mass = " << m_gas_init / M_sol << " Msun\n";
