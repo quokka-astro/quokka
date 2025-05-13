@@ -1044,7 +1044,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #if AMREX_SPACEDIM == 3
 		// drift particles from t to (t + dt)
 		// N.B.: MUST be done *before* Poisson solve at new time!
-		particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
+		// particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
 #endif
 
 		// elliptic solve over entire AMR grid (post-timestep)

@@ -55,6 +55,39 @@ template <> struct Physics_Traits<StarCluster> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
+template <> struct Particle_Traits<StarCluster> {
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
+};
+
+template <> void QuokkaSimulation<StarCluster>::createInitialSinkParticles()
+{
+	// read particles from ASCII file
+	const int nreal_extra = 4; // mass vx vy vz
+	SinkParticles->SetVerbose(1);
+	SinkParticles->InitFromAsciiFile("sink.txt", nreal_extra, nullptr);
+
+	// // Loop over all particle at all levels and set first integer component to SNProgenitor
+	// for (int lev = 0; lev <= SinkParticles->finestLevel(); ++lev) {
+	// 	auto &particles = SinkParticles->GetParticles(lev);
+
+	// 	for (auto &kv : particles) {
+	// 		auto &particle_array = kv.second.GetArrayOfStructs();
+	// 		const int np = particle_array.numParticles();
+	// 		auto *pdata = particle_array().data();
+
+	// 		// Launch GPU kernel to set integer components
+	// 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+	// 			auto &p = pdata[i]; // NOLINT
+	// 			p.rdata(0) = M_star_in_Msun * C::M_solar;
+	// 		});
+	// 	}
+	// }
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
+}
+
 template <> void QuokkaSimulation<StarCluster>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	std::vector<Real> x_array = {
