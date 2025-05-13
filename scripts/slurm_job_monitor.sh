@@ -11,20 +11,20 @@ LOGFILE="job_output.log"
 CHECK_INTERVAL=60     # check every CHECK_INTERVAL seconds
 TIMEOUT=300           # timeout without output after TIMEOUT seconds
 
-# Function to monitor logfile for new output using stat to get file size
 monitor_log() {
-    # Get initial file size
-    last_size=$(stat -c%s "$LOGFILE" 2>/dev/null || echo 0)
+    echo "Monitoring $LOGFILE for hangs..."
+    # Get initial line count
+    last_lines=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
     last_change_time=$(date +%s)
 
     while true; do
         sleep "$CHECK_INTERVAL"
-        current_size=$(stat -c%s "$LOGFILE" 2>/dev/null || echo 0)
+        current_lines=$(wc -l < "$LOGFILE" 2>/dev/null || echo 0)
         current_time=$(date +%s)
 
-        if (( current_size > last_size )); then
+        if (( current_lines > last_lines )); then
             # New output detected
-            last_size=$current_size
+            last_lines=$current_lines
             last_change_time=$current_time
         else
             # No new output detected
