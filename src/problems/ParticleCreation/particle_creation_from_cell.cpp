@@ -117,7 +117,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
-		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &/*state_arr*/, amrex::Array4<const amrex::Real> const &/*state_accretion_rate_arr*/, int i, int j, int k,
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const & /*state_arr*/,
+						 amrex::Array4<const amrex::Real> const & /*state_accretion_rate_arr*/, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
 			// A simple demonstration of particle creation
@@ -159,7 +160,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		}
 
 		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const &/*state_accretion_rate_arr*/, int i, int j, int k,
+		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr,
+						 StateArray const & /*state_accretion_rate_arr*/, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
 		{
@@ -207,8 +209,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-				    int evolution_stage_index, int birth_time_index)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev,
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
