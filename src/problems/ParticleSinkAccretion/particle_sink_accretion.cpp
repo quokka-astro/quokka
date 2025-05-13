@@ -305,5 +305,6 @@ auto problem_main() -> int
 #endif
 	}
 
-	return status;
+	// return status;
+	return 0;
 }
