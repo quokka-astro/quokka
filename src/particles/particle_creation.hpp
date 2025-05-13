@@ -186,7 +186,6 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
 			// Determine sound speed.
-			const Real Egas = state_arr(i, j, k, HydroSystem<problem_t>::energy_index);
 			Real cs = NAN;
 			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
@@ -239,7 +238,6 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
 			// Determine sound speed.
-			const Real Egas = state_arr(i, j, k, HydroSystem<problem_t>::energy_index);
 			Real cs = NAN;
 			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;

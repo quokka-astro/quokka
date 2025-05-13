@@ -90,9 +90,9 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 {
 	// tag cells for refinement: static mesh refinement for the whole domain
 
-	auto const &dx = geom[lev].CellSizeArray();
-	auto const &plo = geom[lev].ProbLoArray();
-	auto const &phi = geom[lev].ProbHiArray();
+	// auto const &dx = geom[lev].CellSizeArray();
+	// auto const &plo = geom[lev].ProbLoArray();
+	// auto const &phi = geom[lev].ProbHiArray();
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -104,19 +104,6 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<SinkProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<SinkProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<SinkProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
 	const int ncomp_cc = Physics_Indices<SinkProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
@@ -126,8 +113,6 @@ auto problem_main() -> int
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
-
-	// amrex::ParmParse const pp("problem");
 
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim(BCs_cc);
