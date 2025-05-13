@@ -612,7 +612,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
 
-				const auto [real_data, int_data] = getParticleDataAtLevel(lev);
+				const auto &real_data = getParticleDataAtLevel(lev).first;
 
 				if (!real_data.empty()) {
 					amrex::Print() << "Level " << lev << "\n";
