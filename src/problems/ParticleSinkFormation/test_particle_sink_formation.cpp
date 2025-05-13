@@ -125,7 +125,7 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	const auto &values0 = std::get<1>(fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true));
 
 	// get total gas mass of the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
@@ -182,12 +182,12 @@ auto problem_main() -> int
 
 		// plot
 		std::vector<double> xs(nx);
-		std::vector<double> rho(nx);
-		std::vector<double> rho0(nx);
+		std::vector<double> rho_x(nx);
+		std::vector<double> rho0_x(nx);
 		for (int i = 0; i < nx; ++i) {
 			xs[i] = position[i];
-			rho[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
-			rho0[i] = values0.at(HydroSystem<SinkProblem>::density_index)[i];
+			rho_x[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
+			rho0_x[i] = values0.at(HydroSystem<SinkProblem>::density_index)[i];
 		}
 
 #ifdef HAVE_PYTHON
@@ -195,11 +195,11 @@ auto problem_main() -> int
 		std::map<std::string, std::string> rho0_args;
 		rho0_args["label"] = "rho0";
 		rho0_args["color"] = "blue";
-		matplotlibcpp::plot(xs, rho0, rho0_args);
+		matplotlibcpp::plot(xs, rho0_x, rho0_args);
 		std::map<std::string, std::string> rho_args;
 		rho_args["label"] = "rho";
 		rho_args["color"] = "red";
-		matplotlibcpp::plot(xs, rho, rho_args);
+		matplotlibcpp::plot(xs, rho_x, rho_args);
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("rho (g cm^-3)");
 		matplotlibcpp::legend();
