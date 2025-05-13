@@ -14,11 +14,16 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
+#include "SimulationData.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include <gcem.hpp>
+
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 using amrex::Real;
 
@@ -32,6 +37,11 @@ constexpr double k_B = C::k_B;
 constexpr double cs0 = gcem::sqrt(k_B * T0 / mu);
 
 AMREX_GPU_MANAGED double M_star_in_Msun = 1.0; // NOLINT
+
+template <> struct Particle_Traits<StarCluster> {
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
+};
 
 template <> struct quokka::EOS_Traits<StarCluster> {
 	static constexpr double gamma = 1.0;
@@ -55,9 +65,9 @@ template <> struct Physics_Traits<StarCluster> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> struct Particle_Traits<StarCluster> {
-	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
+template <> struct SimulationData<StarCluster> {
+	std::vector<Real> time;
+	std::vector<Real> Mstar;
 };
 
 template <> void QuokkaSimulation<StarCluster>::createInitialSinkParticles()
@@ -223,6 +233,25 @@ template <> void QuokkaSimulation<StarCluster>::refineGrid(int lev, amrex::TagBo
 	});
 }
 
+template <> void QuokkaSimulation<StarCluster>::computeAfterTimestep()
+{
+	// every step, save particle mass to userData_
+	userData_.time.push_back(tNew_[0]);
+	// userData_.Mstar.push_back(1.0);
+
+	// Get particle data using the physics particle descriptor
+	const int finest_level = finestLevel();
+	const auto &real_data = particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(finest_level).first;
+
+	Real Mstar = 0.0;
+	const int mass_index = 3;
+	for (const auto &p : real_data) {
+		Mstar += p[mass_index];
+	}
+
+	userData_.Mstar.push_back(Mstar);
+}
+
 auto problem_main() -> int
 {
 	// read problem parameters
@@ -253,6 +282,24 @@ auto problem_main() -> int
 
 	// evolve
 	sim.evolve();
+
+	// plot particle mass vs time
+	std::vector<Real> &time = sim.userData_.time;
+	std::vector<Real> &Mstar_ = sim.userData_.Mstar;
+
+	// print mass vs time
+	for (int i = 0; i < time.size(); ++i) {
+		amrex::Print() << "time = " << time[i] << ", Mstar = " << Mstar_[i] << std::endl;
+	}
+
+#ifdef HAVE_PYTHON
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(time, Mstar_);
+	matplotlibcpp::xlabel("Time");
+	matplotlibcpp::ylabel("Particle Mass");
+	matplotlibcpp::title("Particle Mass vs Time");
+	matplotlibcpp::save("particle_mass.png");
+#endif
 
 	int const status = 0;
 	return status;
