@@ -12,11 +12,6 @@
 namespace quokka
 {
 
-constexpr double T0 = 10.0;
-constexpr double mu = 2.33 * C::m_p;
-constexpr double k_B = C::k_B;
-constexpr double cs0 = gcem::sqrt(k_B * T0 / mu);
-
 enum class AccretionScheme { Threshold = 0, BondiHoyle = 1 };
 
 // manually set the accretion scheme
