@@ -243,13 +243,15 @@ template <> void QuokkaSimulation<StarCluster>::computeAfterTimestep()
 	const int finest_level = finestLevel();
 	const auto &real_data = particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(finest_level).first;
 
-	Real Mstar = 0.0;
-	const int mass_index = 3;
-	for (const auto &p : real_data) {
-		Mstar += p[mass_index];
-	}
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		Real Mstar = 0.0;
+		const int mass_index = 3;
+		for (const auto &p : real_data) {
+			Mstar += p[mass_index];
+		}
 
-	userData_.Mstar.push_back(Mstar);
+		userData_.Mstar.push_back(Mstar);
+	}
 }
 
 auto problem_main() -> int
@@ -272,10 +274,10 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<StarCluster> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1; // enable self-gravity
-	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 1.0e6 * 3.0e7; // ~1 Myr
+	sim.doPoissonSolve_ = 1;       // enable self-gravity
+	sim.reconstructionOrder_ = 3;  // 2=PLM, 3=PPM
+	sim.cflNumber_ = 0.3;	       // *must* be less than 1/3 in 3D!
+	sim.stopTime_ = 1.0e8 * 3.0e7; // ~1 Myr
 
 	// initialize
 	sim.setInitialConditions();
@@ -283,24 +285,50 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	// plot particle mass vs time
-	std::vector<Real> &time = sim.userData_.time;
-	std::vector<Real> &Mstar_ = sim.userData_.Mstar;
+	int status = 0;
 
-	// print mass vs time
-	for (int i = 0; i < time.size(); ++i) {
-		amrex::Print() << "time = " << time[i] << ", Mstar = " << Mstar_[i] << std::endl;
-	}
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// plot particle mass vs time
+		std::vector<Real> &time = sim.userData_.time;
+		std::vector<Real> &Mstar_ = sim.userData_.Mstar;
+
+		// print mass vs time
+		for (int i = 0; i < time.size(); ++i) {
+			amrex::Print() << "time = " << time[i] << ", Mstar = " << Mstar_[i] << "\n";
+		}
+
+		// compute exact accretion rate
+		const Real r_BH = C::Gconst * M_star_in_Msun * C::M_solar / (cs0 * cs0);
+		const Real lam = std::exp(1.5) / 4.0;
+		const Real Mdot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * (lam * cs0);
+		amrex::Print() << "Mdot_exact = " << Mdot_exact << "\n";
+
+		// Estimate the accretion rate from the particle data
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.istep[0] >= 80, "At least 80 time steps is required to estimate the accretion rate");
+
+		const int last_step = time.size() - 1;
+		const int first_step = last_step - 40;
+		const Real Mdot_sim = (Mstar_[last_step] - Mstar_[first_step]) / (time[last_step] - time[first_step]);
+		amrex::Print() << "Mdot_sim = " << Mdot_sim << "\n";
+
+		// compute relative difference
+		const Real rel_diff = std::abs(Mdot_sim - Mdot_exact) / Mdot_exact;
+		const Real rel_diff_tol = 0.4;
+
+		status = 1;
+		if (rel_diff < rel_diff_tol) {
+			status = 0;
+		}
 
 #ifdef HAVE_PYTHON
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(time, Mstar_);
-	matplotlibcpp::xlabel("Time");
-	matplotlibcpp::ylabel("Particle Mass");
-	matplotlibcpp::title("Particle Mass vs Time");
-	matplotlibcpp::save("particle_mass.png");
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(time, Mstar_);
+		matplotlibcpp::xlabel("Time");
+		matplotlibcpp::ylabel("Particle Mass");
+		matplotlibcpp::title("Particle Mass vs Time");
+		matplotlibcpp::save("particle_mass.png");
 #endif
+	}
 
-	int const status = 0;
 	return status;
 }

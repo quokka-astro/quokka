@@ -30,7 +30,7 @@ do_reflux = 1
 do_subcycle = 0
 
 checkpoint_interval = -1
-plotfile_interval = 10
-max_timesteps = 50
+plotfile_interval = -1
+max_timesteps = 100
 
 problem.star_mass = 1.0
