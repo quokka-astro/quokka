@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM EQUAL 3)
-	add_executable(test_grav_rad_particle_3D test_grav_rad_particle_3D.cpp ../../util/fextract.cpp ${QuokkaObjSources})
+	add_executable(test_grav_rad_particle_3D test_grav_rad_particle_3D.cpp ${QuokkaObjSources})
 
 	if(AMReX_GPU_BACKEND MATCHES "CUDA")
 			setup_target_for_cuda_compilation(test_grav_rad_particle_3D)

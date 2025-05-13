@@ -180,6 +180,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;				     // 1 == self-gravity enabled, 0 == disabled
+	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
 	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -704,6 +705,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default do_subcycle = 1
 	pp.query("do_subcycle", do_subcycle);
 
+	// Default poisson_supercycle_interval = 1
+	pp.query("poisson_supercycle_interval", poissonSupercycleInterval_);
+
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
 
@@ -786,7 +790,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 #endif
 
-	if (plotfileInterval_ > 0) {
+	if (plotfileInterval_ > 0 || plotTimeInterval_ > 0) {
 		WritePlotFile();
 	}
 
@@ -969,9 +973,27 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	int last_projection_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
-	double next_plot_file_time = plotTimeInterval_;
-	double next_chk_file_time = checkpointTimeInterval_;
 	int last_chk_file_step = 0;
+
+	double next_plot_file_time = 0;
+	if (plotTimeInterval_ > 0) {
+		// We have one plotfile at the start of the simulation, so we set next_plot_file_time to plotTimeInterval_
+		next_plot_file_time = plotTimeInterval_;
+		while (next_plot_file_time < cur_time) {
+			// advance next_plot_file_time until it is >= cur_time
+			// this is needed for restarts
+			next_plot_file_time += plotTimeInterval_;
+		}
+	}
+	double next_chk_file_time = 0;
+	if (checkpointTimeInterval_ > 0) {
+		while (next_chk_file_time < cur_time) {
+			// advance next_chk_file_time until it is >= cur_time
+			// this is needed for restarts
+			next_chk_file_time += checkpointTimeInterval_;
+		}
+	}
+
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
@@ -1088,7 +1110,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		doDiagnostics();
 
 		// Writing Plot files at time intervals
-		if (plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
+		if (last_plot_file_step != step + 1 && plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
 			next_plot_file_time += plotTimeInterval_;
 			WritePlotFile();
 		}
@@ -1157,7 +1179,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	amrex::Print() << '\n';
 
 	// write final plotfile
-	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
+	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && istep[0] > last_plot_file_step) {
 		WritePlotFile();
 	}
 
@@ -1267,9 +1289,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 {
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_ != 0) {
-
-		calculateGpotAllLevels();
-
+		if (poissonSupercycleInterval_ > 1) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(regrid_int <= 0, "Poisson supercycling is only allowed for static meshes!");
+		}
+		if (istep[0] % poissonSupercycleInterval_ == 0) {
+			// do Poisson solve every poissonSupercycleInterval_ coarse steps
+			calculateGpotAllLevels();
+		}
+		// this must be done every step
 		gravAccelAllLevels(dt);
 	}
 #endif
@@ -1411,7 +1438,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Sink accretion, stage 2: update the particle states
-	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, geom[lev], lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
 	particleRegister_.depositSN(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
