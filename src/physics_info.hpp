@@ -1,9 +1,12 @@
 #ifndef PHYSICS_INFO_HPP_ // NOLINT
 #define PHYSICS_INFO_HPP_
 
+#include "AMReX_REAL.H"
 #include "fundamental_constants.H"
 #include "physics_numVars.hpp"
 #include <AMReX.H>
+
+using Real = amrex::Real;
 
 // enum for unit system, one of CGS, CONSTANTS, CUSTOM
 enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
