@@ -179,7 +179,7 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "Test passed\n";
 		}
-	
+
 		// plot
 		std::vector<double> xs(nx);
 		std::vector<double> rho(nx);
