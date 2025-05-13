@@ -45,7 +45,6 @@ constexpr double gamma_gas = quokka::EOS_Traits<HydroWaveFC>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 
-
 // k = 2 pi / wave length
 // box length = 1, so |k| in [1, inf)
 constexpr double num_modes = 1;
@@ -54,7 +53,6 @@ constexpr double k_amplitude = 2 * M_PI * num_modes;
 // input perturbation: choose to do this via the relative denisty field in [0, 1]. remember, the linear regime is valid when this perturbation is small
 constexpr double amp = 1e-6;
 const double omega = k_amplitude * sound_speed;
-
 
 ////////////////////////////////////
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -135,7 +133,7 @@ template <> void QuokkaSimulation<HydroWaveFC>::setInitialConditionsOnGridFaceVa
 
 template <>
 void QuokkaSimulation<HydroWaveFC>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -153,7 +151,7 @@ void QuokkaSimulation<HydroWaveFC>::computeReferenceSolution(amrex::MultiFab &re
 
 template <>
 void QuokkaSimulation<HydroWaveFC>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+								amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
