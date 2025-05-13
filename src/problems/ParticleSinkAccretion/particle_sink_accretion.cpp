@@ -303,7 +303,7 @@ auto problem_main() -> int
 
 		// Estimate the accretion rate from the particle data
 		if (sim.istep[0] >= 22) {
-			const int last_step = time.size() - 1;
+			const int last_step = static_cast<int>(time.size()) - 1;
 			const int first_step = last_step - 20;
 			const Real Mdot_sim = (Mstar_[last_step] - Mstar_[first_step]) / (time[last_step] - time[first_step]);
 			amrex::Print() << "Mdot_sim = " << Mdot_sim << "\n";
