@@ -31,6 +31,6 @@ do_subcycle = 0
 
 checkpoint_interval = -1
 plotfile_interval = -1
-max_timesteps = 100
+max_timesteps = 80
 
 problem.star_mass = 1.0

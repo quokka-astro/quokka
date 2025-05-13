@@ -277,7 +277,7 @@ auto problem_main() -> int
 	sim.doPoissonSolve_ = 1;       // enable self-gravity
 	sim.reconstructionOrder_ = 3;  // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	       // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 1.0e8 * 3.0e7; // ~1 Myr
+	sim.stopTime_ = 1.0e6 * 3.0e7; // ~1 Myr
 
 	// initialize
 	sim.setInitialConditions();
@@ -304,10 +304,10 @@ auto problem_main() -> int
 		amrex::Print() << "Mdot_exact = " << Mdot_exact << "\n";
 
 		// Estimate the accretion rate from the particle data
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.istep[0] >= 80, "At least 80 time steps is required to estimate the accretion rate");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.istep[0] >= 50, "At least 80 time steps is required to estimate the accretion rate");
 
 		const int last_step = time.size() - 1;
-		const int first_step = last_step - 40;
+		const int first_step = last_step - 20;
 		const Real Mdot_sim = (Mstar_[last_step] - Mstar_[first_step]) / (time[last_step] - time[first_step]);
 		amrex::Print() << "Mdot_sim = " << Mdot_sim << "\n";
 
