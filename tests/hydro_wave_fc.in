@@ -31,6 +31,7 @@ checkpoint_interval = -1
 cfl = 0.3
 stop_time = 1.0
 max_timesteps = 2
+do_tracers = 1
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 2
