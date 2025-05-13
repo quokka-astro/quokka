@@ -179,8 +179,9 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
-		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
-						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr,
+						 amrex::Array4<const amrex::Real> const & /*accretion_rate_arr*/, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
@@ -230,8 +231,9 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		}
 
 		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const &accretion_rate_arr,
-						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr,
+						 StateArray const & /*accretion_rate_arr*/, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
 		{
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
