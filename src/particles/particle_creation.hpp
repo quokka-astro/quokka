@@ -170,20 +170,19 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		amrex::Real current_time;
 		amrex::Real dt;
 
+		static constexpr Real Gconst = C::Gconst;
+		static constexpr Real gamma = quokka::EOS_Traits<problem_t>::gamma;
+		static constexpr Real mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+		static constexpr Real FLOOR_T_CREATEPARTICLE = 5.0;
+		static constexpr Real cs_floor = gcem::sqrt(gamma * FLOOR_T_CREATEPARTICLE * C::k_B / mu);
+		static constexpr Real jeansNo = 0.25;
+
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
-			constexpr Real Gconst = C::Gconst;
-			constexpr Real gamma = quokka::EOS_Traits<problem_t>::gamma;
-			constexpr Real mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-			constexpr Real FLOOR_T_CREATEPARTICLE = 5.0;
-			constexpr Real cs_floor = gcem::sqrt(gamma * FLOOR_T_CREATEPARTICLE * C::k_B / mu);
-
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
-
-			constexpr Real jeansNo = 0.25;
 
 			// Determine sound speed.
 			const Real Egas = state_arr(i, j, k, HydroSystem<problem_t>::energy_index);
@@ -215,6 +214,13 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		amrex::Real current_time;
 		amrex::Real dt;
 
+		static constexpr Real Gconst = C::Gconst;
+		static constexpr Real gamma = quokka::EOS_Traits<problem_t>::gamma;
+		static constexpr Real mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+		static constexpr Real FLOOR_T_CREATEPARTICLE = 5.0;
+		static constexpr Real cs_floor = gcem::sqrt(gamma * FLOOR_T_CREATEPARTICLE * C::k_B / mu);
+		static constexpr Real jeansNo = 0.25;
+
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
 				amrex::Real current_time, amrex::Real dt)
@@ -228,15 +234,7 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
 		{
-			constexpr Real Gconst = C::Gconst;
-			constexpr Real gamma = quokka::EOS_Traits<problem_t>::gamma;
-			constexpr Real mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-			constexpr Real FLOOR_T_CREATEPARTICLE = 5.0;
-			constexpr Real cs_floor = gcem::sqrt(gamma * FLOOR_T_CREATEPARTICLE * C::k_B / mu);
-
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
-
-			constexpr Real jeansNo = 0.25;
 
 			// Determine sound speed.
 			const Real Egas = state_arr(i, j, k, HydroSystem<problem_t>::energy_index);
