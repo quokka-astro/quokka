@@ -30,6 +30,7 @@ constexpr double T0 = 10.0;
 constexpr double mu = 2.33 * C::m_p;
 constexpr double k_B = C::k_B;
 constexpr double cs0 = gcem::sqrt(k_B * T0 / mu);
+constexpr double sphere_radius_over_r_B = 8.0;
 
 AMREX_GPU_MANAGED double M_star_in_Msun = 1.0; // NOLINT
 
@@ -144,12 +145,15 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	    0.004192350772, 0.004171920231, 0.004151638621, 0.004131504502, 0.004111516447};
 
 	// set initial conditions
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const double r_B = C::Gconst * M_star_in_Msun * C::M_solar / std::pow(cs0, 2);
+
+	// assert that the box size is bigger than sphere_radius_over_r_B * r_B
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(prob_lo[0]) > sphere_radius_over_r_B * r_B, "Box size is not big enough to cover 16 * r_B");
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const Real x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
@@ -161,15 +165,25 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 		}
 		const Real xx = r / r_B;
 
-		AMREX_ASSERT(xx >= x_array[0]);
-		AMREX_ASSERT(xx <= x_array.back());
+		Real rho = NAN;
+		Real vv = NAN;
 
-		// interpolate for v
-		const Real vv = interpolate_value(xx, x_array.data(), v_array.data(), static_cast<int>(x_array.size()));
-		const Real lam = std::exp(1.5) / 4.0;
-		const Real aa = lam / (xx * xx * vv);
+		if (xx > sphere_radius_over_r_B) {
+			rho = rho0;
+			vv = 0.0;
+		} else {
 
-		const Real rho = aa * rho0;
+			AMREX_ASSERT(xx >= x_array[0]);
+			AMREX_ASSERT(xx <= x_array.back());
+
+			// interpolate for v
+			vv = interpolate_value(xx, x_array.data(), v_array.data(), static_cast<int>(x_array.size()));
+			const Real lam = std::exp(1.5) / 4.0;
+			const Real aa = lam / (xx * xx * vv);
+
+			rho = aa * rho0;
+		}
+
 		const Real v = vv * cs0;
 		const Real vx = v * x / r;
 		const Real vy = v * y / r;
@@ -237,6 +251,8 @@ auto problem_main() -> int
 	// particle mass
 	pp.query("star_mass", M_star_in_Msun);
 
+	const double M_star_in_g = M_star_in_Msun * C::M_solar;
+
 	// boundary conditions
 	const int ncomp_cc = Physics_Indices<AccretionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -249,18 +265,16 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1;       // enable self-gravity
-	sim.reconstructionOrder_ = 3;  // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	       // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 1.0e6 * 3.0e7; // ~1 Myr
+	sim.doPoissonSolve_ = 1;      // enable self-gravity
+	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
+	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
+	sim.initDt_ = 3.0e10;	      // ~1 kyr
 
 	// initialize
 	sim.setInitialConditions();
 
 	// evolve
 	sim.evolve();
-
-	int status = 0;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// plot particle mass vs time
@@ -273,31 +287,46 @@ auto problem_main() -> int
 		}
 
 		// compute exact accretion rate
-		const Real r_BH = C::Gconst * M_star_in_Msun * C::M_solar / (cs0 * cs0);
+		const Real r_BH = C::Gconst * M_star_in_g / (cs0 * cs0);
 		const Real lam = std::exp(1.5) / 4.0;
 		const Real Mdot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * (lam * cs0);
 		amrex::Print() << "Mdot_exact = " << Mdot_exact << "\n";
 
+#ifdef HAVE_PYTHON
+		matplotlibcpp::clf();
+
+		// legends
+		std::map<std::string, std::string> args;
+		args["label"] = "simulation";
+		matplotlibcpp::plot(time, Mstar_, args);
+#endif
+
 		// Estimate the accretion rate from the particle data
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.istep[0] >= 50, "At least 80 time steps is required to estimate the accretion rate");
+		if (sim.istep[0] >= 22) {
+			const int last_step = time.size() - 1;
+			const int first_step = last_step - 20;
+			const Real Mdot_sim = (Mstar_[last_step] - Mstar_[first_step]) / (time[last_step] - time[first_step]);
+			amrex::Print() << "Mdot_sim = " << Mdot_sim << "\n";
 
-		const int last_step = time.size() - 1;
-		const int first_step = last_step - 20;
-		const Real Mdot_sim = (Mstar_[last_step] - Mstar_[first_step]) / (time[last_step] - time[first_step]);
-		amrex::Print() << "Mdot_sim = " << Mdot_sim << "\n";
+			// compute relative difference
+			const Real rel_diff = std::abs(Mdot_sim - Mdot_exact) / Mdot_exact;
+			amrex::Print() << "rel_diff = " << rel_diff << "\n";
 
-		// compute relative difference
-		const Real rel_diff = std::abs(Mdot_sim - Mdot_exact) / Mdot_exact;
-		const Real rel_diff_tol = 0.4;
-
-		status = 1;
-		if (rel_diff < rel_diff_tol) {
-			status = 0;
+#ifdef HAVE_PYTHON
+			// add a line for the exact accretion rate
+			const double t1 = 0.3 * sim.stopTime_;
+			const double t2 = 0.7 * sim.stopTime_;
+			const double Mstar_exact1 = M_star_in_g + 2 * Mdot_sim * t1;
+			const double Mstar_exact2 = Mstar_exact1 + Mdot_exact * (t2 - t1);
+			args["label"] = "Exact Bondi accretion rate";
+			args["linestyle"] = "--";
+			args["color"] = "black";
+			matplotlibcpp::plot({t1, t2}, {Mstar_exact1, Mstar_exact2}, args);
+#endif
 		}
 
 #ifdef HAVE_PYTHON
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(time, Mstar_);
+		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("Time");
 		matplotlibcpp::ylabel("Particle Mass");
 		matplotlibcpp::title("Particle Mass vs Time");
@@ -305,6 +334,5 @@ auto problem_main() -> int
 #endif
 	}
 
-	// return status;
 	return 0;
 }

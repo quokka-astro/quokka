@@ -1,8 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     = -3.085677581e+18 -3.085677581e+18 -3.085677581e+18
-geometry.prob_hi     = 3.085677581e+18 3.085677581e+18 3.085677581e+18
+# box size: (-4 pc, 4 pc)
+geometry.prob_lo     = -1.234271033e+19 -1.234271033e+19 -1.234271033e+19
+geometry.prob_hi     = 1.234271033e+19 1.234271033e+19 1.234271033e+19
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -30,7 +31,8 @@ do_reflux = 1
 do_subcycle = 0
 
 checkpoint_interval = -1
-plotfile_interval = -1
+plotfile_interval = 8
 max_timesteps = 80
+stop_time = 3.0e13
 
 problem.star_mass = 1.0
