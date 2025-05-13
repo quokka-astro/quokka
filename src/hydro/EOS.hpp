@@ -388,8 +388,6 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_rp, estate);
 		cs = estate.cs;
-	} else {
-		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	}
 #endif
 	return cs;
