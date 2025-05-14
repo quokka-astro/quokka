@@ -2680,7 +2680,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
 			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
-			const std::string &plotfilename_fc = CustomPlotFileName( plotfilename_base.c_str(), istep[0]);	
+			const std::string &plotfilename_fc = CustomPlotFileName(plotfilename_base.c_str(), istep[0]);
 			auto varnames_fc_dim = varnames_fc[idim];
 			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc_dim, Geom(), tNew_[0], istep, refRatio());
 		}

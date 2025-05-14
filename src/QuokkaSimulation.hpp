@@ -210,8 +210,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 	void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,quokka::direction const dir);
-  
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir);
+
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
@@ -350,8 +350,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 
 	// add face-centered velocities
 	for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-		componentNames_fc_flatten_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});//rename to _fc_flatten_
-		componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});//array for fc_	
+		componentNames_fc_flatten_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"}); // rename to _fc_flatten_
+		componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});   // array for fc_
 	}
 	// add mhd state variables
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -743,7 +743,7 @@ void QuokkaSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref,
 
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,quokka::direction const dir)
+							      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	// user should implement
 }
