@@ -23,6 +23,7 @@ namespace SinkAccretionUtils
 {
 
 constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
+constexpr double cs_floor = 1.0e4; // = 0.1 km/s
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
@@ -70,6 +71,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 				if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 					cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 				}
+				cs = std::max(cs, cs_floor);
 				sum_rho += rho;
 				sum_px += px;
 				sum_py += py;
@@ -239,6 +241,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 			cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
 		}
+		cs_cell = std::max(cs_cell, cs_floor);
 		const double rho_J = J * J * M_PI * cs_cell * cs_cell / (C::Gconst * (dx_max * dx_max));
 
 		// If (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1
