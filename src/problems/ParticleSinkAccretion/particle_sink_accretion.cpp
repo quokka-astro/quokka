@@ -34,7 +34,6 @@ constexpr double T0 = 10.0;
 constexpr double mu = 2.33 * C::m_p;
 constexpr double k_B = C::k_B;
 constexpr double cs0 = gcem::sqrt(k_B * T0 / mu);
-constexpr double sphere_radius_over_r_B = 32.0;
 
 AMREX_GPU_MANAGED double M_star_in_Msun = 1.0; // NOLINT
 
@@ -203,10 +202,10 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 			vv = 0.0;
 		} else {
 			// interpolate for v
-			if (xx <= x_array[0]) {
-				vv = v_array[0];
+			if (xx <= x_array_ptr[0]) {  // NOLINT
+				vv = v_array_ptr[0]; // NOLINT
 			} else {
-				AMREX_ASSERT(xx <= x_array[array_size - 1]); // NOLINT
+				AMREX_ASSERT(xx <= x_array_ptr[array_size - 1]); // NOLINT
 				vv = interpolate_value(xx, x_array_ptr, v_array_ptr, array_size);
 			}
 			const Real lam = std::exp(1.5) / 4.0;
