@@ -2675,12 +2675,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {	
 		std::array<amrex::Vector<amrex::MultiFab>,AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_); //fc version, needs check if fc quantities exist
 		std::vector<std::string> dimNames = {"x", "y", "z"};
-		//auto plotfilename_base = plotfilename + "/fcvars";
+		//auto plotfilename_base = plotfilename + "/fc_vars";
 		//const std::string &plotfilename_fc = CustomPlotFileName( plotfilename_base.c_str(), istep[0]);
 		auto varnames_fc = GetPlotfileVarNames_fc();
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) { 
 			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
-			auto plotfilename_base = plotfilename + "/fcvars/" + dimNames[idim];
+			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
 			const std::string &plotfilename_fc = CustomPlotFileName( plotfilename_base.c_str(), istep[0]);	
 			auto varnames_fc_dim = varnames_fc[idim];
 			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc_dim, Geom(), tNew_[0], istep, refRatio());			
