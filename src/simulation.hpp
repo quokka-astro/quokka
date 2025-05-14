@@ -2683,6 +2683,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 			const std::string &plotfilename_fc = CustomPlotFileName(plotfilename_base.c_str(), istep[0]);
 			auto varnames_fc_dim = varnames_fc[idim];
 			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc_dim, Geom(), tNew_[0], istep, refRatio());
+			WriteMetadataFile(plotfilename_fc + "/metadata.yaml");
 		}
 	}
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
