@@ -67,7 +67,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
 				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
 				double cs = NAN;
-				if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
+				if (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 					cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 				} else {
 					cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk);
@@ -238,7 +238,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 		constexpr double J = 0.25;
 		double cs_cell = NAN;
-		if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
+		if (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 			cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
 		} else {
 			cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k);

@@ -282,7 +282,7 @@ auto problem_main() -> int
 		std::vector<Real> &Mstar_ = sim.userData_.Mstar;
 
 		// print mass vs time
-		for (int i = 0; i < time.size(); ++i) {
+		for (int i = 0; i < static_cast<int>(time.size()); ++i) {
 			amrex::Print() << "time = " << time[i] << ", Mstar = " << Mstar_[i] << "\n";
 		}
 
