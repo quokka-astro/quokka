@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-# box size: (-4 pc, 4 pc)
-geometry.prob_lo     = -1.234271033e+19 -1.234271033e+19 -1.234271033e+19
-geometry.prob_hi     = 1.234271033e+19 1.234271033e+19 1.234271033e+19
+# box size: (-7.7696 pc, 7.7696 pc)
+geometry.prob_lo     = -2.397448054e+19 -2.397448054e+19 -2.397448054e+19
+geometry.prob_hi     = 2.397448054e+19 2.397448054e+19 2.397448054e+19
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -14,10 +14,10 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell          = 128 128 128
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 32    # grid size must be divisible by this
-amr.max_grid_size   = 32    # at least 128 for GPUs
+amr.blocking_factor = 64    # grid size must be divisible by this
+amr.max_grid_size   = 64    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
@@ -30,9 +30,9 @@ gravity.Gconst = 1.0    #gravitational constant
 do_reflux = 1
 do_subcycle = 0
 
-checkpoint_interval = -1
-plotfile_interval = 8
-max_timesteps = 80
-stop_time = 3.0e13
+stop_time = 3.0e14
 
-problem.star_mass = 1.0
+problem.star_mass = 10.0
+plotfile_interval = -1
+checkpoint_interval = -1
+max_timesteps = 128
