@@ -78,8 +78,7 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 
 template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	constexpr int array_size = 401;
-	const amrex::GpuArray<Real, array_size> x_array = {
+	const amrex::Gpu::DeviceVector<double> x_array = {
 	    0.0001, 0.04,  0.08,  0.12,	 0.16,	0.20,  0.24,  0.28,  0.32,  0.36,  0.40,  0.44,	 0.48,	0.52,  0.56,  0.60,  0.64,  0.68,  0.72,  0.76,	 0.80,
 	    0.84,   0.88,  0.92,  0.96,	 1.00,	1.04,  1.08,  1.12,  1.16,  1.20,  1.24,  1.28,	 1.32,	1.36,  1.40,  1.44,  1.48,  1.52,  1.56,  1.60,	 1.64,
 	    1.68,   1.72,  1.76,  1.80,	 1.84,	1.88,  1.92,  1.96,  2.00,  2.04,  2.08,  2.12,	 2.16,	2.20,  2.24,  2.28,  2.32,  2.36,  2.40,  2.44,	 2.48,
@@ -100,7 +99,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	    14.28,  14.32, 14.36, 14.40, 14.44, 14.48, 14.52, 14.56, 14.60, 14.64, 14.68, 14.72, 14.76, 14.80, 14.84, 14.88, 14.92, 14.96, 15.00, 15.04, 15.08,
 	    15.12,  15.16, 15.20, 15.24, 15.28, 15.32, 15.36, 15.40, 15.44, 15.48, 15.52, 15.56, 15.60, 15.64, 15.68, 15.72, 15.76, 15.80, 15.84, 15.88, 15.92,
 	    15.96,  16.00};
-	const amrex::GpuArray<Real, array_size> v_array = {
+	const amrex::Gpu::DeviceVector<double> v_array = {
 	    6.371881593525, 6.371881593525, 4.187338638014, 3.207694870928, 2.620940546521, 2.220410065376, 1.925598751310, 1.697675943531, 1.515267485382,
 	    1.365492388620, 1.240055990063, 1.133339112310, 1.041379368041, 0.961290369858, 0.890912265037, 0.828591934444, 0.773039520182, 0.723231774385,
 	    0.678345156254, 0.637708412603, 0.600768261984, 0.567064099956, 0.536209045091, 0.507875525290, 0.481784169865, 0.457695145301, 0.435401322287,
@@ -158,9 +157,9 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	// assert that the box size is bigger than sphere_radius_over_r_B * r_B
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(prob_lo[0]) > sphere_radius_over_r_B * r_B, "Box size is not big enough to cover 16 * r_B");
 
-	// auto const &x_array_ptr = x_array.dataPtr();
-	// auto const &v_array_ptr = v_array.dataPtr();
-	// int array_size = static_cast<int>(x_array.size());
+	auto const &x_array_ptr = x_array.dataPtr();
+	auto const &v_array_ptr = v_array.dataPtr();
+	int array_size = static_cast<int>(x_array.size());
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const Real x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
@@ -184,7 +183,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 			AMREX_ASSERT(xx <= x_array[array_size - 1]); // NOLINT
 
 			// interpolate for v
-			vv = interpolate_value(xx, x_array.data(), v_array.data(), array_size);
+			vv = interpolate_value(xx, x_array_ptr, v_array_ptr, array_size);
 			const Real lam = std::exp(1.5) / 4.0;
 			const Real aa = lam / (xx * xx * vv);
 
