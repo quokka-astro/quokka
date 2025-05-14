@@ -132,7 +132,7 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *ar
 	}
 }
 
-AMREX_GPU_HOST_DEVICE 
+AMREX_GPU_HOST_DEVICE
 double interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len)
 {
 	/* Note: arr_x must be sorted in ascending order,

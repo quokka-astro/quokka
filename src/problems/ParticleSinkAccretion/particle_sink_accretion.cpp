@@ -179,7 +179,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 			vv = 0.0;
 		} else {
 
-			AMREX_ASSERT(xx >= x_array[0]); // NOLINT
+			AMREX_ASSERT(xx >= x_array[0]);		     // NOLINT
 			AMREX_ASSERT(xx <= x_array[array_size - 1]); // NOLINT
 
 			// interpolate for v
