@@ -179,7 +179,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 
 	auto const &x_array_ptr = x_array.dataPtr();
 	auto const &v_array_ptr = v_array.dataPtr();
-	int array_size = static_cast<int>(x_array.size());
+	const int array_size = static_cast<int>(x_array.size());
 
 	const Real Lx = prob_hi[0] - prob_lo[0];
 	const Real R_ball = Lx / 4.0;
