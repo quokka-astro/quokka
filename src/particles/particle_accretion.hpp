@@ -149,7 +149,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), cs_floor_d, plo, dx);
+		const auto [M_dot, r_K] =
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), cs_floor_d, plo, dx);
 		AMREX_ASSERT(M_dot >= 0.0);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
@@ -288,7 +289,8 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), cs_floor_d, plo, dx);
+		const auto [M_dot, r_K] =
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), cs_floor_d, plo, dx);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
