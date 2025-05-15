@@ -135,7 +135,6 @@ auto problem_main() -> int
 	const amrex::Real epsilon = std::sqrt(err_sq);
 	amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << std::endl;
 
-
 	const double err_tol = 1.0e-8; // for Nx = 100
 	int status = 0;
 	if (epsilon > err_tol) {
