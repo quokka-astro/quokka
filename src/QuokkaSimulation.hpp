@@ -348,8 +348,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 
 	// add face-centered velocities
 	for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-		componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"}); // rename to _fc_flatten_
-		componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});   // array for fc_
+		componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});  // rename to _fc_flatten_
+		componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"}); // array for fc_
 	}
 	// add mhd state variables
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
