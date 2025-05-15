@@ -56,39 +56,32 @@ const double omega = k_amplitude * sound_speed;
 
 ////////////////////////////////////
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
-					  double time)
+					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, double time)
 {
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
-	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
-	const amrex::Real x3_L = prob_lo[2] + k * dx[2];
-
 	const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
-	const amrex::Real x2_C = x2_L + static_cast<amrex::Real>(0.5) * dx[1];
-	const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
 
-	if (cen == quokka::centering::cc) {
-		const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
+	const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
 
-		const double density = bg_density + bg_density * amp * cos_wave_C;
-		const double pressure = bg_pressure + bg_pressure * gamma_gas * amp * cos_wave_C;
-		const double x1vel = sound_speed * amp * cos_wave_C;
-		const double x2vel = 0.0;
-		const double x3vel = 0.0;
+	const double density = bg_density + bg_density * amp * cos_wave_C;
+	const double pressure = bg_pressure + bg_pressure * gamma_gas * amp * cos_wave_C;
+	const double x1vel = sound_speed * amp * cos_wave_C;
+	const double x2vel = 0.0;
+	const double x3vel = 0.0;
 
-		const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
-		const double momentum = density * velocity_magnitude;
-		const double Ekin = 0.5 * std::pow(momentum, 2) / density;
-		const double Eint = pressure / (gamma_gas - 1);
-		const double Etot = Ekin + Eint;
+	const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
+	const double momentum = density * velocity_magnitude;
+	const double Ekin = 0.5 * std::pow(momentum, 2) / density;
+	const double Eint = pressure / (gamma_gas - 1);
+	const double Etot = Ekin + Eint;
 
-		state(i, j, k, HydroSystem<HydroWaveFC>::density_index) = density;
-		state(i, j, k, HydroSystem<HydroWaveFC>::x1Momentum_index) = x1vel * density;
-		state(i, j, k, HydroSystem<HydroWaveFC>::x2Momentum_index) = x2vel * density;
-		state(i, j, k, HydroSystem<HydroWaveFC>::x3Momentum_index) = x3vel * density;
-		state(i, j, k, HydroSystem<HydroWaveFC>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<HydroWaveFC>::internalEnergy_index) = Eint;
-	}
+	state(i, j, k, HydroSystem<HydroWaveFC>::density_index) = density;
+	state(i, j, k, HydroSystem<HydroWaveFC>::x1Momentum_index) = x1vel * density;
+	state(i, j, k, HydroSystem<HydroWaveFC>::x2Momentum_index) = x2vel * density;
+	state(i, j, k, HydroSystem<HydroWaveFC>::x3Momentum_index) = x3vel * density;
+	state(i, j, k, HydroSystem<HydroWaveFC>::energy_index) = Etot;
+	state(i, j, k, HydroSystem<HydroWaveFC>::internalEnergy_index) = Eint;
+
 }
 
 template <> void QuokkaSimulation<HydroWaveFC>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -107,7 +100,7 @@ template <> void QuokkaSimulation<HydroWaveFC>::setInitialConditionsOnGrid(quokk
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused quantities with zeros
 		}
-		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, cen, dir, 0);
+		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, cen, 0);
 	});
 }
 
@@ -127,7 +120,7 @@ template <> void QuokkaSimulation<HydroWaveFC>::setInitialConditionsOnGridFaceVa
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0; // fill unused quantities with zeros
 		}
-		computeWaveSolution(i, j, k, state_fc, dx, prob_lo, cen, dir, 0);
+		computeWaveSolution(i, j, k, state_fc, dx, prob_lo, cen, 0);
 	});
 }
 
@@ -144,28 +137,11 @@ void QuokkaSimulation<HydroWaveFC>::computeReferenceSolution(amrex::MultiFab &re
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, 0);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, 0);
 		});
 	}
 }
 
-template <>
-void QuokkaSimulation<HydroWaveFC>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
-{
-	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateExact = ref.array(iter);
-		auto const ncomp = ref.nComp();
-
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			for (int n = 0; n < ncomp; ++n) {
-				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
-			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, 0);
-		});
-	}
-}
 
 auto problem_main() -> int
 {
