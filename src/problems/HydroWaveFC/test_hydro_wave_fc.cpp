@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro_wave_fc.cpp
-/// \brief Copy of test_hydro_wave but with face-centered velocities.
+/// \file test_hydro_wave.cpp
+/// \brief Defines a test problem for a linear hydro wave.
 ///
 
 #include <valarray>
@@ -89,6 +89,9 @@ auto problem_main() -> int
 	// Based on the ATHENA test page:
 	// https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
 
+	// Problem parameters
+	// const int nx = 100;
+	// const double Lx = 1.0;
 	const double CFL_number = 0.1;
 	const double max_time = 1.0;
 	const int max_timesteps = 1;
@@ -104,6 +107,12 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
+
+	sim.cflNumber_ = CFL_number;
+	sim.stopTime_ = max_time;
+	sim.maxTimesteps_ = max_timesteps;
+	sim.plotfileInterval_ = 1;
+	sim.do_tracers = 1;
 
 	// set initial conditions
 	sim.setInitialConditions();
@@ -134,6 +143,90 @@ auto problem_main() -> int
 	}
 	const amrex::Real epsilon = std::sqrt(err_sq);
 	amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << std::endl;
+
+#ifdef HAVE_PYTHON
+	// plot results
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// extract values
+		std::vector<double> d(nx);
+		std::vector<double> vx(nx);
+		std::vector<double> P(nx);
+
+		for (int i = 0; i < nx; ++i) {
+			amrex::Real rho = values.at(HydroSystem<WaveProblem>::density_index)[i];
+			amrex::Real xmom = values.at(HydroSystem<WaveProblem>::x1Momentum_index)[i];
+			amrex::Real Egas = values.at(HydroSystem<WaveProblem>::energy_index)[i];
+
+			amrex::Real xvel = xmom / rho;
+			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
+			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
+
+			d.at(i) = (rho - rho0) / amp;
+			vx.at(i) = (xvel - v0) / amp;
+			P.at(i) = (pressure - P0) / amp;
+		}
+
+		std::vector<double> density_exact(nx);
+		std::vector<double> velocity_exact(nx);
+		std::vector<double> pressure_exact(nx);
+
+		for (int i = 0; i < nx; ++i) {
+			amrex::Real rho = val_exact.at(HydroSystem<WaveProblem>::density_index)[i];
+			amrex::Real xmom = val_exact.at(HydroSystem<WaveProblem>::x1Momentum_index)[i];
+			amrex::Real Egas = val_exact.at(HydroSystem<WaveProblem>::energy_index)[i];
+
+			amrex::Real xvel = xmom / rho;
+			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
+			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
+
+			density_exact.at(i) = (rho - rho0) / amp;
+			velocity_exact.at(i) = (xvel - v0) / amp;
+			pressure_exact.at(i) = (pressure - P0) / amp;
+		}
+
+		// Plot results
+		amrex::Real const t = sim.tNew_[0];
+
+		std::map<std::string, std::string> d_args;
+		std::map<std::string, std::string> dinit_args;
+		std::map<std::string, std::string> dexact_args;
+		d_args["label"] = "density";
+		dinit_args["label"] = "density (initial)";
+
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(xs, d, d_args);
+		matplotlibcpp::plot(xs, density_exact, dinit_args);
+		matplotlibcpp::legend();
+		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::save(fmt::format("./density_{:.4f}.pdf", t));
+
+		std::map<std::string, std::string> P_args;
+		std::map<std::string, std::string> Pinit_args;
+		std::map<std::string, std::string> Pexact_args;
+		P_args["label"] = "pressure";
+		Pinit_args["label"] = "pressure (initial)";
+
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(xs, P, P_args);
+		matplotlibcpp::plot(xs, pressure_exact, Pinit_args);
+		matplotlibcpp::legend();
+		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::save(fmt::format("./pressure_{:.4f}.pdf", t));
+
+		std::map<std::string, std::string> v_args;
+		std::map<std::string, std::string> vinit_args;
+		std::map<std::string, std::string> vexact_args;
+		v_args["label"] = "velocity";
+		vinit_args["label"] = "velocity (initial)";
+
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(xs, vx, v_args);
+		matplotlibcpp::plot(xs, velocity_exact, vinit_args);
+		matplotlibcpp::legend();
+		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::save(fmt::format("./velocity_{:.4f}.pdf", t));
+	}
+#endif
 
 	const double err_tol = 1.0e-8; // for Nx = 100
 	int status = 0;
