@@ -13,15 +13,13 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 8 8
+amr.n_cell          = 100 4 4
 amr.max_level       = 0 # number of levels = max_level + 1
 
-amr.max_grid_size_x = 128
-amr.max_grid_size_y = 8
-amr.max_grid_size_z = 8
-amr.blocking_factor_x = 4
-amr.blocking_factor_y = 4
-amr.blocking_factor_z = 4
+amr.max_grid_size_x = 100
+amr.max_grid_size_y = 4
+amr.max_grid_size_z = 4
+amr.blocking_factor = 4
 
 do_reflux = 0
 do_subcycle = 0
@@ -32,7 +30,3 @@ cfl = 0.3
 stop_time = 1.0
 max_timesteps = 1
 do_tracers = 1
-
-hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 2
-hydro.use_dual_energy = 0

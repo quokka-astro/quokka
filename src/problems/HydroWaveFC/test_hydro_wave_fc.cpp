@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro_wave.cpp
-/// \brief Defines a test problem for a linear hydro wave.
+/// \file test_hydro_wave_fc.cpp
+/// \brief Copy of test_hydro_wave but with face-centered velocities.
 ///
 
 #include <valarray>
@@ -18,158 +18,127 @@
 #include "test_hydro_wave_fc.hpp"
 #include "util/fextract.hpp"
 
-struct HydroWaveFC {
+struct WaveProblem {
 };
 
-template <> struct quokka::EOS_Traits<HydroWaveFC> {
+template <> struct quokka::EOS_Traits<WaveProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<HydroWaveFC> {
+template <> struct Physics_Traits<WaveProblem> {
+	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_mhd_enabled = true;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-// constants
-constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<HydroWaveFC>::gamma;
+constexpr double rho0 = 1.0;					    // background density
+constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblem>::gamma; // background pressure
+constexpr double v0 = 0.;					    // background velocity
+constexpr double amp = 1.0e-6;					    // perturbation amplitude
 
-// background states
-constexpr double bg_density = 1.0;
-constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
-
-// k = 2 pi / wave length
-// box length = 1, so |k| in [1, inf)
-constexpr double num_modes = 1;
-constexpr double k_amplitude = 2 * M_PI * num_modes;
-
-// input perturbation: choose to do this via the relative denisty field in [0, 1]. remember, the linear regime is valid when this perturbation is small
-constexpr double amp = 1e-6;
-const double omega = k_amplitude * sound_speed;
-
-////////////////////////////////////
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, double time)
+					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
-	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
-	const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
+	const amrex::Real x_L = prob_lo[0] + (i + amrex::Real(0.0)) * dx[0];
+	const amrex::Real x_R = prob_lo[0] + (i + amrex::Real(1.0)) * dx[0];
+	const amrex::Real A = amp;
 
-	const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
+	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
+	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
+	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
-	const double density = bg_density + bg_density * amp * cos_wave_C;
-	const double pressure = bg_pressure + bg_pressure * gamma_gas * amp * cos_wave_C;
-	const double x1vel = sound_speed * amp * cos_wave_C;
-	const double x2vel = 0.0;
-	const double x3vel = 0.0;
+	double rho = U_0[0] + dU[0];
+	double xmom = U_0[1] + dU[1];
+	double Etot = U_0[2] + dU[2];
+	double Eint = Etot - 0.5 * (xmom * xmom) / rho;
 
-	const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
-	const double momentum = density * velocity_magnitude;
-	const double Ekin = 0.5 * std::pow(momentum, 2) / density;
-	const double Eint = pressure / (gamma_gas - 1);
-	const double Etot = Ekin + Eint;
-
-	state(i, j, k, HydroSystem<HydroWaveFC>::density_index) = density;
-	state(i, j, k, HydroSystem<HydroWaveFC>::x1Momentum_index) = x1vel * density;
-	state(i, j, k, HydroSystem<HydroWaveFC>::x2Momentum_index) = x2vel * density;
-	state(i, j, k, HydroSystem<HydroWaveFC>::x3Momentum_index) = x3vel * density;
-	state(i, j, k, HydroSystem<HydroWaveFC>::energy_index) = Etot;
-	state(i, j, k, HydroSystem<HydroWaveFC>::internalEnergy_index) = Eint;
+	state(i, j, k, HydroSystem<WaveProblem>::density_index) = rho;
+	state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = xmom;
+	state(i, j, k, HydroSystem<WaveProblem>::x2Momentum_index) = 0;
+	state(i, j, k, HydroSystem<WaveProblem>::x3Momentum_index) = 0;
+	state(i, j, k, HydroSystem<WaveProblem>::energy_index) = Etot;
+	state(i, j, k, HydroSystem<WaveProblem>::internalEnergy_index) = Eint;
 }
 
-template <> void QuokkaSimulation<HydroWaveFC>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	// extract grid information
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	// extract variables required from the geom object
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const quokka::centering cen = grid_elem.cen_;
-	const quokka::direction dir = grid_elem.dir_;
-
-	const int ncomp_cc = Physics_Indices<HydroWaveFC>::nvarTotal_cc;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
-			state_cc(i, j, k, n) = 0; // fill unused quantities with zeros
+			state_cc(i, j, k, n) = 0; // fill unused components with zeros
 		}
-		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, cen, 0);
+		computeWaveSolution(i, j, k, state_cc, dx, prob_lo);
 	});
-}
-
-template <> void QuokkaSimulation<HydroWaveFC>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
-{
-	// extract grid information
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	const amrex::Array4<double> &state_fc = grid_elem.array_;
-	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const quokka::centering cen = grid_elem.cen_;
-	const quokka::direction dir = grid_elem.dir_;
-
-	const int ncomp_fc = Physics_Indices<HydroWaveFC>::nvarPerDim_fc;
-	// loop over the grid and set the initial condition
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < ncomp_fc; ++n) {
-			state_fc(i, j, k, n) = 0; // fill unused quantities with zeros
-		}
-		computeWaveSolution(i, j, k, state_fc, dx, prob_lo, cen, 0);
-	});
-}
-
-template <>
-void QuokkaSimulation<HydroWaveFC>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
-{
-	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateExact = ref.array(iter);
-		auto const ncomp = ref.nComp();
-
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			for (int n = 0; n < ncomp; ++n) {
-				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
-			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, 0);
-		});
-	}
 }
 
 auto problem_main() -> int
 {
-	const int nvars_cc = Physics_Indices<HydroWaveFC>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
-	for (int icomp = 0; icomp < nvars_cc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_cc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_cc[icomp].setHi(idim, amrex::BCType::int_dir);
+	// Based on the ATHENA test page:
+	// https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
+
+	const double CFL_number = 0.1;
+	const double max_time = 1.0;
+	const int max_timesteps = 1;
+
+	// Problem initialization
+	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
-	const int nvars_fc = Physics_Indices<HydroWaveFC>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
+	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 
-	QuokkaSimulation<HydroWaveFC> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+	// set initial conditions
 	sim.setInitialConditions();
+	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
+
+	// Main time loop
 	sim.evolve();
 
-	// Compute test success condition
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
+	int nx = static_cast<int>(position.size());
+	std::vector<double> xs = position;
+
+	// compute error norm
+	amrex::Real err_sq = 0.;
+	for (int n = 0; n < QuokkaSimulation<WaveProblem>::ncompHydro_; ++n) {
+		if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
+			continue;
+		}
+		amrex::Real dU_k = 0.;
+		for (int i = 0; i < nx; ++i) {
+			// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
+			const amrex::Real U_k0 = val_exact.at(n)[i];
+			const amrex::Real U_k1 = values.at(n)[i];
+			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx);
+		}
+		// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
+		err_sq += dU_k * dU_k;
+	}
+	const amrex::Real epsilon = std::sqrt(err_sq);
+	amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << std::endl;
+
+
+	const double err_tol = 1.0e-8; // for Nx = 100
 	int status = 0;
-	const double error_tol = 0.002;
-	if (sim.errorNorm_ > error_tol) {
+	if (epsilon > err_tol) {
 		status = 1;
 	}
 
