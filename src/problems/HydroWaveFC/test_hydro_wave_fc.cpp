@@ -81,7 +81,6 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	state(i, j, k, HydroSystem<HydroWaveFC>::x3Momentum_index) = x3vel * density;
 	state(i, j, k, HydroSystem<HydroWaveFC>::energy_index) = Etot;
 	state(i, j, k, HydroSystem<HydroWaveFC>::internalEnergy_index) = Eint;
-
 }
 
 template <> void QuokkaSimulation<HydroWaveFC>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -141,7 +140,6 @@ void QuokkaSimulation<HydroWaveFC>::computeReferenceSolution(amrex::MultiFab &re
 		});
 	}
 }
-
 
 auto problem_main() -> int
 {

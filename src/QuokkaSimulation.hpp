@@ -209,7 +209,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
-	
+
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
@@ -739,7 +739,6 @@ void QuokkaSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref,
 	// user should implement
 }
 
-
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
@@ -810,7 +809,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 				const int nghost = state_new_fc_[0][idim].nGrow();
 				amrex::MultiFab state_ref_level0(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0),
 								 ncomp, nghost);
-				
+
 				// compute error norm
 				amrex::MultiFab residual(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0), ncomp,
 							 nghost);
