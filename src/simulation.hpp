@@ -396,7 +396,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int nghost_cc_ = 4;						    // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
-	amrex::Vector<std::string> componentNames_fc_flatten_;
+	amrex::Vector<std::string> componentNames_fc_flat_;
 	std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> componentNames_fc_;
 	amrex::Vector<std::string> derivedNames_;
 	bool areInitialConditionsDefined_ = false;
@@ -2619,7 +2619,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames
 	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
-			varnames.push_back(componentNames_fc_flatten_[icomp]);
+			varnames.push_back(componentNames_fc_flat_[icomp]);
 		}
 	}
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());

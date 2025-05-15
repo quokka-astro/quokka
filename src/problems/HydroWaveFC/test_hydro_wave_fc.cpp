@@ -46,18 +46,18 @@ constexpr double amp = 1.0e-6;					    // perturbation amplitude
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
-	const amrex::Real x_L = prob_lo[0] + (i + amrex::Real(0.0)) * dx[0];
-	const amrex::Real x_R = prob_lo[0] + (i + amrex::Real(1.0)) * dx[0];
+	const amrex::Real x_L = prob_lo[0] + (i + static_cast<amrex::Real>(0.0)) * dx[0];
+	const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
 	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
 	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
-	double rho = U_0[0] + dU[0];
-	double xmom = U_0[1] + dU[1];
-	double Etot = U_0[2] + dU[2];
-	double Eint = Etot - 0.5 * (xmom * xmom) / rho;
+	double const rho = U_0[0] + dU[0];
+	double const xmom = U_0[1] + dU[1];
+	double const Etot = U_0[2] + dU[2];
+	double const Eint = Etot - 0.5 * (xmom * xmom) / rho;
 
 	state(i, j, k, HydroSystem<WaveProblem>::density_index) = rho;
 	state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = xmom;
@@ -70,8 +70,8 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
@@ -122,8 +122,8 @@ auto problem_main() -> int
 	sim.evolve();
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
-	int nx = static_cast<int>(position.size());
-	std::vector<double> xs = position;
+	int const nx = static_cast<int>(position.size());
+	std::vector<double> const xs = position;
 
 	// compute error norm
 	amrex::Real err_sq = 0.;
@@ -142,7 +142,7 @@ auto problem_main() -> int
 		err_sq += dU_k * dU_k;
 	}
 	const amrex::Real epsilon = std::sqrt(err_sq);
-	amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << std::endl;
+	amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << '\n';
 
 	const double err_tol = 1.0e-8; // for Nx = 100
 	int status = 0;
