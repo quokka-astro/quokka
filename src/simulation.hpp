@@ -1601,9 +1601,9 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (fr_as_crse != nullptr) {
-				AMREX_ASSERT(lev < finestLevel());
-				AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-				fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi), fluxArrays[1].fabPtr(mfi), fluxArrays[2].fabPtr(mfi))},
+			AMREX_ASSERT(lev < finestLevel());
+			AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
+			fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi), fluxArrays[1].fabPtr(mfi), fluxArrays[2].fabPtr(mfi))},
 					    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 		}
 
@@ -1971,7 +1971,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		GetData(lev - 1, time, coarseData, coarseTime, cen, dir);
 		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
 
-		for (auto & i : coarseData) {
+		for (auto &i : coarseData) {
 			AMREX_ASSERT(!i->contains_nan(0, state.nComp()));
 			AMREX_ASSERT(!i->contains_nan()); // check ghost zones
 		}
@@ -2092,7 +2092,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 					       quokka::centering cen, quokka::direction dir)
-{ // here neco
+{							// here neco
 	BL_PROFILE("AMRSimulation::FillCoarsePatch()"); // NOLINT(misc-const-correctness)
 
 	AMREX_ASSERT(lev > 0);
