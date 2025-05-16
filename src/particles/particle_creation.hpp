@@ -195,12 +195,14 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 			// Jeans density.
 			const Real rho_J = M_PI * std::pow(cs / (std::sqrt(Gconst) * dx_max / jeansNo), 2);
-			// Find local maximum
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 			const double accretion_rate_cell = accretion_rate_arr(i, j, k);
-			amrex::Real maxValue = 0.0;
 
-			// Only cell has local maximum density, > Jeans density, and has zero accretion rate can form a sink particle.
+			// Only form a star if
+			// 1. Cell density is above Jeans density
+			// 2. Cell accretion rate is zero
+			// 3. Cell density is the local maximum density
+			amrex::Real maxValue = 0.0;
 			if (cell_density > rho_J && accretion_rate_cell == 0.0) {
 				for (int ii = i - 3; ii <= i + 3; ++ii) {
 					for (int jj = j - 3; jj <= j + 3; ++jj) {
