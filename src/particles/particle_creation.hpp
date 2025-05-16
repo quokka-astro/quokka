@@ -6,6 +6,8 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "particle_types.hpp"
+#include "particles/particle_deposition.hpp"
+#include "particles/particle_utils.hpp"
 #include "stellarpop_data.hpp"
 #include <cmath>
 
@@ -170,6 +172,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		amrex::Real current_time;
 		amrex::Real dt;
 
+		static constexpr int stencil_size = ParticleUtils::stencil_size;
+
 		static constexpr Real Gconst = C::Gconst;
 		static constexpr Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 		static constexpr Real mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
@@ -202,20 +206,28 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			// 1. Cell density is above Jeans density
 			// 2. Cell accretion rate is zero
 			// 3. Cell density is the local maximum density
-			amrex::Real maxValue = 0.0;
 			if (cell_density > rho_J && accretion_rate_cell == 0.0) {
-				for (int ii = i - 3; ii <= i + 3; ++ii) {
-					for (int jj = j - 3; jj <= j + 3; ++jj) {
-						for (int kk = k - 3; kk <= k + 3; ++kk) {
-							Real const dist = sqrt(pow(ii - i, 2) + pow(jj - j, 2) + pow(kk - k, 2));
-							if (dist <= 3.0 && state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index) > maxValue) {
-								maxValue = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+				bool is_local_maximum = true;
+				for (int di = -3; di <= 3 && is_local_maximum; ++di) {
+					for (int dj = -3; dj <= 3 && is_local_maximum; ++dj) {
+						for (int dk = -3; dk <= 3 && is_local_maximum; ++dk) {
+							// Skip the center cell
+							if (di == 0 && dj == 0 && dk == 0) {
+								continue;
+							}
+							// Only check cells within spherical radius of 3
+							if (di * di + dj * dj + dk * dk <= static_cast<Real>(stencil_size * stencil_size) + 1.0e-10) {
+								const Real rho_ijk = state_arr(i + di, j + dj, k + dk, HydroSystem<problem_t>::density_index);
+								if (rho_ijk > cell_density) {
+									is_local_maximum = false;
+									break;
+								}
 							}
 						}
 					}
 				}
 
-				if (cell_density == maxValue) {
+				if (is_local_maximum) {
 					return 1;
 				}
 			}
