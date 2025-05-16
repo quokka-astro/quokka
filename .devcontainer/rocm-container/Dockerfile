@@ -7,7 +7,8 @@ ENV rocrand_DIR=/opt/rocm-6.4.0/lib/cmake/rocrand
 ENV hiprand_DIR=/opt/rocm-6.4.0/lib/cmake/hiprand
 ENV rocprim_DIR=/opt/rocm-6.4.0/lib/cmake/rocprim
 ENV rocsparse_DIR=/opt/rocm-6.4.0/lib/cmake/rocsparse
-ENV AMREX_AMD_ARCH=gfx908
+ENV rocthrust_DIR=/opt/rocm-6.4.0/lib/cmake/rocthrust
+ENV AMREX_AMD_ARCH=gfx90a
 ENV CC=hipcc
 ENV CXX=hipcc
 
