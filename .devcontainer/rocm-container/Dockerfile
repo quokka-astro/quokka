@@ -7,7 +7,6 @@ ENV rocrand_DIR=/opt/rocm-6.4.0/lib/cmake/rocrand
 ENV hiprand_DIR=/opt/rocm-6.4.0/lib/cmake/hiprand
 ENV rocprim_DIR=/opt/rocm-6.4.0/lib/cmake/rocprim
 ENV rocsparse_DIR=/opt/rocm-6.4.0/lib/cmake/rocsparse
-ENV rocthrust_DIR=/opt/rocm-6.4.0/lib/cmake/rocthrust
 ENV AMREX_AMD_ARCH=gfx90a
 ENV CC=hipcc
 ENV CXX=hipcc
@@ -15,7 +14,7 @@ ENV CXX=hipcc
 # Update package lists and install necessary dependencies
 RUN apt-get update -qq && apt-get upgrade -y -qq && \
     apt-get install -y -qq --no-install-recommends \
-    rocrand-dev hiprand-dev rocprim-dev rocsparse-dev rocthrust-dev \
+    rocrand-dev hiprand-dev rocprim-dev rocsparse-dev \
     build-essential wget curl git ninja-build gcc g++ \
     python3-dev python3-numpy python3-matplotlib python3-pip \
     libhdf5-dev libopenmpi-dev netbase && \
@@ -60,7 +59,7 @@ RUN mkdir -p /tmp/build-kokkos && cd /tmp/build-kokkos && \
     wget -q https://github.com/kokkos/kokkos/releases/download/4.6.01/kokkos-4.6.01.tar.gz && \
     tar xzf kokkos-4.6.01.tar.gz && \
     mkdir build && cd build && \
-    cmake ../kokkos-4.6.01 -DKokkos_ENABLE_HIP=ON -DKokkos_ARCH_AMD_GFX90A=ON && \
+    cmake ../kokkos-4.6.01 -DKokkos_ENABLE_HIP=ON -DKokkos_ARCH_AMD_GFX90A=ON -DKokkos_ENABLE_ROCTHRUST=OFF -DKokkos_ENABLE_HIP_RELOCATABLE_DEVICE_CODE=OFF -DCMAKE_CXX_STANDARD=17 -DCMAKE_CXX_EXTENSIONS=OFF && \
     make -j$(nproc) && make install && \
     cd / && \
     rm -rf /tmp/build-kokkos
@@ -72,7 +71,7 @@ RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
     wget -q https://github.com/Viskores/viskores/archive/refs/tags/v1.0.0.tar.gz && \
     tar xzf v1.0.0.tar.gz && \
     mkdir build && cd build && \
-    cmake ../viskores-1.0.0 -DViskores_ENABLE_RENDERING=ON -DViskores_USE_64BIT_IDS=ON -DViskores_USE_DOUBLE_PRECISION=ON -DViskores_ENABLE_KOKKOS=ON && \
+    cmake ../viskores-1.0.0 -DViskores_ENABLE_RENDERING=ON -DViskores_USE_64BIT_IDS=OFF -DViskores_USE_DOUBLE_PRECISION=ON -DViskores_ENABLE_KOKKOS=ON -DVTKm_ENABLE_KOKKOS_THRUST=OFF && \
     make -j$(nproc) && make install && \
     cd / && \
     rm -rf /tmp/build-viskores
