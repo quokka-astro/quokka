@@ -47,22 +47,17 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
     cd / && \
     rm -rf /tmp/build-adios2
 
-## Install Ascent
-RUN mkdir /tmp/build-ascent
-COPY ascent_build.patch /tmp/build-ascent
+## Install Viskores (volume rendering and isosurfaces)
+# NOTE: to build this, you need a Docker VM with a LARGE amount of RAM (at least 15 GB RAM, 4 GB swap)
 
-# commit version is dev branch on 2025-04-10
-# NOTE: with enable_cuda=ON, you need a Docker VM with a LARGE amount of RAM (at least 15 GB RAM, 4 GB swap)
-RUN cd /tmp/build-ascent && \
-    wget https://github.com/Alpine-DAV/ascent/archive/4da1379.tar.gz && \
-    tar xzf 4da1379.tar.gz -C . --strip-components=1 && \
-    wget https://github.com/LLNL/blt/archive/refs/tags/v0.6.2.tar.gz && \
-    tar xzf v0.6.2.tar.gz -C ./src/blt --strip-components=1 && \
-    cd ./scripts/build_ascent && \
-    patch -p1 build_ascent.sh /tmp/build-ascent/ascent_build.patch && \
-    env enable_cuda=ON enable_mpi=ON build_hdf5=true build_silo=false bash build_ascent.sh && \
+RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
+    wget -q https://github.com/Viskores/viskores/archive/refs/tags/v1.0.0.tar.gz && \
+    tar xzf v1.0.0.tar.gz && \
+    mkdir build && cd build && \
+    cmake .. -DViskores_ENABLE_RENDERING=ON -DViskores_ENABLE_MPI=ON -DViskores_USE_64BIT_IDS=ON -DViskores_USE_DOUBLE_PRECISION=ON -DViskores_ENABLE_CUDA=ON && \
+    make -j$(nproc) && make install && \
     cd / && \
-    rm -rf /tmp/ascent_build
+    rm -rf /tmp/build-viskores
 
 # Set the working directory and user
 WORKDIR /home/ubuntu
