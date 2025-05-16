@@ -179,9 +179,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
-		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr,
-						 amrex::Array4<const amrex::Real> const & accretion_rate_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
+						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
 		{
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
@@ -198,27 +197,27 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			const Real rho_J = M_PI * std::pow(cs / (std::sqrt(Gconst) * dx_max / jeansNo), 2);
 			// Find local maximum
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-			const double accretion_rate_cell = accretion_rate_arr(i,j,k);
+			const double accretion_rate_cell = accretion_rate_arr(i, j, k);
 			amrex::Real maxValue = 0.0;
-			
+
 			// Only cell has local maximum density, > Jeans density, and has zero accretion rate can form a sink particle.
 			if (cell_density > rho_J && accretion_rate_cell == 0.0) {
-			  for (int ii = i - 3; ii< i + 3; ++ii) {
-			    for (int jj = j - 3 ; jj < j + 3; ++jj) {
-			      for (int kk = k - 3; kk < k + 3; ++kk) {
-				Real dist = sqrt(pow(ii-i,2)+pow(jj-j,2)+pow(kk-k,2));
-				if (dist <= 3.0 && state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index) > maxValue) {
-				  maxValue = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-				}				
-			      }
-			    }
-			  }
-			
-			  if (cell_density == maxValue) {
-			    return 1;
-			  }
-                       }
-		       return 0;			
+				for (int ii = i - 3; ii < i + 3; ++ii) {
+					for (int jj = j - 3; jj < j + 3; ++jj) {
+						for (int kk = k - 3; kk < k + 3; ++kk) {
+							Real dist = sqrt(pow(ii - i, 2) + pow(jj - j, 2) + pow(kk - k, 2));
+							if (dist <= 3.0 && state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index) > maxValue) {
+								maxValue = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+							}
+						}
+					}
+				}
+
+				if (cell_density == maxValue) {
+					return 1;
+				}
+			}
+			return 0;
 		}
 	};
 
