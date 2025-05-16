@@ -16,31 +16,53 @@ show_help() {
     echo
     echo "Options:"
     echo "  -h, --help        Show this help message"
+    echo "  --fix            Apply clang-tidy fix-it hints"
     exit 0
 }
 
-# Check for help flag
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    show_help
-fi
+# Initialize variables
+fix_flag=""
 
-# Check if at least one argument is provided
-if [ $# -lt 1 ]; then
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            ;;
+        --fix)
+            fix_flag="-fix"
+            shift
+            ;;
+        *)
+            if [ -z "$BUILD_DIR" ]; then
+                BUILD_DIR="$1"
+            elif [ -z "$target" ]; then
+                target="$1"
+            else
+                echo "Error: Unexpected argument '$1'"
+                echo "Use -h or --help for usage information"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Check if build directory is provided
+if [ -z "$BUILD_DIR" ]; then
     echo "Error: Missing required argument 'build_directory'"
     echo "Use -h or --help for usage information"
     exit 1
 fi
 
+# Set target type with default value "changed" if not specified
+target="${target:-changed}"
+
 # check if the first argument is a valid directory
-if [ ! -d "$1" ]; then
+if [ ! -d "$BUILD_DIR" ]; then
     echo "Invalid build directory. Please provide a valid directory path."
     exit 1
 fi
-
-# Store the build directory path from first argument
-BUILD_DIR="$1"
-# Set target type with default value "changed" if not specified
-target="${2:-changed}"
 
 # Get the name of the current git branch
 CURRENT_BRANCH=$(git branch --show-current)
@@ -80,5 +102,5 @@ echo
 
 # Only run clang-tidy if there are files to process
 if [ ${#files_select[@]} -gt 0 ]; then
-    clang-tidy "${files_select[@]}" -p "$BUILD_DIR"
+    clang-tidy "${files_select[@]}" -p "$BUILD_DIR" $fix_flag
 fi
