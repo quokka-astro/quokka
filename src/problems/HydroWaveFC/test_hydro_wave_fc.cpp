@@ -38,10 +38,10 @@ template <> struct Physics_Traits<WaveProblemFC> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-constexpr double rho0 = 1.0;					    // background density
+constexpr double rho0 = 1.0;					      // background density
 constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblemFC>::gamma; // background pressure
-constexpr double v0 = 0.;					    // background velocity
-constexpr double amp = 1.0e-6;					    // perturbation amplitude
+constexpr double v0 = 0.;					      // background velocity
+constexpr double amp = 1.0e-6;					      // perturbation amplitude
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
