@@ -2872,6 +2872,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::VisMF::Write(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
+		amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 	}
 
 	// write the face-centred MultiFab data to, e.g., chk00010/Level_0/
@@ -2880,6 +2881,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 			for (int lev = 0; lev <= finest_level; ++lev) {
 				amrex::VisMF::Write(state_new_fc_[lev][idim], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_",
 													    std::string("Face_") + quokka::face_dir_str[idim]));
+				amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 			}
 		}
 	}
