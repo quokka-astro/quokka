@@ -524,7 +524,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getNewMF_fc() const
 
 template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 {
-	BL_PROFILE("AMRSimulation::initialize()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::initialize()");
 
 	readParameters();
 
@@ -652,7 +652,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 {
-	BL_PROFILE("AMRSimulation::readParameters()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::readParameters()");
 
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
@@ -749,7 +749,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
 {
-	BL_PROFILE("AMRSimulation::setInitialConditions()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::setInitialConditions()");
 
 	if (restart_chkfile.empty()) {
 		// start simulation from the beginning
@@ -814,7 +814,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
 {
 	// compute CFL timestep on level 'lev'
-	BL_PROFILE("AMRSimulation::computeTimestepAtLevel()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::computeTimestepAtLevel()");
 
 	using dtloc_t = amrex::ValLocPair<amrex::Real, amrex::IntVect>;
 
@@ -879,7 +879,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 {
-	BL_PROFILE("AMRSimulation::computeTimestep()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::computeTimestep()");
 
 	// compute candidate timestep dt_tmp on each level
 	amrex::Vector<amrex::Real> dt_tmp(finest_level + 1);
@@ -962,7 +962,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getCycleWalltime() 
 
 template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 {
-	BL_PROFILE("AMRSimulation::evolve()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::evolve()");
 
 	AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
 
@@ -1217,7 +1217,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
 		}
 
-		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
+		BL_PROFILE_REGION("GravitySolver");
 
 		// set up elliptic solve object
 		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
@@ -1278,7 +1278,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_ != 0) {
 
-		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
+		BL_PROFILE_REGION("GravitySolver");
 
 		// add gravitational acceleration to hydro state (using operator splitting)
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1449,7 +1449,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 // nsubsteps[lev] is set correctly.
 template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
 {
-	BL_PROFILE("AMRSimulation::timeStepWithSubcycling()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::timeStepWithSubcycling()");
 
 	// perform regrid if needed
 	if (regrid_int > 0) {
@@ -1576,7 +1576,7 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
 						      std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
 {
-	BL_PROFILE("AMRSimulation::incrementFluxRegisters()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
 
 	if (fr_as_crse != nullptr) {
 		AMREX_ASSERT(lev < finestLevel());
@@ -1597,7 +1597,7 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
 {
-	BL_PROFILE("AMRSimulation::incrementFluxRegisters()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (fr_as_crse != nullptr) {
@@ -1650,7 +1650,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterF
 template <typename problem_t>
 void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm)
 {
-	BL_PROFILE("AMRSimulation::MakeNewLevelFromCoarse()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::MakeNewLevelFromCoarse()");
 
 	// cell-centred
 	const int ncomp_cc = state_new_cc_[level - 1].nComp();
@@ -1692,7 +1692,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 template <typename problem_t>
 void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm)
 {
-	BL_PROFILE("AMRSimulation::RemakeLevel()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::RemakeLevel()");
 
 	// cell-centred
 	const int ncomp_cc = state_new_cc_[level].nComp();
@@ -1737,7 +1737,7 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 // Delete level data. Overrides the pure virtual function in AmrCore
 template <typename problem_t> void AMRSimulation<problem_t>::ClearLevel(int level)
 {
-	BL_PROFILE("AMRSimulation::ClearLevel()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::ClearLevel()");
 
 	state_new_cc_[level].clear();
 	state_old_cc_[level].clear();
@@ -1811,7 +1811,7 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
 					 FillPatchType fptype)
 {
-	BL_PROFILE("AMRSimulation::FillPatch()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::FillPatch()");
 
 	amrex::Vector<amrex::MultiFab *> cmf;
 	amrex::Vector<amrex::MultiFab *> fmf;
@@ -1886,7 +1886,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 template <typename problem_t>
 void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm)
 {
-	BL_PROFILE("AMRSimulation::MakeNewLevelFromScratch()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::MakeNewLevelFromScratch()");
 
 	// define empty MultiFab containers with the right number of components and ghost-zones
 
@@ -1937,7 +1937,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 						      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
 						      PostInterpHook const &post_interp, FillPatchType fptype)
 {
-	BL_PROFILE("AMRSimulation::fillBoundaryConditions()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
 	// On a single level, any periodic boundaries are filled first
 	// 	then built-in boundary conditions are filled (with amrex::FilccCell()),
@@ -2025,7 +2025,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 						 quokka::centering &cen, FillPatchType fptype, PreInterpHook const &pre_interp,
 						 PostInterpHook const &post_interp)
 {
-	BL_PROFILE("AMRSimulation::FillPatchWithData()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
 	amrex::MFInterpolater *mapper_cc = getAmrInterpolaterCellCentered();
 
@@ -2093,8 +2093,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 					       quokka::centering cen, quokka::direction dir)
-{							// here neco
-	BL_PROFILE("AMRSimulation::FillCoarsePatch()"); // NOLINT(misc-const-correctness)
+{ // here neco
+	BL_PROFILE("AMRSimulation::FillCoarsePatch()");
 
 	AMREX_ASSERT(lev > 0);
 
@@ -2127,7 +2127,7 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime,
 				       quokka::centering cen, quokka::direction dir)
 {
-	BL_PROFILE("AMRSimulation::GetData()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::GetData()");
 
 	if ((cen != quokka::centering::cc) && (cen != quokka::centering::fc)) {
 		amrex::Print() << "Centering passed to GetData(): " << static_cast<int>(cen) << "\n";
@@ -2169,7 +2169,7 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time, amrex::Vector<
 // average down on all levels
 template <typename problem_t> void AMRSimulation<problem_t>::AverageDown()
 {
-	BL_PROFILE("AMRSimulation::AverageDown()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::AverageDown()");
 
 	for (int lev = finest_level - 1; lev >= 0; --lev) {
 		AverageDownTo(lev);
@@ -2179,7 +2179,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDown()
 // set covered coarse cells to be the average of overlying fine cells
 template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int crse_lev)
 {
-	BL_PROFILE("AMRSimulation::AverageDownTo()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::AverageDownTo()");
 
 	// cell-centred
 	amrex::average_down(state_new_cc_[crse_lev + 1], state_new_cc_[crse_lev], geom[crse_lev + 1], geom[crse_lev], 0, state_new_cc_[crse_lev].nComp(),
@@ -2524,7 +2524,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 #ifdef AMREX_USE_ASCENT
 template <typename problem_t> void AMRSimulation<problem_t>::AscentCustomActions(conduit::Node const &blueprintMesh)
 {
-	BL_PROFILE("AMRSimulation::AscentCustomActions()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::AscentCustomActions()");
 
 	// add a scene with a pseudocolor plot
 	Node scenes;
@@ -2554,7 +2554,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AscentCustomActions
 // do Ascent render
 template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 {
-	BL_PROFILE("AMRSimulation::RenderAscent()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::RenderAscent()");
 
 	// combine multifabs
 	const int included_ghosts = std::min(nghost_cc_, nghost_fc_);
@@ -2610,7 +2610,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames
 // write plotfile to disk
 template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 {
-	BL_PROFILE("AMRSimulation::WritePlotFile()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::WritePlotFile()");
 
 	if (amrex::AsyncOut::UseAsyncOut()) {
 		// ensure that we flush any plotfiles that are currently being written
@@ -2795,7 +2795,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::SetLastCheckpointSy
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile() const
 {
-	BL_PROFILE("AMRSimulation::WriteCheckpointFile()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::WriteCheckpointFile()");
 
 	// chk00010            write a checkpoint file with this root directory
 	// chk00010/Header     this contains information you need to save (e.g.,
@@ -2907,7 +2907,7 @@ inline void GotoNextLine(std::istream &is)
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
 {
-	BL_PROFILE("AMRSimulation::ReadCheckpointFile()"); // NOLINT(misc-const-correctness)
+	BL_PROFILE("AMRSimulation::ReadCheckpointFile()");
 
 	amrex::Print() << "Restart from checkpoint " << restart_chkfile << "\n";
 
