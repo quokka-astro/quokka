@@ -1974,6 +1974,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		for (auto &i : coarseData) {
 			AMREX_ASSERT(!i->contains_nan(0, state.nComp()));
 			AMREX_ASSERT(!i->contains_nan()); // check ghost zones
+			amrex::ignore_unused(i);
 		}
 
 		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, fptype, pre_interp,
