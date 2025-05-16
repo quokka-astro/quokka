@@ -202,22 +202,22 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 			// Only cell has local maximum density, > Jeans density, and has zero accretion rate can form a sink particle.
 			if (cell_density > rho_J && accretion_rate_cell == 0.0) {
-			  for (int ii = i - 3; ii<= i + 3; ++ii) {
-			    for (int jj = j - 3 ; jj <= j + 3; ++jj) {
-			      for (int kk = k - 3; kk <= k + 3; ++kk) {
-				Real const dist = sqrt(pow(ii-i,2)+pow(jj-j,2)+pow(kk-k,2));
-				if (dist <= 3.0 && state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index) > maxValue) {
-				  maxValue = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-				}				
-			      }
-			    }
-			  }
-			
-			  if (cell_density == maxValue) {
-			    return 1;
-			  }
-                       }
-		       return 0;			
+				for (int ii = i - 3; ii <= i + 3; ++ii) {
+					for (int jj = j - 3; jj <= j + 3; ++jj) {
+						for (int kk = k - 3; kk <= k + 3; ++kk) {
+							Real const dist = sqrt(pow(ii - i, 2) + pow(jj - j, 2) + pow(kk - k, 2));
+							if (dist <= 3.0 && state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index) > maxValue) {
+								maxValue = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+							}
+						}
+					}
+				}
+
+				if (cell_density == maxValue) {
+					return 1;
+				}
+			}
+			return 0;
 		}
 	};
 
