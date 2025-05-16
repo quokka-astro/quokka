@@ -2657,10 +2657,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
 #endif
 	amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts); // create fc version, triggered in next line
-	// Adding plotfileMF fc
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-	}
-	//
 	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 
 	const std::string &plotfilename = PlotFileName(istep[0]);
@@ -2687,8 +2683,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 		}
 	}
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
-
-	// WriteMetadataFile(plotfilename_fc + "/metadata.yaml"); //idim loop to iterate for x,y,z
 
 #ifdef AMREX_PARTICLES
 	// write particles

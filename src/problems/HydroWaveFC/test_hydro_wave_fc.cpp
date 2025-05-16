@@ -18,15 +18,15 @@
 #include "test_hydro_wave_fc.hpp"
 #include "util/fextract.hpp"
 
-struct WaveProblem {
+struct WaveProblemFC {
 };
 
-template <> struct quokka::EOS_Traits<WaveProblem> {
+template <> struct quokka::EOS_Traits<WaveProblemFC> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<WaveProblem> {
+template <> struct Physics_Traits<WaveProblemFC> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -39,7 +39,7 @@ template <> struct Physics_Traits<WaveProblem> {
 };
 
 constexpr double rho0 = 1.0;					    // background density
-constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblem>::gamma; // background pressure
+constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblemFC>::gamma; // background pressure
 constexpr double v0 = 0.;					    // background velocity
 constexpr double amp = 1.0e-6;					    // perturbation amplitude
 
@@ -51,7 +51,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
+	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblemFC>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
 	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
 	double const rho = U_0[0] + dU[0];
@@ -59,22 +59,22 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	double const Etot = U_0[2] + dU[2];
 	double const Eint = Etot - 0.5 * (xmom * xmom) / rho;
 
-	state(i, j, k, HydroSystem<WaveProblem>::density_index) = rho;
-	state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = xmom;
-	state(i, j, k, HydroSystem<WaveProblem>::x2Momentum_index) = 0;
-	state(i, j, k, HydroSystem<WaveProblem>::x3Momentum_index) = 0;
-	state(i, j, k, HydroSystem<WaveProblem>::energy_index) = Etot;
-	state(i, j, k, HydroSystem<WaveProblem>::internalEnergy_index) = Eint;
+	state(i, j, k, HydroSystem<WaveProblemFC>::density_index) = rho;
+	state(i, j, k, HydroSystem<WaveProblemFC>::x1Momentum_index) = xmom;
+	state(i, j, k, HydroSystem<WaveProblemFC>::x2Momentum_index) = 0;
+	state(i, j, k, HydroSystem<WaveProblemFC>::x3Momentum_index) = 0;
+	state(i, j, k, HydroSystem<WaveProblemFC>::energy_index) = Etot;
+	state(i, j, k, HydroSystem<WaveProblemFC>::internalEnergy_index) = Eint;
 }
 
-template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<WaveProblemFC>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<WaveProblemFC>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
@@ -97,7 +97,7 @@ auto problem_main() -> int
 	const int max_timesteps = 1;
 
 	// Problem initialization
-	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<WaveProblemFC>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -106,7 +106,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<WaveProblem> sim(BCs_cc);
+	QuokkaSimulation<WaveProblemFC> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
@@ -127,8 +127,8 @@ auto problem_main() -> int
 
 	// compute error norm
 	amrex::Real err_sq = 0.;
-	for (int n = 0; n < QuokkaSimulation<WaveProblem>::ncompHydro_; ++n) {
-		if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
+	for (int n = 0; n < QuokkaSimulation<WaveProblemFC>::ncompHydro_; ++n) {
+		if (n == HydroSystem<WaveProblemFC>::internalEnergy_index) {
 			continue;
 		}
 		amrex::Real dU_k = 0.;

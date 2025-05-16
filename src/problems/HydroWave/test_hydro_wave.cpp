@@ -94,7 +94,7 @@ auto problem_main() -> int
 	// const double Lx = 1.0;
 	const double CFL_number = 0.1;
 	const double max_time = 1.0;
-	const int max_timesteps = 1;
+	const int max_timesteps = 2e4;
 
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
@@ -111,7 +111,7 @@ auto problem_main() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = 1;
+	sim.plotfileInterval_ = -1;
 
 	// set initial conditions
 	sim.setInitialConditions();
