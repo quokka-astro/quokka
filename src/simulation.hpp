@@ -2349,7 +2349,7 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts) -> amrex::MultiFab // make fc version, refer to notes
+auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts) -> amrex::MultiFab 
 {
 	// Combine state_new_cc_[lev] and derived variables in a new MF
 	const int ncomp_cc = state_new_cc_[lev].nComp();
@@ -2428,7 +2428,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, con
 }
 
 // put together an array of multifabs for writing
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const int included_ghosts) -> amrex::Vector<amrex::MultiFab> // make fc version
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const int included_ghosts) -> amrex::Vector<amrex::MultiFab> 
 {
 	amrex::Vector<amrex::MultiFab> r;
 	for (int i = 0; i <= finest_level; ++i) {
@@ -2438,7 +2438,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::PlotFileMF_fc(const int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> // make fc version
+auto AMRSimulation<problem_t>::PlotFileMF_fc(const int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> 
 {
 	std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> r_fc;
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2653,7 +2653,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #else
 	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
 #endif
-	amrex::Vector<amrex::MultiFab> mf_cc =PlotFileMF_cc(included_ghosts); // create fc version, triggered in next line
+	amrex::Vector<amrex::MultiFab> mf_cc =PlotFileMF_cc(included_ghosts); 
 	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 
 	const std::string &plotfilename = PlotFileName(istep[0]);
@@ -2665,9 +2665,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plot_file, tNew_[0], istep[0]);
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio()); // add fc version
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio()); 
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_); // fc version, needs check if fc quantities exist
+		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_); 
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		auto varnames_fc = GetPlotfileVarNames_fc();
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
