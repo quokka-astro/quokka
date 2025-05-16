@@ -1,5 +1,5 @@
 # Use the NVIDIA CUDA image as the base image
-FROM nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66
+FROM nvidia/cuda:12.9.0-devel-ubuntu24.04@sha256:632c7db01c6a392f1a4a51b575ee1c125d19e7656de83a285ac222fc35b80606
 
 # Set environment variables for NVIDIA
 ENV NVIDIA_VISIBLE_DEVICES=all
