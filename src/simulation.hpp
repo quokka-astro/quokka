@@ -1971,9 +1971,9 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		GetData(lev - 1, time, coarseData, coarseTime, cen, dir);
 		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
 
-		for (int i = 0; i < coarseData.size(); ++i) {
-			AMREX_ASSERT(!coarseData[i]->contains_nan(0, state.nComp()));
-			AMREX_ASSERT(!coarseData[i]->contains_nan()); // check ghost zones
+		for (auto & i : coarseData) {
+			AMREX_ASSERT(!i->contains_nan(0, state.nComp()));
+			AMREX_ASSERT(!i->contains_nan()); // check ghost zones
 		}
 
 		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, fptype, pre_interp,
@@ -2841,20 +2841,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 		HeaderFile << finest_level << "\n";
 
 		// write out array of istep
-		for (int i = 0; i < istep.size(); ++i) {
-			HeaderFile << istep[i] << " ";
+		for (int const i : istep) {
+			HeaderFile << i << " ";
 		}
 		HeaderFile << "\n";
 
 		// write out array of dt
-		for (int i = 0; i < dt_.size(); ++i) {
-			HeaderFile << dt_[i] << " ";
+		for (double const i : dt_) {
+			HeaderFile << i << " ";
 		}
 		HeaderFile << "\n";
 
 		// write out array of t_new
-		for (int i = 0; i < tNew_.size(); ++i) {
-			HeaderFile << tNew_[i] << " ";
+		for (double const i : tNew_) {
+			HeaderFile << i << " ";
 		}
 		HeaderFile << "\n";
 
