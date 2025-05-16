@@ -90,8 +90,6 @@ auto problem_main() -> int
 	// https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
 
 	// Problem parameters
-	// const int nx = 100;
-	// const double Lx = 1.0;
 	const double CFL_number = 0.1;
 	const double max_time = 1.0;
 	const int max_timesteps = 1;
@@ -122,7 +120,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
-	int const nx = static_cast<int>(position.size());
+	auto const nx = static_cast<int>(position.size());
 	std::vector<double> const xs = position;
 
 	// compute error norm

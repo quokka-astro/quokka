@@ -2362,7 +2362,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 	}
 	const int ncomp_deriv = derivedNames_.size();
 	const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
-	amrex::MultiFab plotMF_cc(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
+	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
 
 	if (included_ghosts > 0) {
 		// Fill ghost zones for state_new_cc_
@@ -2380,37 +2380,35 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int inc
 
 	// copy data from cell-centred state variables
 	for (int i = 0; i < ncomp_cc; i++) {
-		amrex::MultiFab::Copy(plotMF_cc, state_new_cc_[lev], i, comp, 1, included_ghosts);
+		amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], i, comp, 1, included_ghosts);
 		comp++;
 	}
 
 	// compute cell-center averaged face-centred data
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			AverageFCToCC(plotMF_cc, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc);
+			AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc);
 			comp += ncomp_per_dim_fc;
 		}
 	}
 
 	// compute derived vars
 	for (auto const &dname : derivedNames_) {
-		ComputeDerivedVar(lev, dname, plotMF_cc, comp);
+		ComputeDerivedVar(lev, dname, plotMF, comp);
 		comp++;
 	}
 
-	return plotMF_cc;
+	return plotMF;
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_) -> amrex::MultiFab // make fc version, refer to notes
+auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_) -> amrex::MultiFab 
 {
-	// get number of variables, includes framework for adding derived vars in future
 	int comp = 0;
 	int nvar_dim_tot_fc = 0;
 	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
 		nvar_dim_tot_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
 	}
-	// const int ncomp_deriv = derivedNames_.size();
 	const int ncomp_plotMF_fc = nvar_dim_tot_fc;
 
 	amrex::MultiFab plotMF_fc(grids[lev], dmap[lev], ncomp_plotMF_fc, nghost_fc_);
@@ -2432,11 +2430,11 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, con
 // put together an array of multifabs for writing
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const int included_ghosts) -> amrex::Vector<amrex::MultiFab> // make fc version
 {
-	amrex::Vector<amrex::MultiFab> r_cc;
+	amrex::Vector<amrex::MultiFab> r;
 	for (int i = 0; i <= finest_level; ++i) {
-		r_cc.push_back(PlotFileMFAtLevel_cc(i, included_ghosts));
+		r.push_back(PlotFileMFAtLevel_cc(i, included_ghosts));
 	}
-	return r_cc;
+	return r;
 }
 
 template <typename problem_t>
@@ -2636,7 +2634,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames
 			}
 		}
 	}
-	// varnames_fc.insert(varnames_fc.end(), derivedNames_.begin(), derivedNames_.end());
 	return varnames_fc;
 }
 
@@ -2656,8 +2653,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #else
 	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
 #endif
-	amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts); // create fc version, triggered in next line
-	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf_cc);
+	amrex::Vector<amrex::MultiFab> mf_cc =PlotFileMF_cc(included_ghosts); // create fc version, triggered in next line
+	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 
 	const std::string &plotfilename = PlotFileName(istep[0]);
 	auto varnames = GetPlotfileVarNames();
@@ -2668,7 +2665,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plot_file, tNew_[0], istep[0]);
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio()); // add fc version
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio()); // add fc version
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_); // fc version, needs check if fc quantities exist
 		std::vector<std::string> dimNames = {"x", "y", "z"};
