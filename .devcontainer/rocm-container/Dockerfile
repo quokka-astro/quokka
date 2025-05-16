@@ -59,7 +59,7 @@ RUN mkdir -p /tmp/build-kokkos && cd /tmp/build-kokkos && \
     wget -q https://github.com/kokkos/kokkos/releases/download/4.6.01/kokkos-4.6.01.tar.gz && \
     tar xzf kokkos-4.6.01.tar.gz && \
     mkdir build && cd build && \
-    cmake ../kokkos-4.6.01 -Kokkos_ENABLE_HIP=ON && \
+    cmake ../kokkos-4.6.01 -DKokkos_ENABLE_HIP=ON -DKokkos_ARCH_AMD_GFX90A=ON && \
     make -j$(nproc) && make install && \
     cd / && \
     rm -rf /tmp/build-kokkos
