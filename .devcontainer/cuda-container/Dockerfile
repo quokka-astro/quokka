@@ -54,7 +54,7 @@ RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
     wget -q https://github.com/Viskores/viskores/archive/refs/tags/v1.0.0.tar.gz && \
     tar xzf v1.0.0.tar.gz && \
     mkdir build && cd build && \
-    cmake .. -DViskores_ENABLE_RENDERING=ON -DViskores_ENABLE_MPI=ON -DViskores_USE_64BIT_IDS=ON -DViskores_USE_DOUBLE_PRECISION=ON -DViskores_ENABLE_CUDA=ON && \
+    cmake ../viskores-1.0.0 -DViskores_ENABLE_RENDERING=ON -DViskores_USE_64BIT_IDS=ON -DViskores_USE_DOUBLE_PRECISION=ON -DViskores_ENABLE_CUDA=ON -DViskores_CUDA_Architecture=70 && \
     make -j$(nproc) && make install && \
     cd / && \
     rm -rf /tmp/build-viskores
