@@ -74,7 +74,11 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 		const double y = prob_lo[1] + (j * dx[1]);
 		const double z = prob_lo[2] + (k * dx[2]);
 		if (x <= sf_cell_loc && x + dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
+			// the cell at sf_cell_loc 
 			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density;
+		} else if (x - 2 * dx[0] <= sf_cell_loc && x - dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
+			// the cell that is 2 cells left of sf_cell_loc
+			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density * 0.999;
 		} else {
 			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
 		}
@@ -125,7 +129,8 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	const auto &values0 = std::get<1>(fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true));
+	const auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	const int nx = static_cast<int>(position0.size());
 
 	// get total gas mass of the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
@@ -136,7 +141,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-	const int nx = static_cast<int>(position.size());
 
 	// get total gas mass of the final state
 	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
@@ -199,6 +203,7 @@ auto problem_main() -> int
 		std::map<std::string, std::string> rho_args;
 		rho_args["label"] = "rho";
 		rho_args["color"] = "red";
+		rho_args["linestyle"] = "--";
 		matplotlibcpp::plot(xs, rho_x, rho_args);
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("rho (g cm^-3)");
