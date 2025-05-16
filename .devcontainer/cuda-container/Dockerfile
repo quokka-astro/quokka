@@ -47,7 +47,7 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
     cd / && \
     rm -rf /tmp/build-adios2
 
-## Install Viskores (volume rendering and isosurfaces)
+# Install Viskores (volume rendering and isosurfaces)
 # NOTE: to build this, you need a Docker VM with a LARGE amount of RAM (at least 15 GB RAM, 4 GB swap)
 
 RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
