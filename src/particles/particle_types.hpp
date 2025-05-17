@@ -70,20 +70,20 @@ namespace quokka
 
 // Enum class to identify different particle types
 AMREX_ENUM(ParticleType,
-	Rad,		      // Radiation particles
-	CIC,		      // Gravitating particles
-	CICRad,		      // Gravitating radiation particles
-	StochasticStellarPop, // Stellar population particles
-	Sink,		      // Sink particles
-	Test		      // Test particles with all features enabled
+	   Rad,			 // Radiation particles
+	   CIC,			 // Gravitating particles
+	   CICRad,		 // Gravitating radiation particles
+	   StochasticStellarPop, // Stellar population particles
+	   Sink,		 // Sink particles
+	   Test			 // Test particles with all features enabled
 );
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
 AMREX_ENUM(SNScheme,
-	SN_thermal_only,			// pure thermal
-	SN_thermal_or_thermal_momentum,		// pure thermal (RM<1) or thermal+momentum (RM>=1)
-	SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
-	SN_pure_kinetic_or_thermal_momentum	// pure kinetic (RM<1) or thermal+momentum (RM>=1)
+	   SN_thermal_only,			   // pure thermal
+	   SN_thermal_or_thermal_momentum,	   // pure thermal (RM<1) or thermal+momentum (RM>=1)
+	   SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
+	   SN_pure_kinetic_or_thermal_momentum	   // pure kinetic (RM<1) or thermal+momentum (RM>=1)
 );
 
 //-------------------- Radiation particles --------------------
@@ -159,10 +159,10 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 
 // Enum for StellarEvolution particle stage
 AMREX_ENUM(StellarEvolutionStage,
-	LowMassStar,  // Low mass star stage
-	SNProgenitor, // Supernova progenitor stage
-	SNRemnant,    // Supernova remnant stage
-	Removed	      // Mark for removal
+	   LowMassStar,	 // Low mass star stage
+	   SNProgenitor, // Supernova progenitor stage
+	   SNRemnant,	 // Supernova remnant stage
+	   Removed	 // Mark for removal
 );
 
 //-------------------- Stellar population particles --------------------

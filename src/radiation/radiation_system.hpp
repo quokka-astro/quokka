@@ -63,11 +63,10 @@ static constexpr double inf = std::numeric_limits<double>::max();
 
 // enum for opacity_model
 AMREX_ENUM(OpacityModel,
-	single_group = 0, // user-defined opacity for each group, given as a function of density and temperature.
-	piecewise_constant_opacity,
-	PPL_opacity_fixed_slope_spectrum,
-	PPL_opacity_full_spectrum // piecewise power-law opacity model with piecewise power-law fitting to a user-defined opacity function and on-the-fly
-				  // piecewise power-law fitting to radiation energy density and flux.
+	   single_group = 0, // user-defined opacity for each group, given as a function of density and temperature.
+	   piecewise_constant_opacity, PPL_opacity_fixed_slope_spectrum,
+	   PPL_opacity_full_spectrum // piecewise power-law opacity model with piecewise power-law fitting to a user-defined opacity function and on-the-fly
+				     // piecewise power-law fitting to radiation energy density and flux.
 );
 
 // this struct is specialized by the user application code
