@@ -35,6 +35,16 @@ RUN mkdir /tmp/build-adios2 && cd /tmp/build-adios2 && \
  cd / && \
  rm -rf /tmp/build-adios2
 
+# Install Viskores (volume rendering and isosurfaces)
+RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
+    wget -q https://github.com/Viskores/viskores/archive/refs/tags/v1.0.0.tar.gz && \
+    tar xzf v1.0.0.tar.gz && \
+    mkdir build && cd build && \
+    cmake ../viskores-1.0.0 -DViskores_ENABLE_RENDERING=ON -DViskores_USE_64BIT_IDS=ON -DViskores_USE_DOUBLE_PRECISION=ON && \
+    make -j$(nproc) && make install && \
+    cd / && \
+    rm -rf /tmp/build-viskores
+
 WORKDIR /home/vscode
 USER vscode
 
