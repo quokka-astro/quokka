@@ -2,6 +2,7 @@
 #define PARTICLE_ACCRETION_HPP_
 
 #include "AMReX_Array4.H"
+#include "AMReX_Enum.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
 #include "gcem.hpp"
@@ -12,7 +13,7 @@
 namespace quokka
 {
 
-enum class AccretionScheme { Threshold = 0, BondiHoyle = 1 };
+AMREX_ENUM(AccretionScheme, Threshold = 0, BondiHoyle = 1);
 
 // manually set the accretion scheme
 constexpr AccretionScheme accretion_scheme = AccretionScheme::BondiHoyle;

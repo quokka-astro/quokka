@@ -41,6 +41,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_BCRec.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
+#include "AMReX_Enum.H"
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
@@ -147,7 +148,7 @@ template <> struct as_if<std::string, std::optional<std::string>> {
 };
 } // namespace YAML
 
-enum class FillPatchType { fillpatch_class, fillpatch_function };
+AMREX_ENUM(FillPatchType, fillpatch_class, fillpatch_function);
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore

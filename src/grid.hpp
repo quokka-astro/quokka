@@ -5,12 +5,13 @@
 #include <AMReX_Array.H>
 #include <AMReX_Array4.H>
 #include <AMReX_Box.H>
+#include <AMReX_Enum.H>
 #include <AMReX_REAL.H>
 
 namespace quokka
 {
-enum class centering { cc = 0, fc, ec };
-enum class direction { na = -1, x, y, z };
+AMREX_ENUM(centering, cc = 0, fc, ec);
+AMREX_ENUM(direction, na = -1, x, y, z);
 const std::array<const std::string, 3> face_dir_str = {"x", "y", "z"}; // NOLINT
 
 struct grid {

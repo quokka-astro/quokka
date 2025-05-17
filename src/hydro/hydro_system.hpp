@@ -16,6 +16,7 @@
 #include "AMReX.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Enum.H"
 #include "AMReX_REAL.H"
 #include "AMReX_iMultiFab.H"
 
@@ -40,7 +41,7 @@ template <typename problem_t> struct HydroSystem_Traits {
 	static constexpr bool reconstruct_eint = true;
 };
 
-enum class RiemannSolver { HLLC, LLF, HLLD };
+AMREX_ENUM(RiemannSolver, HLLC, LLF, HLLD);
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///

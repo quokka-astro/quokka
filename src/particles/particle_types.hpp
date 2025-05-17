@@ -2,6 +2,7 @@
 #define PARTICLE_TYPES_HPP_
 
 #include "AMReX_AmrParticles.H"
+#include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
 #include "physics_info.hpp"
 
@@ -68,22 +69,22 @@ namespace quokka
 {
 
 // Enum class to identify different particle types
-enum class ParticleType {
+AMREX_ENUM(ParticleType,
 	Rad,		      // Radiation particles
 	CIC,		      // Gravitating particles
 	CICRad,		      // Gravitating radiation particles
 	StochasticStellarPop, // Stellar population particles
 	Sink,		      // Sink particles
 	Test		      // Test particles with all features enabled
-};
+);
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
-enum class SNScheme {
+AMREX_ENUM(SNScheme,
 	SN_thermal_only,			// pure thermal
 	SN_thermal_or_thermal_momentum,		// pure thermal (RM<1) or thermal+momentum (RM>=1)
 	SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
 	SN_pure_kinetic_or_thermal_momentum	// pure kinetic (RM<1) or thermal+momentum (RM>=1)
-};
+);
 
 //-------------------- Radiation particles --------------------
 
@@ -157,12 +158,12 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 //-------------------- Stellar evolution stage enum --------------------
 
 // Enum for StellarEvolution particle stage
-enum class StellarEvolutionStage {
+AMREX_ENUM(StellarEvolutionStage,
 	LowMassStar,  // Low mass star stage
 	SNProgenitor, // Supernova progenitor stage
 	SNRemnant,    // Supernova remnant stage
 	Removed	      // Mark for removal
-};
+);
 
 //-------------------- Stellar population particles --------------------
 
@@ -324,9 +325,7 @@ inline void particleParmParse()
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
 
 	// Handle SNScheme enum
-	int sn_scheme_int = static_cast<int>(SN_scheme);
-	pp.query("SN_scheme", sn_scheme_int);
-	SN_scheme = static_cast<SNScheme>(sn_scheme_int);
+	pp.query("SN_scheme", SN_scheme);
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
