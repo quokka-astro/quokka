@@ -110,7 +110,7 @@ quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater,
 !!! Warning
     Ascent should only be used for volume rendering.  Other visualization features are not expected to work correctly, since we do **not** pass ghost cells to Ascent.
 
-Ascent allows you to generate visualizations (as PNG images) while the simulation is running, without any extra effort.
+Ascent allows you to generate raytraced volume renderings (as PNG images) while the simulation is running.
 
 ### Compiling Ascent on an HPC cluster
 
@@ -133,7 +133,7 @@ If you are running your simulation on GPU nodes, you should add either `+cuda` o
 
 Add `ascent_interval = N` to your ParmParse input file, where `N` is the number of coarse timesteps between Ascent outputs.
 
-### Customizing the visualization
+### Customizing the rendering
 
 Add an [ascent_actions.yaml file](https://ascent.readthedocs.io/en/latest/Actions/Actions.html) to the simulation working directory. This example actions file will create a volume rendering with the given camera parameters:
 
