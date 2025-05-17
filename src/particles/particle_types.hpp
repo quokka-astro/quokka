@@ -69,7 +69,7 @@ namespace quokka
 {
 
 // Enum class to identify different particle types
-AMREX_ENUM(ParticleType,
+AMREX_ENUM(ParticleType, // NOLINT
 	   Rad,			 // Radiation particles
 	   CIC,			 // Gravitating particles
 	   CICRad,		 // Gravitating radiation particles
@@ -79,7 +79,7 @@ AMREX_ENUM(ParticleType,
 );
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
-AMREX_ENUM(SNScheme,
+AMREX_ENUM(SNScheme, // NOLINT
 	   SN_thermal_only,			   // pure thermal
 	   SN_thermal_or_thermal_momentum,	   // pure thermal (RM<1) or thermal+momentum (RM>=1)
 	   SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
@@ -158,7 +158,7 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 //-------------------- Stellar evolution stage enum --------------------
 
 // Enum for StellarEvolution particle stage
-AMREX_ENUM(StellarEvolutionStage,
+AMREX_ENUM(StellarEvolutionStage, // NOLINT
 	   LowMassStar,	 // Low mass star stage
 	   SNProgenitor, // Supernova progenitor stage
 	   SNRemnant,	 // Supernova remnant stage

@@ -41,7 +41,7 @@ template <typename problem_t> struct HydroSystem_Traits {
 	static constexpr bool reconstruct_eint = true;
 };
 
-AMREX_ENUM(RiemannSolver, HLLC, LLF, HLLD);
+AMREX_ENUM(RiemannSolver, HLLC, LLF, HLLD); // NOLINT
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///

@@ -13,7 +13,7 @@
 namespace quokka
 {
 
-AMREX_ENUM(AccretionScheme, Threshold = 0, BondiHoyle = 1);
+AMREX_ENUM(AccretionScheme, Threshold = 0, BondiHoyle = 1); // NOLINT
 
 // manually set the accretion scheme
 constexpr AccretionScheme accretion_scheme = AccretionScheme::BondiHoyle;

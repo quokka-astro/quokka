@@ -10,8 +10,8 @@
 
 namespace quokka
 {
-AMREX_ENUM(centering, cc = 0, fc, ec);
-AMREX_ENUM(direction, na = -1, x, y, z);
+AMREX_ENUM(centering, cc = 0, fc, ec); // NOLINT
+AMREX_ENUM(direction, na = -1, x, y, z); // NOLINT
 const std::array<const std::string, 3> face_dir_str = {"x", "y", "z"}; // NOLINT
 
 struct grid {

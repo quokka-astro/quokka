@@ -10,7 +10,7 @@ using Real = amrex::Real;
 #include "AMReX_Enum.H"
 
 // enum for unit system, one of CGS, CONSTANTS, CUSTOM
-AMREX_ENUM(UnitSystem, CGS, CONSTANTS, CUSTOM);
+AMREX_ENUM(UnitSystem, CGS, CONSTANTS, CUSTOM); // NOLINT
 
 // this struct is specialized by the user application code.
 template <typename problem_t> struct Physics_Traits {

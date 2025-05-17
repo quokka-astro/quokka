@@ -148,7 +148,7 @@ template <> struct as_if<std::string, std::optional<std::string>> {
 };
 } // namespace YAML
 
-AMREX_ENUM(FillPatchType, fillpatch_class, fillpatch_function);
+AMREX_ENUM(FillPatchType, fillpatch_class, fillpatch_function); // NOLINT
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
