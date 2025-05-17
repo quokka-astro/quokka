@@ -129,9 +129,37 @@ If you are running your simulation on GPU nodes, you should add either `+cuda` o
 2.  Add `-DAMReX_ASCENT=ON -DAMReX_CONDUIT=ON` to your CMake options.
 3.  Compile your problem, e.g.: `ninja -j4 test_hydro3d_blast`
 
+### Running with Ascent
+
+Add `ascent_interval = N` to your ParmParse input file, where `N` is the number of coarse timesteps between Ascent outputs.
+
 ### Customizing the visualization
 
-Add an [ascent_actions.yaml file](https://ascent.readthedocs.io/en/latest/Actions/Actions.html) to the simulation working directory.
+Add an [ascent_actions.yaml file](https://ascent.readthedocs.io/en/latest/Actions/Actions.html) to the simulation working directory. This example actions file will create a volume rendering with the given camera parameters:
+
+```yaml
+- action: "add_extracts"
+  extracts:
+    my_volume_extract:
+      type: "volume"
+      params:
+        field: "gasDensity"
+        filename: "volume%05d"
+        image_width: 512
+        image_height: 512
+        camera:
+          look_at: [0.5, 0.5, 0.5]
+          position: [-1.2, 0.499, 0.501]
+          up: [0.0, 0.0, 1.0]
+          fov: 60.0
+          xpan: 0.0
+          ypan: 0.0
+          zoom: 1.0
+          azimuth: 0.0
+          elevation: 0.0
+          near_plane: 0.01
+          far_plane: 10.0
+```
 
 !!! Warning
     The `ascent_actions.yaml` file can be edited while the simulation is running, and the updated parameters will be used for subsequent renders. If invalid values are given, renders may stop working without notice.
