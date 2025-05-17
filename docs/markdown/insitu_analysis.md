@@ -110,7 +110,11 @@ quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater,
 !!! Warning
     Ascent should only be used for volume rendering.  Other visualization features are not expected to work correctly, since we do **not** pass ghost cells to Ascent.
 
-Ascent allows you to generate raytraced volume renderings (as PNG images) while the simulation is running.
+Ascent allows you to generate raytraced volume renderings (saved as a sequence of PNG images) while the simulation is running.
+
+![](volume_render_sphere.png)
+
+*A volume rendering of the `SphericalCollapse` problem.*
 
 ### Compiling Ascent on an HPC cluster
 
