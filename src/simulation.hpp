@@ -2566,7 +2566,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 
 	// convexify multifabs
 	// see: https://github.com/AMReX-Codes/amrex/pull/4013
-	amrex::Vector<amrex:::MultiFab> mf_convex = amrex::convexify(mf_overlapping_ptr, refRatio());
+	amrex::Vector<amrex:: : MultiFab> mf_convex = amrex::convexify(mf_overlapping_ptr, refRatio());
 	amrex::Vector<const amrex::MultiFab *> mf_convex_ptr = amrex::GetVecOfConstPtrs(mf_convex);
 
 	// rescale geometry
