@@ -2611,11 +2611,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 
 	// combine multifabs
 	const int included_ghosts = std::min(nghost_cc_, nghost_fc_);
-	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(included_ghosts);
-	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+	amrex::Vector<amrex::MultiFab> mf_overlapping = PlotFileMF(included_ghosts);
+	amrex::Vector<const amrex::MultiFab *> mf_overlapping_ptr = amrex::GetVecOfConstPtrs(mf_overlapping);
 	amrex::Vector<std::string> varnames;
 	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
+
+	// convexify multifabs
+	// see: https://github.com/AMReX-Codes/amrex/pull/4013
+	amrex::Vector<amrex::MultiFab> mf_convex = amrex::convexify(mf_overlapping_ptr, refRatio());
+	amrex::Vector<const amrex::MultiFab *> mf_convex_ptr = amrex::GetVecOfConstPtrs(mf_convex);
 
 	// rescale geometry
 	// (Ascent fails to render if you use parsec-size boxes in units of cm...)
@@ -2636,7 +2641,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 
 	// wrap MultiFabs into a Blueprint mesh
 	conduit::Node blueprintMesh;
-	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
+	amrex::MultiLevelToBlueprint(finest_level + 1, mf_convex_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
 
 	// copy to host mem (needed for DataBinning)
 	conduit::Node bpMeshHost;
@@ -2936,6 +2941,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::VisMF::Write(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
+		amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 	}
 
 	// write the face-centred MultiFab data to, e.g., chk00010/Level_0/
@@ -2944,6 +2950,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 			for (int lev = 0; lev <= finest_level; ++lev) {
 				amrex::VisMF::Write(state_new_fc_[lev][idim], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_",
 													    std::string("Face_") + quokka::face_dir_str[idim]));
+				amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 			}
 		}
 	}
