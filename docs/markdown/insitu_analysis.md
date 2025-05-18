@@ -1,6 +1,6 @@
 # In-situ analysis
 
-*In-situ analysis* refers to analyzing the simulations as they are running. There are two options: using the *runtime diagnostics* that are built-in to Quokka, and using *Ascent*, a third-party library.
+*In-situ analysis* refers to analyzing the simulations as they are running. There are two options: using the *runtime diagnostics* that are built-in to Quokka, and volume rendering using *Ascent*, a third-party library.
 
 ## Diagnostics
 
@@ -105,25 +105,27 @@ quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
 ```
 
-## Ascent (deprecated)
+## Volume Rendering (Ascent)
 
 !!! Warning
-    Due to correctness and performance issues, **using Ascent is not recommended**. Support for Ascent will be removed in a future version of Quokka.
+    Ascent should only be used for volume rendering.  Other visualization features are not expected to work correctly, since we do **not** pass ghost cells to Ascent.
 
-Ascent allows you to generate visualizations (as PNG images) while the simulation is running, without any extra effort.
+Ascent allows you to generate raytraced volume renderings (saved as a sequence of PNG images) while the simulation is running.
 
-!!! Note
-    On Setonix, Ascent is already built. In your job script, add the line: `export Ascent_DIR=/software/projects/pawsey0807/bwibking/ascent_06082023/install/ascent-develop/lib/cmake/ascent`.
+![](volume_render_sphere.png)
 
-### Compiling Ascent via Spack
+*A volume rendering of the `SphericalCollapse` problem.*
 
-1.  Run `spack external find`.
-2.  Make sure there are entries listed for `hdf5`, `cuda`, and `openmpi` in your `~/.spack/packages.yaml` file.
-3.  Add [buildable: False](https://spack.readthedocs.io/en/latest/build_settings.html#external-packages) to each entry.
-4.  Run `spack fetch --dependencies ascent@develop+cuda+vtkh~fortran~shared cuda_arch=70 ^conduit~parmetis~fortran`
-5.  On a dedicated compute node, run `spack install ascent@develop+cuda+vtkh~fortran~shared cuda_arch=70 ^conduit~parmetis~fortran`
+### Compiling Ascent on an HPC cluster
 
-For A100 GPUs, change the above lines to ``cuda_arch=80``. Currently, it's not possible to [build for both GPU models at the same time](https://github.com/Alpine-DAV/ascent/issues/950#issuecomment-1153243232).
+1.  Download Spack and activate it in your environment.
+2.  Run `spack external find`.
+3.  Make sure there are entries listed for `slurm` and `mpi` in your `~/.spack/packages.yaml` file.
+4.  Add [buildable: False](https://spack.readthedocs.io/en/latest/build_settings.html#external-packages) to these entries.
+5.  Run `spack fetch --dependencies ascent@develop`
+6.  On a dedicated compute node, run `spack install ascent@develop`
+
+If you are running your simulation on GPU nodes, you should add either `+cuda` or `+rocm` to the Spack spec, e.g. `spack install ascent@develop+cuda`, depending on whether you are running on NVIDIA or AMD GPUs, respectively.
 
 ### Compiling Quokka with Ascent support
 
@@ -131,9 +133,37 @@ For A100 GPUs, change the above lines to ``cuda_arch=80``. Currently, it's not p
 2.  Add `-DAMReX_ASCENT=ON -DAMReX_CONDUIT=ON` to your CMake options.
 3.  Compile your problem, e.g.: `ninja -j4 test_hydro3d_blast`
 
-### Customizing the visualization
+### Running with Ascent
 
-Add an [ascent_actions.yaml file](https://ascent.readthedocs.io/en/latest/Actions/Actions.html) to the simulation working directory. This file can even be edited while the simulation is running!
+Add `ascent_interval = N` to your ParmParse input file, where `N` is the number of coarse timesteps between Ascent outputs.
+
+### Customizing the rendering
+
+Add an [ascent_actions.yaml file](https://ascent.readthedocs.io/en/latest/Actions/Actions.html) to the simulation working directory. This example actions file will create a volume rendering with the given camera parameters:
+
+```yaml
+- action: "add_extracts"
+  extracts:
+    my_volume_extract:
+      type: "volume"
+      params:
+        field: "gasDensity"
+        filename: "volume%05d"
+        image_width: 512
+        image_height: 512
+        camera:
+          look_at: [0.5, 0.5, 0.5]
+          position: [-1.2, 0.499, 0.501]
+          up: [0.0, 0.0, 1.0]
+          fov: 60.0
+          xpan: 0.0
+          ypan: 0.0
+          zoom: 1.0
+          azimuth: 0.0
+          elevation: 0.0
+          near_plane: 0.01
+          far_plane: 10.0
+```
 
 !!! Warning
-    Volume renderings do not correctly handle ghost cells ([GitHub issue](https://github.com/Alpine-DAV/ascent/issues/955)).
+    The `ascent_actions.yaml` file can be edited while the simulation is running, and the updated parameters will be used for subsequent renders. If invalid values are given, renders may stop working without notice.
