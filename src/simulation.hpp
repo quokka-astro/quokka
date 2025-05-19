@@ -2573,7 +2573,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 	// combine multifabs
 	const int included_ghosts = std::min(nghost_cc_, nghost_fc_);
 	amrex::Vector<amrex::MultiFab> mf = PlotFileMF_cc(included_ghosts);
-	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf);
 	amrex::Vector<std::string> varnames;
 	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
@@ -2597,7 +2597,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 
 	// wrap MultiFabs into a Blueprint mesh
 	conduit::Node blueprintMesh;
-	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
+	amrex::MultiLevelToBlueprint(finest_level + 1, mf_cc_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
 
 	// copy to host mem (needed for DataBinning)
 	conduit::Node bpMeshHost;
@@ -2659,7 +2659,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 
 #ifdef QUOKKA_USE_OPENPMD
 	// TODO(bwibking): write particles using openPMD
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plot_file, tNew_[0], istep[0]);
+	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0]);
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
