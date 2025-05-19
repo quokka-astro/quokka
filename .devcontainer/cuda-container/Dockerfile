@@ -1,5 +1,5 @@
 # Use the NVIDIA CUDA image as the base image
-FROM nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66
+FROM nvidia/cuda:12.9.0-devel-ubuntu24.04@sha256:632c7db01c6a392f1a4a51b575ee1c125d19e7656de83a285ac222fc35b80606
 
 # Set environment variables for NVIDIA
 ENV NVIDIA_VISIBLE_DEVICES=all
@@ -46,6 +46,18 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
     make -j$(nproc) && make install && \
     cd / && \
     rm -rf /tmp/build-adios2
+
+# Install Viskores (volume rendering and isosurfaces)
+# NOTE: to build this, you need a Docker VM with a LARGE amount of RAM (at least 15 GB RAM, 4 GB swap)
+
+RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
+    wget -q https://github.com/Viskores/viskores/archive/refs/tags/v1.0.0.tar.gz && \
+    tar xzf v1.0.0.tar.gz && \
+    mkdir build && cd build && \
+    cmake ../viskores-1.0.0 -DViskores_ENABLE_RENDERING=ON -DViskores_USE_64BIT_IDS=ON -DViskores_USE_DOUBLE_PRECISION=ON -DViskores_ENABLE_CUDA=ON -DViskores_CUDA_Architecture=70 && \
+    make -j$(nproc) && make install && \
+    cd / && \
+    rm -rf /tmp/build-viskores
 
 # Set the working directory and user
 WORKDIR /home/ubuntu
