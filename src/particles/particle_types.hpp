@@ -78,12 +78,12 @@ enum class ParticleType {
 };
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
-enum class SNScheme {
-	SN_thermal_only,			// pure thermal
-	SN_thermal_or_thermal_momentum,		// pure thermal (RM<1) or thermal+momentum (RM>=1)
-	SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
-	SN_pure_kinetic_or_thermal_momentum	// pure kinetic (RM<1) or thermal+momentum (RM>=1)
-};
+AMREX_ENUM(SNScheme,				   // NOLINT
+	   SN_thermal_only,			   // pure thermal
+	   SN_thermal_or_thermal_momentum,	   // pure thermal (RM<1) or thermal+momentum (RM>=1)
+	   SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
+	   SN_pure_kinetic_or_thermal_momentum	   // pure kinetic (RM<1) or thermal+momentum (RM>=1)
+);
 
 //-------------------- Radiation particles --------------------
 
@@ -302,7 +302,7 @@ inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 
 // Scheme for SN feedback
-inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
+inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
@@ -324,9 +324,7 @@ inline void particleParmParse()
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
 
 	// Handle SNScheme enum
-	int sn_scheme_int = static_cast<int>(SN_scheme);
-	pp.query("SN_scheme", sn_scheme_int);
-	SN_scheme = static_cast<SNScheme>(sn_scheme_int);
+	pp.query("SN_scheme", SN_scheme);
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
