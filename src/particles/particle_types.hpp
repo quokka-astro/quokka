@@ -302,8 +302,7 @@ inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 
 // Scheme for SN feedback
-// FIXME: why is this the default? this is the worst one...
-inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
+inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
