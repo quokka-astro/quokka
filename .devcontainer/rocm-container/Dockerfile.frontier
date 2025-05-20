@@ -97,5 +97,9 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
 #    rm -rf /tmp/build-viskores
 
 
+# create user 'leap'
+RUN useradd -ms /bin/bash leap
+WORKDIR /home/leap
+
 # Set the default command to bash
 CMD [ "/bin/bash" ]
