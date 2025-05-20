@@ -51,8 +51,15 @@ RUN zypper --non-interactive install cmake && zypper clean --all
 # Install Python headers
 RUN zypper --non-interactive install python3-devel && zypper clean --all
 
-# Use amdclang for everything below this line
-ENV CC="amdclang" CXX="amdclang++"
+# Set environment variables for ROCm
+ENV hip_DIR=/opt/rocm-6.4.0/lib/cmake/hip
+ENV rocrand_DIR=/opt/rocm-6.4.0/lib/cmake/rocrand
+ENV hiprand_DIR=/opt/rocm-6.4.0/lib/cmake/hiprand
+ENV rocprim_DIR=/opt/rocm-6.4.0/lib/cmake/rocprim
+ENV rocsparse_DIR=/opt/rocm-6.4.0/lib/cmake/rocsparse
+ENV AMREX_AMD_ARCH=gfx90a
+ENV CC=amdclang
+ENV CXX=amdclang++
 
 # Install blosc2 (needed for ADIOS2)
 RUN pip3 install blosc2
