@@ -90,6 +90,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::BCs_fc_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
+	using AMRSimulation<problem_t>::componentNames_fc_flat_;
 	using AMRSimulation<problem_t>::componentNames_fc_;
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
@@ -356,12 +357,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 
 	// add face-centered velocities
 	for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-		componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});
+		componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});
+		componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});
 	}
 	// add mhd state variables
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-			componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-BField"});
+			componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-BField"});
+			componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-BField"});
 		}
 	}
 }
@@ -862,7 +865,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 				amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
 					       << " and sol_norm = " << sol_norm << "\n";
 
-				print_multifab_fc(state_new_fc_[0][idim], "state_new_fc", 0, idim);
+				//print_multifab_fc(state_new_fc_[0][idim], "state_new_fc", 0, idim);
 			}
 		}
 	}
