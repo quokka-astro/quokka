@@ -845,9 +845,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 
 				computeReferenceSolution_fc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
 
-				    // compute error norm
-				    amrex::MultiFab residual(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0), ncomp,
-							     nghost);
+				// compute error norm
+				amrex::MultiFab residual(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0), ncomp,
+							 nghost);
 				amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
 				amrex::MultiFab::Saxpy(residual, -1., state_new_fc_[0][idim], 0, 0, ncomp, nghost);
 
