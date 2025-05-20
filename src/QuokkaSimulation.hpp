@@ -843,7 +843,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 				amrex::MultiFab state_ref_level0(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0),
 								 ncomp, nghost);
 
-				computeReferenceSolution_fc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim})
+				computeReferenceSolution_fc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
 
 				    // compute error norm
 				    amrex::MultiFab residual(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0), ncomp,
