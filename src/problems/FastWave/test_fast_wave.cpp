@@ -10,13 +10,11 @@
 #include <bitset>
 #include <cassert>
 #include <cmath>
+#include <gcem.hpp>
 #include <iostream>
-#include <stdexcept>
-#include <valarray>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
-#include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -55,8 +53,8 @@ constexpr double bg_mag_amplitude = 1.;
 
 // theta is the angle between k and background magnetic field bg_mag
 constexpr double theta_degrees = 90.0; // degrees
-const double cos_theta = std::cos(theta_degrees * M_PI / 180.0);
-const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
+constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
+// const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
 
 // k = 2 pi / wave length
 // box length = 1, so |k| in [1, inf)
@@ -66,32 +64,32 @@ constexpr double k_amplitude = 2 * M_PI * num_modes;
 // input perturbation: choose to do this via the relative denisty field in [0, 1]. remember, the linear regime is valid when this perturbation is small
 constexpr double delta_b = 1e-6;
 
-const double alfven_speed = bg_mag_amplitude / std::sqrt(bg_density);
-const double magnetosonic_speed = std::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
-const double bg_mag_x1 = 0.0;
-const double bg_mag_x2 = 0.0;
-const double bg_mag_x3 = bg_mag_amplitude;
+constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
+constexpr double magnetosonic_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
+// const double bg_mag_x1 = 0.0;
+// const double bg_mag_x2 = 0.0;
+constexpr double bg_mag_x3 = bg_mag_amplitude;
 
-double compute_omega(double k_amplitude, double magnetosonic_speed, double alfven_speed, double sound_speed, double cos_theta)
+auto compute_omega(double k_amplitude, double magnetosonic_speed, double alfven_speed, double sound_speed, double cos_theta) -> double
 {
 	return std::sqrt(std::pow(k_amplitude, 2) / 2.0 *
 			 (std::pow(magnetosonic_speed, 2) +
 			  std::sqrt(std::pow(magnetosonic_speed, 4) - 4.0 * std::pow(alfven_speed, 2) * std::pow(sound_speed, 2) * std::pow(cos_theta, 2))));
 }
 
-const double omega = compute_omega(k_amplitude, magnetosonic_speed, alfven_speed, sound_speed, cos_theta);
+const double omega = compute_omega(k_amplitude, magnetosonic_speed, alfven_speed, sound_speed, cos_theta); // NOLINT(cert-err58-cpp)
 
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_x(double x1, double x2, double x3, double time)
+AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double x2, double /*x3*/, double time)
 {
 	// return -bg_mag_x3 * x2;
 	return -x2 / 2.0 * (bg_mag_amplitude + delta_b * std::cos(omega * time - k_amplitude * x1));
 }
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_y(double x1, double x2, double x3, double time)
+AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/, double /*x3*/, double time) -> double
 {
 	// return delta_b / k_amplitude * std::sin(omega * time - k_amplitude * x1);
 	return bg_mag_amplitude * x1 / 2.0 + ((delta_b)*std::sin(omega * time - k_amplitude * x1) / (-2.0 * k_amplitude));
 }
-AMREX_GPU_DEVICE double computeMagneticVectorPotential_z(double x1, double x2, double x3, double time) { return 0.0; }
+AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double /*x2*/, double /*x3*/, double /*time*/) -> double { return 0.0; }
 
 ////////////////////////////////////
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -103,8 +101,6 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real x3_L = prob_lo[2] + k * dx[2];
 
 	const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
-	const amrex::Real x2_C = x2_L + static_cast<amrex::Real>(0.5) * dx[1];
-	const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
 
 	if (cen == quokka::centering::cc) {
 		const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
