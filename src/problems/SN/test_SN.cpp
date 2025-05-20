@@ -8,6 +8,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
+#include "math/interpolate.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -38,7 +39,7 @@ static double t_stop = 3.0e5; // stop time (yr) // NOLINT
 
 template <> struct Particle_Traits<SNProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
 };
 
 template <> struct quokka::EOS_Traits<SNProblem> {
@@ -62,16 +63,16 @@ template <> struct Physics_Traits<SNProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> void QuokkaSimulation<SNProblem>::createInitialStochasticStellarPopParticles()
+template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
-	StochasticStellarPopParticles->SetVerbose(1);
-	StochasticStellarPopParticles->InitFromAsciiFile(SN_particles_file, nreal_extra, nullptr);
+	TestParticles->SetVerbose(1);
+	TestParticles->InitFromAsciiFile(SN_particles_file, nreal_extra, nullptr);
 
 	// Loop over all particle at all levels and set first integer component to SNProgenitor
-	for (int lev = 0; lev <= StochasticStellarPopParticles->finestLevel(); ++lev) {
-		auto &particles = StochasticStellarPopParticles->GetParticles(lev);
+	for (int lev = 0; lev <= TestParticles->finestLevel(); ++lev) {
+		auto &particles = TestParticles->GetParticles(lev);
 
 		for (auto &kv : particles) {
 			auto &particle_array = kv.second.GetArrayOfStructs();

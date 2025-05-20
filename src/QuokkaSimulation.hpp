@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
+#include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include <array>
 #include <iostream>
@@ -833,16 +834,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		const double rel_error = err_norm / sol_norm;
 		errorNorm_ = rel_error;
 		amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
-
-		// compute fc-reference solution
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < 3; ++idim) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+\
 				amrex::Print() << "Checking fc-quantities in the " << idim << " direction\n";
 				const int ncomp = state_new_fc_[0][idim].nComp();
 				const int nghost = state_new_fc_[0][idim].nGrow();
 				amrex::MultiFab state_ref_level0(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0),
 								 ncomp, nghost);
-				computeReferenceSolution_fc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
+
+				computeReferenceSolution_fc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim})
 
 				// compute error norm
 				amrex::MultiFab residual(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0), ncomp,
@@ -864,8 +865,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 				errorNorm_ = rel_error;
 				amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
 					       << " and sol_norm = " << sol_norm << "\n";
-
-				//print_multifab_fc(state_new_fc_[0][idim], "state_new_fc", 0, idim);
 			}
 		}
 	}
