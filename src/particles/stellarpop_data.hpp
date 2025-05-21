@@ -55,7 +55,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	
 	// all stars above max mass have same fate as max mass star
 	if (mass_star > interp_mass_star[FATE_ARR_SIZE - 1]) {
-		return static_cast<int> (interp_star_fate[FATE_ARR_SIZE - 1]); // NOLINT
+		return static_cast<int>(interp_star_fate[FATE_ARR_SIZE - 1]); // NOLINT
 	}
 	// Interpolate to find the fate of all other masses
 	amrex::Real fate_interp = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
