@@ -22,8 +22,8 @@ RUN if ! zypper repos -E | grep devel_languages_perl; then \
     rm rocm_so.conf && \
     ldconfig
 
-ENV PATH="/opt/rocm-6.4.0/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/rocm-6.4.0/lib:${LD_LIBRARY_PATH}"
+ENV PATH="/opt/rocm/bin:${PATH}" \
+    LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH}"
 
 RUN zypper --non-interactive install wget tar gzip gcc gcc-fortran file gcc-c++ make && zypper clean --all && \
     if [ ! -z "$(gcc --version | grep -Eo -m 1 [0-9][0-9]+\.[0-9]+\.[0-9]+ | grep -m 1 [0-9])" ]; then \
@@ -52,11 +52,12 @@ RUN zypper --non-interactive install cmake && zypper clean --all
 RUN zypper --non-interactive install python3-devel && zypper clean --all
 
 # Set environment variables for ROCm
-ENV hip_DIR=/opt/rocm-6.4.0/lib/cmake/hip
-ENV rocrand_DIR=/opt/rocm-6.4.0/lib/cmake/rocrand
-ENV hiprand_DIR=/opt/rocm-6.4.0/lib/cmake/hiprand
-ENV rocprim_DIR=/opt/rocm-6.4.0/lib/cmake/rocprim
-ENV rocsparse_DIR=/opt/rocm-6.4.0/lib/cmake/rocsparse
+ENV ROCM_PATH=/opt/rocm
+ENV hip_DIR=/opt/rocm/lib/cmake/hip
+ENV rocrand_DIR=/opt/rocm/lib/cmake/rocrand
+ENV hiprand_DIR=/opt/rocm/lib/cmake/hiprand
+ENV rocprim_DIR=/opt/rocm/lib/cmake/rocprim
+ENV rocsparse_DIR=/opt/rocm/lib/cmake/rocsparse
 ENV AMREX_AMD_ARCH=gfx90a
 ENV CC=amdclang
 ENV CXX=amdclang++
@@ -99,6 +100,7 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
 
 # create user 'leap'
 RUN useradd -ms /bin/bash leap
+RUN usermod -a -G render,video leap
 WORKDIR /home/leap
 USER leap
 
