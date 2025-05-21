@@ -74,9 +74,10 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 		const double y = prob_lo[1] + (j * dx[1]);
 		const double z = prob_lo[2] + (k * dx[2]);
 		if (x <= sf_cell_loc && x + dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
-			// the cell at sf_cell_loc 
+			// the cell at sf_cell_loc
 			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density;
-		} else if (x - 2 * dx[0] <= sf_cell_loc && x - dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
+		} else if (x - 2 * dx[0] <= sf_cell_loc && x - dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc &&
+			   z + dx[2] > sf_cell_loc) {
 			// the cell that is 2 cells left of sf_cell_loc
 			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density * 0.999;
 		} else {
