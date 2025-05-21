@@ -78,12 +78,12 @@ enum class ParticleType {
 };
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
-enum class SNScheme {
-	SN_thermal_only,			// pure thermal
-	SN_thermal_or_thermal_momentum,		// pure thermal (RM<1) or thermal+momentum (RM>=1)
-	SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
-	SN_pure_kinetic_or_thermal_momentum	// pure kinetic (RM<1) or thermal+momentum (RM>=1)
-};
+AMREX_ENUM(SNScheme,				   // NOLINT
+	   SN_thermal_only,			   // pure thermal
+	   SN_thermal_or_thermal_momentum,	   // pure thermal (RM<1) or thermal+momentum (RM>=1)
+	   SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
+	   SN_pure_kinetic_or_thermal_momentum	   // pure kinetic (RM<1) or thermal+momentum (RM>=1)
+);
 
 //-------------------- Radiation particles --------------------
 
@@ -273,14 +273,7 @@ inline auto get_units_data() -> const auto &
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::Sink,
-	     {{{"mass", {1, 0, 0, 0}},
-	       {"vx", {0, 1, -1, 0}},
-	       {"vy", {0, 1, -1, 0}},
-	       {"vz", {0, 1, -1, 0}},
-	       {"birth_time", {0, 0, 1, 0}},
-	       {"death_time", {0, 0, 1, 0}},
-	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
@@ -308,11 +301,15 @@ inline bool disable_SN_feedback = false; // NOLINT
 // Placeholder parameters for particles. Used in gravity_3d.cpp tests
 inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
+
 inline amrex::Real particle_param3 = -1.0; // NOLINT
 inline amrex::Real eps_ff = 0.01;	   // NOLINT
 
 // Scheme for SN feedback
-inline SNScheme SN_scheme = SNScheme::SN_thermal_only; // NOLINT
+inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
+
+// Sink particle accretion
+inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
@@ -328,20 +325,20 @@ inline void particleParmParse()
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
 	pp.query("disable_SN_feedback", disable_SN_feedback);
-	pp.query("param1", particle_param1);
-	pp.query("param2", particle_param2);
-	pp.query("param3", particle_param3);
+	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
 
 	// Handle SNScheme enum
-	int sn_scheme_int = static_cast<int>(SN_scheme);
-	pp.query("SN_scheme", sn_scheme_int);
-	SN_scheme = static_cast<SNScheme>(sn_scheme_int);
+	pp.query("SN_scheme", SN_scheme);
 
 	// Stochastic SF parameters
 	pp.query("eps_ff", eps_ff);
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
+
+	// Placeholder parameters for particles
+	pp.query("param1", particle_param1);
+	pp.query("param2", particle_param2);
 }
 
 } // namespace quokka

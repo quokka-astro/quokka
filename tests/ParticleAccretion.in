@@ -1,8 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -2.0 -2.0 -2.0
-geometry.prob_hi     =  2.0 2.0 2.0
+# box size: (-7.7696 pc, 7.7696 pc)
+geometry.prob_lo     = -2.397448054e+19 -2.397448054e+19 -2.397448054e+19
+geometry.prob_hi     = 2.397448054e+19 2.397448054e+19 2.397448054e+19
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -13,23 +14,25 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 32 32 32
+amr.n_cell          = 128 128 128
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 16     # grid size must be divisible by this
-amr.max_grid_size   = 16    # at least 128 for GPUs
+amr.blocking_factor = 64    # grid size must be divisible by this
+amr.max_grid_size   = 64    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
-amr.grid_eff        = 0.7
+amr.grid_eff        = 0.7   # default
 
-do_reflux = 0
+hydro.reconstruction_order = 3  # PPM
+cfl = 0.2
+stop_time = 0.5             # t_ff = 0.55
+
+gravity.Gconst = 1.0    #gravitational constant
+
+do_reflux = 1
 do_subcycle = 0
-suppress_output = 0
 
-particles.param1 = 0.0015 # create particles at this time, which is step 2
-particles.verbose = 1
-particles.disable_SN_feedback = true
+stop_time = 3.0e14
 
-stop_time = 1.0
-max_timesteps = 4
+problem.star_mass = 10.0
 plotfile_interval = -1
-plottime_interval = 0.003
 checkpoint_interval = -1
+max_timesteps = 128
