@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
+#include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include <array>
 #include <iostream>
@@ -87,6 +88,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::BCs_fc_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
+	using AMRSimulation<problem_t>::componentNames_fc_flat_;
 	using AMRSimulation<problem_t>::componentNames_fc_;
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
@@ -346,12 +348,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 
 	// add face-centered velocities
 	for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-		componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});
+		componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});  // rename to _fc_flatten_
+		componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"}); // array for fc_
 	}
 	// add mhd state variables
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-			componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-BField"});
+			componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-BField"});
+			componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-BField"});
 		}
 	}
 }
@@ -798,6 +802,36 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		const double rel_error = err_norm / sol_norm;
 		errorNorm_ = rel_error;
 		amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::Print() << "Checking fc-quantities in the " << idim << " direction\n";
+				const int ncomp = state_new_fc_[0][idim].nComp();
+				const int nghost = state_new_fc_[0][idim].nGrow();
+				amrex::MultiFab state_ref_level0(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0),
+								 ncomp, nghost);
+
+				// compute error norm
+				amrex::MultiFab residual(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0), ncomp,
+							 nghost);
+				amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
+				amrex::MultiFab::Saxpy(residual, -1., state_new_fc_[0][idim], 0, 0, ncomp, nghost);
+
+				amrex::Real sol_norm = 0.;
+				amrex::Real err_norm = 0.;
+				// compute rms of each component
+				for (int n = 0; n < ncomp; ++n) {
+					sol_norm += std::pow(state_ref_level0.norm1(n), 2);
+					err_norm += std::pow(residual.norm1(n), 2);
+				}
+				sol_norm = std::sqrt(sol_norm);
+				err_norm = std::sqrt(err_norm);
+
+				const double rel_error = err_norm / sol_norm;
+				errorNorm_ = rel_error;
+				amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
+					       << " and sol_norm = " << sol_norm << "\n";
+			}
+		}
 	}
 	amrex::Print() << '\n';
 

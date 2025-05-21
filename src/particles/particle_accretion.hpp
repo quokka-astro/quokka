@@ -66,7 +66,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 				const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
 				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
 				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
-				const double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk);
+				double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk);
+				if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
+					cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+				}
 				sum_rho += rho;
 				sum_px += px;
 				sum_py += py;
@@ -81,6 +84,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	const double vy_infty = sum_py / sum_rho;
 	const double vz_infty = sum_pz / sum_rho;
 	const double cs_infty = sum_cs / sum_rho;
+	AMREX_ASSERT(!std::isnan(rho_infty));
+	AMREX_ASSERT(rho_infty > 0.0);
+	AMREX_ASSERT(!std::isnan(cs_infty));
+	AMREX_ASSERT(cs_infty > 0.0);
 
 	// compute Bondi-Hoyle accretion radius, r_BH = G M / (v^2 + c^2)
 	const double v_infty_sqr = vx_infty * vx_infty + vy_infty * vy_infty + vz_infty * vz_infty;
@@ -89,7 +96,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	// Compute the accretion rate in the accretion zone,
 	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
 	constexpr double lambda = gcem::exp(1.5) / 4.0;
+	AMREX_ASSERT(rho_infty > 0.0);
 	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
+	AMREX_ASSERT(M_dot >= 0.0);
 
 	// Compute accretion kernel radius,
 	// r_K = dx / 4, if r_BH < dx / 4
@@ -137,6 +146,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
 		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx);
+		AMREX_ASSERT(M_dot >= 0.0);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
@@ -189,7 +199,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					//------------ This is the part that is different from UpdateParticleMassAndMomentumInBox -----------
 					// Compute the relative accretion rate and add it to local_accretion_rate
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+					AMREX_ASSERT(rho > 0.0);
 					const double rel_accretion_rate = M_dot_cell * dt / (vol * rho);
+					AMREX_ASSERT(rel_accretion_rate <= 0.0);
 					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk), rel_accretion_rate);
 					//----------------------------------------------------------------------------------------------------
 				}
@@ -223,7 +235,10 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 
 		// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 		constexpr double J = 0.25;
-		const double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k);
+		double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k);
+		if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
+			cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
+		}
 		const double rho_J = J * J * M_PI * cs_cell * cs_cell / (C::Gconst * (dx_max * dx_max));
 
 		// If (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1

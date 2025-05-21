@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include "AMReX_String.H"
 #include <cfenv>
 #include <cmath>
 #include <cstdio>
@@ -336,8 +337,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto CustomPlotFileName(const char *base, int lev) const -> std::string;
 	[[nodiscard]] auto GetPlotfileVarNames() const -> amrex::Vector<std::string>;
-	[[nodiscard]] auto PlotFileMF(int included_ghosts) -> amrex::Vector<amrex::MultiFab>;
-	[[nodiscard]] auto PlotFileMFAtLevel(int lev, int included_ghosts) -> amrex::MultiFab;
+	[[nodiscard]] auto GetPlotfileVarNames_fc() const -> std::array<amrex::Vector<std::string>, AMREX_SPACEDIM>;
+	[[nodiscard]] auto PlotFileMF_cc(int included_ghosts) -> amrex::Vector<amrex::MultiFab>;
+	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts) -> amrex::MultiFab;
+	[[nodiscard]] auto PlotFileMF_fc(int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM>;
+	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
 	void createDiagnostics();
 	void updateDiagnostics();
 	void doDiagnostics();
@@ -393,7 +397,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int nghost_cc_ = 4;						    // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
-	amrex::Vector<std::string> componentNames_fc_;
+	amrex::Vector<std::string> componentNames_fc_flat_;
+	std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> componentNames_fc_;
 	amrex::Vector<std::string> derivedNames_;
 	bool areInitialConditionsDefined_ = false;
 
@@ -2424,7 +2429,7 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 	amrex::Gpu::streamSynchronize();
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(const int lev, const int included_ghosts) -> amrex::MultiFab
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts) -> amrex::MultiFab
 {
 	// Combine state_new_cc_[lev] and derived variables in a new MF
 	const int ncomp_cc = state_new_cc_[lev].nComp();
@@ -2476,14 +2481,51 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 	return plotMF;
 }
 
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_) -> amrex::MultiFab
+{
+	int comp = 0;
+	int nvar_dim_tot_fc = 0;
+	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
+		nvar_dim_tot_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
+	}
+	const int ncomp_plotMF_fc = nvar_dim_tot_fc;
+
+	amrex::MultiFab plotMF_fc(grids[lev], dmap[lev], ncomp_plotMF_fc, nghost_fc_);
+
+	// Fill ghost zones for state_new_fc_
+	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
+		fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+	}
+
+	// copy data from face-centred state variables
+	for (int i = 0; i < ncomp_plotMF_fc; i++) {
+		amrex::MultiFab::Copy(plotMF_fc, state_new_fc_[lev][idim], i, comp, 1, nghost_fc_);
+		comp++;
+	}
+	return plotMF_fc;
+}
+
 // put together an array of multifabs for writing
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF(const int included_ghosts) -> amrex::Vector<amrex::MultiFab>
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const int included_ghosts) -> amrex::Vector<amrex::MultiFab>
 {
 	amrex::Vector<amrex::MultiFab> r;
 	for (int i = 0; i <= finest_level; ++i) {
-		r.push_back(PlotFileMFAtLevel(i, included_ghosts));
+		r.push_back(PlotFileMFAtLevel_cc(i, included_ghosts));
 	}
 	return r;
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_fc(const int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM>
+{
+	std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> r_fc;
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		for (int i = 0; i <= finest_level; ++i) {
+			r_fc[idim].push_back(PlotFileMFAtLevel_fc(i, idim, nghost_fc_));
+		}
+	}
+
+	return r_fc;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
@@ -2549,7 +2591,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	if (computeVars) {
 		for (int lev{0}; lev <= finestLevel(); ++lev) {
 			diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
-			amrex::MultiFab const mf = PlotFileMFAtLevel(lev, std::min(nghost_cc_, nghost_fc_));
+			amrex::MultiFab const mf = PlotFileMFAtLevel_cc(lev, std::min(nghost_cc_, nghost_fc_));
 			auto const varnames = GetPlotfileVarNames();
 
 			for (int v{0}; v < m_diagVars.size(); ++v) {
@@ -2658,11 +2700,24 @@ template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames
 	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
-			varnames.push_back(componentNames_fc_[icomp]);
+			varnames.push_back(componentNames_fc_flat_[icomp]);
 		}
 	}
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 	return varnames;
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames_fc() const -> std::array<amrex::Vector<std::string>, AMREX_SPACEDIM>
+{
+	std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> varnames_fc; // nvarTotal or perDim?
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarPerDim_fc; ++icomp) {
+				varnames_fc[idim].push_back(componentNames_fc_[idim][icomp]);
+			}
+		}
+	}
+	return varnames_fc;
 }
 
 // write plotfile to disk
@@ -2681,27 +2736,36 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #else
 	int included_ghosts = std::min(nghost_cc_, nghost_fc_);
 #endif
-	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(included_ghosts);
-	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf); // NOLINT(misc-const-correctness)
+	amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts);
+	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc); // NOLINT(misc-const-correctness)
 
 	const std::string &plotfilename = PlotFileName(istep[0]);
 	auto varnames = GetPlotfileVarNames();
-
-	// write plotfile
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 #ifdef QUOKKA_USE_OPENPMD
 	// TODO(bwibking): write particles using openPMD
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plot_file, tNew_[0], istep[0]);
+	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0]);
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	// sets the maximum number of binary files per MultiFab
-	// IMPORTANT: on Lustre, this MUST be set to either:
-	//   1. -1 (this writes one file per process), or
-	//   2. the number of OSTs (i.e., the stripe count)
 	amrex::VisMF::SetNOutFiles(plot_nfiles);
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
+		std::vector<std::string> dimNames = {"x", "y", "z"};
+		auto varnames_fc = GetPlotfileVarNames_fc();
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
+			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
+			const std::string &plotfilename_fc = CustomPlotFileName(plotfilename_base.c_str(), istep[0]);
+			auto varnames_fc_dim = varnames_fc[idim];
+			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc_dim, Geom(), tNew_[0], istep, refRatio());
+			WriteMetadataFile(plotfilename_fc + "/metadata.yaml");
+		}
+	}
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
+
 #ifdef AMREX_PARTICLES
 	// write particles
 	if (do_tracers != 0) {
