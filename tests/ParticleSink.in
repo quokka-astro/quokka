@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -3.949667304e+20 -3.949667304e+20 -3.949667304e+20
-geometry.prob_hi     =  3.949667304e+20 3.949667304e+20 3.949667304e+20
+geometry.prob_lo     =  -2.393565931e+17 -2.393565931e+17 -2.393565931e+17 
+geometry.prob_hi     =  2.393565931e+17 2.393565931e+17 2.393565931e+17 
 geometry.is_periodic =  1    1    1
 
 # *****************************************************************
@@ -36,13 +36,13 @@ quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Int
 quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
 
 problem.particles_file = "Sink_4.txt"
-#problem.particles_file = "Sink_40.txt"
 problem.refine_half_domain = false
 
 problem.n_amb = 1.0
 problem.T_amb = 718.0
-particles.SN_scheme = 1 					# 1: SN_thermal_or_thermal_momentum
+particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 1
+particles.sink_particle_use_uniform_kernel = true
 
 max_timesteps = 1
 plotfile_interval = 1
