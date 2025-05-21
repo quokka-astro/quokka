@@ -427,6 +427,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
 				    int evolution_stage_index = -1, int birth_time_index = -1)
 	{
+		// Requires CGS units
+	    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for StochasticStellarPopulation");
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleChecker,
