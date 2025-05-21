@@ -118,7 +118,6 @@ auto problem_main() -> int
 		}
 	}
 
-	// amrex::ParmParse const pp("problem");
 
 	// Problem initialization
 	QuokkaSimulation<ParticleSFProblem> sim(BCs_cc);
@@ -197,16 +196,16 @@ auto problem_main() -> int
 	const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
 	const double rel_error_num_stars = std::abs(num_all_stars - exp_num_stars) / exp_num_stars;
 
+	//Check gas mass 
+	const double initial_gas_mass = rho0 * cell_volume * nx * ny * nz;
+	const double final_gas_mass = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume; ;
+	const double rel_error_gas_mass = (final_gas_mass - initial_gas_mass - all_stars_total_mass);
+	
 	amrex::Print() << "\nRelative error:\n";
 	amrex::Print() << "rel_err(num_stars) = " << rel_error_num_stars << "\n";
 	amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
 	amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
-	// }
+	amrex::Print() << " Initial (gas mass) - Final (gas_mass) - Star Mass = " << rel_error_gas_mass << "\n";
 
-
-	//Check gas mass 
-
-	const double initial_gas_mass = rho0 * cell_volume * nx * ny * nz;
-	const double final_gas_mass = sim.getGasMass();
 	return 0;
 }
