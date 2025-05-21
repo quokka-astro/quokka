@@ -1435,15 +1435,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Sink accretion, stage 1: compute the accretion rate
 	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
-	// Sink formation. To be implemented later. We use accretion_rate_at_level to limit star formation at accretion sites. One way to do this
-	// is to disallow star formation if at least one of the cells in the formation region has a positive accretion rate.
-	// particleRegister_.applySinkFormation(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+	// Sink accretion, stage 2: update the particle states
+	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, geom[lev], lev, time, dt);
 
 	// Only create particles at the finest level to avoid duplicate particle creation in regions where finer levels exist
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
-
-	// Sink accretion, stage 2: update the particle states
-	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, geom[lev], lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
 	particleRegister_.depositSN(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);

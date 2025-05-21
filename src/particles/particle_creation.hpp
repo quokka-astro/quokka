@@ -204,9 +204,9 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 			// Only form a star if
 			// 1. Cell density is above Jeans density
-			// 2. Cell accretion rate is zero
+			// 2. Cell accretion rate (a non-positive number) is zero
 			// 3. Cell density is the local maximum density
-			if (cell_density > rho_J && accretion_rate_cell == 0.0) {
+			if (cell_density > rho_J && accretion_rate_cell >= 0.0) {
 				bool is_local_maximum = true;
 				for (int di = -3; di <= 3 && is_local_maximum; ++di) {
 					for (int dj = -3; dj <= 3 && is_local_maximum; ++dj) {
