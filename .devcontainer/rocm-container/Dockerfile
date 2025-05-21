@@ -7,7 +7,7 @@ ENV rocrand_DIR=/opt/rocm-6.4.0/lib/cmake/rocrand
 ENV hiprand_DIR=/opt/rocm-6.4.0/lib/cmake/hiprand
 ENV rocprim_DIR=/opt/rocm-6.4.0/lib/cmake/rocprim
 ENV rocsparse_DIR=/opt/rocm-6.4.0/lib/cmake/rocsparse
-ENV AMREX_AMD_ARCH=gfx908
+ENV AMREX_AMD_ARCH=gfx90a
 ENV CC=hipcc
 ENV CXX=hipcc
 
@@ -53,6 +53,29 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
     make -j$(nproc) && make install && \
     cd / && \
     rm -rf /tmp/build-adios2
+
+# Install Kokkos (needed for Viskores for ROCm)
+RUN mkdir -p /tmp/build-kokkos && cd /tmp/build-kokkos && \
+    wget -q https://github.com/kokkos/kokkos/releases/download/4.6.01/kokkos-4.6.01.tar.gz && \
+    tar xzf kokkos-4.6.01.tar.gz && \
+    mkdir build && cd build && \
+    cmake ../kokkos-4.6.01 -DKokkos_ENABLE_HIP=ON -DKokkos_ARCH_AMD_GFX90A=ON -DKokkos_ENABLE_ROCTHRUST=OFF -DKokkos_ENABLE_HIP_RELOCATABLE_DEVICE_CODE=OFF -DCMAKE_CXX_STANDARD=17 -DCMAKE_CXX_EXTENSIONS=OFF -DBUILD_SHARED_LIBS=ON && \
+    make -j$(nproc) && make install && \
+    cd / && \
+    rm -rf /tmp/build-kokkos
+
+# Install Viskores (volume rendering and isosurfaces)
+# NOTE: to build this, you need a Docker VM with a LARGE amount of RAM (at least 15 GB RAM, 4 GB swap)
+
+RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
+    wget -q https://github.com/Viskores/viskores/archive/refs/tags/v1.0.0.tar.gz && \
+    tar xzf v1.0.0.tar.gz && \
+    mkdir build && cd build && \
+    cmake ../viskores-1.0.0 -DViskores_ENABLE_RENDERING=ON -DViskores_USE_64BIT_IDS=OFF -DViskores_USE_DOUBLE_PRECISION=ON -DViskores_ENABLE_KOKKOS=ON -DVTKm_ENABLE_KOKKOS_THRUST=OFF -DCMAKE_HIP_FLAGS="-fPIC" -DCMAKE_CXX_FLAGS="-fPIC" && \
+    make -j$(nproc) && make install && \
+    cd / && \
+    rm -rf /tmp/build-viskores
+
 
 # Set the working directory and user
 WORKDIR /home/ubuntu
