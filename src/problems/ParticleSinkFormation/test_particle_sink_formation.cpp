@@ -138,54 +138,78 @@ auto problem_main() -> int
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
-	// evolve
+	// evolve to step 1
+	sim.maxTimesteps_ = 1;
 	sim.evolve();
 
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-
-	// get total gas mass of the final state
-	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	// get total gas mass after step 1
+	amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
 
 	int status = 0;
 
-	// get total particle mass of the final state
-	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	// get total particle mass after step 1
+	const auto &real_data_step1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	const int n_stars_step1 = static_cast<int>(real_data_step1.size());
+
+	if (n_stars_step1 == 0) {
+		status = 1;
+		amrex::Print() << "Test failed: no particles created in the formation step !!!\n";
+		return status;
+	}
+
+	const int mass_index = 3;
+	amrex::Real const m_stars_step1 = std::accumulate(real_data_step1.begin(), real_data_step1.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	const double m_tot_step1 = m_gas_step1 + m_stars_step1;
+
+	// Check relative error in the formation step and confirm mass is conserved to machine precision
+	const double rel_error_gas_mass_step1 = std::abs(m_gas_init - m_tot_step1) / m_gas_init;
+	amrex::Print() << "Step 1: rel_err(gas_mass) = " << rel_error_gas_mass_step1 << "\n";
+	int status_step1 = 1;
+	if (rel_error_gas_mass_step1 < 1.0e-13) {
+		status_step1 = 0;
+	}
+	status += status_step1;
+
+	if (status > 0) {
+		amrex::Print() << "Test failed: mass not conserved to machine precision in the formation step !!!\n";
+		return status;
+	}
+
+	// evolve to step 2
+	sim.maxTimesteps_ = 4;
+	sim.evolve();
+
+	// get total gas mass after step 2
+	amrex::Real const m_gas_step2 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+
+	// get total particle mass after step 2
+	const auto &real_data_step2 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	amrex::Real const m_stars_step2 = std::accumulate(real_data_step2.begin(), real_data_step2.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	const double m_tot_step2 = m_gas_step2 + m_stars_step2;
+
+	// Check relative error in the accretion step and confirm mass is conserved to within 1e-6
+	const double rel_error_gas_mass_step2 = std::abs(m_gas_init - m_tot_step2) / m_gas_init;
+	amrex::Print() << "Step 2: rel_err(gas_mass) = " << rel_error_gas_mass_step2 << "\n";
+	int status_step2 = 1;
+	if (rel_error_gas_mass_step2 < 1.0e-6) {
+		status_step2 = 0;
+	}
+	status += status_step2;
+
+	// find ratio of particle mass to gas mass
+	const double mass_ratio = m_stars_step2 / m_gas_step2;
+	amrex::Print() << "particle mass / gas mass = " << mass_ratio << "\n";
+
+	if (status > 0) {
+		amrex::Print() << "Test failed: mass not conserved in the accretion step !!!\n";
+	} else {
+		amrex::Print() << "Test passed\n";
+	}
+
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::Print() << "Initial state:\n";
-		amrex::Print() << "Gas mass = " << m_gas_init / M_sol << " Msun\n";
-
-		amrex::Print() << "Final state:\n";
-
-		const int mass_idx = 3;
-		double m_stars_final = 0.0;
-		const int num_stars = static_cast<int>(real_data_final.size());
-		for (int i = 0; i < num_stars; ++i) {
-			m_stars_final += real_data_final[i][mass_idx];
-		}
-		amrex::Print() << "Gas mass = " << m_gas_final / M_sol << " Msun\n";
-		amrex::Print() << "Particle mass = " << m_stars_final / M_sol << " Msun\n";
-		amrex::Print() << "Number of particles = " << num_stars << "\n";
-
-		// get gas+particle mass
-		const double m_final = m_gas_final + m_stars_final;
-		amrex::Print() << "gas+particle mass = " << m_final / M_sol << " Msun\n";
-
-		// relative error
-		const double rel_error_gas_mass = std::abs(m_gas_init - m_final) / m_gas_init;
-		amrex::Print() << "\nRelative error:\n";
-		amrex::Print() << "rel_err(gas_mass) = " << rel_error_gas_mass << "\n";
-
-		if (num_stars == 0) {
-			status = 1;
-			amrex::Print() << "Test failed: no particles created !!!\n";
-		} else if (std::isnan(rel_error_gas_mass) || rel_error_gas_mass > 1.0e-10) {
-			status = 1;
-			amrex::Print() << "Test failed: mass not conserved !!!\n";
-		} else {
-			amrex::Print() << "Test passed\n";
-		}
-
-		// plot
 		std::vector<double> xs(nx);
 		std::vector<double> rho_x(nx);
 		std::vector<double> rho0_x(nx);
@@ -208,6 +232,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, rho_x, rho_args);
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("rho (g cm^-3)");
+		matplotlibcpp::title(fmt::format("t = {:.2e}", sim.tNew_[0]));
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./sink_formation_density.pdf");
 #endif
