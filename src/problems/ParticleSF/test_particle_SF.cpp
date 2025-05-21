@@ -103,7 +103,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::T
 
 auto problem_main() -> int
 {
-	
+
 	const int ncomp_cc = Physics_Indices<ParticleSFProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
@@ -113,7 +113,6 @@ auto problem_main() -> int
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
-
 
 	// Problem initialization
 	QuokkaSimulation<ParticleSFProblem> sim(BCs_cc);
@@ -142,8 +141,7 @@ auto problem_main() -> int
 	const int ny = static_cast<int>((prob_hi[1] - prob_lo[1]) / dx0[1]);
 	const int nz = static_cast<int>((prob_hi[2] - prob_lo[2]) / dx0[2]);
 
-
-	//Check particle stats
+	// Check particle stats
 
 	const amrex::Real eps_star = 0.5;
 	const double exp_Mstar_high_mean = 19.39;
@@ -192,17 +190,18 @@ auto problem_main() -> int
 	const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
 	const double rel_error_num_stars = std::abs(num_all_stars - exp_num_stars) / exp_num_stars;
 
-	//Check gas mass 
+	// Check gas mass
 	const double initial_gas_mass = rho0 * cell_volume * nx * ny * nz;
-	const double final_gas_mass = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume; ;
+	const double final_gas_mass = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
+	;
 	const double change_gas_mass = initial_gas_mass - (all_stars_total_mass - high_mass_stars_total_mass);
-	
+
 	amrex::Print() << "\nRelative error:\n";
 	amrex::Print() << "rel_err(num_stars) = " << rel_error_num_stars << "\n";
 	amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
 	amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
-	amrex::Print() << "Initial (gas mass) - Mass of Low Mass Stars =  " << change_gas_mass/M_sol << " Msun \n";
-	amrex::Print() << "Rel error wrt final gas mass = " << std::abs(final_gas_mass - change_gas_mass)/final_gas_mass  << "\n";
+	amrex::Print() << "Initial (gas mass) - Mass of Low Mass Stars =  " << change_gas_mass / M_sol << " Msun \n";
+	amrex::Print() << "Rel error wrt final gas mass = " << std::abs(final_gas_mass - change_gas_mass) / final_gas_mass << "\n";
 
 	return 0;
 }

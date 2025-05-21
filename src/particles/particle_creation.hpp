@@ -331,10 +331,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
 								for (int kk = k - 1; kk <= k + 1; ++kk) {
 									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) /rho_adj;
-									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) /rho_adj;
-									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) /rho_adj;
-									
+									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) / rho_adj;
+									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) / rho_adj;
+									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) / rho_adj;
+
 									numx += rho_adj * (vx_adj - v_cm_x) * (vx_adj - v_cm_x);
 									numy += rho_adj * (vy_adj - v_cm_y) * (vy_adj - v_cm_y);
 									numz += rho_adj * (vz_adj - v_cm_z) * (vz_adj - v_cm_z);
@@ -428,7 +428,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				    int evolution_stage_index = -1, int birth_time_index = -1)
 	{
 		// Requires CGS units
-	    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for StochasticStellarPopulation");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
+						 "UnitSystem must be CGS for StochasticStellarPopulation");
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleChecker,
