@@ -9,14 +9,14 @@ COPY rocm_so.conf rocm_so.conf
 RUN if ! zypper repos -E | grep devel_languages_perl; then \
     zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.6/devel:languages:perl.repo; \
     fi && \
-    echo "[ROCm-6.4.0]" | tee --append /etc/zypp/repos.d/rocm.repo && \
-    echo "name=ROCm6.4.0" | tee --append /etc/zypp/repos.d/rocm.repo && \
+    echo "[ROCm-6.4.1]" | tee --append /etc/zypp/repos.d/rocm.repo && \
+    echo "name=ROCm6.4.1" | tee --append /etc/zypp/repos.d/rocm.repo && \
     echo "baseurl=https://repo.radeon.com/rocm/zyp/6.4/main" | tee --append /etc/zypp/repos.d/rocm.repo && \
     echo "enabled=1" | tee --append /etc/zypp/repos.d/rocm.repo && \
     echo "gpgcheck=1" | tee --append /etc/zypp/repos.d/rocm.repo && \
     echo "gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" | tee --append /etc/zypp/repos.d/rocm.repo && \
     zypper --non-interactive --gpg-auto-import-keys refresh && \
-    zypper --non-interactive install rocm6.4.0 && \
+    zypper --non-interactive install rocm6.4.1 && \
     zypper clean --all && \
     cat rocm_so.conf >> /etc/ld.so.conf.d/rocm.conf && \
     rm rocm_so.conf && \
@@ -32,7 +32,7 @@ RUN zypper --non-interactive install wget tar gzip gcc gcc-fortran file gcc-c++ 
     wget --progress=bar:force https://www.mpich.org/static/downloads/3.4.3/mpich-3.4.3.tar.gz && \
     tar xzf mpich-3.4.3.tar.gz && \
     cd mpich-3.4.3 && \
-    ./configure --with-device=ch4:ofi --prefix=/opt/mpich/3.4.3 --with-hip=/opt/rocm-6.4.0/hip && \
+    ./configure --with-device=ch4:ofi --prefix=/opt/mpich/3.4.3 --with-hip=/opt/rocm/hip && \
     make install -j7 && \
     cd / && \
     rm -rf mpich-3.4.3/ mpich-3.4.3.tar.gz
