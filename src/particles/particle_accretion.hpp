@@ -23,13 +23,12 @@ namespace SinkAccretionUtils
 {
 
 constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
-static constexpr double cs_floor_ = 1.33e4; // = 0.133 km/s = sqrt(k_B * 5 K / (2.33 m_p))
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass,
-								   double par_x, double par_y, double par_z, double cs_floor,
+								   double par_x, double par_y, double par_z,
 								   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 								   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> std::tuple<double, double>
 {
@@ -71,7 +70,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 				if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 					cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 				}
-				cs = std::max(cs, cs_floor);
 				sum_rho += rho;
 				sum_px += px;
 				sum_py += py;
@@ -139,8 +137,6 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
 
-	const double cs_floor_d = cs_floor_;
-
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
@@ -150,7 +146,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
 		const auto [M_dot, r_K] =
-		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), cs_floor_d, plo, dx);
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx);
 		AMREX_ASSERT(M_dot >= 0.0);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
@@ -227,8 +223,6 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	const auto &dx = geom.CellSizeArray();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
-	const double cs_floor_d = cs_floor_;
-
 	amrex::ParallelFor(accretion_rate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		const double accretion_rate_floor = -0.25;
@@ -246,7 +240,6 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 			cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
 		}
-		cs_cell = std::max(cs_cell, cs_floor_d);
 		const double rho_J = J * J * M_PI * cs_cell * cs_cell / (C::Gconst * (dx_max * dx_max));
 
 		// If (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1
@@ -279,8 +272,6 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
 
-	const double cs_floor_d = cs_floor_;
-
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
@@ -290,7 +281,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
 		const auto [M_dot, r_K] =
-		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), cs_floor_d, plo, dx);
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
