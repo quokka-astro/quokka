@@ -97,6 +97,8 @@ RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
     cd / && \
     rm -rf /tmp/build-viskores
 
+# add packages needed to download and build Quokka
+RUN zypper --non-interactive install git gdb hdf5-devel python3-devel && zypper clean --all
 
 # create user 'leap'
 RUN useradd -ms /bin/bash leap
