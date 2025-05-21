@@ -200,7 +200,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-			const amrex::Real prob_star_formation = eps_ff_ * dt / eps_star / t_ff;
+			const amrex::Real prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
 
@@ -313,18 +313,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
 								for (int kk = k - 1; kk <= k + 1; ++kk) {
-
-									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									numx += rho_adj * vx_adj;
-									numy += rho_adj * vy_adj;
-									numz += rho_adj * vz_adj;
-									denominator += rho_adj;
+									numx += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index));
+									numy += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index));
+									numz += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index));
+									denominator += state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
 								}
 							}
 						}
@@ -338,18 +330,14 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
 								for (int kk = k - 1; kk <= k + 1; ++kk) {
-
-									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
 									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) /rho_adj;
+									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) /rho_adj;
+									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) /rho_adj;
+									
 									numx += rho_adj * (vx_adj - v_cm_x) * (vx_adj - v_cm_x);
 									numy += rho_adj * (vy_adj - v_cm_y) * (vy_adj - v_cm_y);
 									numz += rho_adj * (vz_adj - v_cm_z) * (vz_adj - v_cm_z);
-
 									denominator += rho_adj;
 								}
 							}
@@ -362,9 +350,24 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						const double signy = v_cm_y == 0.0 ? 1.0 : (std::abs(v_cm_y) / v_cm_y);
 						const double signz = v_cm_z == 0.0 ? 1.0 : (std::abs(v_cm_z) / v_cm_z);
 
-						p.rdata(mass_idx + 1) = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
-						p.rdata(mass_idx + 2) = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
-						p.rdata(mass_idx + 3) = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
+						double vx_new = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
+						double vy_new = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
+						double vz_new = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
+
+						// Enforce maximum speed limit of 1000 km/s
+						{
+							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
+							constexpr double max_speed = 1.0e8; // cm s^{-1}
+							if (speed > max_speed) {
+								double const scale = max_speed / speed;
+								vx_new *= scale;
+								vy_new *= scale;
+								vz_new *= scale;
+								p.rdata(mass_idx + 1) = vx_new;
+								p.rdata(mass_idx + 2) = vy_new;
+								p.rdata(mass_idx + 3) = vz_new;
+							}
+						}
 
 						// Sample mass randomly from the IMF between m_star_high, which is the min mass and max mass in the Sukhbold
 						// table
@@ -381,7 +384,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 						p.idata(evolution_stage_index) =
 						    interpolate_fate(p.rdata(mass_idx)) == 1 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : 0;
-						;
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
 					}
 				}
