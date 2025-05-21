@@ -52,7 +52,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	auto const &y_arr = interp_star_fate;
 	const double mass_in_Msun = mass_star / C::M_solar;
 	AMREX_ASSERT(mass_in_Msun >= 0.0);
-	amrex::Real fate_interp ; 
+	amrex::Real fate_interp;
 
 	// Interpolate to find the fate of all other masses
 	fate_interp = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
@@ -61,7 +61,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	if (mass_star > interp_mass_star[FATE_ARR_SIZE - 1]) {
 		fate_interp = interp_star_fate[FATE_ARR_SIZE - 1]; // NOLINT
 	}
-	
+
 	return (fate_interp < 0.5 ? 0 : 1);
 }
 
