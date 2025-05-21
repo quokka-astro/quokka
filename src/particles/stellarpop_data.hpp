@@ -52,7 +52,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	auto const &y_arr = interp_star_fate;
 	const double mass_in_Msun = mass_star / C::M_solar;
 	AMREX_ASSERT(mass_in_Msun >= 0.0);
-	
+
 	// all stars above max mass have same fate as max mass star
 	if (mass_star > interp_mass_star[FATE_ARR_SIZE - 1]) {
 		return static_cast<int>(interp_star_fate[FATE_ARR_SIZE - 1]); // NOLINT
