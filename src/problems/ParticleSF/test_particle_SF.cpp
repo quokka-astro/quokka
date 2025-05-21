@@ -107,19 +107,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::T
 
 auto problem_main() -> int
 {
-	// auto isNormalComp = [=](int n, int dim) {
-	// 	if ((n == HydroSystem<ParticleSFProblem>::x1Momentum_index) && (dim == 0)) {
-	// 		return true;
-	// 	}
-	// 	if ((n == HydroSystem<ParticleSFProblem>::x2Momentum_index) && (dim == 1)) {
-	// 		return true;
-	// 	}
-	// 	if ((n == HydroSystem<ParticleSFProblem>::x3Momentum_index) && (dim == 2)) {
-	// 		return true;
-	// 	}
-	// 	return false;
-	// };
-
+	
 	const int ncomp_cc = Physics_Indices<ParticleSFProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
@@ -143,29 +131,6 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	// // get total mass of the initial gas
-	// amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	// amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	// amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	// double total_total_mass = NAN;
-	// double total_total_mass_final = NAN;
-	// double total_particle_mass = 0.0;
-
-	// // get total particle mass
-	// const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
-	// if (amrex::ParallelDescriptor::IOProcessor()) {
-	// 	// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
-	// 	// d[3]; });
-	// 	for (const auto &p : real_data) {
-	// 		total_particle_mass += p[3];
-	// 	}
-	// 	total_total_mass = total_mass_init + total_particle_mass;
-	// 	amrex::Print() << "\nBefore evolution:\n";
-	// 	amrex::Print() << "Total gas mass = " << total_mass_init << "\n";
-	// 	amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";
-	// 	amrex::Print() << "Total total mass = " << total_total_mass << "\n";
-	// }
-
 	// evolve
 	sim.evolve();
 
@@ -182,6 +147,9 @@ auto problem_main() -> int
 	const int ny = static_cast<int>((prob_hi[1] - prob_lo[1]) / dx0[1]);
 	const int nz = static_cast<int>((prob_hi[2] - prob_lo[2]) / dx0[2]);
 
+
+	//Check particle stats
+
 	const amrex::Real eps_star = 0.5;
 	const double exp_Mstar_high_mean = 19.39;
 	const double exp_fstar_high = 0.220;
@@ -196,7 +164,6 @@ auto problem_main() -> int
 	// get total mass of the final particles
 	const auto [real_data_final, idata_final] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
-	// if (amrex::ParallelDescriptor::IOProcessor()) {
 	const int mass_idx = 3;
 	double high_mass_stars_total_mass = 0.0;
 	double all_stars_total_mass = 0.0;
@@ -236,5 +203,10 @@ auto problem_main() -> int
 	amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
 	// }
 
+
+	//Check gas mass 
+
+	const double initial_gas_mass = rho0 * cell_volume * nx * ny * nz;
+	const double final_gas_mass = sim.getGasMass();
 	return 0;
 }
