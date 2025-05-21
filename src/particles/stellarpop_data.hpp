@@ -19,7 +19,7 @@
 #include "math/interpolate.hpp"
 
 using Real = amrex::Real;
-static constexpr int FATE_ARR_SIZE = 202;
+static constexpr int FATE_ARR_SIZE = 201;
 static constexpr int AGE_ARR_SIZE = 197;
 static constexpr int YR_TO_SEC = 3.15576e7; // seconds in a year
 
@@ -35,30 +35,30 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	    22.8, 22.9, 23.,  23.1, 23.2, 23.3, 23.4,  23.5, 23.6,  23.7, 23.8,	 23.9, 24.,   24.1, 24.2,  24.3, 24.4,	24.5,  24.6, 24.7, 24.8, 24.9, 25.,
 	    25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7,  25.8, 25.9,  26.,  26.1,	 26.2, 26.3,  26.4, 26.5,  26.6, 26.7,	26.8,  26.9, 27.,  27.1, 27.2, 27.3,
 	    27.4, 27.5, 27.6, 27.7, 27.8, 27.9, 28.,   28.1, 28.2,  28.3, 28.4,	 28.5, 28.6,  28.7, 28.8,  28.9, 29.,	29.1,  29.2, 29.3, 29.4, 29.5, 29.6,
-	    29.7, 29.8, 29.9, 30.,  31.,  32.,	33.,   35.,  40.,   45.,  50.,	 55.,  60.,   70.,  80.,   100., 120.,	3.00e2};
+	    29.7, 29.8, 29.9, 30.,  31.,  32.,	33.,   35.,  40.,   45.,  50.,	 55.,  60.,   70.,  80.,   100., 120.};
 
-	const amrex::GpuArray<Real, FATE_ARR_SIZE> interp_star_fate{
+	const amrex::GpuArray<Real, FATE_ARR_SIZE> interp_star_fate = {
 	    // if fate==1, star will go SN, inject energy!
-	    // if fate==0, star is a low mass star
+	    // if fate==0, star will not go SN, no energy injection
 	    0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
 	    1., 1., 1., 0., 0., 1., 0., 0., 0., 0., 1., 1., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0., 1., 1., 1., 1., 0., 0., 1., 0.,
 	    1., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 1., 1., 1., 1., 1., 0., 0., 1., 0., 1., 1., 1., 0., 0.,
 	    1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
 	    0., 0., 0., 1., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0., 0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-	    0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 1., 1.
-
-	};
+	    0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 1.};
 
 	// Interpolate to find the accurate fates from array
 	auto const &x_arr = interp_mass_star;
 	auto const &y_arr = interp_star_fate;
 	const double mass_in_Msun = mass_star / C::M_solar;
 	AMREX_ASSERT(mass_in_Msun >= 0.0);
-	AMREX_ASSERT(mass_in_Msun <= 3.00e2);
-	if (mass_in_Msun >= 3.00e2) {
-		// In release build, return 1 anyway to avoid catastrophic crash
-		return 1;
+
+	// all stars above max mass have same fate as max mass star
+	if(mass_star > interp_mass_star[FATE_ARR_SIZE - 1]) {
+		return interp_star_fate[FATE_ARR_SIZE - 1]; 
 	}
+
+	// Interpolate to find the fate of all other masses
 	amrex::Real fate_interp = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
 	return (fate_interp < 0.5 ? 0 : 1);
 }
