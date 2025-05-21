@@ -1,11 +1,11 @@
-#ifndef PARTICLE_SINK_ACCRETION_HPP_ // NOLINT
-#define PARTICLE_SINK_ACCRETION_HPP_
+#ifndef TEST_PARTICLE_ACCRETION_HPP_ // NOLINT
+#define TEST_PARTICLE_ACCRETION_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file particle_sink_accretion.hpp
+/// \file test_particle_accretion.hpp
 /// \brief Defines a test problem for Bondi-Hoyle accretion.
 ///
 
@@ -19,4 +19,4 @@
 // function definitions
 auto problem_main() -> int;
 
-#endif // PARTICLE_SINK_ACCRETION_HPP_
+#endif // TEST_PARTICLE_ACCRETION_HPP_
