@@ -93,10 +93,6 @@ template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::T
 {
 	// tag cells for refinement: static mesh refinement for the whole domain
 
-	// auto const &dx = geom[lev].CellSizeArray();
-	// auto const &plo = geom[lev].ProbLoArray();
-	// auto const &phi = geom[lev].ProbHiArray();
-
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto tag = tags.array(mfi);
