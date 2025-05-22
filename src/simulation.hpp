@@ -1442,6 +1442,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
+	// TODO(cch): put accretion_rate_at_level inside depositSN
 	particleRegister_.depositSN(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 }
 #endif // AMREX_SPACEDIM == 3
