@@ -1,6 +1,7 @@
 #ifndef PARTICLE_CREATION_HPP_
 #define PARTICLE_CREATION_HPP_
 
+#include "AMReX_BLassert.H"
 #include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
@@ -326,11 +327,15 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						v_cm_y = numy / denominator;
 						v_cm_z = numz / denominator;
 
+						numx = 0.0;
+						numy = 0.0;
+						numz = 0.0;
 						// Use the centre of mass velocity to get the velocity dispersion
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
 								for (int kk = k - 1; kk <= k + 1; ++kk) {
 									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+									AMREX_ASSERT(rho_adj > 0.0);
 									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) / rho_adj;
 									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) / rho_adj;
 									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) / rho_adj;
@@ -342,6 +347,11 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 								}
 							}
 						}
+						AMREX_ASSERT(denominator > 0.0);
+						AMREX_ASSERT(numx >= 0.0);
+						AMREX_ASSERT(numy >= 0.0);
+						AMREX_ASSERT(numz >= 0.0);
+
 						const double sigma_sq_x = numx / denominator;
 						const double sigma_sq_y = numy / denominator;
 						const double sigma_sq_z = numz / denominator;
