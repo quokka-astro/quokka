@@ -147,7 +147,7 @@ auto problem_main() -> int
 	const double exp_Mstar_high_mean = 19.39;
 	const double exp_fstar_high = 0.220;
 	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
-	const amrex::Real prob_star_formation = (eps_ff/eps_star) * sim.initDt_ / t_ff;
+	const amrex::Real prob_star_formation = (eps_ff / eps_star) * sim.initDt_ / t_ff;
 	amrex::Print() << "prob_star_formation = " << prob_star_formation << "\n";
 
 	const amrex::Real particle_mass = rho0 * cell_volume * eps_star * sim.initDt_ / t_ff;
