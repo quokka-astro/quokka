@@ -257,7 +257,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
 				const int nscalars = Physics_Traits<problem_t>::numPassiveScalars;
-				const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
 				double total_momx = 0.0;
