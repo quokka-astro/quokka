@@ -2439,8 +2439,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 	}
 	const int ncomp_plotMF_fc = nvar_dim_tot_fc;
 
-	amrex::MultiFab plotMF_fc(grids[lev], dmap[lev], ncomp_plotMF_fc, nghost_fc_);
-
+	amrex::MultiFab plotMF_fc(amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim)), dmap[lev], ncomp_plotMF_fc, nghost_fc_);
 	// Fill ghost zones for state_new_fc_
 	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
 		fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
