@@ -178,6 +178,8 @@ auto problem_main() -> int
 		amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";
 	}
 
+	const double total_total_mass_init = total_mass_init + total_particle_mass;
+
 	// evolve
 	sim.evolve();
 
@@ -201,20 +203,26 @@ auto problem_main() -> int
 		for (const auto &p : real_data_final) {
 			total_particle_mass_final += p[3];
 		}
+		const double total_total_mass_final = total_mass_final + total_particle_mass_final;
 
-		// change in gas mass
+		// compute difference in mass changes
 		const double gas_mass_change = total_mass_final - total_mass_init;
 		const double particle_mass_change = total_particle_mass_final - total_particle_mass;
-		const double rel_mass_error = std::abs(gas_mass_change + particle_mass_change) / std::abs(gas_mass_change);
+		const double rel_mass_error = gas_mass_change == 0.0 ? 0.0 : std::abs(gas_mass_change + particle_mass_change) / std::abs(gas_mass_change);
 		amrex::Print() << "\nAfter evolution:\n";
 		amrex::Print() << "Gas mass change = " << gas_mass_change << "\n";
 		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
 		amrex::Print() << "Total mass change = " << gas_mass_change + particle_mass_change << "\n";
-		amrex::Print() << "Relative mass error = " << rel_mass_error << "\n";
+		amrex::Print() << "Relative error in change of mass = " << rel_mass_error << "\n";
 
-		// should be machine precision (1e-14), but the change is 5 orders of magnitude smaller than the initial mass, so an error of 1e-9 is expected
-		const double rel_mass_error_tol = 1.0e-8;
-		if (!(rel_mass_error < rel_mass_error_tol)) {
+		// compute relative error in the change of total mass
+		const double rel_error_total_mass = std::abs(total_total_mass_final - total_total_mass_init) / total_total_mass_init;
+		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass << "\n";
+
+		// Note that while the error relative to the total mass (gas + particles) should be within machine precision (1e-14), the error relative
+		// to the *change* could be large because the change is several orders of magnitude smaller than the total mass.
+		const double rel_error_tol = 1.0e-14;
+		if (!(rel_error_total_mass < rel_error_tol)) {
 			status = 1;
 		}
 
@@ -257,8 +265,8 @@ auto problem_main() -> int
 		amrex::Print() << "Solution norm = " << sol_norm << "\n";
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
-		const double rel_error_tol = 1.0e-6;
-		if (!(rel_error < rel_error_tol)) {
+		const double rel_error2_tol = 1.0e-6;
+		if (!(rel_error < rel_error2_tol)) {
 			status = 1;
 		}
 
