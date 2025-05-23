@@ -167,7 +167,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static constexpr amrex::Real J = 0.5;	     // Jeans parameter
 
 	// Constants for the Chabrier IMF
-	// These are the parameters used in ChabrierIMGCalculation.nb
+	// These are the parameters used in extern/ChabrierIMGCalculation.nb
 	static constexpr amrex::Real m_star_high = 9.0 * C::M_solar; // all stars above this mass are considered high mass stars
 	static constexpr amrex::Real m_imf_max = 120.0 * C::M_solar; // high mass limit of the IMF
 	static constexpr amrex::Real alpha = 2.35;		     // slope of the powerlaw
