@@ -66,18 +66,16 @@ constexpr double delta_b = 1e-6;
 
 constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
 constexpr double magnetosonic_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
-// const double bg_mag_x1 = 0.0;
-// const double bg_mag_x2 = 0.0;
 constexpr double bg_mag_x3 = bg_mag_amplitude;
 
-auto compute_omega(double k_amplitude, double magnetosonic_speed, double alfven_speed, double sound_speed, double cos_theta) -> double
+auto compute_omega() -> double
 {
 	return std::sqrt(std::pow(k_amplitude, 2) / 2.0 *
 			 (std::pow(magnetosonic_speed, 2) +
 			  std::sqrt(std::pow(magnetosonic_speed, 4) - 4.0 * std::pow(alfven_speed, 2) * std::pow(sound_speed, 2) * std::pow(cos_theta, 2))));
 }
 
-const double omega = compute_omega(k_amplitude, magnetosonic_speed, alfven_speed, sound_speed, cos_theta); // NOLINT(cert-err58-cpp)
+const double omega = compute_omega(); // NOLINT(cert-err58-cpp)
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double x2, double /*x3*/, double time)
 {
