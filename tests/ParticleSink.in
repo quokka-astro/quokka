@@ -44,5 +44,5 @@ particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 1
 particles.sink_particle_use_uniform_kernel = true
 
-max_timesteps = 1
+max_timesteps = 3
 plotfile_interval = 1

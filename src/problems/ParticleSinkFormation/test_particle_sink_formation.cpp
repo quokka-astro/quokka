@@ -107,6 +107,14 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 	}
 }
 
+template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
+{
+	// read particles from ASCII file
+	const int nreal_extra = 4; // mass vx vy vz
+	SinkParticles->SetVerbose(1);
+	SinkParticles->InitFromAsciiFile("Sink_v2.txt", nreal_extra, nullptr);
+}
+
 auto problem_main() -> int
 {
 	const int ncomp_cc = Physics_Indices<SinkProblem>::nvarTotal_cc;
@@ -138,15 +146,20 @@ auto problem_main() -> int
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
+	// get total particle mass of the initial state
+	const int mass_index = 3;
+	const auto &real_data_init = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	const double m_tot_init = m_gas_init + m_stars_init;
+
+	int status = 0;
+
 	// evolve to step 1
 	sim.maxTimesteps_ = 1;
 	sim.evolve();
 
 	// get total gas mass after step 1
 	amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
-
-	int status = 0;
 
 	// get total particle mass after step 1
 	const auto &real_data_step1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
@@ -158,13 +171,16 @@ auto problem_main() -> int
 		return status;
 	}
 
-	const int mass_index = 3;
 	amrex::Real const m_stars_step1 = std::accumulate(real_data_step1.begin(), real_data_step1.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_step1 = m_gas_step1 + m_stars_step1;
 
+	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
+	amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
+	amrex::Print() << "Initial total mass = " << m_tot_init << "\n";
+
 	// Check relative error in the formation step and confirm mass is conserved to machine precision
-	const double rel_error_gas_mass_step1 = std::abs(m_gas_init - m_tot_step1) / m_gas_init;
-	amrex::Print() << "Step 1: rel_err(gas_mass) = " << rel_error_gas_mass_step1 << "\n";
+	const double rel_error_gas_mass_step1 = std::abs(m_tot_init - m_tot_step1) / m_tot_init;
+	amrex::Print() << "Step 1: rel_err(total_mass) = " << rel_error_gas_mass_step1 << "\n";
 	int status_step1 = 1;
 	if (rel_error_gas_mass_step1 < 1.0e-13) {
 		status_step1 = 0;
@@ -176,29 +192,29 @@ auto problem_main() -> int
 		return status;
 	}
 
-	// evolve to step 2
-	sim.maxTimesteps_ = 4;
+	// evolve to the end
+	sim.maxTimesteps_ = 2;
 	sim.evolve();
 
-	// get total gas mass after step 2
-	amrex::Real const m_gas_step2 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	// get total gas mass after the end
+	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
-	// get total particle mass after step 2
-	const auto &real_data_step2 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	amrex::Real const m_stars_step2 = std::accumulate(real_data_step2.begin(), real_data_step2.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
-	const double m_tot_step2 = m_gas_step2 + m_stars_step2;
+	// get total particle mass after the end
+	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	const double m_tot_final = m_gas_final + m_stars_final;
 
 	// Check relative error in the accretion step and confirm mass is conserved to within 1e-6
-	const double rel_error_gas_mass_step2 = std::abs(m_gas_init - m_tot_step2) / m_gas_init;
-	amrex::Print() << "Step 2: rel_err(gas_mass) = " << rel_error_gas_mass_step2 << "\n";
-	int status_step2 = 1;
-	if (rel_error_gas_mass_step2 < 1.0e-6) {
-		status_step2 = 0;
+	const double rel_error_gas_mass_final = std::abs(m_tot_init - m_tot_final) / m_tot_init;
+	amrex::Print() << "Final: rel_err(total_mass) = " << rel_error_gas_mass_final << "\n";
+	int status_final = 1;
+	if (rel_error_gas_mass_final < 1.0e-6) {
+		status_final = 0;
 	}
-	status += status_step2;
+	status += status_final;
 
 	// find ratio of particle mass to gas mass
-	const double mass_ratio = m_stars_step2 / m_gas_step2;
+	const double mass_ratio = m_stars_final / m_gas_final;
 	amrex::Print() << "particle mass / gas mass = " << mass_ratio << "\n";
 
 	if (status > 0) {
