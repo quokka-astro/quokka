@@ -35,14 +35,7 @@ quokka.slice_z.int    = 1                   # Output cadence (in number of coars
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
 
-problem.particles_file = "Sink_4.txt"
-problem.refine_half_domain = false
-
-problem.n_amb = 1.0
-problem.T_amb = 718.0
-particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 1
-particles.sink_particle_use_uniform_kernel = true
 
-max_timesteps = 3
+max_timesteps = 2
 plotfile_interval = 1

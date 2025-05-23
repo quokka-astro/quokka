@@ -31,7 +31,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
-const double sf_cell_density = 1.0e5 * C::m_p; // g cm^-3
+const double sf_cell_density = 1.0e2 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
@@ -59,6 +59,14 @@ template <> struct Physics_Traits<SinkProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
+
+template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
+{
+	// read particles from ASCII file
+	const int nreal_extra = 4; // mass vx vy vz
+	SinkParticles->SetVerbose(1);
+	SinkParticles->InitFromAsciiFile("Sink_v2.txt", nreal_extra, nullptr);
+}
 
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -107,23 +115,36 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 	}
 }
 
-template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
-{
-	// read particles from ASCII file
-	const int nreal_extra = 4; // mass vx vy vz
-	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile("Sink_v2.txt", nreal_extra, nullptr);
-}
-
 auto problem_main() -> int
 {
+	auto isNormalComp = [=](int n, int dim) {
+		if ((n == HydroSystem<SinkProblem>::x1Momentum_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == HydroSystem<SinkProblem>::x2Momentum_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == HydroSystem<SinkProblem>::x3Momentum_index) && (dim == 2)) {
+			return true;
+		}
+		return false;
+	};
+
 	const int ncomp_cc = Physics_Indices<SinkProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// periodic boundaries
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			// // periodic boundaries
+			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			// octant symmetry
+			if (isNormalComp(n, i)) {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+			} else {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+			}
 		}
 	}
 
@@ -208,7 +229,7 @@ auto problem_main() -> int
 	const double rel_error_gas_mass_final = std::abs(m_tot_init - m_tot_final) / m_tot_init;
 	amrex::Print() << "Final: rel_err(total_mass) = " << rel_error_gas_mass_final << "\n";
 	int status_final = 1;
-	if (rel_error_gas_mass_final < 1.0e-6) {
+	if (rel_error_gas_mass_final < 1.0e-9) {
 		status_final = 0;
 	}
 	status += status_final;

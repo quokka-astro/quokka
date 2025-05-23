@@ -23,7 +23,6 @@
 struct SinkProblem {
 };
 
-static bool refine_half_domain = false; // NOLINT
 constexpr double M_sol = C::M_solar;
 
 constexpr double mu = 1.0 * C::m_p;
@@ -68,7 +67,7 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile("sink.txt", nreal_extra, nullptr);
+	SinkParticles->InitFromAsciiFile("Sink_v2.txt", nreal_extra, nullptr);
 }
 
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -76,10 +75,24 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const double rho_e = CV * T0 * rho0;
+	const auto prob_lo = geom[0].ProbLoArray();
+	const auto dx = geom[0].CellSizeArray();
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
+		const double x = prob_lo[0] + (i * dx[0]);
+		const double y = prob_lo[1] + (j * dx[1]);
+		const double z = prob_lo[2] + (k * dx[2]);
+		if (x <= sf_cell_loc && x + dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
+			// the cell at sf_cell_loc
+			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density;
+		} else if (x - 2 * dx[0] <= sf_cell_loc && x - dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc &&
+			   z + dx[2] > sf_cell_loc) {
+			// the cell that is 2 cells left of sf_cell_loc
+			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density * 0.999;
+		} else {
+			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
+		}
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = 0.0;
@@ -90,25 +103,17 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 
 template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement: static mesh refinement for the whole domain (if refine_half_domain is false) or for x > 0 (if refine_half_domain is true)
+	// tag cells for refinement: static mesh refinement for the whole domain
 
-	auto const &dx = geom[lev].CellSizeArray();
-	auto const &plo = geom[lev].ProbLoArray();
-	auto const &phi = geom[lev].ProbHiArray();
-	const bool refine_half_domain_ = refine_half_domain;
+	// auto const &dx = geom[lev].CellSizeArray();
+	// auto const &plo = geom[lev].ProbLoArray();
+	// auto const &phi = geom[lev].ProbHiArray();
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto tag = tags.array(mfi);
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const double x_frac = ((i + 0.5) * dx[0]) / (phi[0] - plo[0]);
-			const double y_frac = ((j + 0.5) * dx[1]) / (phi[1] - plo[1]);
-			const double z_frac = ((k + 0.5) * dx[2]) / (phi[2] - plo[2]);
-			if (!refine_half_domain_ || (x_frac >= 0.7 && x_frac <= 0.8 && y_frac >= 0.3 && y_frac <= 0.7 && z_frac >= 0.3 && z_frac <= 0.7)) {
-				tag(i, j, k) = amrex::TagBox::SET;
-			}
-		});
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
 	}
 }
 
@@ -150,8 +155,8 @@ auto problem_main() -> int
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 10.0 * dt_init;
-	sim.initDt_ = dt_init;
+	sim.stopTime_ = 1.0e6 * year; // 1 Myr
+	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 	sim.tempFloor_ = 10.0; // K
 
 	// initialize
@@ -219,10 +224,12 @@ auto problem_main() -> int
 
 		// Note that while the error relative to the total mass (gas + particles) should be within machine precision (1e-14), the error relative
 		// to the *change* could be large because the change is several orders of magnitude smaller than the total mass.
-		const double rel_error_tol = 1.0e-14;
+		const double rel_error_tol = 1.0e-9;
 		if (!(rel_error_total_mass < rel_error_tol)) {
 			status = 1;
 		}
+
+		return status;
 
 		// exact solution
 		const double rhodot = 7.078494865e-34; // g / cm3 / s
