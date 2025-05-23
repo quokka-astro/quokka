@@ -194,7 +194,6 @@ auto problem_main() -> int
 	// Check gas mass
 	const double initial_gas_mass = rho0 * cell_volume * nx * ny * nz;
 	const double final_gas_mass = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
-	;
 	const double change_gas_mass = initial_gas_mass - (all_stars_total_mass - high_mass_stars_total_mass);
 
 	amrex::Print() << "\nRelative error:\n";
