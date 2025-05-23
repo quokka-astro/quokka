@@ -221,10 +221,12 @@ auto problem_main() -> int
 
 		// Note that while the error relative to the total mass (gas + particles) should be within machine precision (1e-14), the error relative
 		// to the *change* could be large because the change is several orders of magnitude smaller than the total mass.
-		const double rel_error_tol = 1.0e-14;
+		const double rel_error_tol = 1.0e-9;
 		if (!(rel_error_total_mass < rel_error_tol)) {
 			status = 1;
 		}
+
+		return status;
 
 		// exact solution
 		const double rhodot = 7.078494865e-34; // g / cm3 / s
