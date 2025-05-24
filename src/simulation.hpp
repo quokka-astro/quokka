@@ -1430,6 +1430,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
+	// Fill boundary before computing accretion rate. This is necessary because the computation of accretion rate uses 3 ghost cells, but the
+	// boundaries are not filled at this point.
+	// TODO(cch): we can fill the hydro variables only if no other variables are used in accretion rate computation
+	state_new_cc_[lev].FillBoundary(geom[lev].periodicity());
+
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
 	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
 
