@@ -312,7 +312,6 @@ auto problem_main() -> int
 
 	// get total particle mass of the initial state
 	const auto &real_data_init = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	const int n_stars_init = static_cast<int>(real_data_init.size());
 	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
 	amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
 
@@ -327,7 +326,6 @@ auto problem_main() -> int
 
 	// get total particle mass of the final state
 	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	const int n_stars_final = static_cast<int>(real_data_final.size());
 	amrex::Real const m_stars_final =
 	    std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
 	amrex::Print() << "Final particle mass = " << m_stars_final << "\n";
