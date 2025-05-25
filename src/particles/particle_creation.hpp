@@ -176,9 +176,6 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		static constexpr Real Gconst = C::Gconst;
 		static constexpr Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 		static constexpr Real mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-		static constexpr Real FLOOR_T_CREATEPARTICLE = 5.0;
-		static constexpr Real cs_floor = gcem::sqrt(gamma * FLOOR_T_CREATEPARTICLE * C::k_B / mu);
-		static constexpr Real jeansNo = 0.25;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
@@ -193,11 +190,10 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 			} else {
 				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
-				cs = std::max(cs, cs_floor);
 			}
 
 			// Jeans density.
-			const Real rho_J = M_PI * std::pow(cs / (std::sqrt(Gconst) * dx_max / jeansNo), 2);
+			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 			const double accretion_rate_cell = accretion_rate_arr(i, j, k);
 
@@ -249,9 +245,6 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		static constexpr Real Gconst = C::Gconst;
 		static constexpr Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 		static constexpr Real mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-		static constexpr Real FLOOR_T_CREATEPARTICLE = 5.0;
-		static constexpr Real cs_floor = gcem::sqrt(gamma * FLOOR_T_CREATEPARTICLE * C::k_B / mu);
-		static constexpr Real jeansNo = 0.25;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
@@ -275,11 +268,10 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 			} else {
 				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
-				cs = std::max(cs, cs_floor);
 			}
 
 			// Jeans density.
-			const Real rho_J = M_PI * std::pow(cs / (std::sqrt(Gconst) * dx_max / jeansNo), 2);
+			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max);
 
 			// Calculate common values for all particles
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
