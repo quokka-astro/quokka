@@ -129,11 +129,10 @@ auto problem_main() -> int
 	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
 	const amrex::Real prob_star_formation = (eps_ff / eps_star) * sim.initDt_ / t_ff;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
-						 "Probability of star formation must be less than 1.0, check parameters to ensure this is the case");
+					 "Probability of star formation must be less than 1.0, check parameters to ensure this is the case");
 	// evolve
 	sim.evolve();
 
-	
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	const auto prob_lo = sim.geom[0].ProbLoArray();
