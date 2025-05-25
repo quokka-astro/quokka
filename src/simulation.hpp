@@ -1443,7 +1443,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Sink accretion, stage 2: update the particle states
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, geom[lev], lev, time, dt);
 
-	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location. 
+	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
