@@ -118,8 +118,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 	amrex::Real death_time = 0.0;
 	if (mass_star > interp_mass_star[AGE_ARR_SIZE - 1]) {
 		death_time = interp_death_time[AGE_ARR_SIZE - 1]; // NOLINT
-	}
-	else{
+	} else {
 		death_time = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), AGE_ARR_SIZE) * YR_TO_SEC; // NOLINT
 	}
 	return death_time;
