@@ -134,17 +134,17 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// // periodic boundaries
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			// periodic boundaries
+			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 			// octant symmetry
-			// if (isNormalComp(n, i)) {
-			// 	BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-			// 	BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			// } else {
-			// 	BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-			// 	BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			// }
+			if (isNormalComp(n, i)) {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+			} else {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+			}
 		}
 	}
 
@@ -155,6 +155,7 @@ auto problem_main() -> int
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 1.0e6 * year; // 1 Myr
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
+	sim.doPoissonSolve_ = 1;
 
 	// initialize
 	sim.setInitialConditions();
