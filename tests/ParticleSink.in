@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
-geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
-geometry.is_periodic =  1    1    1
+geometry.prob_lo     =  -2.393565931e+17 -2.393565931e+17 -2.393565931e+17 
+geometry.prob_hi     =  2.393565931e+17 2.393565931e+17 2.393565931e+17 
+geometry.is_periodic =  0    0    0
 
 # *****************************************************************
 # VERBOSITY
@@ -22,27 +22,14 @@ amr.grid_eff        = 0.7   # default
 
 do_reflux = 1
 do_subcycle = 0
-do_tracers = 0      # turn on tracer particles
-
-hydro.artificial_viscosity_coefficient = 0.1
-
-# quokka.diagnostics = slice_z
-quokka.slice_z.type = DiagFramePlane         # Diagnostic type
-quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
-quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.slice_z.center = 0.1                # Coordinate in the normal direction (cannot lie *exactly* on domain boundary)
-quokka.slice_z.int    = 1                   # Output cadence (in number of coarse steps)
-quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
-quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
 
 #problem.particles_file = "Sink_4.txt"
 #problem.refine_half_domain = false
 
-#problem.n_amb = 1.0
-#problem.T_amb = 718.0
-#particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 1
-#particles.sink_particle_use_uniform_kernel = true
+particles.sink_particle_use_uniform_kernel = true
 
-max_timesteps = 3
-plotfile_interval = 1
+max_timesteps = 1
+plotfile_interval = -1
+
+tiny_profiler.enabled = 0
