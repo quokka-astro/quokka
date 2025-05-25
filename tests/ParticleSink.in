@@ -23,8 +23,8 @@ amr.grid_eff        = 0.7   # default
 do_reflux = 1
 do_subcycle = 0
 
-#problem.particles_file = "Sink_4.txt"
-#problem.refine_half_domain = false
+problem.particles_file = "Sink_4.txt"
+problem.refine_half_domain = false
 
 particles.verbose = 1
 particles.sink_particle_use_uniform_kernel = true
