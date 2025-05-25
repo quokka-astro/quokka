@@ -115,11 +115,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 	auto const &y_arr = interp_death_time;
 	const double mass_in_Msun = mass_star / C::M_solar;
 	AMREX_ASSERT(mass_in_Msun >= 0.0);
-	// AMREX_ASSERT(mass_in_Msun <= 3.00e2);
-	if (mass_in_Msun >= 3.00e2) {
-		// In release build, return something anyway to avoid catastrophic crash
-		return 2.68266550e+06 * YR_TO_SEC;
+	amrex::Real death_time = 0.0;
+	if (mass_star > interp_mass_star[AGE_ARR_SIZE - 1]) {
+		death_time = interp_death_time[AGE_ARR_SIZE - 1]; // NOLINT
 	}
-	amrex::Real death_time = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), AGE_ARR_SIZE) * YR_TO_SEC; // NOLINT
+	else{
+		death_time = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), AGE_ARR_SIZE) * YR_TO_SEC; // NOLINT
+	}
 	return death_time;
 }
