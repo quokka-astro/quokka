@@ -163,7 +163,8 @@ auto problem_main() -> int
 	// get total particle mass of the initial state
 	const int mass_index = 3;
 	const auto &real_data_init = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
+							 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_init = m_gas_init + m_stars_init;
 
 	int status = 0;
@@ -185,7 +186,8 @@ auto problem_main() -> int
 		return status;
 	}
 
-	amrex::Real const m_stars_step1 = std::accumulate(real_data_step1.begin(), real_data_step1.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	amrex::Real const m_stars_step1 = std::accumulate(real_data_step1.begin(), real_data_step1.end(), 0.0,
+							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_step1 = m_gas_step1 + m_stars_step1;
 
 	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
@@ -216,7 +218,8 @@ auto problem_main() -> int
 
 	// get total particle mass after the end
 	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
+							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_final = m_gas_final + m_stars_final;
 
 	// Check relative error in the accretion step and confirm mass is conserved to machine precision

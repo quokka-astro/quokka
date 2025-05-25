@@ -215,7 +215,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 								continue;
 							}
 							// Only check cells within spherical radius of 3
-							// A small epsilon is added to the right hand side to ensure both (i - stencil_size) and (i + stencil_size) are included
+							// A small epsilon is added to the right hand side to ensure both (i - stencil_size) and (i +
+							// stencil_size) are included
 							if (di * di + dj * dj + dk * dk <= static_cast<Real>(stencil_size * stencil_size) + 1.0e-10) {
 								const Real rho_ijk = state_arr(i + di, j + dj, k + dk, HydroSystem<problem_t>::density_index);
 								if (rho_ijk > cell_density) {
