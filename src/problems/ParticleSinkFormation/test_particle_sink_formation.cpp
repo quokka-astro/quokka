@@ -135,16 +135,16 @@ auto problem_main() -> int
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			// // periodic boundaries
-			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 			// octant symmetry
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
+			// if (isNormalComp(n, i)) {
+			// 	BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+			// 	BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+			// } else {
+			// 	BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+			// 	BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+			// }
 		}
 	}
 
@@ -203,7 +203,8 @@ auto problem_main() -> int
 	const double rel_error_gas_mass_step1 = std::abs(m_tot_init - m_tot_step1) / m_tot_init;
 	amrex::Print() << "Step 1: rel_err(total_mass) = " << rel_error_gas_mass_step1 << "\n";
 	int status_step1 = 1;
-	if (rel_error_gas_mass_step1 < 1.0e-13) {
+	const double rel_error_total_mass = 1.0e-14;
+	if (rel_error_gas_mass_step1 < rel_error_total_mass) {
 		status_step1 = 0;
 	}
 	status += status_step1;
@@ -214,7 +215,7 @@ auto problem_main() -> int
 	}
 
 	// evolve to the end
-	sim.maxTimesteps_ = 2;
+	sim.maxTimesteps_ = 10;
 	sim.evolve();
 
 	// get total gas mass after the end
@@ -229,7 +230,7 @@ auto problem_main() -> int
 	const double rel_error_gas_mass_final = std::abs(m_tot_init - m_tot_final) / m_tot_init;
 	amrex::Print() << "Final: rel_err(total_mass) = " << rel_error_gas_mass_final << "\n";
 	int status_final = 1;
-	if (rel_error_gas_mass_final < 1.0e-9) {
+	if (rel_error_gas_mass_final < rel_error_total_mass) {
 		status_final = 0;
 	}
 	status += status_final;
