@@ -83,9 +83,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::x3Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::energy_index) = P / (gamma - 1.);
-		;
 		state_cc(i, j, k, HydroSystem<ParticleSFProblem>::internalEnergy_index) = P / (gamma - 1.);
-		;
 	});
 }
 
