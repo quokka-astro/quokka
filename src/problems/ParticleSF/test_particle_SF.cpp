@@ -62,10 +62,6 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	// const double rho_e = CV * T0 * rho0;
-	// const auto prob_lo = geom[0].ProbLoArray();
-	// const auto prob_hi = geom[0].ProbHiArray();
-
 	const auto dx = geom[0].CellSizeArray();
 
 	// loop over the grid and set the initial condition
@@ -123,13 +119,21 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	// evolve
-	sim.evolve();
-
 	amrex::Real eps_ff = 0.0;
 	amrex::ParmParse const pp("particles");
 	pp.query("eps_ff", eps_ff);
 
+	const amrex::Real eps_star = 0.5;
+	const double exp_Mstar_high_mean = 19.39;
+	const double exp_fstar_high = 0.220;
+	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
+	const amrex::Real prob_star_formation = (eps_ff / eps_star) * sim.initDt_ / t_ff;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
+						 "Probability of star formation must be less than 1.0, check parameters to ensure this is the case");
+	// evolve
+	sim.evolve();
+
+	
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	const auto prob_lo = sim.geom[0].ProbLoArray();
@@ -140,13 +144,6 @@ auto problem_main() -> int
 	const int nz = static_cast<int>((prob_hi[2] - prob_lo[2]) / dx0[2]);
 
 	// Check particle stats
-
-	const amrex::Real eps_star = 0.5;
-	const double exp_Mstar_high_mean = 19.39;
-	const double exp_fstar_high = 0.220;
-	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
-	const amrex::Real prob_star_formation = (eps_ff / eps_star) * sim.initDt_ / t_ff;
-	amrex::Print() << "prob_star_formation = " << prob_star_formation << "\n";
 
 	const amrex::Real particle_mass = rho0 * cell_volume * eps_star * sim.initDt_ / t_ff;
 	const amrex::Real m_high_tot = particle_mass * exp_fstar_high;
@@ -171,6 +168,7 @@ auto problem_main() -> int
 	const double mean_mass_high_mass_stars = high_mass_stars_total_mass / num_high_mass_stars;
 	const double mass_fraction_high_mass_stars = high_mass_stars_total_mass / all_stars_total_mass;
 	const double mean_mass_high_mass_stars_Msun = mean_mass_high_mass_stars / M_sol;
+	amrex::Print() << "Probability of star formation in every cell = " << prob_star_formation << "\n";
 	amrex::Print() << "Total particle mass = " << all_stars_total_mass / M_sol << " Msun\n";
 	amrex::Print() << "Number of high mass stars = " << num_high_mass_stars << "\n";
 	amrex::Print() << "Number of all stars = " << num_all_stars << "\n";
@@ -185,7 +183,8 @@ auto problem_main() -> int
 	amrex::Print() << "fstar_high = " << exp_fstar_high << "\n";
 
 	// relative error
-	const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / exp_Mstar_high_mean;
+	const double sigma_high_mass_stars = std::sqrt(exp_Mstar_high_mean);
+	const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / sigma_high_mass_stars;
 	const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
 	const double rel_error_num_stars = std::abs(num_all_stars - exp_num_stars) / exp_num_stars;
 
@@ -196,7 +195,7 @@ auto problem_main() -> int
 
 	amrex::Print() << "\nRelative error:\n";
 	amrex::Print() << "rel_err(num_stars) = " << rel_error_num_stars << "\n";
-	amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << "\n";
+	amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << " sigma " << "\n";
 	amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
 	amrex::Print() << "Initial (gas mass) - Mass of Low Mass Stars =  " << change_gas_mass / M_sol << " Msun \n";
 	amrex::Print() << "Rel error wrt final gas mass = " << std::abs(final_gas_mass - change_gas_mass) / final_gas_mass << "\n";
