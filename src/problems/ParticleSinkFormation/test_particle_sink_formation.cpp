@@ -31,7 +31,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
-const double sf_cell_density = 1.0e2 * C::m_p; // g cm^-3
+const double sf_cell_density = 1.0e5 * C::m_p; // g cm^-3
 const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
@@ -59,14 +59,6 @@ template <> struct Physics_Traits<SinkProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
-
-template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
-{
-	// read particles from ASCII file
-	const int nreal_extra = 4; // mass vx vy vz
-	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile("Sink_v2.txt", nreal_extra, nullptr);
-}
 
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -204,8 +196,8 @@ auto problem_main() -> int
 	const double rel_error_gas_mass_step1 = std::abs(m_tot_init - m_tot_step1) / m_tot_init;
 	amrex::Print() << "Step 1: rel_err(total_mass) = " << rel_error_gas_mass_step1 << "\n";
 	int status_step1 = 1;
-	const double rel_error_total_mass = 1.0e-14;
-	if (rel_error_gas_mass_step1 < rel_error_total_mass) {
+	const double rel_error_total_mass_step1 = 1.0e-14;
+	if (rel_error_gas_mass_step1 < rel_error_total_mass_step1) {
 		status_step1 = 0;
 	}
 	status += status_step1;
@@ -227,11 +219,12 @@ auto problem_main() -> int
 	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_final = m_gas_final + m_stars_final;
 
-	// Check relative error in the accretion step and confirm mass is conserved to within 1e-6
+	// Check relative error in the accretion step and confirm mass is conserved to machine precision
 	const double rel_error_gas_mass_final = std::abs(m_tot_init - m_tot_final) / m_tot_init;
 	amrex::Print() << "Final: rel_err(total_mass) = " << rel_error_gas_mass_final << "\n";
+	const double rel_error_total_mass_final = 1.0e-13;
 	int status_final = 1;
-	if (rel_error_gas_mass_final < rel_error_total_mass) {
+	if (rel_error_gas_mass_final < rel_error_total_mass_final) {
 		status_final = 0;
 	}
 	status += status_final;
@@ -241,7 +234,7 @@ auto problem_main() -> int
 	amrex::Print() << "particle mass / gas mass = " << mass_ratio << "\n";
 
 	if (status > 0) {
-		amrex::Print() << "Test failed: mass not conserved in the accretion step !!!\n";
+		amrex::Print() << "Test failed: mass not conserved to machine precision in the accretion step !!!\n";
 	} else {
 		amrex::Print() << "Test passed\n";
 	}
