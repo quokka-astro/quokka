@@ -1430,6 +1430,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
 
+	// Fill boundary before computing accretion rate. This is necessary because the computation of accretion rate uses 3 ghost cells, but the
+	// boundaries are not filled at this point.
+	// TODO(cch): we can fill the hydro variables only if no other variables are used in accretion rate computation
+	state_new_cc_[lev].FillBoundary(geom[lev].periodicity());
+
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
 	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
 
@@ -2701,7 +2706,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		auto varnames_fc = GetPlotfileVarNames_fc();
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
+			const amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
 			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
 			const std::string &plotfilename_fc = CustomPlotFileName(plotfilename_base.c_str(), istep[0]);
 			auto varnames_fc_dim = varnames_fc[idim];
