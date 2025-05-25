@@ -221,14 +221,11 @@ auto problem_main() -> int
 		const double rel_error_total_mass = std::abs(total_total_mass_step1 - total_total_mass_init) / total_total_mass_init;
 		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass << "\n";
 
-		// Note that while the error relative to the total mass (gas + particles) should be within machine precision (1e-14), the error relative
-		// to the *change* could be large because the change is several orders of magnitude smaller than the total mass.
-		const double mass_rel_error_tol = 1.0e-9;
+		// The total mass (gas + particles) should be conserved within machine precision (1e-14)
+		const double mass_rel_error_tol = 1.0e-14;
 		if (!(rel_error_total_mass < mass_rel_error_tol)) {
 			status = 1;
 		}
-
-		return status;
 
 		// exact solution
 		const double rhodot = 7.078494865e-34; // g / cm3 / s
@@ -269,8 +266,9 @@ auto problem_main() -> int
 		amrex::Print() << "Solution norm = " << sol_norm << "\n";
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
-		const double rel_error2_tol = 1.0e-6;
-		if (!(rel_error < rel_error2_tol)) {
+		// The relative L1 error norm with respect to the exact solution could be large because there is a hydro update after sink accretion.
+		const double rel_error_tol = 1.0e-6;
+		if (!(rel_error < rel_error_tol)) {
 			status = 1;
 		}
 
@@ -329,7 +327,8 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass_final << "\n";
 
 		// Total mass should be conserved to machine precision
-		if (!(rel_error_total_mass_final < 1.0e-13)) {
+		const double mass_rel_error_tol = 1.0e-13;
+		if (!(rel_error_total_mass_final < mass_rel_error_tol)) {
 			status = 1;
 		}
 
