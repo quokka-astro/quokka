@@ -2,13 +2,19 @@
 /// \brief Defines a single-group test problem for gas-dust-radiation coupling in uniform medium.
 ///
 
-#include "test_rad_dust.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "math/interpolate.hpp"
 #include "physics_info.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
+#include <fstream>
 #include <vector>
 
 struct DustProblem {

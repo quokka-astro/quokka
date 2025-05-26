@@ -8,7 +8,12 @@
 ///
 
 #ifdef HAVE_PYTHON
+#ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
+#endif
+#include "linear_advection/linear_advection.hpp"
+#include "util/matplotlibcpp.h"
+#include <fmt/format.h>
 #endif
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"

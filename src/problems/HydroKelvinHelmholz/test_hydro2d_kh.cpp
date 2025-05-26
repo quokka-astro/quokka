@@ -7,7 +7,13 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <cmath>
+#include <fstream>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
@@ -17,7 +23,6 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_hydro2d_kh.hpp"
 
 struct KelvinHelmholzProblem {
 };

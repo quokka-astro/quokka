@@ -7,10 +7,12 @@
 /// \brief Defines a test problem for ODE integration.
 ///
 
-#include "test_ode.hpp"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "math/ODEIntegrate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/valarray.hpp"
+#include <fmt/format.h>
 
 using amrex::Real;
 

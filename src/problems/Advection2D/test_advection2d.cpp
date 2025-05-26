@@ -7,6 +7,7 @@
 /// \brief Defines a test problem for linear advection.
 ///
 
+#include "linear_advection/linear_advection.hpp"
 #include <csignal>
 #include <limits>
 
@@ -24,7 +25,6 @@
 #include "AMReX_REAL.H"
 
 #include "linear_advection/AdvectionSimulation.hpp"
-#include "test_advection2d.hpp"
 
 using amrex::Real;
 

@@ -7,12 +7,20 @@
 /// \brief Defines a test problem for a radiative shock.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "QuokkaSimulation.hpp"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 
-#include "test_radhydro_shock_cgs.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 

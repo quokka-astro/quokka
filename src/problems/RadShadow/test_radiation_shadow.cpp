@@ -7,10 +7,17 @@
 /// \brief Defines a 2D test problem for radiation in the transport regime.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"

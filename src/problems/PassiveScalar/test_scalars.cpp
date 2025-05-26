@@ -7,15 +7,21 @@
 /// \brief Defines a test problem for a contact wave.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_scalars.hpp"
 #include "util/fextract.hpp"
 
 using amrex::Real;

@@ -7,11 +7,15 @@
 /// \brief Defines a test problem for radiation in the free-streaming regime.
 ///
 
-#include "test_radiation_streaming.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
+#include <fmt/format.h>
 
 struct StreamingProblem {
 };

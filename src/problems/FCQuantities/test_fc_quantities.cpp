@@ -6,7 +6,10 @@
 /// \brief Defines a test problem to make sure face-centred quantities are created correctly.
 ///
 
+#include "hydro/hydro_system.hpp"
+#include "hydro/mhd_system.hpp"
 #include <cassert>
+#include <fmt/format.h>
 #include <ostream>
 #include <stdexcept>
 #include <valarray>
@@ -19,7 +22,6 @@
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
-#include "test_fc_quantities.hpp"
 #include "util/fextract.hpp"
 
 struct FCQuantities {

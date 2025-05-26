@@ -6,7 +6,11 @@
 /// \file test_primordial_chem.cpp
 /// \brief Defines a test problem for primordial chemistry (microphysics).
 ///
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include <array>
+#include <fmt/format.h>
 #include <random>
 #include <vector>
 
@@ -27,7 +31,6 @@
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_primordial_chem.hpp"
 
 #include "actual_eos_data.H"
 #include "burn_type.H"

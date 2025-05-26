@@ -7,7 +7,14 @@
 /// \brief Defines a test problem for the odd-even decoupling instability.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <algorithm>
+#include <fmt/format.h>
+#include <fstream>
 #include <vector>
 
 #include "AMReX.H"

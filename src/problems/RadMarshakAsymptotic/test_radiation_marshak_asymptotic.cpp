@@ -7,10 +7,16 @@
 /// \brief Defines a test problem for radiation in the asymptotic diffusion regime.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BLassert.H"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
-#include "test_radiation_marshak_asymptotic.hpp"
 #include "util/fextract.hpp"
 
 struct SuOlsonProblemCgs {

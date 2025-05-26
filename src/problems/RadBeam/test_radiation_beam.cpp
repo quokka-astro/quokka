@@ -11,6 +11,10 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
+#include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"

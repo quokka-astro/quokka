@@ -2,13 +2,21 @@
 /// \brief Defines a test problem for a multigroup gray-opacity non-equilibrium radiative shock.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "QuokkaSimulation.hpp"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 
 #include "radiation/radiation_system.hpp"
-#include "test_radhydro_shock_multigroup.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 

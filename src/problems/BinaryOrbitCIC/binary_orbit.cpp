@@ -7,7 +7,10 @@
 /// \brief Defines a test problem for a binary orbit.
 ///
 
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <algorithm>
+#include <fstream>
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -21,7 +24,6 @@
 
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
-#include "binary_orbit.hpp"
 #include "hydro/hydro_system.hpp"
 
 struct BinaryOrbit {

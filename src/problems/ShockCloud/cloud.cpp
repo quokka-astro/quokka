@@ -21,6 +21,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
+#include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
 #include "cooling/TabulatedCooling.hpp"

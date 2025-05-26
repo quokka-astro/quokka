@@ -8,7 +8,14 @@
 /// Implementing shock tube proglem from Plewa and Muller 1999, A&A 342, 179
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 
@@ -17,7 +24,6 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_hydro_shocktube_cma.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 

@@ -7,11 +7,17 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_hydro_sms.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON

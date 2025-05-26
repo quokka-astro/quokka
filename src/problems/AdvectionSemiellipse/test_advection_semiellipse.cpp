@@ -7,6 +7,12 @@
 /// \brief Defines a test problem for linear advection.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "linear_advection/AdvectionSimulation.hpp"
+#include "linear_advection/linear_advection.hpp"
+#include <fmt/format.h>
 #include <limits>
 #include <vector>
 
@@ -19,7 +25,6 @@
 #include "hyperbolic_system.hpp"
 #include "linear_advection/AdvectionSimulation.hpp"
 #include "linear_advection/linear_advection.hpp"
-#include "test_advection_semiellipse.hpp"
 #include "util/fextract.hpp"
 
 struct SemiellipseProblem {

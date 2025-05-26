@@ -2,7 +2,16 @@
 /// \brief Defines a test problem for blackbody spectrum in a uniform advecting medium.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "QuokkaSimulation.hpp"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 #include <unordered_map>
 
 #include "AMReX_Array.H"
@@ -14,7 +23,6 @@
 
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
-#include "test_radhydro_bb.hpp"
 
 static constexpr bool export_csv = true;
 

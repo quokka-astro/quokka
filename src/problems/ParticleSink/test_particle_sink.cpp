@@ -8,13 +8,13 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
+#include "math/interpolate.hpp"
 #include "util/fextract.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
-#include "test_particle_sink.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
