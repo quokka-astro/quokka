@@ -33,11 +33,11 @@ constexpr double gamma_gas = (5. / 3.);
 constexpr double mu = gamma_gas;		       // mean molecular weight (required s.t. c_s0 == 1)
 constexpr double c_v = k_B / (mu * (gamma_gas - 1.0)); // specific heat
 
-constexpr double T0 = 1.0;
+constexpr double T_lo = 1.0;
 constexpr double rho0 = 1.0;
 constexpr double v0 = (Mach0 * c_s0);
 
-constexpr double T1 = 3.661912665809719;
+constexpr double T_hi = 3.661912665809719;
 constexpr double rho1 = 3.0021676971081166;
 constexpr double v1 = (Mach0 * c_s0) * (rho0 / rho1);
 
@@ -45,10 +45,10 @@ constexpr double chat = 10.0 * (v0 + c_s0); // reduced speed of light
 
 constexpr double Ggrav = 1.0; // dimensionless gravitational constant; arbitrary
 
-constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0);
-constexpr double Egas0 = rho0 * c_v * T0;
-constexpr double Erad1 = a_rad * (T1 * T1 * T1 * T1);
-constexpr double Egas1 = rho1 * c_v * T1;
+constexpr double Erad0 = a_rad * (T_lo * T_lo * T_lo * T_lo);
+constexpr double Egas0 = rho0 * c_v * T_lo;
+constexpr double Erad1 = a_rad * (T_hi * T_hi * T_hi * T_hi);
+constexpr double Egas1 = rho1 * c_v * T_hi;
 
 constexpr double shock_position = 0.0130; // 0.0132; // cm
 					  // (shock position drifts to the right
@@ -277,7 +277,7 @@ auto problem_main() -> int
 
 			const double Erad_t = values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
 			Erad.at(i) = Erad_t / a_rad;			     // scaled
-			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T0; // dimensionless
+			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_lo; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];
 			const double rho = values.at(RadSystem<ShockProblem>::gasDensity_index)[i];
@@ -286,7 +286,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T0; // dimensionless
+			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T_lo; // dimensionless
 
 			gasDensity.at(i) = rho;
 			gasVelocity.at(i) = x1GasMom / rho;

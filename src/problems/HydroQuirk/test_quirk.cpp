@@ -62,7 +62,7 @@ constexpr Real pl = 26.85;
 constexpr Real dr = 1.0;
 constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
-int ishock_g = 0;
+constexpr int ishock_g = 0;
 
 template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {

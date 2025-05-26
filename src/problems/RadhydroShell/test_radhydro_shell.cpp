@@ -285,7 +285,7 @@ template <> void QuokkaSimulation<ShellProblem>::refineGrid(int lev, amrex::TagB
 auto problem_main() -> int
 {
 	// This problem can only be run in 3D
-	static_assert(AMREX_SPACEDIM == 3);
+#if (AMREX_SPACEDIM == 3)
 
 	auto isNormalComp = [=](int n, int dim) {
 		// it is critical to reflect both the radiation and gas momenta!
@@ -343,6 +343,8 @@ auto problem_main() -> int
 
 	// run
 	sim.evolve();
+
+#endif
 
 	return 0;
 }

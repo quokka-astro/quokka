@@ -25,7 +25,7 @@ struct SedovProblem {
 // if false, use octant symmetry instead
 constexpr bool simulate_full_box = false;
 
-bool test_passes = false; // if one of the energy checks fails, set to false
+bool test_passes = false; // if one of the energy checks fails, set to false. NOLINT
 
 template <> struct quokka::EOS_Traits<SedovProblem> {
 	static constexpr double gamma = 1.4;
@@ -50,7 +50,7 @@ template <> struct Physics_Traits<SedovProblem> {
 
 // declare global variables
 const double rho = 1.0;	   // g cm^-3
-double E_blast = 0.851072; // ergs
+double E_blast = 0.851072; // ergs. NOLINT
 
 template <> void QuokkaSimulation<SedovProblem>::preCalculateInitialConditions()
 {

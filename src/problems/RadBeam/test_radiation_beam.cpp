@@ -277,10 +277,10 @@ auto problem_main() -> int
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // left x2 -- inflow
 		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
-		if (AMREX_SPACEDIM == 3) {
-			BCs_cc[n].setLo(2, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(2, amrex::BCType::int_dir);
-		}
+#if (AMREX_SPACEDIM == 3)
+		BCs_cc[n].setLo(2, amrex::BCType::int_dir); // periodic
+		BCs_cc[n].setHi(2, amrex::BCType::int_dir);
+#endif
 	}
 
 	// Problem initialization

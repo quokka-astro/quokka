@@ -35,20 +35,20 @@ constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
 constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
 
-constexpr double T0 = 2.18e6; // K
+constexpr double T_low = 2.18e6; // K
 constexpr double rho0 = 5.69; // g cm^-3
 constexpr double v0 = 5.19e7; // cm s^-1
 
-constexpr double T1 = 7.98e6; // K [7.98297e6]
+constexpr double T_hi = 7.98e6; // K [7.98297e6]
 constexpr double rho1 = 17.1; // g cm^-3 [17.08233]
 constexpr double v1 = 1.73e7; // cm s^-1 [1.72875e7]
 
 constexpr double chat = 10.0 * (v0 + c_s0); // reduced speed of light
 
-constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
-constexpr double Egas0 = rho0 * c_v * T0;	      // erg cm^-3
-constexpr double Erad1 = a_rad * (T1 * T1 * T1 * T1); // erg cm^-3
-constexpr double Egas1 = rho1 * c_v * T1;	      // erg cm^-3
+constexpr double Erad0 = a_rad * (T_low * T_low * T_low * T_low); // erg cm^-3
+constexpr double Egas0 = rho0 * c_v * T_low;	      // erg cm^-3
+constexpr double Erad1 = a_rad * (T_hi * T_hi * T_hi * T_hi); // erg cm^-3
+constexpr double Egas1 = rho1 * c_v * T_hi;	      // erg cm^-3
 
 constexpr double shock_position = 0.01305; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
 					   // we initialize slightly to the left...)
@@ -274,7 +274,7 @@ auto problem_main() -> int
 
 			const double Erad_t = values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
 			Erad.at(i) = Erad_t / a_rad;			     // scaled
-			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T0; // dimensionless
+			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_low; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];
 			const double rho = values.at(RadSystem<ShockProblem>::gasDensity_index)[i];
@@ -283,7 +283,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T0; // dimensionless
+			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T_low; // dimensionless
 		}
 
 		// read in exact solution
