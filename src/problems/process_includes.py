@@ -42,13 +42,6 @@ def process_folder(folder_path):
     # Get the header section (everything before first include)
     header = cpp_content[:first_include_pos]
     
-    # Get all existing includes
-    existing_includes = []
-    for line in cpp_content[first_include_pos:].split('\n'):
-        if line.strip().startswith('#include'):
-            if os.path.basename(hpp_file) not in line:  # Skip the hpp include
-                existing_includes.append(line)
-    
     # Process the includes from hpp
     processed_includes = []
     for include in includes:
@@ -59,24 +52,12 @@ def process_folder(folder_path):
         else:
             processed_includes.append(include)
     
-    # Combine all includes and remove duplicates while preserving order
-    all_includes = []
-    seen = set()
-    for include in processed_includes + existing_includes:
-        if include not in seen:
-            seen.add(include)
-            all_includes.append(include)
+    # Create new content by inserting hpp includes at the beginning
+    new_content = header + '\n'.join(processed_includes) + '\n' + cpp_content[first_include_pos:]
     
-    # Create new content
-    new_content = header + '\n'.join(all_includes) + '\n\n'
-    
-    # Add the rest of the file content
-    rest_content = cpp_content[first_include_pos:]
-    # Skip all includes in the rest content
-    while rest_content.startswith('#include'):
-        rest_content = rest_content[rest_content.find('\n') + 1:]
-    
-    new_content += rest_content
+    # Remove the hpp include line
+    hpp_include = f'#include "{os.path.basename(hpp_file)}"\n'
+    new_content = new_content.replace(hpp_include, '')
     
     # Write back to cpp file
     with open(cpp_file, 'w') as f:
@@ -87,12 +68,11 @@ def process_folder(folder_path):
 def process_all(base_dir):
     for entry in os.listdir(base_dir):
         folder_path = os.path.join(base_dir, entry)
-        print(folder_path)
-        # continue
         if os.path.isdir(folder_path):
             process_folder(folder_path)
 
 if __name__ == "__main__":
     # Process all folders in src/problems
-    base_dir = "."
-    process_all(base_dir) 
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+    process_all(base_dir)
+    # process_folder("./StarCluster")
