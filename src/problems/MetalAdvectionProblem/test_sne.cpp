@@ -176,10 +176,10 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 	//  inject energy into cells with stochastic sampling
 	const BL_PROFILE("QuokkaSimulation::Addsupernova()")
 
-	const double cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
-	const double rho_eint_blast = userData.E_blast / cell_vol;       // ergs cm^-3
-	const double rho_blast = userData.M_ejecta / cell_vol;	       // g cm^-3
-	const double scalar_blast = 1.e3 / cell_vol;		       // g cm^-3
+	    const double cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
+	const double rho_eint_blast = userData.E_blast / cell_vol;	 // ergs cm^-3
+	const double rho_blast = userData.M_ejecta / cell_vol;		 // g cm^-3
+	const double scalar_blast = 1.e3 / cell_vol;			 // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
