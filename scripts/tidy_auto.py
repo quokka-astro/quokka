@@ -3,7 +3,6 @@ import os
 import sys
 import subprocess
 from glob import glob
-from pathlib import Path
 
 
 def run_command(cmd, cwd=None):
@@ -16,11 +15,6 @@ def run_command(cmd, cwd=None):
         sys.exit(1)
 
 
-def test():
-    cmd_ = "sleep 10 && echo done &"
-    run_command(cmd_)
-
-
 def main():
     max_count = 200
     count = 0
@@ -28,7 +22,7 @@ def main():
         base_name = os.path.basename(f)
         log_file = f"./gitignore-chongchong-tidy/{base_name}"
         log_file_fix = f"./gitignore-chongchong-tidy-fix/{base_name}"
-        log_file_fix2 = f"./gitignore-chongchong-tidy-fix2/{base_name}"
+        # log_file_fix2 = f"./gitignore-chongchong-tidy-fix2/{base_name}"
         is_tidy_clean = True
         if os.path.exists(log_file):
             with open(log_file, "r") as log_file_:
