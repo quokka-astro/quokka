@@ -88,7 +88,7 @@ quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double E
 template <>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas,
-						std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+						std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/ /*massScalars*/ -> double
 {
 	return rho * c_v * Tgas;
 }
@@ -135,7 +135,7 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 
 	amrex::Real const y0 = 0.;
-	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+	amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
 	if (i < lo[0]) {
 		// Marshak boundary condition
@@ -188,8 +188,8 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 template <> void QuokkaSimulation<TophatProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -198,12 +198,12 @@ template <> void QuokkaSimulation<TophatProblem>::setInitialConditionsOnGrid(quo
 		const double Erad = a_rad * std::pow(T_initial, 4);
 		double rho = rho_wall;
 
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
-		bool inside_region1 = ((((x > 0.) && (x <= 2.5)) || ((x > 4.5) && (x < 7.0))) && (std::abs(y) < 0.5));
-		bool inside_region2 = ((((x > 2.5) && (x < 3.0)) || ((x > 4.) && (x <= 4.5))) && (std::abs(y) < 1.5));
-		bool inside_region3 = (((x > 3.0) && (x < 4.0)) && ((std::abs(y) > 1.0) && (std::abs(y) < 1.5)));
+		bool const inside_region1 = ((((x > 0.) && (x <= 2.5)) || ((x > 4.5) && (x < 7.0))) && (std::abs(y) < 0.5));
+		bool const inside_region2 = ((((x > 2.5) && (x < 3.0)) || ((x > 4.) && (x <= 4.5))) && (std::abs(y) < 1.5));
+		bool const inside_region3 = (((x > 3.0) && (x < 4.0)) && ((std::abs(y) > 1.0) && (std::abs(y) < 1.5)));
 
 		if (inside_region1 || inside_region2 || inside_region3) {
 			rho = rho_pipe;

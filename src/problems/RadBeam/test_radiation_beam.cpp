@@ -184,10 +184,10 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		const double py = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
 		const double pz = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
 
-		double E_inc = a_rad * std::pow(T_hohlraum, 4);
-		double Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-		double Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-		double Fz_bdry = 0.;
+		double const E_inc = a_rad * std::pow(T_hohlraum, 4);
+		double const Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+		double const Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+		double const Fz_bdry = 0.;
 
 		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;

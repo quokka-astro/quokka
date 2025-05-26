@@ -307,7 +307,7 @@ auto problem_main() -> int
 		sol_norm += std::abs(Tgas_interp[i]) + std::abs(Erad_line_interp[i]);
 	}
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	if (export_csv) {
 		std::ofstream file;

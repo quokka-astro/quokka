@@ -331,7 +331,7 @@ auto problem_main() -> int
 	// const double Tmax_tol = 1.37e7;
 	const double error_tol = 8e-3;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	// symmetry check
 	double symm_err = 0.;
@@ -342,7 +342,7 @@ auto problem_main() -> int
 		symm_norm += std::abs(Tgas2[i]);
 	}
 	const double symm_rel_error = symm_err / symm_norm;
-	amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << std::endl;
+	amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

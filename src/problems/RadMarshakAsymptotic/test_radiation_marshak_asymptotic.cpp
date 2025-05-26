@@ -228,7 +228,7 @@ auto problem_main() -> int
 
 	bool use_wavespeed_correction = false;
 
-	amrex::ParmParse pp("marshak");
+	amrex::ParmParse const pp("marshak");
 	pp.query("use_wavespeed_correction", use_wavespeed_correction);
 	sim.use_wavespeed_correction_ = use_wavespeed_correction;
 
@@ -268,7 +268,7 @@ auto problem_main() -> int
 	std::vector<double> xs_exact;
 	std::vector<double> Tmat_exact;
 
-	std::string filename = "../extern/marshak_similarity.csv";
+	std::string const filename = "../extern/marshak_similarity.csv";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 
@@ -304,7 +304,7 @@ auto problem_main() -> int
 
 	const double error_tol = 0.09;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot results
@@ -334,7 +334,7 @@ auto problem_main() -> int
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	std::cout << "Finished." << '\n';
 
 	int status = 0;
 	if ((rel_error > error_tol) || std::isnan(rel_error)) {

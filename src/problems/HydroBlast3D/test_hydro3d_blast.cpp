@@ -71,8 +71,8 @@ template <> void QuokkaSimulation<SedovProblem>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-	double rho_copy = rho;
-	double E_blast_copy = E_blast;
+	double const rho_copy = rho;
+	double const E_blast_copy = E_blast;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

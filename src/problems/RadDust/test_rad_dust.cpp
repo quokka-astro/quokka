@@ -214,7 +214,7 @@ auto problem_main() -> int
 	}
 	const double error_tol = 0.003;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

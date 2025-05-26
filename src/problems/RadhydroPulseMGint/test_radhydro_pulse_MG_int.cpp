@@ -336,7 +336,7 @@ auto problem_main() -> int
 	int n_p = static_cast<int>(move / dx);
 	int half = static_cast<int>(nx / 2.0);
 	double drift = move - static_cast<double>(n_p) * dx;
-	int shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
+	int shift = n_p - ((n_p + half) / nx) * nx;
 
 	std::vector<double> xs(nx);
 	std::vector<double> Trad(nx);
@@ -407,7 +407,7 @@ auto problem_main() -> int
 	n_p = static_cast<int>(move / dx);
 	half = static_cast<int>(nx / 2.0);
 	drift = move - static_cast<double>(n_p) * dx;
-	shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
+	shift = n_p - ((n_p + half) / nx) * nx;
 
 	std::vector<double> xs2(nx);
 	std::vector<double> Trad2(nx);
@@ -460,7 +460,7 @@ auto problem_main() -> int
 	}
 	const double error_tol = 0.02;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	// symmetry check
 	double symm_err = 0.;
@@ -471,7 +471,7 @@ auto problem_main() -> int
 		symm_norm += std::abs(Tgas[i]);
 	}
 	const double symm_rel_error_1 = symm_err / symm_norm;
-	amrex::Print() << "Symmetry L1 error norm of the MG pulse = " << symm_rel_error_1 << std::endl;
+	amrex::Print() << "Symmetry L1 error norm of the MG pulse = " << symm_rel_error_1 << '\n';
 
 	symm_err = 0.;
 	symm_norm = 0.;
@@ -480,7 +480,7 @@ auto problem_main() -> int
 		symm_norm += std::abs(Tgas2[i]);
 	}
 	const double symm_rel_error_2 = symm_err / symm_norm;
-	amrex::Print() << "Symmetry L1 error norm of the exact (grey) pulse = " << symm_rel_error_2 << std::endl;
+	amrex::Print() << "Symmetry L1 error norm of the exact (grey) pulse = " << symm_rel_error_2 << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

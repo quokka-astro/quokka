@@ -103,7 +103,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
+	if ((bcr->lo(0) != amrex::BCType::ext_dir) && (bcr->hi(0) != amrex::BCType::ext_dir)) {
 		return;
 	}
 
@@ -162,14 +162,14 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	// loop over the cell-centered quantities and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
 		amrex::Real radEnergy = NAN;
 		amrex::Real x1RadFlux = NAN;
@@ -257,7 +257,7 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	int nx = static_cast<int>(position.size());
+	int const nx = static_cast<int>(position.size());
 
 	// Plot results
 	int status = 0;
@@ -292,7 +292,7 @@ auto problem_main() -> int
 		std::vector<double> Trad_exact;
 		std::vector<double> Tmat_exact;
 
-		std::string filename = "../extern/LowrieEdwards/shock.txt";
+		std::string const filename = "../extern/LowrieEdwards/shock.txt";
 		std::ifstream fstream(filename, std::ios::in);
 
 		const double error_tol = 0.005;
@@ -322,8 +322,8 @@ auto problem_main() -> int
 
 			// compute error norm
 			std::vector<double> Trad_interp(xs_exact.size());
-			amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << std::endl;
-			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << std::endl;
+			amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << '\n';
+			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << '\n';
 
 			interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Trad.data(),
 					   static_cast<int>(xs.size()));
@@ -336,9 +336,9 @@ auto problem_main() -> int
 			}
 
 			rel_error = err_norm / sol_norm;
-			amrex::Print() << "Error norm = " << err_norm << std::endl;
-			amrex::Print() << "Solution norm = " << sol_norm << std::endl;
-			amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+			amrex::Print() << "Error norm = " << err_norm << '\n';
+			amrex::Print() << "Solution norm = " << sol_norm << '\n';
+			amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 		}
 
 		if ((rel_error > error_tol) || std::isnan(rel_error)) {
@@ -356,7 +356,7 @@ auto problem_main() -> int
 		}
 
 		// plot results
-		int s = 48; // stride
+		int const s = 48; // stride
 		std::map<std::string, std::string> Trad_args;
 		Trad_args["label"] = "radiation";
 		Trad_args["color"] = "C1";

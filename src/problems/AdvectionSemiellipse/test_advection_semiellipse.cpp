@@ -39,7 +39,7 @@ template <> struct Physics_Traits<SemiellipseProblem> {
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
-	amrex::Real x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+	amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 	double dens = 0.0;
 	if (std::abs(x - 0.2) <= 0.15) {
 		dens = std::sqrt(1.0 - std::pow((x - 0.2) / 0.15, 2));
@@ -50,8 +50,8 @@ AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Ar
 template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const int ncomp_cc = Physics_Indices<SemiellipseProblem>::nvarTotal_cc;
@@ -62,7 +62,7 @@ template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOn
 template <>
 void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/)
 {
 
 	// fill reference solution multifab
@@ -80,10 +80,10 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(amrex::Mu
 	auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
 
 	// interpolate exact solution onto coarse grid
-	int nx = static_cast<int>(position.size());
+	int const nx = static_cast<int>(position.size());
 	std::vector<double> xs(nx);
 	for (int i = 0; i < nx; ++i) {
-		xs.at(i) = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		xs.at(i) = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 	}
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -91,8 +91,8 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(amrex::Mu
 		std::vector<double> d(nx);
 		std::vector<double> d_exact(nx);
 		for (int i = 0; i < nx; ++i) {
-			amrex::Real rho = values.at(0)[i];
-			amrex::Real rho_exact = val_exact.at(0)[i];
+			amrex::Real const rho = values.at(0)[i];
+			amrex::Real const rho_exact = val_exact.at(0)[i];
 			d.at(i) = rho;
 			d_exact.at(i) = rho_exact;
 		}

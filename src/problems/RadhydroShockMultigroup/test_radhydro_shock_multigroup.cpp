@@ -322,8 +322,8 @@ auto problem_main() -> int
 
 			// compute error norm
 			std::vector<double> Trad_interp(xs_exact.size());
-			amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << std::endl;
-			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << std::endl;
+			amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << '\n';
+			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << '\n';
 
 			interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Trad.data(),
 					   static_cast<int>(xs.size()));
@@ -336,9 +336,9 @@ auto problem_main() -> int
 			}
 
 			rel_error = err_norm / sol_norm;
-			amrex::Print() << "Error norm = " << err_norm << std::endl;
-			amrex::Print() << "Solution norm = " << sol_norm << std::endl;
-			amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+			amrex::Print() << "Error norm = " << err_norm << '\n';
+			amrex::Print() << "Solution norm = " << sol_norm << '\n';
+			amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 		}
 
 		if ((rel_error > error_tol) || std::isnan(rel_error)) {
