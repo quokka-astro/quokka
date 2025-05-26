@@ -4,12 +4,19 @@ import os
 import re
 
 def process_folder(folder_path):
-    # Get the hpp and cpp files
-    hpp_file = os.path.join(folder_path, 'test_advection.hpp')
-    cpp_file = os.path.join(folder_path, 'test_advection.cpp')
-    
-    if not (os.path.exists(hpp_file) and os.path.exists(cpp_file)):
-        print(f"Required files not found in {folder_path}")
+    # Find the first .cpp file and its corresponding .hpp file
+    cpp_file = None
+    hpp_file = None
+    for fname in os.listdir(folder_path):
+        if fname.endswith('.cpp'):
+            base = fname[:-4]
+            cpp_file = os.path.join(folder_path, fname)
+            hpp_candidate = os.path.join(folder_path, base + '.hpp')
+            if os.path.exists(hpp_candidate):
+                hpp_file = hpp_candidate
+                break
+    if not (cpp_file and hpp_file):
+        print(f"No matching .cpp/.hpp pair in {folder_path}")
         return
     
     # Read the hpp file
@@ -32,7 +39,17 @@ def process_folder(folder_path):
         print(f"No includes found in {cpp_file}")
         return
     
-    # Process the includes
+    # Get the header section (everything before first include)
+    header = cpp_content[:first_include_pos]
+    
+    # Get all existing includes
+    existing_includes = []
+    for line in cpp_content[first_include_pos:].split('\n'):
+        if line.strip().startswith('#include'):
+            if os.path.basename(hpp_file) not in line:  # Skip the hpp include
+                existing_includes.append(line)
+    
+    # Process the includes from hpp
     processed_includes = []
     for include in includes:
         if 'matplotlibcpp.h' in include:
@@ -42,11 +59,24 @@ def process_folder(folder_path):
         else:
             processed_includes.append(include)
     
-    # Insert the includes
-    new_content = cpp_content[:first_include_pos] + '\n'.join(processed_includes) + '\n' + cpp_content[first_include_pos:]
+    # Combine all includes and remove duplicates while preserving order
+    all_includes = []
+    seen = set()
+    for include in processed_includes + existing_includes:
+        if include not in seen:
+            seen.add(include)
+            all_includes.append(include)
     
-    # Remove the test_advection.hpp include
-    new_content = new_content.replace('#include "test_advection.hpp"\n', '')
+    # Create new content
+    new_content = header + '\n'.join(all_includes) + '\n\n'
+    
+    # Add the rest of the file content
+    rest_content = cpp_content[first_include_pos:]
+    # Skip all includes in the rest content
+    while rest_content.startswith('#include'):
+        rest_content = rest_content[rest_content.find('\n') + 1:]
+    
+    new_content += rest_content
     
     # Write back to cpp file
     with open(cpp_file, 'w') as f:
@@ -54,7 +84,13 @@ def process_folder(folder_path):
     
     print(f"Successfully processed {folder_path}")
 
+def process_all(base_dir):
+    for entry in os.listdir(base_dir):
+        folder_path = os.path.join(base_dir, entry)
+        if os.path.isdir(folder_path):
+            process_folder(folder_path)
+
 if __name__ == "__main__":
-    # Process the Advection folder
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    process_folder(current_dir) 
+    # Process all folders in src/problems
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    process_all(base_dir) 
