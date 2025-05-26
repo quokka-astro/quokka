@@ -45,6 +45,9 @@ def process_folder(folder_path):
     # Insert the includes
     new_content = cpp_content[:first_include_pos] + '\n'.join(processed_includes) + '\n' + cpp_content[first_include_pos:]
     
+    # Remove the test_advection.hpp include
+    new_content = new_content.replace('#include "test_advection.hpp"\n', '')
+    
     # Write back to cpp file
     with open(cpp_file, 'w') as f:
         f.write(new_content)

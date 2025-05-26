@@ -7,6 +7,9 @@
 /// \brief Defines a test problem for linear advection.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
@@ -18,9 +21,10 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
+#include "linear_advection/linear_advection.hpp"
+#include <fmt/format.h>
 
 #include "linear_advection/AdvectionSimulation.hpp"
-#include "test_advection.hpp"
 #include "util/fextract.hpp"
 
 struct SawtoothProblem {
