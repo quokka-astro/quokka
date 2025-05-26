@@ -87,10 +87,12 @@ def process_folder(folder_path):
 def process_all(base_dir):
     for entry in os.listdir(base_dir):
         folder_path = os.path.join(base_dir, entry)
+        print(folder_path)
+        # continue
         if os.path.isdir(folder_path):
             process_folder(folder_path)
 
 if __name__ == "__main__":
     # Process all folders in src/problems
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    base_dir = "."
     process_all(base_dir) 
