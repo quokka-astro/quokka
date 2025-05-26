@@ -43,12 +43,12 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e16, 1e1
 //        1.00000000e+19};
 
 constexpr double kappa0 = 100.; // cm^2 g^-1
-constexpr double T0 = 1.0e7;	// K (temperature)
-constexpr double T1 = 2.0e7;	// K (temperature)
+constexpr double T_lo = 1.0e7;	// K (temperature)
+constexpr double T_hi = 2.0e7;	// K (temperature)
 constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double width = 24.0; // cm, width of the pulse
-constexpr double Erad0 = a_rad * T0 * T0 * T0 * T0;
+constexpr double Erad0 = a_rad * T_lo * T_lo * T_lo * T_lo;
 constexpr double erad_floor = Erad0 * 1.0e-14;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double h_planck = C::hplanck;
@@ -70,7 +70,7 @@ auto compute_initial_Tgas(const double x) -> double
 {
 	// compute temperature profile for Gaussian radiation pulse
 	const double sigma = width;
-	return T0 + (T1 - T0) * std::exp(-x * x / (2.0 * sigma * sigma));
+	return T_lo + (T_hi - T_lo) * std::exp(-x * x / (2.0 * sigma * sigma));
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -78,7 +78,7 @@ auto compute_exact_rho(const double x) -> double
 {
 	// compute density profile for Gaussian radiation pulse
 	auto T = compute_initial_Tgas(x);
-	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
+	return rho0 * T_lo / T + (a_rad * mu / 3. / k_B) * (std::pow(T_lo, 4) / T - std::pow(T, 3));
 }
 
 template <> struct quokka::EOS_Traits<SGProblem> {
@@ -394,7 +394,7 @@ auto problem_main() -> int
 	}
 	const double error_tol = 0.006;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

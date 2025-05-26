@@ -64,10 +64,6 @@ template <> struct Physics_Traits<Channel> {
 };
 
 // global variables needed for Dirichlet boundary condition and initial conditions
-#if 0 // workaround AMDGPU compiler bug
-namespace
-{
-#endif
 Real rho0 = NAN;										// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 Real u0 = NAN;											// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 Real s0 = NAN;											// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -77,9 +73,6 @@ AMREX_GPU_MANAGED amrex::Real u_inflow = NAN;							// NOLINT(cppcoreguidelines-
 AMREX_GPU_MANAGED amrex::Real v_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED amrex::Real w_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScalars> s_inflow{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-#if 0												// workaround AMDGPU compiler bug
-};											 // namespace
-#endif
 
 template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -135,13 +128,14 @@ auto problem_main() -> int
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // NSCBC inflow
 		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // NSCBC outflow
 
-		if constexpr (AMREX_SPACEDIM >= 2) {
-			BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(1, amrex::BCType::int_dir);
-		} else if (AMREX_SPACEDIM == 3) {
-			BCs_cc[n].setLo(2, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(2, amrex::BCType::int_dir);
-		}
+#if (AMREX_SPACEDIM >= 2)
+		BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic
+		BCs_cc[n].setHi(1, amrex::BCType::int_dir);
+#endif
+#if (AMREX_SPACEDIM == 3)
+		BCs_cc[n].setLo(2, amrex::BCType::int_dir);
+		BCs_cc[n].setHi(2, amrex::BCType::int_dir);
+#endif
 	}
 
 	QuokkaSimulation<Channel> sim(BCs_cc);

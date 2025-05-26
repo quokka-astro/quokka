@@ -14,12 +14,12 @@ struct PulseProblem {
 struct AdvPulseProblem {
 };
 
-constexpr double T0 = 1.0e7; // K (temperature)
-constexpr double T1 = 2.0e7; // K (temperature)
-constexpr double rho0 = 1.2; // g cm^-3 (matter density)
+constexpr double T_lo = 1.0e7; // K (temperature)
+constexpr double T_hi = 2.0e7; // K (temperature)
+constexpr double rho0 = 1.2;   // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double width = 24.0; // cm, width of the pulse
-constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
+constexpr double erad_floor = a_rad * T_lo * T_lo * T_lo * T_lo * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 
@@ -81,7 +81,7 @@ auto compute_initial_Tgas(const double x) -> double
 {
 	// compute temperature profile for Gaussian radiation pulse
 	const double sigma = width;
-	return T0 + (T1 - T0) * std::exp(-x * x / (2.0 * sigma * sigma));
+	return T_lo + (T_hi - T_lo) * std::exp(-x * x / (2.0 * sigma * sigma));
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -89,28 +89,28 @@ auto compute_exact_rho(const double x) -> double
 {
 	// compute density profile for Gaussian radiation pulse
 	auto T = compute_initial_Tgas(x);
-	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
+	return rho0 * T_lo / T + (a_rad * mu / 3. / k_B) * (std::pow(T_lo, 4) / T - std::pow(T, 3));
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
+	const double sigma = 3063.96 * std::pow(Tgas / T_lo, -3.5);
 	return sigma / rho;
 }
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
+	const double sigma = 3063.96 * std::pow(Tgas / T_lo, -3.5);
 	return sigma / rho;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+	const double sigma = 101.248 * std::pow(Tgas / T_lo, -3.5);
 	return sigma / rho;
 }
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+	const double sigma = 101.248 * std::pow(Tgas / T_lo, -3.5);
 	return sigma / rho;
 }
 
@@ -331,7 +331,7 @@ auto problem_main() -> int
 	// const double Tmax_tol = 1.37e7;
 	const double error_tol = 8e-3;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	// symmetry check
 	double symm_err = 0.;
@@ -342,7 +342,7 @@ auto problem_main() -> int
 		symm_norm += std::abs(Tgas2[i]);
 	}
 	const double symm_rel_error = symm_err / symm_norm;
-	amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << std::endl;
+	amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

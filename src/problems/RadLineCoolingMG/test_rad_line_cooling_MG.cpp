@@ -78,9 +78,9 @@ template <> struct RadSystem_Traits<CoolingProblemMG> {
 };
 
 template <> struct ISM_Traits<CoolingProblemMG> {
-	static constexpr bool enable_dust_gas_thermal_coupling_model = 1;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_photoelectric_heating = 1;
+	static constexpr bool enable_photoelectric_heating = true;
 };
 
 template <>
@@ -307,7 +307,7 @@ auto problem_main() -> int
 		sol_norm += std::abs(Tgas_interp[i]) + std::abs(Erad_line_interp[i]);
 	}
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	if (export_csv) {
 		std::ofstream file;

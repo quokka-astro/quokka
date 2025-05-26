@@ -45,14 +45,14 @@ constexpr double v_contact = 2.0; // contact wave velocity
 template <> void QuokkaSimulation<ScalarProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
 		double vx = NAN;
 		double rho = NAN;
 		double P = NAN;
@@ -93,7 +93,7 @@ void QuokkaSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &
 		auto const ncomp = ref.nComp();
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+			Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
 			double vx = NAN;
 			double rho = NAN;
 			double P = NAN;
@@ -267,6 +267,6 @@ auto problem_main() -> int
 	}
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return status;
 }

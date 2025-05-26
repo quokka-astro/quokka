@@ -48,19 +48,19 @@ template <> struct Physics_Traits<HighMachProblem> {
 template <> void QuokkaSimulation<HighMachProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
 
-		double norm = 1. / (2.0 * M_PI);
-		double vx = norm * std::sin(2.0 * M_PI * x);
-		double rho = 1.0;
-		double P = 1.0e-10;
+		double const norm = 1. / (2.0 * M_PI);
+		double const vx = norm * std::sin(2.0 * M_PI * x);
+		double const rho = 1.0;
+		double const P = 1.0e-10;
 
 		AMREX_ASSERT(!std::isnan(vx));
 		AMREX_ASSERT(!std::isnan(rho));
@@ -81,8 +81,8 @@ template <> void QuokkaSimulation<HighMachProblem>::setInitialConditionsOnGrid(q
 }
 
 template <>
-void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
-								 amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const & /*dx*/,
+								 amrex::GpuArray<Real, AMREX_SPACEDIM> const & /*prob_lo*/)
 {
 
 	// extract solution
@@ -101,7 +101,7 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 	std::vector<double> vx_exact;
 	std::vector<double> P_exact;
 
-	std::string filename = "../extern/highmach_reference.txt";
+	std::string const filename = "../extern/highmach_reference.txt";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 	std::string header;
@@ -114,10 +114,10 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 		for (double value = NAN; iss >> value;) {
 			values.push_back(value);
 		}
-		Real x_val = values.at(0);
-		Real d_val = values.at(1);
-		Real vx_val = values.at(2);
-		Real P_val = values.at(3);
+		Real const x_val = values.at(0);
+		Real const d_val = values.at(1);
+		Real const vx_val = values.at(2);
+		Real const P_val = values.at(3);
 
 		x_exact.push_back(x_val);
 		d_exact.push_back(d_val);
@@ -162,11 +162,11 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 				state(i, j, k, n) = 0.;
 			}
 
-			Real rho = rho_arr[i];
-			Real vx = vx_arr[i];
-			Real Pgas = P_arr[i];
-			Real Eint = Pgas / (gamma - 1.);
-			Real Etot = Eint + 0.5 * rho * (vx * vx);
+			Real const rho = rho_arr[i];
+			Real const vx = vx_arr[i];
+			Real const Pgas = P_arr[i];
+			Real const Eint = Pgas / (gamma - 1.);
+			Real const Etot = Eint + 0.5 * rho * (vx * vx);
 
 			state(i, j, k, HydroSystem<HighMachProblem>::density_index) = rho;
 			state(i, j, k, HydroSystem<HighMachProblem>::x1Momentum_index) = rho * vx;
@@ -273,6 +273,6 @@ auto problem_main() -> int
 	}
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return status;
 }

@@ -24,7 +24,7 @@
 struct ShocktubeProblem {
 };
 
-bool consv_test_passes = true; // if mass scalar conservation check fails, set to false
+bool consv_test_passes = true; // if mass scalar conservation check fails, set to false. NOLINT
 
 template <> struct SimulationData<ShocktubeProblem> {
 	std::vector<double> t_vec_;	      // stores the time array

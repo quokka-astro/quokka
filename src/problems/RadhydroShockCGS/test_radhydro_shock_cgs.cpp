@@ -35,20 +35,20 @@ constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
 constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
 
-constexpr double T0 = 2.18e6; // K
-constexpr double rho0 = 5.69; // g cm^-3
-constexpr double v0 = 5.19e7; // cm s^-1
+constexpr double T_low = 2.18e6; // K
+constexpr double rho0 = 5.69;	 // g cm^-3
+constexpr double v0 = 5.19e7;	 // cm s^-1
 
-constexpr double T1 = 7.98e6; // K [7.98297e6]
-constexpr double rho1 = 17.1; // g cm^-3 [17.08233]
-constexpr double v1 = 1.73e7; // cm s^-1 [1.72875e7]
+constexpr double T_hi = 7.98e6; // K [7.98297e6]
+constexpr double rho1 = 17.1;	// g cm^-3 [17.08233]
+constexpr double v1 = 1.73e7;	// cm s^-1 [1.72875e7]
 
 constexpr double chat = 10.0 * (v0 + c_s0); // reduced speed of light
 
-constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
-constexpr double Egas0 = rho0 * c_v * T0;	      // erg cm^-3
-constexpr double Erad1 = a_rad * (T1 * T1 * T1 * T1); // erg cm^-3
-constexpr double Egas1 = rho1 * c_v * T1;	      // erg cm^-3
+constexpr double Erad0 = a_rad * (T_low * T_low * T_low * T_low); // erg cm^-3
+constexpr double Egas0 = rho0 * c_v * T_low;			  // erg cm^-3
+constexpr double Erad1 = a_rad * (T_hi * T_hi * T_hi * T_hi);	  // erg cm^-3
+constexpr double Egas1 = rho1 * c_v * T_hi;			  // erg cm^-3
 
 constexpr double shock_position = 0.01305; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
 					   // we initialize slightly to the left...)
@@ -103,7 +103,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
+	if ((bcr->lo(0) != amrex::BCType::ext_dir) && (bcr->hi(0) != amrex::BCType::ext_dir)) {
 		return;
 	}
 
@@ -162,14 +162,14 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	// loop over the cell-centered quantities and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
 		amrex::Real radEnergy = NAN;
 		amrex::Real x1RadFlux = NAN;
@@ -257,7 +257,7 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	int nx = static_cast<int>(position.size());
+	int const nx = static_cast<int>(position.size());
 
 	// Plot results
 	int status = 0;
@@ -273,8 +273,8 @@ auto problem_main() -> int
 			xs.at(i) = x; // cm
 
 			const double Erad_t = values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
-			Erad.at(i) = Erad_t / a_rad;			     // scaled
-			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T0; // dimensionless
+			Erad.at(i) = Erad_t / a_rad;				// scaled
+			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_low; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];
 			const double rho = values.at(RadSystem<ShockProblem>::gasDensity_index)[i];
@@ -283,7 +283,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T0; // dimensionless
+			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T_low; // dimensionless
 		}
 
 		// read in exact solution
@@ -292,7 +292,7 @@ auto problem_main() -> int
 		std::vector<double> Trad_exact;
 		std::vector<double> Tmat_exact;
 
-		std::string filename = "../extern/LowrieEdwards/shock.txt";
+		std::string const filename = "../extern/LowrieEdwards/shock.txt";
 		std::ifstream fstream(filename, std::ios::in);
 
 		const double error_tol = 0.005;
@@ -322,8 +322,8 @@ auto problem_main() -> int
 
 			// compute error norm
 			std::vector<double> Trad_interp(xs_exact.size());
-			amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << std::endl;
-			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << std::endl;
+			amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << '\n';
+			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << '\n';
 
 			interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Trad.data(),
 					   static_cast<int>(xs.size()));
@@ -336,9 +336,9 @@ auto problem_main() -> int
 			}
 
 			rel_error = err_norm / sol_norm;
-			amrex::Print() << "Error norm = " << err_norm << std::endl;
-			amrex::Print() << "Solution norm = " << sol_norm << std::endl;
-			amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+			amrex::Print() << "Error norm = " << err_norm << '\n';
+			amrex::Print() << "Solution norm = " << sol_norm << '\n';
+			amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 		}
 
 		if ((rel_error > error_tol) || std::isnan(rel_error)) {
@@ -356,7 +356,7 @@ auto problem_main() -> int
 		}
 
 		// plot results
-		int s = 48; // stride
+		int const s = 48; // stride
 		std::map<std::string, std::string> Trad_args;
 		Trad_args["label"] = "radiation";
 		Trad_args["color"] = "C1";
