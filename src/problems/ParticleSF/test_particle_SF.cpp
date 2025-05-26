@@ -146,8 +146,10 @@ auto problem_main() -> int
 
 	const amrex::Real particle_mass = rho0 * cell_volume * eps_star * sim.initDt_ / t_ff;
 	const amrex::Real m_high_tot = particle_mass * exp_fstar_high;
-	const amrex::Real num_high_mass_stars_exp = m_high_tot / (exp_Mstar_high_mean * C::M_solar);
-	const amrex::Real exp_num_stars = prob_star_formation * (1 + num_high_mass_stars_exp) * nx * ny * nz;
+	const amrex::Real exp_num_high_mass_stars_percell = m_high_tot / (exp_Mstar_high_mean * C::M_solar);
+	const amrex::Real exp_num_stars_total = prob_star_formation * (1 + exp_num_high_mass_stars_percell) * nx * ny * nz;
+	const amrex::Real exp_num_low_mass_stars_total = prob_star_formation * nx * ny * nz;
+	const amrex::Real exp_num_high_mass_stars_total = prob_star_formation * exp_num_high_mass_stars_percell * nx * ny * nz;
 
 	// get total mass of the final particles
 	const auto [real_data_final, idata_final] =
@@ -156,48 +158,45 @@ auto problem_main() -> int
 	double high_mass_stars_total_mass = 0.0;
 	double all_stars_total_mass = 0.0;
 	int num_high_mass_stars = 0;
+	int num_low_mass_stars = 0;
 	const int num_all_stars = static_cast<int>(real_data_final.size());
 	for (int i = 0; i < num_all_stars; ++i) {
 		if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
 			high_mass_stars_total_mass += real_data_final[i][mass_idx];
 			num_high_mass_stars++;
 		}
+		else{
+			num_low_mass_stars++;
+		}
 		all_stars_total_mass += real_data_final[i][mass_idx];
 	}
-	const double mean_mass_high_mass_stars = high_mass_stars_total_mass / num_high_mass_stars;
-	const double mass_fraction_high_mass_stars = high_mass_stars_total_mass / all_stars_total_mass;
+	const double mean_mass_high_mass_stars      = high_mass_stars_total_mass / num_high_mass_stars;
 	const double mean_mass_high_mass_stars_Msun = mean_mass_high_mass_stars / M_sol;
 	amrex::Print() << "Probability of star formation in every cell = " << prob_star_formation << "\n";
-	amrex::Print() << "Total particle mass = " << all_stars_total_mass / M_sol << " Msun\n";
-	amrex::Print() << "Number of high mass stars = " << num_high_mass_stars << "\n";
-	amrex::Print() << "Number of all stars = " << num_all_stars << "\n";
-	amrex::Print() << "Mstar_high_mean = " << mean_mass_high_mass_stars_Msun << " Msun\n";
-	amrex::Print() << "fstar_high = " << mass_fraction_high_mass_stars << "\n";
 
-	// expectations
-
-	amrex::Print() << "\nExpected values:\n";
-	amrex::Print() << "Expected number of stars = " << exp_num_stars << "\n";
-	amrex::Print() << "Mstar_high_mean = " << exp_Mstar_high_mean << " Msun\n";
-	amrex::Print() << "fstar_high = " << exp_fstar_high << "\n";
+	amrex::Print() << "Total particle mass          = " << all_stars_total_mass / M_sol << " Msun\n";
+	amrex::Print() << "Total Number of high mass stars    = " << num_high_mass_stars << "\n";
+	amrex::Print() << "Total Number of low mass stars     = " << num_low_mass_stars << "\n";
+	amrex::Print() << "Total Number of all stars          = " << num_all_stars << "\n";
+	amrex::Print() << "Mean mass of high mass stars = " << mean_mass_high_mass_stars_Msun << " Msun\n";
 
 	// relative error
-	const double sigma_high_mass_stars = std::sqrt(exp_Mstar_high_mean);
+	const double sigma_high_mass_stars = std::sqrt(exp_num_high_mass_stars_total);
 	const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / sigma_high_mass_stars;
-	const double rel_error_fstar_high = std::abs(mass_fraction_high_mass_stars - exp_fstar_high) / exp_fstar_high;
-	const double rel_error_num_stars = std::abs(num_all_stars - exp_num_stars) / exp_num_stars;
+	const double rel_error_num_stars = std::abs(num_all_stars - exp_num_stars_total) / exp_num_stars_total;
+	const double rel_error_num_low_mass_stars = std::abs(num_low_mass_stars - exp_num_low_mass_stars_total) / exp_num_low_mass_stars_total;
 
 	// Check gas mass
 	const double initial_gas_mass = rho0 * cell_volume * nx * ny * nz;
 	const double final_gas_mass = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
-	const double change_gas_mass = initial_gas_mass - (all_stars_total_mass - high_mass_stars_total_mass);
+	const double change_gas_mass = initial_gas_mass - final_gas_mass;
 
-	amrex::Print() << "\nRelative error:\n";
-	amrex::Print() << "rel_err(num_stars) = " << rel_error_num_stars << "\n";
-	amrex::Print() << "rel_err(Mstar_high_mean) = " << rel_error_Mstar_high_mean << " sigma " << "\n";
-	amrex::Print() << "rel_err(fstar_high) = " << rel_error_fstar_high << "\n";
-	amrex::Print() << "Initial (gas mass) - Mass of Low Mass Stars =  " << change_gas_mass / M_sol << " Msun \n";
-	amrex::Print() << "Rel error wrt final gas mass = " << std::abs(final_gas_mass - change_gas_mass) / final_gas_mass << "\n";
+	amrex::Print() << "\nRelative Error:\n";
+	amrex::Print() << "Relative Error (total number of stars)    = " << rel_error_num_stars << "\n";
+	amrex::Print() << "Relative Error (mass of high mass stars)  = " << rel_error_Mstar_high_mean << " sigma " << "\n";
+	amrex::Print() << "Relative Error (number of total stars)    = " << rel_error_num_stars << "\n";
+	amrex::Print() << "Relative Error (number of low mass stars) = " << rel_error_num_low_mass_stars << "\n";
+	amrex::Print() << "Change in Gas Mass (Initial - Final)      =  " << change_gas_mass << " Msun \n";
 
 	return 0;
 }
