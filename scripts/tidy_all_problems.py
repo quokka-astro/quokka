@@ -15,27 +15,36 @@ def run_command(cmd, cwd=None):
 
 
 def main():
+    stage = 2 # 1: fix it, 2: recheck after fix
     max_count = 200
     count = 0
     for f in glob("./src/problems/*/*.cpp"):
         base_name = os.path.basename(f)
-        log_file = f"./gitignore-chongchong-tidy/{base_name}"
-        log_file_fix = f"./gitignore-chongchong-tidy-fix/{base_name}"
-        # log_file_fix2 = f"./gitignore-chongchong-tidy-fix2/{base_name}"
+        log_file_fix = f"./sims/tidy/tidy-all-problems-fix/{base_name}"
+        log_file_fix2 = f"./sims/tidy/tidy-all-problems-after-fix/{base_name}"
+        os.makedirs(os.path.dirname(log_file_fix), exist_ok=True)
+        os.makedirs(os.path.dirname(log_file_fix2), exist_ok=True)
+
+        # log_file_base = f"./sims/tidy/tidy-all-problems/{base_name}"
+        log_file_base = f"./sims/tidy/tidy-all-fix1/{base_name}"
+
         is_tidy_clean = True
-        if os.path.exists(log_file):
-            with open(log_file, "r") as log_file_:
+        if os.path.exists(log_file_base):
+            with open(log_file_base, "r") as log_file_:
                 n_lines = len(log_file_.readlines())
-                if n_lines > 2:
+                if n_lines > 3:
                     is_tidy_clean = False
             if not is_tidy_clean:
                 print(f"doing tidy for {base_name}")
-                cmd = f"clang-tidy {f} -fix -p ./build/build-3D-debug > {log_file_fix} && echo 'done' >> {log_file_fix} &"
-                # cmd = f"clang-tidy {f} -p ./build/build-3D-debug > {log_file_fix2} && echo 'done' >> {log_file_fix2} &"
+                cmd = ""
+                if stage == 1:
+                    cmd = f"clang-tidy {f} -fix -p ./build/build-3D-debug > {log_file_fix} && echo 'done' >> {log_file_fix} &"
+                elif stage == 2:
+                    cmd = f"clang-tidy {f} -p ./build/build-3D-debug > {log_file_fix2} && echo 'done' >> {log_file_fix2} &"
                 run_command(cmd)
                 count += 1
         else:
-            print(f"File {log_file} does not exist")
+            print(f"File {log_file_base} does not exist")
         if count >= max_count:
             break
 
