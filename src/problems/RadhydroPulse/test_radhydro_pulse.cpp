@@ -17,8 +17,8 @@ struct AdvPulseProblem {
 constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 
 constexpr double T_low = 1.0e7; // K (temperature)
-constexpr double T_hi = 2.0e7; // K (temperature)
-constexpr double rho0 = 1.2; // g cm^-3 (matter density)
+constexpr double T_hi = 2.0e7;	// K (temperature)
+constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;

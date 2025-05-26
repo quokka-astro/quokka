@@ -115,7 +115,7 @@ quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, con
 }
 
 const auto initial_Egas = 1e-10 * quokka::EOS<MarshakProblem>::ComputeEintFromTgas(rho0, T_hohlraum); // NOLINT
-const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum)); // NOLINT
+const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum));      // NOLINT
 
 template <>
 void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange,

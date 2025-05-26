@@ -273,7 +273,7 @@ auto problem_main() -> int
 			for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
 				Erad_t += values.at(RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
 			}
-			Erad.at(i) = Erad_t / a_rad;			     // scaled
+			Erad.at(i) = Erad_t / a_rad;			       // scaled
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_lo; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];

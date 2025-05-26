@@ -62,7 +62,7 @@ static constexpr bool export_csv = true;
 
 constexpr double T_lo = 1.0e7; // K (temperature)
 constexpr double T_hi = 2.0e7; // K (temperature)
-constexpr double rho0 = 1.2; // g cm^-3 (matter density)
+constexpr double rho0 = 1.2;   // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double width = 24.0; // cm, width of the pulse
 constexpr double erad_floor = a_rad * T_lo * T_lo * T_lo * T_lo * 1.0e-10;

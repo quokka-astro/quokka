@@ -178,16 +178,20 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 	}
 
 	std::vector<double> density_exact_interp(xs.size());
-	interpolate_arrays(xs.data(), density_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), density_exact.data(), static_cast<int>(xs_exact.size()));
+	interpolate_arrays(xs.data(), density_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), density_exact.data(),
+			   static_cast<int>(xs_exact.size()));
 
 	std::vector<double> velocity_exact_interp(xs.size());
-	interpolate_arrays(xs.data(), velocity_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), velocity_exact.data(), static_cast<int>(xs_exact.size()));
+	interpolate_arrays(xs.data(), velocity_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), velocity_exact.data(),
+			   static_cast<int>(xs_exact.size()));
 
 	std::vector<double> pressure_exact_interp(xs.size());
-	interpolate_arrays(xs.data(), pressure_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), pressure_exact.data(), static_cast<int>(xs_exact.size()));
+	interpolate_arrays(xs.data(), pressure_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), pressure_exact.data(),
+			   static_cast<int>(xs_exact.size()));
 
 	std::vector<double> eint_exact_interp(xs.size());
-	interpolate_arrays(xs.data(), eint_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), eint_exact.data(), static_cast<int>(xs_exact.size()));
+	interpolate_arrays(xs.data(), eint_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), eint_exact.data(),
+			   static_cast<int>(xs_exact.size()));
 
 	amrex::Gpu::DeviceVector<double> rho_g(density_exact_interp.size());
 	amrex::Gpu::DeviceVector<double> vx_g(velocity_exact_interp.size());

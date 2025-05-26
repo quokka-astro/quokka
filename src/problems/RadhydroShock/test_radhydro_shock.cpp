@@ -276,7 +276,7 @@ auto problem_main() -> int
 			xs.at(i) = x; // cm
 
 			const double Erad_t = values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
-			Erad.at(i) = Erad_t / a_rad;			     // scaled
+			Erad.at(i) = Erad_t / a_rad;			       // scaled
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_lo; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];

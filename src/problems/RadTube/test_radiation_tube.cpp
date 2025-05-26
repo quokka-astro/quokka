@@ -32,9 +32,9 @@ constexpr double kappa0 = 100.;	     // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g
 constexpr double gamma_gas = 5. / 3.;
 
-constexpr double rho0 = 1.0;		    // g cm^-3
-constexpr double T_lo = 2.75e7;		    // K
-constexpr double rho1 = 2.1940476649492044; // g cm^-3
+constexpr double rho0 = 1.0;		      // g cm^-3
+constexpr double T_lo = 2.75e7;		      // K
+constexpr double rho1 = 2.1940476649492044;   // g cm^-3
 constexpr double T_hi = 2.2609633884436745e7; // K
 constexpr double a_rad = C::a_rad;
 
