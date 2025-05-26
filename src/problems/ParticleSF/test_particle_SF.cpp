@@ -164,13 +164,12 @@ auto problem_main() -> int
 		if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
 			high_mass_stars_total_mass += real_data_final[i][mass_idx];
 			num_high_mass_stars++;
-		}
-		else{
+		} else {
 			num_low_mass_stars++;
 		}
 		all_stars_total_mass += real_data_final[i][mass_idx];
 	}
-	const double mean_mass_high_mass_stars      = high_mass_stars_total_mass / num_high_mass_stars;
+	const double mean_mass_high_mass_stars = high_mass_stars_total_mass / num_high_mass_stars;
 	const double mean_mass_high_mass_stars_Msun = mean_mass_high_mass_stars / M_sol;
 	amrex::Print() << "Probability of star formation in every cell = " << prob_star_formation << "\n";
 
