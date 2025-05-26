@@ -136,7 +136,7 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 		// Calculate Stellar Disk Potential
 		double prefac2 = NAN;
 		prefac2 = 2. * M_PI * Gconst_ * Sigma_star * z_star;
-		const double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
+		const double Phist = prefac2 * (std::pow(1. + (z * z / z_star / z_star), 0.5) - 1.);
 
 		// Calculate Gas Disk Potential
 
