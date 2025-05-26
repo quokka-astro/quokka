@@ -33,9 +33,9 @@ constexpr double mu = 2.33 * C::m_u; // g
 constexpr double gamma_gas = 5. / 3.;
 
 constexpr double rho0 = 1.0;		    // g cm^-3
-constexpr double T0 = 2.75e7;		    // K
+constexpr double T_lo = 2.75e7;		    // K
 constexpr double rho1 = 2.1940476649492044; // g cm^-3
-constexpr double T1 = 2.2609633884436745e7; // K
+constexpr double T_hi = 2.2609633884436745e7; // K
 constexpr double a_rad = C::a_rad;
 
 constexpr double a0 = 4.0295519855200705e7; // cm s^-1
@@ -62,8 +62,8 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double c_hat_over_c = 10.0 * a0 / C::c_light;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::k_B;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 3.3 * T0, 1000. * T0}; // Kelvin
-	// static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 1000. * T0}; // Kelvin
+	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T_lo, 3.3 * T_lo, 1000. * T_lo}; // Kelvin
+	// static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T_lo, 1000. * T_lo}; // Kelvin
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
@@ -206,12 +206,12 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	auto const radBoundaries_g = RadSystem<TubeProblem>::radBoundaries_;
 
 	// calculate radEnergyFractions
-	auto radEnergyFractionsT0 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T0);
-	auto radEnergyFractionsT1 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T1);
+	auto radEnergyFractionsT0 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T_lo);
+	auto radEnergyFractionsT1 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T_hi);
 
 	if (i < lo[0]) {
 		// left side boundary -- constant
-		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T0, 4);
+		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T_lo, 4);
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 			const double Frad = consVar(lo[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g);
 			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractionsT0[g];
@@ -220,7 +220,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
 		}
 
-		const double Egas = (C::k_B / mu) * rho0 * T0 / (gamma_gas - 1.0);
+		const double Egas = (C::k_B / mu) * rho0 * T_lo / (gamma_gas - 1.0);
 		const double x1Mom = consVar(lo[0], j, k, RadSystem<TubeProblem>::x1GasMomentum_index);
 		const double Ekin = 0.5 * (x1Mom * x1Mom) / rho0;
 		consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
@@ -231,7 +231,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
 	} else if (i > hi[0]) {
 		// right-side boundary -- constant
-		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T1, 4);
+		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T_hi, 4);
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 			const double Frad = consVar(hi[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g);
 			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractionsT1[g];
@@ -240,7 +240,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
 		}
 
-		const double Egas = (C::k_B / mu) * rho1 * T1 / (gamma_gas - 1.0);
+		const double Egas = (C::k_B / mu) * rho1 * T_hi / (gamma_gas - 1.0);
 		const double x1Mom = consVar(hi[0], j, k, RadSystem<TubeProblem>::x1GasMomentum_index);
 		const double Ekin = 0.5 * (x1Mom * x1Mom) / rho1;
 		consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;

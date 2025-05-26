@@ -60,12 +60,12 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexp
 
 static constexpr bool export_csv = true;
 
-constexpr double T0 = 1.0e7; // K (temperature)
-constexpr double T1 = 2.0e7; // K (temperature)
+constexpr double T_lo = 1.0e7; // K (temperature)
+constexpr double T_hi = 2.0e7; // K (temperature)
 constexpr double rho0 = 1.2; // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double width = 24.0; // cm, width of the pulse
-constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
+constexpr double erad_floor = a_rad * T_lo * T_lo * T_lo * T_lo * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double h_planck = C::hplanck;
 constexpr double k_B = C::k_B;
@@ -84,7 +84,7 @@ constexpr int64_t max_timesteps = 1e2; // to make 3D test run fast on GPUs
 // constexpr double v0_adv = 1.0e8;    // advecting pulse
 // constexpr double max_time = 1.2e-4; // max_time = 2.0 * width / v1;
 
-constexpr double T_ref = T0;
+constexpr double T_ref = T_lo;
 constexpr double nu_ref = 1.0e18;			     // Hz
 constexpr double coeff_ = h_planck * nu_ref / (k_B * T_ref); // = 4.799243073 = 1 / 0.2083661912
 
@@ -142,7 +142,7 @@ auto compute_initial_Tgas(const double x) -> double
 {
 	// compute temperature profile for Gaussian radiation pulse
 	const double sigma = width;
-	return T0 + (T1 - T0) * std::exp(-x * x / (2.0 * sigma * sigma));
+	return T_lo + (T_hi - T_lo) * std::exp(-x * x / (2.0 * sigma * sigma));
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -150,7 +150,7 @@ auto compute_exact_rho(const double x) -> double
 {
 	// compute density profile for Gaussian radiation pulse
 	auto T = compute_initial_Tgas(x);
-	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
+	return rho0 * T_lo / T + (a_rad * mu / 3. / k_B) * (std::pow(T_lo, 4) / T - std::pow(T, 3));
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -199,13 +199,13 @@ RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	const double sigma = scaleup * 3063.96 * std::pow(Tgas / T0, -3.5);
+	const double sigma = scaleup * 3063.96 * std::pow(Tgas / T_lo, -3.5);
 	return sigma / rho;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	const double sigma = scaleup * 101.248 * std::pow(Tgas / T0, -3.5);
+	const double sigma = scaleup * 101.248 * std::pow(Tgas / T_lo, -3.5);
 	return sigma / rho;
 }
 
