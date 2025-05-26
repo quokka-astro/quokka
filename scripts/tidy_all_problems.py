@@ -26,7 +26,7 @@ def main():
         os.makedirs(os.path.dirname(log_file_fix2), exist_ok=True)
 
         # log_file_base = f"./sims/tidy/tidy-all-problems/{base_name}"
-        log_file_base = f"./sims/tidy/tidy-all-fix1/{base_name}"
+        log_file_base = f"./sims/tidy/tidy-all-problems-fix1/{base_name}"
 
         is_tidy_clean = True
         if os.path.exists(log_file_base):
