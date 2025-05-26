@@ -176,10 +176,10 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 	//  inject energy into cells with stochastic sampling
 	const BL_PROFILE("QuokkaSimulation::Addsupernova()")
 
-	    const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
-	const Real rho_eint_blast = userData.E_blast / cell_vol;       // ergs cm^-3
-	const Real rho_blast = userData.M_ejecta / cell_vol;	       // g cm^-3
-	const Real scalar_blast = 1.e3 / cell_vol;		       // g cm^-3
+	const double cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
+	const double rho_eint_blast = userData.E_blast / cell_vol;       // ergs cm^-3
+	const double rho_blast = userData.M_ejecta / cell_vol;	       // g cm^-3
+	const double scalar_blast = 1.e3 / cell_vol;		       // g cm^-3
 	const int cum_sn = userData.SN_counter_cumulative;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -338,7 +338,6 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 
 	proj["mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    // int nmscalars = Physics_Traits<MetalProblem>::numMassScalars;
 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
 		    return (rho * vx3);
