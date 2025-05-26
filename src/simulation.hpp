@@ -178,6 +178,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
 	int checkpointInterval_ = -1;				     // -1 == no output
 	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
+	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;				     // 1 == self-gravity enabled, 0 == disabled
@@ -737,6 +738,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// read temperature floor in K
 	pp.query("temperature_floor", tempFloor_);
+
+	// read universal refinement factor (when restarting)
+	pp.query("restart_refine_factor", restartRefineFactor_);
 
 	// specify maximum walltime in HH:MM:SS format
 	std::string maxWalltimeInput;
@@ -3042,11 +3046,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		// read in level 'lev' BoxArray from Header
-		amrex::BoxArray ba;
-		ba.readFrom(is);
+		amrex::BoxArray ba_file;
+		ba_file.readFrom(is);
 		GotoNextLine(is);
 
-		/*Create New BoxArray at Level 0 for optimum load distribution*/
+		amrex::BoxArray ba(ba_file);
+		amrex::Box minBox = ba.minimalBox();
+		amrex::Box inputDomain = geom[0].ProbDomain();
+		// TODO(bwibking): check if minBox == inputDomain:
+		//   * if yes, nothing to do.
+		//   * if no, make sure it differs by an integer factor, set restartRefineFactor.
+		//   * otherwise, abort.
+
+		if (restartRefineFactor_ > 1) {
+			// refine boxes by restartRefineFactor
+			ba.refine(restartRefineFactor_);
+		}
+
+		// load balancing: create new BoxArray at level 0 for a possibly different number of MPI ranks
 		if (lev == 0) {
 			amrex::IntVect fac(2);
 			const amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
@@ -3102,26 +3119,29 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// read in the MultiFab data
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		// cell-centred
-		if (lev == 0) {
-			amrex::MultiFab tmp;
-			amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		// cell-centred data
+		amrex::MultiFab tmp;
+		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		if (restartRefineFactor_ == 1) {
+			// if not refining, ParallelCopy:
 			state_new_cc_[0].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_, nghost_cc_);
 		} else {
-			amrex::VisMF::Read(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+			// if refining, InterpFromCoarseLevel:
+			// FIXME(bwibking): implement
 		}
-		// face-centred
+
+		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (lev == 0) {
-					amrex::MultiFab tmp;
-					amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
-											      std::string("Face_") + quokka::face_dir_str[idim]));
+				amrex::MultiFab tmp;
+				amrex::VisMF::Read(
+				    tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+				if (restartRefineFactor_ == 1) {
+					// if not refining, ParallelCopy:
 					state_new_fc_[0][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
 				} else {
-					amrex::VisMF::Read(
-					    state_new_fc_[lev][idim],
-					    amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+					// if refining, InterpFromCoarseLevel:
+					// FIXME(bwibking): implement
 				}
 			}
 		}
@@ -3136,6 +3156,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 	// Initialize and register particle containers from checkpoint file
+	// TODO(bwibking): split particles after reading if we are universally refining
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
