@@ -102,7 +102,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationMultiG
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real  /*temperature*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<DustProblem>::ComputeThermalRadiationTempDerivativeMultiGroup(amrex::Real /*temperature*/,
 												   amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
     -> quokka::valarray<amrex::Real, nGroups_>
 {

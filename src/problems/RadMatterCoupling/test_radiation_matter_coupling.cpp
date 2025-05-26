@@ -227,7 +227,7 @@ auto problem_main() -> int
 		// Plot results
 		std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
 		std::vector<double> &Trad = sim.userData_.Trad_vec_;
-		std::vector<double>  const&t = sim.userData_.t_vec_;
+		std::vector<double> const &t = sim.userData_.t_vec_;
 
 		matplotlibcpp::clf();
 		matplotlibcpp::yscale("log");

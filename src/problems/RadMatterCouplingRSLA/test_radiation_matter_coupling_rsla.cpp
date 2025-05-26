@@ -219,7 +219,7 @@ auto problem_main() -> int
 		}
 
 		std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
-		std::vector<double>  const&t = sim.userData_.t_vec_;
+		std::vector<double> const &t = sim.userData_.t_vec_;
 
 		// compute L1 error norm
 		double err_norm = 0.;

@@ -292,7 +292,7 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 		}
 
 		// Plot results
-		int const skip = 8;	    // only plot every 8 elements of exact solution
+		int const skip = 8;	  // only plot every 8 elements of exact solution
 		double const msize = 5.0; // marker size
 		matplotlibcpp::clf();
 		using mpl_arg = std::map<std::string, std::string>;
