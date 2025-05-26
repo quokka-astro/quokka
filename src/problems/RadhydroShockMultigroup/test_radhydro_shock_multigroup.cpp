@@ -26,18 +26,18 @@ constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
 constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
 constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
-constexpr double T0 = 2.18e6;					      // K
+constexpr double T_lo = 2.18e6;					      // K
 constexpr double rho0 = 5.69;					      // g cm^-3
 constexpr double v0 = 5.19e7;					      // cm s^-1
-constexpr double T1 = 7.98e6;					      // K [7.98297e6]
+constexpr double T_hi = 7.98e6;					      // K [7.98297e6]
 constexpr double rho1 = 17.1;					      // g cm^-3 [17.08233]
 constexpr double v1 = 1.73e7;					      // cm s^-1 [1.72875e7]
 constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
 
-constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
+constexpr double Erad0 = a_rad * (T_lo * T_lo * T_lo * T_lo); // erg cm^-3
 constexpr double Erad_floor_ = Erad0 * 1e-12;
-constexpr double Egas0 = rho0 * c_v * T0; // erg cm^-3
-constexpr double Egas1 = rho1 * c_v * T1; // erg cm^-3
+constexpr double Egas0 = rho0 * c_v * T_lo; // erg cm^-3
+constexpr double Egas1 = rho1 * c_v * T_hi; // erg cm^-3
 
 constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
 					  // we initialize slightly to the left...)
@@ -123,7 +123,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		const double px_L = rho0 * v0;
 		const double Egas_L = Egas0;
 
-		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiationMultiGroup(T0, radBoundaries_g);
+		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiationMultiGroup(T_lo, radBoundaries_g);
 
 		// x1 left side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
@@ -143,7 +143,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		const double px_R = rho1 * v1;
 		const double Egas_R = Egas1;
 
-		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiationMultiGroup(T1, radBoundaries_g);
+		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiationMultiGroup(T_hi, radBoundaries_g);
 
 		// x1 right-side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
@@ -187,13 +187,13 @@ template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quok
 			energy = Egas0 + 0.5 * rho0 * (v0 * v0);
 			density = rho0;
 			x1Momentum = rho0 * v0;
-			temp = T0;
+			temp = T_lo;
 		} else {
 			x1RadFlux = 0.0;
 			energy = Egas1 + 0.5 * rho1 * (v1 * v1);
 			density = rho1;
 			x1Momentum = rho1 * v1;
-			temp = T1;
+			temp = T_hi;
 		}
 
 		auto Erad_g = RadSystem<ShockProblem>::ComputeThermalRadiationMultiGroup(temp, radBoundaries_g);
@@ -273,8 +273,8 @@ auto problem_main() -> int
 			for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
 				Erad_t += values.at(RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
 			}
-			Erad.at(i) = Erad_t / a_rad;			     // scaled
-			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T0; // dimensionless
+			Erad.at(i) = Erad_t / a_rad;			       // scaled
+			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_lo; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];
 			const double rho = values.at(RadSystem<ShockProblem>::gasDensity_index)[i];
@@ -283,7 +283,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T0; // dimensionless
+			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T_lo; // dimensionless
 		}
 
 		// read in exact solution
@@ -322,8 +322,8 @@ auto problem_main() -> int
 
 			// compute error norm
 			std::vector<double> Trad_interp(xs_exact.size());
-			amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << std::endl;
-			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << std::endl;
+			amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << '\n';
+			amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << '\n';
 
 			interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Trad.data(),
 					   static_cast<int>(xs.size()));
@@ -336,9 +336,9 @@ auto problem_main() -> int
 			}
 
 			rel_error = err_norm / sol_norm;
-			amrex::Print() << "Error norm = " << err_norm << std::endl;
-			amrex::Print() << "Solution norm = " << sol_norm << std::endl;
-			amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+			amrex::Print() << "Error norm = " << err_norm << '\n';
+			amrex::Print() << "Solution norm = " << sol_norm << '\n';
+			amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 		}
 
 		if ((rel_error > error_tol) || std::isnan(rel_error)) {

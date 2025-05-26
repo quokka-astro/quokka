@@ -108,7 +108,7 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 							   amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/, const amrex::BCRec *bcr,
 							   int /*bcomp*/, int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
+	if ((bcr->lo(0) != amrex::BCType::ext_dir) && (bcr->hi(0) != amrex::BCType::ext_dir)) {
 		return;
 	}
 
@@ -268,7 +268,7 @@ auto problem_main() -> int
 		std::vector<double> Trad_exact;
 		std::vector<double> Tmat_exact;
 
-		std::string filename = "../extern/SuOlson/100pt_tau10p0.dat";
+		std::string const filename = "../extern/SuOlson/100pt_tau10p0.dat";
 		std::ifstream fstream(filename, std::ios::in);
 		AMREX_ALWAYS_ASSERT(fstream.is_open());
 
@@ -301,7 +301,7 @@ auto problem_main() -> int
 		double sol_norm = 0.;
 		const double t = sim.tNew_[0];
 		const double xmax = c * t;
-		amrex::Print() << "diffusion length = " << xmax << std::endl;
+		amrex::Print() << "diffusion length = " << xmax << '\n';
 		for (size_t i = 0; i < xs.size(); ++i) {
 			if (xs[i] < xmax) {
 				err_norm += std::abs(Trad[i] - Trad_exact_interp[i]);
@@ -311,7 +311,7 @@ auto problem_main() -> int
 
 		const double error_tol = 0.02; // 2 per cent
 		const double rel_error = err_norm / sol_norm;
-		amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 		if ((rel_error > error_tol) || std::isnan(rel_error)) {
 			status = 1;

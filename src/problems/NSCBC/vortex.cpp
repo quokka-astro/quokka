@@ -165,10 +165,10 @@ auto problem_main() -> int
 			BCs_cc[n].setLo(1, amrex::BCType::ext_dir); // y- NSCBC outflow
 			BCs_cc[n].setHi(1, amrex::BCType::ext_dir);
 		}
-		if (AMREX_SPACEDIM == 3) {
-			BCs_cc[n].setLo(2, amrex::BCType::int_dir); // z- periodic
-			BCs_cc[n].setHi(2, amrex::BCType::int_dir);
-		}
+#if (AMREX_SPACEDIM == 3)
+		BCs_cc[n].setLo(2, amrex::BCType::int_dir); // z- periodic
+		BCs_cc[n].setHi(2, amrex::BCType::int_dir);
+#endif
 	}
 
 	QuokkaSimulation<Vortex> sim(BCs_cc);

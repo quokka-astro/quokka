@@ -46,10 +46,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto exactSolutionAtIndex(int i, int j, amre
 							      amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi,
 							      amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx) -> Real
 {
-	Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-	Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
-	Real const x0 = prob_lo[0] + Real(0.5) * (prob_hi[0] - prob_lo[0]);
-	Real const y0 = prob_lo[1] + Real(0.5) * (prob_hi[1] - prob_lo[1]);
+	Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
+	Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
+	Real const x0 = prob_lo[0] + static_cast<Real>(0.5) * (prob_hi[0] - prob_lo[0]);
+	Real const y0 = prob_lo[1] + static_cast<Real>(0.5) * (prob_hi[1] - prob_lo[1]);
 
 	Real rho = 0.;
 	if ((std::abs(x - x0) < 0.1) && (std::abs(y - y0) < 0.1)) {
@@ -61,9 +61,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto exactSolutionAtIndex(int i, int j, amre
 template <> void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	// loop over the grid and set the initial condition
@@ -164,7 +164,7 @@ auto problem_main() -> int
 	// run simulation
 	sim.evolve();
 
-	int status;
+	int status = 0;
 	if (sim.errorNorm_ < 0.15) {
 		status = 0;
 	} else {

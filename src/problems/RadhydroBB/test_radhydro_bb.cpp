@@ -314,7 +314,7 @@ auto problem_main() -> int
 	// insert a dummy breakpoint
 	int aa = 0;
 	aa += 1;
-	std::cout << aa << std::endl;
+	std::cout << aa << '\n';
 
 	// assert nu_exact[0] = 0.001 and nu_exact[-1] = 100
 	AMREX_ASSERT(nu_exact[0] == 0.001);
@@ -348,7 +348,7 @@ auto problem_main() -> int
 		sol_norm_T += std::abs(Trad_exact[i]);
 	}
 	const double rel_error_T = err_norm_T / sol_norm_T;
-	amrex::Print() << "Relative L1 error norm for T_gas = " << rel_error_T << std::endl;
+	amrex::Print() << "Relative L1 error norm for T_gas = " << rel_error_T << '\n';
 
 	for (int g = 0; g < n_groups_; ++g) {
 		err_norm += std::abs(Fnu_exact[g] - F_r_spec[g]);
@@ -357,7 +357,7 @@ auto problem_main() -> int
 
 	const double error_tol = 0.1;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

@@ -33,11 +33,11 @@ constexpr double gamma_gas = (5. / 3.);
 constexpr double mu = gamma_gas;		       // mean molecular weight (required s.t. c_s0 == 1)
 constexpr double c_v = k_B / (mu * (gamma_gas - 1.0)); // specific heat
 
-constexpr double T0 = 1.0;
+constexpr double T_lo = 1.0;
 constexpr double rho0 = 1.0;
 constexpr double v0 = (Mach0 * c_s0);
 
-constexpr double T1 = 3.661912665809719;
+constexpr double T_hi = 3.661912665809719;
 constexpr double rho1 = 3.0021676971081166;
 constexpr double v1 = (Mach0 * c_s0) * (rho0 / rho1);
 
@@ -45,10 +45,10 @@ constexpr double chat = 10.0 * (v0 + c_s0); // reduced speed of light
 
 constexpr double Ggrav = 1.0; // dimensionless gravitational constant; arbitrary
 
-constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0);
-constexpr double Egas0 = rho0 * c_v * T0;
-constexpr double Erad1 = a_rad * (T1 * T1 * T1 * T1);
-constexpr double Egas1 = rho1 * c_v * T1;
+constexpr double Erad0 = a_rad * (T_lo * T_lo * T_lo * T_lo);
+constexpr double Egas0 = rho0 * c_v * T_lo;
+constexpr double Erad1 = a_rad * (T_hi * T_hi * T_hi * T_hi);
+constexpr double Egas1 = rho1 * c_v * T_hi;
 
 constexpr double shock_position = 0.0130; // 0.0132; // cm
 					  // (shock position drifts to the right
@@ -103,7 +103,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
+	if ((bcr->lo(0) != amrex::BCType::ext_dir) && (bcr->hi(0) != amrex::BCType::ext_dir)) {
 		return;
 	}
 
@@ -166,14 +166,14 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
 		amrex::Real radEnergy = NAN;
 		amrex::Real x1RadFlux = NAN;
@@ -259,7 +259,7 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	int nx = static_cast<int>(position.size());
+	int const nx = static_cast<int>(position.size());
 	int status = 0;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -276,8 +276,8 @@ auto problem_main() -> int
 			xs.at(i) = x; // cm
 
 			const double Erad_t = values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
-			Erad.at(i) = Erad_t / a_rad;			     // scaled
-			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T0; // dimensionless
+			Erad.at(i) = Erad_t / a_rad;			       // scaled
+			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_lo; // dimensionless
 
 			const double Etot_t = values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];
 			const double rho = values.at(RadSystem<ShockProblem>::gasDensity_index)[i];
@@ -286,7 +286,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T0; // dimensionless
+			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T_lo; // dimensionless
 
 			gasDensity.at(i) = rho;
 			gasVelocity.at(i) = x1GasMom / rho;
@@ -298,7 +298,7 @@ auto problem_main() -> int
 		std::vector<double> Tmat_exact;
 		std::vector<double> Frad_over_c_exact;
 
-		std::string filename = "../extern/LowrieEdwards/shock.txt";
+		std::string const filename = "../extern/LowrieEdwards/shock.txt";
 		std::ifstream fstream(filename, std::ios::in);
 		AMREX_ALWAYS_ASSERT(fstream.is_open());
 		std::string header;
@@ -326,8 +326,8 @@ auto problem_main() -> int
 
 		// compute error norm
 		std::vector<double> Trad_interp(xs_exact.size());
-		amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << std::endl;
-		amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << std::endl;
+		amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size() - 1] << '\n';
+		amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size() - 1] << '\n';
 
 		interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Trad.data(), static_cast<int>(xs.size()));
 
@@ -341,9 +341,9 @@ auto problem_main() -> int
 		const double error_tol = 0.01;
 		double rel_error = NAN;
 		rel_error = err_norm / sol_norm;
-		amrex::Print() << "Error norm = " << err_norm << std::endl;
-		amrex::Print() << "Solution norm = " << sol_norm << std::endl;
-		amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "Error norm = " << err_norm << '\n';
+		amrex::Print() << "Solution norm = " << sol_norm << '\n';
+		amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 		if ((rel_error > error_tol) || std::isnan(rel_error)) {
 			status = 1;

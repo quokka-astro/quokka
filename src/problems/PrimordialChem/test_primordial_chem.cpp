@@ -78,7 +78,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	init_extern_parameters();
 
 	// parmparse species and temperature
-	amrex::ParmParse pp("primordial_chem");
+	amrex::ParmParse const pp("primordial_chem");
 	userData_.small_temp = 1e1;
 	pp.query("small_temp", userData_.small_temp);
 
@@ -282,6 +282,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	int status = 0;
+	int const status = 0;
 	return status;
 }

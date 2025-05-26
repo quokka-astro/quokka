@@ -84,7 +84,7 @@ template <> void QuokkaSimulation<CoolingTest>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<CoolingTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -116,12 +116,12 @@ template <> void QuokkaSimulation<CoolingTest>::setInitialConditionsOnGrid(quokk
 		}
 		AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
 
-		Real rho = 0.12 * m_H * (1.0 + delta_rho); // g cm^-3
-		Real xmom = 0;
-		Real ymom = 0;
-		Real zmom = 0;
+		Real const rho = 0.12 * m_H * (1.0 + delta_rho); // g cm^-3
+		Real const xmom = 0;
+		Real const ymom = 0;
+		Real const zmom = 0;
 		Real const P = 4.0e4 * C::k_B; // erg cm^-3
-		Real Eint = (quokka::EOS_Traits<CoolingTest>::gamma - 1.) * P;
+		Real const Eint = (quokka::EOS_Traits<CoolingTest>::gamma - 1.) * P;
 
 		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
@@ -158,11 +158,11 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(const amrex::IntVect &iv
 
 	if (j >= hi[1]) {
 		// x2 upper boundary -- constant
-		Real rho = rho0;
-		Real xmom = 0;
-		Real ymom = rho * (-26.0e5); // [-26 km/s]
-		Real zmom = 0;
-		Real Eint = quokka::EOS<CoolingTest>::ComputeEintFromTgas(rho, Tgas0);
+		Real const rho = rho0;
+		Real const xmom = 0;
+		Real const ymom = rho * (-26.0e5); // [-26 km/s]
+		Real const zmom = 0;
+		Real const Eint = quokka::EOS<CoolingTest>::ComputeEintFromTgas(rho, Tgas0);
 		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
 		consVar(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
@@ -215,6 +215,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	int status = 0;
+	int const status = 0;
 	return status;
 }
