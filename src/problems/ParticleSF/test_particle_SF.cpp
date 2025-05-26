@@ -116,6 +116,10 @@ auto problem_main() -> int
 	sim.stopTime_ = 1.0e6 * year; // 1 Myr
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 
+	// set random state
+	const int seed = 42;
+	amrex::InitRandom(seed, 1); // all ranks should produce the same values
+
 	// initialize
 	sim.setInitialConditions();
 
