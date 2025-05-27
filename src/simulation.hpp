@@ -3065,10 +3065,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 				const int rescaleFac = inputGrid[0] / restartGrid[0];
 				amrex::Print() << "Rescaling MultiFabs in restart file by a factor of " << rescaleFac << "...\n";
 				// make sure the grid size differs by the same integer factor for all dimensions
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    restartGrid[idim] * rescaleFac == inputGrid[idim],
-					    "Simulation has been restarted with a grid size that is not an integer multiple of the grid written to disk!");
+				if (amrex::ParallelDescriptor::IOProcessor()) {
+					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(restartGrid[idim] * rescaleFac == inputGrid[idim],
+										 "Simulation has been restarted with a grid size that is not an integer "
+										 "multiple of the grid written to disk!");
+					}
 				}
 				// set global restartRefineFactor_
 				restartRefineFactor_ = rescaleFac;
