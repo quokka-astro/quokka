@@ -3050,29 +3050,32 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		ba_file.readFrom(is);
 		GotoNextLine(is);
 
-		amrex::BoxArray ba(ba_file);
-		amrex::Box const reDom = ba.minimalBox();
-		amrex::Box const inDom = geom[0].Domain();
-		const amrex::IntVect restartGrid{
-		    AMREX_D_DECL(reDom.bigEnd(0) - reDom.smallEnd(0) + 1, reDom.bigEnd(1) - reDom.smallEnd(1) + 1, reDom.bigEnd(2) - reDom.smallEnd(2) + 1)};
-		const amrex::IntVect inputGrid{
-		    AMREX_D_DECL(inDom.bigEnd(0) - inDom.smallEnd(0) + 1, inDom.bigEnd(1) - inDom.smallEnd(1) + 1, inDom.bigEnd(2) - inDom.smallEnd(2) + 1)};
+		if (lev == 0) {
+			amrex::Box const reDom = ba_file.minimalBox();
+			amrex::Box const inDom = geom[0].Domain();
+			const amrex::IntVect restartGrid{AMREX_D_DECL(reDom.bigEnd(0) - reDom.smallEnd(0) + 1, reDom.bigEnd(1) - reDom.smallEnd(1) + 1,
+								      reDom.bigEnd(2) - reDom.smallEnd(2) + 1)};
+			const amrex::IntVect inputGrid{AMREX_D_DECL(inDom.bigEnd(0) - inDom.smallEnd(0) + 1, inDom.bigEnd(1) - inDom.smallEnd(1) + 1,
+								    inDom.bigEnd(2) - inDom.smallEnd(2) + 1)};
 
-		if (restartGrid != inputGrid) {
-			amrex::Print() << "Input grid dimensions: " << inputGrid << "\n";
-			amrex::Print() << "Restart file grid dimensions: " << restartGrid << "\n";
-			// compute rescale factor
-			const int rescaleFac = inputGrid[0] / restartGrid[0];
-			amrex::Print() << "Rescaling restart data by a factor of " << rescaleFac << "...\n";
-			// make sure the grid size differs by the same integer factor for all dimensions
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    restartGrid[idim] * rescaleFac == inputGrid[idim],
-				    "Simulation has been restarted with a grid size that is not an integer multiple of the grid written to disk!");
+			if (restartGrid != inputGrid) {
+				amrex::Print() << "Input grid dimensions on level 0: " << inputGrid << "\n";
+				amrex::Print() << "Restart file grid dimensions on level 0: " << restartGrid << "\n";
+				// compute rescale factor
+				const int rescaleFac = inputGrid[0] / restartGrid[0];
+				amrex::Print() << "Rescaling MultiFabs in restart file by a factor of " << rescaleFac << "...\n";
+				// make sure the grid size differs by the same integer factor for all dimensions
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    restartGrid[idim] * rescaleFac == inputGrid[idim],
+					    "Simulation has been restarted with a grid size that is not an integer multiple of the grid written to disk!");
+				}
+				// set global restartRefineFactor_
+				restartRefineFactor_ = rescaleFac;
 			}
-			restartRefineFactor_ = rescaleFac;
 		}
 
+		amrex::BoxArray ba(ba_file);
 		if (restartRefineFactor_ > 1) {
 			// refine boxes by restartRefineFactor
 			ba.refine(restartRefineFactor_);
