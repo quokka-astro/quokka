@@ -3051,12 +3051,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		GotoNextLine(is);
 
 		amrex::BoxArray ba(ba_file);
-		amrex::Box minBox = ba.minimalBox();
-		amrex::Box inputDomain = geom[0].ProbDomain();
-		// TODO(bwibking): check if minBox == inputDomain:
-		//   * if yes, nothing to do.
-		//   * if no, make sure it differs by an integer factor, set restartRefineFactor.
-		//   * otherwise, abort.
+		amrex::Box const restartDomain = ba.minimalBox();
+		amrex::Box const inputDomain = geom[0].Domain();
+
+		if (restartDomain != inputDomain) {
+			// make sure the grid size differs by an integer factor for all dimensions
+			int rescaleFac = 1;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				rescaleFac = inputDomain.bigEnd(idim) / restartDomain.bigEnd(idim);
+			}
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    inputDomain.bigEnd(idim) * rescaleFac == restartDomain.bigEnd(idim),
+				    "Simulation has been restarted with a grid size that is not an integer multiple of the grid written to disk!");
+			}
+			// set rescale factor
+			amrex::Print() << "Rescaling restart data by a factor of " << rescaleFac << "...\n";
+			restartRefineFactor_ = rescaleFac;
+		}
 
 		if (restartRefineFactor_ > 1) {
 			// refine boxes by restartRefineFactor
