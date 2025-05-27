@@ -739,9 +739,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// read temperature floor in K
 	pp.query("temperature_floor", tempFloor_);
 
-	// read universal refinement factor (when restarting)
-	pp.query("restart_refine_factor", restartRefineFactor_);
-
 	// specify maximum walltime in HH:MM:SS format
 	std::string maxWalltimeInput;
 	pp.query("max_walltime", maxWalltimeInput);
