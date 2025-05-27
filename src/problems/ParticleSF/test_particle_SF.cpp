@@ -29,8 +29,7 @@ constexpr double gamma_ = 5. / 3.;
 AMREX_GPU_MANAGED Real rho0 = NAN;  // NOLINT
 const double year = 3.15576e+07;    // in seconds
 AMREX_GPU_MANAGED Real Tamb = 10.0; // NOLINT
-// AMREX_GPU_MANAGED Real sigma1 = 700000.0;
-;
+
 
 template <> struct Particle_Traits<ParticleSFProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -133,7 +132,7 @@ auto problem_main() -> int
 	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
 	const amrex::Real prob_star_formation = (eps_ff / eps_star) * sim.initDt_ / t_ff;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
-					 "Probability of star formation must be less than 1.0, check parameters to ensure this is the case");
+					 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
 	// evolve
 	sim.evolve();
 
