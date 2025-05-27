@@ -2,11 +2,17 @@
 /// \brief Defines a Marshak wave problem with variable opacity.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BLassert.H"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_radiation_marshak_Vaytet.hpp"
 #include "util/fextract.hpp"
 
 // constexpr int n_groups_ = 2; // Be careful

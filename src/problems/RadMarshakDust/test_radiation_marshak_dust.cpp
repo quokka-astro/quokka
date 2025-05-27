@@ -7,11 +7,15 @@
 /// \brief Defines a test Marshak wave problem with weak coupling between dust and gas.
 ///
 
-#include "test_radiation_marshak_dust.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
+#include "radiation/radiation_dust_system.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
+#include <fmt/format.h>
 
 struct MarshakProblem {
 };

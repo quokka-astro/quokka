@@ -7,6 +7,7 @@
 /// \brief Implements a subsonic vortex flow problem with Navier-Stokes
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
+#include <fmt/format.h>
 #include <random>
 #include <tuple>
 #include <vector>
@@ -38,7 +39,6 @@
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
-#include "vortex.hpp"
 
 using amrex::Real;
 

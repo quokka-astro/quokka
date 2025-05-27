@@ -6,6 +6,9 @@
 /// \file spherical_collapse.cpp
 /// \brief Defines a test problem for pressureless spherical collapse.
 ///
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fstream>
 #include <limits>
 
 #include "AMReX.H"
@@ -21,7 +24,6 @@
 #include "AMReX_SPACE.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "spherical_collapse.hpp"
 
 struct CollapseProblem {
 };

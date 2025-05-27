@@ -7,6 +7,11 @@
 /// \brief Defines a test problem for a linear hydro wave.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include <fmt/format.h>
 #include <valarray>
 
 #include "AMReX_Array.H"
@@ -15,7 +20,6 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_hydro_wave_fc.hpp"
 #include "util/fextract.hpp"
 
 struct WaveProblemFC {
