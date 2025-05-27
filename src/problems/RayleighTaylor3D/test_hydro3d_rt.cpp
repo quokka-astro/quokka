@@ -53,8 +53,8 @@ amrex::Real constexpr g_z = -0.1;
 template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -74,13 +74,13 @@ template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka:
 			scalar = 0.0;
 		}
 
-		double amp = A * amrex::Random(rng);
+		double const amp = A * amrex::Random(rng);
 
-		double vx = 0;
-		double vy = 0;
-		double vz = amp * (1.0 + std::cos(8.0 * M_PI * z / 3.0)) / 2.0;
-		double P0 = 2.5;
-		double P = P0 + rho * g_z * z;
+		double const vx = 0;
+		double const vy = 0;
+		double const vz = amp * (1.0 + std::cos(8.0 * M_PI * z / 3.0)) / 2.0;
+		double const P0 = 2.5;
+		double const P = P0 + rho * g_z * z;
 
 		AMREX_ASSERT(!std::isnan(vx));
 		AMREX_ASSERT(!std::isnan(vy));
@@ -172,7 +172,7 @@ template <> void QuokkaSimulation<RTProblem>::computeAfterTimestep()
 	static amrex::Long cycle = 0;
 
 	if ((cycle % 10) == 0) {
-		int axis = 2; // z-axis
+		int const axis = 2; // z-axis
 		auto profile = computeAxisAlignedProfile(axis, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) {
 			return state(i, j, k, HydroSystem<RTProblem>::scalar0_index);
 		});
@@ -219,7 +219,7 @@ auto problem_main() -> int
 		}
 
 		// reflecting in z- direction
-		int i = AMREX_SPACEDIM - 1;
+		int const i = AMREX_SPACEDIM - 1;
 		if (isNormalComp(n, i)) {
 			BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
 			BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);

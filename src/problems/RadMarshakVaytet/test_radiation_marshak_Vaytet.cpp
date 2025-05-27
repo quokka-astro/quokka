@@ -399,7 +399,7 @@ auto problem_main() -> int
 			fstream << ", " << "Trad_" << i;
 		}
 		for (int i = 0; i < nx; ++i) {
-			fstream << std::endl;
+			fstream << '\n';
 			fstream << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i];
 			for (int j = 0; j < n_groups_; ++j) {
 				fstream << ", " << Trad_g[j][i];
@@ -415,7 +415,7 @@ auto problem_main() -> int
 			fstream_coll << ", " << "Trad_" << i;
 		}
 		for (int i = 0; i < nx; ++i) {
-			fstream_coll << std::endl;
+			fstream_coll << '\n';
 			fstream_coll << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i];
 			for (int j = 0; j < n_coll; ++j) {
 				fstream_coll << ", " << Trad_coll[j][i];
@@ -481,7 +481,7 @@ auto problem_main() -> int
 	}
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	std::cout << "Finished." << '\n';
 
 	// if ((rel_error > error_tol) || std::isnan(rel_error)) {
 	// 	status = 1;

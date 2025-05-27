@@ -50,18 +50,18 @@ constexpr double amp = 1.0e-6;					    // perturbation amplitude
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
-	const amrex::Real x_L = prob_lo[0] + (i + amrex::Real(0.0)) * dx[0];
-	const amrex::Real x_R = prob_lo[0] + (i + amrex::Real(1.0)) * dx[0];
+	const amrex::Real x_L = prob_lo[0] + (i + static_cast<amrex::Real>(0.0)) * dx[0];
+	const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
 	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
 	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
-	double rho = U_0[0] + dU[0];
-	double xmom = U_0[1] + dU[1];
-	double Etot = U_0[2] + dU[2];
-	double Eint = Etot - 0.5 * (xmom * xmom) / rho;
+	double const rho = U_0[0] + dU[0];
+	double const xmom = U_0[1] + dU[1];
+	double const Etot = U_0[2] + dU[2];
+	double const Eint = Etot - 0.5 * (xmom * xmom) / rho;
 
 	state(i, j, k, HydroSystem<WaveProblem>::density_index) = rho;
 	state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = xmom;
@@ -74,8 +74,8 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
@@ -125,8 +125,8 @@ auto problem_main() -> int
 	sim.evolve();
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
-	int nx = static_cast<int>(position.size());
-	std::vector<double> xs = position;
+	int const nx = static_cast<int>(position.size());
+	std::vector<double> const xs = position;
 
 	// compute error norm
 	amrex::Real err_sq = 0.;
@@ -145,7 +145,7 @@ auto problem_main() -> int
 		err_sq += dU_k * dU_k;
 	}
 	const amrex::Real epsilon = std::sqrt(err_sq);
-	amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << std::endl;
+	amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot results
@@ -156,13 +156,13 @@ auto problem_main() -> int
 		std::vector<double> P(nx);
 
 		for (int i = 0; i < nx; ++i) {
-			amrex::Real rho = values.at(HydroSystem<WaveProblem>::density_index)[i];
-			amrex::Real xmom = values.at(HydroSystem<WaveProblem>::x1Momentum_index)[i];
-			amrex::Real Egas = values.at(HydroSystem<WaveProblem>::energy_index)[i];
+			amrex::Real const rho = values.at(HydroSystem<WaveProblem>::density_index)[i];
+			amrex::Real const xmom = values.at(HydroSystem<WaveProblem>::x1Momentum_index)[i];
+			amrex::Real const Egas = values.at(HydroSystem<WaveProblem>::energy_index)[i];
 
-			amrex::Real xvel = xmom / rho;
-			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
+			amrex::Real const xvel = xmom / rho;
+			amrex::Real const Eint = Egas - xmom * xmom / (2.0 * rho);
+			amrex::Real const pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
 
 			d.at(i) = (rho - rho0) / amp;
 			vx.at(i) = (xvel - v0) / amp;
@@ -174,13 +174,13 @@ auto problem_main() -> int
 		std::vector<double> pressure_exact(nx);
 
 		for (int i = 0; i < nx; ++i) {
-			amrex::Real rho = val_exact.at(HydroSystem<WaveProblem>::density_index)[i];
-			amrex::Real xmom = val_exact.at(HydroSystem<WaveProblem>::x1Momentum_index)[i];
-			amrex::Real Egas = val_exact.at(HydroSystem<WaveProblem>::energy_index)[i];
+			amrex::Real const rho = val_exact.at(HydroSystem<WaveProblem>::density_index)[i];
+			amrex::Real const xmom = val_exact.at(HydroSystem<WaveProblem>::x1Momentum_index)[i];
+			amrex::Real const Egas = val_exact.at(HydroSystem<WaveProblem>::energy_index)[i];
 
-			amrex::Real xvel = xmom / rho;
-			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
+			amrex::Real const xvel = xmom / rho;
+			amrex::Real const Eint = Egas - xmom * xmom / (2.0 * rho);
+			amrex::Real const pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
 
 			density_exact.at(i) = (rho - rho0) / amp;
 			velocity_exact.at(i) = (xvel - v0) / amp;
@@ -192,7 +192,7 @@ auto problem_main() -> int
 
 		std::map<std::string, std::string> d_args;
 		std::map<std::string, std::string> dinit_args;
-		std::map<std::string, std::string> dexact_args;
+		std::map<std::string, std::string> const dexact_args;
 		d_args["label"] = "density";
 		dinit_args["label"] = "density (initial)";
 
@@ -205,7 +205,7 @@ auto problem_main() -> int
 
 		std::map<std::string, std::string> P_args;
 		std::map<std::string, std::string> Pinit_args;
-		std::map<std::string, std::string> Pexact_args;
+		std::map<std::string, std::string> const Pexact_args;
 		P_args["label"] = "pressure";
 		Pinit_args["label"] = "pressure (initial)";
 
@@ -218,7 +218,7 @@ auto problem_main() -> int
 
 		std::map<std::string, std::string> v_args;
 		std::map<std::string, std::string> vinit_args;
-		std::map<std::string, std::string> vexact_args;
+		std::map<std::string, std::string> const vexact_args;
 		v_args["label"] = "velocity";
 		vinit_args["label"] = "velocity (initial)";
 

@@ -49,15 +49,15 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		double vx = NAN;
 		double rho = NAN;
 		double P = NAN;
@@ -147,7 +147,7 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 	std::vector<double> pressure_exact;
 	std::vector<double> velocity_exact;
 
-	std::string filename = "../extern/ShuOsher_athena_3c_hllc_vl.txt";
+	std::string const filename = "../extern/ShuOsher_athena_3c_hllc_vl.txt";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 
@@ -176,10 +176,10 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 
 	// interpolate exact solution onto coarse grid
 	auto const box = geom[0].Domain();
-	int nx = (box.hiVect3d()[0] - box.loVect3d()[0]) + 1;
+	int const nx = (box.hiVect3d()[0] - box.loVect3d()[0]) + 1;
 	std::vector<double> xs(nx);
 	for (int i = 0; i < nx; ++i) {
-		xs.at(i) = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		xs.at(i) = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 	}
 
 	std::vector<double> density_exact_interp(xs.size());
@@ -216,9 +216,9 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
-			amrex::Real rho = rho_arr[i];
-			amrex::Real vx = vx_arr[i];
-			amrex::Real P = P_arr[i];
+			amrex::Real const rho = rho_arr[i];
+			amrex::Real const vx = vx_arr[i];
+			amrex::Real const P = P_arr[i];
 
 			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
@@ -242,13 +242,13 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 		std::vector<double> P(nx);
 
 		for (int i = 0; i < nx; ++i) {
-			amrex::Real rho = values.at(HydroSystem<ShocktubeProblem>::density_index)[i];
-			amrex::Real xmom = values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index)[i];
-			amrex::Real Egas = values.at(HydroSystem<ShocktubeProblem>::energy_index)[i];
+			amrex::Real const rho = values.at(HydroSystem<ShocktubeProblem>::density_index)[i];
+			amrex::Real const xmom = values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index)[i];
+			amrex::Real const Egas = values.at(HydroSystem<ShocktubeProblem>::energy_index)[i];
 
-			amrex::Real xvel = xmom / rho;
-			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = (quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.) * Eint;
+			amrex::Real const xvel = xmom / rho;
+			amrex::Real const Eint = Egas - xmom * xmom / (2.0 * rho);
+			amrex::Real const pressure = (quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.) * Eint;
 
 			d.at(i) = rho;
 			vx.at(i) = xvel;

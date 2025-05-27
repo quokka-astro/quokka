@@ -274,7 +274,7 @@ auto problem_main() -> int
 		sol_norm += std::abs(Tgas_exact_vec[i]) + std::abs(Erad_exact_vec[i]);
 	}
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	if (export_csv) {
 		std::ofstream file;

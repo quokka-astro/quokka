@@ -239,7 +239,7 @@ auto problem_main() -> int
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
 	}
-	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
+	amrex::Print() << "Relative L1 norm = " << rel_err_norm << '\n';
 
 #ifdef HAVE_PYTHON
 	// Plot results
@@ -264,6 +264,6 @@ auto problem_main() -> int
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return status;
 }

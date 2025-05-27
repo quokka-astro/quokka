@@ -81,7 +81,7 @@ template <> void QuokkaSimulation<StarCluster>::preCalculateInitialConditions()
 	if (!isSamplingDone) {
 		// read perturbations from file
 		turb_data turbData;
-		amrex::ParmParse pp("perturb");
+		amrex::ParmParse const pp("perturb");
 		std::string turbdata_filename;
 		pp.query("filename", turbdata_filename);
 		initialize_turbdata(turbData, turbdata_filename);

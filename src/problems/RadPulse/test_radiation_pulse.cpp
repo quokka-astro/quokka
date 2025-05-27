@@ -87,7 +87,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanO
 template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -97,7 +97,7 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		const double Trad = compute_exact_Trad(x - x0, initial_time);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, Trad);
 
@@ -174,7 +174,7 @@ auto problem_main() -> int
 	std::vector<double> Tgas(nx);
 	std::vector<double> Erad(nx);
 	std::vector<double> Egas(nx);
-	std::vector<double> T_initial(nx);
+	std::vector<double> const T_initial(nx);
 	std::vector<double> xs_exact;
 	std::vector<double> Trad_exact;
 	std::vector<double> Erad_exact;
@@ -205,7 +205,7 @@ auto problem_main() -> int
 	}
 	const double error_tol = 0.01;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature
@@ -213,7 +213,7 @@ auto problem_main() -> int
 
 	std::map<std::string, std::string> Trad_args;
 	std::map<std::string, std::string> Tgas_args;
-	std::map<std::string, std::string> Tinit_args;
+	std::map<std::string, std::string> const Tinit_args;
 	std::map<std::string, std::string> Trad_exact_args;
 	Trad_args["label"] = "radiation temperature";
 	Trad_args["linestyle"] = "-.";
