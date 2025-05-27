@@ -30,7 +30,6 @@ AMREX_GPU_MANAGED Real rho0 = NAN;  // NOLINT
 const double year = 3.15576e+07;    // in seconds
 AMREX_GPU_MANAGED Real Tamb = 10.0; // NOLINT
 
-
 template <> struct Particle_Traits<ParticleSFProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
