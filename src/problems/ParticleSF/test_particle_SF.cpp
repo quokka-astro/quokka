@@ -176,10 +176,10 @@ auto problem_main() -> int
 	amrex::Print() << "Probability of star formation in every cell = " << prob_star_formation << "\n";
 
 	amrex::Print() << "Total particle mass          = " << all_stars_total_mass / M_sol << " Msun\n";
-	amrex::Print() << "Total Number of high mass stars [expected]   = " << num_high_mass_stars <<" [" << exp_num_high_mass_stars_total << "] \n";
-	amrex::Print() << "Total Number of low mass stars  [expected]   = " << num_low_mass_stars <<" [" << exp_num_low_mass_stars_total << "] \n";
-	amrex::Print() << "Total Number of all stars       [expected]   = " << num_all_stars <<" [" << exp_num_stars_total << "] \n";
-	amrex::Print() << "Mean mass of high mass stars    [expected]   = " << mean_mass_high_mass_stars_Msun <<" [19.39]" << " Msun\n";
+	amrex::Print() << "Total Number of high mass stars [expected]   = " << num_high_mass_stars << " [" << exp_num_high_mass_stars_total << "] \n";
+	amrex::Print() << "Total Number of low mass stars  [expected]   = " << num_low_mass_stars << " [" << exp_num_low_mass_stars_total << "] \n";
+	amrex::Print() << "Total Number of all stars       [expected]   = " << num_all_stars << " [" << exp_num_stars_total << "] \n";
+	amrex::Print() << "Mean mass of high mass stars    [expected]   = " << mean_mass_high_mass_stars_Msun << " [19.39]" << " Msun\n";
 
 	// relative error
 	const double sigma_high_mass_stars = std::sqrt(exp_num_high_mass_stars_total);
@@ -196,7 +196,7 @@ auto problem_main() -> int
 	amrex::Print() << "Relative Error (mass of high mass stars)      = " << rel_error_Mstar_high_mean << " \n";
 	amrex::Print() << "Relative Error (number of high mass stars)    = " << rel_error_num_stars_high << " sigma \n";
 	amrex::Print() << "Relative Error (number of low mass stars)     = " << rel_error_num_stars_low << "\n";
-	amrex::Print() << "Change in Gas Mass (Initial - Final)          = " << change_gas_mass/M_sol << " Msun \n";
+	amrex::Print() << "Change in Gas Mass (Initial - Final)          = " << change_gas_mass / M_sol << " Msun \n";
 
 	return 0;
 }
