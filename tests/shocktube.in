@@ -23,3 +23,9 @@ do_subcycle = 1
 plotfile_interval = -1
 cfl = 0.6
 hydro.reconstruction_order = 3
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+stop_time = 0.4
+max_timesteps = 8000

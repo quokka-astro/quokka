@@ -203,11 +203,7 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<ContactProblem> sim(BCs_cc);
 
-	sim.stopTime_ = 2.0;
-	sim.cflNumber_ = 0.8;
-	sim.maxTimesteps_ = 2000;
 	sim.computeReferenceSolution_ = true;
-	sim.plotfileInterval_ = -1;
 
 	// initialize and evolve
 	sim.setInitialConditions();

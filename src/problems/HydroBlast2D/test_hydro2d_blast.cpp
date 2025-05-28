@@ -172,10 +172,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<BlastProblem> sim(BCs_cc);
 
-	sim.stopTime_ = 0.1; // 1.5;
-	sim.cflNumber_ = 0.3;
-	sim.maxTimesteps_ = 20000;
-	sim.plotfileInterval_ = 2000;
 
 	// initialize
 	sim.setInitialConditions();

@@ -112,10 +112,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
 
 	// set initial conditions
 	sim.setInitialConditions();

@@ -19,3 +19,13 @@ amr.blocking_factor = 4     # grid size must be divisible by this
 
 do_reflux = 0
 do_subcycle = 0
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+cfl = 0.1
+stop_time = 6.0
+max_dt = 1e-3
+init_dt = 1e-5
+max_timesteps = 50000
+plotfile_interval = -1

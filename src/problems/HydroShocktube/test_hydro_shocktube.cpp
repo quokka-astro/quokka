@@ -371,8 +371,6 @@ auto problem_main() -> int
 	// sim.cflNumber_ = CFL_number;
 	// sim.maxDt_ = max_dt;
 	// sim.initDt_ = initial_dt;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
 	sim.computeReferenceSolution_ = true;
 
 	// Main time loop

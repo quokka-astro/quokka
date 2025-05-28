@@ -142,11 +142,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	AdvectionSimulation<SawtoothProblem> sim(BCs_cc);
-	sim.maxDt_ = max_dt;
-	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
 	sim.advectionVx_ = 1.0;
 	sim.advectionVy_ = advection_velocity;
 
