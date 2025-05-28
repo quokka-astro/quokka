@@ -181,7 +181,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<RichtmeyerMeshkovProblem> sim(BCs_cc);
 
-
 	// initialize
 	sim.setInitialConditions();
 

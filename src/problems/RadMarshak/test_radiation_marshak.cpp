@@ -224,7 +224,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<SuOlsonProblem> sim(BCs_cc);
 
-
 	// initialize
 	sim.setInitialConditions();
 

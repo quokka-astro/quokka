@@ -151,7 +151,7 @@ auto problem_main() -> int
 	QuokkaSimulation<SinkProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.tempFloor_ = 10.0; // K
+	sim.tempFloor_ = 10.0;	      // K
 	sim.doPoissonSolve_ = 1;
 
 	// initialize

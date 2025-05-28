@@ -112,7 +112,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 
-
 	// set initial conditions
 	sim.setInitialConditions();
 	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);

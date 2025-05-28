@@ -252,7 +252,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<ShockProblem> sim(BCs_cc);
 
-
 	// run
 	sim.setInitialConditions();
 	sim.evolve();

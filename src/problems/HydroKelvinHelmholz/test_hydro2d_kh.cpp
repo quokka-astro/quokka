@@ -139,7 +139,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<KelvinHelmholzProblem> sim(BCs_cc);
 
-
 	// initialize
 	sim.setInitialConditions();
 

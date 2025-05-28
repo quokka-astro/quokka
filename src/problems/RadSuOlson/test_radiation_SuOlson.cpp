@@ -226,7 +226,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
 
-
 	// evolve
 	sim.setInitialConditions();
 	sim.evolve();

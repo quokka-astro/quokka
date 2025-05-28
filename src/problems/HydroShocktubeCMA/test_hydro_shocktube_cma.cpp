@@ -261,7 +261,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
 
-
 	// Main time loop
 	sim.setInitialConditions();
 	sim.evolve();

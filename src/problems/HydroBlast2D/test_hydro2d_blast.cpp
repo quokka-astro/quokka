@@ -172,7 +172,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<BlastProblem> sim(BCs_cc);
 
-
 	// initialize
 	sim.setInitialConditions();
 

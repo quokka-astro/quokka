@@ -169,7 +169,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<CouplingProblem> sim(BCs_cc);
 
-
 	// initialize
 	sim.setInitialConditions();
 
