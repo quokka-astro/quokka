@@ -7,6 +7,7 @@
 /// \brief Defines a test problem for a binary orbit.
 ///
 
+#include "AMReX_BLassert.H"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include <algorithm>
@@ -28,6 +29,9 @@
 
 struct BinaryOrbit {
 };
+
+static bool do_split_particles = false; // NOLINT
+static int split_factor = 8;		// NOLINT
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
@@ -80,6 +84,14 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
 	CICParticles->InitFromAsciiFile("BinaryOrbit_particles.txt", nreal_extra, nullptr);
+
+	// test particle splitting
+	// (this is intended to only be used when restarting at a higher resolution)
+	if (do_split_particles) {
+		amrex::Print() << "Splitting CICParticles using split_factor = " << split_factor << "\n";
+		int const lev = 0; // all CICParticles are on level 0
+		particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, split_factor);
+	}
 }
 
 template <> void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
@@ -109,19 +121,28 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 				amrex::Print() << "Computing particle statistics...\n";
 
 				// compute orbital elements
-				const auto &p1 = real_data[0];
-				const auto &p2 = real_data[1];
-				const double dx = p1[0] - p2[0]; // position x
-				const double dy = p1[1] - p2[1]; // position y
-				const double dz = p1[2] - p2[2]; // position z
-				const double dist = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+				double dist = 0.0;
+
+				// Loop over all pairs of particles
+				for (size_t i = 0; i < real_data.size(); ++i) {
+					for (size_t j = i + 1; j < real_data.size(); ++j) {
+						const auto &p1 = real_data[i];
+						const auto &p2 = real_data[j];
+						const double dx = p1[0] - p2[0]; // position x
+						const double dy = p1[1] - p2[1]; // position y
+						const double dz = p1[2] - p2[2]; // position z
+						const double pair_dist = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+						dist = std::max(dist, pair_dist);
+					}
+				}
+
 				const double dist0 = 6.25e12; // cm
 				const amrex::Real cell_dx0 = this->geom[finest_level].CellSize(0);
 
 				// save statistics
 				userData_.time.push_back(tNew_[finest_level]);
 				userData_.dist.push_back((dist - dist0) / cell_dx0);
-				amrex::Print() << "Particle separation: " << dist << " cm, initial separation is " << dist0 << " cm.\n";
+				amrex::Print() << "Maximum particle separation: " << dist << " cm, initial separation is " << dist0 << " cm.\n";
 			}
 		}
 	}
@@ -167,6 +188,11 @@ auto problem_main() -> int
 		}
 	}
 
+	// read in runtime parameters for this test problem
+	amrex::ParmParse const pp("problem");
+	pp.query("do_split_particles", do_split_particles);
+	pp.query("split_factor", split_factor);
+
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
@@ -184,7 +210,7 @@ auto problem_main() -> int
 			auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
 						       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
 			max_err = std::abs(*result);
-			amrex::Print() << "max particle separation = " << max_err << " cell widths.\n";
+			amrex::Print() << "max deviation from initial particle separation = " << max_err << " cell widths.\n";
 		} else {
 			max_err = 1.0;
 			amrex::Print() << "No particles in userData_.dist.\n";
@@ -192,9 +218,23 @@ auto problem_main() -> int
 	}
 
 	int status = 1;
-	const double max_err_tol = 0.18; // max error tol in cell widths
-	if (max_err < max_err_tol) {
-		status = 0;
+	if (do_split_particles) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ <= 20, "maxTimesteps_ must be <= 20 when do_split_particles is true");
+		const double split_max_err_tol = 0.6; // max error tol in cell widths
+		if (max_err < split_max_err_tol) {
+			status = 0;
+			amrex::Print() << "Test passed (split particles)\n";
+		} else {
+			amrex::Print() << "Test failed (split particles)\n";
+		}
+	} else {
+		const double max_err_tol = 0.18; // max error tol in cell widths
+		if (max_err < max_err_tol) {
+			status = 0;
+			amrex::Print() << "Test passed\n";
+		} else {
+			amrex::Print() << "Test failed\n";
+		}
 	}
 	return status;
 }
