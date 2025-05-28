@@ -341,7 +341,6 @@ auto problem_main() -> int
 	QuokkaSimulation<ShellProblem> sim(BCs_cc);
 	constexpr amrex::Real t0_hydro = r_0 / a0; // seconds
 	// sim.densityFloor_ = 1.0e-8 * rho_0;
-	sim.stopTime_ = 0.125 * t0_hydro;
 	sim.setInitialConditions();
 
 	// run

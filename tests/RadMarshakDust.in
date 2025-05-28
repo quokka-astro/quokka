@@ -35,3 +35,13 @@ suppress_output = 0
 stop_time = 5.0
 #checkpoint_interval = 1
 #restartfile = chk00006
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+# Note: stop_time can be overridden by runtime parameters
+cfl = 0.8
+radiation_cfl = 0.8
+max_dt = 1.0
+max_timesteps = 5000
+plotfile_interval = -1

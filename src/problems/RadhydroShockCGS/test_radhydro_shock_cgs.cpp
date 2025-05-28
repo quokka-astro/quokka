@@ -253,11 +253,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<ShockProblem> sim(BCs_cc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.stopTime_ = max_time;
-	sim.plotfileInterval_ = -1;
 
 	// run
 	sim.setInitialConditions();

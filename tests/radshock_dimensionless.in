@@ -23,3 +23,11 @@ do_subcycle = 0
 plotfile_interval = 10000000
 
 radiation.print_iteration_counts = 1
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+max_timesteps = 20000
+cfl = 0.4
+max_dt = 0.001
+stop_time = 0.04734

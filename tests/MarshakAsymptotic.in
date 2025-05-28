@@ -1,4 +1,4 @@
-cfl= = 10.0
+cfl = 10.0
 
 # *****************************************************************
 # Problem size and geometry
@@ -22,3 +22,13 @@ amr.blocking_factor = 4     # grid size must be divisible by this
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 1
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+radiation_cfl = 10.0
+stop_time = 10.0e-9
+init_dt = 5.0e-12
+max_dt = 5.0
+max_timesteps = 1000000
+plotfile_interval = -1

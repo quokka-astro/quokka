@@ -21,3 +21,10 @@ do_reflux = 0
 do_subcycle = 0
 
 plotfile_interval = 10000000
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+max_timesteps = 20000
+cfl = 0.4
+stop_time = 1.0e-9
