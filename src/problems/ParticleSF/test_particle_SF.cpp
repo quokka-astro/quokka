@@ -179,7 +179,8 @@ auto problem_main() -> int
 	amrex::Print() << "Total Number of high mass stars [expected]   = " << num_high_mass_stars << " [" << exp_num_high_mass_stars_total << "] \n";
 	amrex::Print() << "Total Number of low mass stars  [expected]   = " << num_low_mass_stars << " [" << exp_num_low_mass_stars_total << "] \n";
 	amrex::Print() << "Total Number of all stars       [expected]   = " << num_all_stars << " [" << exp_num_stars_total << "] \n";
-	amrex::Print() << "Mean mass of high mass stars    [expected]   = " << mean_mass_high_mass_stars_Msun << " [" << exp_Mstar_high_mean<<"]" << " Msun\n";
+	amrex::Print() << "Mean mass of high mass stars    [expected]   = " << mean_mass_high_mass_stars_Msun << " [" << exp_Mstar_high_mean << "]"
+		       << " Msun\n";
 
 	// relative error
 	const double sigma_high_mass_stars = std::sqrt(exp_num_high_mass_stars_total);
