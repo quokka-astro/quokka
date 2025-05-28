@@ -3221,7 +3221,38 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		AMREX_ASSERT(CICParticles == nullptr);
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC);
-		CICParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
+		
+		// Handle universal refinement: temporarily use original grid geometry during particle restart
+		if (restartRefineFactor_ > 1) {
+			// Save current geometry
+			auto current_geom = CICParticles->Geom(0);
+			auto current_ba = CICParticles->ParticleBoxArray(0);
+			auto current_dm = CICParticles->ParticleDistributionMap(0);
+			
+			// Set up original (coarse) geometry for particle reading
+			CICParticles->SetParticleGeometry(0, coarse_level0_geom);
+			
+			// Create coarse BoxArray by coarsening the current refined one
+			amrex::BoxArray coarse_ba = current_ba;
+			coarse_ba.coarsen(restartRefineFactor_);
+			amrex::DistributionMapping coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
+			CICParticles->SetParticleBoxArray(0, coarse_ba);
+			CICParticles->SetParticleDistributionMap(0, coarse_dm);
+			
+			// Read particles with coarse grid structure
+			CICParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
+			
+			// Restore refined geometry
+			CICParticles->SetParticleGeometry(0, current_geom);
+			CICParticles->SetParticleBoxArray(0, current_ba);
+			CICParticles->SetParticleDistributionMap(0, current_dm);
+			
+			// Redistribute particles to refined grid
+			CICParticles->Redistribute();
+		} else {
+			// Normal restart without refinement
+			CICParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
+		}
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
