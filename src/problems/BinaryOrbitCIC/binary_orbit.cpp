@@ -122,7 +122,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 
 				// compute orbital elements
 				double dist = 0.0;
-				
+
 				// Loop over all pairs of particles
 				for (size_t i = 0; i < real_data.size(); ++i) {
 					for (size_t j = i + 1; j < real_data.size(); ++j) {
@@ -135,7 +135,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 						dist = std::max(dist, pair_dist);
 					}
 				}
-				
+
 				const double dist0 = 6.25e12; // cm
 				const amrex::Real cell_dx0 = this->geom[finest_level].CellSize(0);
 
