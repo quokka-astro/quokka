@@ -99,6 +99,7 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@ff0a06e83cb2de871e5a09832bc6a81e7276941f # v3.28.18
+        if: ${{ needs.check_changes.outputs.has_non_docs_changes == 'true' }}
         with:
           category: "/language:${{ matrix.language }}"
 
