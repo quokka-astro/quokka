@@ -234,10 +234,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<SuOlsonProblemCgs> sim(BCs_cc);
 
-	sim.stopTime_ = max_time;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();

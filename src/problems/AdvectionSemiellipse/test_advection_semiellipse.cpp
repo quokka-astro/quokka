@@ -142,13 +142,9 @@ auto problem_main() -> int
 
 	// Problem initialization
 	AdvectionSimulation<SemiellipseProblem> sim(BCs_cc);
-	sim.maxDt_ = max_dt;
 	sim.advectionVx_ = advection_velocity;
 	sim.advectionVy_ = 0.;
 	sim.advectionVz_ = 0.;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.stopTime_ = max_time;
-	sim.plotfileInterval_ = -1;
 
 	// set initial conditions
 	sim.setInitialConditions();

@@ -21,4 +21,11 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 1
 
-plotfile_interval = 10000000
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+# Note: stop_time is calculated as Lx / a0 in source code
+cfl = 0.4
+radiation_cfl = 0.4
+max_timesteps = 2000
+plotfile_interval = -1

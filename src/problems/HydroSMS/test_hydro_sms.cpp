@@ -282,14 +282,9 @@ auto problem_main() -> int
 
 	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.constantDt_ = fixed_dt;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
 	sim.integratorOrder_ = 2;     // use forward Euler
 	sim.reconstructionOrder_ = 3; // use donor cell
 	sim.computeReferenceSolution_ = true;
-	sim.plotfileInterval_ = -1;
 
 	// Main time loop
 	sim.setInitialConditions();

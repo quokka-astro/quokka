@@ -226,13 +226,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.maxDt_ = max_dt;
-	sim.initDt_ = initial_dt;
-	sim.plotfileInterval_ = -1;
 
 	// evolve
 	sim.setInitialConditions();

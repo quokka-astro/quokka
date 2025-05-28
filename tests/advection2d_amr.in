@@ -20,3 +20,12 @@ amr.max_grid_size   = 16
 
 do_reflux = 1
 do_subcycle = 1
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+stop_time = 1.0
+cfl = 0.4
+max_timesteps = 10000
+plotfile_interval = 1000
+checkpoint_interval = -1
