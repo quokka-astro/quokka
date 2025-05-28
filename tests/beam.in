@@ -23,3 +23,11 @@ amr.grid_eff        = 0.7   # default
 
 do_reflux = 1
 do_subcycle = 1
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+stop_time = 2.0
+radiation_cfl = 1.2
+max_timesteps = 300
+plotfile_interval = 20

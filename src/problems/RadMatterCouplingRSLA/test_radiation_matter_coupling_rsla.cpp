@@ -171,12 +171,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<CouplingProblem> sim(BCs_cc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.constantDt_ = constant_dt;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.stopTime_ = max_time;
-	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();

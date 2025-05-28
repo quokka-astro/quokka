@@ -219,11 +219,6 @@ auto problem_main() -> int
 	pp.query("max_time", max_time);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.stopTime_ = max_time;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.maxDt_ = max_dt;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();

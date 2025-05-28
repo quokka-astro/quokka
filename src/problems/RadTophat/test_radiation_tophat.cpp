@@ -282,10 +282,6 @@ auto problem_main() -> int
 	QuokkaSimulation<TophatProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 2; // PLM
-	sim.stopTime_ = max_time;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = 20;
 
 	// initialize
 	sim.setInitialConditions();

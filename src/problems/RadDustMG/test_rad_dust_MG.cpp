@@ -186,11 +186,6 @@ auto problem_main() -> int
 	QuokkaSimulation<DustProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number_gas;
-	sim.radiationCflNumber_ = CFL_number_gas;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();

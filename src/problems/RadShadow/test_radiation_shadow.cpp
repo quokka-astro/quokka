@@ -242,10 +242,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<ShadowProblem> sim(BCs_cc);
-	sim.stopTime_ = max_time;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = 50; // for debugging
 
 	// initialize
 	sim.setInitialConditions();

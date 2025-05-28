@@ -317,12 +317,6 @@ auto problem_main() -> int
 	QuokkaSimulation<MGProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.stopTime_ = max_time;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.cflNumber_ = CFL_number;
-	sim.maxDt_ = max_dt;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();
