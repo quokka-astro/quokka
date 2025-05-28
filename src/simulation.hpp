@@ -3078,8 +3078,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 				restartRefineFactor_ = rescaleFac;
 				// set coarse level 0 geometry
 				amrex::IntVect is_per = geom[0].periodicity().intVect();
-				coarse_level0_geom =
-				    amrex::Geometry(reDom, geom[0].ProbDomain(), amrex::CoordSys::cartesian, {is_per[0], is_per[1], is_per[2]});
+				amrex::Array<int, AMREX_SPACEDIM> is_per_arr{AMREX_D_DECL(is_per[0], is_per[1], is_per[2])};
+				coarse_level0_geom = amrex::Geometry(reDom, geom[0].ProbDomain(), amrex::CoordSys::cartesian, is_per_arr);
 			}
 		}
 
@@ -3159,7 +3159,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			} else {
 				coarse_geom = geom[lev - 1];
 			}
-			amrex::IntVect restart_ref_ratio{restartRefineFactor_, restartRefineFactor_, restartRefineFactor_};
+			amrex::IntVect restart_ref_ratio{AMREX_D_DECL(restartRefineFactor_, restartRefineFactor_, restartRefineFactor_)};
 			using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>;
 			BndryFunc boundaryFunctor(setBoundaryFunctor<problem_t>{});
 			amrex::PhysBCFunct<BndryFunc> fineBdryFunct(geom[lev], BCs_cc_, boundaryFunctor);
@@ -3185,7 +3185,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 					} else {
 						coarse_geom = geom[lev - 1];
 					}
-					amrex::IntVect restart_ref_ratio{restartRefineFactor_, restartRefineFactor_, restartRefineFactor_};
+					amrex::IntVect restart_ref_ratio{AMREX_D_DECL(restartRefineFactor_, restartRefineFactor_, restartRefineFactor_)};
 					using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
 					BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{});
 					amrex::PhysBCFunct<BndryFunc> fineBdryFunct(geom[lev], BCs_fc_, boundaryFunctor);
