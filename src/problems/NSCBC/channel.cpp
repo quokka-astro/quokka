@@ -7,6 +7,7 @@
 /// \brief Implements a subsonic channel flow problem with Navier-Stokes
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
+#include <fmt/format.h>
 #include <random>
 #include <tuple>
 #include <vector>
@@ -28,7 +29,6 @@
 #include "AMReX_SPACE.H"
 
 #include "QuokkaSimulation.hpp"
-#include "channel.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/HydroState.hpp"

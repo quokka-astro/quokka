@@ -7,13 +7,18 @@
 /// \brief Defines a test problem for radiation-matter coupling.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
 #include <vector>
 
 #include "AMReX_BC_TYPES.H"
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_radiation_matter_coupling.hpp"
 #include "util/fextract.hpp"
 
 struct CouplingProblem {

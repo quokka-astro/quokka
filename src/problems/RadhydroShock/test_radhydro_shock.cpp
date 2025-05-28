@@ -7,13 +7,20 @@
 /// \brief Defines a test problem for a radiative shock.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_radhydro_shock.hpp"
 #include "util/fextract.hpp"
 
 struct ShockProblem {

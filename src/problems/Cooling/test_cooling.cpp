@@ -6,6 +6,7 @@
 /// \file test_cooling.cpp
 /// \brief Defines a test problem for SUNDIALS cooling.
 ///
+#include <fmt/format.h>
 #include <random>
 
 #include "AMReX_BC_TYPES.H"

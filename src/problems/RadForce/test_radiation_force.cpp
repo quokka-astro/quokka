@@ -7,7 +7,12 @@
 /// \brief Defines a test problem for radiation force terms.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "radiation/radiation_system.hpp"
 #include <cstdint>
+#include <fmt/format.h>
 #include <string>
 
 #include "AMReX.H"
@@ -21,7 +26,6 @@
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_radiation_force.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON

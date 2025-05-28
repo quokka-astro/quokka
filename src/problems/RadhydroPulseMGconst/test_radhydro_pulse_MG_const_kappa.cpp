@@ -3,12 +3,18 @@
 /// with PPL_opacity_fixed_slope_spectrum opacity model.
 ///
 
-#include "test_radhydro_pulse_MG_const_kappa.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
+#include "math/interpolate.hpp"
 #include "physics_info.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 // Single-group problem
 struct SGProblem {

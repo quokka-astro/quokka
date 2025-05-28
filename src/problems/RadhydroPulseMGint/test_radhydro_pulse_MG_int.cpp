@@ -2,16 +2,21 @@
 /// \brief Defines a test problem for multigroup radiation in the diffusion regime with advection by gas using group-integrated opacity.
 ///
 
-#include "test_radhydro_pulse_MG_int.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
+#include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 struct MGProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

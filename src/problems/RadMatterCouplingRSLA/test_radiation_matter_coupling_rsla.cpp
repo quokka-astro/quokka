@@ -7,10 +7,14 @@
 /// \brief Defines a test problem for radiation-matter coupling.
 ///
 
-#include "test_radiation_matter_coupling_rsla.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "QuokkaSimulation.hpp"
+#include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

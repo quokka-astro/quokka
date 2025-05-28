@@ -7,13 +7,19 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 
 #include "QuokkaSimulation.hpp"
-#include "test_radiation_marshak.hpp"
 #include "util/fextract.hpp"
 
 struct SuOlsonProblem {

@@ -7,6 +7,9 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
@@ -17,10 +20,13 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_TagBox.H"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_hydro2d_blast.hpp"
 
 struct BlastProblem {
 };
