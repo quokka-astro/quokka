@@ -21,7 +21,7 @@ workflows:
             **/*.c run-tests true
             **/*.hpp run-tests true
             **/*.h run-tests true
-          # Base revision for comparison (usually main/master branch)
-          base-revision: main
-          # Config to use for the main pipeline
+          # Base revision for comparison
+          base-revision: development
+          # Config to use for the development pipeline
           config-path: .circleci/continue-config.yml
