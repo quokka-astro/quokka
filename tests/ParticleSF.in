@@ -45,5 +45,5 @@ particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 1
 particles.eps_ff = 0.5
 
-max_timesteps = 20
+max_timesteps = 1
 plotfile_interval = -1
