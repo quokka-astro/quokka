@@ -24,5 +24,6 @@ do_reflux = 0
 do_subcycle = 0
 
 plotfile_interval  = 1000
+checkpoint_interval = 1000
 
 blast_problem.check_solution = false
