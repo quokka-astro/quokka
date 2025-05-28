@@ -6,16 +6,6 @@ on:
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ development ]
-    paths-ignore:
-      - '.ci/**'
-      - '.github/**'
-      - 'cmake/**'
-      - 'docs/**'
-      - 'paper/**'
-      - 'scripts/**'
-      - '*.md'
-      - '*.rst'
-      - '.devcontainer/**'
 
 concurrency:
   group: ${{ github.ref }}-${{ github.head_ref }}-cmake-macos
@@ -29,8 +19,13 @@ permissions:
   contents: read
 
 jobs:
+  check_changes:
+    uses: ./.github/workflows/check_changes.yml
+
   build:
     runs-on: macos-14
+    needs: check_changes
+    if: needs.check_changes.outputs.has_non_docs_changes == 'true'
 
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
