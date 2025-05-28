@@ -24,3 +24,12 @@ do_subcycle = 0
 cooling.enabled = 1
 cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
 temperature_floor = 10  # K
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+cfl = 0.4
+max_timesteps = 100
+stop_time = 3.16e13
+plotfile_interval = 100
+checkpoint_interval = -1

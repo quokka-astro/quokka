@@ -268,8 +268,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
-	sim.initDt_ = dt_;
-	sim.maxDt_ = dt_;
 
 	// Read parameters from input file
 	const amrex::ParmParse pp("problem");

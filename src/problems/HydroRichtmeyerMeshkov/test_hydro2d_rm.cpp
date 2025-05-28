@@ -181,10 +181,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<RichtmeyerMeshkovProblem> sim(BCs_cc);
 
-	sim.stopTime_ = 2.5;
-	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 50000;
-	sim.plotfileInterval_ = 100;
 
 	// initialize
 	sim.setInitialConditions();

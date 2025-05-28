@@ -151,9 +151,6 @@ auto problem_main() -> int
 	QuokkaSimulation<SinkProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 10.0 * dt_init;
-	sim.initDt_ = dt_init;
 	sim.tempFloor_ = 10.0; // K
 	sim.doPoissonSolve_ = 1;
 
@@ -181,8 +178,7 @@ auto problem_main() -> int
 
 	const double total_total_mass_init = total_mass_init + total_particle_mass;
 
-	// evolve
-	sim.maxTimesteps_ = 1;
+	// evolve (1 timestep)
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -303,8 +299,7 @@ auto problem_main() -> int
 #endif
 	}
 
-	// evolve
-	sim.maxTimesteps_ = 10;
+	// evolve (10 timesteps)
 	sim.evolve();
 
 	// get total particle mass in the final state

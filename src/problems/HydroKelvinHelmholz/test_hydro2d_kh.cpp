@@ -139,10 +139,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<KelvinHelmholzProblem> sim(BCs_cc);
 
-	sim.stopTime_ = 1.5;
-	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 40000;
-	sim.plotfileInterval_ = 100;
 
 	// initialize
 	sim.setInitialConditions();

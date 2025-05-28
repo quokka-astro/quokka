@@ -118,8 +118,6 @@ auto problem_main() -> int
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.radiationCflNumber_ = CFL_number;
-	sim.maxDt_ = dt_max;
 
 	// initialize
 	sim.setInitialConditions();

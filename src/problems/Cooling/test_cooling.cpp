@@ -203,12 +203,6 @@ auto problem_main() -> int
 	// reconstructing the temperature instead of the pressure
 	sim.reconstructionOrder_ = 3; // PLM
 
-	sim.cflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.stopTime_ = max_time;
-	sim.plotfileInterval_ = 100;
-	sim.checkpointInterval_ = -1;
-
 	// Set initial conditions
 	sim.setInitialConditions();
 

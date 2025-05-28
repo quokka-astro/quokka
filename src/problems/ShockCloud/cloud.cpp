@@ -777,7 +777,6 @@ auto problem_main() -> int
 	const double max_time = max_t_cc * t_cc;
 
 	// set simulation parameters
-	sim.stopTime_ = max_time;
 	sim.pressureFloor_ = 1.0e-3 * ::P0; // set pressure floor
 
 	// set metadata

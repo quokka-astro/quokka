@@ -36,3 +36,8 @@ problem.star_mass = 10.0
 plotfile_interval = -1
 checkpoint_interval = -1
 max_timesteps = 128
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+init_dt = 3.0e10

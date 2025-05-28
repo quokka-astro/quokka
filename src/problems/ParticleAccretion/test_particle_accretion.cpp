@@ -297,8 +297,6 @@ auto problem_main() -> int
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1;      // enable self-gravity
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.initDt_ = 3.0e10;	      // ~1 kyr
 	sim.tempFloor_ = 10.0;	      // K
 
 	// initialize

@@ -138,10 +138,6 @@ auto problem_main() -> int
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.radiationCflNumber_ = CFL_number;
-	sim.maxDt_ = dt_max;
-	sim.maxTimesteps_ = max_timesteps;
-	// sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();
