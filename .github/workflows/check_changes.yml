@@ -7,6 +7,8 @@ on:
         value: ${{ jobs.check.outputs.has_docs_changes }}
       has_non_docs_changes:
         value: ${{ jobs.check.outputs.has_non_docs_changes }}
+      has_scripts_changes:
+        value: ${{ jobs.check.outputs.has_scripts_changes }}
 
 jobs:
   check:
@@ -14,6 +16,7 @@ jobs:
     outputs:
       has_docs_changes: ${{ steps.set-output.outputs.has_docs_changes }}
       has_non_docs_changes: ${{ steps.set-output.outputs.has_non_docs_changes }}
+      has_scripts_changes: ${{ steps.set-output.outputs.has_scripts_changes }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -25,6 +28,8 @@ jobs:
               - '*.md'
               - '*.rst'
               - 'paper/**'
+            scripts:
+              - 'scripts/**'
             others:
               - '!docs/**'
               - '!*.md'
@@ -33,4 +38,5 @@ jobs:
       - id: set-output
         run: |
           echo "has_docs_changes=${{ steps.changes.outputs.docs }}" >> $GITHUB_OUTPUT
-          echo "has_non_docs_changes=${{ steps.changes.outputs.others }}" >> $GITHUB_OUTPUT 
+          echo "has_non_docs_changes=${{ steps.changes.outputs.others }}" >> $GITHUB_OUTPUT
+          echo "has_scripts_changes=${{ steps.changes.outputs.scripts }}" >> $GITHUB_OUTPUT 
