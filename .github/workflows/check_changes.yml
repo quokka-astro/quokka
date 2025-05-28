@@ -28,6 +28,7 @@ jobs:
             scripts:
               - 'scripts/**'
             others:
+              - '**'
               - '!.ci/**'
               - '!.github/**'
               - '!cmake/**'
