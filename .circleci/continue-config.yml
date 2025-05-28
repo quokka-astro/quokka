@@ -27,8 +27,8 @@ jobs:
           name: Install build dependencies
           command: |
             sudo apt update
-            sudo apt install cmake g++ libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
-            python3 -m pip install -U numpy scipy matplotlib
+            sudo apt install cmake g++ libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3.10 python3.10-venv python3-pip
+            python3.10 -m pip install -U numpy scipy matplotlib
       - run:
           name: Build
           command: |
@@ -60,8 +60,8 @@ jobs:
           name: Install build dependencies
           command: |
             sudo apt update
-            sudo apt install cmake clang lld libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
-            python3 -m pip install -U numpy scipy matplotlib
+            sudo apt install cmake clang lld libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3.10 python3.10-venv python3-pip
+            python3.10 -m pip install -U numpy scipy matplotlib
       - run:
           name: Build
           command: |
@@ -97,8 +97,8 @@ jobs:
           name: Install build dependencies
           command: |
             sudo apt update
-            sudo apt install cmake g++ libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
-            python3 -m pip install -U numpy scipy matplotlib
+            sudo apt install cmake g++ libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3.10 python3.10-venv python3-pip
+            python3.10 -m pip install -U numpy scipy matplotlib
       - run:
           name: Build
           command: |
