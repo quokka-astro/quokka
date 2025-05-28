@@ -5,7 +5,7 @@ setup: true
 
 # Import the path-filtering orb
 orbs:
-  path-filtering: circleci/path-filtering@1.0.0
+  path-filtering: circleci/path-filtering@2.0.0
 
 workflows:
   # Setup workflow that determines which tests to run
