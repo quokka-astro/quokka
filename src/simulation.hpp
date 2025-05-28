@@ -11,6 +11,7 @@
 
 // c++ headers
 #include "AMReX_MFInterpolater.H"
+#include "AMReX_Periodicity.H"
 #include "AMReX_String.H"
 #include <cfenv>
 #include <cmath>
@@ -3076,7 +3077,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 				// set global restartRefineFactor_
 				restartRefineFactor_ = rescaleFac;
 				// set coarse level 0 geometry
-				coarse_level0_geom = amrex::Geometry(reDom, geom[0].ProbDomain(), amrex::CoordSys::cartesian, geom[0].periodicity());
+				amrex::IntVect is_per = geom[0].periodicity().intVect();
+				coarse_level0_geom =
+				    amrex::Geometry(reDom, geom[0].ProbDomain(), amrex::CoordSys::cartesian, {is_per[0], is_per[1], is_per[2]});
 			}
 		}
 
@@ -3156,11 +3159,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			} else {
 				coarse_geom = geom[lev - 1];
 			}
-			amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], BCs_cc_, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(coarse_geom, BCs_cc_, boundaryFunctor);
+			amrex::IntVect restart_ref_ratio{restartRefineFactor_, restartRefineFactor_, restartRefineFactor_};
+			using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>;
+			BndryFunc boundaryFunctor(setBoundaryFunctor<problem_t>{});
+			amrex::PhysBCFunct<BndryFunc> fineBdryFunct(geom[lev], BCs_cc_, boundaryFunctor);
+			amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_cc_, boundaryFunctor);
 			amrex::InterpFromCoarseLevel(state_new_cc_[lev], 0., tmp, 0, 0, tmp.nComp(), coarse_geom, geom[lev], coarseBdryFunct, 0, fineBdryFunct,
-						     0, restartRefineFactor_, getAmrInterpolaterCellCentered(), BCs_cc_, 0);
+						     0, restart_ref_ratio, getAmrInterpolaterCellCentered(), BCs_cc_, 0);
 		}
 
 		// face-centred data
@@ -3180,12 +3185,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 					} else {
 						coarse_geom = geom[lev - 1];
 					}
-					amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{});
-					amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], BCs_fc_, boundaryFunctor);
-					amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(coarse_geom, BCs_fc_,
-															    boundaryFunctor);
-					amrex::InterpFromCoarseLevel(state_new_fc_[lev], 0., tmp, 0, 0, tmp.nComp(), coarse_geom, geom[lev], coarseBdryFunct, 0,
-								     fineBdryFunct, 0, restartRefineFactor_, getAmrInterpolaterFaceCentered(), BCs_fc_, 0);
+					amrex::IntVect restart_ref_ratio{restartRefineFactor_, restartRefineFactor_, restartRefineFactor_};
+					using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+					BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{});
+					amrex::PhysBCFunct<BndryFunc> fineBdryFunct(geom[lev], BCs_fc_, boundaryFunctor);
+					amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_fc_, boundaryFunctor);
+					amrex::InterpFromCoarseLevel(state_new_fc_[lev][idim], 0., tmp, 0, 0, tmp.nComp(), coarse_geom, geom[lev],
+								     coarseBdryFunct, 0, fineBdryFunct, 0, restart_ref_ratio, getAmrInterpolaterFaceCentered(),
+								     BCs_fc_, 0);
 				}
 			}
 		}
