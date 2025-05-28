@@ -179,12 +179,12 @@ auto problem_main() -> int
 	amrex::Print() << "Total Number of high mass stars [expected]   = " << num_high_mass_stars << " [" << exp_num_high_mass_stars_total << "] \n";
 	amrex::Print() << "Total Number of low mass stars  [expected]   = " << num_low_mass_stars << " [" << exp_num_low_mass_stars_total << "] \n";
 	amrex::Print() << "Total Number of all stars       [expected]   = " << num_all_stars << " [" << exp_num_stars_total << "] \n";
-	amrex::Print() << "Mean mass of high mass stars    [expected]   = " << mean_mass_high_mass_stars_Msun << " [19.39]" << " Msun\n";
+	amrex::Print() << "Mean mass of high mass stars    [expected]   = " << mean_mass_high_mass_stars_Msun << " [" << exp_Mstar_high_mean<<"]" << " Msun\n";
 
 	// relative error
 	const double sigma_high_mass_stars = std::sqrt(exp_num_high_mass_stars_total);
 	const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / exp_Mstar_high_mean;
-	const double rel_error_num_stars_high = std::abs(num_all_stars - exp_num_stars_total) / exp_num_stars_total;
+	const double rel_error_num_stars_high = std::abs(num_all_stars - exp_num_stars_total) / sigma_high_mass_stars;
 	const double rel_error_num_stars_low = std::abs(num_low_mass_stars - exp_num_low_mass_stars_total) / exp_num_low_mass_stars_total;
 
 	// Check gas mass
