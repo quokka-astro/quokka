@@ -7,10 +7,19 @@
 /// \brief Defines a test problem for ODE integration.
 ///
 
-#include "test_ode.hpp"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "math/ODEIntegrate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/valarray.hpp"
+#include <fmt/format.h>
+
+struct ODETest {
+};
+
+constexpr double seconds_in_year = 3.154e7;
+
+// function definitions
 
 using amrex::Real;
 

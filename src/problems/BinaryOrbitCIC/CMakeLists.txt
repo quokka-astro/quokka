@@ -6,4 +6,5 @@ if (AMReX_SPACEDIM EQUAL 3)
 
     add_test(NAME BinaryOrbitCIC COMMAND binary_orbit BinaryOrbit.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME BinaryOrbitCICAMR COMMAND binary_orbit BinaryOrbitAMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME BinaryOrbitCICSplit COMMAND binary_orbit BinaryOrbit_split.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

@@ -7,13 +7,20 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
+#include "QuokkaSimulation.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
-#include "test_radiation_marshak_cgs.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
