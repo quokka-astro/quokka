@@ -6,6 +6,16 @@ on:
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ development ]
+    paths-ignore:
+      - '.ci/**'
+      - '.github/**'
+      - 'cmake/**'
+      - 'docs/**'
+      - 'paper/**'
+      - 'scripts/**'
+      - '*.md'
+      - '*.rst'
+      - '.devcontainer/**'
   merge_group:
     branches: [ development ]
 

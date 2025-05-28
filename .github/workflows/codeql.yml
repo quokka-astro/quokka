@@ -5,6 +5,16 @@ on:
     branches: [ "development" ]
   pull_request:
     branches: [ "development" ]
+    paths-ignore:
+      - '.ci/**'
+      - '.github/**'
+      - 'cmake/**'
+      - 'docs/**'
+      - 'paper/**'
+      - 'scripts/**'
+      - '*.md'
+      - '*.rst'
+      - '.devcontainer/**'
   schedule:
     - cron: "27 3 * * 0"
 
