@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include "AMReX_MFInterpolater.H"
 #include "AMReX_String.H"
 #include <cfenv>
 #include <cmath>
@@ -3041,6 +3042,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		}
 	}
 
+	// used when restarting with refinement
+	amrex::Geometry coarse_level0_geom;
+
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		// read in level 'lev' BoxArray from Header
 		amrex::BoxArray ba_file;
@@ -3071,6 +3075,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 				}
 				// set global restartRefineFactor_
 				restartRefineFactor_ = rescaleFac;
+				// set coarse level 0 geometry
+				coarse_level0_geom = amrex::Geometry(reDom, geom[0].ProbDomain(), amrex::CoordSys::cartesian, geom[0].periodicity());
 			}
 		}
 
@@ -3140,11 +3146,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		amrex::MultiFab tmp;
 		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
 		if (restartRefineFactor_ == 1) {
-			// if not refining, ParallelCopy:
-			state_new_cc_[0].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_, nghost_cc_);
+			// if not refining, ParallelCopy
+			state_new_cc_[lev].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_, nghost_cc_);
 		} else {
-			// if refining, InterpFromCoarseLevel:
-			// FIXME(bwibking): implement
+			// if refining, InterpFromCoarseLevel
+			amrex::Geometry coarse_geom;
+			if (lev == 0) {
+				coarse_geom = coarse_level0_geom;
+			} else {
+				coarse_geom = geom[lev - 1];
+			}
+			amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], BCs_cc_, boundaryFunctor);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(coarse_geom, BCs_cc_, boundaryFunctor);
+			amrex::InterpFromCoarseLevel(state_new_cc_[lev], 0., tmp, 0, 0, tmp.nComp(), coarse_geom, geom[lev], coarseBdryFunct, 0, fineBdryFunct,
+						     0, restartRefineFactor_, getAmrInterpolaterCellCentered(), BCs_cc_, 0);
 		}
 
 		// face-centred data
@@ -3155,10 +3171,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 				    tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
 				if (restartRefineFactor_ == 1) {
 					// if not refining, ParallelCopy:
-					state_new_fc_[0][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+					state_new_fc_[lev][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
 				} else {
-					// if refining, InterpFromCoarseLevel:
-					// FIXME(bwibking): implement
+					// if refining, InterpFromCoarseLevel
+					amrex::Geometry coarse_geom;
+					if (lev == 0) {
+						coarse_geom = coarse_level0_geom;
+					} else {
+						coarse_geom = geom[lev - 1];
+					}
+					amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{});
+					amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], BCs_fc_, boundaryFunctor);
+					amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(coarse_geom, BCs_fc_,
+															    boundaryFunctor);
+					amrex::InterpFromCoarseLevel(state_new_fc_[lev], 0., tmp, 0, 0, tmp.nComp(), coarse_geom, geom[lev], coarseBdryFunct, 0,
+								     fineBdryFunct, 0, restartRefineFactor_, getAmrInterpolaterFaceCentered(), BCs_fc_, 0);
 				}
 			}
 		}
