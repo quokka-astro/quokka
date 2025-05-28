@@ -20,3 +20,12 @@ amr.blocking_factor = 4     # grid size must be divisible by this
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 1
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+radiation_cfl = 0.8
+stop_time = 1.0e-4
+max_dt = 1e-3
+max_timesteps = 100000
+plotfile_interval = -1

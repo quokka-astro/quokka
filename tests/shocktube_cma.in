@@ -24,3 +24,9 @@ plotfile_interval = -1
 cfl = 0.6
 hydro.reconstruction_order = 3
 hydro.artificial_viscosity_coefficient = 0.1
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+stop_time = 1.0
+max_timesteps = 80000

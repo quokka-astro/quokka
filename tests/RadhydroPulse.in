@@ -27,3 +27,13 @@ amr.max_grid_size_z = 4
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 1
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+# Note: stop_time can be overridden by max_time parameter above
+cfl = 0.8
+radiation_cfl = 0.8
+max_dt = 1e-3
+max_timesteps = 100000000
+plotfile_interval = -1

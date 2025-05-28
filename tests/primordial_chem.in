@@ -76,3 +76,12 @@ integrator.atol_spec = 1.0e-4
 # these params help debug the code
 #amrex.throw_exception = 1
 #amrex.signal_handling = 0
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+cfl = 0.25
+stop_time = 5e16
+max_timesteps = 5
+plotfile_interval = 100
+checkpoint_interval = -1

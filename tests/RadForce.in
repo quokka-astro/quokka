@@ -27,3 +27,11 @@ suppress_output = 1
 
 cfl = 0.4
 radiation.cfl = 0.4
+
+# *****************************************************************
+# Simulation parameters (moved from source code)
+# *****************************************************************
+# Note: stop_time is calculated as 10.0 * (Lx / a0) in source code
+# Note: max_dt can be overridden by parameter above
+max_timesteps = 1000000
+plotfile_interval = -1

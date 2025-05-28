@@ -261,8 +261,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
 
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
 
 	// Main time loop
 	sim.setInitialConditions();
