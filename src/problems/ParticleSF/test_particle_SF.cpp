@@ -185,7 +185,7 @@ auto problem_main() -> int
 	// relative error
 	const double sigma_high_mass_stars = std::sqrt(exp_num_high_mass_stars_total);
 	const double rel_error_Mstar_high_mean = std::abs(mean_mass_high_mass_stars_Msun - exp_Mstar_high_mean) / exp_Mstar_high_mean;
-	const double rel_error_num_stars_high = std::abs(num_all_stars - exp_num_stars_total) / sigma_high_mass_stars;
+	const double rel_error_num_stars_high = std::abs(num_high_mass_stars - exp_num_high_mass_stars_total) / sigma_high_mass_stars;
 	const double rel_error_num_stars_low = std::abs(num_low_mass_stars - exp_num_low_mass_stars_total) / exp_num_low_mass_stars_total;
 
 	// Check gas mass
@@ -195,7 +195,7 @@ auto problem_main() -> int
 
 	amrex::Print() << "\nRelative Error:\n";
 	amrex::Print() << "Relative Error (mass of high mass stars)      = " << rel_error_Mstar_high_mean << " \n";
-	amrex::Print() << "Relative Error (number of high mass stars)    = " << rel_error_num_stars_high << " sigma \n";
+	amrex::Print() << "Deviation (number of high mass stars)         = " << rel_error_num_stars_high << " sigma \n";
 	amrex::Print() << "Relative Error (number of low mass stars)     = " << rel_error_num_stars_low << "\n";
 	amrex::Print() << "Change in Gas Mass (Initial - Final)          = " << change_gas_mass / M_sol << " Msun \n";
 
