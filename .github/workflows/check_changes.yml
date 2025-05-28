@@ -28,15 +28,15 @@ jobs:
             scripts:
               - 'scripts/**'
             others:
-              - '!ci/**'
-              - '!github/**'
+              - '!.ci/**'
+              - '!.github/**'
               - '!cmake/**'
               - '!docs/**'
               - '!paper/**'
               - '!scripts/**'
               - '!*.md'
               - '!*.rst'
-              - '!devcontainer/**'
+              - '!.devcontainer/**'
 
       - id: set-output
         run: |
