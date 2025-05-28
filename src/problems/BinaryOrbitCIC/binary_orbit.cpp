@@ -29,6 +29,9 @@
 struct BinaryOrbit {
 };
 
+static bool do_split_particles = false; // NOLINT
+static int split_factor = 8;		// NOLINT
+
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
 	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
@@ -80,6 +83,14 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
 	CICParticles->InitFromAsciiFile("BinaryOrbit_particles.txt", nreal_extra, nullptr);
+
+	// test particle splitting
+	// (this is intended to only be used when restarting at a higher resolution)
+	if (do_split_particles) {
+		amrex::Print() << "Splitting CICParticles using split_factor = " << split_factor << "\n";
+		int const lev = 0; // all CICParticles are on level 0
+		particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, split_factor);
+	}
 }
 
 template <> void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
@@ -166,6 +177,11 @@ auto problem_main() -> int
 			}
 		}
 	}
+
+	// read in runtime parameters for this test problem
+	amrex::ParmParse const pp("particles");
+	pp.query("do_split_particles", do_split_particles);
+	pp.query("split_factor", split_factor);
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
