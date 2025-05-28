@@ -25,16 +25,19 @@ jobs:
           filters: |
             docs:
               - 'docs/**'
-              - '*.md'
-              - '*.rst'
-              - 'paper/**'
             scripts:
               - 'scripts/**'
             others:
+              - '!ci/**'
+              - '!github/**'
+              - '!cmake/**'
               - '!docs/**'
+              - '!paper/**'
+              - '!scripts/**'
               - '!*.md'
               - '!*.rst'
-              - '!paper/**'
+              - '!devcontainer/**'
+
       - id: set-output
         run: |
           echo "has_docs_changes=${{ steps.changes.outputs.docs }}" >> $GITHUB_OUTPUT
