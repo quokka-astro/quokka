@@ -33,7 +33,7 @@ cfl = 0.3
 max_timesteps = 20
 stop_time = 5.0e7   # s
 
-particles.do_split_particles = true
-particles.split_factor = 8
+problem.do_split_particles = true
+problem.split_factor = 8
 
 particles.verbose = 1

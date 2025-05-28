@@ -179,7 +179,7 @@ auto problem_main() -> int
 	}
 
 	// read in runtime parameters for this test problem
-	amrex::ParmParse const pp("particles");
+	amrex::ParmParse const pp("problem");
 	pp.query("do_split_particles", do_split_particles);
 	pp.query("split_factor", split_factor);
 
