@@ -1,7 +1,18 @@
 name: clang-tidy-review
 
 # You can be more specific, but it currently only works on pull requests
-on: [pull_request]
+# Fiewer paths are ignored because some folders (e.g. scripts) are not relavent to code build but should be linted
+on:  
+  pull_request:  
+    paths-ignore:
+      - '.ci/**'
+      - '.github/**'
+      - 'cmake/**'
+      - 'docs/**'
+      - 'paper/**'
+      - '*.md'
+      - '*.rst'
+      - '.devcontainer/**'
 
 concurrency:
   group: ${{ github.ref }}-${{ github.head_ref }}-clang-tidy
