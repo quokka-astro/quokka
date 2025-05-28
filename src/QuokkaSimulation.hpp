@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
+#include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include <array>
 #include <iostream>
@@ -87,6 +88,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::BCs_fc_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
+	using AMRSimulation<problem_t>::componentNames_fc_flat_;
 	using AMRSimulation<problem_t>::componentNames_fc_;
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
@@ -115,6 +117,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
+
+	using AMRSimulation<problem_t>::max_level;
+	using AMRSimulation<problem_t>::n_error_buf;
 
 	SimulationData<problem_t> userData_;
 
@@ -188,11 +193,13 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
+	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
+	void createInitialSinkParticles() override;
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
@@ -341,12 +348,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 
 	// add face-centered velocities
 	for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-		componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});
+		componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});  // rename to _fc_flatten_
+		componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"}); // array for fc_
 	}
 	// add mhd state variables
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-			componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-BField"});
+			componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-BField"});
+			componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-BField"});
 		}
 	}
 }
@@ -616,6 +625,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSto
 	// note: an implementation is only effective if StochasticStellarPop_particles are used
 }
 
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSinkParticles()
+{
+	// Optional implementation
+	// Sink particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
+	// beginning of the simulation.
+	// note: an implementation is only effective if Sink_particles are used
+}
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTestParticles()
 {
 	// Optional implementation
@@ -696,9 +713,23 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistic
 	return std::map<std::string, amrex::Real>{};
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <typename problem_t> void QuokkaSimulation<problem_t>::refineGrid(int /*lev*/, amrex::TagBoxArray & /*tags*/, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement -- user should implement
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow)
+{
+	// call user-defined RefineGrid to set tags
+	refineGrid(lev, tags, time, ngrow);
+
+#if AMREX_SPACEDIM == 3
+	// refine grids around particles
+	if (lev < max_level) {
+		particleRegister_.refineGridsAroundParticles(lev, tags, time, ngrow, n_error_buf[lev]);
+	}
+#endif
 }
 
 template <typename problem_t>
@@ -771,6 +802,36 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		const double rel_error = err_norm / sol_norm;
 		errorNorm_ = rel_error;
 		amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::Print() << "Checking fc-quantities in the " << idim << " direction\n";
+				const int ncomp = state_new_fc_[0][idim].nComp();
+				const int nghost = state_new_fc_[0][idim].nGrow();
+				amrex::MultiFab state_ref_level0(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0),
+								 ncomp, nghost);
+
+				// compute error norm
+				amrex::MultiFab residual(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0), ncomp,
+							 nghost);
+				amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
+				amrex::MultiFab::Saxpy(residual, -1., state_new_fc_[0][idim], 0, 0, ncomp, nghost);
+
+				amrex::Real sol_norm = 0.;
+				amrex::Real err_norm = 0.;
+				// compute rms of each component
+				for (int n = 0; n < ncomp; ++n) {
+					sol_norm += std::pow(state_ref_level0.norm1(n), 2);
+					err_norm += std::pow(residual.norm1(n), 2);
+				}
+				sol_norm = std::sqrt(sol_norm);
+				err_norm = std::sqrt(err_norm);
+
+				const double rel_error = err_norm / sol_norm;
+				errorNorm_ = rel_error;
+				amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
+					       << " and sol_norm = " << sol_norm << "\n";
+			}
+		}
 	}
 	amrex::Print() << '\n';
 

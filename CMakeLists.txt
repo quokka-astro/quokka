@@ -77,6 +77,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options(-Wno-psabi)
 endif()
 
+# this is necessary to avoid spurious FPEs due to vectorization
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+  add_compile_options(-ffp-exception-behavior=strict)
+endif()
+
 execute_process(COMMAND git rev-parse --abbrev-ref HEAD
     WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
     OUTPUT_VARIABLE QUOKKA_GIT_BRANCH

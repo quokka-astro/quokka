@@ -14,6 +14,9 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
@@ -101,9 +104,9 @@ void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex
 	const amrex::Real source_norm = L_star / std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-		amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
 		radEnergy(i, j, k) = source_norm * std::exp(-(r * r) / (2.0 * sigma_star * sigma_star));
@@ -135,7 +138,7 @@ template <> struct SimulationData<ShellProblem> {
 template <> void QuokkaSimulation<ShellProblem>::preCalculateInitialConditions()
 {
 	// get filename from input file
-	amrex::ParmParse pp("shell_problem");
+	amrex::ParmParse const pp("shell_problem");
 	std::string filename{};
 	pp.query("filename", filename);
 
@@ -173,7 +176,7 @@ template <> void QuokkaSimulation<ShellProblem>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<ShellProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -195,22 +198,22 @@ template <> void QuokkaSimulation<ShellProblem>::setInitialConditionsOnGrid(quok
 	auto const &r_ptr = userData_.r_arr_g.dataPtr();
 	auto const &Erad_ptr = userData_.Erad_arr_g.dataPtr();
 	auto const &Frad_ptr = userData_.Frad_arr_g.dataPtr();
-	int r_size = static_cast<int>(userData_.r_arr_g.size());
+	int const r_size = static_cast<int>(userData_.r_arr_g.size());
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-		amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 		amrex::Real const rhat_x = (x - x0) / r;
 		amrex::Real const rhat_y = (y - y0) / r;
 		amrex::Real const rhat_z = (z - z0) / r;
 
-		double sigma_sh = H_shell / (2.0 * std::sqrt(2.0 * std::log(2.0)));
-		double rho_norm = M_shell / (4.0 * M_PI * r * r * std::sqrt(2.0 * M_PI * sigma_sh * sigma_sh));
-		double rho_shell = rho_norm * std::exp(-std::pow(r - r_0, 2) / (2.0 * sigma_sh * sigma_sh));
-		double rho = std::max(rho_shell, 1.0e-8 * rho_0);
+		double const sigma_sh = H_shell / (2.0 * std::sqrt(2.0 * std::log(2.0)));
+		double const rho_norm = M_shell / (4.0 * M_PI * r * r * std::sqrt(2.0 * M_PI * sigma_sh * sigma_sh));
+		double const rho_shell = rho_norm * std::exp(-std::pow(r - r_0, 2) / (2.0 * sigma_sh * sigma_sh));
+		double const rho = std::max(rho_shell, 1.0e-8 * rho_0);
 
 		// interpolate Frad from table
 		const double Frad_r = interpolate_value(r, r_ptr, Frad_ptr, r_size);
@@ -244,7 +247,7 @@ template <> void QuokkaSimulation<ShellProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void QuokkaSimulation<ShellProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShellProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -285,7 +288,7 @@ template <> void QuokkaSimulation<ShellProblem>::ErrorEst(int lev, amrex::TagBox
 auto problem_main() -> int
 {
 	// This problem can only be run in 3D
-	static_assert(AMREX_SPACEDIM == 3);
+#if (AMREX_SPACEDIM == 3)
 
 	auto isNormalComp = [=](int n, int dim) {
 		// it is critical to reflect both the radiation and gas momenta!
@@ -343,6 +346,8 @@ auto problem_main() -> int
 
 	// run
 	sim.evolve();
+
+#endif
 
 	return 0;
 }

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04@sha256:165d17c4c70838a9660a37c94436ba81e43d07d62749faa8da8af0eab81e2514
+FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04@sha256:a74f174cf8541b418e50787382d0edb5cd2b817754da2eaf892bae3468a62264
 
 RUN apt-get --yes -qq update \
  && apt-get --yes -qq upgrade \
@@ -34,6 +34,16 @@ RUN mkdir /tmp/build-adios2 && cd /tmp/build-adios2 && \
  make -j 16 && make install && \
  cd / && \
  rm -rf /tmp/build-adios2
+
+# Install Viskores (volume rendering and isosurfaces)
+RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
+    wget -q https://github.com/Viskores/viskores/archive/refs/tags/v1.0.0.tar.gz && \
+    tar xzf v1.0.0.tar.gz && \
+    mkdir build && cd build && \
+    cmake ../viskores-1.0.0 -DViskores_ENABLE_RENDERING=ON -DViskores_USE_64BIT_IDS=ON -DViskores_USE_DOUBLE_PRECISION=ON && \
+    make -j$(nproc) && make install && \
+    cd / && \
+    rm -rf /tmp/build-viskores
 
 WORKDIR /home/vscode
 USER vscode

@@ -21,9 +21,9 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
+#include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
-#include "blast.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
@@ -251,7 +251,7 @@ template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::
 	}
 }
 
-template <> void QuokkaSimulation<RandomBlast>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<RandomBlast>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 	const Real q_min = 1e-5 * rho0; // minimum density for refinement

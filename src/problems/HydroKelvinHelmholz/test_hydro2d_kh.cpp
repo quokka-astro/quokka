@@ -7,7 +7,13 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <cmath>
+#include <fstream>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
@@ -17,7 +23,6 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_hydro2d_kh.hpp"
 
 struct KelvinHelmholzProblem {
 };
@@ -46,7 +51,7 @@ template <> struct Physics_Traits<KelvinHelmholzProblem> {
 template <> void QuokkaSimulation<KelvinHelmholzProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -57,18 +62,18 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::setInitialConditionsOn
 	amrex::Real const A = 0.01;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
 		double const L = 0.01;	  // shearing layer thickness
 		double const sigma = 0.2; // perturbation thickness
 		double const yy = std::abs(y - y0) - 0.25;
 
-		double rho = 1.5 - 0.5 * std::tanh(yy / L);
-		double vx = 0.5 * std::tanh(yy / L);
-		double vy = A * std::cos(4.0 * M_PI * (x - x0)) * std::exp(-(yy * yy) / (sigma * sigma));
-		double vz = 0.;
-		double P = 2.5;
+		double const rho = 1.5 - 0.5 * std::tanh(yy / L);
+		double const vx = 0.5 * std::tanh(yy / L);
+		double const vy = A * std::cos(4.0 * M_PI * (x - x0)) * std::exp(-(yy * yy) / (sigma * sigma));
+		double const vz = 0.;
+		double const P = 2.5;
 
 		AMREX_ASSERT(!std::isnan(vx));
 		AMREX_ASSERT(!std::isnan(vy));
@@ -87,7 +92,7 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::setInitialConditionsOn
 	});
 }
 
-template <> void QuokkaSimulation<KelvinHelmholzProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<KelvinHelmholzProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 

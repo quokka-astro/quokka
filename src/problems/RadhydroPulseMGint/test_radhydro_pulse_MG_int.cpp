@@ -2,16 +2,21 @@
 /// \brief Defines a test problem for multigroup radiation in the diffusion regime with advection by gas using group-integrated opacity.
 ///
 
-#include "test_radhydro_pulse_MG_int.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
+#include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 struct MGProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -60,12 +65,12 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexp
 
 static constexpr bool export_csv = true;
 
-constexpr double T0 = 1.0e7; // K (temperature)
-constexpr double T1 = 2.0e7; // K (temperature)
-constexpr double rho0 = 1.2; // g cm^-3 (matter density)
+constexpr double T_lo = 1.0e7; // K (temperature)
+constexpr double T_hi = 2.0e7; // K (temperature)
+constexpr double rho0 = 1.2;   // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double width = 24.0; // cm, width of the pulse
-constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
+constexpr double erad_floor = a_rad * T_lo * T_lo * T_lo * T_lo * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double h_planck = C::hplanck;
 constexpr double k_B = C::k_B;
@@ -84,7 +89,7 @@ constexpr int64_t max_timesteps = 1e2; // to make 3D test run fast on GPUs
 // constexpr double v0_adv = 1.0e8;    // advecting pulse
 // constexpr double max_time = 1.2e-4; // max_time = 2.0 * width / v1;
 
-constexpr double T_ref = T0;
+constexpr double T_ref = T_lo;
 constexpr double nu_ref = 1.0e18;			     // Hz
 constexpr double coeff_ = h_planck * nu_ref / (k_B * T_ref); // = 4.799243073 = 1 / 0.2083661912
 
@@ -142,7 +147,7 @@ auto compute_initial_Tgas(const double x) -> double
 {
 	// compute temperature profile for Gaussian radiation pulse
 	const double sigma = width;
-	return T0 + (T1 - T0) * std::exp(-x * x / (2.0 * sigma * sigma));
+	return T_lo + (T_hi - T_lo) * std::exp(-x * x / (2.0 * sigma * sigma));
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -150,7 +155,7 @@ auto compute_exact_rho(const double x) -> double
 {
 	// compute density profile for Gaussian radiation pulse
 	auto T = compute_initial_Tgas(x);
-	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
+	return rho0 * T_lo / T + (a_rad * mu / 3. / k_B) * (std::pow(T_lo, 4) / T - std::pow(T, 3));
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -199,13 +204,13 @@ RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doubl
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	const double sigma = scaleup * 3063.96 * std::pow(Tgas / T0, -3.5);
+	const double sigma = scaleup * 3063.96 * std::pow(Tgas / T_lo, -3.5);
 	return sigma / rho;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
 {
-	const double sigma = scaleup * 101.248 * std::pow(Tgas / T0, -3.5);
+	const double sigma = scaleup * 101.248 * std::pow(Tgas / T_lo, -3.5);
 	return sigma / rho;
 }
 
@@ -336,7 +341,7 @@ auto problem_main() -> int
 	int n_p = static_cast<int>(move / dx);
 	int half = static_cast<int>(nx / 2.0);
 	double drift = move - static_cast<double>(n_p) * dx;
-	int shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
+	int shift = n_p - ((n_p + half) / nx) * nx;
 
 	std::vector<double> xs(nx);
 	std::vector<double> Trad(nx);
@@ -407,7 +412,7 @@ auto problem_main() -> int
 	n_p = static_cast<int>(move / dx);
 	half = static_cast<int>(nx / 2.0);
 	drift = move - static_cast<double>(n_p) * dx;
-	shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
+	shift = n_p - ((n_p + half) / nx) * nx;
 
 	std::vector<double> xs2(nx);
 	std::vector<double> Trad2(nx);
@@ -460,7 +465,7 @@ auto problem_main() -> int
 	}
 	const double error_tol = 0.02;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	// symmetry check
 	double symm_err = 0.;
@@ -471,7 +476,7 @@ auto problem_main() -> int
 		symm_norm += std::abs(Tgas[i]);
 	}
 	const double symm_rel_error_1 = symm_err / symm_norm;
-	amrex::Print() << "Symmetry L1 error norm of the MG pulse = " << symm_rel_error_1 << std::endl;
+	amrex::Print() << "Symmetry L1 error norm of the MG pulse = " << symm_rel_error_1 << '\n';
 
 	symm_err = 0.;
 	symm_norm = 0.;
@@ -480,7 +485,7 @@ auto problem_main() -> int
 		symm_norm += std::abs(Tgas2[i]);
 	}
 	const double symm_rel_error_2 = symm_err / symm_norm;
-	amrex::Print() << "Symmetry L1 error norm of the exact (grey) pulse = " << symm_rel_error_2 << std::endl;
+	amrex::Print() << "Symmetry L1 error norm of the exact (grey) pulse = " << symm_rel_error_2 << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

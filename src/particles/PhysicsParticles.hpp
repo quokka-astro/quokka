@@ -15,6 +15,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "particle_accretion.hpp"
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
@@ -40,6 +41,8 @@ class PhysicsParticleDescriptorBase
 	int evolutionStageIndex_{-1};	// Index for evolution stage (-1 if not used)
 	bool allowsAccretion_{false};	// Whether particles can accrete gas
 
+	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
+
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), allowsCreation_(allows_creation),
@@ -63,10 +66,12 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsAccretion() const -> bool { return allowsAccretion_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getForceFinestLevel() const -> bool { return forceFinestLevel_; }
 
 	// setter methods for particle properties
-	void setEvolutionStageIndex(int evolution_stage_idx) { evolutionStageIndex_ = evolution_stage_idx; }
-	void setAllowsAccretion(bool allows_accretion) { allowsAccretion_ = allows_accretion; }
+	AMREX_FORCE_INLINE void setEvolutionStageIndex(int evolution_stage_idx) { evolutionStageIndex_ = evolution_stage_idx; }
+	AMREX_FORCE_INLINE void setAllowsAccretion(bool allows_accretion) { allowsAccretion_ = allows_accretion; }
+	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
 
 	// New method to get particle positions and data
 	[[nodiscard]] virtual auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
@@ -114,12 +119,24 @@ class PhysicsParticleDescriptorBase
 
 	// Destroy particles at level lev_min and above
 	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
-
+	virtual void splitParticles(int lev, int splitFactor) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
-	// Methods that are implemented for some but not all particle types, so they cannot be pure virtual
+	// Tag cells around particles for refinement
+	virtual void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) const = 0;
+
+	//----- Methods that are implemented for some but not all particle types, so they cannot be pure virtual -----
+
 	virtual void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
+
+	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	{ /* Default empty implementation */ }
+
+	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time,
+					amrex::Real dt)
+	{ /* Default empty implementation */
+	}
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -460,6 +477,70 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	void splitParticles(int const lev, int const splitFactor) override
+	{
+		if (container_ != nullptr && this->getMassIndex() >= 0) {
+			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+				// Update NextID to include particles that will be created
+				const amrex::Long npart_old = pIter.numParticles();
+				const unsigned int max_new_particles = splitFactor * npart_old;
+				const amrex::Long pid = ContainerType::ParticleType::NextID();
+				ContainerType::ParticleType::NextID(pid + max_new_particles);
+
+				// Resize particle tile
+				auto &particles = pIter.GetArrayOfStructs();
+				particles.resize(npart_old + max_new_particles);
+
+				// Create the particles
+				const auto &geom = container_->Geom(lev);
+				const auto dxinv = geom.InvCellSizeArray();
+				const auto dx = geom.CellSizeArray();
+				const auto plo = geom.ProbLoArray();
+				const int cpu_id = amrex::ParallelDescriptor::MyProc();
+				const int mass_idx = this->getMassIndex();
+				auto *pdata_old = particles().data();
+				auto *pdata_new = particles().data() + npart_old;
+
+				amrex::ParallelForRNG(npart_old, [=] AMREX_GPU_DEVICE(int64_t idx, amrex::RandomEngine const &rng) {
+					// compute cell corner position (x0, y0, z0) of the old particle
+					const int i = static_cast<int>((pdata_old[idx].pos(0) - plo[0]) * dxinv[0]); // NOLINT
+					const int j = static_cast<int>((pdata_old[idx].pos(1) - plo[1]) * dxinv[1]); // NOLINT
+					const int k = static_cast<int>((pdata_old[idx].pos(2) - plo[2]) * dxinv[2]); // NOLINT
+					amrex::Real const x0 = plo[0] + (i * dx[0]);
+					amrex::Real const y0 = plo[1] + (j * dx[1]);
+					amrex::Real const z0 = plo[2] + (k * dx[2]);
+
+					// mark old particle for deletion
+					auto &p_old = pdata_old[idx]; // NOLINT
+					p_old.id() = -1;
+					amrex::Real const old_mass = p_old.rdata(mass_idx);
+
+					// create new particles
+					auto *new_particles = &pdata_new[idx * splitFactor]; // NOLINT
+					for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
+						auto &p_new = new_particles[idx_new]; // NOLINT
+						// copy old particle properties
+						for (int rc = 0; rc < ContainerType::ParticleType::NReal; ++rc) {
+							p_new.rdata(rc) = p_old.rdata(rc);
+						}
+						for (int ic = 0; ic < ContainerType::ParticleType::NInt; ++ic) {
+							p_new.idata(ic) = p_old.idata(ic);
+						}
+						// set new particle properties
+						p_new.cpu() = cpu_id;
+						p_new.id() = pid + idx * splitFactor + idx_new;
+						p_new.pos(0) = x0 + dx[0] * amrex::Random(rng);
+						p_new.pos(1) = y0 + dx[1] * amrex::Random(rng);
+						p_new.pos(2) = z0 + dx[2] * amrex::Random(rng);
+						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
+					}
+				});
+			}
+			// Remove the old particles
+			container_->Redistribute(lev);
+		}
+	}
+
 	// Compute maximum particle speed at a given level
 	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> override
 	{
@@ -620,6 +701,39 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 	}
+
+#if AMREX_SPACEDIM == 3
+	// Implement cell tagging around particles
+	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) const override
+	{
+		if (container_ == nullptr) {
+			return;
+		}
+
+		for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
+			auto &particles = pti.GetArrayOfStructs();
+			auto *pData = particles().data();
+			const amrex::Long np = pti.numParticles();
+
+			// Get geometry information for this level
+			const auto &geom = container_->Geom(lev);
+			const auto plo = geom.ProbLoArray();
+			const auto dxi = geom.InvCellSizeArray();
+
+			const auto tag = tags.array(pti);
+
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+				// Find the cell containing the particle
+				const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+				const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+				const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+
+				tag(ix, iy, iz) = amrex::TagBox::SET;
+			});
+		}
+	}
+#endif
 };
 
 // New class for star particles that adds stellar evolution capabilities
@@ -654,9 +768,25 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 								       this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
-				updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
+								      this->getEvolutionStageIndex());
 			}
 		}
+	}
+
+	// compute accretion rate
+	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt) override
+	{
+		SinkAccretionUtils::computeAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, lev, time, dt,
+									       this->getMassIndex());
+	}
+
+	// apply accretion
+	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time,
+				amrex::Real dt) override
+	{
+		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, geom, lev, time, dt,
+									     this->getMassIndex());
 	}
 #endif // AMREX_SPACEDIM == 3
 };
@@ -710,7 +840,10 @@ template <typename problem_t> class PhysicsParticleRegister
 				return "Test_particles";
 			case ParticleType::StochasticStellarPop:
 				return "StochasticStellarPop_particles";
+			case ParticleType::Sink:
+				return "Sink_particles";
 			default:
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
 				return "Unknown_particles";
 		}
 	}
@@ -755,10 +888,13 @@ template <typename problem_t> class PhysicsParticleRegister
 		if (type == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
-			    false, StochasticStellarPopParticleStageIdx, true);
+			    false, StochasticStellarPopParticleStageIdx, false);
+		} else if (type == ParticleType::Sink) {
+			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx, -1,
+															    -1, true, false, -1, true);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, true);
+			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
 		} else {
 			amrex::Abort("Unknown particle type for star particles");
 		}
@@ -768,7 +904,7 @@ template <typename problem_t> class PhysicsParticleRegister
 #endif // AMREX_SPACEDIM == 3
 
 	// Retrieve a particle descriptor by type
-	[[nodiscard]] auto getParticleDescriptor(ParticleType type) const -> const PhysicsParticleDescriptorBase *
+	[[nodiscard]] auto getParticleDescriptor(ParticleType type) -> PhysicsParticleDescriptorBase *
 	{
 		auto it = particleRegistry_.find(type);
 		if (it != particleRegistry_.end()) {
@@ -806,6 +942,27 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->isStarParticle()) {
 				descriptor->depositSN(state, state_buffer, lev, time, dt);
+			}
+		}
+	}
+
+	// Implementation of computeSinkAccretion
+	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getAllowsAccretion()) {
+				descriptor->computeSinkAccretion(state, state_accretion_rate, lev, time, dt);
+			}
+		}
+	}
+
+	// Implementation of applySinkAccretion
+	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time,
+				amrex::Real dt)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getAllowsAccretion()) {
+				descriptor->applySinkAccretion(state, state_accretion_rate, geom, lev, time, dt);
 			}
 		}
 	}
@@ -905,6 +1062,17 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 		return max_speed;
+	}
+
+	// Refine grids around particles that require finest level
+	void refineGridsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow, const amrex::IntVect &n_error_buf)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getForceFinestLevel()) {
+				AMREX_ALWAYS_ASSERT(n_error_buf.min() >= 2);
+				descriptor->tagCellsAroundParticles(lev, tags, time, ngrow);
+			}
+		}
 	}
 #endif // AMREX_SPACEDIM == 3
 

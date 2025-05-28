@@ -21,6 +21,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
+#include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
 #include "cooling/TabulatedCooling.hpp"
@@ -632,7 +633,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	return proj;
 }
 
-template <> void QuokkaSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 	const int Ncells_per_lcool = 10;

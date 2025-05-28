@@ -2,7 +2,9 @@
 /// \brief Defines a 1D test problem for radiating particles.
 ///
 
-#include "test_radparticle.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX.H"
 #include "AMReX_Array4.H"
 #include "AMReX_Box.H"
@@ -14,6 +16,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
 
 struct ParticleProblem {
 };

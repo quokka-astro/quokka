@@ -2,12 +2,18 @@
 /// \brief Defines a test problem for radiation in the static diffusion regime with advection by gas.
 ///
 
-#include "test_radhydro_pulse.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
+#include "math/interpolate.hpp"
 #include "physics_info.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -16,14 +22,14 @@ struct AdvPulseProblem {
 
 constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 
-constexpr double T0 = 1.0e7; // K (temperature)
-constexpr double T1 = 2.0e7; // K (temperature)
-constexpr double rho0 = 1.2; // g cm^-3 (matter density)
+constexpr double T_low = 1.0e7; // K (temperature)
+constexpr double T_hi = 2.0e7;	// K (temperature)
+constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
 constexpr double width = 24.0; // cm, width of the pulse
-constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
+constexpr double erad_floor = a_rad * T_low * T_low * T_low * T_low * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 
@@ -80,7 +86,7 @@ auto compute_initial_Tgas(const double x) -> double
 {
 	// compute temperature profile for Gaussian radiation pulse
 	const double sigma = width;
-	return T0 + (T1 - T0) * std::exp(-x * x / (2.0 * sigma * sigma));
+	return T_low + (T_hi - T_low) * std::exp(-x * x / (2.0 * sigma * sigma));
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -88,7 +94,7 @@ auto compute_exact_rho(const double x) -> double
 {
 	// compute density profile for Gaussian radiation pulse
 	auto T = compute_initial_Tgas(x);
-	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
+	return rho0 * T_low / T + (a_rad * mu / 3. / k_B) * (std::pow(T_low, 4) / T - std::pow(T, 3));
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -339,7 +345,7 @@ auto problem_main() -> int
 	}
 	const double error_tol = 0.006;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

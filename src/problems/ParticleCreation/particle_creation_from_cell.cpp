@@ -5,10 +5,10 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "math/interpolate.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "particle_creation_from_cell.hpp"
 
 struct TestParticle {
 };
@@ -71,13 +71,17 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	TestParticles->SetVerbose(1);
 	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
 
-	// Loop over all particle at all levels and set first integer component to SNProgenitor
-	for (int lev = 0; lev <= TestParticles->maxLevel(); ++lev) {
-		auto &particles = TestParticles->GetParticles(lev);
-
-		for (auto &kv : particles) {
-			auto &particle_array = kv.second.GetArrayOfStructs();
+	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
+	// do not have particles, TestParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
+	for (auto &kv : TestParticles->GetParticles()) {
+		for (auto &ikv : kv) {
+			auto &particle_array = ikv.second.GetArrayOfStructs();
 			const int np = particle_array.numParticles();
+
+			if (np == 0) {
+				continue;
+			}
+
 			auto *pdata = particle_array().data();
 
 			// Launch GPU kernel to set integer components
@@ -96,16 +100,6 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 
 	// Ensure GPU operations are complete
 	amrex::Gpu::streamSynchronize();
-}
-
-template <> void QuokkaSimulation<TestParticle>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-{
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto tag = tags.array(mfi);
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
-	}
 }
 
 namespace quokka
@@ -155,12 +149,13 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real current_time;
+		amrex::Real dt;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				amrex::Real current_time)
+				amrex::Real current_time, amrex::Real dt)
 		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
-		      pid_start(particle_id_start), current_time(current_time)
+		      pid_start(particle_id_start), current_time(current_time), dt(dt)
 		{
 		}
 
@@ -282,6 +277,9 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
+
+	// set force finest level to true for test particles
+	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->setForceFinestLevel(true);
 
 	// evolve
 	sim.evolve();
