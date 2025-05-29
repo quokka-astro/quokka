@@ -52,6 +52,7 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 - Member functions use PascalCase (e.g., `ReadCheckpointFile`)
 - Always use curly braces for single statement blocks
 - Always use a trailing return type for functions that do not return `void`
+- ALWAYS declare variables `const` when they are never modified after initialization.
 - Document APIs using Doxygen style comments
 - PRs should be focused on a single change and target the `development` branch
 - Static analysis with clang-tidy available for code quality checks
