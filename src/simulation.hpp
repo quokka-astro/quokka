@@ -387,6 +387,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	template <typename ParticleContainer>
 	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, amrex::Geometry const &coarse_level0_geom,
 						    std::string const &restart_chkfile, std::string const &particle_type_name);
+
+	template <typename ContainerType>
+	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
+						       const RefinementContext &refinement_context, bool use_star_registration = false);
+
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
 	auto getWalltime() -> amrex::Real;
@@ -3287,52 +3292,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// Initialize and register particle containers from checkpoint file
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
-		AMREX_ASSERT(RadParticles == nullptr);
-		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad);
-		restartParticleContainerWithRefinement(RadParticles, refinement_context.coarse_level0_geom, restart_chkfile,
-						       particleRegister_.getParticleTypeName(quokka::ParticleType::Rad));
+		initializeParticleContainerFromCheckpoint(RadParticles, quokka::ParticleType::Rad, refinement_context);
 	}
 
 #if AMREX_SPACEDIM == 3
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
-		AMREX_ASSERT(CICParticles == nullptr);
-		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
-		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC);
-		restartParticleContainerWithRefinement(CICParticles, refinement_context.coarse_level0_geom, restart_chkfile,
-						       particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
+		initializeParticleContainerFromCheckpoint(CICParticles, quokka::ParticleType::CIC, refinement_context);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
-		AMREX_ASSERT(CICRadParticles == nullptr);
-		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType(CICRadParticles.get(), quokka::ParticleType::CICRad);
-		restartParticleContainerWithRefinement(CICRadParticles, refinement_context.coarse_level0_geom, restart_chkfile,
-						       particleRegister_.getParticleTypeName(quokka::ParticleType::CICRad));
+		initializeParticleContainerFromCheckpoint(CICRadParticles, quokka::ParticleType::CICRad, refinement_context);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-		AMREX_ASSERT(StochasticStellarPopParticles == nullptr);
-		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
-		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
-		restartParticleContainerWithRefinement(StochasticStellarPopParticles, refinement_context.coarse_level0_geom, restart_chkfile,
-						       particleRegister_.getParticleTypeName(quokka::ParticleType::StochasticStellarPop));
+		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, refinement_context, true);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-		AMREX_ASSERT(SinkParticles == nullptr);
-		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
-		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
-		restartParticleContainerWithRefinement(SinkParticles, refinement_context.coarse_level0_geom, restart_chkfile,
-						       particleRegister_.getParticleTypeName(quokka::ParticleType::Sink));
+		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, refinement_context, true);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-		AMREX_ASSERT(TestParticles == nullptr);
-		TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
-		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test);
-		restartParticleContainerWithRefinement(TestParticles, refinement_context.coarse_level0_geom, restart_chkfile,
-						       particleRegister_.getParticleTypeName(quokka::ParticleType::Test));
+		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, refinement_context, true);
 	}
 #endif // AMREX_SPACEDIM == 3
 #endif
@@ -3400,6 +3381,24 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		// Normal restart without refinement
 		particles->Restart(restart_chkfile, particle_type_name);
 	}
+}
+
+template <typename problem_t>
+template <typename ContainerType>
+void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
+									 const RefinementContext &refinement_context, bool use_star_registration)
+{
+	AMREX_ASSERT(container == nullptr);
+	container = std::make_unique<ContainerType>(this);
+
+	if (use_star_registration) {
+		particleRegister_.registerStarParticleType(container.get(), particle_type);
+	} else {
+		particleRegister_.registerParticleType(container.get(), particle_type);
+	}
+
+	restartParticleContainerWithRefinement(container, refinement_context.coarse_level0_geom, restart_chkfile,
+					       particleRegister_.getParticleTypeName(particle_type));
 }
 
 #endif // SIMULATION_HPP_
