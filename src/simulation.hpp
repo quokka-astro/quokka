@@ -3392,7 +3392,11 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	container = std::make_unique<ContainerType>(this);
 
 	if (use_star_registration) {
+#if AMREX_SPACEDIM == 3
 		particleRegister_.registerStarParticleType(container.get(), particle_type);
+#else
+		amrex::Abort("Star particles are only available in 3D builds");
+#endif
 	} else {
 		particleRegister_.registerParticleType(container.get(), particle_type);
 	}
