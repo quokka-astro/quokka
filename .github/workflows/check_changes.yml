@@ -35,6 +35,12 @@ jobs:
               - 'scripts/**'
             code:
               - 'src/**'
+              - 'extern/amrex/**'
+              - 'extern/Microphysics/**'
+              - 'extern/fmt/**'
+              - 'extern/grackle_data_files/**'
+              - 'extern/openPMD-api/**'
+              - 'extern/yaml-cpp/**'
               - 'tests/**'
               - 'CMakeLists.txt'
               - '**/*.cpp'
