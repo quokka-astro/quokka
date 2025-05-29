@@ -53,7 +53,7 @@ jobs:
     - name: Run
       working-directory: ${{github.workspace}}/tests
       shell: bash
-      run: mpirun $RUNNER_WORKSPACE/build/src/problems/HydroBlast3D/test_hydro3d_blast blast_32.in max_walltime=0:00:10 plotfile_interval=100 checkpoint_interval=100
+      run: mpirun $RUNNER_WORKSPACE/build/src/problems/HydroBlast3D/test_hydro3d_blast ../inputs/blast_32.in max_walltime=0:00:10 plotfile_interval=100 checkpoint_interval=100
 
     - name: Upload test output
       if: always()
