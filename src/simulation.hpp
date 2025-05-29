@@ -357,7 +357,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void ReadCheckpointFile();
 	template <typename ParticleContainer>
-	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, amrex::Geometry const &coarse_level0_geom, 
+	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, amrex::Geometry const &coarse_level0_geom,
 						    std::string const &restart_chkfile, std::string const &particle_type_name);
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
@@ -3215,7 +3215,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		AMREX_ASSERT(RadParticles == nullptr);
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
 		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad);
-		restartParticleContainerWithRefinement(RadParticles, coarse_level0_geom, restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Rad));
+		restartParticleContainerWithRefinement(RadParticles, coarse_level0_geom, restart_chkfile,
+						       particleRegister_.getParticleTypeName(quokka::ParticleType::Rad));
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -3223,35 +3224,40 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		AMREX_ASSERT(CICParticles == nullptr);
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC);
-		restartParticleContainerWithRefinement(CICParticles, coarse_level0_geom, restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
+		restartParticleContainerWithRefinement(CICParticles, coarse_level0_geom, restart_chkfile,
+						       particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
 		AMREX_ASSERT(CICRadParticles == nullptr);
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
 		particleRegister_.registerParticleType(CICRadParticles.get(), quokka::ParticleType::CICRad);
-		restartParticleContainerWithRefinement(CICRadParticles, coarse_level0_geom, restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CICRad));
+		restartParticleContainerWithRefinement(CICRadParticles, coarse_level0_geom, restart_chkfile,
+						       particleRegister_.getParticleTypeName(quokka::ParticleType::CICRad));
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
 		AMREX_ASSERT(StochasticStellarPopParticles == nullptr);
 		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
 		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
-		restartParticleContainerWithRefinement(StochasticStellarPopParticles, coarse_level0_geom, restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::StochasticStellarPop));
+		restartParticleContainerWithRefinement(StochasticStellarPopParticles, coarse_level0_geom, restart_chkfile,
+						       particleRegister_.getParticleTypeName(quokka::ParticleType::StochasticStellarPop));
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
 		AMREX_ASSERT(SinkParticles == nullptr);
 		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
 		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
-		restartParticleContainerWithRefinement(SinkParticles, coarse_level0_geom, restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Sink));
+		restartParticleContainerWithRefinement(SinkParticles, coarse_level0_geom, restart_chkfile,
+						       particleRegister_.getParticleTypeName(quokka::ParticleType::Sink));
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
 		AMREX_ASSERT(TestParticles == nullptr);
 		TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
 		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test);
-		restartParticleContainerWithRefinement(TestParticles, coarse_level0_geom, restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Test));
+		restartParticleContainerWithRefinement(TestParticles, coarse_level0_geom, restart_chkfile,
+						       particleRegister_.getParticleTypeName(quokka::ParticleType::Test));
 	}
 #endif // AMREX_SPACEDIM == 3
 #endif
@@ -3261,34 +3267,55 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 template <typename problem_t>
 template <typename ParticleContainer>
-void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, 
-								       amrex::Geometry const &coarse_level0_geom, 
-								       std::string const &restart_chkfile, 
-								       std::string const &particle_type_name)
+void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, amrex::Geometry const &coarse_level0_geom,
+								      std::string const &restart_chkfile, std::string const &particle_type_name)
 {
 	if (restartRefineFactor_ > 1) {
-		// Save current geometry
-		auto current_geom = particles->Geom(0);
-		auto current_ba = particles->ParticleBoxArray(0);
-		auto current_dm = particles->ParticleDistributionMap(0);
+		// Get current finest level for multi-level handling
+		const int finest_level = finestLevel();
+
+		// Save current geometry for all levels
+		amrex::Vector<amrex::Geometry> current_geom(finest_level + 1);
+		amrex::Vector<amrex::BoxArray> current_ba(finest_level + 1);
+		amrex::Vector<amrex::DistributionMapping> current_dm(finest_level + 1);
+
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			current_geom[lev] = particles->Geom(lev);
+			current_ba[lev] = particles->ParticleBoxArray(lev);
+			current_dm[lev] = particles->ParticleDistributionMap(lev);
+		}
 
 		// Set up original (coarse) geometry for particle reading
+		// Level 0 uses the provided coarse geometry
 		particles->SetParticleGeometry(0, coarse_level0_geom);
 
-		// Create coarse BoxArray by coarsening the current refined one
-		amrex::BoxArray coarse_ba = current_ba;
-		coarse_ba.coarsen(restartRefineFactor_);
-		amrex::DistributionMapping const coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
-		particles->SetParticleBoxArray(0, coarse_ba);
-		particles->SetParticleDistributionMap(0, coarse_dm);
+		// For each level, coarsen by the same refinement factor
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			// Create coarse BoxArray by coarsening the current refined one
+			amrex::BoxArray coarse_ba = current_ba[lev];
+			coarse_ba.coarsen(restartRefineFactor_);
+			amrex::DistributionMapping const coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
+
+			// For levels > 0, set up the appropriate coarse geometry
+			if (lev > 0) {
+				// Get the geometry by coarsening the current level's geometry
+				amrex::Geometry coarse_geom_lev = amrex::coarsen(current_geom[lev], restartRefineFactor_);
+				particles->SetParticleGeometry(lev, coarse_geom_lev);
+			}
+
+			particles->SetParticleBoxArray(lev, coarse_ba);
+			particles->SetParticleDistributionMap(lev, coarse_dm);
+		}
 
 		// Read particles with coarse grid structure
 		particles->Restart(restart_chkfile, particle_type_name);
 
-		// Restore refined geometry
-		particles->SetParticleGeometry(0, current_geom);
-		particles->SetParticleBoxArray(0, current_ba);
-		particles->SetParticleDistributionMap(0, current_dm);
+		// Restore refined geometry for all levels
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			particles->SetParticleGeometry(lev, current_geom[lev]);
+			particles->SetParticleBoxArray(lev, current_ba[lev]);
+			particles->SetParticleDistributionMap(lev, current_dm[lev]);
+		}
 
 		// Redistribute particles to refined grid
 		particles->Redistribute();
