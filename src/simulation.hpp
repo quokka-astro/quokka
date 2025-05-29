@@ -386,12 +386,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
 	template <typename ParticleContainer>
-	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, amrex::Geometry const &coarse_level0_geom,
-						    std::string const &restart_chkfile, std::string const &particle_type_name);
+	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
+						    std::string const &particle_type_name);
 
 	template <typename ContainerType>
 	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-						       const RefinementContext &refinement_context, bool use_star_registration = false);
+						       bool use_star_registration = false);
 
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
@@ -3252,10 +3252,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			ba.refine(restartRefineFactor_);
 		}
 
-		// load balancing: create new BoxArray at level 0 for a possibly different number of MPI ranks
-		if (lev == 0) {
-			ba = loadBalanceOnRestart(ba, lev);
-		}
+		// load balancing: create new BoxArray for a possibly different number of MPI ranks
+		ba = loadBalanceOnRestart(ba, lev);
 
 		// create a distribution mapping
 		amrex::DistributionMapping dm{ba, amrex::ParallelDescriptor::NProcs()};
@@ -3298,10 +3296,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
-		restartParticleContainerWithRefinement(TracerPC, refinement_context.coarse_level0_geom, restart_chkfile, "tracer_particles");
+		restartParticleContainerWithRefinement(TracerPC, restart_chkfile, "tracer_particles");
 	}
 
-	// Initialize and register particle containers from checkpoint file
+	// 6. Initialize and register particle containers from checkpoint file
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		initializeParticleContainerFromCheckpoint(RadParticles, quokka::ParticleType::Rad, refinement_context);
@@ -3335,8 +3333,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 template <typename problem_t>
 template <typename ParticleContainer>
-void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, amrex::Geometry const &coarse_level0_geom,
-								      std::string const &restart_chkfile, std::string const &particle_type_name)
+void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
+								      std::string const &particle_type_name)
 {
 	if (restartRefineFactor_ > 1) {
 		// Get current finest level for multi-level handling
@@ -3354,23 +3352,15 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		}
 
 		// Set up original (coarse) geometry for particle reading
-		// Level 0 uses the provided coarse geometry
-		particles->SetParticleGeometry(0, coarse_level0_geom);
-
 		// For each level, coarsen by the same refinement factor
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// Create coarse BoxArray by coarsening the current refined one
 			amrex::BoxArray coarse_ba = current_ba[lev];
 			coarse_ba.coarsen(restartRefineFactor_);
 			amrex::DistributionMapping const coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
-
-			// For levels > 0, set up the appropriate coarse geometry
-			if (lev > 0) {
-				// Get the geometry by coarsening the current level's geometry
-				amrex::Geometry coarse_geom_lev = amrex::coarsen(current_geom[lev], restartRefineFactor_);
-				particles->SetParticleGeometry(lev, coarse_geom_lev);
-			}
-
+			// Get the geometry by coarsening the current level's geometry
+			amrex::Geometry coarse_geom_lev = amrex::coarsen(current_geom[lev], restartRefineFactor_);
+			particles->SetParticleGeometry(lev, coarse_geom_lev);
 			particles->SetParticleBoxArray(lev, coarse_ba);
 			particles->SetParticleDistributionMap(lev, coarse_dm);
 		}
@@ -3388,7 +3378,8 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		// Redistribute particles to refined grid
 		particles->Redistribute();
 
-		// TODO(bwibking): split particles
+		// TODO(bwibking): Split particles by restartRefineFactor_**3
+		// ...
 	} else {
 		// Normal restart without refinement
 		particles->Restart(restart_chkfile, particle_type_name);
@@ -3398,7 +3389,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 template <typename problem_t>
 template <typename ContainerType>
 void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-									 const RefinementContext &refinement_context, bool use_star_registration)
+									 bool use_star_registration)
 {
 	AMREX_ASSERT(container == nullptr);
 	container = std::make_unique<ContainerType>(this);
@@ -3413,8 +3404,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 		particleRegister_.registerParticleType(container.get(), particle_type);
 	}
 
-	restartParticleContainerWithRefinement(container, refinement_context.coarse_level0_geom, restart_chkfile,
-					       particleRegister_.getParticleTypeName(particle_type));
+	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type));
 }
 
 #endif // SIMULATION_HPP_
