@@ -3217,12 +3217,12 @@ template <typename problem_t> auto AMRSimulation<problem_t>::loadBalanceOnRestar
 		// unless the domain has odd number of cells in that direction.
 		ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
 		return ba_lev;
-	} else {
-		// For higher levels, preserve the input BoxArray and apply load balancing
-		amrex::BoxArray ba_lev = input_ba;
-		ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
-		return ba_lev;
 	}
+
+	// For higher levels, use the input BoxArray and chop grids for better load balancing
+	amrex::BoxArray ba_lev = input_ba;
+	ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
+	return ba_lev;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
