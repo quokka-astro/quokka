@@ -383,7 +383,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom);
 	void loadMultiFabData(const CheckpointHeader &header, const RefinementContext &context);
-	auto loadBalanceLevel0OnRestart(const amrex::BoxArray &input_ba) -> amrex::BoxArray;
+	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
 	template <typename ParticleContainer>
 	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, amrex::Geometry const &coarse_level0_geom,
@@ -3199,25 +3199,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::loadBalanceLevel0OnRestart(const amrex::BoxArray &input_ba) -> amrex::BoxArray
+auto AMRSimulation<problem_t>::loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray
 {
 	amrex::IntVect fac(2);
-	const amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
-	const amrex::IntVect domhi{AMREX_D_DECL(input_ba[input_ba.size() - 1].bigEnd(0), input_ba[input_ba.size() - 1].bigEnd(1), input_ba[input_ba.size() - 1].bigEnd(2))};
-	const amrex::Box dom(domlo, domhi);
+	const amrex::Box dom = geom[lev].Domain();
 	const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		if (dom.length(idim) != dom2.length(idim)) {
 			fac[idim] = 1;
 		}
 	}
-	amrex::BoxArray ba_lev0(amrex::coarsen(dom, fac));
-	ba_lev0.maxSize(max_grid_size[0] / fac);
-	ba_lev0.refine(fac);
+	amrex::BoxArray ba_lev(amrex::coarsen(dom, fac));
+	ba_lev.maxSize(max_grid_size[lev] / fac);
+	ba_lev.refine(fac);
 	// Boxes in ba have even number of cells in each direction
 	// unless the domain has odd number of cells in that direction.
-	ChopGrids(0, ba_lev0, amrex::ParallelDescriptor::NProcs());
-	return ba_lev0;
+	ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
+	return ba_lev;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
@@ -3249,7 +3247,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 		// load balancing: create new BoxArray at level 0 for a possibly different number of MPI ranks
 		if (lev == 0) {
-			ba = loadBalanceLevel0OnRestart(ba);
+			ba = loadBalanceOnRestart(ba, lev);
 		}
 
 		// create a distribution mapping
