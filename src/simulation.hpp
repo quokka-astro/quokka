@@ -3377,9 +3377,6 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 
 		// Redistribute particles to refined grid
 		particles->Redistribute();
-
-		// TODO(bwibking): Split particles by restartRefineFactor_**3
-		// ...
 	} else {
 		// Normal restart without refinement
 		particles->Restart(restart_chkfile, particle_type_name);
@@ -3394,6 +3391,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	AMREX_ASSERT(container == nullptr);
 	container = std::make_unique<ContainerType>(this);
 
+	// Register container
 	if (use_star_registration) {
 #if AMREX_SPACEDIM == 3
 		particleRegister_.registerStarParticleType(container.get(), particle_type);
@@ -3404,7 +3402,18 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 		particleRegister_.registerParticleType(container.get(), particle_type);
 	}
 
+	// Read particles
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type));
+
+	// Split particles
+	if (restartRefineFactor_ > 1) {
+		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
+		amrex::Print() << fmt::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
+		auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
+		for (int lev = 0; lev < finestLevel(); ++lev) {
+			descriptor->splitParticles(lev, split_factor);
+		}
+	}
 }
 
 #endif // SIMULATION_HPP_
