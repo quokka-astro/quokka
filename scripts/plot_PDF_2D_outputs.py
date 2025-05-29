@@ -20,7 +20,6 @@ def read_header(filename):
             values = [float_if_possible(val) for val in tokens[1:]]
             header[key] = values
     f.close()
-    aaa = 3
     return header
         
 if __name__ == "__main__":
