@@ -25,10 +25,10 @@ if (AMReX_SPACEDIM EQUAL 3)
     )
 
     #re-run cmake if this file is changed
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tests/PopIII.in)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/inputs/PopIII.in)
 
     # Read the 'PopIII.in' file line by line
-    file(READ ../inputs/${CMAKE_SOURCE_DIR}/tests/PopIII.in pop_in_contents)
+    file(READ ${CMAKE_SOURCE_DIR}/inputs/PopIII.in pop_in_contents)
 
     # Split the file contents into lines
     string(REPLACE "\n" ";" pop_in_lines "${pop_in_contents}")
@@ -64,7 +64,7 @@ if (AMReX_SPACEDIM EQUAL 3)
            message(FATAL_ERROR "No box size found to create initial perturbations for!")
         endif()
     else()
-        message(FATAL_ERROR "No matching line found in ${CMAKE_SOURCE_DIR}/tests/PopIII.in!")
+        message(FATAL_ERROR "No matching line found in ${CMAKE_SOURCE_DIR}/inputs/PopIII.in!")
     endif()
 
 
