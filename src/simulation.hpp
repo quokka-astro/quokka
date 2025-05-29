@@ -3201,21 +3201,29 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 template <typename problem_t>
 auto AMRSimulation<problem_t>::loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray
 {
-	amrex::IntVect fac(2);
-	const amrex::Box dom = geom[lev].Domain();
-	const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		if (dom.length(idim) != dom2.length(idim)) {
-			fac[idim] = 1;
+	if (lev == 0) {
+		// For level 0, create optimally-sized boxes from the domain
+		amrex::IntVect fac(2);
+		const amrex::Box dom = geom[lev].Domain();
+		const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (dom.length(idim) != dom2.length(idim)) {
+				fac[idim] = 1;
+			}
 		}
+		amrex::BoxArray ba_lev(amrex::coarsen(dom, fac));
+		ba_lev.maxSize(max_grid_size[lev] / fac);
+		ba_lev.refine(fac);
+		// Boxes in ba have even number of cells in each direction
+		// unless the domain has odd number of cells in that direction.
+		ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
+		return ba_lev;
+	} else {
+		// For higher levels, preserve the input BoxArray and apply load balancing
+		amrex::BoxArray ba_lev = input_ba;
+		ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
+		return ba_lev;
 	}
-	amrex::BoxArray ba_lev(amrex::coarsen(dom, fac));
-	ba_lev.maxSize(max_grid_size[lev] / fac);
-	ba_lev.refine(fac);
-	// Boxes in ba have even number of cells in each direction
-	// unless the domain has odd number of cells in that direction.
-	ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
-	return ba_lev;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
