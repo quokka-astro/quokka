@@ -68,7 +68,7 @@ template <> void QuokkaSimulation<ParticleProblem>::createInitialCICRadParticles
 	// read particles from ASCII file
 	const int nreal_extra = 6 + nGroups_; // mass vx vy vz birth_time death_time lum1
 	CICRadParticles->SetVerbose(1);
-	CICRadParticles->InitFromAsciiFile("GravRadParticles3D.txt", nreal_extra, nullptr);
+	CICRadParticles->InitFromAsciiFile("../inputs/GravRadParticles3D.txt", nreal_extra, nullptr);
 }
 
 template <> void QuokkaSimulation<ParticleProblem>::createInitialCICParticles()
@@ -76,7 +76,7 @@ template <> void QuokkaSimulation<ParticleProblem>::createInitialCICParticles()
 	// read particles from ASCII file - same as CICRadParticles but only mass and velocity components
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
-	CICParticles->InitFromAsciiFile("GravRadParticles3D_cic_only.txt", nreal_extra, nullptr);
+	CICParticles->InitFromAsciiFile("../inputs/GravRadParticles3D_cic_only.txt", nreal_extra, nullptr);
 }
 
 template <> void QuokkaSimulation<ParticleProblem>::createInitialRadParticles()
@@ -84,7 +84,7 @@ template <> void QuokkaSimulation<ParticleProblem>::createInitialRadParticles()
 	// read particles from ASCII file - same as CICRadParticles but only birth_time, death_time, and luminosity
 	const int nreal_extra = 2 + nGroups_; // birth_time death_time lum1
 	RadParticles->SetVerbose(1);
-	RadParticles->InitFromAsciiFile("GravRadParticles3D_rad_only.txt", nreal_extra, nullptr);
+	RadParticles->InitFromAsciiFile("../inputs/GravRadParticles3D_rad_only.txt", nreal_extra, nullptr);
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real

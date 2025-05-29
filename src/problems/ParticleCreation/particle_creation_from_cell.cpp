@@ -69,7 +69,7 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	TestParticles->SetVerbose(1);
-	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
+	TestParticles->InitFromAsciiFile("../inputs/TestParticles.txt", nreal_extra, nullptr);
 
 	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
 	// do not have particles, TestParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.

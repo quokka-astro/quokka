@@ -76,7 +76,7 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile("sink.txt", nreal_extra, nullptr);
+	SinkParticles->InitFromAsciiFile("../inputs/sink.txt", nreal_extra, nullptr);
 
 	// manually set particle mass to M_star_in_Msun * C::M_solar
 	for (auto &kv : SinkParticles->GetParticles()) {
