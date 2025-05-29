@@ -32,6 +32,7 @@ namespace filesystem = experimental::filesystem;
 #include <ostream>
 #include <stdexcept>
 #include <variant>
+#include <algorithm>
 
 // library headers
 #include "AMReX.H"
@@ -400,6 +401,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::string> componentNames_fc_flat_;
 	std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> componentNames_fc_;
 	amrex::Vector<std::string> derivedNames_;
+	amrex::Vector<std::string> plotfileVarsToInclude_cc_;
 	bool areInitialConditionsDefined_ = false;
 
 	/// output parameters
@@ -2383,17 +2385,7 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts) -> amrex::MultiFab
 {
-	// Combine state_new_cc_[lev] and derived variables in a new MF
-	const int ncomp_cc = state_new_cc_[lev].nComp();
-	int comp = 0;
-	int ncomp_per_dim_fc = 0;
-	int ncomp_tot_fc = 0;
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
-		ncomp_tot_fc = Physics_Indices<problem_t>::nvarTotal_fc;
-	}
-	const int ncomp_deriv = derivedNames_.size();
-	const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
+	const int ncomp_plotMF = plotfileVarsToInclude_cc_.size();
 	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
 
 	if (included_ghosts > 0) {
@@ -2410,24 +2402,41 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 		}
 	}
 
-	// copy data from cell-centred state variables
-	for (int i = 0; i < ncomp_cc; i++) {
-		amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], i, comp, 1, included_ghosts);
-		comp++;
-	}
-
-	// compute cell-center averaged face-centred data
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc);
-			comp += ncomp_per_dim_fc;
+	// Process each variable in the configurable list
+	int comp = 0;
+	for (const std::string &varname : plotfileVarsToInclude_cc_) {
+		// Check if it's a cell-centered variable
+		auto cc_it = std::find(componentNames_cc_.begin(), componentNames_cc_.end(), varname);
+		if (cc_it != componentNames_cc_.end()) {
+			int cc_comp = std::distance(componentNames_cc_.begin(), cc_it);
+			amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], cc_comp, comp, 1, included_ghosts);
+			comp++;
+			continue;
 		}
-	}
 
-	// compute derived vars
-	for (auto const &dname : derivedNames_) {
-		ComputeDerivedVar(lev, dname, plotMF, comp);
-		comp++;
+		// Check if it's a face-centered variable
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			auto fc_it = std::find(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end(), varname);
+			if (fc_it != componentNames_fc_flat_.end()) {
+				int fc_comp_flat = std::distance(componentNames_fc_flat_.begin(), fc_it);
+				int idim = fc_comp_flat / Physics_Indices<problem_t>::nvarPerDim_fc;
+				int fc_comp = fc_comp_flat % Physics_Indices<problem_t>::nvarPerDim_fc;
+				AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, fc_comp, 1);
+				comp++;
+				continue;
+			}
+		}
+
+		// Check if it's a derived variable
+		auto deriv_it = std::find(derivedNames_.begin(), derivedNames_.end(), varname);
+		if (deriv_it != derivedNames_.end()) {
+			ComputeDerivedVar(lev, varname, plotMF, comp);
+			comp++;
+			continue;
+		}
+
+		// Variable not found in any category
+		amrex::Abort("PlotFileMFAtLevel_cc: Variable '" + varname + "' not found in any component list");
 	}
 
 	return plotMF;
@@ -2648,15 +2657,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 
 template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames() const -> amrex::Vector<std::string>
 {
-	amrex::Vector<std::string> varnames;
-	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
-			varnames.push_back(componentNames_fc_flat_[icomp]);
-		}
-	}
-	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
-	return varnames;
+	return plotfileVarsToInclude_cc_;
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames_fc() const -> std::array<amrex::Vector<std::string>, AMREX_SPACEDIM>
