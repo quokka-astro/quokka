@@ -21,7 +21,7 @@ jobs:
 
   analyze:
     needs: check_changes
-    if: ${{ github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule' && needs.check_changes.outputs.has_non_docs_changes == 'true' }}
+    if: ${{ (github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule') && (needs.check_changes.outputs.has_cpp_changes == 'true' || needs.check_changes.outputs.has_py_changes == 'true') }}
     name: Analyze
     runs-on: ubuntu-latest
     permissions:
@@ -76,10 +76,10 @@ jobs:
 
       - name: Build (py)
         uses: github/codeql-action/autobuild@ff0a06e83cb2de871e5a09832bc6a81e7276941f # v3.28.18
-        if: ${{ matrix.language == 'python' && needs.check_changes.outputs.has_non_docs_changes == 'true' }}
+        if: ${{ matrix.language == 'python' && needs.check_changes.outputs.has_py_changes == 'true' }}
 
       - name: Build (C++)
-        if: ${{ matrix.language == 'cpp' && needs.check_changes.outputs.has_non_docs_changes == 'true' }}
+        if: ${{ matrix.language == 'cpp' && needs.check_changes.outputs.has_cpp_changes == 'true' }}
         run: |
           export CCACHE_COMPRESS=1
           export CCACHE_COMPRESSLEVEL=10
@@ -99,7 +99,7 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@ff0a06e83cb2de871e5a09832bc6a81e7276941f # v3.28.18
-        if: ${{ needs.check_changes.outputs.has_non_docs_changes == 'true' }}
+        if: ${{ needs.check_changes.outputs.has_cpp_changes == 'true' || needs.check_changes.outputs.has_py_changes == 'true' }}
         with:
           category: "/language:${{ matrix.language }}"
 

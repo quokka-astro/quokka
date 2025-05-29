@@ -9,6 +9,10 @@ on:
         value: ${{ jobs.check.outputs.has_non_docs_changes }}
       has_scripts_changes:
         value: ${{ jobs.check.outputs.has_scripts_changes }}
+      has_cpp_changes:
+        value: ${{ jobs.check.outputs.has_cpp_changes }}
+      has_py_changes:
+        value: ${{ jobs.check.outputs.has_py_changes }}
 
 jobs:
   check:
@@ -17,6 +21,8 @@ jobs:
       has_docs_changes: ${{ steps.set-output.outputs.has_docs_changes }}
       has_non_docs_changes: ${{ steps.set-output.outputs.has_non_docs_changes }}
       has_scripts_changes: ${{ steps.set-output.outputs.has_scripts_changes }}
+      has_cpp_changes: ${{ steps.set-output.outputs.has_cpp_changes }}
+      has_py_changes: ${{ steps.set-output.outputs.has_py_changes }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -35,9 +41,19 @@ jobs:
               - '**/*.c'
               - '**/*.hpp'
               - '**/*.h'
+            cpp:
+              - '**/*.cpp'
+              - '**/*.c'
+              - '**/*.hpp'
+              - '**/*.h'
+            py:
+              - '**/*.py'
+              - '**/*.ipynb'
 
       - id: set-output
         run: |
           echo "has_docs_changes=${{ steps.changes.outputs.docs }}" >> $GITHUB_OUTPUT
           echo "has_non_docs_changes=${{ steps.changes.outputs.code }}" >> $GITHUB_OUTPUT
           echo "has_scripts_changes=${{ steps.changes.outputs.scripts }}" >> $GITHUB_OUTPUT 
+          echo "has_cpp_changes=${{ steps.changes.outputs.cpp }}" >> $GITHUB_OUTPUT
+          echo "has_py_changes=${{ steps.changes.outputs.py }}" >> $GITHUB_OUTPUT
