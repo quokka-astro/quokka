@@ -361,11 +361,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	struct RefinementContext {
 		int refinement_factor = 1;
 		amrex::Geometry coarse_level0_geom;
-		auto needs_refinement() const -> bool { return refinement_factor > 1; }
+		[[nodiscard]] auto needs_refinement() const -> bool { return refinement_factor > 1; }
 	};
 
 	struct CheckpointHeader {
-		int finest_level;
+		int finest_level{};
 		amrex::Vector<int> istep;
 		amrex::Vector<amrex::Real> dt;
 		amrex::Vector<amrex::Real> t_new;
@@ -3024,8 +3024,8 @@ inline void GotoNextLine(std::istream &is)
 }
 
 template <typename problem_t>
-typename AMRSimulation<problem_t>::RefinementContext AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba,
-												       const amrex::Geometry &current_geom)
+auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba,
+			       const amrex::Geometry &current_geom) -> typename AMRSimulation<problem_t>::RefinementContext
 {
 	RefinementContext context;
 
@@ -3053,7 +3053,7 @@ typename AMRSimulation<problem_t>::RefinementContext AMRSimulation<problem_t>::d
 		// set refinement factor and create coarse level 0 geometry
 		context.refinement_factor = rescaleFac;
 		amrex::IntVect is_per = current_geom.periodicity().intVect();
-		amrex::Array<int, AMREX_SPACEDIM> is_per_arr{AMREX_D_DECL(is_per[0], is_per[1], is_per[2])};
+		const amrex::Array<int, AMREX_SPACEDIM> is_per_arr{AMREX_D_DECL(is_per[0], is_per[1], is_per[2])};
 		context.coarse_level0_geom = amrex::Geometry(reDom, current_geom.ProbDomain(), amrex::CoordSys::cartesian, is_per_arr);
 	}
 
@@ -3061,12 +3061,12 @@ typename AMRSimulation<problem_t>::RefinementContext AMRSimulation<problem_t>::d
 }
 
 template <typename problem_t>
-typename AMRSimulation<problem_t>::CheckpointHeader AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_file)
+auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_file) -> typename AMRSimulation<problem_t>::CheckpointHeader
 {
 	CheckpointHeader header;
 
 	// Header
-	std::string File(restart_file + "/Header");
+	const std::string File(restart_file + "/Header");
 
 	const amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::GetIOBufferSize());
 
