@@ -3024,8 +3024,8 @@ inline void GotoNextLine(std::istream &is)
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba,
-			       const amrex::Geometry &current_geom) -> typename AMRSimulation<problem_t>::RefinementContext
+auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) ->
+    typename AMRSimulation<problem_t>::RefinementContext
 {
 	RefinementContext context;
 
