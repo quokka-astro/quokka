@@ -3406,6 +3406,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type));
 
 	// Split particles
+#if AMREX_SPACEDIM == 3
 	if (restartRefineFactor_ > 1) {
 		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
 		amrex::Print() << fmt::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
@@ -3414,6 +3415,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 			descriptor->splitParticles(lev, split_factor);
 		}
 	}
+#endif
 }
 
 #endif // SIMULATION_HPP_
