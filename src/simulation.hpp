@@ -3235,7 +3235,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			// Create coarse BoxArray by coarsening the current refined one
 			amrex::BoxArray coarse_ba = current_ba;
 			coarse_ba.coarsen(restartRefineFactor_);
-			amrex::DistributionMapping coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
+			amrex::DistributionMapping const coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
 			CICParticles->SetParticleBoxArray(0, coarse_ba);
 			CICParticles->SetParticleDistributionMap(0, coarse_dm);
 
