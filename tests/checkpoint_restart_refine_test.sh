@@ -17,6 +17,13 @@ BUILD_DIR=${BUILD_DIR:=../build}
 PLOTFILETOOLS_DIR=${PLOTFILETOOLS_DIR:=../extern/amrex/Tools/Plotfile}
 NPROC=${NPROC:=`nproc`}
 
+# Detect OS for sed compatibility (macOS requires -i '', Linux requires -i)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    SED_INPLACE="sed -i ''"
+else
+    SED_INPLACE="sed -i"
+fi
+
 echo "=== Universal Refinement Test ==="
 
 # Clean up any existing files
@@ -31,19 +38,51 @@ CHECKPOINT_TIME=0.01 # Create checkpoint at t=0.01 (fewer steps)
 STOP_TIME=0.025       # Run until t=0.025 for comparison
 
 # Create coarse AMR input file (32^3 base with 1 AMR level) based on working blast_32.in
-cp "$BUILD_DIR/../tests/blast_32.in" coarse_amr.in
-sed -i '' 's/amr.max_level       = 0/amr.max_level       = 1/' coarse_amr.in
-#sed -i '' 's/do_tracers = 1/do_tracers = 0/' coarse_amr.in
-sed -i '' 's/do_reflux = 0/do_reflux = 1/' coarse_amr.in
-sed -i '' 's/do_subcycle = 0/do_subcycle = 1/' coarse_amr.in
+# Try multiple possible locations for blast_32.in to handle different CI environments
+if [ -f "blast_32.in" ]; then
+    cp "blast_32.in" coarse_amr.in
+elif [ -f "$BUILD_DIR/../tests/blast_32.in" ]; then
+    cp "$BUILD_DIR/../tests/blast_32.in" coarse_amr.in
+elif [ -f "../tests/blast_32.in" ]; then
+    cp "../tests/blast_32.in" coarse_amr.in
+else
+    echo "❌ ERROR: Cannot find blast_32.in input file"
+    echo "Tried locations:"
+    echo "  blast_32.in (current directory)"
+    echo "  $BUILD_DIR/../tests/blast_32.in"
+    echo "  ../tests/blast_32.in"
+    echo "Current directory: $(pwd)"
+    echo "Files in current directory: $(ls -la)"
+    exit 1
+fi
+$SED_INPLACE 's/amr.max_level       = 0/amr.max_level       = 1/' coarse_amr.in
+#$SED_INPLACE 's/do_tracers = 1/do_tracers = 0/' coarse_amr.in
+$SED_INPLACE 's/do_reflux = 0/do_reflux = 1/' coarse_amr.in
+$SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' coarse_amr.in
 
 # Create fine AMR input file (64^3 base with 1 AMR level) based on working blast_32.in
-cp "$BUILD_DIR/../tests/blast_32.in" fine_amr.in
-sed -i '' 's/amr.n_cell          = 32 32 32/amr.n_cell          = 64 64 64/' fine_amr.in
-sed -i '' 's/amr.max_level       = 0/amr.max_level       = 1/' fine_amr.in
-#sed -i '' 's/do_tracers = 1/do_tracers = 0/' fine_amr.in
-sed -i '' 's/do_reflux = 0/do_reflux = 1/' fine_amr.in
-sed -i '' 's/do_subcycle = 0/do_subcycle = 1/' fine_amr.in
+# Try multiple possible locations for blast_32.in to handle different CI environments  
+if [ -f "blast_32.in" ]; then
+    cp "blast_32.in" fine_amr.in
+elif [ -f "$BUILD_DIR/../tests/blast_32.in" ]; then
+    cp "$BUILD_DIR/../tests/blast_32.in" fine_amr.in
+elif [ -f "../tests/blast_32.in" ]; then
+    cp "../tests/blast_32.in" fine_amr.in
+else
+    echo "❌ ERROR: Cannot find blast_32.in input file for fine_amr.in"
+    echo "Tried locations:"
+    echo "  blast_32.in (current directory)"
+    echo "  $BUILD_DIR/../tests/blast_32.in"
+    echo "  ../tests/blast_32.in"
+    echo "Current directory: $(pwd)"
+    echo "Files in current directory: $(ls -la)"
+    exit 1
+fi
+$SED_INPLACE 's/amr.n_cell          = 32 32 32/amr.n_cell          = 64 64 64/' fine_amr.in
+$SED_INPLACE 's/amr.max_level       = 0/amr.max_level       = 1/' fine_amr.in
+#$SED_INPLACE 's/do_tracers = 1/do_tracers = 0/' fine_amr.in
+$SED_INPLACE 's/do_reflux = 0/do_reflux = 1/' fine_amr.in
+$SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' fine_amr.in
 
 echo "=== Step 1: Create coarse AMR checkpoint (32^3 base + 1 AMR level) ==="
 # Run coarse AMR simulation to create checkpoints
