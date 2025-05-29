@@ -361,7 +361,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	struct RefinementContext {
 		int refinement_factor = 1;
 		amrex::Geometry coarse_level0_geom;
-		bool needs_refinement() const { return refinement_factor > 1; }
+		auto needs_refinement() const -> bool { return refinement_factor > 1; }
 	};
 
 	struct CheckpointHeader {
@@ -375,8 +375,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void ReadCheckpointFile();
 
 	// Helper methods for checkpoint restart refactoring
-	RefinementContext detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom);
-	CheckpointHeader readCheckpointHeader(const std::string &restart_file);
+	auto detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) -> RefinementContext;
+	auto readCheckpointHeader(const std::string &restart_file) -> CheckpointHeader;
 	template <typename BoundaryFunctor>
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
