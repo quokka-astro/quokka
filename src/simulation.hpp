@@ -3302,28 +3302,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// 6. Initialize and register particle containers from checkpoint file
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
-		initializeParticleContainerFromCheckpoint(RadParticles, quokka::ParticleType::Rad, refinement_context);
+		initializeParticleContainerFromCheckpoint(RadParticles, quokka::ParticleType::Rad);
 	}
 
 #if AMREX_SPACEDIM == 3
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
-		initializeParticleContainerFromCheckpoint(CICParticles, quokka::ParticleType::CIC, refinement_context);
+		initializeParticleContainerFromCheckpoint(CICParticles, quokka::ParticleType::CIC);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
-		initializeParticleContainerFromCheckpoint(CICRadParticles, quokka::ParticleType::CICRad, refinement_context);
+		initializeParticleContainerFromCheckpoint(CICRadParticles, quokka::ParticleType::CICRad);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, refinement_context, true);
+		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, true);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, refinement_context, true);
+		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, true);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, refinement_context, true);
+		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, true);
 	}
 #endif // AMREX_SPACEDIM == 3
 #endif
