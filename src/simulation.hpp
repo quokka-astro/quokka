@@ -23,6 +23,7 @@ namespace std
 namespace filesystem = experimental::filesystem;
 }
 #endif
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -32,7 +33,6 @@ namespace filesystem = experimental::filesystem;
 #include <ostream>
 #include <stdexcept>
 #include <variant>
-#include <algorithm>
 
 // library headers
 #include "AMReX.H"
@@ -2655,10 +2655,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 }
 #endif // AMREX_USE_ASCENT
 
-template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames() const -> amrex::Vector<std::string>
-{
-	return plotfileVarsToInclude_cc_;
-}
+template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames() const -> amrex::Vector<std::string> { return plotfileVarsToInclude_cc_; }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames_fc() const -> std::array<amrex::Vector<std::string>, AMREX_SPACEDIM>
 {

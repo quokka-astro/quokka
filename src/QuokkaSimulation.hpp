@@ -367,7 +367,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineDefaultPlo
 {
 	// Initialize plotfileVarsToInclude_cc_ with all cell-centered variables
 	this->plotfileVarsToInclude_cc_.insert(this->plotfileVarsToInclude_cc_.end(), this->componentNames_cc_.begin(), this->componentNames_cc_.end());
-	
+
 	// Add all face-centered variables except RiemannSolverVelocity
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
@@ -377,15 +377,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineDefaultPlo
 			}
 		}
 	}
-	
+
 	// Add all derived variables
 	this->plotfileVarsToInclude_cc_.insert(this->plotfileVarsToInclude_cc_.end(), this->derivedNames_.begin(), this->derivedNames_.end());
-	
+
 	// Detect name collisions and abort if any are found
 	std::set<std::string> seen_names;
 	for (const std::string &varname : this->plotfileVarsToInclude_cc_) {
 		if (!seen_names.insert(varname).second) {
-			amrex::Abort("Duplicate variable name '" + varname + "' found in plotfile variables list. "
+			amrex::Abort("Duplicate variable name '" + varname +
+				     "' found in plotfile variables list. "
 				     "This indicates a naming collision between cell-centered, face-centered, or derived variables.");
 		}
 	}
