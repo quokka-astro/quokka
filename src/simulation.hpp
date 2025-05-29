@@ -3198,8 +3198,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 	}
 }
 
-template <typename problem_t>
-auto AMRSimulation<problem_t>::loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray
+template <typename problem_t> auto AMRSimulation<problem_t>::loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray
 {
 	if (lev == 0) {
 		// For level 0, create optimally-sized boxes from the domain
