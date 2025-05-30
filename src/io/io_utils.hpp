@@ -28,9 +28,9 @@ class ScopedVisMFNOutFiles {
 	
 	// Delete copy and move operations to ensure RAII semantics
 	ScopedVisMFNOutFiles(const ScopedVisMFNOutFiles&) = delete;
-	ScopedVisMFNOutFiles& operator=(const ScopedVisMFNOutFiles&) = delete;
+	auto operator=(const ScopedVisMFNOutFiles&) -> ScopedVisMFNOutFiles& = delete;
 	ScopedVisMFNOutFiles(ScopedVisMFNOutFiles&&) = delete;
-	ScopedVisMFNOutFiles& operator=(ScopedVisMFNOutFiles&&) = delete;
+	auto operator=(ScopedVisMFNOutFiles&&) -> ScopedVisMFNOutFiles& = delete;
 };
 
 } // namespace quokka
