@@ -9,23 +9,24 @@ namespace quokka
 {
 
 // RAII helper class to temporarily set AMReX IO settings
-class ScopedVisMFNOutFiles {
+class ScopedVisMFNOutFiles
+{
       private:
 	int originalNOutFiles_;
-	
+
       public:
 	explicit ScopedVisMFNOutFiles(int nfiles) : originalNOutFiles_(amrex::VisMF::GetNOutFiles())
 	{
 		// Always set the value (including -1 which means one file per process)
 		amrex::VisMF::SetNOutFiles(nfiles);
 	}
-	
+
 	~ScopedVisMFNOutFiles()
 	{
 		// Restore original value
 		amrex::VisMF::SetNOutFiles(originalNOutFiles_);
 	}
-	
+
 	// Delete copy and move operations to ensure RAII semantics
 	ScopedVisMFNOutFiles(const ScopedVisMFNOutFiles&) = delete;
 	auto operator=(const ScopedVisMFNOutFiles&) -> ScopedVisMFNOutFiles& = delete;
