@@ -485,13 +485,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::rereadRuntimePar
 {
 	// Re-read runtime parameters to ensure they override any compile-time settings
 	// This is called at the beginning of evolve() to ensure user input takes precedence
-	
+
 	// Call parent class rereadRuntimeParameters
 	AMRSimulation<problem_t>::rereadRuntimeParameters();
-	
+
 	// Re-read QuokkaSimulation-specific parameters
 	readParmParse();
-	
+
 	// Re-read particle parameters
 	quokka::particleParmParse();
 }
