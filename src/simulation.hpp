@@ -87,6 +87,7 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "io/DiagBase.H"
+#include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
 
@@ -2713,7 +2714,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	// sets the maximum number of binary files per MultiFab
-	amrex::VisMF::SetNOutFiles(plot_nfiles);
+	quokka::ScopedVisMFNOutFiles scoped_nfiles(plot_nfiles);
 
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -2962,7 +2963,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	WriteMetadataFile(checkpointname + "/metadata.yaml");
 
 	// set the maximum number of binary files per MultiFab
-	amrex::VisMF::SetNOutFiles(checkpoint_nfiles);
+	quokka::ScopedVisMFNOutFiles scoped_nfiles(checkpoint_nfiles);
 
 	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
