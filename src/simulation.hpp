@@ -222,6 +222,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void initialize();
 	void PerformanceHints();
 	void readParameters();
+	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 	void setInitialConditions();
 	void setInitialConditionsAtLevel_cc(int level, amrex::Real time);
 	void setInitialConditionsAtLevel_fc(int level, amrex::Real time);
@@ -752,6 +753,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	}
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::rereadRuntimeParameters()
+{
+	// Re-read runtime parameters to ensure they override any compile-time settings
+	// This is called at the beginning of evolve() to ensure user input takes precedence
+	readParameters();
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
 {
 	BL_PROFILE("AMRSimulation::setInitialConditions()"); // NOLINT(misc-const-correctness)
@@ -970,6 +978,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	BL_PROFILE("AMRSimulation::evolve()"); // NOLINT(misc-const-correctness)
 
 	AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
+
+	// Re-read runtime parameters to ensure they override any compile-time settings
+	// set in problem_main(). This ensures user input always takes precedence.
+	rereadRuntimeParameters();
 
 	amrex::Real cur_time = tNew_[0];
 #ifdef AMREX_USE_ASCENT
@@ -2442,7 +2454,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 	}
 	const int ncomp_plotMF_fc = nvar_dim_tot_fc;
 
-	amrex::MultiFab plotMF_fc(grids[lev], dmap[lev], ncomp_plotMF_fc, nghost_fc_);
+	amrex::MultiFab plotMF_fc(amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim)), dmap[lev], ncomp_plotMF_fc, nghost_fc_);
 
 	// Fill ghost zones for state_new_fc_
 	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
