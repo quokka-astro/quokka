@@ -378,7 +378,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Helper methods for checkpoint restart refactoring
 	auto detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) -> RefinementContext;
 	auto readCheckpointHeader(const std::string &restart_file) -> CheckpointHeader;
-	template <typename BoundaryFunctor>
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
 	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
@@ -3142,7 +3141,6 @@ auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_f
 }
 
 template <typename problem_t>
-template <typename BoundaryFunctor>
 void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 							      const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom,
 							      const amrex::Vector<amrex::BCRec> &bcs)
@@ -3153,9 +3151,10 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 	} else {
 		// if refining, InterpFromCoarseLevel
 		amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
-		BoundaryFunctor boundaryFunctor;
-		amrex::PhysBCFunct<BoundaryFunctor> fineBdryFunct(fine_geom, bcs, boundaryFunctor);
-		amrex::PhysBCFunct<BoundaryFunctor> coarseBdryFunct(coarse_geom, bcs, boundaryFunctor);
+		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>;
+		BndryFunc boundaryFunctor(setBoundaryFunctor<problem_t>{});
+		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, bcs, boundaryFunctor);
+		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, bcs, boundaryFunctor);
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
 					     restart_ref_ratio, getAmrInterpolaterCellCentered(), bcs, 0);
 	}
@@ -3184,10 +3183,6 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const CheckpointHeader &header, const RefinementContext &context)
 {
 	for (int lev = 0; lev <= header.finest_level; ++lev) {
-		// cell-centred data
-		amrex::MultiFab tmp;
-		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
-
 		amrex::Geometry coarse_geom;
 		if (lev == 0) {
 			coarse_geom = context.coarse_level0_geom;
@@ -3195,8 +3190,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 			coarse_geom = geom[lev - 1];
 		}
 
-		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>;
-		interpolateMultiFabFromRestart<BndryFunc>(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
+		// cell-centred data
+		amrex::MultiFab tmp;
+		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
+		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -3205,6 +3203,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				amrex::VisMF::Read(
 				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
 				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
+				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev].contains_nan());
 			}
 		}
 	}
