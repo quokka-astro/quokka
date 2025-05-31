@@ -211,7 +211,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 			if ((LambdaJ < J * dx[0]) &&
 			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
-				const amrex::Real particle_mass = cell_density * cell_volume * eps_star * dt / t_ff;
+				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
 				num_star = static_cast<int>(1 + (amrex::RandomPoisson(num_high_mass_stars_exp, engine)));
