@@ -3203,7 +3203,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				amrex::VisMF::Read(
 				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
 				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
-				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev].contains_nan());
+				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan());
 			}
 		}
 	}
