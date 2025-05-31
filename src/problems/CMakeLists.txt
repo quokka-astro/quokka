@@ -7,6 +7,8 @@ add_subdirectory(ParticleSink)
 add_subdirectory(ParticleCreation)
 add_subdirectory(SN)
 
+add_subdirectory(ParticleSF)
+
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
 add_subdirectory(HydroContact)
