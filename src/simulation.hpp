@@ -3189,7 +3189,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 {
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::Print() << "Loading Level " << lev << " Multifab...\n";
-		
+
 		amrex::Geometry coarse_geom;
 		if (lev == 0) {
 			coarse_geom = context.coarse_level0_geom;
