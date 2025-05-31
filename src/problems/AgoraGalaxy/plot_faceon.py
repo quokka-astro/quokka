@@ -40,9 +40,8 @@ if __name__ == "__main__":
         if my_plotfile[-4:] == ".png":
             continue
 
-        output_file1 = my_plotfile + "_Slice_x_gasDensity.png"
-        #output_file2 = my_plotfile + "_Slice_x_temperature.png"
-        if os.path.isfile(output_file1):
+        output_file1z = my_plotfile + "_Slice_z_gasDensity.png"
+        if os.path.isfile(output_file1z):
             continue
         
         # load data
@@ -50,27 +49,15 @@ if __name__ == "__main__":
         field_prefix, field_name = zip(*ds.field_list)
         center = ds.arr([1e10, 1e10, 1e10], 'code_length')
         zoom_fac = 40
-        
-        # x-slice
-        if not os.path.isfile(output_file1):
-            plt2 = yt.SlicePlot(ds, 'x', ('boxlib', 'gasDensity'), center=center)
+
+        # z-slice (face-on)
+        if not os.path.isfile(output_file1z):
+            plt2 = yt.ProjectionPlot(ds, 'z', ('boxlib', 'gasDensity'), center=center)
             plt2.zoom(zoom_fac)
-            plt2.set_zlim(('boxlib', 'gasDensity'), 1e-29, 1e-24)
+            plt2.set_zlim(('boxlib', 'gasDensity'), 3e-4, 1.)
             if 'StochasticStellarPop_particles' in field_prefix:
                 plt2.annotate_particles((1, "Mpc"), ptype="StochasticStellarPop_particles")
-            #plt2.annotate_streamlines(("gas", "velocity_y"), ("gas", "velocity_z"), color="black")
             plt2.annotate_scale()
             plt2.annotate_timestamp()
-            plt2.save(output_file1)
+            plt2.save(output_file1z)
         
-        # x-slice
-        #if not os.path.isfile(output_file2):
-        #    plt2 = yt.SlicePlot(ds, 'x', ('boxlib', 'temperature'), center=center)
-        #    plt2.zoom(zoom_fac)
-        #    plt2.set_zlim(('boxlib', 'temperature'), 1e3, 2e8)
-        #    if 'StochasticStellarPop_particles' in field_prefix:
-        #        plt2.annotate_particles((1, "Mpc"), ptype="StochasticStellarPop_particles")
-        #    #plt2.annotate_streamlines(("gas", "velocity_y"), ("gas", "velocity_z"), color="black")
-        #    plt2.annotate_scale()
-        #    plt2.annotate_timestamp()
-        #    plt2.save(output_file2)
