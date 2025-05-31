@@ -765,13 +765,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp_amr.query("checkpoint_nfiles", checkpoint_nfiles);
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::rereadRuntimeParameters()
-{
-	// Re-read runtime parameters to ensure they override any compile-time settings
-	// This is called at the beginning of evolve() to ensure user input takes precedence
-	readParameters();
-}
-
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
 {
 	BL_PROFILE("AMRSimulation::setInitialConditions()"); // NOLINT(misc-const-correctness)
@@ -2767,20 +2760,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #else
 	// sets the maximum number of binary files per MultiFab
 	amrex::VisMF::SetNOutFiles(plot_nfiles);
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
-		std::vector<std::string> dimNames = {"x", "y", "z"};
-		auto varnames_fc = GetPlotfileVarNames_fc();
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			const amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
-			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
-			const std::string &plotfilename_fc = CustomPlotFileName(plotfilename_base.c_str(), istep[0]);
-			auto varnames_fc_dim = varnames_fc[idim];
-			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc_dim, Geom(), tNew_[0], istep, refRatio());
-			WriteMetadataFile(plotfilename_fc + "/metadata.yaml");
-		}
-	}
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
 
 #ifdef AMREX_PARTICLES
@@ -3014,9 +2994,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	WriteMetadataFile(checkpointname + "/metadata.yaml");
 
 	// set the maximum number of binary files per MultiFab
-	// IMPORTANT: on Lustre, this MUST be set to either:
-	//   1. -1 (this writes one file per process), or
-	//   2. the number of OSTs (i.e., the stripe count)
 	amrex::VisMF::SetNOutFiles(checkpoint_nfiles);
 
 	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
