@@ -14,7 +14,6 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
-#include "test_particle_sink_formation.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
