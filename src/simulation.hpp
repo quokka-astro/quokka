@@ -3481,7 +3481,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
 		amrex::Print() << fmt::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
 		auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
-		for (int lev = 0; lev < finestLevel(); ++lev) {
+		for (int lev = 0; lev <= finestLevel(); ++lev) {
 			descriptor->splitParticles(lev, split_factor);
 		}
 	}
