@@ -2760,7 +2760,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #else
 	// sets the maximum number of binary files per MultiFab
 	amrex::VisMF::SetNOutFiles(plot_nfiles);
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
 
 #ifdef AMREX_PARTICLES
