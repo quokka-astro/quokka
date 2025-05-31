@@ -3163,8 +3163,9 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 		// CRITICALLY IMPORTANT: the refined multifabs are NOT properly nested
 		//   with respect to the multifabs in the checkpoints! this means we can
 		//   only do piecewise **constant** refinement.
+		amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
-					     restart_ref_ratio, &amrex::mf_pc_interp, bcs, 0);
+					     restart_ref_ratio, mapper, bcs, 0);
 	}
 }
 
