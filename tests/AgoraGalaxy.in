@@ -44,7 +44,7 @@ derived_vars = temperature gpot
 # max_level = 8 implies a maximum resolution of dx =  36.6 pc (MED res).
 # max_level = 9 implies a maximum resolution of dx =  18.3 pc (HI res).
 #
-amr.max_level              = 4
+amr.max_level              = 5
 
 agora_galaxy.vcirc_file    = "./vcirc.dat"
 agora_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
