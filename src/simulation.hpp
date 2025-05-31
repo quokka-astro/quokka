@@ -3164,7 +3164,7 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 		//   with respect to the multifabs in the checkpoints! this means we can
 		//   only do piecewise **constant** refinement.
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
-					     restart_ref_ratio, amrex::mf_pc_interp, bcs, 0);
+					     restart_ref_ratio, &amrex::mf_pc_interp, bcs, 0);
 	}
 }
 
