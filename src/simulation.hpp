@@ -3188,6 +3188,8 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const RefinementContext &context)
 {
 	for (int lev = 0; lev <= finest_level; ++lev) {
+		amrex::Print() << "Loading Level " << lev << " Multifab...\n";
+		
 		amrex::Geometry coarse_geom;
 		if (lev == 0) {
 			coarse_geom = context.coarse_level0_geom;
@@ -3198,6 +3200,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		// cell-centred data
 		amrex::MultiFab tmp;
 		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		AMREX_ALWAYS_ASSERT(!tmp.contains_nan());
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());
 
@@ -3207,6 +3210,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				amrex::MultiFab tmp_fc;
 				amrex::VisMF::Read(
 				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+				AMREX_ALWAYS_ASSERT(!tmp_fc.contains_nan());
 				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan());
 			}
