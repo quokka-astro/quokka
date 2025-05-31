@@ -3386,7 +3386,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		// Check for Level_N directories from 0 to finestLevel
 		const int finest_level = finestLevel();
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			std::string level_path = pc_path + "/Level_" + std::to_string(lev);
+			std::string const level_path = pc_path + "/Level_" + std::to_string(lev);
 			if (amrex::FileSystem::Exists(level_path)) {
 				has_level_dirs = 1;
 				break;
