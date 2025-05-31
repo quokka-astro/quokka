@@ -1,6 +1,5 @@
 import yt
-from unyt import cm, g
-import numpy as np
+from unyt import g
 import argparse
 import os.path
 
@@ -41,4 +40,3 @@ if __name__ == "__main__":
             plt.set_ylim(1e2, 1e9)
             plt.set_xlabel("Density")
             plt.save(output_file1)
-        
