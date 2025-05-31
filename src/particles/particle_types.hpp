@@ -156,14 +156,13 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 
 //-------------------- Stellar evolution stage enum --------------------
 
-// Enum for particle evolution stages. This is designed to be shared among several particle types. However, not all particle types will use all stages.
-// - LowMassStar: singular low mass stars
-// - SNProgenitor: singular high-mass stars (> 8 Msun). Depending on the SF and SN scheme, these stars will either explode as supernovae in
-//   the end of their lifetime unconditionally, or conditionally according to their evolutional track.
-// - SNRemnant: Supernova remnant stage
-// - LowMassComposite: composite of low-mass stars
-// - Removed: marked for removal
-enum class StellarEvolutionStage { LowMassStar, SNProgenitor, SNRemnant, LowMassComposite, Removed };
+// Enum for StellarEvolution particle stage
+enum class StellarEvolutionStage {
+	LowMassStar,  // Low mass star stage
+	SNProgenitor, // Supernova progenitor stage
+	SNRemnant,    // Supernova remnant stage
+	Removed	      // Mark for removal
+};
 
 //-------------------- Stellar population particles --------------------
 
@@ -302,8 +301,6 @@ inline bool disable_SN_feedback = false; // NOLINT
 inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 
-inline amrex::Real eps_ff = 0.01; // NOLINT
-
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
@@ -328,9 +325,6 @@ inline void particleParmParse()
 
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
-
-	// Stochastic SF parameters
-	pp.query("eps_ff", eps_ff);
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);

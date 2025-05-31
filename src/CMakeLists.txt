@@ -116,6 +116,7 @@ endif(WARNINGS_AS_ERRORS)
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
+include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 # default network_name (for Microphysics EOS) for all tests:

@@ -138,18 +138,14 @@ double interpolate_value(double x, double const *arr_x, double const *arr_y, int
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
 
-	AMREX_ASSERT(!std::isnan(x));
-
 	int64_t j = 0;
 	j = binary_search_with_guess(x, arr_x, arr_len, j);
 
 	double y = NAN;
 	if (j == -1) {
 		y = NAN;
-		AMREX_ASSERT(false);
 	} else if (j == arr_len) {
 		y = NAN;
-		AMREX_ASSERT(false);
 	} else if (j == arr_len - 1) {
 		y = arr_y[j];
 	} else if (x == arr_x[j]) { // avoid roundoff error

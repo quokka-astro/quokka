@@ -7,14 +7,12 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <utility>
 
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
-#include "AMReX_RandomEngine.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 #include "particle_accretion.hpp"
@@ -118,6 +116,7 @@ class PhysicsParticleDescriptorBase
 	// Create particles from hydro state at the finest level
 	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call.
 	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
+
 	// Destroy particles at level lev_min and above
 	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
 	virtual void splitParticles(int lev, int splitFactor) = 0;
@@ -680,8 +679,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_);
 			amrex::Print() << fmt::format("{:<20}{:<15}\n", particle_type_name, getNumParticles());
 
-			const int max_number_to_print = 100;
-
 			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
 				// if max_level = 0 and has stellar evolution stage, print the mass and particle stage for all particles
 				if (getEvolutionStageIndex() >= 0) {
@@ -690,13 +687,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					if (!real_data.empty()) {
 						amrex::Print() << "Level " << lev << "\n";
 						// Print header for detailed particle data
-						amrex::Print() << fmt::format("  {:<20} | {:>20}\n", "Mass", "Stellar evolution stage");
+						amrex::Print() << fmt::format("  {:<15} | {:>20}\n", "Mass", "Stellar evolution stage");
 						// amrex::Print() << fmt::format("  {}\n", std::string(15 + 3 + 20, '-'));
 
 						// Print each particle's data with aligned columns
-						const int n_print = std::min(static_cast<int>(real_data.size()), max_number_to_print);
-						for (int i = 0; i < n_print; ++i) {
-							amrex::Print() << fmt::format("  {:<20} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
+						for (int i = 0; i < static_cast<int>(real_data.size()); ++i) {
+							amrex::Print() << fmt::format("  {:<15} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
 										      int_data[i][getEvolutionStageIndex()]);
 						}
 						amrex::Print() << "\n"; // Add extra line for readability between particle types
