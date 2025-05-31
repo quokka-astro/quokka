@@ -2,8 +2,12 @@
 /// \brief Defines a 2D test problem for radiating particles.
 ///
 
-#include "test_radparticle_2D.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
 
 struct ParticleProblem {
 };

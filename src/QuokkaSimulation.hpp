@@ -186,6 +186,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
 	void defineComponentNames();
 	void readParmParse();
+	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
@@ -478,6 +479,21 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
 		rpp.query("print_iteration_counts", print_rad_counter_);
 	}
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::rereadRuntimeParameters()
+{
+	// Re-read runtime parameters to ensure they override any compile-time settings
+	// This is called at the beginning of evolve() to ensure user input takes precedence
+
+	// Call parent class rereadRuntimeParameters
+	AMRSimulation<problem_t>::rereadRuntimeParameters();
+
+	// Re-read QuokkaSimulation-specific parameters
+	readParmParse();
+
+	// Re-read particle parameters
+	quokka::particleParmParse();
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int

@@ -7,7 +7,12 @@
 /// \brief Defines a test problem for radiation force terms.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "radiation/radiation_system.hpp"
 #include <cstdint>
+#include <fmt/format.h>
 #include <string>
 
 #include "AMReX.H"
@@ -21,7 +26,6 @@
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_radiation_force.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
@@ -278,7 +282,7 @@ auto problem_main() -> int
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
 	}
-	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
+	amrex::Print() << "Relative L1 norm = " << rel_err_norm << '\n';
 
 #ifdef HAVE_PYTHON
 	// Plot density
@@ -318,6 +322,6 @@ auto problem_main() -> int
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return status;
 }

@@ -8,13 +8,13 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
+#include "math/interpolate.hpp"
 #include "util/fextract.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
-#include "test_particle_sink.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -155,6 +155,7 @@ auto problem_main() -> int
 	sim.stopTime_ = 10.0 * dt_init;
 	sim.initDt_ = dt_init;
 	sim.tempFloor_ = 10.0; // K
+	sim.doPoissonSolve_ = 1;
 
 	// initialize
 	sim.setInitialConditions();
@@ -178,11 +179,14 @@ auto problem_main() -> int
 		amrex::Print() << "Total particle mass = " << total_particle_mass << "\n";
 	}
 
+	const double total_total_mass_init = total_mass_init + total_particle_mass;
+
 	// evolve
+	sim.maxTimesteps_ = 1;
 	sim.evolve();
 
 	// get total gas mass in the final state
-	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	amrex::Real const total_mass_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
 	const int nx = static_cast<int>(position.size());
@@ -193,28 +197,34 @@ auto problem_main() -> int
 
 	int status = 0;
 
-	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// compute total particle mass and error
-		double total_particle_mass_final = 0.0;
-		for (const auto &p : real_data_final) {
-			total_particle_mass_final += p[3];
+		double total_particle_mass_step1 = 0.0;
+		for (const auto &p : real_data_ste1) {
+			total_particle_mass_step1 += p[3];
 		}
+		const double total_total_mass_step1 = total_mass_step1 + total_particle_mass_step1;
 
-		// change in gas mass
-		const double gas_mass_change = total_mass_final - total_mass_init;
-		const double particle_mass_change = total_particle_mass_final - total_particle_mass;
-		const double rel_mass_error = std::abs(gas_mass_change + particle_mass_change) / std::abs(gas_mass_change);
+		// compute difference in mass changes
+		const double gas_mass_change = total_mass_step1 - total_mass_init;
+		const double particle_mass_change = total_particle_mass_step1 - total_particle_mass;
+		const double rel_mass_error = gas_mass_change == 0.0 ? 0.0 : std::abs(gas_mass_change + particle_mass_change) / std::abs(gas_mass_change);
 		amrex::Print() << "\nAfter evolution:\n";
 		amrex::Print() << "Gas mass change = " << gas_mass_change << "\n";
 		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
 		amrex::Print() << "Total mass change = " << gas_mass_change + particle_mass_change << "\n";
-		amrex::Print() << "Relative mass error = " << rel_mass_error << "\n";
+		amrex::Print() << "Relative error in change of mass = " << rel_mass_error << "\n";
 
-		// should be machine precision (1e-14), but the change is 5 orders of magnitude smaller than the initial mass, so an error of 1e-9 is expected
-		const double rel_mass_error_tol = 1.0e-8;
-		if (!(rel_mass_error < rel_mass_error_tol)) {
+		// compute relative error in the change of total mass
+		const double rel_error_total_mass = std::abs(total_total_mass_step1 - total_total_mass_init) / total_total_mass_init;
+		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass << "\n";
+
+		// Note that while the error relative to the total mass (gas + particles) should be within machine precision (1e-14), the error relative
+		// to the *change* could be large because the change is several orders of magnitude smaller than the total mass.
+		const double mass_rel_error_tol = 1.0e-9;
+		if (!(rel_error_total_mass < mass_rel_error_tol)) {
 			status = 1;
 		}
 
@@ -262,12 +272,6 @@ auto problem_main() -> int
 			status = 1;
 		}
 
-		if (status == 1) {
-			amrex::Print() << "Test failed\n";
-		} else {
-			amrex::Print() << "Test passed\n";
-		}
-
 #ifdef HAVE_PYTHON
 		matplotlibcpp::clf();
 		matplotlibcpp::ylim(0.0, 1.1);
@@ -297,6 +301,41 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./sink_density_vs_x_over_dx.png");
 #endif
+	}
+
+	// evolve
+	sim.maxTimesteps_ = 10;
+	sim.evolve();
+
+	// get total particle mass in the final state
+	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	double total_particle_mass_final = 0.0;
+	for (const auto &p : real_data_final) {
+		total_particle_mass_final += p[3];
+	}
+	amrex::Print() << "Total particle mass = " << total_particle_mass_final << "\n";
+
+	// get total gas mass in the final state
+	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::Print() << "Total gas mass = " << total_mass_final << "\n";
+		const double total_total_mass_final = total_mass_final + total_particle_mass_final;
+
+		// compute relative error in the change of total mass
+		const double rel_error_total_mass_final = std::abs(total_total_mass_final - total_total_mass_init) / total_total_mass_init;
+		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass_final << "\n";
+
+		// Total mass should be conserved to machine precision
+		if (!(rel_error_total_mass_final < 1.0e-13)) {
+			status = 1;
+		}
+
+		if (status == 1) {
+			amrex::Print() << "Test failed\n";
+		} else {
+			amrex::Print() << "Test passed\n";
+		}
 	}
 
 	return status;

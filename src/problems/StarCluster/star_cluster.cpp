@@ -6,6 +6,9 @@
 /// \file star_cluster.cpp
 /// \brief Defines a test problem for pressureless spherical collapse of a star cluster.
 ///
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <random>
@@ -26,7 +29,6 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
-#include "star_cluster.hpp"
 #include "turbulence/TurbDataReader.hpp"
 
 using amrex::Real;
@@ -79,7 +81,7 @@ template <> void QuokkaSimulation<StarCluster>::preCalculateInitialConditions()
 	if (!isSamplingDone) {
 		// read perturbations from file
 		turb_data turbData;
-		amrex::ParmParse pp("perturb");
+		amrex::ParmParse const pp("perturb");
 		std::string turbdata_filename;
 		pp.query("filename", turbdata_filename);
 		initialize_turbdata(turbData, turbdata_filename);

@@ -14,6 +14,9 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
@@ -25,7 +28,7 @@ struct SedovProblem {
 // if false, use octant symmetry instead
 constexpr bool simulate_full_box = false;
 
-bool test_passes = false; // if one of the energy checks fails, set to false
+bool test_passes = false; // if one of the energy checks fails, set to false. NOLINT
 
 template <> struct quokka::EOS_Traits<SedovProblem> {
 	static constexpr double gamma = 1.4;
@@ -50,7 +53,7 @@ template <> struct Physics_Traits<SedovProblem> {
 
 // declare global variables
 const double rho = 1.0;	   // g cm^-3
-double E_blast = 0.851072; // ergs
+double E_blast = 0.851072; // ergs. NOLINT
 
 template <> void QuokkaSimulation<SedovProblem>::preCalculateInitialConditions()
 {
@@ -71,8 +74,8 @@ template <> void QuokkaSimulation<SedovProblem>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-	double rho_copy = rho;
-	double E_blast_copy = E_blast;
+	double const rho_copy = rho;
+	double const E_blast_copy = E_blast;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
