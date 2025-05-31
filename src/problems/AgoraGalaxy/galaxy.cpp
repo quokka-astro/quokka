@@ -24,7 +24,6 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "fundamental_constants.H"
-#include "galaxy.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
