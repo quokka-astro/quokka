@@ -3369,6 +3369,43 @@ template <typename ParticleContainer>
 void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
 								      std::string const &particle_type_name)
 {
+	// Check whether there are any particles to read
+	std::string const pc_path = restart_chkfile + "/" + particle_type_name;
+
+	// Check if the particle checkpoint directory exists
+	if (!amrex::FileSystem::Exists(pc_path)) {
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Print() << "WARNING: Particle checkpoint directory not found: " << pc_path << "\n";
+		}
+		return;
+	}
+
+	// Check for subdirectories with "Level_" prefix
+	int has_level_dirs = 0;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Check for Level_N directories from 0 to finestLevel
+		const int finest_level = finestLevel();
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			std::string level_path = pc_path + "/Level_" + std::to_string(lev);
+			if (amrex::FileSystem::Exists(level_path)) {
+				has_level_dirs = 1;
+				break;
+			}
+		}
+	}
+
+	// Broadcast the result to all processors
+	// (NOTE: ParallelDescriptor does not support Bcast for bool types, so we use int instead.)
+	amrex::ParallelDescriptor::Bcast(&has_level_dirs, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+
+	// If no Level_ directories found, there are no particles to read
+	if (!has_level_dirs) {
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Print() << "WARNING: No particle data found in checkpoint (no Level_* directories) in " << pc_path << "\n";
+		}
+		return;
+	}
+
 	if (restartRefineFactor_ > 1) {
 		// Get current finest level for multi-level handling
 		const int finest_level = finestLevel();
