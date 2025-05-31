@@ -766,6 +766,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp_amr.query("checkpoint_nfiles", checkpoint_nfiles);
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::rereadRuntimeParameters()
+{
+	// Re-read runtime parameters to ensure they override any compile-time settings
+	// This is called at the beginning of evolve() to ensure user input takes precedence
+	readParameters();
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
 {
 	BL_PROFILE("AMRSimulation::setInitialConditions()"); // NOLINT(misc-const-correctness)
