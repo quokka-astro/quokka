@@ -357,7 +357,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 
-	// ABOUTME: Checkpoint restart refinement context and helper structures
 	// ABOUTME: Used to handle universal refinement during checkpoint restart operations
 	struct RefinementContext {
 		int refinement_factor = 1;
@@ -365,24 +364,16 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 		[[nodiscard]] auto needs_refinement() const -> bool { return refinement_factor > 1; }
 	};
 
-	struct CheckpointHeader {
-		int finest_level{};
-		amrex::Vector<int> istep;
-		amrex::Vector<amrex::Real> dt;
-		amrex::Vector<amrex::Real> t_new;
-		amrex::Vector<amrex::BoxArray> box_arrays;
-	};
-
 	void ReadCheckpointFile();
 
 	// Helper methods for checkpoint restart refactoring
 	auto detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) -> RefinementContext;
-	auto readCheckpointHeader(const std::string &restart_file) -> CheckpointHeader;
+	auto readCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>;
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
 	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom);
-	void loadMultiFabData(const CheckpointHeader &header, const RefinementContext &context);
+	void loadMultiFabData(const RefinementContext &context);
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
 	template <typename ParticleContainer>
@@ -3072,13 +3063,10 @@ auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &re
 	return context;
 }
 
-template <typename problem_t>
-auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_file) -> typename AMRSimulation<problem_t>::CheckpointHeader
+template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>
 {
-	CheckpointHeader header;
-
 	// Header
-	const std::string File(restart_file + "/Header");
+	std::string File(restart_file + "/Header");
 
 	const amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::GetIOBufferSize());
 
@@ -3094,7 +3082,7 @@ auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_f
 	std::getline(is, line);
 
 	// read in finest_level
-	is >> header.finest_level;
+	is >> finest_level;
 	GotoNextLine(is);
 
 	// read in array of istep
@@ -3102,9 +3090,8 @@ auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_f
 	{
 		std::istringstream lis(line);
 		int i = 0;
-		header.istep.resize(header.finest_level + 1);
 		while (lis >> word) {
-			header.istep[i++] = std::stoi(word);
+			istep[i++] = std::stoi(word);
 		}
 	}
 
@@ -3113,9 +3100,8 @@ auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_f
 	{
 		std::istringstream lis(line);
 		int i = 0;
-		header.dt.resize(header.finest_level + 1);
 		while (lis >> word) {
-			header.dt[i++] = std::stod(word);
+			dt_[i++] = std::stod(word);
 		}
 	}
 
@@ -3124,20 +3110,18 @@ auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_f
 	{
 		std::istringstream lis(line);
 		int i = 0;
-		header.t_new.resize(header.finest_level + 1);
 		while (lis >> word) {
-			header.t_new[i++] = std::stod(word);
+			tNew_[i++] = std::stod(word);
 		}
 	}
 
 	// read in BoxArrays for all levels
-	header.box_arrays.resize(header.finest_level + 1);
-	for (int lev = 0; lev <= header.finest_level; ++lev) {
-		header.box_arrays[lev].readFrom(is);
+	amrex::Vector<amrex::BoxArray> ba(finest_level + 1);
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		ba[lev].readFrom(is);
 		GotoNextLine(is);
 	}
-
-	return header;
+	return ba;
 }
 
 template <typename problem_t>
@@ -3180,9 +3164,9 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 	}
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const CheckpointHeader &header, const RefinementContext &context)
+template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const RefinementContext &context)
 {
-	for (int lev = 0; lev <= header.finest_level; ++lev) {
+	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::Geometry coarse_geom;
 		if (lev == 0) {
 			coarse_geom = context.coarse_level0_geom;
@@ -3243,21 +3227,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	amrex::Print() << "Restart from checkpoint " << restart_chkfile << "\n";
 
 	// 1. Read header information
-	auto header = readCheckpointHeader(restart_chkfile);
-
-	// 2. Load simulation state from header
-	finest_level = header.finest_level;
-	istep = header.istep;
-	dt_ = header.dt;
-	tNew_ = header.t_new;
+	auto header_box_arrays = readCheckpointHeader(restart_chkfile);
 
 	// 3. Detect refinement context
-	auto refinement_context = detectRefinementContext(header.box_arrays[0], geom[0]);
+	auto refinement_context = detectRefinementContext(header_box_arrays[0], geom[0]);
 	restartRefineFactor_ = refinement_context.refinement_factor;
 
 	// 4. Set up grid structure from header
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		amrex::BoxArray ba(header.box_arrays[lev]);
+		amrex::BoxArray ba(header_box_arrays[lev]);
 		if (restartRefineFactor_ > 1) {
 			// refine boxes by restartRefineFactor
 			ba.refine(restartRefineFactor_);
@@ -3300,7 +3278,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	ReadMetadataFile(restart_chkfile);
 
 	// 5. Load MultiFab data with refinement handling
-	loadMultiFabData(header, refinement_context);
+	loadMultiFabData(refinement_context);
 
 #ifdef AMREX_PARTICLES
 	// read particle data
