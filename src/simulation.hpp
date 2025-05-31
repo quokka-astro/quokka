@@ -10,6 +10,8 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include "AMReX_MFInterpolater.H"
+#include "AMReX_Periodicity.H"
 #include "AMReX_String.H"
 #include <cfenv>
 #include <cmath>
@@ -179,6 +181,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
 	int checkpointInterval_ = -1;				     // -1 == no output
 	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
+	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;				     // 1 == self-gravity enabled, 0 == disabled
@@ -354,7 +357,44 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteProjectionPlotfile() const;
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
+
+	// ABOUTME: Checkpoint restart refinement context and helper structures
+	// ABOUTME: Used to handle universal refinement during checkpoint restart operations
+	struct RefinementContext {
+		int refinement_factor = 1;
+		amrex::Geometry coarse_level0_geom;
+		[[nodiscard]] auto needs_refinement() const -> bool { return refinement_factor > 1; }
+	};
+
+	struct CheckpointHeader {
+		int finest_level{};
+		amrex::Vector<int> istep;
+		amrex::Vector<amrex::Real> dt;
+		amrex::Vector<amrex::Real> t_new;
+		amrex::Vector<amrex::BoxArray> box_arrays;
+	};
+
 	void ReadCheckpointFile();
+
+	// Helper methods for checkpoint restart refactoring
+	auto detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) -> RefinementContext;
+	auto readCheckpointHeader(const std::string &restart_file) -> CheckpointHeader;
+	template <typename BoundaryFunctor>
+	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
+					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
+	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
+							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom);
+	void loadMultiFabData(const CheckpointHeader &header, const RefinementContext &context);
+	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
+
+	template <typename ParticleContainer>
+	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
+						    std::string const &particle_type_name);
+
+	template <typename ContainerType>
+	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
+						       bool use_star_registration = false);
+
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
 	auto getWalltime() -> amrex::Real;
@@ -3015,14 +3055,50 @@ inline void GotoNextLine(std::istream &is)
 	is.ignore(bl_ignore_max, '\n');
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
+template <typename problem_t>
+auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) ->
+    typename AMRSimulation<problem_t>::RefinementContext
 {
-	BL_PROFILE("AMRSimulation::ReadCheckpointFile()"); // NOLINT(misc-const-correctness)
+	RefinementContext context;
 
-	amrex::Print() << "Restart from checkpoint " << restart_chkfile << "\n";
+	amrex::Box const reDom = restart_ba.minimalBox();
+	amrex::Box const inDom = current_geom.Domain();
+	const amrex::IntVect restartGrid{
+	    AMREX_D_DECL(reDom.bigEnd(0) - reDom.smallEnd(0) + 1, reDom.bigEnd(1) - reDom.smallEnd(1) + 1, reDom.bigEnd(2) - reDom.smallEnd(2) + 1)};
+	const amrex::IntVect inputGrid{
+	    AMREX_D_DECL(inDom.bigEnd(0) - inDom.smallEnd(0) + 1, inDom.bigEnd(1) - inDom.smallEnd(1) + 1, inDom.bigEnd(2) - inDom.smallEnd(2) + 1)};
+
+	if (restartGrid != inputGrid) {
+		amrex::Print() << "Input grid dimensions on level 0: " << inputGrid << "\n";
+		amrex::Print() << "Restart file grid dimensions on level 0: " << restartGrid << "\n";
+		// compute rescale factor
+		const int rescaleFac = inputGrid[0] / restartGrid[0];
+		amrex::Print() << "Rescaling MultiFabs in restart file by a factor of " << rescaleFac << "...\n";
+		// make sure the grid size differs by the same integer factor for all dimensions
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(restartGrid[idim] * rescaleFac == inputGrid[idim],
+								 "Simulation has been restarted with a grid size that is not an integer "
+								 "multiple of the grid written to disk!");
+			}
+		}
+		// set refinement factor and create coarse level 0 geometry
+		context.refinement_factor = rescaleFac;
+		amrex::IntVect is_per = current_geom.periodicity().intVect();
+		const amrex::Array<int, AMREX_SPACEDIM> is_per_arr{AMREX_D_DECL(is_per[0], is_per[1], is_per[2])};
+		context.coarse_level0_geom = amrex::Geometry(reDom, current_geom.ProbDomain(), amrex::CoordSys::cartesian, is_per_arr);
+	}
+
+	return context;
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_file) -> typename AMRSimulation<problem_t>::CheckpointHeader
+{
+	CheckpointHeader header;
 
 	// Header
-	std::string File(restart_chkfile + "/Header");
+	const std::string File(restart_file + "/Header");
 
 	const amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::GetIOBufferSize());
 
@@ -3038,7 +3114,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	std::getline(is, line);
 
 	// read in finest_level
-	is >> finest_level;
+	is >> header.finest_level;
 	GotoNextLine(is);
 
 	// read in array of istep
@@ -3046,8 +3122,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	{
 		std::istringstream lis(line);
 		int i = 0;
+		header.istep.resize(header.finest_level + 1);
 		while (lis >> word) {
-			istep[i++] = std::stoi(word);
+			header.istep[i++] = std::stoi(word);
 		}
 	}
 
@@ -3056,8 +3133,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	{
 		std::istringstream lis(line);
 		int i = 0;
+		header.dt.resize(header.finest_level + 1);
 		while (lis >> word) {
-			dt_[i++] = std::stod(word);
+			header.dt[i++] = std::stod(word);
 		}
 	}
 
@@ -3066,37 +3144,147 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	{
 		std::istringstream lis(line);
 		int i = 0;
+		header.t_new.resize(header.finest_level + 1);
 		while (lis >> word) {
-			tNew_[i++] = std::stod(word);
+			header.t_new[i++] = std::stod(word);
 		}
 	}
 
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		// read in level 'lev' BoxArray from Header
-		amrex::BoxArray ba;
-		ba.readFrom(is);
+	// read in BoxArrays for all levels
+	header.box_arrays.resize(header.finest_level + 1);
+	for (int lev = 0; lev <= header.finest_level; ++lev) {
+		header.box_arrays[lev].readFrom(is);
 		GotoNextLine(is);
+	}
 
-		/*Create New BoxArray at Level 0 for optimum load distribution*/
+	return header;
+}
+
+template <typename problem_t>
+template <typename BoundaryFunctor>
+void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
+							      const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom,
+							      const amrex::Vector<amrex::BCRec> &bcs)
+{
+	if (!context.needs_refinement()) {
+		// if not refining, ParallelCopy
+		target.ParallelCopy(source, 0, 0, source.nComp(), target.nGrowVect(), source.nGrowVect());
+	} else {
+		// if refining, InterpFromCoarseLevel
+		amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
+		BoundaryFunctor boundaryFunctor;
+		amrex::PhysBCFunct<BoundaryFunctor> fineBdryFunct(fine_geom, bcs, boundaryFunctor);
+		amrex::PhysBCFunct<BoundaryFunctor> coarseBdryFunct(coarse_geom, bcs, boundaryFunctor);
+		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
+					     restart_ref_ratio, getAmrInterpolaterCellCentered(), bcs, 0);
+	}
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source,
+									  const RefinementContext &context, const amrex::Geometry &coarse_geom,
+									  const amrex::Geometry &fine_geom)
+{
+	if (!context.needs_refinement()) {
+		// if not refining, ParallelCopy
+		target.ParallelCopy(source, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+	} else {
+		// if refining, InterpFromCoarseLevel
+		amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
+		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{});
+		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, BCs_fc_, boundaryFunctor);
+		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_fc_, boundaryFunctor);
+		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
+					     restart_ref_ratio, getAmrInterpolaterFaceCentered(), BCs_fc_, 0);
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const CheckpointHeader &header, const RefinementContext &context)
+{
+	for (int lev = 0; lev <= header.finest_level; ++lev) {
+		// cell-centred data
+		amrex::MultiFab tmp;
+		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+
+		amrex::Geometry coarse_geom;
 		if (lev == 0) {
-			amrex::IntVect fac(2);
-			const amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
-			const amrex::IntVect domhi{AMREX_D_DECL(ba[ba.size() - 1].bigEnd(0), ba[ba.size() - 1].bigEnd(1), ba[ba.size() - 1].bigEnd(2))};
-			const amrex::Box dom(domlo, domhi);
-			const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (dom.length(idim) != dom2.length(idim)) {
-					fac[idim] = 1;
-				}
-			}
-			amrex::BoxArray ba_lev0(amrex::coarsen(dom, fac));
-			ba_lev0.maxSize(max_grid_size[0] / fac);
-			ba_lev0.refine(fac);
-			// Boxes in ba have even number of cells in each direction
-			// unless the domain has odd number of cells in that direction.
-			ChopGrids(0, ba_lev0, amrex::ParallelDescriptor::NProcs());
-			ba = ba_lev0;
+			coarse_geom = context.coarse_level0_geom;
+		} else {
+			coarse_geom = geom[lev - 1];
 		}
+
+		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>;
+		interpolateMultiFabFromRestart<BndryFunc>(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
+
+		// face-centred data
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::MultiFab tmp_fc;
+				amrex::VisMF::Read(
+				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
+			}
+		}
+	}
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray
+{
+	if (lev == 0) {
+		// For level 0, create optimally-sized boxes from the domain
+		amrex::IntVect fac(2);
+		const amrex::Box dom = geom[lev].Domain();
+		const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (dom.length(idim) != dom2.length(idim)) {
+				fac[idim] = 1;
+			}
+		}
+		amrex::BoxArray ba_lev(amrex::coarsen(dom, fac));
+		ba_lev.maxSize(max_grid_size[lev] / fac);
+		ba_lev.refine(fac);
+		// Boxes in ba have even number of cells in each direction
+		// unless the domain has odd number of cells in that direction.
+		ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
+		return ba_lev;
+	}
+
+	// For higher levels, use the input BoxArray and chop grids for better load balancing
+	amrex::BoxArray ba_lev = input_ba;
+	ChopGrids(lev, ba_lev, amrex::ParallelDescriptor::NProcs());
+	return ba_lev;
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
+{
+	BL_PROFILE("AMRSimulation::ReadCheckpointFile()"); // NOLINT(misc-const-correctness)
+
+	amrex::Print() << "Restart from checkpoint " << restart_chkfile << "\n";
+
+	// 1. Read header information
+	auto header = readCheckpointHeader(restart_chkfile);
+
+	// 2. Load simulation state from header
+	finest_level = header.finest_level;
+	istep = header.istep;
+	dt_ = header.dt;
+	tNew_ = header.t_new;
+
+	// 3. Detect refinement context
+	auto refinement_context = detectRefinementContext(header.box_arrays[0], geom[0]);
+	restartRefineFactor_ = refinement_context.refinement_factor;
+
+	// 4. Set up grid structure from header
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		amrex::BoxArray ba(header.box_arrays[lev]);
+		if (restartRefineFactor_ > 1) {
+			// refine boxes by restartRefineFactor
+			ba.refine(restartRefineFactor_);
+		}
+
+		// load balancing: create new BoxArray for a possibly different number of MPI ranks
+		ba = loadBalanceOnRestart(ba, lev);
 
 		// create a distribution mapping
 		amrex::DistributionMapping dm{ba, amrex::ParallelDescriptor::NProcs()};
@@ -3131,89 +3319,134 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	ReadMetadataFile(restart_chkfile);
 
-	// read in the MultiFab data
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		// cell-centred
-		if (lev == 0) {
-			amrex::MultiFab tmp;
-			amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
-			state_new_cc_[0].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_, nghost_cc_);
-		} else {
-			amrex::VisMF::Read(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
-		}
-		// face-centred
-		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (lev == 0) {
-					amrex::MultiFab tmp;
-					amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
-											      std::string("Face_") + quokka::face_dir_str[idim]));
-					state_new_fc_[0][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
-				} else {
-					amrex::VisMF::Read(
-					    state_new_fc_[lev][idim],
-					    amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-				}
-			}
-		}
-	}
+	// 5. Load MultiFab data with refinement handling
+	loadMultiFabData(header, refinement_context);
 
 #ifdef AMREX_PARTICLES
 	// read particle data
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
-		TracerPC->Restart(restart_chkfile, "tracer_particles");
+		restartParticleContainerWithRefinement(TracerPC, restart_chkfile, "tracer_particles");
 	}
 
-	// Initialize and register particle containers from checkpoint file
+	// 6. Initialize and register particle containers from checkpoint file
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
-		AMREX_ASSERT(RadParticles == nullptr);
-		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad);
-		RadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Rad));
+		initializeParticleContainerFromCheckpoint(RadParticles, quokka::ParticleType::Rad);
 	}
 
 #if AMREX_SPACEDIM == 3
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
-		AMREX_ASSERT(CICParticles == nullptr);
-		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
-		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC);
-		CICParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CIC));
+		initializeParticleContainerFromCheckpoint(CICParticles, quokka::ParticleType::CIC);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
-		AMREX_ASSERT(CICRadParticles == nullptr);
-		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
-		particleRegister_.registerParticleType(CICRadParticles.get(), quokka::ParticleType::CICRad);
-		CICRadParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::CICRad));
+		initializeParticleContainerFromCheckpoint(CICRadParticles, quokka::ParticleType::CICRad);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-		AMREX_ASSERT(StochasticStellarPopParticles == nullptr);
-		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
-		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
-		StochasticStellarPopParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::StochasticStellarPop));
+		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, true);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-		AMREX_ASSERT(SinkParticles == nullptr);
-		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
-		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
-		SinkParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Sink));
+		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, true);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-		AMREX_ASSERT(TestParticles == nullptr);
-		TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
-		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test);
-		TestParticles->Restart(restart_chkfile, particleRegister_.getParticleTypeName(quokka::ParticleType::Test));
+		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, true);
 	}
 #endif // AMREX_SPACEDIM == 3
 #endif
 
 	areInitialConditionsDefined_ = true;
+}
+
+template <typename problem_t>
+template <typename ParticleContainer>
+void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
+								      std::string const &particle_type_name)
+{
+	if (restartRefineFactor_ > 1) {
+		// Get current finest level for multi-level handling
+		const int finest_level = finestLevel();
+
+		// Save current geometry for all levels
+		amrex::Vector<amrex::Geometry> current_geom(finest_level + 1);
+		amrex::Vector<amrex::BoxArray> current_ba(finest_level + 1);
+		amrex::Vector<amrex::DistributionMapping> current_dm(finest_level + 1);
+
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			current_geom[lev] = particles->Geom(lev);
+			current_ba[lev] = particles->ParticleBoxArray(lev);
+			current_dm[lev] = particles->ParticleDistributionMap(lev);
+		}
+
+		// Set up original (coarse) geometry for particle reading
+		// For each level, coarsen by the same refinement factor
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			// Create coarse BoxArray by coarsening the current refined one
+			amrex::BoxArray coarse_ba = current_ba[lev];
+			coarse_ba.coarsen(restartRefineFactor_);
+			amrex::DistributionMapping const coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
+			// Get the geometry by coarsening the current level's geometry
+			amrex::Geometry coarse_geom_lev = amrex::coarsen(current_geom[lev], restartRefineFactor_);
+			particles->SetParticleGeometry(lev, coarse_geom_lev);
+			particles->SetParticleBoxArray(lev, coarse_ba);
+			particles->SetParticleDistributionMap(lev, coarse_dm);
+		}
+
+		// Read particles with coarse grid structure
+		particles->Restart(restart_chkfile, particle_type_name);
+
+		// Restore refined geometry for all levels
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			particles->SetParticleGeometry(lev, current_geom[lev]);
+			particles->SetParticleBoxArray(lev, current_ba[lev]);
+			particles->SetParticleDistributionMap(lev, current_dm[lev]);
+		}
+
+		// Redistribute particles to refined grid
+		particles->Redistribute();
+	} else {
+		// Normal restart without refinement
+		particles->Restart(restart_chkfile, particle_type_name);
+	}
+}
+
+template <typename problem_t>
+template <typename ContainerType>
+void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
+									 bool use_star_registration)
+{
+	AMREX_ASSERT(container == nullptr);
+	container = std::make_unique<ContainerType>(this);
+
+	// Register container
+	if (use_star_registration) {
+#if AMREX_SPACEDIM == 3
+		particleRegister_.registerStarParticleType(container.get(), particle_type);
+#else
+		amrex::Abort("Star particles are only available in 3D builds");
+#endif
+	} else {
+		particleRegister_.registerParticleType(container.get(), particle_type);
+	}
+
+	// Read particles
+	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type));
+
+	// Split particles
+#if AMREX_SPACEDIM == 3
+	if (restartRefineFactor_ > 1) {
+		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
+		amrex::Print() << fmt::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
+		auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
+		for (int lev = 0; lev < finestLevel(); ++lev) {
+			descriptor->splitParticles(lev, split_factor);
+		}
+	}
+#endif
 }
 
 #endif // SIMULATION_HPP_
