@@ -1,9 +1,9 @@
 #ifndef PARTICLE_CREATION_HPP_
 #define PARTICLE_CREATION_HPP_
 
+#include "AMReX_BLassert.H"
 #include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 #include "particle_types.hpp"
 #include "stellarpop_data.hpp"
 #include <cmath>
@@ -40,11 +40,11 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				auto *pcounts = counts.data();
 
 				// Count potential particles per cell
-				amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+				amrex::ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &engine) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
-					pcounts[index] = particle_checker(state_arr, i, j, k, dx); // NOLINT
+					pcounts[index] = particle_checker(state_arr, i, j, k, dx, engine); // NOLINT
 				});
 
 				// Calculate exclusive prefix sum to get unique position for each particle
@@ -73,14 +73,14 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				// Initialize particle creator functor using the provided ParticleCreator type
 				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, cpu_id, pid, evolution_stage_index, current_time, dt);
 
-				amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+				amrex::ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &engine) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 
-					if (pcounts[index] > 0) {									 // NOLINT
-						const int num_particles = pcounts[index];						 // NOLINT
-						auto *particles = &pdata[poffset[index]];						 // NOLINT
-						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index]); // NOLINT
+					if (pcounts[index] > 0) {										 // NOLINT
+						const int num_particles = pcounts[index];							 // NOLINT
+						auto *particles = &pdata[poffset[index]];							 // NOLINT
+						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index], engine); // NOLINT
 					}
 				});
 			}
@@ -109,10 +109,10 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const &engine) const -> int
 		{
 			// Default implementation creates no particles
-			amrex::ignore_unused(state_arr, i, j, k, dx);
+			amrex::ignore_unused(state_arr, i, j, k, dx, engine);
 			return 0;
 		}
 	};
@@ -138,10 +138,11 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::RandomEngine const &engine) const
 		{
 			// Default implementation does nothing
-			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset);
+			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset, engine);
 		}
 	};
 
@@ -163,50 +164,22 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	// Specialized nested ParticleChecker for StochasticStellarPop particles
 
 	static constexpr amrex::Real eps_star = 0.5; // fraction of gas mass that goes into star particles
-	static constexpr amrex::Real eps_ff = 0.5;   // efficiency per free fall time
 	static constexpr amrex::Real J = 0.5;	     // Jeans parameter
 
 	// Constants for the Chabrier IMF
-	static constexpr amrex::Real m_star_high = 8.0 * C::M_solar; // all stars above this mass are considered high mass stars
-	static constexpr amrex::Real m_imf_min = 0.08 * C::M_solar;  // lower limit of the IMF
+	// These are the parameters used in extern/ChabrierIMGCalculation.nb
+	static constexpr amrex::Real m_star_high = 9.0 * C::M_solar; // all stars above this mass are considered high mass stars
 	static constexpr amrex::Real m_imf_max = 120.0 * C::M_solar; // high mass limit of the IMF
-	static constexpr amrex::Real m_imf_break = 1.0 * C::M_solar; // IMF is lognormal below this mass and powerlaw above
-	static constexpr amrex::Real imf_disp = 0.55;		     // dispersion of the lognormal IMF
-	static constexpr amrex::Real imf_mu = 32.599;		     //=log10(0.2 * C::M_solar), mean of the lognormal IMF, avoid compiler error
 	static constexpr amrex::Real alpha = 2.35;		     // slope of the powerlaw
 
-	// Write out expression because compiler error for nested gcem
-	static constexpr double log_m_imf_break = 33.298634783124434; // Log10 (m_imf_break)
-	static constexpr double log_m_imf_min = 32.20172477011638;    // Log(m_imf_min)
-	static constexpr double sqrt_2 = 1.4142135623730951;	      // sqrt(2.0)
-	static constexpr double arg_m_imf_break = (log_m_imf_break - imf_mu) / (sqrt_2 * imf_disp);
-	static constexpr double arg_m_imf_min = (log_m_imf_min - imf_mu) / (sqrt_2 * imf_disp);
-	static constexpr double pow_alpha_m_imf_max = 4.147289859088856e-13;	// pow(m_imf_max, 2.0 - alpha);
-	static constexpr double pow_alpha_m_imf_break = 2.215530973426628e-12;	// pow(m_imf_break, 2.0 - alpha);
-	static constexpr double pow_alpha_m_star_high = 1.0700309275455029e-12; // pow(m_star_high, 2.0 - alpha);
-
-	// Here we calculate the fraction of high mass stars and the average mass of high mass stars
-	//... by assuming a Chabrier IMF which has a lognormal distribution for masses above m_imf_break
-	//... and a powerlaw before larger masses.
 	// fstar_high sets the mass of the high mass stars in a cell (=particle mass * fstar_high)
 	// m_star_high_avg is the average mass of the high mass stars in a cell
-	// Checkout docs/star_formation for more details
-
-	static constexpr double norm_ratio =
-	    gcem::pow(m_imf_break, (1 - alpha)) * imf_disp * gcem::sqrt(2.0 * M_PI) / gcem::exp(-(arg_m_imf_break * arg_m_imf_break));
-
-	static constexpr double total_star_mass = ((2. - alpha) * norm_ratio) * gcem::exp(imf_mu + imf_disp * imf_disp / 2) *
-						      (gcem::erf(arg_m_imf_break - imf_disp / sqrt_2) - gcem::erf(arg_m_imf_min - imf_disp / sqrt_2)) +
-						  pow_alpha_m_imf_max - pow_alpha_m_imf_break;
-
-	static constexpr double mass_highmass_stars = pow_alpha_m_imf_max - pow_alpha_m_star_high;
+	// Checkout docs/star_formation for more details on the physics and ChabrierIMGCalculation.nb for the derivation
+	// of fstar_high and m_star_high_avg
 
 	// // fstar is the fraction of number of high mass stars from the IMF
-	static constexpr double fstar_high = mass_highmass_stars / total_star_mass;
-	;
-
-	static constexpr double m_star_high_avg = m_imf_max * ((alpha - 1.0) / (alpha - 2.0)) * (1. - gcem::pow(m_star_high / m_imf_max, 2.0 - alpha)) /
-						  (1. - gcem::pow(m_star_high / m_imf_max, 1.0 - alpha)); // average mass of high mass stars
+	static constexpr double fstar_high = 0.2055;
+	static constexpr double m_star_high_avg = 19.39 * C::M_solar; // average mass of high mass stars
 
 	ParticleCreationTraits() = default;
 
@@ -215,27 +188,28 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
+		amrex::Real eps_ff_ = eps_ff;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const &engine) const -> int
 		{
-			auto engine = amrex::RandomEngine();
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-			const amrex::Real prob_star_formation = eps_ff * dt / eps_star / t_ff;
+			const amrex::Real prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
 
 			// Check if the cell violates the Jeans condition but create a particle only if prob_star_formation > random draw
 			// eps_star is the fraction of gas mass that goes into star particles
 			// Checkout docs/star_formation for more details
-			if (LambdaJ < J * dx[0] &&
+
+			if ((LambdaJ < J * dx[0]) &&
 			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
@@ -257,6 +231,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
+		amrex::Real eps_ff_ = eps_ff;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
@@ -269,10 +244,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::RandomEngine const &engine) const
 		{
 
-			auto engine = amrex::RandomEngine();
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
@@ -282,8 +257,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
 				const int nscalars = Physics_Traits<problem_t>::numPassiveScalars;
-				const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-				const amrex::Real particle_mass = cell_density * cell_volume * eps_ff * dt / t_ff;
+				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
 				double total_momx = 0.0;
 				double total_momy = 0.0;
@@ -301,9 +275,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					// Set particle birth time
 					p.rdata(birth_time_index) = current_time;
 
-					// Set particle evolution stage to 0 if it is a low mass star
-					// This gets changed if there is a high mass star in the cell
-					p.idata(evolution_stage_index) = p_idx;
+					// Set particle evolution stage to LowMassComposite if it is a low-mass stellar composite
+					// This gets changed in the for loop below if this is a high mass star
+					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::LowMassComposite);
 
 					// Low Mass particle position at cell center
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
@@ -327,6 +301,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double vy_adj = NAN;
 						double vz_adj = NAN;
 						double rho_adj = NAN;
+						double v_cm_x = NAN;
+						double v_cm_y = NAN;
+						double v_cm_z = NAN;
 
 						// Get the average velocity from the velocity dispersion of the surrounding cells
 						// We use the velocity dispersion of the surrounding cells to get the velocity of the high mass star...
@@ -336,33 +313,70 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						for (int ii = i - 1; ii <= i + 1; ++ii) {
 							for (int jj = j - 1; jj <= j + 1; ++jj) {
 								for (int kk = k - 1; kk <= k + 1; ++kk) {
+									numx += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index));
+									numy += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index));
+									numz += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index));
+									denominator += state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+								}
+							}
+						}
 
-									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) /
-										 state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
+						// Compute the centre of mass velocity
+						v_cm_x = numx / denominator;
+						v_cm_y = numy / denominator;
+						v_cm_z = numz / denominator;
+
+						numx = 0.0;
+						numy = 0.0;
+						numz = 0.0;
+						// Use the centre of mass velocity to get the velocity dispersion
+						for (int ii = i - 1; ii <= i + 1; ++ii) {
+							for (int jj = j - 1; jj <= j + 1; ++jj) {
+								for (int kk = k - 1; kk <= k + 1; ++kk) {
 									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									numx += rho_adj * (vx_adj - (vx)) * (vx_adj - (vx));
-									numy += rho_adj * (vy_adj - (vy)) * (vy_adj - (vy));
-									numz += rho_adj * (vz_adj - (vz)) * (vz_adj - (vz));
+									AMREX_ASSERT(rho_adj > 0.0);
+									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) / rho_adj;
+									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) / rho_adj;
+									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) / rho_adj;
 
+									numx += rho_adj * (vx_adj - v_cm_x) * (vx_adj - v_cm_x);
+									numy += rho_adj * (vy_adj - v_cm_y) * (vy_adj - v_cm_y);
+									numz += rho_adj * (vz_adj - v_cm_z) * (vz_adj - v_cm_z);
 									denominator += rho_adj;
 								}
 							}
 						}
+						AMREX_ASSERT(denominator > 0.0);
+						AMREX_ASSERT(numx >= 0.0);
+						AMREX_ASSERT(numy >= 0.0);
+						AMREX_ASSERT(numz >= 0.0);
+
 						const double sigma_sq_x = numx / denominator;
 						const double sigma_sq_y = numy / denominator;
 						const double sigma_sq_z = numz / denominator;
 
-						const double signx = vx == 0.0 ? 1.0 : (std::abs(vx) / vx);
-						const double signy = vy == 0.0 ? 1.0 : (std::abs(vy) / vy);
-						const double signz = vz == 0.0 ? 1.0 : (std::abs(vz) / vz);
+						const double signx = v_cm_x == 0.0 ? 1.0 : (std::abs(v_cm_x) / v_cm_x);
+						const double signy = v_cm_y == 0.0 ? 1.0 : (std::abs(v_cm_y) / v_cm_y);
+						const double signz = v_cm_z == 0.0 ? 1.0 : (std::abs(v_cm_z) / v_cm_z);
 
-						p.rdata(mass_idx + 1) = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
-						p.rdata(mass_idx + 2) = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
-						p.rdata(mass_idx + 3) = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
+						double vx_new = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
+						double vy_new = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
+						double vz_new = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
+
+						// Enforce maximum speed limit of 1000 km/s
+						{
+							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
+							constexpr double max_speed = 1.0e8; // cm s^{-1}
+							if (speed > max_speed) {
+								double const scale = max_speed / speed;
+								vx_new *= scale;
+								vy_new *= scale;
+								vz_new *= scale;
+								p.rdata(mass_idx + 1) = vx_new;
+								p.rdata(mass_idx + 2) = vy_new;
+								p.rdata(mass_idx + 3) = vz_new;
+							}
+						}
 
 						// Sample mass randomly from the IMF between m_star_high, which is the min mass and max mass in the Sukhbold
 						// table
@@ -377,7 +391,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						total_momy += p.rdata(mass_idx + 2) * p.rdata(mass_idx);
 						total_momz += p.rdata(mass_idx + 3) * p.rdata(mass_idx);
 
-						p.idata(evolution_stage_index) = interpolate_fate(p.rdata(mass_idx));
+						p.idata(evolution_stage_index) =
+						    interpolate_fate(p.rdata(mass_idx)) == 1 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : 0;
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
 					}
 				}
@@ -421,6 +436,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
 				    int evolution_stage_index = -1, int birth_time_index = -1)
 	{
+		// Requires CGS units
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
+						 "UnitSystem must be CGS for StochasticStellarPopulation");
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleChecker,
