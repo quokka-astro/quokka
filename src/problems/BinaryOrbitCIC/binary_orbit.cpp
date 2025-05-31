@@ -203,7 +203,7 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	std::array<int, AMREX_SPACEDIM> n_cell;
+	std::array<int, AMREX_SPACEDIM> n_cell{};
 	amrex::ParmParse const amr_pp("amr");
 	amr_pp.query("n_cell", n_cell);
 	const bool is_refactor = n_cell[0] == 64;
