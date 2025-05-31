@@ -5,10 +5,10 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "math/interpolate.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "particle_creation_from_cell.hpp"
 
 struct TestParticle {
 };

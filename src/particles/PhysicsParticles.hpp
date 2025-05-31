@@ -115,7 +115,7 @@ class PhysicsParticleDescriptorBase
 
 	// Destroy particles at level lev_min and above
 	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
-
+	virtual void splitParticles(int lev, int splitFactor) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
 	// Tag cells around particles for refinement
@@ -469,6 +469,70 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		if (container_ != nullptr) {
 			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
 			    container_, this->getMassIndex(), lev_min, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+		}
+	}
+
+	void splitParticles(int const lev, int const splitFactor) override
+	{
+		if (container_ != nullptr && this->getMassIndex() >= 0) {
+			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+				// Update NextID to include particles that will be created
+				const amrex::Long npart_old = pIter.numParticles();
+				const unsigned int max_new_particles = splitFactor * npart_old;
+				const amrex::Long pid = ContainerType::ParticleType::NextID();
+				ContainerType::ParticleType::NextID(pid + max_new_particles);
+
+				// Resize particle tile
+				auto &particles = pIter.GetArrayOfStructs();
+				particles.resize(npart_old + max_new_particles);
+
+				// Create the particles
+				const auto &geom = container_->Geom(lev);
+				const auto dxinv = geom.InvCellSizeArray();
+				const auto dx = geom.CellSizeArray();
+				const auto plo = geom.ProbLoArray();
+				const int cpu_id = amrex::ParallelDescriptor::MyProc();
+				const int mass_idx = this->getMassIndex();
+				auto *pdata_old = particles().data();
+				auto *pdata_new = particles().data() + npart_old;
+
+				amrex::ParallelForRNG(npart_old, [=] AMREX_GPU_DEVICE(int64_t idx, amrex::RandomEngine const &rng) {
+					// compute cell corner position (x0, y0, z0) of the old particle
+					const int i = static_cast<int>((pdata_old[idx].pos(0) - plo[0]) * dxinv[0]); // NOLINT
+					const int j = static_cast<int>((pdata_old[idx].pos(1) - plo[1]) * dxinv[1]); // NOLINT
+					const int k = static_cast<int>((pdata_old[idx].pos(2) - plo[2]) * dxinv[2]); // NOLINT
+					amrex::Real const x0 = plo[0] + (i * dx[0]);
+					amrex::Real const y0 = plo[1] + (j * dx[1]);
+					amrex::Real const z0 = plo[2] + (k * dx[2]);
+
+					// mark old particle for deletion
+					auto &p_old = pdata_old[idx]; // NOLINT
+					p_old.id() = -1;
+					amrex::Real const old_mass = p_old.rdata(mass_idx);
+
+					// create new particles
+					auto *new_particles = &pdata_new[idx * splitFactor]; // NOLINT
+					for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
+						auto &p_new = new_particles[idx_new]; // NOLINT
+						// copy old particle properties
+						for (int rc = 0; rc < ContainerType::ParticleType::NReal; ++rc) {
+							p_new.rdata(rc) = p_old.rdata(rc);
+						}
+						for (int ic = 0; ic < ContainerType::ParticleType::NInt; ++ic) {
+							p_new.idata(ic) = p_old.idata(ic);
+						}
+						// set new particle properties
+						p_new.cpu() = cpu_id;
+						p_new.id() = pid + idx * splitFactor + idx_new;
+						p_new.pos(0) = x0 + dx[0] * amrex::Random(rng);
+						p_new.pos(1) = y0 + dx[1] * amrex::Random(rng);
+						p_new.pos(2) = z0 + dx[2] * amrex::Random(rng);
+						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
+					}
+				});
+			}
+			// Remove the old particles
+			container_->Redistribute(lev);
 		}
 	}
 

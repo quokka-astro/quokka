@@ -6,7 +6,11 @@
 /// \file test_primordial_chem.cpp
 /// \brief Defines a test problem for primordial chemistry (microphysics).
 ///
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include <array>
+#include <fmt/format.h>
 #include <random>
 #include <vector>
 
@@ -27,7 +31,6 @@
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_primordial_chem.hpp"
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
@@ -78,7 +81,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::preCalculateInitialCondit
 	init_extern_parameters();
 
 	// parmparse species and temperature
-	amrex::ParmParse pp("primordial_chem");
+	amrex::ParmParse const pp("primordial_chem");
 	userData_.small_temp = 1e1;
 	pp.query("small_temp", userData_.small_temp);
 
@@ -282,6 +285,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	int status = 0;
+	int const status = 0;
 	return status;
 }

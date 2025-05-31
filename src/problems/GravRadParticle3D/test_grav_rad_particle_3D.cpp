@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <fmt/format.h>
 
 #include "AMReX.H"
 #include "AMReX_BCRec.H"
@@ -15,7 +16,6 @@
 #include "hydro/EOS.hpp"
 #include "particles/PhysicsParticles.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_grav_rad_particle_3D.hpp"
 
 struct ParticleProblem {
 };

@@ -1,7 +1,6 @@
 /// \file particle_sink_accretion.cpp
 /// \brief Defines a test problem for Bondi-Hoyle accretion.
 
-#include "test_particle_accretion.hpp"
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
@@ -16,6 +15,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include <fstream>
 #include <gcem.hpp>
 
 #ifdef HAVE_PYTHON

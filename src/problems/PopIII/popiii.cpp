@@ -7,7 +7,10 @@
 /// \brief Defines a test problem for Pop III star formation.
 /// Author: Piyush Sharda (Leiden University, 2023)
 ///
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <array>
+#include <fstream>
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -21,7 +24,6 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
-#include "popiii.hpp"
 #include "radiation/radiation_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
 
