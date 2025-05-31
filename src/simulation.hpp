@@ -3160,8 +3160,11 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 		BndryFunc boundaryFunctor(setBoundaryFunctor<problem_t>{});
 		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, bcs, boundaryFunctor);
 		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, bcs, boundaryFunctor);
+		// CRITICALLY IMPORTANT: the refined multifabs are NOT properly nested
+		//   with respect to the multifabs in the checkpoints! this means we can
+		//   only do piecewise **constant** refinement.
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
-					     restart_ref_ratio, getAmrInterpolaterCellCentered(), bcs, 0);
+					     restart_ref_ratio, amrex::mf_pc_interp, bcs, 0);
 	}
 }
 
@@ -3203,7 +3206,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		AMREX_ALWAYS_ASSERT(!tmp.contains_nan());
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
-		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan()); // check ghost cells 
+		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());			      // check ghost cells
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -3214,7 +3217,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				AMREX_ALWAYS_ASSERT(!tmp_fc.contains_nan());
 				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
-				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan()); // check ghost faces
+				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan());					  // check ghost faces
 			}
 		}
 	}
