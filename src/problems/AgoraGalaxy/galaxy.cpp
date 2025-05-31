@@ -14,11 +14,9 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_PlotFileUtil.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -276,88 +274,13 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 	// read particles from ASCII file
 	amrex::ParmParse const pp("agora_galaxy");
 	std::string filename;
-	std::string plotfile_to_resample;
-	int particle_split_factor = 0;
 	pp.query("particle_file", filename);
-	pp.query("plotfile_to_resample", plotfile_to_resample);
-	pp.query("particle_split_factor", particle_split_factor);
 
+	amrex::Print() << "\nReading particles from ASCII file " << filename << "...\n";
+	CICParticles->SetVerbose(1);
+	const int nreal_extra = 4; // mass vx vy vz
+	CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
 	amrex::Print() << "\n";
-	if (plotfile_to_resample.empty()) {
-		amrex::Print() << "Reading particles from ASCII file " << filename << "...\n";
-		CICParticles->SetVerbose(1);
-
-		const int nreal_extra = 4; // mass vx vy vz
-		CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
-	} else {
-		amrex::Print() << "Reading particles from plotfile " << plotfile_to_resample << "...\n";
-		CICParticles->SetVerbose(1);
-
-		std::string const particleType_plotfile_name = quokka::PhysicsParticleRegister<AgoraGalaxy>::getParticleTypeName(quokka::ParticleType::CIC);
-		CICParticles->Restart(plotfile_to_resample, particleType_plotfile_name);
-
-		for (int lev = 0; lev < CICParticles->finestLevel(); ++lev) {
-			amrex::Print() << "[Level " << lev << "] Number of valid particles: " << CICParticles->NumberOfParticlesAtLevel(lev) << "\n";
-		}
-
-		// split particles
-		for (int lev = 0; lev < CICParticles->finestLevel(); ++lev) {
-			amrex::Print() << "Splitting particles on level " << lev << "...\n";
-			particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, particle_split_factor);
-		}
-	}
-	amrex::Print() << "\n";
-}
-
-template <> void AMRSimulation<AgoraGalaxy>::setInitialConditionsAtLevel_cc(int level, amrex::Real time)
-{
-	/// Read plotfile and resample onto existing grids.
-
-	// (this does not currently work for face-centered vars)
-	static_assert(!Physics_Traits<AgoraGalaxy>::is_mhd_enabled);
-
-	amrex::ParmParse const pp("agora_galaxy");
-	std::string plotfile_to_resample;
-	pp.query("plotfile_to_resample", plotfile_to_resample);
-
-	if (plotfile_to_resample.empty()) {
-		// fill boxes from scratch
-		for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
-			quokka::grid const grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
-						     geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
-			setInitialConditionsOnGrid(grid_elem);
-		}
-	} else {
-		if (level > 0) {
-			// interpolate coarse levels onto this level
-			// (must be done for *every* refined level, since our level may be embiggened)
-			amrex::Print() << "...interpolating level " << level << " from coarse levels\n";
-			FillCoarsePatch(level, 0., state_new_cc_[level], 0, state_new_cc_[level].nComp(), BCs_cc_, quokka::centering::cc,
-					quokka::direction::na); // NOTE: FillCoarsePatch overwrites all cells
-			FixupState(level);			// AMR interpolation may produce unphysical states
-		}
-
-		// read existing level from plotfile and copy onto overlapping cells
-		amrex::PlotFileData plotfile(plotfile_to_resample);
-		if (level <= plotfile.finestLevel()) {
-			amrex::Print() << "...reading level " << level << " from plotfile and copying intersecting regions\n";
-			amrex::MultiFab const plot_mf = plotfile.get(level);
-			int const ncomp = state_new_cc_[level].nComp();
-			amrex::ParallelCopy(state_new_cc_[level], plot_mf, 0, 0, ncomp);
-		}
-	}
-
-	// check that the valid state_new_cc_[level] is properly filled
-	const int ncomp_cc = Physics_Indices<AgoraGalaxy>::nvarTotal_cc;
-	AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
-
-	// fill ghost zones
-	fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
-			       InterpHookNone, FillPatchType::fillpatch_function);
-
-	// copy to state_old_cc_ (including ghost zones)
-	const int nghost_cc = nghost_cc_;
-	state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp_cc, nghost_cc, nghost_cc);
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
