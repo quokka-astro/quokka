@@ -379,11 +379,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	template <typename ParticleContainer>
 	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
-						    std::string const &particle_type_name);
+						    std::string const &particle_type_name, amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
 	template <typename ContainerType>
 	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-						       bool use_star_registration = false);
+						       amrex::Vector<amrex::BoxArray> const &header_box_arrays, bool use_star_registration = false);
 
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
@@ -3316,34 +3316,34 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
-		restartParticleContainerWithRefinement(TracerPC, restart_chkfile, "tracer_particles");
+		restartParticleContainerWithRefinement(TracerPC, restart_chkfile, "tracer_particles", header_box_arrays);
 	}
 
 	// 6. Initialize and register particle containers from checkpoint file
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
-		initializeParticleContainerFromCheckpoint(RadParticles, quokka::ParticleType::Rad);
+		initializeParticleContainerFromCheckpoint(RadParticles, quokka::ParticleType::Rad, header_box_arrays);
 	}
 
 #if AMREX_SPACEDIM == 3
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
-		initializeParticleContainerFromCheckpoint(CICParticles, quokka::ParticleType::CIC);
+		initializeParticleContainerFromCheckpoint(CICParticles, quokka::ParticleType::CIC, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
-		initializeParticleContainerFromCheckpoint(CICRadParticles, quokka::ParticleType::CICRad);
+		initializeParticleContainerFromCheckpoint(CICRadParticles, quokka::ParticleType::CICRad, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, true);
+		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, header_box_arrays, true);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, true);
+		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, header_box_arrays, true);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, true);
+		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays, true);
 	}
 #endif // AMREX_SPACEDIM == 3
 #endif
@@ -3354,7 +3354,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 template <typename problem_t>
 template <typename ParticleContainer>
 void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
-								      std::string const &particle_type_name)
+								      std::string const &particle_type_name, amrex::Vector<amrex::BoxArray> const &header_box_arrays)
 {
 	// Check whether there are any particles to read
 	std::string const pc_path = restart_chkfile + "/" + particle_type_name;
@@ -3394,9 +3394,6 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 	}
 
 	if (restartRefineFactor_ > 1) {
-		// Get current finest level for multi-level handling
-		const int finest_level = finestLevel();
-
 		// Save current geometry for all levels
 		amrex::Vector<amrex::Geometry> current_geom(finest_level + 1);
 		amrex::Vector<amrex::BoxArray> current_ba(finest_level + 1);
@@ -3408,14 +3405,11 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 			current_dm[lev] = particles->ParticleDistributionMap(lev);
 		}
 
-		// Set up original (coarse) geometry for particle reading
-		// For each level, coarsen by the same refinement factor
+		// Set up original (coarse) geometry and boxArrays for particle reading
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			// Create coarse BoxArray by coarsening the current refined one
-			amrex::BoxArray coarse_ba = current_ba[lev];
-			coarse_ba.coarsen(restartRefineFactor_);
+			// Get coarse BoxArray from header box arrays
+			amrex::BoxArray coarse_ba = header_box_arrays[lev];
 			amrex::DistributionMapping const coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
-			// Get the geometry by coarsening the current level's geometry
 			amrex::Geometry coarse_geom_lev = amrex::coarsen(current_geom[lev], restartRefineFactor_);
 			particles->SetParticleGeometry(lev, coarse_geom_lev);
 			particles->SetParticleBoxArray(lev, coarse_ba);
@@ -3423,6 +3417,10 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		}
 
 		// Read particles with coarse grid structure
+		amrex::Print() << "Before resizeData: particles->numLevels() = " << particles->numLevels() << "\n";
+		particles->resizeData();  // Ensure particle container internal structures are properly sized
+		amrex::Print() << "After resizeData: particles->numLevels() = " << particles->numLevels() << "\n";
+		amrex::Print() << "About to call Restart with finest_level = " << finest_level << "\n";
 		particles->Restart(restart_chkfile, particle_type_name);
 
 		// Restore refined geometry for all levels
@@ -3443,7 +3441,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 template <typename problem_t>
 template <typename ContainerType>
 void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-									 bool use_star_registration)
+									 amrex::Vector<amrex::BoxArray> const &header_box_arrays, bool use_star_registration)
 {
 	AMREX_ASSERT(container == nullptr);
 	container = std::make_unique<ContainerType>(this);
@@ -3460,7 +3458,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	}
 
 	// Read particles
-	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type));
+	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
 
 	// Split particles
 #if AMREX_SPACEDIM == 3
