@@ -29,7 +29,7 @@ tiny_profiler.enabled = 0
 
 cfl = 0.3
 stop_time = 5.0e7   # s
-checkpoint_interval = 20
-max_timesteps = 60
+checkpoint_interval = 10
+max_timesteps = 20
 plotfile_interval = 10
-restartfile = chk00020
+restartfile = chk00010
