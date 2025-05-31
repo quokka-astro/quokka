@@ -3394,16 +3394,16 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 
 		// Read particles with coarse grid structure
 		particles->resizeData(); // Ensure particle container internal structures are properly sized
-		
+
 		// WORKAROUND for AMReX bug: If the particle container has more levels than the
-		// checkpoint file, Restart() will crash due to out-of-bounds access in the 
+		// checkpoint file, Restart() will crash due to out-of-bounds access in the
 		// old_dms vector. We need to temporarily reduce the number of levels.
 		const int pc_finest_level = particles->finestLevel();
 		if (pc_finest_level > finest_level) {
 			amrex::Abort("ERROR: Particle container has more levels than checkpoint. "
-			             "This is not currently supported due to an AMReX limitation.");
+				     "This is not currently supported due to an AMReX limitation.");
 		}
-		
+
 		particles->Restart(restart_chkfile, particle_type_name);
 
 		// Restore refined geometry for all levels
