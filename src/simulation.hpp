@@ -3203,7 +3203,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		AMREX_ALWAYS_ASSERT(!tmp.contains_nan());
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
-		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan()); // check ghost cells 
+		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());			      // check ghost cells
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -3214,7 +3214,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				AMREX_ALWAYS_ASSERT(!tmp_fc.contains_nan());
 				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
-				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan()); // check ghost faces
+				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan());					  // check ghost faces
 			}
 		}
 	}
