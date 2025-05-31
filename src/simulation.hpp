@@ -3354,7 +3354,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 template <typename problem_t>
 template <typename ParticleContainer>
 void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
-								      std::string const &particle_type_name, amrex::Vector<amrex::BoxArray> const &header_box_arrays)
+								      std::string const &particle_type_name,
+								      amrex::Vector<amrex::BoxArray> const &header_box_arrays)
 {
 	// Check whether there are any particles to read
 	std::string const pc_path = restart_chkfile + "/" + particle_type_name;
@@ -3418,7 +3419,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 
 		// Read particles with coarse grid structure
 		amrex::Print() << "Before resizeData: particles->numLevels() = " << particles->numLevels() << "\n";
-		particles->resizeData();  // Ensure particle container internal structures are properly sized
+		particles->resizeData(); // Ensure particle container internal structures are properly sized
 		amrex::Print() << "After resizeData: particles->numLevels() = " << particles->numLevels() << "\n";
 		amrex::Print() << "About to call Restart with finest_level = " << finest_level << "\n";
 		particles->Restart(restart_chkfile, particle_type_name);
