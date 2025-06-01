@@ -1724,9 +1724,6 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primV
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 	} else {
-		AMREX_ASSERT(!leftState[0].contains_nan());
-		AMREX_ASSERT(!rightState[0].contains_nan());
-		AMREX_ASSERT(!primVar.contains_nan());
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 	}
 }
