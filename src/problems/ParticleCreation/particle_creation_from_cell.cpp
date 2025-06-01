@@ -160,11 +160,10 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		}
 
 		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr,
-						 StateArray const & /*state_accretion_rate_arr*/, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
-						 amrex::RandomEngine const & /*engine*/) const
+		AMREX_GPU_DEVICE void
+		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*state_accretion_rate_arr*/, int i,
+			   int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+			   amrex::Long base_offset, amrex::RandomEngine const & /*engine*/) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
