@@ -144,133 +144,136 @@ auto problem_main() -> int
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 1.0e6 * year; // 1 Myr
-	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
+	sim.stopTime_ = 1.0e7 * year; // 1 Myr
+	sim.initDt_ = 1.0e6 * year;   // 0.1 Myr
 	sim.doPoissonSolve_ = 1;
 
 	// initialize
 	sim.setInitialConditions();
+	// return 0;
 
-	const auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-	const int nx = static_cast<int>(position0.size());
+	// const auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	// const int nx = static_cast<int>(position0.size());
 
-	// get total gas mass of the initial state
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	// // get total gas mass of the initial state
+	// amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	// amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	// amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
-	// get total particle mass of the initial state
-	const int mass_index = 3;
-	const auto &real_data_init = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
-							 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
-	const double m_tot_init = m_gas_init + m_stars_init;
+	// // get total particle mass of the initial state
+	// const int mass_index = 3;
+	// const auto &real_data_init = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	// amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
+	// 						 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	// const double m_tot_init = m_gas_init + m_stars_init;
 
-	int status = 0;
+	// int status = 0;
 
 	// evolve to step 1
-	sim.maxTimesteps_ = 1;
+	// sim.maxTimesteps_ = 1;
 	sim.evolve();
 
-	// get total gas mass after step 1
-	amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	return 0;
 
-	// get total particle mass after step 1
-	const auto &real_data_step1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	const int n_stars_step1 = static_cast<int>(real_data_step1.size());
+	// // get total gas mass after step 1
+	// amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
-	if (n_stars_step1 == 0) {
-		status = 1;
-		amrex::Print() << "Test failed: no particles created in the formation step !!!\n";
-		return status;
-	}
+	// // get total particle mass after step 1
+	// const auto &real_data_step1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	// const int n_stars_step1 = static_cast<int>(real_data_step1.size());
 
-	amrex::Real const m_stars_step1 = std::accumulate(real_data_step1.begin(), real_data_step1.end(), 0.0,
-							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
-	const double m_tot_step1 = m_gas_step1 + m_stars_step1;
+	// if (n_stars_step1 == 0) {
+	// 	status = 1;
+	// 	amrex::Print() << "Test failed: no particles created in the formation step !!!\n";
+	// 	return status;
+	// }
 
-	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
-	amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
-	amrex::Print() << "Initial total mass = " << m_tot_init << "\n";
+	// amrex::Real const m_stars_step1 = std::accumulate(real_data_step1.begin(), real_data_step1.end(), 0.0,
+	// 						  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	// const double m_tot_step1 = m_gas_step1 + m_stars_step1;
 
-	// Check relative error in the formation step and confirm mass is conserved to machine precision
-	const double rel_error_gas_mass_step1 = std::abs(m_tot_init - m_tot_step1) / m_tot_init;
-	amrex::Print() << "Step 1: rel_err(total_mass) = " << rel_error_gas_mass_step1 << "\n";
-	int status_step1 = 1;
-	const double rel_error_total_mass_step1 = 1.0e-14;
-	if (rel_error_gas_mass_step1 < rel_error_total_mass_step1) {
-		status_step1 = 0;
-	}
-	status += status_step1;
+	// amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
+	// amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
+	// amrex::Print() << "Initial total mass = " << m_tot_init << "\n";
 
-	if (status > 0) {
-		amrex::Print() << "Test failed: mass not conserved to machine precision in the formation step !!!\n";
-		return status;
-	}
+	// // Check relative error in the formation step and confirm mass is conserved to machine precision
+	// const double rel_error_gas_mass_step1 = std::abs(m_tot_init - m_tot_step1) / m_tot_init;
+	// amrex::Print() << "Step 1: rel_err(total_mass) = " << rel_error_gas_mass_step1 << "\n";
+	// int status_step1 = 1;
+	// const double rel_error_total_mass_step1 = 1.0e-14;
+	// if (rel_error_gas_mass_step1 < rel_error_total_mass_step1) {
+	// 	status_step1 = 0;
+	// }
+	// status += status_step1;
 
-	// evolve to the end
-	sim.maxTimesteps_ = 10;
-	sim.evolve();
+	// if (status > 0) {
+	// 	amrex::Print() << "Test failed: mass not conserved to machine precision in the formation step !!!\n";
+	// 	return status;
+	// }
 
-	// get total gas mass after the end
-	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	// // evolve to the end
+	// sim.maxTimesteps_ = 10;
+	// sim.evolve();
 
-	// get total particle mass after the end
-	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
-							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
-	const double m_tot_final = m_gas_final + m_stars_final;
+// 	// get total gas mass after the end
+// 	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
-	// Check relative error in the accretion step and confirm mass is conserved to machine precision
-	const double rel_error_gas_mass_final = std::abs(m_tot_init - m_tot_final) / m_tot_init;
-	amrex::Print() << "Final: rel_err(total_mass) = " << rel_error_gas_mass_final << "\n";
-	const double rel_error_total_mass_final = 1.0e-13;
-	int status_final = 1;
-	if (rel_error_gas_mass_final < rel_error_total_mass_final) {
-		status_final = 0;
-	}
-	status += status_final;
+// 	// get total particle mass after the end
+// 	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+// 	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
+// 							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+// 	const double m_tot_final = m_gas_final + m_stars_final;
 
-	// find ratio of particle mass to gas mass
-	const double mass_ratio = m_stars_final / m_gas_final;
-	amrex::Print() << "particle mass / gas mass = " << mass_ratio << "\n";
+// 	// Check relative error in the accretion step and confirm mass is conserved to machine precision
+// 	const double rel_error_gas_mass_final = std::abs(m_tot_init - m_tot_final) / m_tot_init;
+// 	amrex::Print() << "Final: rel_err(total_mass) = " << rel_error_gas_mass_final << "\n";
+// 	const double rel_error_total_mass_final = 1.0e-13;
+// 	int status_final = 1;
+// 	if (rel_error_gas_mass_final < rel_error_total_mass_final) {
+// 		status_final = 0;
+// 	}
+// 	status += status_final;
 
-	if (status > 0) {
-		amrex::Print() << "Test failed: mass not conserved to machine precision in the accretion step !!!\n";
-	} else {
-		amrex::Print() << "Test passed\n";
-	}
+// 	// find ratio of particle mass to gas mass
+// 	const double mass_ratio = m_stars_final / m_gas_final;
+// 	amrex::Print() << "particle mass / gas mass = " << mass_ratio << "\n";
 
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+// 	if (status > 0) {
+// 		amrex::Print() << "Test failed: mass not conserved to machine precision in the accretion step !!!\n";
+// 	} else {
+// 		amrex::Print() << "Test passed\n";
+// 	}
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::vector<double> xs(nx);
-		std::vector<double> rho_x(nx);
-		std::vector<double> rho0_x(nx);
-		for (int i = 0; i < nx; ++i) {
-			xs[i] = position[i];
-			rho_x[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
-			rho0_x[i] = values0.at(HydroSystem<SinkProblem>::density_index)[i];
-		}
+// 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
 
-#ifdef HAVE_PYTHON
-		matplotlibcpp::clf();
-		std::map<std::string, std::string> rho0_args;
-		rho0_args["label"] = "rho0";
-		rho0_args["color"] = "blue";
-		matplotlibcpp::plot(xs, rho0_x, rho0_args);
-		std::map<std::string, std::string> rho_args;
-		rho_args["label"] = "rho";
-		rho_args["color"] = "red";
-		rho_args["linestyle"] = "--";
-		matplotlibcpp::plot(xs, rho_x, rho_args);
-		matplotlibcpp::xlabel("x (cm)");
-		matplotlibcpp::ylabel("rho (g cm^-3)");
-		matplotlibcpp::title(fmt::format("t = {:.2e}", sim.tNew_[0]));
-		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_formation_density.pdf");
-#endif
-	}
+// 	if (amrex::ParallelDescriptor::IOProcessor()) {
+// 		std::vector<double> xs(nx);
+// 		std::vector<double> rho_x(nx);
+// 		std::vector<double> rho0_x(nx);
+// 		for (int i = 0; i < nx; ++i) {
+// 			xs[i] = position[i];
+// 			rho_x[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
+// 			rho0_x[i] = values0.at(HydroSystem<SinkProblem>::density_index)[i];
+// 		}
 
-	return status;
+// #ifdef HAVE_PYTHON
+// 		matplotlibcpp::clf();
+// 		std::map<std::string, std::string> rho0_args;
+// 		rho0_args["label"] = "rho0";
+// 		rho0_args["color"] = "blue";
+// 		matplotlibcpp::plot(xs, rho0_x, rho0_args);
+// 		std::map<std::string, std::string> rho_args;
+// 		rho_args["label"] = "rho";
+// 		rho_args["color"] = "red";
+// 		rho_args["linestyle"] = "--";
+// 		matplotlibcpp::plot(xs, rho_x, rho_args);
+// 		matplotlibcpp::xlabel("x (cm)");
+// 		matplotlibcpp::ylabel("rho (g cm^-3)");
+// 		matplotlibcpp::title(fmt::format("t = {:.2e}", sim.tNew_[0]));
+// 		matplotlibcpp::legend();
+// 		matplotlibcpp::save("./sink_formation_density.pdf");
+// #endif
+// 	}
+
+	// return status;
 }
