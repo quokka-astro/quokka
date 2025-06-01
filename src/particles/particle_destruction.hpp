@@ -1,6 +1,7 @@
 #ifndef PARTICLE_DESTRUCTION_HPP_
 #define PARTICLE_DESTRUCTION_HPP_
 
+#include "AMReX_BLProfiler.H"
 #include "particle_types.hpp"
 
 namespace quokka
@@ -16,6 +17,7 @@ template <typename problem_t, typename ContainerType, template <typename> class 
 static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev_min, amrex::Real current_time, amrex::Real dt, int birth_time_index,
 				 int evolution_stage_index)
 {
+	BL_PROFILE("ParticleDestructionImpl::destroyParticlesImpl()");
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
 			// Counter for total particles destroyed at this time step
@@ -112,6 +114,7 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 	static void destroyParticles(ContainerType *container, int mass_idx, int lev_min, amrex::Real current_time, amrex::Real dt, int birth_time_index,
 				     int evolution_stage_index)
 	{
+		BL_PROFILE("ParticleDestructionTraits::destroyParticles()");
 		// Use the common implementation with our checker type
 		ParticleDestructionImpl::destroyParticlesImpl<problem_t, ContainerType, ParticleDestructionTraits<particleType>::template ParticleChecker>(
 		    container, mass_idx, lev_min, current_time, dt, birth_time_index, evolution_stage_index);

@@ -2,6 +2,7 @@
 #define PARTICLE_ACCRETION_HPP_
 
 #include "AMReX_Array4.H"
+#include "AMReX_BLProfiler.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
 #include "gcem.hpp"
@@ -128,6 +129,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
 {
+	BL_PROFILE("SinkAccretionUtils::ComputeAccretionRateInBox()");
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
 	auto *pData = particles().data();
@@ -216,6 +218,7 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 template <typename problem_t>
 void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom)
 {
+	BL_PROFILE("SinkAccretionUtils::ComputeScaleDown()");
 	const auto &local_state_arr = state.arrays();
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &local_scale_down_arr = scale_down.arrays();
@@ -263,6 +266,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, int mass_index, amrex::Real /*time*/, amrex::Real dt,
 					amrex::Real /*vol*/)
 {
+	BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentumInBox()");
 	// Get the particle array of structs
 	auto &particles = pti.GetArrayOfStructs();
 	auto *pData = particles().data();
@@ -364,6 +368,7 @@ template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, int mass_index, amrex::Real time,
 				   amrex::Real dt)
 {
+	BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentum()");
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
@@ -384,6 +389,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 
 template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate)
 {
+	BL_PROFILE("SinkAccretionUtils::UpdateHydroState()");
 	const auto &local_accretion_rate_arr = accretion_rate.arrays();
 	const auto &state_arr = state.arrays();
 
@@ -411,6 +417,7 @@ template <typename ContainerType, typename problem_t>
 void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real time, amrex::Real dt,
 		      int mass_index)
 {
+	BL_PROFILE("SinkAccretionUtils::computeAccretion()");
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
@@ -434,6 +441,7 @@ template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev,
 		    amrex::Real time, amrex::Real dt, int mass_index)
 {
+	BL_PROFILE("SinkAccretionUtils::applyAccretion()");
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
 	// of the available mass.
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
