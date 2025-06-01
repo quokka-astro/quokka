@@ -46,7 +46,8 @@ template <typename problem_t> class HyperbolicSystem
       public:
 	template <SlopeLimiter limiter> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real
 	{
-		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC || limiter == SlopeLimiter::EP, "Invalid slope limiter specified.");
+		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC || limiter == SlopeLimiter::EP,
+			      "Invalid slope limiter specified.");
 		if constexpr (limiter == SlopeLimiter::minmod) {
 			return minmod(x, y);
 		}
@@ -68,10 +69,7 @@ template <typename problem_t> class HyperbolicSystem
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto EP(double a, double b) -> double
-	{
-		return MC(a, b);
-	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto EP(double a, double b) -> double { return MC(a, b); }
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
@@ -337,19 +335,19 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM_EP(quokka::Array4View<amrex::R
 		// Use second-order differences to maintain higher-order accuracy
 		const auto d2_l = (q(i + 1, j, k, n) - 2.0 * q(i, j, k, n) + q(i - 1, j, k, n));
 		const auto d2_ll = (q(i, j, k, n) - 2.0 * q(i - 1, j, k, n) + q(i - 2, j, k, n));
-		
+
 		// Use a combination of first and second derivatives for EP limiting
 		const auto ep_factor = std::min(1.0, std::abs(d2_l) > 1e-12 ? std::abs(d2_ll / d2_l) : 1.0);
 		lslope = ep_factor * delta_l;
 	}
 
-	// Right slope computation  
+	// Right slope computation
 	auto rslope = MC(delta_r, delta_l);
 	if (is_extremum) {
 		// Similar EP limiting for right slope
 		const auto d2_r = (q(i + 2, j, k, n) - 2.0 * q(i + 1, j, k, n) + q(i, j, k, n));
 		const auto d2_c = (q(i + 1, j, k, n) - 2.0 * q(i, j, k, n) + q(i - 1, j, k, n));
-		
+
 		const auto ep_factor = std::min(1.0, std::abs(d2_c) > 1e-12 ? std::abs(d2_r / d2_c) : 1.0);
 		rslope = ep_factor * delta_r;
 	}
