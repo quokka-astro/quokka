@@ -13,7 +13,7 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 32 32 32
+amr.n_cell          = 16 16 16
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 16    # grid size must be divisible by this
 amr.max_grid_size   = 16    # at least 128 for GPUs
@@ -30,4 +30,4 @@ plotfile_interval = -1
 
 tiny_profiler.enabled = 0
 
-max_timesteps = 1
+max_timesteps = 2
