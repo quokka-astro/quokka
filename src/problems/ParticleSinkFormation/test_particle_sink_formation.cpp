@@ -63,7 +63,6 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const double rho_e = CV * T0 * rho0;
 	const auto prob_lo = geom[0].ProbLoArray();
 	const auto dx = geom[0].CellSizeArray();
 
@@ -72,16 +71,17 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 		const double x = prob_lo[0] + (i * dx[0]);
 		const double y = prob_lo[1] + (j * dx[1]);
 		const double z = prob_lo[2] + (k * dx[2]);
+		double rho = rho0;
 		if (x <= sf_cell_loc && x + dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
-			// the cell at sf_cell_loc
-			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density;
+			// this is the cell with peak density
+			rho = sf_cell_density;
 		} else if (x - 2 * dx[0] <= sf_cell_loc && x - dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc &&
 			   z + dx[2] > sf_cell_loc) {
-			// the cell that is 2 cells left of sf_cell_loc
-			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = sf_cell_density * 0.999;
-		} else {
-			state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
+			// this is the cell that is 2 cells left of the peak density cell
+			rho = sf_cell_density * 0.999;
 		}
+		const double rho_e = CV * T0 * rho;
+		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = 0.0;
