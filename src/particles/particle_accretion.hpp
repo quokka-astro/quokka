@@ -242,14 +242,16 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		const double rho_J = J * J * M_PI * cs_cell * cs_cell / (C::Gconst * (dx_max * dx_max));
 
 		// If (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1
-		const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
-		if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
-			const double accretion_rate_cell_new = rho_J / rho_cell - 1.0;
-			local_accretion_rate_arr[bx](i, j, k) = accretion_rate_cell_new;
-			local_scale_down_arr[bx](i, j, k) = accretion_rate_cell_new / accretion_rate_cell;
+		if (accretion_rate_cell > 0.0) {
+			const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
+				const double accretion_rate_cell_new = rho_J / rho_cell - 1.0;
+				local_accretion_rate_arr[bx](i, j, k) = accretion_rate_cell_new;
+				local_scale_down_arr[bx](i, j, k) = accretion_rate_cell_new / accretion_rate_cell;
+			}
+			AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
+			AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
 		}
-		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
-		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
 	});
 
 	// synchronize scale_down
