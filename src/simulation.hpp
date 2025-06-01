@@ -3068,7 +3068,7 @@ auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &re
 template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>
 {
 	// Header
-	std::string File(restart_file + "/Header");
+	std::string const File(restart_file + "/Header");
 
 	const amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::GetIOBufferSize());
 
