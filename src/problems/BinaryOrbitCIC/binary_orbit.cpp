@@ -25,7 +25,6 @@
 
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 
 struct BinaryOrbit {
 };
