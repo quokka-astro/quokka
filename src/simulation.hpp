@@ -3204,10 +3204,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		// cell-centred data
 		amrex::MultiFab tmp;
 		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
-		AMREX_ALWAYS_ASSERT(!tmp.contains_nan());
+		AMREX_ALWAYS_ASSERT(!tmp.contains_nan(0, tmp.nComp())); // check valid cells
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
-		// AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());			      // check ghost cells
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -3215,10 +3214,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				amrex::MultiFab tmp_fc;
 				amrex::VisMF::Read(
 				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-				AMREX_ALWAYS_ASSERT(!tmp_fc.contains_nan());
+				AMREX_ALWAYS_ASSERT(!tmp_fc.contains_nan(0, tmp_fc.nComp())); // check valid cells
 				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
-				// AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan());					  // check ghost faces
 			}
 		}
 	}
