@@ -921,7 +921,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Deposit radiation from all luminous particles
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time)
 	{
-		BL_PROFILE("PhysicsParticleRegister::depositRadiation()");
+		const BL_PROFILE("PhysicsParticleRegister::depositRadiation()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getLumIndex() >= 0) {
 				descriptor->depositRadiation(radEnergySource, lev, current_time, Physics_Traits<problem_t>::nGroups);
@@ -933,7 +933,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Deposit mass from all massive particles
 	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst)
 	{
-		BL_PROFILE("PhysicsParticleRegister::depositMass()");
+		const BL_PROFILE("PhysicsParticleRegister::depositMass()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->depositMass(rhs, finest_lev, Gconst);
@@ -944,7 +944,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Deposit supernova energy and momentum from all particles
 	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
 	{
-		BL_PROFILE("PhysicsParticleRegister::depositSN()");
+		const BL_PROFILE("PhysicsParticleRegister::depositSN()");
 		// this function is only implemented for some particle types, so we specify the particle type manually here
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->isStarParticle()) {
@@ -956,7 +956,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Implementation of computeSinkAccretion
 	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{
-		BL_PROFILE("PhysicsParticleRegister::computeSinkAccretion()");
+		const BL_PROFILE("PhysicsParticleRegister::computeSinkAccretion()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
 				descriptor->computeSinkAccretion(state, state_accretion_rate, lev, time, dt);
@@ -968,7 +968,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time,
 				amrex::Real dt)
 	{
-		BL_PROFILE("PhysicsParticleRegister::applySinkAccretion()");
+		const BL_PROFILE("PhysicsParticleRegister::applySinkAccretion()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getAllowsAccretion()) {
 				descriptor->applySinkAccretion(state, state_accretion_rate, geom, lev, time, dt);
@@ -980,7 +980,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Redistribute all particles within a level
 	void redistribute(int lev)
 	{
-		BL_PROFILE("PhysicsParticleRegister::redistribute(lev)");
+		const BL_PROFILE("PhysicsParticleRegister::redistribute(lev)");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->redistribute(lev);
 		}
@@ -989,7 +989,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Redistribute all particles with ghost cells
 	void redistribute(int lev, int ngrow)
 	{
-		BL_PROFILE("PhysicsParticleRegister::redistribute(lev,ngrow)");
+		const BL_PROFILE("PhysicsParticleRegister::redistribute(lev,ngrow)");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->redistribute(lev, ngrow);
 		}
@@ -998,7 +998,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Write all particle data to plot file
 	void writePlotFile(const std::string &plotfilename)
 	{
-		BL_PROFILE("PhysicsParticleRegister::writePlotFile()");
+		const BL_PROFILE("PhysicsParticleRegister::writePlotFile()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
@@ -1008,7 +1008,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Write all particle data to checkpoint file
 	void writeCheckpoint(const std::string &checkpointname, bool include_header) const
 	{
-		BL_PROFILE("PhysicsParticleRegister::writeCheckpoint()");
+		const BL_PROFILE("PhysicsParticleRegister::writeCheckpoint()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
 			descriptor->writeUnitsFile(checkpointname, getParticleTypeName(type));
@@ -1019,7 +1019,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Update positions of all massive particles
 	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
 	{
-		BL_PROFILE("PhysicsParticleRegister::driftParticlesAllLevels()");
+		const BL_PROFILE("PhysicsParticleRegister::driftParticlesAllLevels()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->driftParticles(0, lev_max, dt);
@@ -1030,7 +1030,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Update velocities of all massive particles
 	void kickParticlesAtLevel(int lev, amrex::Real dt, amrex::MultiFab &accel)
 	{
-		BL_PROFILE("PhysicsParticleRegister::kickParticlesAtLevel()");
+		const BL_PROFILE("PhysicsParticleRegister::kickParticlesAtLevel()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
 				descriptor->kickParticles(lev, dt, accel);
@@ -1041,7 +1041,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Create particles based on particle type
 	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
 	{
-		BL_PROFILE("PhysicsParticleRegister::createParticlesFromState()");
+		const BL_PROFILE("PhysicsParticleRegister::createParticlesFromState()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
@@ -1057,7 +1057,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Destroy particles based on particle type
 	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt)
 	{
-		BL_PROFILE("PhysicsParticleRegister::destroyParticles()");
+		const BL_PROFILE("PhysicsParticleRegister::destroyParticles()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only destroy particles if the descriptor allows destruction
 			if (descriptor->getAllowsDestruction()) {
@@ -1084,7 +1084,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Refine grids around particles that require finest level
 	void refineGridsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow, const amrex::IntVect &n_error_buf)
 	{
-		BL_PROFILE("PhysicsParticleRegister::refineGridsAroundParticles()");
+		const BL_PROFILE("PhysicsParticleRegister::refineGridsAroundParticles()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getForceFinestLevel()) {
 				AMREX_ALWAYS_ASSERT(n_error_buf.min() >= 2);
@@ -1097,7 +1097,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Print particle statistics
 	void printParticleStatistics() const
 	{
-		BL_PROFILE("PhysicsParticleRegister::printParticleStatistics()");
+		const BL_PROFILE("PhysicsParticleRegister::printParticleStatistics()");
 		amrex::Print() << ">>> Particle statistics:\n";
 		amrex::Print() << fmt::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
 

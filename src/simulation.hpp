@@ -1334,7 +1334,7 @@ struct setFunctorParticleAccel {
 #if AMREX_SPACEDIM == 3
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
-	BL_PROFILE("AMRSimulation::kickParticlesAllLevels()");
+	const BL_PROFILE("AMRSimulation::kickParticlesAllLevels()");
 	// kick particles (do: vel[i] += 0.5 * dt * accel[i])
 
 	// skip if there are no massive particles
@@ -1437,7 +1437,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInteraction(amrex::Real time, amrex::Real dt)
 {
-	BL_PROFILE("AMRSimulation::particleMeshInteraction()");
+	const BL_PROFILE("AMRSimulation::particleMeshInteraction()");
 	// Need 4 ghost cells for SN deposition with a SNR radius of 3 dx.
 	const int nghost = 4;
 
@@ -2247,7 +2247,7 @@ template <typename problem_t> template <typename F> auto AMRSimulation<problem_t
 #ifdef AMREX_PARTICLES
 template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 {
-	BL_PROFILE("AMRSimulation::InitParticles()");
+	const BL_PROFILE("AMRSimulation::InitParticles()");
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
@@ -2262,7 +2262,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 
 template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 {
-	BL_PROFILE("AMRSimulation::InitPhyParticles()");
+	const BL_PROFILE("AMRSimulation::InitPhyParticles()");
 	// Verify that particle_switch is of the correct type
 	detail::verify_particle_switch_type<problem_t>();
 

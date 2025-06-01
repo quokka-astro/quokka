@@ -206,7 +206,7 @@ template <typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
 {
-	BL_PROFILE("SNFeedbackUtils::depositToBuffer()");
+	const BL_PROFILE("SNFeedbackUtils::depositToBuffer()");
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
 	constexpr amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 	    stencil_weights_gpu = {{{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
@@ -431,7 +431,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 
 template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
 {
-	BL_PROFILE("SNFeedbackUtils::addBufferToState()");
+	const BL_PROFILE("SNFeedbackUtils::addBufferToState()");
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		auto const &local_state = state.array(mfi);
@@ -452,7 +452,7 @@ template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amre
 template <typename ContainerType>
 void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
 {
-	BL_PROFILE("SNFeedbackUtils::updateEvolutionStage()");
+	const BL_PROFILE("SNFeedbackUtils::updateEvolutionStage()");
 	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
 		return;
 	}
@@ -484,7 +484,7 @@ template <typename ContainerType, typename problem_t>
 void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		  int evolutionStageIndex, int birthTimeIndex)
 {
-	BL_PROFILE("[particle_deposition] SNDeposition()");
+	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
 		      "SN_stencil_size must be <= 3"); // SN_stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
 
