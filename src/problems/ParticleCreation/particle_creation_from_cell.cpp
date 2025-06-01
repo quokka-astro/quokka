@@ -119,7 +119,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const & /*state_arr*/,
 						 amrex::Array4<const amrex::Real> const & /*state_accretion_rate_arr*/, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const & /*engine*/) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
@@ -163,7 +163,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr,
 						 StateArray const & /*state_accretion_rate_arr*/, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::RandomEngine const & /*engine*/) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles

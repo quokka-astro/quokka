@@ -2308,6 +2308,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
 		AMREX_ASSERT(StochasticStellarPopParticles == nullptr);
 
+		static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for StochasticStellarPop particles");
+
 		// Create particle container
 		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
 		StochasticStellarPopParticles->SetVerbose(0);

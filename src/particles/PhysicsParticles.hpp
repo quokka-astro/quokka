@@ -674,12 +674,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_);
 			amrex::Print() << fmt::format("number of {} = {}\n", particle_type_name, getNumParticles());
 
+			const int max_number_to_print = 100;
+
 			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
 
 				// const auto &real_data = getParticleDataAtLevel(lev).first;
 				const auto [real_data, int_data] = getParticleDataAtLevel(lev);
 
-				const int max_num_to_print = 100;
 				const int evolution_stage_idx = getEvolutionStageIndex();
 
 				if (!real_data.empty()) {
@@ -692,8 +693,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					}
 
 					// Print each particle's data with aligned columns
+					const int n_print = std::min(static_cast<int>(real_data.size()), max_number_to_print);
 					int i = 0;
-					for (; i < std::min(static_cast<int>(real_data.size()), max_num_to_print); ++i) {
+					for (; i < n_print; ++i) {
 						if (evolution_stage_idx >= 0) {
 							amrex::Print() << fmt::format("\t{:20.13e} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
 										      int_data[i][evolution_stage_idx]);
@@ -701,7 +703,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							amrex::Print() << fmt::format("\t{:20.13e}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()]);
 						}
 					}
-					if (i == max_num_to_print) {
+					if (i == max_number_to_print) {
 						amrex::Print() << fmt::format("\t...\n");
 					}
 				}
