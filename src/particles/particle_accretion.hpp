@@ -236,7 +236,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1
 		// The condition "accretion_rate_cell > 0.0" is essential as we only want to apply this to the accretion zone. There could be a
 		// Jeans-violating cell that is not in a accretion zone emerging at the beginning of a step.
-		if (accretion_rate_cell > 0.0) {
+		if (accretion_rate_cell > std::numeric_limits<double>::min()) {
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k);
 			if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
