@@ -169,7 +169,7 @@ auto problem_main() -> int
 	int status = 0;
 
 	// evolve to step 1
-	// sim.maxTimesteps_ = 2;
+	sim.maxTimesteps_ = 1;
 	sim.evolve();
 
 	// get total gas mass after step 1
