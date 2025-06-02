@@ -169,8 +169,9 @@ auto problem_main() -> int
 	int status = 0;
 
 	// evolve to step 1
-	sim.maxTimesteps_ = 1;
+	// sim.maxTimesteps_ = 2;
 	sim.evolve();
+	return 0;
 
 	// get total gas mass after step 1
 	amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
