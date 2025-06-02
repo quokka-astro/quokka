@@ -672,28 +672,39 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		if (container_ != nullptr) {
 			// TODO(cch): add a getParticleTypeName() method to PhysicsParticleDescriptor and call it here
 			const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_);
-			amrex::Print() << fmt::format("{:<20}{:<15}\n", particle_type_name, getNumParticles());
+			amrex::Print() << fmt::format("number of {} = {}\n", particle_type_name, getNumParticles());
 
 			const int max_number_to_print = 100;
 
 			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
-				// if max_level = 0 and has stellar evolution stage, print the mass and particle stage for all particles
-				if (getEvolutionStageIndex() >= 0) {
-					const auto [real_data, int_data] = getParticleDataAtLevel(lev);
 
-					if (!real_data.empty()) {
-						amrex::Print() << "Level " << lev << "\n";
-						// Print header for detailed particle data
-						amrex::Print() << fmt::format("  {:<20} | {:>20}\n", "Mass", "Stellar evolution stage");
-						// amrex::Print() << fmt::format("  {}\n", std::string(15 + 3 + 20, '-'));
+				// const auto &real_data = getParticleDataAtLevel(lev).first;
+				const auto [real_data, int_data] = getParticleDataAtLevel(lev);
 
-						// Print each particle's data with aligned columns
-						const int n_print = std::min(static_cast<int>(real_data.size()), max_number_to_print);
-						for (int i = 0; i < n_print; ++i) {
-							amrex::Print() << fmt::format("  {:<20} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
-										      int_data[i][getEvolutionStageIndex()]);
+				const int evolution_stage_idx = getEvolutionStageIndex();
+
+				if (!real_data.empty()) {
+					amrex::Print() << "Level " << lev << "\n";
+					// Print header for detailed particle data
+					if (evolution_stage_idx >= 0) {
+						amrex::Print() << fmt::format("\t{:>20} | {:>20}\n", "mass", "evolution stage");
+					} else {
+						amrex::Print() << fmt::format("\t{:>20}\n", "mass");
+					}
+
+					// Print each particle's data with aligned columns
+					const int n_print = std::min(static_cast<int>(real_data.size()), max_number_to_print);
+					int i = 0;
+					for (; i < n_print; ++i) {
+						if (evolution_stage_idx >= 0) {
+							amrex::Print() << fmt::format("\t{:20.13e} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
+										      int_data[i][evolution_stage_idx]);
+						} else {
+							amrex::Print() << fmt::format("\t{:20.13e}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()]);
 						}
-						amrex::Print() << "\n"; // Add extra line for readability between particle types
+					}
+					if (i == max_number_to_print) {
+						amrex::Print() << fmt::format("\t...\n");
 					}
 				}
 			}
