@@ -13,7 +13,7 @@
 namespace quokka
 {
 
-const double sf_cell_density_tmp = 1.0e5 * C::m_p; // g cm^-3
+const double sf_cell_density_tmp = 1.0e5 * C::m_p;   // g cm^-3
 const double sf_den_tmp = 0.1 * sf_cell_density_tmp; // g cm^-3
 
 // Helper namespace with implementation details for particle creation
@@ -271,7 +271,7 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			   int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 			   amrex::Long base_offset, amrex::RandomEngine const & /*engine*/) const
 		{
-			const double rho_J = 2.0e-24;
+			const auto rho_J = sf_den_tmp;
 			// Calculate common values for all particles
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
@@ -308,7 +308,14 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
+			const double Eint_new =
+			    state_arr(i, j, k, HydroSystem<problem_t>::energy_index) -
+			    0.5 *
+				(state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) * state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) +
+				 state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) * state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) +
+				 state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) * state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index)) /
+				cell_density;
+			state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
 		}
 	};
 

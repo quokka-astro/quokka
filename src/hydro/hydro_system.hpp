@@ -253,6 +253,8 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 
 template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool
 {
+	AMREX_ASSERT(!cons_mf.contains_nan());
+
 	// check whether density or pressure are negative
 	auto const &cons = cons_mf.const_arrays();
 
@@ -264,6 +266,11 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					const auto py = cons[bx](i, j, k, x2Momentum_index);
 					const auto pz = cons[bx](i, j, k, x3Momentum_index);
 					const auto E = cons[bx](i, j, k, energy_index);
+					AMREX_ASSERT(!std::isnan(rho));
+					AMREX_ASSERT(!std::isnan(px));
+					AMREX_ASSERT(!std::isnan(py));
+					AMREX_ASSERT(!std::isnan(pz));
+					AMREX_ASSERT(!std::isnan(E));
 					const auto vx = px / rho;
 					const auto vy = py / rho;
 					const auto vz = pz / rho;
@@ -273,6 +280,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 
 					bool negativeDensity = (rho <= 0.);
 					bool negativePressure = (P <= 0.);
+					bool negativeInternalEnergy = (thermal_energy <= 0.);
 
 					if constexpr (is_eos_isothermal()) {
 						if (negativeDensity) {
@@ -280,7 +288,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 							return {false};
 						}
 					} else {
-						if (negativeDensity || negativePressure) {
+						if (negativeDensity || negativePressure || negativeInternalEnergy) {
 							printf("invalid state at (%d, %d, %d): rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E,
 							       thermal_energy, P);
 							return {false};
@@ -927,6 +935,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				// auxiliary Eint is actually (auxiliary) specific internal energy
 				Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
 				Eint_R = rho_R * x1RightState(i, j, k, primEint_index);
+				AMREX_ASSERT(rho_L > 0.0);
+				AMREX_ASSERT(rho_R > 0.0);
+				AMREX_ASSERT(Eint_L > 0.0);
+				AMREX_ASSERT(Eint_R > 0.0);
 			} else {
 				// pressure_index is actually pressure
 				P_L = x1LeftState(i, j, k, pressure_index);
@@ -935,6 +947,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				// primEint_index is actually (rho * e)
 				Eint_L = x1LeftState(i, j, k, primEint_index);
 				Eint_R = x1RightState(i, j, k, primEint_index);
+				AMREX_ASSERT(Eint_L > 0.0);
+				AMREX_ASSERT(Eint_R > 0.0);
 			}
 
 			amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);

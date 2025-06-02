@@ -1451,16 +1451,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Sink accretion, stage 1: compute the accretion rate
 	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+	AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(state_new_cc_[lev]));
 
 	// Sink accretion, stage 2: update the particle states
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, geom[lev], lev, time, dt);
+	AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(state_new_cc_[lev]));
 
 	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+	AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(state_new_cc_[lev]));
 
 	// Deposit the SN particles into the MultiFab
 	// TODO(cch): put accretion_rate_at_level inside depositSN
 	particleRegister_.depositSN(state_new_cc_[lev], lev, time, dt);
+	AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan());
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(state_new_cc_[lev]));
 }
 #endif // AMREX_SPACEDIM == 3
 

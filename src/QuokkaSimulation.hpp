@@ -1147,6 +1147,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 #endif
 		}
 
+		AMREX_ASSERT(!state_old_cc_[lev].contains_nan());
 		// create temporary multifab for old state
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1159,6 +1160,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
 			}
 
+			AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(state_old_cc_tmp));
 			success = advanceHydroAtLevel(state_old_cc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
 
 			if (!success) {
@@ -1305,6 +1307,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
 
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(state_old_cc_tmp));
 	auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(state_old_cc_tmp, ncompHydro_, lev);
 
 	// Stage 1 of RK2-SSP
@@ -1707,6 +1710,8 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primV
 						    amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab const &x1Flat,
 						    amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
 {
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(leftState));
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(rightState));
 	if (reconstructionOrder_ == 3) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 2) {
@@ -1716,15 +1721,21 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primV
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(leftState));
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(rightState));
 
 	// cell-centered kernel
 	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(leftState));
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(rightState));
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+		AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(leftState));
+		AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(rightState));
 	}
 }
 
@@ -1757,6 +1768,15 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_cc_);
 
 	// compute flux functions
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(primVar));
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(consVar));
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(leftState[0]));
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(rightState[0]));
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(flux[0]));
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(facevel[0]));
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(leftState[1]));
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(rightState[1]));
+	AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(flux[1]));
 	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], reconstructRange, nvars);
 		     , hydroFOFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], reconstructRange, nvars);
 		     , hydroFOFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], reconstructRange, nvars);)
@@ -1776,6 +1796,8 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &pri
 	// donor-cell reconstruction
 	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	// LLF solver
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(leftState));
+	AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(rightState));
 	HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 }
 
@@ -2195,6 +2217,8 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
+	AMREX_ALWAYS_ASSERT(RadSystem<problem_t>::CheckStatesValid(x1LeftState));
+	AMREX_ALWAYS_ASSERT(RadSystem<problem_t>::CheckStatesValid(x1RightState));
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange,
 							  consState, dx, use_wavespeed_correction_); // watch out for argument order!!
 }
