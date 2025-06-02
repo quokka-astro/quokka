@@ -87,6 +87,7 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "io/DiagBase.H"
+#include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
 
@@ -407,6 +408,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::string plot_file{"plt"};	       // plotfile prefix
 	std::string chk_file{"chk"};	       // checkpoint prefix
 	std::string stats_file{"history.txt"}; // statistics filename
+	int plot_nfiles = -1;		       // default: -1 (i.e., one file per process)
+	int checkpoint_nfiles = -1;	       // default: -1 (i.e., one file per process)
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
 
@@ -751,6 +754,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		maxWalltime_ = 3600 * hours + 60 * minutes + seconds;
 		amrex::Print() << fmt::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
 	}
+
+	// IO settings (following the AMReX convention for the Amr class)
+	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
+	amrex::ParmParse const pp_amr("amr");
+
+	// Default max number of binary files per multifab when writing plotfiles
+	pp_amr.query("plot_nfiles", plot_nfiles);
+
+	// Default max number of binary files per multifab when writing checkpoints
+	pp_amr.query("checkpoint_nfiles", checkpoint_nfiles);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::rereadRuntimeParameters()
@@ -2718,6 +2731,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0]);
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
+	// sets the maximum number of binary files per MultiFab
+	quokka::ScopedVisMFNOutFiles scoped_nfiles(plot_nfiles);
+
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
@@ -2963,6 +2979,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 
 	// write Metadata file
 	WriteMetadataFile(checkpointname + "/metadata.yaml");
+
+	// set the maximum number of binary files per MultiFab
+	quokka::ScopedVisMFNOutFiles scoped_nfiles(checkpoint_nfiles);
 
 	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
