@@ -148,16 +148,6 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 	++cycle;
 }
 
-template <> void QuokkaSimulation<BinaryOrbit>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-{
-	// for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-	// 	const amrex::Box &box = mfi.validbox();
-	// 	const auto tag = tags.array(mfi);
-
-	// 	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
-	// }
-}
-
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
