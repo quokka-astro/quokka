@@ -612,6 +612,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialCondit
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRadParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialRadParticles()");
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if Rad_particles are used
@@ -621,6 +622,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRad
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialCICParticles()");
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if CIC_particles are used
@@ -628,6 +630,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCIC
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICRadParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialCICRadParticles()");
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if CICRad_particles are used
@@ -635,6 +638,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCIC
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialStochasticStellarPopParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialStochasticStellarPopParticles()");
 	// Optional implementation
 	// StochasticStellarPop particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.
@@ -643,6 +647,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSto
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSinkParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialSinkParticles()");
 	// Optional implementation
 	// Sink particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.
@@ -651,6 +656,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSin
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTestParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialTestParticles()");
 	// Optional implementation
 	// Test particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.

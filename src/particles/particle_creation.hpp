@@ -1,6 +1,7 @@
 #ifndef PARTICLE_CREATION_HPP_
 #define PARTICLE_CREATION_HPP_
 
+#include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "gcem.hpp"
 #include "hydro/hydro_system.hpp"
@@ -19,6 +20,7 @@ template <typename problem_t, typename ContainerType, template <typename> class 
 static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
 				int evolution_stage_index = -1, int birth_time_index = -1)
 {
+	const BL_PROFILE("ParticleCreationImpl::createParticlesImpl()");
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
 			// Counter for total particles created at this time step
@@ -151,6 +153,7 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
 				    int evolution_stage_index = -1, int birth_time_index = -1)
 	{
+		const BL_PROFILE("ParticleCreationTraits::createParticles()");
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<particleType>::template ParticleChecker,
 							  ParticleCreationTraits<particleType>::template ParticleCreator>(
@@ -436,6 +439,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
 				    int evolution_stage_index = -1, int birth_time_index = -1)
 	{
+		const BL_PROFILE("ParticleCreationTraits<StochasticStellarPop>::createParticles()");
 		// Requires CGS units
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
 						 "UnitSystem must be CGS for StochasticStellarPopulation");
