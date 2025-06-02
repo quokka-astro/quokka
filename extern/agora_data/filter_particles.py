@@ -1,6 +1,5 @@
 import numpy as np
 import argparse
-from pathlib import Path
 
 cgs_length = 1.0e3 * 3.085677587679311e18 # 1 kpc
 

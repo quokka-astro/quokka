@@ -10,9 +10,9 @@ cgs_mass = 1.0e9 * 1.989e33 # 1e9 solar masses
 def count_lines_in_file(filename):
     ## return the number of lines in the ASCII file 'filename'
     ## see: https://stackoverflow.com/a/27518377
-    f = open(filename, 'rb')
-    bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
-    return sum(buf.count(b'\n') for buf in bufgen)
+    with open(filename, 'rb') as f:
+        bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
+        return sum(buf.count(b'\n') for buf in bufgen)
 
 if __name__ == "__main__":
     ## save ASCII file in AMReX particle format
