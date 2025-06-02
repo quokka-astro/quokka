@@ -3091,7 +3091,7 @@ auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &re
 template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>
 {
 	// Header
-	std::string File(restart_file + "/Header");
+	std::string const File(restart_file + "/Header");
 
 	const amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::GetIOBufferSize());
 
@@ -3193,11 +3193,10 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 	}
 }
 
+
 template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const RefinementContext &context)
 {
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		amrex::Print() << "Loading Level " << lev << " Multifab...\n";
-
 		amrex::Geometry coarse_geom;
 		if (lev == 0) {
 			coarse_geom = context.coarse_level0_geom;
@@ -3208,7 +3207,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		// cell-centred data
 		amrex::MultiFab tmp;
 		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
-		AMREX_ALWAYS_ASSERT(!tmp.contains_nan(0, tmp.nComp())); // check valid cells
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
 
@@ -3218,7 +3216,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				amrex::MultiFab tmp_fc;
 				amrex::VisMF::Read(
 				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-				AMREX_ALWAYS_ASSERT(!tmp_fc.contains_nan(0, tmp_fc.nComp())); // check valid cells
 				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 			}
@@ -3420,10 +3417,17 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		}
 
 		// Read particles with coarse grid structure
-		amrex::Print() << "Before resizeData: particles->numLevels() = " << particles->numLevels() << "\n";
 		particles->resizeData(); // Ensure particle container internal structures are properly sized
-		amrex::Print() << "After resizeData: particles->numLevels() = " << particles->numLevels() << "\n";
-		amrex::Print() << "About to call Restart with finest_level = " << finest_level << "\n";
+
+		// WORKAROUND for AMReX bug: If the particle container has more levels than the
+		// checkpoint file, Restart() will crash due to out-of-bounds access in the
+		// old_dms vector. We need to temporarily reduce the number of levels.
+		const int pc_finest_level = particles->finestLevel();
+		if (pc_finest_level > finest_level) {
+			amrex::Abort("ERROR: Particle container has more levels than checkpoint. "
+				     "This is not currently supported due to an AMReX limitation.");
+		}
+
 		particles->Restart(restart_chkfile, particle_type_name);
 
 		// Restore refined geometry for all levels

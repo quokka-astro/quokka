@@ -19,7 +19,6 @@
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
 struct SedovProblem {
