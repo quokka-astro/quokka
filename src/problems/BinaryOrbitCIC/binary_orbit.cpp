@@ -25,7 +25,6 @@
 
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 
 struct BinaryOrbit {
 };
@@ -137,7 +136,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 				}
 
 				const double dist0 = 6.25e12; // cm
-				const amrex::Real cell_dx0 = this->geom[finest_level].CellSize(0);
+				const amrex::Real cell_dx0 = this->geom[0].CellSize(0);
 
 				// save statistics
 				userData_.time.push_back(tNew_[finest_level]);
@@ -147,16 +146,6 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 		}
 	}
 	++cycle;
-}
-
-template <> void QuokkaSimulation<BinaryOrbit>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
-{
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto tag = tags.array(mfi);
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
-	}
 }
 
 auto problem_main() -> int
@@ -200,12 +189,26 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->setForceFinestLevel(true);
+
 	// evolve
 	sim.evolve();
+
+	std::array<int, AMREX_SPACEDIM> n_cell{};
+	amrex::ParmParse const amr_pp("amr");
+	amr_pp.query("n_cell", n_cell);
+	const bool is_refactor = n_cell[0] == 64;
+
+	// get the number of particles
+	const int n_particles = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
+
+	int status = 0;
 
 	// check max abs particle distance
 	double max_err = 0.0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::Print() << "Number of particles: " << n_particles << "\n";
+
 		if (!sim.userData_.dist.empty()) {
 			auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
 						       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
@@ -215,26 +218,42 @@ auto problem_main() -> int
 			max_err = 1.0;
 			amrex::Print() << "No particles in userData_.dist.\n";
 		}
+
+		if (do_split_particles) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ <= 20, "maxTimesteps_ must be <= 20 when do_split_particles is true");
+			const double split_max_err_tol = 0.6; // max error tol in cell widths
+			if (max_err < split_max_err_tol) {
+				amrex::Print() << "Test passed (split particles)\n";
+			} else {
+				status = 1;
+				amrex::Print() << "Test failed (split particles)\n";
+			}
+			if (n_particles != 2 * split_factor) {
+				status = 1;
+				amrex::Print() << "Test failed (split particles, number of particles is not 2 * split_factor)\n";
+			}
+		} else if (!is_refactor) {
+			const double max_err_tol = 0.18; // max error tol in cell widths
+			if (max_err < max_err_tol) {
+				status = 0;
+				amrex::Print() << "Test passed\n";
+			} else {
+				amrex::Print() << "Test failed\n";
+			}
+		} else {
+			const double max_err_tol = 2.0; // max error tol in cell widths
+			if (max_err < max_err_tol) {
+				status = 0;
+				amrex::Print() << "Test passed\n";
+			} else {
+				amrex::Print() << "Test failed\n";
+			}
+			if (n_particles != 2 * 8) {
+				status = 1;
+				amrex::Print() << "Test failed (refactor, number of particles is not 2 * 8)\n";
+			}
+		}
 	}
 
-	int status = 1;
-	if (do_split_particles) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ <= 20, "maxTimesteps_ must be <= 20 when do_split_particles is true");
-		const double split_max_err_tol = 0.6; // max error tol in cell widths
-		if (max_err < split_max_err_tol) {
-			status = 0;
-			amrex::Print() << "Test passed (split particles)\n";
-		} else {
-			amrex::Print() << "Test failed (split particles)\n";
-		}
-	} else {
-		const double max_err_tol = 0.18; // max error tol in cell widths
-		if (max_err < max_err_tol) {
-			status = 0;
-			amrex::Print() << "Test passed\n";
-		} else {
-			amrex::Print() << "Test failed\n";
-		}
-	}
 	return status;
 }
