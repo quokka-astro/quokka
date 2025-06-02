@@ -52,12 +52,9 @@ template <> struct Physics_Traits<AgoraGalaxy> {
 	static constexpr int nGroups = 1;			     // number of radiation groups
 };
 
-// temporarily disable particles for scaling test purposes
-#if 0
 template <> struct Particle_Traits<AgoraGalaxy> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::StochasticStellarPop;
 };
-#endif
 
 template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Real r_inner{};
