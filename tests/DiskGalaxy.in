@@ -27,7 +27,7 @@ do_tracers = 1
 poisson_supercycle_interval = 5
 
 cfl = 0.3
-max_timesteps = 100
+max_timesteps = 200
 stop_time = 6.3e15         # 200 Myr
 
 cooling.enabled = 1
@@ -37,8 +37,8 @@ cooling.hdf5_data_file = "./CloudyData_UVB=HM2012.h5"
 temperature_floor = 100
 density_floor = 1e-30
 
-checkpoint_interval = 1000
-plottime_interval = 7.885e13	# 2.5 Myr
+checkpoint_interval = -1
+plotfile_interval = 1000
 derived_vars = temperature gpot
 
 # max_level = 7 implies a maximum resolution of dx =  73.2 pc (LOW res).
