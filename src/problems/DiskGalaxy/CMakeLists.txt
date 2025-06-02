@@ -1,0 +1,6 @@
+if (AMReX_SPACEDIM EQUAL 3)
+    add_executable(disk_galaxy galaxy.cpp ${QuokkaObjSources})
+    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+        setup_target_for_cuda_compilation(disk_galaxy)
+    endif()
+endif()
