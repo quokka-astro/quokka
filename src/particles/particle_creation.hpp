@@ -3,8 +3,10 @@
 
 #include "AMReX_BLassert.H"
 #include "gcem.hpp"
+#include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
+#include "particles/particle_utils.hpp"
 #include "stellarpop_data.hpp"
 #include <cmath>
 
