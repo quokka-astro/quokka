@@ -1,5 +1,3 @@
-add_subdirectory(BinaryOrbitCIC)
-
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
@@ -63,6 +61,7 @@ add_subdirectory(RadhydroPulseMGconst)
 add_subdirectory(RadhydroPulseMGint)
 add_subdirectory(RadhydroBB)
 
+add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(Cooling)
 add_subdirectory(FCQuantities)
 add_subdirectory(NSCBC)
