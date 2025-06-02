@@ -13,6 +13,9 @@
 namespace quokka
 {
 
+const double sf_cell_density_tmp = 1.0e5 * C::m_p; // g cm^-3
+const double sf_den_tmp = 0.1 * sf_cell_density_tmp; // g cm^-3
+
 // Helper namespace with implementation details for particle creation
 namespace ParticleCreationImpl
 {
@@ -185,23 +188,58 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 						 amrex::RandomEngine const & /*engine*/) const -> int
 		{
-			const double dx_max = std::max({dx[0], dx[1], dx[2]});
+			// const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
-			// Determine sound speed.
-			Real cs = NAN;
-			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
-			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
-			}
+			// // Determine sound speed.
+			// Real cs = NAN;
+			// if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+			// 	cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+			// } else {
+			// 	cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
+			// }
 
 			// Jeans density.
-			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max);
+			const auto rho_J = sf_den_tmp;
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
-			if (cell_density > 2.0e-24) {
+			if (cell_density > rho_J) {
 				return 1;
 			}
 			return 0;
+
+			// const double accretion_rate_cell = accretion_rate_arr(i, j, k);
+
+			// // Only form a star if
+			// // 1. Cell density is above Jeans density
+			// // 2. Cell accretion rate (a non-positive number) is zero
+			// // 3. Cell density is the local maximum density
+			// if (cell_density > rho_J && accretion_rate_cell >= 0.0) {
+			// 	bool is_local_maximum = true;
+			// 	for (int di = -3; di <= 3 && is_local_maximum; ++di) {
+			// 		for (int dj = -3; dj <= 3 && is_local_maximum; ++dj) {
+			// 			for (int dk = -3; dk <= 3 && is_local_maximum; ++dk) {
+			// 				// Skip the center cell
+			// 				if (di == 0 && dj == 0 && dk == 0) {
+			// 					continue;
+			// 				}
+			// 				// Only check cells within spherical radius of 3
+			// 				// A small epsilon is added to the right hand side to ensure both (i - stencil_size) and (i +
+			// 				// stencil_size) are included
+			// 				if (di * di + dj * dj + dk * dk <= static_cast<Real>(stencil_size * stencil_size) + 1.0e-10) {
+			// 					const Real rho_ijk = state_arr(i + di, j + dj, k + dk, HydroSystem<problem_t>::density_index);
+			// 					if (rho_ijk > cell_density) {
+			// 						is_local_maximum = false;
+			// 						break;
+			// 					}
+			// 				}
+			// 			}
+			// 		}
+			// 	}
+
+			// 	if (is_local_maximum) {
+			// 		return 1;
+			// 	}
+			// }
+			// return 0;
 		}
 	};
 

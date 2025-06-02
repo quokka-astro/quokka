@@ -78,7 +78,7 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 		} else if (x - 2 * dx[0] <= sf_cell_loc && x - dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc &&
 			   z + dx[2] > sf_cell_loc) {
 			// this is the cell that is 2 cells left of the peak density cell
-			rho = sf_cell_density * 0.999;
+			rho = sf_cell_density * 1.0e-3;
 		}
 		const double rho_e = CV * T0 * rho;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho;
