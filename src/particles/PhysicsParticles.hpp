@@ -113,10 +113,6 @@ class PhysicsParticleDescriptorBase
 	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
 
-	// Create particles from hydro state at the finest level
-	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call.
-	virtual void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const = 0;
-
 	// Destroy particles at level lev_min and above
 	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
 	virtual void splitParticles(int lev, int splitFactor) = 0;
@@ -131,6 +127,12 @@ class PhysicsParticleDescriptorBase
 	{ /* Default empty implementation */ }
 
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
+	{ /* Default empty implementation */ }
+
+	// Create particles from hydro state at the finest level
+	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call in order to
+	// make particle-mesh interaction work.
+	virtual void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt)
 	{ /* Default empty implementation */ }
 
 	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time,
@@ -462,13 +464,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) const override
-	{
-		// Use the traits class to implement the specialized behavior
-		ParticleCreationTraits<particleType_>::template createParticles<problem_t, ContainerType>(
-		    container_, this->getMassIndex(), state, lev, current_time, dt, this->getEvolutionStageIndex(), this->getBirthTimeIndex());
-	}
-
 	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) override
 	{
 		if (container_ != nullptr) {
@@ -791,6 +786,14 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, geom, lev, time, dt,
 									     this->getMassIndex());
 	}
+
+	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt) override
+	{
+		// Use the traits class to implement the specialized behavior
+		ParticleCreationTraits<particleType>::template createParticles<problem_t, ContainerType>(
+		    this->container_, this->getMassIndex(), state, accretion_rate, lev, current_time, dt, this->getEvolutionStageIndex(),
+		    this->getBirthTimeIndex());
+	}
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -939,8 +942,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Deposit supernova energy and momentum from all particles
-	void depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt)
+	void depositSN(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
 	{
+		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp(), state.nGrow());
 		// this function is only implemented for some particle types, so we specify the particle type manually here
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->isStarParticle()) {
@@ -1027,13 +1031,13 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Create particles based on particle type
-	void createParticlesFromState(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
-				descriptor->createParticlesFromState(state, lev, current_time, dt);
+				descriptor->createParticlesFromState(state, accretion_rate, lev, current_time, dt);
 
 				// redistribute particles
 				// descriptor->redistribute(lev);

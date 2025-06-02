@@ -16,8 +16,8 @@ namespace ParticleCreationImpl
 {
 // Common implementation of particle creation logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType, template <typename> class CreatorType>
-static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
-				int evolution_stage_index = -1, int birth_time_index = -1)
+static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
+				amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
 {
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
@@ -30,6 +30,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 			for (amrex::MFIter mfi = container->MakeMFIter(lev); mfi.isValid(); ++mfi) {
 				const auto &box = mfi.validbox();
 				const auto &state_arr = state.array(mfi);
+				const auto &accretion_rate_arr = accretion_rate.array(mfi);
 				const auto &geom = container->Geom(lev);
 				const auto dx = geom.CellSizeArray();
 				const auto plo = geom.ProbLoArray();
@@ -44,7 +45,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
-					pcounts[index] = particle_checker(state_arr, i, j, k, dx, engine); // NOLINT
+					pcounts[index] = particle_checker(state_arr, accretion_rate_arr, i, j, k, dx, engine); // NOLINT
 				});
 
 				// Calculate exclusive prefix sum to get unique position for each particle
@@ -77,10 +78,11 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 
-					if (pcounts[index] > 0) {										 // NOLINT
-						const int num_particles = pcounts[index];							 // NOLINT
-						auto *particles = &pdata[poffset[index]];							 // NOLINT
-						particle_creator(particles, num_particles, state_arr, i, j, k, dx, plo, poffset[index], engine); // NOLINT
+					if (pcounts[index] > 0) {			  // NOLINT
+						const int num_particles = pcounts[index]; // NOLINT
+						auto *particles = &pdata[poffset[index]]; // NOLINT
+						particle_creator(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, poffset[index],
+								 engine); // NOLINT
 					}
 				});
 			}
@@ -108,11 +110,12 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
-		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const &engine) const -> int
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
+						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 amrex::RandomEngine const &engine) const -> int
 		{
 			// Default implementation creates no particles
-			amrex::ignore_unused(state_arr, i, j, k, dx, engine);
+			amrex::ignore_unused(state_arr, accretion_rate_arr, i, j, k, dx, engine);
 			return 0;
 		}
 	};
@@ -136,25 +139,25 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		}
 
 		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const &accretion_rate_arr,
+						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
 						 amrex::RandomEngine const &engine) const
 		{
 			// Default implementation does nothing
-			amrex::ignore_unused(particles, num_particles, state_arr, i, j, k, dx, plo, base_offset, engine);
+			amrex::ignore_unused(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, base_offset, engine);
 		}
 	};
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
-				    int evolution_stage_index = -1, int birth_time_index = -1)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<particleType>::template ParticleChecker,
 							  ParticleCreationTraits<particleType>::template ParticleCreator>(
-		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index);
 	}
 };
 
@@ -192,7 +195,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
-		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr,
+						 amrex::Array4<const amrex::Real> const & /*accretion_rate_arr*/, int i, int j, int k,
 						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const &engine) const -> int
 		{
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
@@ -242,10 +246,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		}
 
 		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
-						 amrex::RandomEngine const &engine) const
+		AMREX_GPU_DEVICE void
+		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*accretion_rate_arr*/, int i, int j,
+			   int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+			   amrex::Long base_offset, amrex::RandomEngine const &engine) const
 		{
 
 			if (mass_idx + 3 < ParticleType::NReal) {
@@ -433,8 +437,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
-				    int evolution_stage_index = -1, int birth_time_index = -1)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
 	{
 		// Requires CGS units
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
@@ -443,7 +447,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleCreator>(
-		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index);
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
 

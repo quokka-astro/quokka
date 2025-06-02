@@ -144,8 +144,8 @@ auto problem_main() -> int
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 1.0e7 * year; // 1 Myr
-	sim.initDt_ = 1.0e6 * year;   // 0.1 Myr
+	sim.stopTime_ = 1.0e6 * year; // 1 Myr
+	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 	sim.doPoissonSolve_ = 1;
 
 	// initialize
