@@ -3193,7 +3193,6 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 	}
 }
 
-
 template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const RefinementContext &context)
 {
 	for (int lev = 0; lev <= finest_level; ++lev) {
