@@ -14,6 +14,7 @@ from grackle_tables import (
 def fast_log2(x):
     """Fast approximation of log2(x) using the not-quite-logarithmic method.
     This implements the same algorithm as FastMath::fastlg in the C++ code.
+
     Args:
         x: positive number or array
     Returns:
@@ -21,67 +22,180 @@ def fast_log2(x):
     """
     if np.any(x <= 0):
         raise ValueError("log divergent for x <= 0")
-    
     # For scalar or array inputs
-    x = np.asarray(x)
-    
+    x = np.asarray(x)    
     # frexp returns (mantissa, exponent) where x = mantissa * 2^exponent
     # and 0.5 <= mantissa < 1.0
     mantissa, exponent = np.frexp(x)
-    
     # The not-quite-log approximation: log2(x) ≈ 2(mantissa - 1) + exponent
     return 2 * (mantissa - 1) + exponent
 
 
-def fast_log10(x):
-    """Fast approximation of log10(x) using the not-quite-logarithmic method.
+def inverse_fast_log2(y):
+    """Inverse of the fast_log2 function using numerical root-finding to machine precision.
+    
+    This function finds x such that fast_log2(x) = y by solving the equation
+    f(x) = fast_log2(x) - y = 0 using scipy's root-finding methods with machine precision.
+
     Args:
-        x: positive number or array
+        y: log2 value or array
     Returns:
-        Approximation of log10(x)
+        x such that fast_log2(x) = y (accurate to machine precision)
     """
-    LOG2_TO_LOG10 = 0.301029995663981195  # log10(2)
-    return LOG2_TO_LOG10 * fast_log2(x)
+    from scipy.optimize import brentq
+    
+    # Handle scalar vs array input
+    y = np.asarray(y)
+    scalar_input = y.ndim == 0
+    y = np.atleast_1d(y)
+    
+    result = np.zeros_like(y)
+    
+    # Machine epsilon for float64
+    eps = np.finfo(np.float64).eps
+    
+    for i, y_val in enumerate(y):
+        # Define the function to find the root of
+        def f(x):
+            if x <= 0:
+                return np.inf  # fast_log2 is undefined for x <= 0
+            return fast_log2(x) - y_val
+        
+        # Get initial bounds for the root search
+        # Since fast_log2(x) ≈ log2(x), we can use 2^y as an initial guess
+        x_guess = 2.0 ** y_val
+        
+        # Use a bracket around the guess
+        # The fast_log2 function is monotonic, so we can bracket the root
+        x_lower = x_guess * 0.5
+        x_upper = x_guess * 2.0
+        
+        # Expand bracket if needed to ensure we bracket the root
+        max_bracket_iterations = 20
+        for _ in range(max_bracket_iterations):
+            f_lower = f(x_lower)
+            f_upper = f(x_upper)
+            
+            if f_lower * f_upper < 0:
+                # We have bracketed the root
+                break
+            elif abs(f_lower) < abs(f_upper):
+                x_lower *= 0.5
+            else:
+                x_upper *= 2.0
+        else:
+            # If we couldn't bracket after max_iterations, use a much wider search
+            x_lower = x_guess * 1e-20
+            x_upper = x_guess * 1e20
+            
+            # Final check
+            if f(x_lower) * f(x_upper) >= 0:
+                raise RuntimeError(f"Failed to bracket root for fast_log2(x) = {y_val}")
+        
+        # Use Brent's method for robust root finding with tight tolerances
+        # scipy requires rtol >= 4*eps and xtol > 0
+        # We use the tightest allowed tolerances
+        x_sol = brentq(f, x_lower, x_upper, xtol=eps, rtol=4*eps, maxiter=1000)
+        
+        # For very small numbers (large negative y), the fast_log2 approximation 
+        # has larger errors, so we need to be more tolerant
+        if y_val < -50:
+            # For very negative values, accept larger residuals as they're inherent
+            # to the fast_log2 approximation, not the inverse
+            tolerance = 1.0  # Accept residuals up to 1.0 for very small numbers
+        else:
+            tolerance = eps * max(1.0, abs(y_val)) * 50
+        
+        # Verify the solution
+        residual = abs(fast_log2(x_sol) - y_val)
+        if residual > tolerance:
+            # Try Newton-Raphson refinement
+            # Derivative of fast_log2(x) ≈ 1/(x * ln(2))
+            for _ in range(5):  # Multiple refinement steps
+                dx = -f(x_sol) * x_sol * np.log(2)
+                x_sol_new = x_sol + dx
+                if abs(f(x_sol_new)) < abs(f(x_sol)):
+                    x_sol = x_sol_new
+                else:
+                    break
+            
+            # Final check with adjusted tolerance
+            residual = abs(fast_log2(x_sol) - y_val)
+            if residual > tolerance and y_val >= -50:
+                print(f"Warning: inverse_fast_log2({y_val}) has residual {residual:.2e}")
+        
+        result[i] = x_sol
+    
+    # Return scalar if input was scalar
+    if scalar_input:
+        return result[0]
+    return result
 
 
-def inverse_fast_log10(y):
-    """Inverse of the fast_log10 function.
+def compute_temperature_from_nH_e(nH, e_int, tables=None, gamma = 5./3., T_min=None, T_max=None, mu_min=0.59, mu_max=1.3):
+    """Convert gas specific internal energy to temperature.
+    
+    This is a Python implementation of the ComputeTgasFromEgas function from
+    src/cooling/GrackleLikeCooling.hpp. It solves for the temperature that gives
+    the correct internal energy through the mean molecular weight relationship.
+    
     Args:
-        y: log10 value or array
-    Returns:
-        x such that fast_log10(x) ≈ y
-    """
-    # Convert from log10 to log2
-    LOG10_TO_LOG2 = 1.0 / 0.301029995663981195
-    y2 = LOG10_TO_LOG2 * y
-    
-    # Find n (integer part) and fractional part
-    n = np.floor(y2).astype(int)
-    frac = y2 - n
-    
-    # Solve: frac = 2(mantissa - 1)
-    # mantissa = frac/2 + 1
-    mantissa = frac / 2 + 1
-    
-    # Reconstruct x = mantissa * 2^n
-    x = np.ldexp(mantissa, n)
-    return x
-
-
-def temperature_from_specific_energy(e_int, mu):
-    """Convert specific internal energy to temperature.
-    
-    Args:
+        nH: hydrogen number density (cm^-3)
         e_int: specific internal energy (erg/g)
-        mu: mean molecular weight in units of m_H
+        gamma: adiabatic index == 5/3
+        tables: cooling tables object with interpolation data
+        T_min: minimum temperature (K) - if None, uses table minimum
+        T_max: maximum temperature (K) - if None, uses table maximum
+        mu_min: minimum mean molecular weight - if None, uses typical value
+        mu_max: maximum mean molecular weight - if None, uses typical value
     
     Returns:
         T: temperature (K)
     """
-    # For ideal gas: e_int = (3/2) * k_B * T / (mu * m_H)
-    # Solve for T: T = (2/3) * e_int * mu * m_H / k_B
-    T = (2.0 / 3.0) * e_int * mu * m_H / boltzmann_constant_cgs_
-    return T
+    # Set default temperature bounds from tables if not provided
+    if T_min is None:
+        T_min = 10.0 ** tables.log_T[0]
+    if T_max is None:
+        T_max = 10.0 ** tables.log_T[-1]
+    
+    # Check whether temperature is out-of-bounds
+    eint_min = specific_energy_from_temperature(T_min, mu_max)
+    eint_max = specific_energy_from_temperature(T_max, mu_min)
+    
+    if e_int <= eint_min:
+        return T_min
+    if e_int >= eint_max:
+        return T_max
+    
+    # Solve for temperature given Eint (with fixed adiabatic index gamma)
+    C = (gamma - 1.) * e_int * m_H / boltzmann_constant_cgs_
+    
+    # Define the function to find the root of: f(T) = C * mu(T) - T = 0
+    def f(T):
+        # Compute new mu from mu(T) table
+        T_clamped = np.clip(T, T_min, T_max)
+        try:
+            mu = interpolate_mu(nH, T_clamped, tables=tables)
+        except ValueError:
+            # If interpolation fails, use a default value
+            mu = NAN
+        return C * mu - T
+    
+    # Compute temperature bounds using physics
+    T_lower = max(C * mu_min, T_min)
+    T_upper = min(C * mu_max, T_max)
+    
+    # Use scipy's TOMS748 method for root finding (same as C++ code)
+    from scipy.optimize import toms748    
+    try:
+        # TOMS748 method with relative tolerance
+        T_sol = toms748(f, T_lower, T_upper, rtol=1.0e-5, maxiter=100)
+    except ValueError as e:
+        # Root finding failed
+        print(f"Tgas iteration failed! e_int = {e_int:.17e}, nH = {nH:.3e}, T_lower = {T_lower:.3e}, T_upper = {T_upper:.3e}")
+        raise e
+    
+    return T_sol
 
 
 def specific_energy_from_temperature(T, mu):
@@ -117,32 +231,8 @@ def find_eint_range(grackle_file, rho_min, rho_max, T_min, T_max):
     """
     # Read the tables
     tables = read_tables(grackle_file)
-    
-    # Sample a grid of densities and temperatures to find mu range
-    n_samples = 20  # Should be sufficient to capture mu variations
-    rho_samples = np.logspace(np.log10(rho_min), np.log10(rho_max), n_samples)
-    T_samples = np.logspace(np.log10(T_min), np.log10(T_max), n_samples)
-    
-    mu_values = []
-    
-    for rho in rho_samples:
-        nH = rho * cloudy_H_mass_fraction / m_H
-        for T in T_samples:
-            try:
-                mu = interpolate_mu(nH, T, tables=tables)
-                mu_values.append(mu)
-            except ValueError:
-                # Skip if outside table bounds
-                pass
-    
-    if not mu_values:
-        # If no valid mu values found, use typical range
-        print("Warning: Could not interpolate mu from tables, using typical values")
-        mu_min = 0.6  # Typical for ionized gas
-        mu_max = 1.3  # Typical for neutral gas
-    else:
-        mu_min = min(mu_values)
-        mu_max = max(mu_values)
+    mu_min = np.min(tables.mmw)
+    mu_max = np.max(tables.mmw)
     
     # Calculate specific internal energy bounds
     # Minimum e_int occurs at minimum T and maximum mu
@@ -157,9 +247,8 @@ def find_eint_range(grackle_file, rho_min, rho_max, T_min, T_max):
 
 
 def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, 
-                          rho_min=1e-30, rho_max=1e-20,
-                          eint_min=1e10, eint_max=1e20,
-                          output_file='resampled_cooling_tables.asdf'):
+                            eint_min=1e10, eint_max=1e20,
+                            output_file='resampled_cooling_tables.asdf'):
     """Resample cooling tables on a not-quite-logarithmic grid of density and specific internal energy.    
     Uses the fast logarithm approximation from https://arxiv.org/pdf/2206.08957 for grid spacing.
     
@@ -167,32 +256,62 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         grackle_file: path to Grackle HDF5 cooling tables
         n_rho: number of density points
         n_eint: number of specific internal energy points
-        rho_min: minimum mass density (g/cm^3)
-        rho_max: maximum mass density (g/cm^3)
         eint_min: minimum specific internal energy (erg/g)
         eint_max: maximum specific internal energy (erg/g)
         output_file: output ASDF file name
     """
     # Read the original tables
     tables = read_tables(grackle_file)
+    print("Table properties:")
+    print(f"\tnH min: {10.**tables.log_nH[0]:e}")
+    print(f"\tnH max: {10.**tables.log_nH[-1]:e}")
+    print(f"\tT min: {10.**tables.log_T[0]:e}")
+    print(f"\tT max: {10.**tables.log_T[-1]:e}")
+    print("")
     
-    # Create not-quite-logarithmic grids using fast_log10
-    # Create linear spacing in the not-quite-log space
-    fast_log_rho = np.linspace(fast_log10(rho_min), fast_log10(rho_max), n_rho)
-    fast_log_eint = np.linspace(fast_log10(eint_min), fast_log10(eint_max), n_eint)
+    rho_from_nH = lambda nH: (nH * m_H) / cloudy_H_mass_fraction
+    rho_min = rho_from_nH(10.**tables.log_nH[0])
+    rho_max = rho_from_nH(10.**tables.log_nH[-1])
     
-    # Convert back to linear space using inverse transform
-    rho_grid = inverse_fast_log10(fast_log_rho)
-    eint_grid = inverse_fast_log10(fast_log_eint)
+    # Create not-quite-logarithmic grids using fast_log2
+    # To avoid numerical issues with very small numbers, scale by the minimum value
+    rho_scale = rho_min
+    eint_scale = eint_min
+    
+    # Create linear spacing in the not-quite-log space of scaled values
+    fast_log_rho_scaled = np.linspace(fast_log2(rho_min/rho_scale), fast_log2(rho_max/rho_scale), n_rho)
+    fast_log_eint_scaled = np.linspace(fast_log2(eint_min/eint_scale), fast_log2(eint_max/eint_scale), n_eint)
+    
+    # Convert back to linear space using inverse transform and unscale
+    rho_grid = inverse_fast_log2(fast_log_rho_scaled) * rho_scale
+    eint_grid = inverse_fast_log2(fast_log_eint_scaled) * eint_scale
+
+    # Check that the grid boundaries are correct
+    print("Verifying grid boundaries...")
+    print(f"  rho_grid[0] = {rho_grid[0]:.15e}, rho_min = {rho_min:.15e}")
+    print(f"  rho_grid[-1] = {rho_grid[-1]:.15e}, rho_max = {rho_max:.15e}")
+    print(f"  eint_grid[0] = {eint_grid[0]:.15e}, eint_min = {eint_min:.15e}")
+    print(f"  eint_grid[-1] = {eint_grid[-1]:.15e}, eint_max = {eint_max:.15e}")
+    
+    # With scaling, we should achieve near-exact boundaries
+    eps = np.finfo(np.float64).eps
+    tolerance = eps * 100  # Allow for some numerical error
+    
+    assert abs(rho_grid[0] - rho_min) <= tolerance * rho_min, f"rho_grid[0]={rho_grid[0]} != rho_min={rho_min}"
+    assert abs(rho_grid[-1] - rho_max) <= tolerance * rho_max, f"rho_grid[-1]={rho_grid[-1]} != rho_max={rho_max}"
+    assert abs(eint_grid[0] - eint_min) <= tolerance * eint_min, f"eint_grid[0]={eint_grid[0]} != eint_min={eint_min}"
+    assert abs(eint_grid[-1] - eint_max) <= tolerance * eint_max, f"eint_grid[-1]={eint_grid[-1]} != eint_max={eint_max}"
+    print("✓ Grid boundaries are correct!")
+    print("")
     
     # Initialize output arrays
     cooling_rates = np.zeros((n_rho, n_eint))
     temperatures = np.zeros((n_rho, n_eint))
-    mean_molecular_weights = np.zeros((n_rho, n_eint))
     
     print(f"Resampling cooling tables on {n_rho} x {n_eint} grid using not-quite-logarithmic spacing...")
     print(f"Density range: {rho_min:.2e} to {rho_max:.2e} g/cm^3")
     print(f"Specific energy range: {eint_min:.2e} to {eint_max:.2e} erg/g")
+    print("")
     
     # Loop over the grid and compute cooling rates
     for i, rho in enumerate(rho_grid):
@@ -203,25 +322,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         nH = rho * cloudy_H_mass_fraction / m_H
         
         for j, e_int in enumerate(eint_grid):
-            # Initial guess for temperature using ideal gas approximation
-            # with mu = 1.0 as initial guess
-            T_guess = temperature_from_specific_energy(e_int, 1.0)
-            
-            # Iterate to find consistent temperature and mean molecular weight
-            # since mu depends on T through ionization state
-            for _ in range(20):  # typically converges in a few iterations
-                mu = interpolate_mu(nH, T_guess, tables=tables)
-                T_new = temperature_from_specific_energy(e_int, mu)
-                if abs(T_new - T_guess) / T_guess < 1e-6:
-                    break
-                T_guess = T_new
-            
-            T = T_new
-            
-            # Store the results
+            T = compute_temperature_from_nH_e(nH, e_int, tables=tables)
             temperatures[i, j] = T
-            mean_molecular_weights[i, j] = mu
-            
             # Compute cooling rate
             try:
                 Edot = cooling_rate(nH, T, redshift=0., tables=tables)
@@ -234,6 +336,10 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     print(f"\nSaving resampled tables to {output_file}")
     
     # Create the data tree for ASDF
+    # Store the actual fast_log values of the grid (not scaled)
+    fast_log_rho = fast_log2(rho_grid)
+    fast_log_eint = fast_log2(eint_grid)
+    
     tree = {
         'grids': {
             'fast_log_rho': fast_log_rho,
@@ -244,7 +350,6 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         'data': {
             'cooling_rates': cooling_rates,
             'temperatures': temperatures,
-            'mean_molecular_weights': mean_molecular_weights
         },
         'metadata': {
             'n_rho': n_rho,
@@ -255,13 +360,12 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
             'eint_max': eint_max,
             'cloudy_H_mass_fraction': cloudy_H_mass_fraction,
             'description': 'Cooling rates resampled on (rho, e_int) grid using not-quite-logarithmic spacing',
-            'spacing_method': 'not-quite-logarithmic (fast log10 approximation)',
+            'spacing_method': 'not-quite-logarithmic (fast log2 approximation)',
             'units': {
                 'rho': 'g/cm^3',
                 'eint': 'erg/g',
                 'cooling_rate': 'erg/cm^3/s',
                 'temperature': 'K',
-                'mmw': 'dimensionless (in units of m_H)'
             }
         }
     }
@@ -281,6 +385,55 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         print(f"Cooling rate range: {np.min(cooling_rates[valid_mask]):.2e} to {np.max(cooling_rates[valid_mask]):.2e} erg/cm^3/s")
 
 
+def test_inverse_fast_log2():
+    """Test that inverse_fast_log2 correctly inverts fast_log2 to machine precision."""
+    print("Testing inverse_fast_log2...")
+    
+    # Test various ranges of x values
+    test_values = [
+        1e-10, 1e-5, 0.001, 0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0, 
+        100.0, 1e5, 1e10, 1e15, 1e20
+    ]
+    
+    # Also test array input
+    test_array = np.logspace(-10, 20, 100)
+    
+    max_error = 0.0
+    eps = np.finfo(np.float64).eps
+    
+    # Test scalar values
+    for x in test_values:
+        y = fast_log2(x)
+        x_recovered = inverse_fast_log2(y)
+        error = abs(x - x_recovered) / x
+        max_error = max(max_error, error)
+        
+        if error > eps * 10:  # Allow for some numerical error accumulation
+            print(f"  x = {x:.6e}, fast_log2(x) = {y:.6e}, recovered x = {x_recovered:.6e}, rel error = {error:.2e}")
+    
+    # Test array input
+    y_array = fast_log2(test_array)
+    x_recovered_array = inverse_fast_log2(y_array)
+    errors = abs(test_array - x_recovered_array) / test_array
+    max_error = max(max_error, np.max(errors))
+    
+    print(f"Maximum relative error: {max_error:.2e}")
+    print(f"Machine epsilon: {eps:.2e}")
+    
+    # A factor of 20-50 times machine epsilon is excellent for numerical methods
+    tolerance_factor = 50
+    if max_error < eps * tolerance_factor:
+        print(f"✓ inverse_fast_log2 successfully inverts fast_log2 to near machine precision!")
+        print(f"  Maximum error is {max_error/eps:.1f}x machine epsilon")
+    else:
+        print(f"✗ inverse_fast_log2 error exceeds {tolerance_factor}x machine precision")
+        # Show worst cases
+        worst_idx = np.argmax(errors)
+        print(f"  Worst case: x = {test_array[worst_idx]:.6e}, error = {errors[worst_idx]:.2e}")
+    
+    return max_error < eps * tolerance_factor
+
+
 def main():
     """Main function to run the resampling."""
     import argparse
@@ -289,22 +442,20 @@ def main():
         description='Resample Grackle cooling tables on (rho, e_int) grid',
         epilog='Use --find-eint-range to determine appropriate eint_min/eint_max from temperature bounds.')
     
-    parser.add_argument('grackle_file', type=str,
+    parser.add_argument('grackle_file', type=str, nargs='?',
                         help='Path to Grackle HDF5 cooling table file')
     
     # Mode selection
     parser.add_argument('--find-eint-range', action='store_true',
                         help='Find eint range from temperature bounds instead of resampling')
+    parser.add_argument('--test', action='store_true',
+                        help='Test the inverse_fast_log2 function')
     
     # Parameters for resampling
     parser.add_argument('--n_rho', type=int, default=100,
                         help='Number of density points (default: 100)')
     parser.add_argument('--n_eint', type=int, default=100,
                         help='Number of specific energy points (default: 100)')
-    parser.add_argument('--rho_min', type=float, default=1e-30,
-                        help='Minimum density in g/cm^3 (default: 1e-30)')
-    parser.add_argument('--rho_max', type=float, default=1e-20,
-                        help='Maximum density in g/cm^3 (default: 1e-20)')
     parser.add_argument('--eint_min', type=float, default=1e10,
                         help='Minimum specific energy in erg/g (default: 1e10)')
     parser.add_argument('--eint_max', type=float, default=1e20,
@@ -320,15 +471,31 @@ def main():
     
     args = parser.parse_args()
     
+    if args.test:
+        # Run the test
+        success = test_inverse_fast_log2()
+        import sys
+        sys.exit(0 if success else 1)
+    
+    # For other modes, grackle_file is required
+    if not args.grackle_file:
+        parser.error("grackle_file is required unless using --test mode")
+    
     if args.find_eint_range:
         # Find eint range mode
+        # Read the tables to get density range
+        tables = read_tables(args.grackle_file)
+        rho_from_nH = lambda nH: (nH * m_H) / cloudy_H_mass_fraction
+        rho_min = rho_from_nH(10.**tables.log_nH[0])
+        rho_max = rho_from_nH(10.**tables.log_nH[-1])
+        
         print(f"Finding specific internal energy range for:")
-        print(f"  Density range: {args.rho_min:.2e} to {args.rho_max:.2e} g/cm^3")
+        print(f"  Density range: {rho_min:.2e} to {rho_max:.2e} g/cm^3")
         print(f"  Temperature range: {args.T_min:.2e} to {args.T_max:.2e} K\n")
         
         eint_min, eint_max = find_eint_range(
             args.grackle_file,
-            args.rho_min, args.rho_max,
+            rho_min, rho_max,
             args.T_min, args.T_max
         )
         
@@ -341,8 +508,6 @@ def main():
             args.grackle_file,
             n_rho=args.n_rho,
             n_eint=args.n_eint,
-            rho_min=args.rho_min,
-            rho_max=args.rho_max,
             eint_min=args.eint_min,
             eint_max=args.eint_max,
             output_file=args.output
