@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ABOUTME: Resample cooling tables from grackle_tables.py as a function of specific
-# ABOUTME: internal energy and mass density on a logarithmic 2D grid.
+# ABOUTME: internal energy and mass density on a logarithmic 2D grid, including sound speeds.
 
 import numpy as np
 import h5py
@@ -178,6 +178,23 @@ def specific_energy_from_temperature(T, mu):
     return e_int
 
 
+def compute_sound_speed(rho, T, mu, gamma=5./3.):
+    """Compute sound speed from density, temperature, and mean molecular weight.
+    
+    Args:
+        rho: density (g/cm^3)
+        T: temperature (K)
+        mu: mean molecular weight in units of m_H
+        gamma: adiabatic index
+    
+    Returns:
+        cs: sound speed (cm/s)
+    """
+    # For ideal gas: cs = sqrt(gamma * k_B * T / (mu * m_H))
+    cs = np.sqrt(gamma * boltzmann_constant_cgs_ * T / (mu * m_H))
+    return cs
+
+
 def find_eint_range(tables):
     """Find the range of specific internal energies for a given table.
 
@@ -207,6 +224,11 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
                             output_file='resampled_cooling_tables.h5'):
     """Resample cooling tables on a not-quite-logarithmic grid of density and specific internal energy.    
     Uses the fast logarithm approximation from https://arxiv.org/pdf/2206.08957 for grid spacing.
+    
+    Computes and stores:
+    - Cooling rates (erg/cm^3/s)
+    - Temperatures (K)
+    - Sound speeds (cm/s)
     
     Args:
         grackle_file: path to Grackle HDF5 cooling tables
@@ -257,6 +279,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     # Initialize output arrays
     cooling_rates = np.zeros((n_rho, n_eint))
     temperatures = np.zeros((n_rho, n_eint))
+    sound_speeds = np.zeros((n_rho, n_eint))
     
     print(f"Resampling cooling tables on {n_rho} x {n_eint} grid using not-quite-logarithmic spacing...")
     print(f"Density range: {rho_min:.2e} to {rho_max:.2e} g/cm^3")
@@ -275,12 +298,16 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
             try:
                 T = compute_temperature_from_nH_e(nH, e_int, tables=tables)
                 Edot = cooling_rate(nH, T, redshift=0., tables=tables)
+                mu = interpolate_mu(nH, T, tables=tables)
+                cs = compute_sound_speed(rho, T, mu)
                 temperatures[i, j] = T
                 cooling_rates[i, j] = Edot
+                sound_speeds[i, j] = cs
             except ValueError:
                 # Handle extrapolation errors by setting to NaN
                 temperatures[i, j] = np.nan
                 cooling_rates[i, j] = np.nan
+                sound_speeds[i, j] = np.nan
     
     # Save resampled tables to HDF5 file
     print(f"\nSaving resampled tables to {output_file}")
@@ -306,6 +333,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         # Store computed data
         data_group.create_dataset('cooling_rates', data=cooling_rates)
         data_group.create_dataset('temperatures', data=temperatures)
+        data_group.create_dataset('sound_speeds', data=sound_speeds)
         
         # Store metadata as attributes
         metadata_group.attrs['n_rho'] = n_rho
@@ -323,6 +351,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         units_group.attrs['eint'] = 'erg/g'
         units_group.attrs['cooling_rate'] = 'erg/cm^3/s'
         units_group.attrs['temperature'] = 'K'
+        units_group.attrs['sound_speed'] = 'cm/s'
     
     print("Done!")
     
@@ -333,6 +362,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         print(f"Valid cooling rates: {np.sum(valid_mask)} / {cooling_rates.size}")
         print(f"Temperature range: {np.min(temperatures[valid_mask]):.2e} to {np.max(temperatures[valid_mask]):.2e} K")
         print(f"Cooling rate range: {np.min(cooling_rates[valid_mask]):.2e} to {np.max(cooling_rates[valid_mask]):.2e} erg/cm^3/s")
+        print(f"Sound speed range: {np.min(sound_speeds[valid_mask]):.2e} to {np.max(sound_speeds[valid_mask]):.2e} cm/s")
 
 
 def test_inverse_fast_log2():
