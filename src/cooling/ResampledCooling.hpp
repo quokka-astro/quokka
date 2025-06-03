@@ -35,6 +35,7 @@ struct resampledGpuConstTables {
 
 	amrex::Table2D<const Real> cooling_rates;
 	amrex::Table2D<const Real> temperatures;
+	amrex::Table2D<const Real> sound_speeds;
 
 	// density range
 	amrex::Real rho_min;
@@ -53,6 +54,7 @@ class resampled_tables
 
 	std::unique_ptr<amrex::TableData<double, 2>> cooling_rates;
 	std::unique_ptr<amrex::TableData<double, 2>> temperatures;
+	std::unique_ptr<amrex::TableData<double, 2>> sound_speeds;
 
 	amrex::Real rho_min;
 	amrex::Real rho_max;
@@ -70,9 +72,10 @@ struct ODEUserData {
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
-	// Convert to fast log scale for interpolation
+	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
-	const Real fast_log_eint_val = FastMath::fastlg(Eint);
+	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
 	// Interpolate cooling rate from resampled tables
 	const Real Edot = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.cooling_rates);
@@ -82,9 +85,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, Real const gamma, resampledGpuConstTables const &tables) -> Real
 {
-	// Convert to fast log scale for interpolation
+	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
-	const Real fast_log_eint_val = FastMath::fastlg(Eint);
+	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
 	// Interpolate temperature from resampled tables
 	const Real Tgas = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.temperatures);
@@ -95,13 +99,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, Real const gamma, resampledGpuConstTables const &tables) -> Real
 {
 	// Compute cooling length l_cool = c_s * t_cool
-	// Note: This will be improved when sound speed table is added
-	const Real Tgas = ComputeTgasFromEgas(rho, Eint, gamma, tables);
+	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	const Real eint = Eint / rho;
+	const Real fast_log_rho_val = FastMath::fastlg(rho);
+	const Real fast_log_eint_val = FastMath::fastlg(eint);
 	
-	// Placeholder for sound speed calculation until sound speed table is added
-	// This assumes mean molecular weight - will be replaced with sound speed table
-	const Real mu_approx = 1.22; // temporary approximation
-	const Real cs = std::sqrt(gamma * C::k_B * Tgas / (mu_approx * (C::m_p + C::m_e)));
+	// Interpolate sound speed from resampled tables
+	const Real cs = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.sound_speeds);
 	
 	const Real Edot = resampled_cooling_function(rho, Eint, tables);
 	const Real t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
