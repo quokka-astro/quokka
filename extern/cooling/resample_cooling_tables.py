@@ -119,7 +119,6 @@ def find_eint_range(grackle_file, rho_min, rho_max, T_min, T_max):
     tables = read_tables(grackle_file)
     
     # Convert densities to hydrogen number densities
-    nH_min = rho_min * cloudy_H_mass_fraction / m_H
     nH_max = rho_max * cloudy_H_mass_fraction / m_H
     
     # Sample a grid of densities and temperatures to find mu range
