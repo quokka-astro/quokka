@@ -70,44 +70,14 @@ def inverse_fast_log2(y):
         x_lower = x_guess * 0.5
         x_upper = x_guess * 2.0
         
-        # Expand bracket if needed to ensure we bracket the root
-        max_bracket_iterations = 20
-        for _ in range(max_bracket_iterations):
-            f_lower = f(x_lower)
-            f_upper = f(x_upper)
-            
-            if f_lower * f_upper < 0:
-                # We have bracketed the root
-                break
-            elif abs(f_lower) < abs(f_upper):
-                x_lower *= 0.5
-            else:
-                x_upper *= 2.0
-        else:
-            # If we couldn't bracket after max_iterations, use a much wider search
-            x_lower = x_guess * 1e-20
-            x_upper = x_guess * 1e20
-            
-            # Final check
-            if f(x_lower) * f(x_upper) >= 0:
-                raise RuntimeError(f"Failed to bracket root for fast_log2(x) = {y_val}")
-        
         # Use Brent's method for robust root finding with tight tolerances
         # scipy requires rtol >= 4*eps and xtol > 0
         # We use the tightest allowed tolerances
-        x_sol = brentq(f, x_lower, x_upper, xtol=eps, rtol=4*eps, maxiter=1000)
-        
-        # For very small numbers (large negative y), the fast_log2 approximation 
-        # has larger errors, so we need to be more tolerant
-        if y_val < -50:
-            # For very negative values, accept larger residuals as they're inherent
-            # to the fast_log2 approximation, not the inverse
-            tolerance = 1.0  # Accept residuals up to 1.0 for very small numbers
-        else:
-            tolerance = eps * max(1.0, abs(y_val)) * 50
+        x_sol = brentq(f, x_lower, x_upper, xtol=eps*x_guess, rtol=4*eps, maxiter=1000)
         
         # Verify the solution
         residual = abs(fast_log2(x_sol) - y_val)
+        tolerance = eps * abs(y_val) * 20
         if residual > tolerance:
             # Try Newton-Raphson refinement
             # Derivative of fast_log2(x) ≈ 1/(x * ln(2))
@@ -121,7 +91,7 @@ def inverse_fast_log2(y):
             
             # Final check with adjusted tolerance
             residual = abs(fast_log2(x_sol) - y_val)
-            if residual > tolerance and y_val >= -50:
+            if residual > tolerance:
                 print(f"Warning: inverse_fast_log2({y_val}) has residual {residual:.2e}")
         
         result[i] = x_sol
@@ -274,17 +244,12 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     rho_max = rho_from_nH(10.**tables.log_nH[-1])
     
     # Create not-quite-logarithmic grids using fast_log2
-    # To avoid numerical issues with very small numbers, scale by the minimum value
-    rho_scale = rho_min
-    eint_scale = eint_min
+    fast_log_rho_scaled = np.linspace(fast_log2(rho_min), fast_log2(rho_max), n_rho)
+    fast_log_eint_scaled = np.linspace(fast_log2(eint_min), fast_log2(eint_max), n_eint)
     
-    # Create linear spacing in the not-quite-log space of scaled values
-    fast_log_rho_scaled = np.linspace(fast_log2(rho_min/rho_scale), fast_log2(rho_max/rho_scale), n_rho)
-    fast_log_eint_scaled = np.linspace(fast_log2(eint_min/eint_scale), fast_log2(eint_max/eint_scale), n_eint)
-    
-    # Convert back to linear space using inverse transform and unscale
-    rho_grid = inverse_fast_log2(fast_log_rho_scaled) * rho_scale
-    eint_grid = inverse_fast_log2(fast_log_eint_scaled) * eint_scale
+    # Convert back to linear space using inverse transform
+    rho_grid = inverse_fast_log2(fast_log_rho_scaled)
+    eint_grid = inverse_fast_log2(fast_log_eint_scaled)
 
     # Check that the grid boundaries are correct
     print("Verifying grid boundaries...")
@@ -336,7 +301,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     print(f"\nSaving resampled tables to {output_file}")
     
     # Create the data tree for ASDF
-    # Store the actual fast_log values of the grid (not scaled)
+    # Store the actual fast_log values of the grid
     fast_log_rho = fast_log2(rho_grid)
     fast_log_eint = fast_log2(eint_grid)
     
