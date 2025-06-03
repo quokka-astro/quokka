@@ -31,11 +31,10 @@ const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 
 const double sf_cell_density = 1.0e5 * C::m_p; // g cm^-3
-const double sf_cell_loc = 1.0;		       // in x,y,z direction, cm
 
 template <> struct Particle_Traits<SinkProblem> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
 
 template <> struct quokka::EOS_Traits<SinkProblem> {
@@ -72,6 +71,7 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 		const double y = prob_lo[1] + (j * dx[1]);
 		const double z = prob_lo[2] + (k * dx[2]);
 		double rho = rho0;
+		const double sf_cell_loc = 0.1 * dx[0]; // The cell right next to the origin
 		if (x <= sf_cell_loc && x + dx[0] > sf_cell_loc && y <= sf_cell_loc && y + dx[1] > sf_cell_loc && z <= sf_cell_loc && z + dx[2] > sf_cell_loc) {
 			// this is the cell with peak density
 			rho = sf_cell_density;
