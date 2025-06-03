@@ -3,7 +3,7 @@
 # ABOUTME: internal energy and mass density on a logarithmic 2D grid.
 
 import numpy as np
-import asdf
+import h5py
 
 from grackle_tables import (
     read_tables, cooling_rate, interpolate_mu, 
@@ -204,7 +204,7 @@ def find_eint_range(tables):
 
 
 def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, 
-                            output_file='resampled_cooling_tables.asdf'):
+                            output_file='resampled_cooling_tables.h5'):
     """Resample cooling tables on a not-quite-logarithmic grid of density and specific internal energy.    
     Uses the fast logarithm approximation from https://arxiv.org/pdf/2206.08957 for grid spacing.
     
@@ -212,7 +212,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         grackle_file: path to Grackle HDF5 cooling tables
         n_rho: number of density points
         n_eint: number of specific internal energy points
-        output_file: output ASDF file name
+        output_file: output HDF5 file name
     """
     # Read the original tables
     tables = read_tables(grackle_file)
@@ -282,47 +282,47 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
                 temperatures[i, j] = np.nan
                 cooling_rates[i, j] = np.nan
     
-    # Save resampled tables to ASDF file
+    # Save resampled tables to HDF5 file
     print(f"\nSaving resampled tables to {output_file}")
     
-    # Create the data tree for ASDF
     # Store the actual fast_log values of the grid
     fast_log_rho = fast_log2(rho_grid)
     fast_log_eint = fast_log2(eint_grid)
     
-    tree = {
-        'grids': {
-            'fast_log_rho': fast_log_rho,
-            'fast_log_eint': fast_log_eint,
-            'rho': rho_grid,
-            'eint': eint_grid
-        },
-        'data': {
-            'cooling_rates': cooling_rates,
-            'temperatures': temperatures,
-        },
-        'metadata': {
-            'n_rho': n_rho,
-            'n_eint': n_eint,
-            'rho_min': rho_min,
-            'rho_max': rho_max,
-            'eint_min': eint_min,
-            'eint_max': eint_max,
-            'cloudy_H_mass_fraction': cloudy_H_mass_fraction,
-            'description': 'Cooling rates resampled on (rho, e_int) grid using not-quite-logarithmic spacing',
-            'spacing_method': 'not-quite-logarithmic (fast log2 approximation)',
-            'units': {
-                'rho': 'g/cm^3',
-                'eint': 'erg/g',
-                'cooling_rate': 'erg/cm^3/s',
-                'temperature': 'K',
-            }
-        }
-    }
-    
-    # Write the ASDF file
-    with asdf.AsdfFile(tree) as af:
-        af.write_to(output_file)
+    # Write the HDF5 file
+    with h5py.File(output_file, 'w') as f:
+        # Create groups to organize data
+        grids_group = f.create_group('grids')
+        data_group = f.create_group('data')
+        metadata_group = f.create_group('metadata')
+        units_group = metadata_group.create_group('units')
+        
+        # Store grid data
+        grids_group.create_dataset('fast_log_rho', data=fast_log_rho)
+        grids_group.create_dataset('fast_log_eint', data=fast_log_eint)
+        grids_group.create_dataset('rho', data=rho_grid)
+        grids_group.create_dataset('eint', data=eint_grid)
+        
+        # Store computed data
+        data_group.create_dataset('cooling_rates', data=cooling_rates)
+        data_group.create_dataset('temperatures', data=temperatures)
+        
+        # Store metadata as attributes
+        metadata_group.attrs['n_rho'] = n_rho
+        metadata_group.attrs['n_eint'] = n_eint
+        metadata_group.attrs['rho_min'] = rho_min
+        metadata_group.attrs['rho_max'] = rho_max
+        metadata_group.attrs['eint_min'] = eint_min
+        metadata_group.attrs['eint_max'] = eint_max
+        metadata_group.attrs['cloudy_H_mass_fraction'] = cloudy_H_mass_fraction
+        metadata_group.attrs['description'] = 'Cooling rates resampled on (rho, e_int) grid using not-quite-logarithmic spacing'
+        metadata_group.attrs['spacing_method'] = 'not-quite-logarithmic (fast log2 approximation)'
+        
+        # Store units as attributes
+        units_group.attrs['rho'] = 'g/cm^3'
+        units_group.attrs['eint'] = 'erg/g'
+        units_group.attrs['cooling_rate'] = 'erg/cm^3/s'
+        units_group.attrs['temperature'] = 'K'
     
     print("Done!")
     
@@ -401,8 +401,8 @@ def main():
                         help='Number of density points (default: 100)')
     parser.add_argument('--n_eint', type=int, default=100,
                         help='Number of specific energy points (default: 100)')
-    parser.add_argument('--output', type=str, default='resampled_cooling_tables.asdf',
-                        help='Output ASDF file name (default: resampled_cooling_tables.asdf)')
+    parser.add_argument('--output', type=str, default='resampled_cooling_tables.h5',
+                        help='Output HDF5 file name (default: resampled_cooling_tables.h5)')
     
     args = parser.parse_args()
     
