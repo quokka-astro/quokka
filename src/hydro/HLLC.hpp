@@ -52,6 +52,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		const double C_tilde_rho = 0.5 * ((sL.Eint / sL.rho) + (sR.Eint / sR.rho) + sL.rho * dedr_L + sR.rho * dedr_R);
 
 		// equation A.5b of Kershaw+1998
+		AMREX_ASSERT(sL.Eint > 0.0);
+		AMREX_ASSERT(sR.Eint > 0.0);
+		AMREX_ASSERT(sL.rho > 0.0);
+		AMREX_ASSERT(sR.rho > 0.0);
 		const double C_tilde_P = 0.5 * ((sL.Eint / sL.rho) * drdp_L + (sR.Eint / sR.rho) * drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
 
 		// avoid NAN cs_tilde

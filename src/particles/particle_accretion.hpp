@@ -8,6 +8,7 @@
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
+#include <limits>
 
 namespace quokka
 {
@@ -394,6 +395,7 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 		AMREX_ASSERT(accretion_rate_cell <= 0.0);
 		AMREX_ASSERT(accretion_rate_cell > -1.0);
 		const double accretion_down_factor = 1.0 + accretion_rate_cell;
+		AMREX_ASSERT(accretion_down_factor > std::numeric_limits<double>::min());
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= accretion_down_factor;
