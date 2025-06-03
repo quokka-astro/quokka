@@ -61,6 +61,7 @@ add_subdirectory(RadhydroPulseMGconst)
 add_subdirectory(RadhydroPulseMGint)
 add_subdirectory(RadhydroBB)
 
+add_subdirectory(DiskGalaxy)
 add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(Cooling)
 add_subdirectory(FCQuantities)
