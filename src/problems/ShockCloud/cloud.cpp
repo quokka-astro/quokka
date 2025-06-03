@@ -24,7 +24,7 @@
 #include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
-#include "cooling/TabulatedCooling.hpp"
+#include "cooling/ResampledCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/NSCBC_inflow.hpp"
@@ -274,7 +274,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 
 	if (dname == "temperature") {
 		const int ncomp = ncomp_in;
-		auto tables = cloudyTables_.const_tables();
+		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
@@ -285,13 +285,13 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			output[bx](i, j, k, ncomp) = Tgas;
 		});
 
 	} else if (dname == "c_s") {
 		const int ncomp = ncomp_in;
-		auto tables = cloudyTables_.const_tables();
+		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
@@ -302,8 +302,8 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
-			Real const mu = quokka::TabulatedCooling::ComputeMMW(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const mu = 1.22; // placeholder until MMW table is added
 			Real const cs = std::sqrt(HydroSystem<ShockCloud>::gamma_ * C::k_B * Tgas / (mu * m_H));
 			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
@@ -315,13 +315,13 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const nH = (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho) / m_H;
+			Real const nH = (quokka::ResampledCooling::cloudy_H_mass_fraction * rho) / m_H;
 			output[bx](i, j, k, ncomp) = nH;
 		});
 
 	} else if (dname == "pressure") {
 		const int ncomp = ncomp_in;
-		auto tables = cloudyTables_.const_tables();
+		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
@@ -332,15 +332,15 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
-			Real const mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const mu = 1.22; // placeholder until MMW table is added
 			Real const ndens = rho / (mu * m_H);
 			output[bx](i, j, k, ncomp) = ndens * Tgas; // [K cm^-3]
 		});
 
 	} else if (dname == "entropy") {
 		const int ncomp = ncomp_in;
-		auto tables = cloudyTables_.const_tables();
+		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
@@ -351,8 +351,8 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
-			Real const mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const mu = 1.22; // placeholder until MMW table is added
 			Real const ndens = rho / (mu * m_H);
 			Real const K_cgs = C::k_B * Tgas * std::pow(ndens, -2. / 3.); // ergs cm^2
 			Real const K_keV_cm2 = K_cgs / keV_in_ergs;		      // convert to units of keV cm^2
@@ -388,7 +388,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 
 	} else if (dname == "cooling_length") {
 		const int ncomp = ncomp_in;
-		auto tables = cloudyTables_.const_tables();
+		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
@@ -400,7 +400,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const l_cool = ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
 		});
 
@@ -440,7 +440,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
-							 quokka::TabulatedCooling::cloudyGpuConstTables const &tables)
+							 quokka::ResampledCooling::resampledGpuConstTables const &tables)
 {
 	// return cell temperature
 	Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -449,7 +449,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-	return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
+	return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
 }
 
 template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -483,7 +483,7 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["sim_partialwind_mass"] = sim_partialwind_mass / solarmass_in_g;
 
 	// compute cloud mass according to temperature threshold
-	auto tables = cloudyTables_.const_tables();
+	auto tables = resampledTables_.const_tables();
 
 	const Real M_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
@@ -611,7 +611,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    return (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho) / m_H;
+		    return (quokka::ResampledCooling::cloudy_H_mass_fraction * rho) / m_H;
 	    });
 
 	// compute cloud partial density projection
@@ -619,7 +619,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial cloud density
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    return (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho_cloud) / m_H;
+		    return (quokka::ResampledCooling::cloudy_H_mass_fraction * rho_cloud) / m_H;
 	    });
 
 	// compute non-cloud partial density projection
@@ -627,7 +627,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial wind density
 		    Real const rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-		    return (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho_wind) / m_H;
+		    return (quokka::ResampledCooling::cloudy_H_mass_fraction * rho_wind) / m_H;
 	    });
 
 	return proj;
@@ -642,7 +642,7 @@ template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBox
 	const Real min_dx = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 	const Real resolved_length = static_cast<Real>(Ncells_per_lcool) * min_dx;
 
-	auto tables = cloudyTables_.const_tables();
+	auto tables = resampledTables_.const_tables();
 	const auto state = state_new_cc_[lev].const_arrays();
 	const auto tag = tags.arrays();
 
@@ -653,7 +653,7 @@ template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBox
 		Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 		Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 		Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-		Real const l_cool = ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 
 		if (l_cool < resolved_length) {
 			tag[bx](i, j, k) = amrex::TagBox::SET;
@@ -725,8 +725,8 @@ auto problem_main() -> int
 	amrex::Print() << fmt::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	// compute mass density of background, cloud
-	::rho0 = nH_bg * m_H / quokka::TabulatedCooling::cloudy_H_mass_fraction;    // g cm^-3
-	::rho1 = nH_cloud * m_H / quokka::TabulatedCooling::cloudy_H_mass_fraction; // g cm^-3
+	::rho0 = nH_bg * m_H / quokka::ResampledCooling::cloudy_H_mass_fraction;    // g cm^-3
+	::rho1 = nH_cloud * m_H / quokka::ResampledCooling::cloudy_H_mass_fraction; // g cm^-3
 
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho1));
@@ -734,11 +734,11 @@ auto problem_main() -> int
 
 	// check temperature of cloud, background
 	constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
-	auto tables = sim.cloudyTables_.const_tables();
+	auto tables = sim.resampledTables_.const_tables();
 	const Real Eint_bg = ::P0 / (gamma - 1.);
 	const Real Eint_cl = ::P0 / (gamma - 1.);
-	const Real T_bg = ComputeTgasFromEgas(rho0, Eint_bg, gamma, tables);
-	const Real T_cl = ComputeTgasFromEgas(rho1, Eint_cl, gamma, tables);
+	const Real T_bg = quokka::ResampledCooling::ComputeTgasFromEgas(rho0, Eint_bg, gamma, tables);
+	const Real T_cl = quokka::ResampledCooling::ComputeTgasFromEgas(rho1, Eint_cl, gamma, tables);
 	amrex::Print() << fmt::format("T_bg = {} K\n", T_bg);
 	amrex::Print() << fmt::format("T_cl = {} K\n", T_cl);
 
@@ -754,7 +754,7 @@ auto problem_main() -> int
 	const Real v_shock = M0 * x4;
 
 	const Real Eint_post = P_post / (gamma - 1.);
-	const Real T_post = ComputeTgasFromEgas(rho_post, Eint_post, gamma, tables);
+	const Real T_post = quokka::ResampledCooling::ComputeTgasFromEgas(rho_post, Eint_post, gamma, tables);
 	amrex::Print() << fmt::format("T_wind = {} K\n", T_post);
 
 	::v_wind = v_wind; // set global variables

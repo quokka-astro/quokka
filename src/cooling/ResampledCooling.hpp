@@ -1,0 +1,212 @@
+//ABOUTME: Header for resampled cooling tables that interpolate on (rho, e_int) grid
+//ABOUTME: Uses HDF5-format tables produced by extern/cooling/resample_cooling_tables.py
+#ifndef RESAMPLEDCOOLING_HPP_ // NOLINT
+#define RESAMPLEDCOOLING_HPP_
+//==============================================================================
+// TwoMomentRad - a radiation transport library for patch-based AMR codes
+// Copyright 2020 Benjamin Wibking.
+// Released under the MIT license. See LICENSE file included in the GitHub repo.
+//==============================================================================
+/// \file ResampledCooling.hpp
+/// \brief Defines methods for interpolating cooling rates from resampled tables.
+///
+
+#include "AMReX.H"
+#include "AMReX_Algorithm.H"
+#include "AMReX_Extension.H"
+#include "AMReX_GpuQualifiers.H"
+#include "AMReX_iMultiFab.H"
+
+#include "fmt/core.h"
+#include "fundamental_constants.H"
+#include "hydro/hydro_system.hpp"
+#include "math/FastMath.hpp"
+#include "math/Interpolate2D.hpp"
+#include "math/ODEIntegrate.hpp"
+#include "radiation/radiation_system.hpp"
+
+namespace quokka::ResampledCooling
+{
+
+struct resampledGpuConstTables {
+	// these are non-owning, so can make a copy of the whole struct
+	amrex::Table1D<const Real> fast_log_rho;
+	amrex::Table1D<const Real> fast_log_eint;
+
+	amrex::Table2D<const Real> cooling_rates;
+	amrex::Table2D<const Real> temperatures;
+
+	// density range
+	amrex::Real rho_min;
+	amrex::Real rho_max;
+
+	// specific internal energy range
+	amrex::Real eint_min;
+	amrex::Real eint_max;
+};
+
+class resampled_tables
+{
+      public:
+	std::unique_ptr<amrex::TableData<double, 1>> fast_log_rho;
+	std::unique_ptr<amrex::TableData<double, 1>> fast_log_eint;
+
+	std::unique_ptr<amrex::TableData<double, 2>> cooling_rates;
+	std::unique_ptr<amrex::TableData<double, 2>> temperatures;
+
+	amrex::Real rho_min;
+	amrex::Real rho_max;
+	amrex::Real eint_min;
+	amrex::Real eint_max;
+
+	[[nodiscard]] auto const_tables() const -> resampledGpuConstTables;
+};
+
+struct ODEUserData {
+	Real rho{};
+	Real gamma{};
+	resampledGpuConstTables tables;
+};
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
+{
+	// Convert to fast log scale for interpolation
+	const Real fast_log_rho_val = FastMath::fastlg(rho);
+	const Real fast_log_eint_val = FastMath::fastlg(Eint);
+
+	// Interpolate cooling rate from resampled tables
+	const Real Edot = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.cooling_rates);
+
+	return Edot;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, Real const gamma, resampledGpuConstTables const &tables) -> Real
+{
+	// Convert to fast log scale for interpolation
+	const Real fast_log_rho_val = FastMath::fastlg(rho);
+	const Real fast_log_eint_val = FastMath::fastlg(Eint);
+
+	// Interpolate temperature from resampled tables
+	const Real Tgas = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.temperatures);
+
+	return Tgas;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, Real const gamma, resampledGpuConstTables const &tables) -> Real
+{
+	// Compute cooling length l_cool = c_s * t_cool
+	// Note: This will be improved when sound speed table is added
+	const Real Tgas = ComputeTgasFromEgas(rho, Eint, gamma, tables);
+	
+	// Placeholder for sound speed calculation until sound speed table is added
+	// This assumes mean molecular weight - will be replaced with sound speed table
+	const Real mu_approx = 1.22; // temporary approximation
+	const Real cs = std::sqrt(gamma * C::k_B * Tgas / (mu_approx * (C::m_p + C::m_e)));
+	
+	const Real Edot = resampled_cooling_function(rho, Eint, tables);
+	const Real t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
+	
+	return cs * t_cool;
+}
+
+// Hydrogen mass fraction (should match the value used in resampling)
+constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.098 * 3.971);
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
+{
+	// unpack user_data
+	auto *udata = static_cast<ODEUserData *>(user_data);
+	const Real rho = udata->rho;
+	resampledGpuConstTables const &tables = udata->tables;
+
+	// check whether specific internal energy is out-of-bounds
+	const Real Eint_min = tables.eint_min;
+	const Real Eint_max = tables.eint_max;
+
+	// compute cooling rate
+	const Real Eint = y_data[0];
+
+	if (Eint <= Eint_min) {
+		// set cooling to value at Eint_min
+		y_rhs[0] = resampled_cooling_function(rho, Eint_min, tables);
+	} else if (Eint >= Eint_max) {
+		// set cooling to value at Eint_max
+		y_rhs[0] = resampled_cooling_function(rho, Eint_max, tables);
+	} else {
+		// ok, within tabulated cooling limits
+		y_rhs[0] = resampled_cooling_function(rho, Eint, tables);
+	}
+
+	return 0; // success
+}
+
+template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor) -> bool
+{
+	BL_PROFILE("computeCooling()")
+
+	const Real dt = dt_in;
+	const Real reltol_floor = 0.01;
+	const Real rtol = 1.0e-4; // not recommended to change this
+
+	auto tables = resampledTables.const_tables();
+
+	const auto &ba = mf.boxArray();
+	const auto &dmap = mf.DistributionMap();
+	amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
+
+	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = mf.array(iter);
+		auto const &nsubsteps = nsubstepsMF.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
+			const Real x1Mom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			const Real x2Mom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			const Real x3Mom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
+
+			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
+			ODEUserData user_data{rho, gamma, tables};
+			quokka::valarray<Real, 1> y = {Eint};
+			quokka::valarray<Real, 1> const abstol = {reltol_floor * E_floor};
+
+			// do integration with RK2 (Heun's method)
+			int nsteps = 0;
+			rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
+			nsubsteps(i, j, k) = nsteps;
+
+			// check if integration failed
+			if (nsteps >= maxStepsODEIntegrate) {
+				Real const Edot = resampled_cooling_function(rho, Eint, tables);
+				Real const t_cool = Eint / Edot;
+				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling "
+				       "time = %g, dt = %.17e\n",
+				       rho, Eint, t_cool, dt);
+			}
+			const Real Eint_new = y[0];
+			const Real dEint = Eint_new - Eint;
+
+			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
+			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+		});
+	}
+
+	int nmax = nsubstepsMF.max(0);
+	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
+	amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+
+	// check if integration succeeded
+	if (nmax >= maxStepsODEIntegrate) {
+		amrex::Print() << "\t[ResampledCooling] Reaction ODE failure! Retrying hydro update...\n";
+		return false;
+	}
+	return true; // success
+}
+
+void readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables);
+
+} // namespace quokka::ResampledCooling
+
+#endif // RESAMPLEDCOOLING_HPP_
