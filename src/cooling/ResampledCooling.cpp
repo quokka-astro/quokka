@@ -1,9 +1,9 @@
-//ABOUTME: Implementation for resampled cooling tables that interpolate on (rho, e_int) grid
-//ABOUTME: Reads HDF5-format tables produced by extern/cooling/resample_cooling_tables.py
+// ABOUTME: Implementation for resampled cooling tables that interpolate on (rho, e_int) grid
+// ABOUTME: Reads HDF5-format tables produced by extern/cooling/resample_cooling_tables.py
 //==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
+//  TwoMomentRad - a radiation transport library for patch-based AMR codes
+//  Copyright 2020 Benjamin Wibking.
+//  Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file ResampledCooling.cpp
 /// \brief Implements methods for interpolating cooling rates from resampled
@@ -21,7 +21,6 @@
 #include "AMReX_GpuContainers.H"
 #include "AMReX_Print.H"
 #include "AMReX_TableData.H"
-
 
 namespace quokka::ResampledCooling
 {
@@ -89,8 +88,8 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read fast_log_rho dataset!");
 		H5Dclose(dset_id);
 
-		resampledTables.fast_log_rho = std::make_unique<amrex::TableData<double, 1>>(
-			amrex::Array<int, 1>{0}, amrex::Array<int, 1>{n_rho - 1}, amrex::The_Pinned_Arena());
+		resampledTables.fast_log_rho =
+		    std::make_unique<amrex::TableData<double, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{n_rho - 1}, amrex::The_Pinned_Arena());
 		auto rho_table = resampledTables.fast_log_rho->table();
 		for (int i = 0; i < n_rho; ++i) {
 			rho_table(i) = temp_data[i];
@@ -105,8 +104,8 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read fast_log_eint dataset!");
 		H5Dclose(dset_id);
 
-		resampledTables.fast_log_eint = std::make_unique<amrex::TableData<double, 1>>(
-			amrex::Array<int, 1>{0}, amrex::Array<int, 1>{n_eint - 1}, amrex::The_Pinned_Arena());
+		resampledTables.fast_log_eint =
+		    std::make_unique<amrex::TableData<double, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{n_eint - 1}, amrex::The_Pinned_Arena());
 		auto eint_table = resampledTables.fast_log_eint->table();
 		for (int i = 0; i < n_eint; ++i) {
 			eint_table(i) = temp_data[i];
@@ -116,7 +115,7 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	// Read 2D data tables
 	const int64_t data_size = static_cast<int64_t>(n_rho) * static_cast<int64_t>(n_eint);
-	
+
 	{
 		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 		dset_id = H5Dopen2(file_id, "/data/cooling_rates", H5P_DEFAULT);
@@ -125,9 +124,9 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		H5Dclose(dset_id);
 
 		resampledTables.cooling_rates = std::make_unique<amrex::TableData<double, 2>>(
-			amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
+		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
 		auto cooling_table = resampledTables.cooling_rates->table();
-		
+
 		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
 		for (int i = 0; i < n_rho; ++i) {
 			for (int j = 0; j < n_eint; ++j) {
@@ -145,9 +144,9 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		H5Dclose(dset_id);
 
 		resampledTables.temperatures = std::make_unique<amrex::TableData<double, 2>>(
-			amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
+		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
 		auto temp_table = resampledTables.temperatures->table();
-		
+
 		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
 		for (int i = 0; i < n_rho; ++i) {
 			for (int j = 0; j < n_eint; ++j) {
@@ -165,9 +164,9 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		H5Dclose(dset_id);
 
 		resampledTables.sound_speeds = std::make_unique<amrex::TableData<double, 2>>(
-			amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
+		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
 		auto sound_speed_table = resampledTables.sound_speeds->table();
-		
+
 		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
 		for (int i = 0; i < n_rho; ++i) {
 			for (int j = 0; j < n_eint; ++j) {
@@ -179,10 +178,8 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	H5Fclose(file_id);
 
-	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", 
-		resampledTables.rho_min, resampledTables.rho_max, n_rho);
-	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", 
-		resampledTables.eint_min, resampledTables.eint_max, n_eint);
+	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
+	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
 }
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables

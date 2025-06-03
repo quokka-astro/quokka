@@ -1,5 +1,5 @@
-//ABOUTME: Header for resampled cooling tables that interpolate on (rho, e_int) grid
-//ABOUTME: Uses HDF5-format tables produced by extern/cooling/resample_cooling_tables.py
+// ABOUTME: Header for resampled cooling tables that interpolate on (rho, e_int) grid
+// ABOUTME: Uses HDF5-format tables produced by extern/cooling/resample_cooling_tables.py
 #ifndef RESAMPLEDCOOLING_HPP_ // NOLINT
 #define RESAMPLEDCOOLING_HPP_
 //==============================================================================
@@ -83,7 +83,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 	return Edot;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, Real const gamma, resampledGpuConstTables const &tables) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, Real const gamma, resampledGpuConstTables const &tables)
+    -> Real
 {
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
 	const Real eint = Eint / rho;
@@ -96,20 +97,21 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	return Tgas;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, Real const gamma, resampledGpuConstTables const &tables) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, Real const gamma, resampledGpuConstTables const &tables)
+    -> Real
 {
 	// Compute cooling length l_cool = c_s * t_cool
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
 	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
-	
+
 	// Interpolate sound speed from resampled tables
 	const Real cs = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.sound_speeds);
-	
+
 	const Real Edot = resampled_cooling_function(rho, Eint, tables);
 	const Real t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
-	
+
 	return cs * t_cool;
 }
 
