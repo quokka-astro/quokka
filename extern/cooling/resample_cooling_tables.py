@@ -118,10 +118,6 @@ def find_eint_range(grackle_file, rho_min, rho_max, T_min, T_max):
     # Read the tables
     tables = read_tables(grackle_file)
     
-    # Convert densities to hydrogen number densities
-    nH_min = rho_min * cloudy_H_mass_fraction / m_H
-    nH_max = rho_max * cloudy_H_mass_fraction / m_H
-    
     # Sample a grid of densities and temperatures to find mu range
     n_samples = 20  # Should be sufficient to capture mu variations
     rho_samples = np.logspace(np.log10(rho_min), np.log10(rho_max), n_samples)
@@ -135,7 +131,7 @@ def find_eint_range(grackle_file, rho_min, rho_max, T_min, T_max):
             try:
                 mu = interpolate_mu(nH, T, tables=tables)
                 mu_values.append(mu)
-            except:
+            except ValueError:
                 # Skip if outside table bounds
                 pass
     
@@ -213,7 +209,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
             
             # Iterate to find consistent temperature and mean molecular weight
             # since mu depends on T through ionization state
-            for _ in range(10):  # typically converges in a few iterations
+            for _ in range(20):  # typically converges in a few iterations
                 mu = interpolate_mu(nH, T_guess, tables=tables)
                 T_new = temperature_from_specific_energy(e_int, mu)
                 if abs(T_new - T_guess) / T_guess < 1e-6:
@@ -230,7 +226,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
             try:
                 Edot = cooling_rate(nH, T, redshift=0., tables=tables)
                 cooling_rates[i, j] = Edot
-            except:
+            except ValueError:
                 # Handle extrapolation errors by setting to NaN
                 cooling_rates[i, j] = np.nan
     
