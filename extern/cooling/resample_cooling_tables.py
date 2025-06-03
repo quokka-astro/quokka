@@ -4,7 +4,7 @@
 
 import numpy as np
 import asdf
-from scipy.interpolate import RectBivariateSpline
+
 from grackle_tables import (
     read_tables, cooling_rate, interpolate_mu, 
     m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction
