@@ -102,7 +102,7 @@ def inverse_fast_log2(y):
     return result
 
 
-def compute_temperature_from_nH_e(nH, e_int, tables=None, gamma = 5./3., T_min=None, T_max=None, mu_min=0.59, mu_max=1.3):
+def compute_temperature_from_nH_e(nH, e_int, tables=None, gamma = 5./3.):
     """Convert gas specific internal energy to temperature.
     
     This is a Python implementation of the ComputeTgasFromEgas function from
@@ -122,16 +122,15 @@ def compute_temperature_from_nH_e(nH, e_int, tables=None, gamma = 5./3., T_min=N
     Returns:
         T: temperature (K)
     """
-    # Set default temperature bounds from tables if not provided
-    if T_min is None:
-        T_min = 10.0 ** tables.log_T[0]
-    if T_max is None:
-        T_max = 10.0 ** tables.log_T[-1]
+    # Set default temperature bounds
+    T_min = 10.0 ** tables.log_T[0]
+    T_max = 10.0 ** tables.log_T[-1]
+    mu_min = np.min(tables.mmw)
+    mu_max = np.max(tables.mmw)
     
-    # Check whether temperature is out-of-bounds
+    # Check whether temperature is (obviously) out-of-bounds
     eint_min = specific_energy_from_temperature(T_min, mu_max)
     eint_max = specific_energy_from_temperature(T_max, mu_min)
-    
     if e_int <= eint_min:
         return T_min
     if e_int >= eint_max:
@@ -144,11 +143,7 @@ def compute_temperature_from_nH_e(nH, e_int, tables=None, gamma = 5./3., T_min=N
     def f(T):
         # Compute new mu from mu(T) table
         T_clamped = np.clip(T, T_min, T_max)
-        try:
-            mu = interpolate_mu(nH, T_clamped, tables=tables)
-        except ValueError:
-            # If interpolation fails, use a default value
-            mu = NAN
+        mu = interpolate_mu(nH, T_clamped, tables=tables)
         return C * mu - T
     
     # Compute temperature bounds using physics
@@ -183,33 +178,25 @@ def specific_energy_from_temperature(T, mu):
     return e_int
 
 
-def find_eint_range(grackle_file, rho_min, rho_max, T_min, T_max):
-    """Find the range of specific internal energies for given density and temperature ranges.
-    
-    This function computes the mean molecular weight for the given density and temperature
-    ranges and calculates the corresponding specific internal energy bounds.
-    
+def find_eint_range(tables):
+    """Find the range of specific internal energies for a given table.
+
     Args:
-        grackle_file: path to Grackle HDF5 cooling tables
-        rho_min: minimum mass density (g/cm^3)
-        rho_max: maximum mass density (g/cm^3)
-        T_min: minimum temperature (K)
-        T_max: maximum temperature (K)
+        tables: the Grackle cooling tables
     
     Returns:
         tuple: (eint_min, eint_max) in erg/g
     """
-    # Read the tables
-    tables = read_tables(grackle_file)
+    # Set default temperature bounds
+    T_min = np.max([10.0 ** tables.log_T[0], 25.0]) # set 25 K temperature floor
+    T_max = 10.0 ** tables.log_T[-1]
     mu_min = np.min(tables.mmw)
     mu_max = np.max(tables.mmw)
     
-    # Calculate specific internal energy bounds
-    # Minimum e_int occurs at minimum T and maximum mu
-    # Maximum e_int occurs at maximum T and minimum mu
+    # Check whether temperature is (obviously) out-of-bounds
     eint_min = specific_energy_from_temperature(T_min, mu_max)
     eint_max = specific_energy_from_temperature(T_max, mu_min)
-    
+
     print(f"Mean molecular weight range: {mu_min:.3f} to {mu_max:.3f}")
     print(f"Specific internal energy range: {eint_min:.2e} to {eint_max:.2e} erg/g")
     
@@ -217,7 +204,6 @@ def find_eint_range(grackle_file, rho_min, rho_max, T_min, T_max):
 
 
 def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, 
-                            eint_min=1e10, eint_max=1e20,
                             output_file='resampled_cooling_tables.asdf'):
     """Resample cooling tables on a not-quite-logarithmic grid of density and specific internal energy.    
     Uses the fast logarithm approximation from https://arxiv.org/pdf/2206.08957 for grid spacing.
@@ -226,8 +212,6 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         grackle_file: path to Grackle HDF5 cooling tables
         n_rho: number of density points
         n_eint: number of specific internal energy points
-        eint_min: minimum specific internal energy (erg/g)
-        eint_max: maximum specific internal energy (erg/g)
         output_file: output ASDF file name
     """
     # Read the original tables
@@ -242,6 +226,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     rho_from_nH = lambda nH: (nH * m_H) / cloudy_H_mass_fraction
     rho_min = rho_from_nH(10.**tables.log_nH[0])
     rho_max = rho_from_nH(10.**tables.log_nH[-1])
+
+    eint_min, eint_max = find_eint_range(tables)
     
     # Create not-quite-logarithmic grids using fast_log2
     fast_log_rho_scaled = np.linspace(fast_log2(rho_min), fast_log2(rho_max), n_rho)
@@ -258,9 +244,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     print(f"  eint_grid[0] = {eint_grid[0]:.15e}, eint_min = {eint_min:.15e}")
     print(f"  eint_grid[-1] = {eint_grid[-1]:.15e}, eint_max = {eint_max:.15e}")
     
-    # With scaling, we should achieve near-exact boundaries
     eps = np.finfo(np.float64).eps
-    tolerance = eps * 100  # Allow for some numerical error
+    tolerance = eps * 20  # Allow for some numerical error
     
     assert abs(rho_grid[0] - rho_min) <= tolerance * rho_min, f"rho_grid[0]={rho_grid[0]} != rho_min={rho_min}"
     assert abs(rho_grid[-1] - rho_max) <= tolerance * rho_max, f"rho_grid[-1]={rho_grid[-1]} != rho_max={rho_max}"
@@ -287,14 +272,14 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         nH = rho * cloudy_H_mass_fraction / m_H
         
         for j, e_int in enumerate(eint_grid):
-            T = compute_temperature_from_nH_e(nH, e_int, tables=tables)
-            temperatures[i, j] = T
-            # Compute cooling rate
             try:
+                T = compute_temperature_from_nH_e(nH, e_int, tables=tables)
                 Edot = cooling_rate(nH, T, redshift=0., tables=tables)
+                temperatures[i, j] = T
                 cooling_rates[i, j] = Edot
             except ValueError:
                 # Handle extrapolation errors by setting to NaN
+                temperatures[i, j] = np.nan
                 cooling_rates[i, j] = np.nan
     
     # Save resampled tables to ASDF file
@@ -385,8 +370,7 @@ def test_inverse_fast_log2():
     print(f"Maximum relative error: {max_error:.2e}")
     print(f"Machine epsilon: {eps:.2e}")
     
-    # A factor of 20-50 times machine epsilon is excellent for numerical methods
-    tolerance_factor = 50
+    tolerance_factor = 20
     if max_error < eps * tolerance_factor:
         print(f"✓ inverse_fast_log2 successfully inverts fast_log2 to near machine precision!")
         print(f"  Maximum error is {max_error/eps:.1f}x machine epsilon")
@@ -403,16 +387,12 @@ def main():
     """Main function to run the resampling."""
     import argparse
     
-    parser = argparse.ArgumentParser(
-        description='Resample Grackle cooling tables on (rho, e_int) grid',
-        epilog='Use --find-eint-range to determine appropriate eint_min/eint_max from temperature bounds.')
+    parser = argparse.ArgumentParser(description='Resample Grackle cooling tables on (rho, e_int) grid')
     
     parser.add_argument('grackle_file', type=str, nargs='?',
                         help='Path to Grackle HDF5 cooling table file')
     
     # Mode selection
-    parser.add_argument('--find-eint-range', action='store_true',
-                        help='Find eint range from temperature bounds instead of resampling')
     parser.add_argument('--test', action='store_true',
                         help='Test the inverse_fast_log2 function')
     
@@ -421,18 +401,8 @@ def main():
                         help='Number of density points (default: 100)')
     parser.add_argument('--n_eint', type=int, default=100,
                         help='Number of specific energy points (default: 100)')
-    parser.add_argument('--eint_min', type=float, default=1e10,
-                        help='Minimum specific energy in erg/g (default: 1e10)')
-    parser.add_argument('--eint_max', type=float, default=1e20,
-                        help='Maximum specific energy in erg/g (default: 1e20)')
     parser.add_argument('--output', type=str, default='resampled_cooling_tables.asdf',
                         help='Output ASDF file name (default: resampled_cooling_tables.asdf)')
-    
-    # Parameters for finding eint range
-    parser.add_argument('--T_min', type=float, default=10.0,
-                        help='Minimum temperature in K for eint range finding (default: 10)')
-    parser.add_argument('--T_max', type=float, default=1e9,
-                        help='Maximum temperature in K for eint range finding (default: 1e9)')
     
     args = parser.parse_args()
     
@@ -444,37 +414,13 @@ def main():
     
     # For other modes, grackle_file is required
     if not args.grackle_file:
-        parser.error("grackle_file is required unless using --test mode")
-    
-    if args.find_eint_range:
-        # Find eint range mode
-        # Read the tables to get density range
-        tables = read_tables(args.grackle_file)
-        rho_from_nH = lambda nH: (nH * m_H) / cloudy_H_mass_fraction
-        rho_min = rho_from_nH(10.**tables.log_nH[0])
-        rho_max = rho_from_nH(10.**tables.log_nH[-1])
-        
-        print(f"Finding specific internal energy range for:")
-        print(f"  Density range: {rho_min:.2e} to {rho_max:.2e} g/cm^3")
-        print(f"  Temperature range: {args.T_min:.2e} to {args.T_max:.2e} K\n")
-        
-        eint_min, eint_max = find_eint_range(
-            args.grackle_file,
-            rho_min, rho_max,
-            args.T_min, args.T_max
-        )
-        
-        print(f"\nSuggested parameters for resampling:")
-        print(f"  --eint_min {eint_min:.6e}")
-        print(f"  --eint_max {eint_max:.6e}")
+        parser.error("grackle_file is required unless using --test mode")    
     else:
         # Resampling mode
         resample_cooling_tables(
             args.grackle_file,
             n_rho=args.n_rho,
             n_eint=args.n_eint,
-            eint_min=args.eint_min,
-            eint_max=args.eint_max,
             output_file=args.output
         )
 
