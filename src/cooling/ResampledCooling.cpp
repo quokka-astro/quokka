@@ -78,6 +78,11 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read eint_max!");
 	H5Aclose(attr_id);
 
+	attr_id = H5Aopen(metadata_group, "cloudy_H_mass_fraction", H5P_DEFAULT);
+	status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &resampledTables.cloudy_H_mass_fraction);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read cloudy_H_mass_fraction!");
+	H5Aclose(attr_id);
+
 	H5Gclose(metadata_group);
 
 	// Read grid data
@@ -234,7 +239,8 @@ auto resampled_tables::const_tables() const -> resampledGpuConstTables
 				       rho_min,
 				       rho_max,
 				       eint_min,
-				       eint_max};
+				       eint_max,
+				       cloudy_H_mass_fraction};
 	return tables;
 }
 

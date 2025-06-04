@@ -46,6 +46,9 @@ struct resampledGpuConstTables {
 	// specific internal energy range
 	amrex::Real eint_min;
 	amrex::Real eint_max;
+
+	// hydrogen mass fraction
+	amrex::Real cloudy_H_mass_fraction;
 };
 
 class resampled_tables
@@ -64,6 +67,7 @@ class resampled_tables
 	amrex::Real rho_max;
 	amrex::Real eint_min;
 	amrex::Real eint_max;
+	amrex::Real cloudy_H_mass_fraction;
 
 	[[nodiscard]] auto const_tables() const -> resampledGpuConstTables;
 };
@@ -143,8 +147,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real con
 	return K;
 }
 
-// Hydrogen mass fraction (should match the value used in resampling)
-constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.098 * 3.971);
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
+{
+	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	const Real eint = Eint / rho;
+	const Real fast_log_rho_val = FastMath::fastlg(rho);
+	const Real fast_log_eint_val = FastMath::fastlg(eint);
+
+	// Interpolate sound speed from resampled tables
+	const Real cs = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.sound_speeds);
+
+	return cs;
+}
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
 {

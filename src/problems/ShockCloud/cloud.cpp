@@ -302,20 +302,19 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			Real const mu = 1.22; // placeholder until MMW table is added
-			Real const cs = std::sqrt(HydroSystem<ShockCloud>::gamma_ * C::k_B * Tgas / (mu * m_H));
+			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
 
 	} else if (dname == "nH") {
 		const int ncomp = ncomp_in;
+		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const nH = (quokka::ResampledCooling::cloudy_H_mass_fraction * rho) / m_H;
+			Real const nH = (tables.cloudy_H_mass_fraction * rho) / m_H;
 			output[bx](i, j, k, ncomp) = nH;
 		});
 
@@ -602,12 +601,13 @@ template <>
 auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
+	auto tables = resampledTables_.const_tables();
 
 	// compute (total) density projection
 	proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    return (quokka::ResampledCooling::cloudy_H_mass_fraction * rho) / m_H;
+		    return (tables.cloudy_H_mass_fraction * rho) / m_H;
 	    });
 
 	// compute cloud partial density projection
@@ -615,7 +615,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial cloud density
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    return (quokka::ResampledCooling::cloudy_H_mass_fraction * rho_cloud) / m_H;
+		    return (tables.cloudy_H_mass_fraction * rho_cloud) / m_H;
 	    });
 
 	// compute non-cloud partial density projection
@@ -623,7 +623,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial wind density
 		    Real const rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-		    return (quokka::ResampledCooling::cloudy_H_mass_fraction * rho_wind) / m_H;
+		    return (tables.cloudy_H_mass_fraction * rho_wind) / m_H;
 	    });
 
 	return proj;
@@ -721,8 +721,9 @@ auto problem_main() -> int
 	amrex::Print() << fmt::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	// compute mass density of background, cloud
-	::rho0 = nH_bg * m_H / quokka::ResampledCooling::cloudy_H_mass_fraction;    // g cm^-3
-	::rho1 = nH_cloud * m_H / quokka::ResampledCooling::cloudy_H_mass_fraction; // g cm^-3
+	auto tables = sim.resampledTables_.const_tables();
+	::rho0 = nH_bg * m_H / tables.cloudy_H_mass_fraction;    // g cm^-3
+	::rho1 = nH_cloud * m_H / tables.cloudy_H_mass_fraction; // g cm^-3
 
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho1));
@@ -730,7 +731,6 @@ auto problem_main() -> int
 
 	// check temperature of cloud, background
 	constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
-	auto tables = sim.resampledTables_.const_tables();
 	const Real Eint_bg = ::P0 / (gamma - 1.);
 	const Real Eint_cl = ::P0 / (gamma - 1.);
 	const Real T_bg = quokka::ResampledCooling::ComputeTgasFromEgas(rho0, Eint_bg, tables);
