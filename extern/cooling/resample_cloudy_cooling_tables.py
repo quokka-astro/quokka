@@ -337,7 +337,7 @@ def resample_cloudy_cooling_tables(cloudy_file, n_rho=100, n_eint=100,
                 P = compute_pressure(rho, T, mu)
                 K = compute_entropy(rho, T, mu)
                 temperatures[i, j] = T
-                cooling_rates[i, j] = Edot
+                cooling_rates[i, j] = Edot / rho**2
                 sound_speeds[i, j] = cs
                 pressures[i, j] = P
                 entropies[i, j] = K
@@ -391,7 +391,7 @@ def resample_cloudy_cooling_tables(cloudy_file, n_rho=100, n_eint=100,
         # Store units as attributes
         units_group.attrs['rho'] = 'g/cm^3'
         units_group.attrs['eint'] = 'erg/g'
-        units_group.attrs['cooling_rate'] = 'erg/cm^3/s'
+        units_group.attrs['cooling_rate'] = 'erg/cm^3/s/(g/cm^3)^2'
         units_group.attrs['temperature'] = 'K'
         units_group.attrs['sound_speed'] = 'cm/s'
         units_group.attrs['pressure'] = 'dyne/cm^2'
