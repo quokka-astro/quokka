@@ -29,7 +29,7 @@ hydro.artificial_viscosity_coefficient = 0.1
 cooling.enabled = 1
 problem.SN_particles_file = "SN.txt"
 problem.refine_half_domain = false
-cooling.cooling_table_type = "resampled"
+cooling.cooling_table_type = "datatable"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 problem.n_amb = 0.1
