@@ -275,6 +275,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     # Read the original tables
     tables = read_tables(grackle_file)
     print("Table properties:")
+    print(f"\tnH len = {len(tables.log_nH)}")
+    print(f"\tT len = {len(tables.log_T)}")
     print(f"\tnH min: {10.**tables.log_nH[0]:e}")
     print(f"\tnH max: {10.**tables.log_nH[-1]:e}")
     print(f"\tT min: {10.**tables.log_T[0]:e}")
@@ -477,10 +479,10 @@ def main():
                         help='Test the inverse_fast_log2 function')
     
     # Parameters for resampling
-    parser.add_argument('--n_rho', type=int, default=100,
-                        help='Number of density points (default: 100)')
-    parser.add_argument('--n_eint', type=int, default=100,
-                        help='Number of specific energy points (default: 100)')
+    parser.add_argument('--n_rho', type=int, default=30,
+                        help='Number of density points (default: 30)')
+    parser.add_argument('--n_eint', type=int, default=200,
+                        help='Number of specific energy points (default: 200)')
     parser.add_argument('--output', type=str, default='resampled_cooling_tables.h5',
                         help='Output HDF5 file name (default: resampled_cooling_tables.h5)')
     
