@@ -24,6 +24,13 @@ struct DataTableGpuConst {
 	
 	int x_size;
 	int y_size;
+	
+	// Member function for interpolation - cleaner API
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
+	auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
+	{
+		return interpolate2d(x, y, x_coords, y_coords, data);
+	}
 };
 
 // Generic 2D data table class
@@ -74,13 +81,6 @@ private:
 	int x_size_ = 0;
 	int y_size_ = 0;
 };
-
-// Convenient wrapper function for interpolation using existing interpolate2d
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-auto interpolate2D(amrex::Real x, amrex::Real y, const DataTableGpuConst& table) -> amrex::Real
-{
-	return interpolate2d(x, y, table.x_coords, table.y_coords, table.data);
-}
 
 } // namespace quokka
 

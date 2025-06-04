@@ -75,7 +75,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto data_table_cooling_function(Real c
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 	
 	// Interpolate cooling rate from data tables
-	const Real Edot_over_rhosq = quokka::interpolate2D(fast_log_rho_val, fast_log_eint_val, tables.cooling_rates);
+	const Real Edot_over_rhosq = tables.cooling_rates.interpolate(fast_log_rho_val, fast_log_eint_val);
 	const Real Edot = Edot_over_rhosq * (rho * rho);
 	return Edot;
 }
@@ -88,7 +88,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 	
 	// Interpolate temperature from data tables
-	const Real Tgas = quokka::interpolate2D(fast_log_rho_val, fast_log_eint_val, tables.temperatures);
+	const Real Tgas = tables.temperatures.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	return Tgas;
 }
@@ -102,7 +102,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rh
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 	
 	// Interpolate sound speed from data tables
-	const Real cs = quokka::interpolate2D(fast_log_rho_val, fast_log_eint_val, tables.sound_speeds);
+	const Real cs = tables.sound_speeds.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	const Real Edot = data_table_cooling_function(rho, Eint, tables);
 	const Real t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
@@ -118,7 +118,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real co
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 	
 	// Interpolate pressure from data tables
-	const Real P = quokka::interpolate2D(fast_log_rho_val, fast_log_eint_val, tables.pressures);
+	const Real P = tables.pressures.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	return P;
 }
@@ -131,7 +131,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real con
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 	
 	// Interpolate entropy from data tables
-	const Real K = quokka::interpolate2D(fast_log_rho_val, fast_log_eint_val, tables.entropies);
+	const Real K = tables.entropies.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	return K;
 }
@@ -144,7 +144,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real 
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 	
 	// Interpolate sound speed from data tables
-	const Real cs = quokka::interpolate2D(fast_log_rho_val, fast_log_eint_val, tables.sound_speeds);
+	const Real cs = tables.sound_speeds.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	return cs;
 }
