@@ -35,13 +35,13 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	hid_t dset_id = 0;
 	hid_t attr_id = 0;
 	herr_t status = 0;
-	herr_t h5_error = -1;
+	herr_t const h5_error = -1;
 
 	file_id = H5Fopen(hdf5_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, "Failed to open resampled cooling data file!");
 
 	// Read metadata
-	hid_t metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
+	hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
 
 	// Read grid dimensions
