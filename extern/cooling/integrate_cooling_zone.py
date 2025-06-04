@@ -131,13 +131,15 @@ def cooling_ode_system(t, y, tables=None, rho=None):
         dydt: time derivatives [deint/dt]
     """
     eint = y[0]
+    if (eint > 0.):
+        # Interpolate cooling rate
+        cooling_rate = interpolate_table(rho, eint, tables)
     
-    # Interpolate cooling rate
-    cooling_rate = interpolate_table(rho, eint, tables)
-    
-    # deint/dt = cooling_rate * rho^2 / rho = cooling_rate * rho
-    # Note: cooling_rate is already Edot/rho^2
-    deint_dt = cooling_rate * rho
+        # deint/dt = cooling_rate * rho^2 / rho = cooling_rate * rho
+        # Note: cooling_rate is already Edot/rho^2
+        deint_dt = cooling_rate * rho
+    else:
+        return np.nan
     
     return [deint_dt]
 
@@ -186,7 +188,7 @@ def integrate_cooling_zone(rho0, T0, t_end, tables, n_output=100):
         y0,
         t_eval=t_eval,
         method='RK45',
-        rtol=1e-8,
+        rtol=1e-4,
         atol=1e-10
     )
     
