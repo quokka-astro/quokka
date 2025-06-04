@@ -722,7 +722,7 @@ auto problem_main() -> int
 
 	// compute mass density of background, cloud
 	auto tables = sim.resampledTables_.const_tables();
-	::rho0 = nH_bg * m_H / tables.cloudy_H_mass_fraction;    // g cm^-3
+	::rho0 = nH_bg * m_H / tables.cloudy_H_mass_fraction;	 // g cm^-3
 	::rho1 = nH_cloud * m_H / tables.cloudy_H_mass_fraction; // g cm^-3
 
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
