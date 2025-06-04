@@ -195,6 +195,40 @@ def compute_sound_speed(rho, T, mu, gamma=5./3.):
     return cs
 
 
+def compute_pressure(rho, T, mu):
+    """Compute pressure from density, temperature, and mean molecular weight.
+    
+    Args:
+        rho: density (g/cm^3)
+        T: temperature (K)
+        mu: mean molecular weight in units of m_H
+    
+    Returns:
+        P: pressure (dyne/cm^2 = erg/cm^3)
+    """
+    # For ideal gas: P = rho * k_B * T / (mu * m_H)
+    P = rho * boltzmann_constant_cgs_ * T / (mu * m_H)
+    return P
+
+
+def compute_entropy(rho, T, mu):
+    """Compute entropy as K = k_B * T * n^(-2/3).
+    
+    Args:
+        rho: density (g/cm^3)
+        T: temperature (K)
+        mu: mean molecular weight in units of m_H
+    
+    Returns:
+        K: entropy K = k_B * T * n^(-2/3) (erg * cm^2)
+    """
+    # Compute number density n = rho / (mu * m_H)
+    n = rho / (mu * m_H)
+    # Compute entropy K = k_B * T * n^(-2/3)
+    K = boltzmann_constant_cgs_ * T * (n ** (-2./3.))
+    return K
+
+
 def find_eint_range(tables):
     """Find the range of specific internal energies for a given table.
 
@@ -229,6 +263,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     - Cooling rates (erg/cm^3/s)
     - Temperatures (K)
     - Sound speeds (cm/s)
+    - Pressures (dyne/cm^2)
+    - Entropies K = k_B * T * n^(-2/3) (erg*cm^2)
     
     Args:
         grackle_file: path to Grackle HDF5 cooling tables
@@ -280,6 +316,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     cooling_rates = np.zeros((n_rho, n_eint))
     temperatures = np.zeros((n_rho, n_eint))
     sound_speeds = np.zeros((n_rho, n_eint))
+    pressures = np.zeros((n_rho, n_eint))
+    entropies = np.zeros((n_rho, n_eint))
     
     print(f"Resampling cooling tables on {n_rho} x {n_eint} grid using not-quite-logarithmic spacing...")
     print(f"Density range: {rho_min:.2e} to {rho_max:.2e} g/cm^3")
@@ -300,14 +338,20 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
                 Edot = cooling_rate(nH, T, redshift=0., tables=tables)
                 mu = interpolate_mu(nH, T, tables=tables)
                 cs = compute_sound_speed(rho, T, mu)
+                P = compute_pressure(rho, T, mu)
+                K = compute_entropy(rho, T, mu)
                 temperatures[i, j] = T
                 cooling_rates[i, j] = Edot
                 sound_speeds[i, j] = cs
+                pressures[i, j] = P
+                entropies[i, j] = K
             except ValueError:
                 # Handle extrapolation errors by setting to NaN
                 temperatures[i, j] = np.nan
                 cooling_rates[i, j] = np.nan
                 sound_speeds[i, j] = np.nan
+                pressures[i, j] = np.nan
+                entropies[i, j] = np.nan
     
     # Save resampled tables to HDF5 file
     print(f"\nSaving resampled tables to {output_file}")
@@ -334,6 +378,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         data_group.create_dataset('cooling_rates', data=cooling_rates)
         data_group.create_dataset('temperatures', data=temperatures)
         data_group.create_dataset('sound_speeds', data=sound_speeds)
+        data_group.create_dataset('pressures', data=pressures)
+        data_group.create_dataset('entropies', data=entropies)
         
         # Store metadata as attributes
         metadata_group.attrs['n_rho'] = n_rho
@@ -352,6 +398,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         units_group.attrs['cooling_rate'] = 'erg/cm^3/s'
         units_group.attrs['temperature'] = 'K'
         units_group.attrs['sound_speed'] = 'cm/s'
+        units_group.attrs['pressure'] = 'dyne/cm^2'
+        units_group.attrs['entropy'] = 'erg*cm^2'
     
     print("Done!")
     
@@ -363,6 +411,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
         print(f"Temperature range: {np.min(temperatures[valid_mask]):.2e} to {np.max(temperatures[valid_mask]):.2e} K")
         print(f"Cooling rate range: {np.min(cooling_rates[valid_mask]):.2e} to {np.max(cooling_rates[valid_mask]):.2e} erg/cm^3/s")
         print(f"Sound speed range: {np.min(sound_speeds[valid_mask]):.2e} to {np.max(sound_speeds[valid_mask]):.2e} cm/s")
+        print(f"Pressure range: {np.min(pressures[valid_mask]):.2e} to {np.max(pressures[valid_mask]):.2e} dyne/cm^2")
+        print(f"Entropy range: {np.min(entropies[valid_mask]):.2e} to {np.max(entropies[valid_mask]):.2e} erg*cm^2")
 
 
 def test_inverse_fast_log2():
