@@ -86,8 +86,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
 	// Interpolate cooling rate from resampled tables
-	const Real Edot = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.cooling_rates);
-
+	const Real Edot_over_rhosq = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.cooling_rates);
+	const Real Edot = Edot_over_rhosq * (rho * rho);
 	return Edot;
 }
 
