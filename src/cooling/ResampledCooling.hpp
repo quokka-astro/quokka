@@ -36,6 +36,8 @@ struct resampledGpuConstTables {
 	amrex::Table2D<const Real> cooling_rates;
 	amrex::Table2D<const Real> temperatures;
 	amrex::Table2D<const Real> sound_speeds;
+	amrex::Table2D<const Real> pressures;
+	amrex::Table2D<const Real> entropies;
 
 	// density range
 	amrex::Real rho_min;
@@ -55,6 +57,8 @@ class resampled_tables
 	std::unique_ptr<amrex::TableData<double, 2>> cooling_rates;
 	std::unique_ptr<amrex::TableData<double, 2>> temperatures;
 	std::unique_ptr<amrex::TableData<double, 2>> sound_speeds;
+	std::unique_ptr<amrex::TableData<double, 2>> pressures;
+	std::unique_ptr<amrex::TableData<double, 2>> entropies;
 
 	amrex::Real rho_min;
 	amrex::Real rho_max;
@@ -113,6 +117,34 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rh
 	const Real t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
 
 	return cs * t_cool;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables)
+    -> Real
+{
+	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	const Real eint = Eint / rho;
+	const Real fast_log_rho_val = FastMath::fastlg(rho);
+	const Real fast_log_eint_val = FastMath::fastlg(eint);
+
+	// Interpolate pressure from resampled tables
+	const Real P = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.pressures);
+
+	return P;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables)
+    -> Real
+{
+	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	const Real eint = Eint / rho;
+	const Real fast_log_rho_val = FastMath::fastlg(rho);
+	const Real fast_log_eint_val = FastMath::fastlg(eint);
+
+	// Interpolate entropy from resampled tables
+	const Real K = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.entropies);
+
+	return K;
 }
 
 // Hydrogen mass fraction (should match the value used in resampling)

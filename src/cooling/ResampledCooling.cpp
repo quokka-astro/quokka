@@ -176,6 +176,46 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 	}
 
+	{
+		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
+		dset_id = H5Dopen2(file_id, "/data/pressures", H5P_DEFAULT);
+		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read pressures dataset!");
+		H5Dclose(dset_id);
+
+		resampledTables.pressures = std::make_unique<amrex::TableData<double, 2>>(
+		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
+		auto pressure_table = resampledTables.pressures->table();
+
+		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
+		for (int i = 0; i < n_rho; ++i) {
+			for (int j = 0; j < n_eint; ++j) {
+				pressure_table(i, j) = temp_data[i * n_eint + j];
+			}
+		}
+		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+	}
+
+	{
+		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
+		dset_id = H5Dopen2(file_id, "/data/entropies", H5P_DEFAULT);
+		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read entropies dataset!");
+		H5Dclose(dset_id);
+
+		resampledTables.entropies = std::make_unique<amrex::TableData<double, 2>>(
+		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
+		auto entropy_table = resampledTables.entropies->table();
+
+		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
+		for (int i = 0; i < n_rho; ++i) {
+			for (int j = 0; j < n_eint; ++j) {
+				entropy_table(i, j) = temp_data[i * n_eint + j];
+			}
+		}
+		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+	}
+
 	H5Fclose(file_id);
 
 	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
@@ -189,6 +229,8 @@ auto resampled_tables::const_tables() const -> resampledGpuConstTables
 				       cooling_rates->const_table(),
 				       temperatures->const_table(),
 				       sound_speeds->const_table(),
+				       pressures->const_table(),
+				       entropies->const_table(),
 				       rho_min,
 				       rho_max,
 				       eint_min,

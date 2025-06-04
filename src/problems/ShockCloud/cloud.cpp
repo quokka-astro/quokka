@@ -332,10 +332,9 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			Real const mu = 1.22; // placeholder until MMW table is added
-			Real const ndens = rho / (mu * m_H);
-			output[bx](i, j, k, ncomp) = ndens * Tgas; // [K cm^-3]
+			Real const P_cgs = quokka::ResampledCooling::ComputePressureFromRhoEint(rho, Eint, tables);
+			Real const ndens_times_T = P_cgs / C::k_B; // convert to [K cm^-3]
+			output[bx](i, j, k, ncomp) = ndens_times_T;
 		});
 
 	} else if (dname == "entropy") {
@@ -351,11 +350,8 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			Real const mu = 1.22; // placeholder until MMW table is added
-			Real const ndens = rho / (mu * m_H);
-			Real const K_cgs = C::k_B * Tgas * std::pow(ndens, -2. / 3.); // ergs cm^2
-			Real const K_keV_cm2 = K_cgs / keV_in_ergs;		      // convert to units of keV cm^2
+			Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
+			Real const K_keV_cm2 = K_cgs / keV_in_ergs; // convert to units of keV cm^2
 			output[bx](i, j, k, ncomp) = K_keV_cm2;
 		});
 
