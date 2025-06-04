@@ -29,6 +29,10 @@ struct DataTableGpuConst {
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
 	auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
+		// Clamp x and y to valid bounds
+		x = amrex::max(x_min, amrex::min(x, x_max));
+		y = amrex::max(y_min, amrex::min(y, y_max));
+		
 		return interpolate2d(x, y, x_coords, y_coords, data);
 	}
 };

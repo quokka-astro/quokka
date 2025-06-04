@@ -156,23 +156,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	const Real rho = udata->rho;
 	dataTableGpuConstTables const &tables = udata->tables;
 
-	// check whether specific internal energy is out-of-bounds
-	const Real Eint_min = tables.eint_min;
-	const Real Eint_max = tables.eint_max;
-
 	// compute cooling rate
 	const Real Eint = y_data[0];
 
-	if (Eint <= Eint_min) {
-		// set cooling to value at Eint_min
-		y_rhs[0] = data_table_cooling_function(rho, Eint_min, tables);
-	} else if (Eint >= Eint_max) {
-		// set cooling to value at Eint_max
-		y_rhs[0] = data_table_cooling_function(rho, Eint_max, tables);
-	} else {
-		// ok, within tabulated cooling limits
-		y_rhs[0] = data_table_cooling_function(rho, Eint, tables);
-	}
+	y_rhs[0] = data_table_cooling_function(rho, Eint, tables);
 
 	return 0; // success
 }
