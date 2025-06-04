@@ -87,8 +87,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 	return Edot;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, resampledGpuConstTables const &tables)
-    -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
 	const Real eint = Eint / rho;
@@ -101,8 +100,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	return Tgas;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables)
-    -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
 	// Compute cooling length l_cool = c_s * t_cool
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
@@ -182,7 +180,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 {
 	const BL_PROFILE("computeCooling()")
 
-	const Real dt = dt_in;
+	    const Real dt = dt_in;
 	const Real reltol_floor = 0.01;
 	const Real rtol = 1.0e-4; // not recommended to change this
 
@@ -219,7 +217,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 			if (nsteps >= maxStepsODEIntegrate) {
 				Real const Edot = resampled_cooling_function(rho, Eint, tables);
 				Real const t_cool = Eint / Edot;
-				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling "  // NOLINT
+				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
 				       "time = %g, dt = %.17e\n",
 				       rho, Eint, t_cool, dt);
 			}
