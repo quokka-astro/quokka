@@ -1,12 +1,12 @@
-// ABOUTME: Test problem for ResampledCooling integrator accuracy using isochoric cooling
-// ABOUTME: Compares numerical integration against analytical solution for constant volume cooling
+// ABOUTME: Test problem for cooling integrator accuracy using isochoric cooling
+// ABOUTME: Supports both ResampledCooling and TabulatedCooling modules via runtime parameter
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_resampled_cooling.cpp
-/// \brief Defines a test problem for ResampledCooling integrator accuracy.
+/// \brief Defines a test problem for cooling integrator accuracy (supports ResampledCooling and TabulatedCooling).
 ///
 
 #ifdef HAVE_PYTHON
@@ -14,6 +14,7 @@
 #endif
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
+#include "cooling/TabulatedCooling.hpp"
 #include "math/interpolate.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -148,6 +149,10 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 			T = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, gamma, grackleTables_.const_tables());
 		} else if (coolingTableType_ == "resampled") {
 			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			T = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudyTables_.const_tables());
+		} else {
+			amrex::Abort("Unsupported cooling table type: " + coolingTableType_);
 		}
 
 		userData_.T_vec_.push_back(T);
@@ -157,7 +162,7 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 auto problem_main() -> int
 {
 	// Read runtime parameters
-	amrex::ParmParse pp("resampled_cooling_test");
+	amrex::ParmParse pp("cooling_test");
 	std::string reference_file = "";
 	pp.query("reference_solution_file", reference_file);
 
@@ -233,7 +238,7 @@ auto problem_main() -> int
 					sol_norm += std::abs(T_ref_interp[i]);
 				}
 				const double rel_error = err_norm / sol_norm;
-				const double error_tol = 0.02; // should be about 1% between GrackleLike and Resampled cooling
+				const double error_tol = 0.02; // should be about 1% between different cooling modules
 
 				amrex::Print() << "Reference solution comparison:" << '\n';
 				amrex::Print() << "  Data points in reference: " << t_ref.size() << '\n';
@@ -325,7 +330,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("time (Myr)");
 		matplotlibcpp::ylabel("Temperature (K)");
 		matplotlibcpp::title("Isochoric Cooling Test");
-		matplotlibcpp::save("./resampled_cooling_temperature.pdf");
+		matplotlibcpp::save("./cooling_temperature.pdf");
 #endif
 	}
 
