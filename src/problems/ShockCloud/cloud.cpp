@@ -430,7 +430,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 				Real const n = rho / ((C::m_p + C::m_e) * mu);
 				Real const P_cgs = n * C::k_B * Tgas;
 				Real const K_cgs = P_cgs * std::pow(rho, -gamma); // entropy K = P * rho^(-gamma)
-				Real const K_keV_cm2 = K_cgs / keV_in_ergs; // convert to units of keV cm^2
+				Real const K_keV_cm2 = K_cgs / keV_in_ergs;	  // convert to units of keV cm^2
 				output[bx](i, j, k, ncomp) = K_keV_cm2;
 			});
 		}
@@ -533,7 +533,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 
 // Helper function for ResampledCooling
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
-								   quokka::ResampledCooling::resampledGpuConstTables const &tables)
+								  quokka::ResampledCooling::resampledGpuConstTables const &tables)
 {
 	// return cell temperature
 	Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -547,7 +547,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, 
 
 // Helper function for TabulatedCooling
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempTabulated(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
-								   quokka::TabulatedCooling::cloudyGpuConstTables const &tables)
+								  quokka::TabulatedCooling::cloudyGpuConstTables const &tables)
 {
 	// return cell temperature
 	Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -560,8 +560,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempTabulated(int i, int j, 
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
-							 bool use_resampled_cooling,
-							 quokka::ResampledCooling::resampledGpuConstTables const &resampled_tables,
+							 bool use_resampled_cooling, quokka::ResampledCooling::resampledGpuConstTables const &resampled_tables,
 							 quokka::TabulatedCooling::cloudyGpuConstTables const &cloudy_tables)
 {
 	// return cell temperature for either cooling type
@@ -571,7 +570,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-	
+
 	if (use_resampled_cooling) {
 		return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampled_tables);
 	} else {
@@ -611,7 +610,7 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 
 	// compute cloud mass according to temperature threshold
 	Real M_cl_1e4, M_cl_8000, M_cl_9000, M_cl_11000, M_cl_12000;
-	
+
 	if (coolingTableType_ == "resampled") {
 		auto tables = resampledTables_.const_tables();
 		M_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
@@ -685,7 +684,7 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["cloud_mass_12000"] = M_cl_12000 / solarmass_in_g;
 
 	Real origM_cl_1e4, origM_cl_8000, origM_cl_9000, origM_cl_11000, origM_cl_12000;
-	
+
 	if (coolingTableType_ == "resampled") {
 		auto tables = resampledTables_.const_tables();
 		origM_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
@@ -805,7 +804,7 @@ template <>
 auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
-	
+
 	Real H_mass_fraction;
 	if (coolingTableType_ == "resampled") {
 		auto tables = resampledTables_.const_tables();
@@ -957,7 +956,7 @@ auto problem_main() -> int
 	} else {
 		H_mass_fraction = quokka::TabulatedCooling::cloudy_H_mass_fraction;
 	}
-	::rho0 = nH_bg * m_H / H_mass_fraction;	 // g cm^-3
+	::rho0 = nH_bg * m_H / H_mass_fraction;	   // g cm^-3
 	::rho1 = nH_cloud * m_H / H_mass_fraction; // g cm^-3
 
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
