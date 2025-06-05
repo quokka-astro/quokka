@@ -6,8 +6,8 @@ import numpy as np
 import h5py
 
 from grackle_tables import (
-    read_tables, cooling_rate, interpolate_mu, compute_temperature_from_nH_e
-    m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction
+    read_tables, cooling_rate, interpolate_mu, compute_temperature_from_nH_e,
+    m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction, specific_energy_from_temperature
 )
 
 

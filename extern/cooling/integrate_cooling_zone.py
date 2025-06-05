@@ -3,7 +3,6 @@
 # ABOUTME: using Cloudy cooling tables resampled on (rho, e_int) grid
 
 import numpy as np
-import argparse
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import h5py
@@ -218,7 +217,7 @@ def integrate_cooling_zone(rho0, T0, t_end, resampled_tables, grackle_tables, n_
     )
     
     if not sol_new.success:
-        print(f"Warning: Integration failed with message: {sol.message}")
+        print(f"Warning: Integration failed with message: {sol_new.message}")
 
     # Solve ODE (using original method)
     print(f"\nIntegrating from t=0 to t={t_end:.3e} s...")
@@ -233,7 +232,7 @@ def integrate_cooling_zone(rho0, T0, t_end, resampled_tables, grackle_tables, n_
     )
     
     if not sol_orig.success:
-        print(f"Warning: Integration failed with message: {sol.message}")
+        print(f"Warning: Integration failed with message: {sol_orig.message}")
 
     results = []
     for sol in [sol_new, sol_orig]:

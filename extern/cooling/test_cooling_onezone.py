@@ -6,7 +6,6 @@ import numpy as np
 from integrate_cooling_zone import (
     load_resampled_cooling_tables,
     integrate_cooling_zone,
-    plot_cooling_evolution,
     plot_cooling_comparison
 )
 from grackle_tables import read_tables
