@@ -32,8 +32,8 @@ stop_time = 6.3e15         # 200 Myr
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = grackle
-cooling.hdf5_data_file = "./CloudyData_UVB=HM2012.h5"
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 100
 density_floor = 1e-30
 
