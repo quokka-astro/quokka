@@ -130,6 +130,60 @@ struct DataTableGpuConst {
 		InterpData interp = find_interpolation_data(x, y);
 		return interpolate_with_data(interp);
 	}
+	
+	// Compute numeric derivatives (∂f/∂x, ∂f/∂y) using bilinear interpolation
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
+	auto numeric_derivative(amrex::Real x, amrex::Real y) const -> amrex::Array<amrex::Real, 2>
+	{
+		// Get interpolation data
+		InterpData interp = find_interpolation_data(x, y);
+		
+		// Get the four corner values
+		amrex::Real A = data(interp.ix, interp.iy);    // (x1, y1)
+		amrex::Real B = data(interp.ix, interp.iiy);   // (x1, y2)  
+		amrex::Real C = data(interp.iix, interp.iy);   // (x2, y1)
+		amrex::Real D = data(interp.iix, interp.iiy);  // (x2, y2)
+		
+		amrex::Real dfdx = 0.0;
+		amrex::Real dfdy = 0.0;
+		
+		// Compute derivatives based on interpolation case
+		if (interp.ix != interp.iix && interp.iy != interp.iiy) {
+			// Full bilinear case: both x and y vary
+			const amrex::Real dx = interp.x2 - interp.x1;
+			const amrex::Real dy = interp.y2 - interp.y1;
+			const amrex::Real vol = dx * dy;
+			
+			// Partial derivative with respect to x
+			// d/dx of bilinear weights times values
+			dfdx = (-(interp.y2 - y) * A - (y - interp.y1) * B + 
+			        (interp.y2 - y) * C + (y - interp.y1) * D) / vol;
+			
+			// Partial derivative with respect to y  
+			// d/dy of bilinear weights times values
+			dfdy = (-(interp.x2 - x) * A + (interp.x2 - x) * B -
+			        (x - interp.x1) * C + (x - interp.x1) * D) / vol;
+			        
+		} else if (interp.ix == interp.iix && interp.iy != interp.iiy) {
+			// Linear interpolation in y direction only
+			const amrex::Real dy = interp.y2 - interp.y1;
+			dfdx = 0.0;  // No variation in x direction
+			dfdy = (B - A) / dy;  // Linear derivative in y
+			
+		} else if (interp.ix != interp.iix && interp.iy == interp.iiy) {
+			// Linear interpolation in x direction only  
+			const amrex::Real dx = interp.x2 - interp.x1;
+			dfdx = (C - A) / dx;  // Linear derivative in x
+			dfdy = 0.0;  // No variation in y direction
+			
+		} else {
+			// Point interpolation - no derivatives
+			dfdx = 0.0;
+			dfdy = 0.0;
+		}
+		
+		return {dfdx, dfdy};
+	}
 };
 
 // Generic 2D data table class
