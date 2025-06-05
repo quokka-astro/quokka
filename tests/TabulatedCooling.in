@@ -28,9 +28,6 @@ cooling.enabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/isrf_1000Go_grains_resampled.h5"
 
-#cooling.cooling_table_type = cloudy_cooling_tools
-#cooling.hdf5_data_file = "../extern/cooling/isrf_1000Go_grains.h5"
-
 # *****************************************************************
 # Time stepping and run control
 # *****************************************************************
@@ -40,5 +37,5 @@ stop_time = 1.0e16
 # *****************************************************************
 # Reference solution comparison (optional)
 # *****************************************************************
-cooling_test.reference_solution_file = cct_cooling_reference_solution.csv
+cooling_test.reference_solution_file = ../extern/cooling/cct_cooling_reference_solution.csv
 cooling_test.output_csv_file = cooling_solution.csv
