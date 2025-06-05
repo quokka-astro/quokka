@@ -47,7 +47,7 @@ for name, rho0, T0, t_end in test_cases:
     
     # Run the integration
     my_results = integrate_cooling_zone(
-        rho0, T0, t_end, tables, grackle_tables, n_output=300
+        rho0, T0, t_end, tables, grackle_tables, n_output=100
     )
 
     for results, runname in zip(my_results, ['resampled', 'Grackle']):

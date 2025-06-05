@@ -130,12 +130,10 @@ def cooling_ode_system_resampled(t, y, tables=None, rho=None):
     """
     eint = y[0]
     if (eint > 0.):
-        cooling_rate = interpolate_table(rho, eint, tables)
-        # deint/dt = cooling_rate * rho^2 / rho = cooling_rate * rho
-        # Note: cooling_rate is already Edot/rho^2
-        # TODO(bwibking): why does this work?
-        #   The algebraic factors do not make sense, so I must have converted this elsewhere in a different way...
-        deint_dt = cooling_rate * rho
+        interp_value = interpolate_table(rho, eint, tables)
+        Edot = interp_value * rho**2
+        # deint/dt = interp_value * rho^2 / rho = interp_value * rho
+        deint_dt = Edot / rho
     else:
         return np.nan
     
@@ -160,8 +158,7 @@ def cooling_ode_system_original(t, y, tables=None, rho=None):
         nH = cloudy_H_mass_fraction * (rho / m_H)
         T = compute_temperature_from_nH_e(nH, eint, tables=tables)
         Edot = cooling_rate(nH, T, redshift=0., tables=tables)
-        # TODO(bwibking): figure out how the input cooling rate is wrong here.
-        deint_dt = Edot / rho # this does not make sense algebrically, the input units must be wrong!!
+        deint_dt = Edot / rho # convert to specific rate
     else:
         return np.nan
     
@@ -212,7 +209,7 @@ def integrate_cooling_zone(rho0, T0, t_end, resampled_tables, grackle_tables, n_
         y0,
         t_eval=t_eval,
         method='RK45',
-        rtol=1e-4,
+        rtol=1e-3,
         atol=1e-10
     )
     
@@ -227,7 +224,7 @@ def integrate_cooling_zone(rho0, T0, t_end, resampled_tables, grackle_tables, n_
         y0,
         t_eval=t_eval,
         method='RK45',
-        rtol=1e-4,
+        rtol=1e-3,
         atol=1e-10
     )
     
