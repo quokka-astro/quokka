@@ -108,7 +108,6 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 
 	// Compute initial internal energy from temperature
 	const double k_B = C::k_B;
-	const double m_u = C::m_u;
 	const double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
 	const double mu = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
 
