@@ -6,8 +6,8 @@ import numpy as np
 import h5py
 
 from grackle_tables import (
-    read_tables, cooling_rate, interpolate_mu, 
-    m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction
+    read_tables, cooling_rate, interpolate_mu, compute_temperature_from_nH_e,
+    m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction, specific_energy_from_temperature
 )
 
 
@@ -100,82 +100,6 @@ def inverse_fast_log2(y):
     if scalar_input:
         return result[0]
     return result
-
-
-def compute_temperature_from_nH_e(nH, e_int, tables=None, gamma = 5./3.):
-    """Convert gas specific internal energy to temperature.
-    
-    This is a Python implementation of the ComputeTgasFromEgas function from
-    src/cooling/GrackleLikeCooling.hpp. It solves for the temperature that gives
-    the correct internal energy through the mean molecular weight relationship.
-    
-    Args:
-        nH: hydrogen number density (cm^-3)
-        e_int: specific internal energy (erg/g)
-        gamma: adiabatic index == 5/3
-        tables: cooling tables object with interpolation data
-        T_min: minimum temperature (K) - if None, uses table minimum
-        T_max: maximum temperature (K) - if None, uses table maximum
-        mu_min: minimum mean molecular weight - if None, uses typical value
-        mu_max: maximum mean molecular weight - if None, uses typical value
-    
-    Returns:
-        T: temperature (K)
-    """
-    # Set default temperature bounds
-    T_min = 10.0 ** tables.log_T[0]
-    T_max = 10.0 ** tables.log_T[-1]
-    mu_min = np.min(tables.mmw)
-    mu_max = np.max(tables.mmw)
-    
-    # Check whether temperature is (obviously) out-of-bounds
-    eint_min = specific_energy_from_temperature(T_min, mu_max)
-    eint_max = specific_energy_from_temperature(T_max, mu_min)
-    if e_int <= eint_min:
-        return T_min
-    if e_int >= eint_max:
-        return T_max
-    
-    # Solve for temperature given Eint (with fixed adiabatic index gamma)
-    C = (gamma - 1.) * e_int * m_H / boltzmann_constant_cgs_
-    
-    # Define the function to find the root of: f(T) = C * mu(T) - T = 0
-    def f(T):
-        # Compute new mu from mu(T) table
-        T_clamped = np.clip(T, T_min, T_max)
-        mu = interpolate_mu(nH, T_clamped, tables=tables)
-        return C * mu - T
-    
-    # Compute temperature bounds using physics
-    T_lower = max(C * mu_min, T_min)
-    T_upper = min(C * mu_max, T_max)
-    
-    # Use scipy's TOMS748 method for root finding (same as C++ code)
-    from scipy.optimize import toms748    
-    try:
-        # TOMS748 method with relative tolerance
-        T_sol = toms748(f, T_lower, T_upper, rtol=1.0e-5, maxiter=100)
-    except ValueError as e:
-        # Root finding failed
-        print(f"Tgas iteration failed! e_int = {e_int:.17e}, nH = {nH:.3e}, T_lower = {T_lower:.3e}, T_upper = {T_upper:.3e}")
-        raise e
-    
-    return T_sol
-
-
-def specific_energy_from_temperature(T, mu):
-    """Convert temperature to specific internal energy.
-    
-    Args:
-        T: temperature (K)
-        mu: mean molecular weight in units of m_H
-    
-    Returns:
-        e_int: specific internal energy (erg/g)
-    """
-    # For ideal gas: e_int = (3/2) * k_B * T / (mu * m_H)
-    e_int = (3.0 / 2.0) * boltzmann_constant_cgs_ * T / (mu * m_H)
-    return e_int
 
 
 def compute_sound_speed(rho, T, mu, gamma=5./3.):
@@ -275,6 +199,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100,
     # Read the original tables
     tables = read_tables(grackle_file)
     print("Table properties:")
+    print(f"\tnH len = {len(tables.log_nH)}")
+    print(f"\tT len = {len(tables.log_T)}")
     print(f"\tnH min: {10.**tables.log_nH[0]:e}")
     print(f"\tnH max: {10.**tables.log_nH[-1]:e}")
     print(f"\tT min: {10.**tables.log_T[0]:e}")
@@ -477,10 +403,10 @@ def main():
                         help='Test the inverse_fast_log2 function')
     
     # Parameters for resampling
-    parser.add_argument('--n_rho', type=int, default=100,
-                        help='Number of density points (default: 100)')
-    parser.add_argument('--n_eint', type=int, default=100,
-                        help='Number of specific energy points (default: 100)')
+    parser.add_argument('--n_rho', type=int, default=30,
+                        help='Number of density points (default: 30)')
+    parser.add_argument('--n_eint', type=int, default=200,
+                        help='Number of specific energy points (default: 200)')
     parser.add_argument('--output', type=str, default='resampled_cooling_tables.h5',
                         help='Output HDF5 file name (default: resampled_cooling_tables.h5)')
     
