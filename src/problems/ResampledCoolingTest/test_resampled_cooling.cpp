@@ -17,6 +17,7 @@
 #include "math/interpolate.hpp"
 #include <fmt/format.h>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <vector>
 
@@ -159,6 +160,9 @@ auto problem_main() -> int
 	amrex::ParmParse pp("resampled_cooling_test");
 	std::string reference_file = "";
 	pp.query("reference_solution_file", reference_file);
+	
+	std::string output_csv_file = "";
+	pp.query("output_csv_file", output_csv_file);
 
 	// Problem parameters
 	const double CFL_number = 0.8;
@@ -243,6 +247,30 @@ auto problem_main() -> int
 			}
 		} else {
 			amrex::Print() << "No reference solution file provided for comparison." << '\n';
+		}
+
+		// Output cooling solution to CSV file if requested
+		if (!output_csv_file.empty()) {
+			amrex::Print() << "Writing cooling solution to CSV file: " << output_csv_file << '\n';
+			
+			std::ofstream csv_file(output_csv_file);
+			if (!csv_file.is_open()) {
+				amrex::Print() << "ERROR: Could not open output CSV file: " << output_csv_file << '\n';
+				status = 1;
+			} else {
+				// Write CSV header
+				csv_file << "time,temperature\n";
+				
+				// Write data
+				const std::vector<double> &t = sim.userData_.t_vec_;
+				const std::vector<double> &T = sim.userData_.T_vec_;
+				for (size_t i = 0; i < t.size(); ++i) {
+					csv_file << std::scientific << std::setprecision(10) << t[i] << "," << T[i] << "\n";
+				}
+				
+				csv_file.close();
+				amrex::Print() << "Successfully wrote " << t.size() << " data points to " << output_csv_file << '\n';
+			}
 		}
 
 #ifdef HAVE_PYTHON
