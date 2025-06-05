@@ -1,0 +1,63 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+# Box size is [-600 kpc, 600 kpc]^3
+geometry.prob_lo     =  -1.8514065526075864e24 -1.8514065526075864e24 -1.8514065526075864e24
+geometry.prob_hi     =   1.8514065526075864e24  1.8514065526075864e24  1.8514065526075864e24
+geometry.is_periodic =   0    0    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 128 128
+amr.blocking_factor = 16    # grid size must be divisible by this
+amr.max_grid_size   = 64    # at least 128 for GPUs
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7
+regrid_interval     = -1    # static refinement only (do not regrid)
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 1
+poisson_supercycle_interval = 5
+
+cfl = 0.3
+max_timesteps = 200
+stop_time = 6.3e15         # 200 Myr
+
+cooling.enabled = 1
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = grackle
+cooling.hdf5_data_file = "./CloudyData_UVB=HM2012.h5"
+temperature_floor = 100
+density_floor = 1e-30
+
+checkpoint_interval = -1
+plotfile_interval = 1000
+derived_vars = temperature gpot
+
+# max_level = 7 implies a maximum resolution of dx =  73.2 pc (LOW res).
+# max_level = 8 implies a maximum resolution of dx =  36.6 pc (MED res).
+# max_level = 9 implies a maximum resolution of dx =  18.3 pc (HI res).
+#
+amr.max_level              = 5
+
+agora_galaxy.vcirc_file    = "./vcirc.dat"
+agora_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
+agora_galaxy.refine_Rmax_kpc = 16.0         # kpc
+agora_galaxy.refine_zmax_kpc = 4.0          # kpc
+
+agora_galaxy.disk_gas_mass_Msun = 8.59322e9 # solar masses
+agora_galaxy.disk_Rscale_kpc = 3.43218      # kpc
+agora_galaxy.disk_zscale_kpc = 0.343218     # kpc
+agora_galaxy.disk_temperature = 1.0e4       # K
+agora_galaxy.disk_perturb_amplitude = 1.0   # dimensionless
+agora_galaxy.disk_perturb_Rmax_kpc = 20.0   # kpc
+
+agora_galaxy.halo_temperature = 1.0e6       # K
+agora_galaxy.halo_number_density = 1.0e-4   # cm^-3

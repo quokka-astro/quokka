@@ -13,6 +13,7 @@
 #include "hydro/EOS.hpp"
 #include <array>
 #include <iostream>
+#include <set>
 #if __has_include(<filesystem>)
 #include <filesystem>
 #elif __has_include(<experimental/filesystem>)
@@ -172,6 +173,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	inline void initialize()
 	{
 		defineComponentNames();
+		defineDefaultPlotfileVariables();
 		// read in runtime parameters
 		readParmParse();
 		// set gamma
@@ -187,6 +189,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
 	void defineComponentNames();
+	void defineDefaultPlotfileVariables();
 	void readParmParse();
 	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 
@@ -359,6 +362,35 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
 			componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-BField"});
 			componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-BField"});
+		}
+	}
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::defineDefaultPlotfileVariables()
+{
+	// Initialize plotfileVarsToInclude_cc_ with all cell-centered variables
+	this->plotfileVarsToInclude_cc_.insert(this->plotfileVarsToInclude_cc_.end(), this->componentNames_cc_.begin(), this->componentNames_cc_.end());
+
+	// Add all face-centered variables except RiemannSolverVelocity
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
+			const std::string &varname = this->componentNames_fc_flat_[icomp];
+			if (varname.find("RiemannSolverVelocity") == std::string::npos) {
+				this->plotfileVarsToInclude_cc_.push_back(varname);
+			}
+		}
+	}
+
+	// Add all derived variables
+	this->plotfileVarsToInclude_cc_.insert(this->plotfileVarsToInclude_cc_.end(), this->derivedNames_.begin(), this->derivedNames_.end());
+
+	// Detect name collisions and abort if any are found
+	std::set<std::string> seen_names;
+	for (const std::string &varname : this->plotfileVarsToInclude_cc_) {
+		if (!seen_names.insert(varname).second) {
+			amrex::Abort("Duplicate variable name '" + varname +
+				     "' found in plotfile variables list. "
+				     "This indicates a naming collision between cell-centered, face-centered, or derived variables.");
 		}
 	}
 }
