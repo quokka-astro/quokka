@@ -13,6 +13,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "cooling/ResampledCooling.hpp"
+#include "cooling/GrackleLikeCooling.hpp"
 #include "math/interpolate.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -136,10 +137,17 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 
 		const amrex::Real Etot = values.at(HydroSystem<ResampledCoolingTest>::energy_index)[0];
 		const amrex::Real rho = values.at(HydroSystem<ResampledCoolingTest>::density_index)[0];
+		const amrex::Real gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
 		// For isochoric cooling with no kinetic energy, Eint = Etot
 		const amrex::Real Eint = Etot;
-		// Get temperature from resampled tables
-		const amrex::Real T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
+
+		// Get temperature from tables
+		amrex::Real T = NAN;
+		if (coolingTableType_ == "grackle") {
+		  T = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, gamma, grackleTables_.const_tables());
+		} else if (coolingTableType_ == "resampled") {
+		  T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
+		}
 
 		userData_.T_vec_.push_back(T);
 	}
@@ -277,6 +285,7 @@ auto problem_main() -> int
 				// Continue without reference plot
 			}
 		}
+		matplotlibcpp::xscale("log");		
 		matplotlibcpp::yscale("log");
 		matplotlibcpp::xlabel("time (Myr)");
 		matplotlibcpp::ylabel("Temperature (K)");
