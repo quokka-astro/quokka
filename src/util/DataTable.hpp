@@ -15,7 +15,7 @@ namespace quokka
 struct InterpData {
 	int ix{}, iy{}, iix{}, iiy{};	    // grid indices
 	amrex::Real x1{}, x2{}, y1{}, y2{}; // actual coordinate values at grid points
-	amrex::Real h{}, v{};	    // normalized coordinates: h = (x-x1)/(x2-x1), v = (y-y1)/(y2-y1)
+	amrex::Real h{}, v{};		    // normalized coordinates: h = (x-x1)/(x2-x1), v = (y-y1)/(y2-y1)
 
 	// Default constructor
 	AMREX_GPU_HOST_DEVICE InterpData() = default;
