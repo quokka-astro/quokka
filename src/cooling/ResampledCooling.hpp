@@ -167,9 +167,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	const Real rho = udata->rho;
 	resampledGpuConstTables const &tables = udata->tables;
 
-	// check whether specific internal energy is out-of-bounds
-	const Real Eint_min = tables.eint_min;
-	const Real Eint_max = tables.eint_max;
+	// check whether internal energy density is out-of-bounds
+	const Real Eint_min = rho * tables.eint_min;
+	const Real Eint_max = rho * tables.eint_max;
 
 	// compute cooling rate
 	const Real Eint = y_data[0];
