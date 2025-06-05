@@ -12,8 +12,8 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "cooling/ResampledCooling.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
+#include "cooling/ResampledCooling.hpp"
 #include "math/interpolate.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -144,9 +144,9 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 		// Get temperature from tables
 		amrex::Real T = NAN;
 		if (coolingTableType_ == "grackle") {
-		  T = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, gamma, grackleTables_.const_tables());
+			T = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, gamma, grackleTables_.const_tables());
 		} else if (coolingTableType_ == "resampled") {
-		  T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
+			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
 		}
 
 		userData_.T_vec_.push_back(T);
@@ -285,7 +285,7 @@ auto problem_main() -> int
 				// Continue without reference plot
 			}
 		}
-		matplotlibcpp::xscale("log");		
+		matplotlibcpp::xscale("log");
 		matplotlibcpp::yscale("log");
 		matplotlibcpp::xlabel("time (Myr)");
 		matplotlibcpp::ylabel("Temperature (K)");
