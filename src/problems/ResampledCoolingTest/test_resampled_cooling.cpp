@@ -77,8 +77,6 @@ auto readReferenceCSV(const std::string &filename) -> std::pair<std::vector<doub
 template <> struct SimulationData<ResampledCoolingTest> {
 	std::vector<double> t_vec_;
 	std::vector<double> T_vec_;
-	std::vector<double> rho_vec_;
-	std::vector<double> P_vec_;
 };
 
 template <> struct quokka::EOS_Traits<ResampledCoolingTest> {
@@ -98,8 +96,8 @@ template <> struct Physics_Traits<ResampledCoolingTest> {
 
 // Initial conditions: hot gas that will cool down
 constexpr double T_initial = 1.0e7;  // K
-constexpr double rho_initial = 1.0e-24; // g cm^-3 (constant density for isochoric)
-
+constexpr double rho_initial = 1.0e-26; // g cm^-3 (constant density for isochoric)
+      
 template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -109,7 +107,7 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 	const double k_B = C::k_B;
 	const double m_u = C::m_u;
 	const double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
-	const double mu = quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
+	const double mu = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
 	
 	// For ideal gas: P = (gamma - 1) * rho * e_int
 	// and P = rho * k_B * T / (mu * m_u)
@@ -155,8 +153,8 @@ auto problem_main() -> int
 	pp.query("reference_solution_file", reference_file);
 	
 	// Problem parameters
-	const double CFL_number = 0.3;
-	const double max_time = 1.0e9 * 3.15e7; // s (1 Gyr)
+	const double CFL_number = 0.8;
+	const double max_time = 1.0e17; // s
 	const int max_timesteps = 1e6;
 
 	// Problem initialization
@@ -280,7 +278,7 @@ auto problem_main() -> int
 				// Continue without reference plot
 			}
 		}
-		
+		matplotlibcpp::yscale("log");
 		matplotlibcpp::xlabel("time (Myr)");
 		matplotlibcpp::ylabel("Temperature (K)");
 		matplotlibcpp::title("Isochoric Cooling Test");
