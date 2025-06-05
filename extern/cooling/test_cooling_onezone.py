@@ -6,7 +6,8 @@ import numpy as np
 from integrate_cooling_zone import (
     load_resampled_cooling_tables,
     integrate_cooling_zone,
-    plot_cooling_evolution
+    plot_cooling_evolution,
+    plot_cooling_comparison
 )
 from grackle_tables import read_tables
 
@@ -57,8 +58,10 @@ for name, rho0, T0, t_end in test_cases:
         print(f"  eint = {results['eint'][-1]:.3e} erg/g")
         print(f"  T = {results['T'][-1]:.3e} K")
     
-        # Save plot
-        output_plot = f"cooling_evolution_{name}_{runname}.png"
-        plot_cooling_evolution(results, output_plot)
+    # Save comparison plot
+    comparison_plot = f"cooling_comparison_{name}.png"
+    plot_cooling_comparison(my_results[0], my_results[1], 
+                          labels=('Resampled', 'Grackle'), 
+                          output_file=comparison_plot)
     
 print("\nAll test cases completed!")

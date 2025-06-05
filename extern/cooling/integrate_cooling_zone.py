@@ -310,3 +310,104 @@ def plot_cooling_evolution(results, output_file='cooling_evolution.png'):
     plt.tight_layout()
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
     print(f"\nPlot saved to {output_file}")
+
+
+def plot_cooling_comparison(results1, results2, labels=('Method 1', 'Method 2'), 
+                          output_file='cooling_comparison.png'):
+    """Plot two different cooling evolution results on the same plot.
+    
+    Args:
+        results1: dict from integrate_cooling_zone (first method)
+        results2: dict from integrate_cooling_zone (second method)
+        labels: tuple of labels for the two methods
+        output_file: output plot filename
+    """
+    # Create figure with GridSpec for custom layout
+    from matplotlib.gridspec import GridSpec
+    fig = plt.figure(figsize=(9, 6))
+    gs = GridSpec(2, 2, height_ratios=[3, 1], hspace=0.05, wspace=0.3)
+    
+    # Create axes - properly using 2x2 grid
+    ax_eint = fig.add_subplot(gs[0, 0])
+    ax_eint_diff = fig.add_subplot(gs[1, 0], sharex=ax_eint)
+    ax_T = fig.add_subplot(gs[0, 1])
+    ax_T_diff = fig.add_subplot(gs[1, 1], sharex=ax_T)
+    
+    # Process both results and store for relative difference calculation
+    times1 = results1['times']
+    t_yr1 = times1 / (365.25 * 24 * 3600)  # years
+    t_kyr1 = t_yr1 / 1000  # kiloyears
+    t_Myr1 = t_yr1 / 1e6  # megayears
+    
+    # Choose appropriate time unit based on results1
+    if np.max(t_yr1) < 1:
+        t_plot1 = times1
+        t_label = 'Time (s)'
+        t_factor = 1.0
+    elif np.max(t_yr1) < 1000:
+        t_plot1 = t_yr1
+        t_label = 'Time (yr)'
+        t_factor = 1.0 / (365.25 * 24 * 3600)
+    elif np.max(t_yr1) < 1e6:
+        t_plot1 = t_kyr1
+        t_label = 'Time (kyr)'
+        t_factor = 1.0 / (365.25 * 24 * 3600 * 1000)
+    else:
+        t_plot1 = t_Myr1
+        t_label = 'Time (Myr)'
+        t_factor = 1.0 / (365.25 * 24 * 3600 * 1e6)
+    
+    # Get data for both methods
+    eint1 = results1['eint']
+    T1 = results1['T']
+    
+    times2 = results2['times']
+    t_plot2 = times2 * t_factor
+    eint2 = results2['eint']
+    T2 = results2['T']
+    
+    # Plot specific internal energy
+    ax_eint.loglog(t_plot1[1:], eint1[1:], label=labels[0], color='blue', linewidth=2)
+    ax_eint.loglog(t_plot2[1:], eint2[1:], label=labels[1], color='red', linewidth=2, linestyle='--')
+    ax_eint.set_ylabel(r'$e_{\rm int}$ (erg/g)')
+    ax_eint.set_title(f'Specific Internal Energy Evolution\n($\\rho$ = {results1["rho"]:.2e} g/cm³)')
+    ax_eint.grid(True, alpha=0.3)
+    ax_eint.legend()
+    ax_eint.set_xticklabels([])  # Hide x labels for upper panel
+    
+    # Interpolate results2 onto results1 time grid for difference calculation
+    eint2_interp = np.interp(times1, times2, eint2)
+    T2_interp = np.interp(times1, times2, T2)
+    
+    # Calculate relative differences
+    eint_rel_diff = (eint2_interp - eint1) / eint1
+    T_rel_diff = (T2_interp - T1) / T1
+    
+    # Plot relative difference for specific internal energy
+    ax_eint_diff.semilogx(t_plot1[1:], eint_rel_diff[1:], color='black', linewidth=1)
+    ax_eint_diff.axhline(y=0, color='gray', linestyle=':', alpha=0.5)
+    ax_eint_diff.set_xlabel(t_label)
+    ax_eint_diff.set_ylabel('Rel. Diff.')
+    ax_eint_diff.grid(True, alpha=0.3)
+    ax_eint_diff.set_ylim(-0.025, 0.025)  # ±2.5% range
+    
+    # Plot temperature
+    ax_T.loglog(t_plot1[1:], T1[1:], label=labels[0], color='blue', linewidth=2)
+    ax_T.loglog(t_plot2[1:], T2[1:], label=labels[1], color='red', linewidth=2, linestyle='--')
+    ax_T.set_ylabel('T (K)')
+    ax_T.set_title(f'Temperature Evolution\n($\\rho$ = {results1["rho"]:.2e} g/cm³)')
+    ax_T.grid(True, alpha=0.3)
+    ax_T.legend()
+    ax_T.set_xticklabels([])  # Hide x labels for upper panel
+    
+    # Plot relative difference for temperature
+    ax_T_diff.semilogx(t_plot1[1:], T_rel_diff[1:], color='black', linewidth=1)
+    ax_T_diff.axhline(y=0, color='gray', linestyle=':', alpha=0.5)
+    ax_T_diff.set_xlabel(t_label)
+    ax_T_diff.set_ylabel('Rel. Diff.')
+    ax_T_diff.grid(True, alpha=0.3)
+    ax_T_diff.set_ylim(-0.025, 0.025)  # ±2.5% range
+    
+    plt.tight_layout()
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    print(f"\nComparison plot saved to {output_file}")
