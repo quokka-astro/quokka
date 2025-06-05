@@ -21,24 +21,54 @@ class cloudyTables:
     log_T = []
 
 
-def read_tables(filename):
+def read_tables(filename, apply_unit_conversion=True):
     """"read Cloudy tables in HDF5 format."""
     f = h5py.File(filename, 'r')
 
     tables = cloudyTables()
-    tables.log_nH = f['Parameter1']
-    tables.log_T = np.log10(f['Temperature'])
+    # Read data into numpy arrays (not HDF5 references)
+    tables.log_nH = np.array(f['Parameter1'])
+    tables.log_T = np.log10(np.array(f['Temperature']))
 
-    log10_or_small = lambda table: np.piecewise(table,
-                                                (table > 0., table <= 0.),
-                                                (np.log10, lambda x: np.NaN))
+    # Calculate CoolUnit conversion factor (same as C++ code)
+    # Assumes CGS units: length=cm, time=s, density=g/cm³
+    xbase1 = 1.0      # cm (length units)
+    tbase1 = 1.0      # s (time units) 
+    dbase1 = 1.0      # g/cm³ (density units)
+    mh = 1.67e-24     # g (proton mass)
+    CoolUnit = (xbase1 * xbase1 * mh * mh) / (tbase1 * tbase1 * tbase1 * dbase1)
+    
+    def log10_or_small_with_units(table):
+        if apply_unit_conversion:
+            # Convert to code units first (divide by CoolUnit), then take log
+            table_code_units = table / CoolUnit
+            return np.piecewise(table_code_units,
+                              (table_code_units > 0., table_code_units <= 0.),
+                              (np.log10, lambda x: np.NaN))
+        else:
+            # Original behavior: take log of CGS values directly
+            return np.piecewise(table,
+                              (table > 0., table <= 0.),
+                              (np.log10, lambda x: np.NaN))
+    
     number_or_nan = lambda table: np.piecewise(table,
         (table > 0., table <= 0.),
         (lambda x: x, lambda x: np.NaN))
 
-    tables.cooling = log10_or_small(f['Cooling'][:, :])
-    tables.heating = log10_or_small(f['Heating'][:, :])
-    tables.mmw = number_or_nan(f['MMW'][:, :])
+    # Read data arrays and apply unit conversion
+    cooling_data = np.array(f['Cooling'][:, :])
+    heating_data = np.array(f['Heating'][:, :])
+    mmw_data = np.array(f['MMW'][:, :])
+    
+    tables.cooling = log10_or_small_with_units(cooling_data)
+    tables.heating = log10_or_small_with_units(heating_data)
+    tables.mmw = number_or_nan(mmw_data)
+    
+    # Store the CoolUnit for reference
+    tables.CoolUnit = CoolUnit
+    tables.unit_conversion_applied = apply_unit_conversion
+    
+    f.close()
     return tables
 
 def write_tables(newtables, filename=None, old_filename=None):
