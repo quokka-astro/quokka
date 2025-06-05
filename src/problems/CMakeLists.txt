@@ -63,6 +63,7 @@ add_subdirectory(RadhydroBB)
 
 add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(Cooling)
+add_subdirectory(ResampledCoolingTest)
 add_subdirectory(FCQuantities)
 add_subdirectory(NSCBC)
 add_subdirectory(ODEIntegration)
