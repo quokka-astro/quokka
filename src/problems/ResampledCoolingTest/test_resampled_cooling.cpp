@@ -219,7 +219,6 @@ auto problem_main() -> int
 			try {
 				auto [t_ref, T_ref] = readReferenceCSV(reference_file);
 
-				
 				// Interpolate reference solution onto simulation timesteps
 				std::vector<double> T_ref_interp(sim.userData_.t_vec_.size());
 				interpolate_arrays(sim.userData_.t_vec_.data(), T_ref_interp.data(), static_cast<int>(sim.userData_.t_vec_.size()),
