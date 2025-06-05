@@ -1392,8 +1392,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, faceVel, fast_mhd_wavespeeds, nghost_fc_,
-							 reconstructionOrder_, geom[lev], time);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds,
+							 reconstructionOrder_);
 			// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			//   auto mask = ec_emf_components_rk_ave[idim].OverlapMask(geom[lev].periodicity());
 			//   ec_emf_components_rk_ave[idim].WeightedSync(*mask, geom[lev].periodicity());
@@ -1543,8 +1543,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, faceVel, fast_mhd_wavespeeds, nghost_fc_,
-							 reconstructionOrder_, geom[lev], time);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds,
+							 reconstructionOrder_);
 			// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			//   auto mask = ec_emf_components_rk_stage2[idim].OverlapMask(geom[lev].periodicity());
 			//   ec_emf_components_rk_stage2[idim].WeightedSync(*mask, geom[lev].periodicity());
@@ -1771,7 +1771,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	int nghost_extra_mhd = 0;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		nghost_extra_mhd = 1;
+		nghost_extra_mhd = 0;
 	}
 	for (int idim = 0; idim < 3; ++idim) {
 		flatCoefs[idim] = amrex::MultiFab(ba_cc, dm, 1, nghost_flattening + nghost_extra_mhd);
