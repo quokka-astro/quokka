@@ -49,7 +49,6 @@ struct DataTableGpuConst {
 		return interpolate2d(x, y, x_coords, y_coords, data);
 	}
 	
-	// Part 1: Find interpolation indices and normalized coordinates
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
 	auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData
 	{
@@ -98,10 +97,14 @@ struct DataTableGpuConst {
 		return interp;
 	}
 	
-	// Part 2: Compute interpolated value using precomputed indices and normalized coordinates
+	// Convenience method: find interpolation data and compute value in one call
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	auto interpolate_with_data(const InterpData& interp) const -> amrex::Real
+	auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
+		// Part 1: Find interpolation indices and normalized coordinates
+		InterpData interp = find_interpolation_data(x, y);
+
+		// Part 2: Compute interpolated value using precomputed indices and normalized coordinates
 		// Get the four corner values: (z1, z2, z3, z4) = (A, C, B, D)
 		// z1 = f(0,0) -> (x1, y1), z2 = f(1,0) -> (x2, y1)
 		// z3 = f(0,1) -> (x1, y2), z4 = f(1,1) -> (x2, y2)
@@ -116,14 +119,6 @@ struct DataTableGpuConst {
 		AMREX_ASSERT(!std::isnan(value));
 		
 		return value;
-	}
-	
-	// Convenience method: find interpolation data and compute value in one call
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
-	{
-		InterpData interp = find_interpolation_data(x, y);
-		return interpolate_with_data(interp);
 	}
 	
 	// Compute numeric derivatives (∂f/∂x, ∂f/∂y) using normalized coordinate algorithm
