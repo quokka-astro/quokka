@@ -13,12 +13,12 @@ namespace quokka
 
 // Structure to hold interpolation indices and normalized coordinates
 struct InterpData {
-	int ix, iy, iix, iiy;	    // grid indices
-	amrex::Real x1, x2, y1, y2; // actual coordinate values at grid points
-	amrex::Real h, v;	    // normalized coordinates: h = (x-x1)/(x2-x1), v = (y-y1)/(y2-y1)
+	int ix{}, iy{}, iix{}, iiy{};	    // grid indices
+	amrex::Real x1{}, x2{}, y1{}, y2{}; // actual coordinate values at grid points
+	amrex::Real h{}, v{};	    // normalized coordinates: h = (x-x1)/(x2-x1), v = (y-y1)/(y2-y1)
 
 	// Default constructor
-	AMREX_GPU_HOST_DEVICE InterpData() : ix(0), iy(0), iix(0), iiy(0), x1(0.0), x2(0.0), y1(0.0), y2(0.0), h(0.0), v(0.0) {}
+	AMREX_GPU_HOST_DEVICE InterpData() = default;
 };
 
 // GPU-friendly struct containing const table references
@@ -27,16 +27,16 @@ struct DataTableGpuConst {
 	amrex::Table1D<const amrex::Real> y_coords;
 	amrex::Table2D<const amrex::Real> data;
 
-	amrex::Real x_min;
-	amrex::Real x_max;
-	amrex::Real y_min;
-	amrex::Real y_max;
+	amrex::Real x_min{};
+	amrex::Real x_max{};
+	amrex::Real y_min{};
+	amrex::Real y_max{};
 
-	int x_size;
-	int y_size;
+	int x_size{};
+	int y_size{};
 
 	// Original interpolation method (for backward compatibility)
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
 		// Clamp x and y to valid bounds
 		x = amrex::max(x_min, amrex::min(x, x_max));
@@ -71,7 +71,7 @@ struct DataTableGpuConst {
 	///   - z3 = f(0,1) -> data(ix, iiy)  = (x1,y2) top-left
 	///   - z4 = f(1,1) -> data(iix, iiy) = (x2,y2) top-right
 	/// ```
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData
 	{
 		InterpData interp;
 
@@ -123,7 +123,7 @@ struct DataTableGpuConst {
 	}
 
 	// Convenience method: find interpolation data and compute value in one call
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
 		// Part 1: Find interpolation indices and normalized coordinates
 		InterpData interp = find_interpolation_data(x, y);
@@ -142,7 +142,7 @@ struct DataTableGpuConst {
 	}
 
 	// Compute numeric derivatives (∂f/∂x, ∂f/∂y) using normalized coordinate algorithm
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto numeric_derivative(amrex::Real x, amrex::Real y) const -> amrex::Array<amrex::Real, 2>
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto numeric_derivative(amrex::Real x, amrex::Real y) const -> amrex::Array<amrex::Real, 2>
 	{
 		// Part 1: Get interpolation data (includes precomputed h and v)
 		InterpData interp = find_interpolation_data(x, y);
@@ -202,11 +202,11 @@ class DataTable
 
 	// Move constructor and assignment
 	DataTable(DataTable &&) = default;
-	DataTable &operator=(DataTable &&) = default;
+	auto operator=(DataTable &&) -> DataTable & = default;
 
 	// Delete copy constructor and assignment (expensive operations)
 	DataTable(const DataTable &) = delete;
-	DataTable &operator=(const DataTable &) = delete;
+	auto operator=(const DataTable &) -> DataTable & = delete;
 
 	// Initialize from vectors
 	void initialize(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
@@ -216,11 +216,11 @@ class DataTable
 	[[nodiscard]] auto const_tables() const -> DataTableGpuConst;
 
 	// Check if table is initialized
-	[[nodiscard]] bool is_initialized() const;
+	[[nodiscard]] auto is_initialized() const -> bool;
 
 	// Get dimensions
-	[[nodiscard]] int x_size() const;
-	[[nodiscard]] int y_size() const;
+	[[nodiscard]] auto x_size() const -> int;
+	[[nodiscard]] auto y_size() const -> int;
 
       private:
 	std::unique_ptr<amrex::TableData<amrex::Real, 1>> x_coords_;

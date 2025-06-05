@@ -70,10 +70,10 @@ auto DataTable::const_tables() const -> DataTableGpuConst
 	return tables;
 }
 
-bool DataTable::is_initialized() const { return (x_coords_ != nullptr && y_coords_ != nullptr && data_ != nullptr); }
+auto DataTable::is_initialized() const -> bool { return (x_coords_ != nullptr && y_coords_ != nullptr && data_ != nullptr); }
 
-int DataTable::x_size() const { return x_size_; }
+auto DataTable::x_size() const -> int { return x_size_; }
 
-int DataTable::y_size() const { return y_size_; }
+auto DataTable::y_size() const -> int { return y_size_; }
 
 } // namespace quokka
