@@ -2,9 +2,9 @@
 #define DATATABLE_HPP_
 
 #include "AMReX.H"
-#include "AMReX_TableData.H"
-#include "AMReX_GpuQualifiers.H"
 #include "AMReX_Extension.H"
+#include "AMReX_GpuQualifiers.H"
+#include "AMReX_TableData.H"
 #include "math/Interpolate2D.hpp"
 #include <memory>
 
@@ -29,23 +29,22 @@ struct DataTableGpuConst {
 	amrex::Table1D<const amrex::Real> x_coords;
 	amrex::Table1D<const amrex::Real> y_coords;
 	amrex::Table2D<const amrex::Real> data;
-	
+
 	amrex::Real x_min;
 	amrex::Real x_max;
 	amrex::Real y_min;
 	amrex::Real y_max;
-	
+
 	int x_size;
 	int y_size;
-	
+
 	// Original interpolation method (for backward compatibility)
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
 		// Clamp x and y to valid bounds
 		x = amrex::max(x_min, amrex::min(x, x_max));
 		y = amrex::max(y_min, amrex::min(y, y_max));
-		
+
 		return interpolate2d(x, y, x_coords, y_coords, data);
 	}
 	
@@ -125,13 +124,12 @@ struct DataTableGpuConst {
 		} else {
 			interp.v = 0.0;  // No variation in y direction (boundary case)
 		}
-		
+
 		return interp;
 	}
 	
 	// Convenience method: find interpolation data and compute value in one call
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
 		// Part 1: Find interpolation indices and normalized coordinates
 		InterpData interp = find_interpolation_data(x, y);
@@ -202,52 +200,50 @@ struct DataTableGpuConst {
 // Generic 2D data table class
 class DataTable
 {
-public:
+      public:
 	// Default constructor
 	DataTable() = default;
-	
+
 	// Constructor with data
-	DataTable(const amrex::Vector<amrex::Real>& x_coords,
-	          const amrex::Vector<amrex::Real>& y_coords,
-	          const amrex::Vector<amrex::Vector<amrex::Real>>& data);
-	
+	DataTable(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
+		  const amrex::Vector<amrex::Vector<amrex::Real>> &data);
+
 	// Move constructor and assignment
-	DataTable(DataTable&&) = default;
-	DataTable& operator=(DataTable&&) = default;
-	
+	DataTable(DataTable &&) = default;
+	DataTable &operator=(DataTable &&) = default;
+
 	// Delete copy constructor and assignment (expensive operations)
-	DataTable(const DataTable&) = delete;
-	DataTable& operator=(const DataTable&) = delete;
-	
+	DataTable(const DataTable &) = delete;
+	DataTable &operator=(const DataTable &) = delete;
+
 	// Initialize from vectors
-	void initialize(const amrex::Vector<amrex::Real>& x_coords,
-	                const amrex::Vector<amrex::Real>& y_coords,
-	                const amrex::Vector<amrex::Vector<amrex::Real>>& data);
-	
+	void initialize(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
+			const amrex::Vector<amrex::Vector<amrex::Real>> &data);
+
 	// Get GPU-friendly const tables
 	[[nodiscard]] auto const_tables() const -> DataTableGpuConst;
-	
+
 	// Check if table is initialized
 	[[nodiscard]] bool is_initialized() const;
-	
+
 	// Get dimensions
 	[[nodiscard]] int x_size() const;
 	[[nodiscard]] int y_size() const;
-	
-private:
+
+      private:
 	std::unique_ptr<amrex::TableData<amrex::Real, 1>> x_coords_;
 	std::unique_ptr<amrex::TableData<amrex::Real, 1>> y_coords_;
 	std::unique_ptr<amrex::TableData<amrex::Real, 2>> data_;
-	
+
 	amrex::Real x_min_ = 0.0;
 	amrex::Real x_max_ = 0.0;
 	amrex::Real y_min_ = 0.0;
 	amrex::Real y_max_ = 0.0;
-	
+
 	int x_size_ = 0;
 	int y_size_ = 0;
 };
 
 } // namespace quokka
 
-#endif // DATATABLE_HPP_ 
+#endif // DATATABLE_HPP_

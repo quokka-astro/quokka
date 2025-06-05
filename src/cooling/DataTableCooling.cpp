@@ -110,10 +110,10 @@ void readResampledData(std::string const &hdf5_file, data_table_tables &dataTabl
 	}
 
 	// Helper function to read 2D dataset and initialize DataTable
-	auto read2DDataset = [&](const std::string& dataset_name, quokka::DataTable& table) {
+	auto read2DDataset = [&](const std::string &dataset_name, quokka::DataTable &table) {
 		const int64_t data_size = static_cast<int64_t>(n_rho) * static_cast<int64_t>(n_eint);
 		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
-		
+
 		dset_id = H5Dopen2(file_id, dataset_name.c_str(), H5P_DEFAULT);
 		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + dataset_name + " dataset!").c_str());
@@ -127,10 +127,10 @@ void readResampledData(std::string const &hdf5_file, data_table_tables &dataTabl
 				data2d[i][j] = temp_data[i * n_eint + j];
 			}
 		}
-		
+
 		// Initialize DataTable
 		table.initialize(rho_coords, eint_coords, data2d);
-		
+
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 	};
 
@@ -149,19 +149,17 @@ void readResampledData(std::string const &hdf5_file, data_table_tables &dataTabl
 
 auto data_table_tables::const_tables() const -> dataTableGpuConstTables
 {
-	dataTableGpuConstTables tables{
-		cooling_rates.const_tables(),
-		temperatures.const_tables(),
-		sound_speeds.const_tables(),
-		pressures.const_tables(),
-		entropies.const_tables(),
-		rho_min,
-		rho_max,
-		eint_min,
-		eint_max,
-		cloudy_H_mass_fraction
-	};
+	dataTableGpuConstTables tables{cooling_rates.const_tables(),
+				       temperatures.const_tables(),
+				       sound_speeds.const_tables(),
+				       pressures.const_tables(),
+				       entropies.const_tables(),
+				       rho_min,
+				       rho_max,
+				       eint_min,
+				       eint_max,
+				       cloudy_H_mass_fraction};
 	return tables;
 }
 
-} // namespace quokka::DataTableCooling 
+} // namespace quokka::DataTableCooling

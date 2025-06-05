@@ -73,7 +73,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto data_table_cooling_function(Real c
 	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
-	
+
 	// Interpolate cooling rate from data tables
 	const Real Edot_over_rhosq = tables.cooling_rates.interpolate(fast_log_rho_val, fast_log_eint_val);
 	// unused computation of the numeric derivative, just to check if it compiles and runs
@@ -88,7 +88,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
-	
+
 	// Interpolate temperature from data tables
 	const Real Tgas = tables.temperatures.interpolate(fast_log_rho_val, fast_log_eint_val);
 
@@ -102,7 +102,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rh
 	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
-	
+
 	// Interpolate sound speed from data tables
 	const Real cs = tables.sound_speeds.interpolate(fast_log_rho_val, fast_log_eint_val);
 
@@ -118,7 +118,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real co
 	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
-	
+
 	// Interpolate pressure from data tables
 	const Real P = tables.pressures.interpolate(fast_log_rho_val, fast_log_eint_val);
 
@@ -131,7 +131,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real con
 	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
-	
+
 	// Interpolate entropy from data tables
 	const Real K = tables.entropies.interpolate(fast_log_rho_val, fast_log_eint_val);
 
@@ -144,7 +144,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real 
 	const Real eint = Eint / rho;
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
-	
+
 	// Interpolate sound speed from data tables
 	const Real cs = tables.sound_speeds.interpolate(fast_log_rho_val, fast_log_eint_val);
 
@@ -235,4 +235,4 @@ void readResampledData(std::string const &hdf5_file, data_table_tables &dataTabl
 
 } // namespace quokka::DataTableCooling
 
-#endif // DATATABLECOOLING_HPP_ 
+#endif // DATATABLECOOLING_HPP_

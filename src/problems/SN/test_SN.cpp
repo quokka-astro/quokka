@@ -21,13 +21,13 @@ struct SNProblem {
 
 static bool refine_half_domain = false; // NOLINT
 
-static double max_Eint_global = 0.0; // NOLINT
-static double max_Eint_last = 0.0; // NOLINT
+static double max_Eint_global = 0.0;	       // NOLINT
+static double max_Eint_last = 0.0;	       // NOLINT
 static std::vector<double> max_Eint_history{}; // NOLINT
-static std::vector<double> t_history{}; // NOLINT
+static std::vector<double> t_history{};	       // NOLINT
 
 static std::string SN_particles_file = "SN_particles.txt"; // NOLINT
-static std::string coolingTableType_ = "grackle"; // NOLINT
+static std::string coolingTableType_ = "grackle";	   // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
 // constexpr double mu = 1.295 * C::m_u; // neutral gas
@@ -235,15 +235,15 @@ auto problem_main() -> int
 		if (csv_file.is_open()) {
 			// Set precision to 13 significant digits
 			csv_file << std::scientific << std::setprecision(13);
-			
+
 			// Write header
 			csv_file << "step, Time_yr, Max_Internal_Energy_erg\n";
-			
+
 			// Write data
 			for (int i = 0; i < max_Eint_history.size(); ++i) {
 				csv_file << i << ", " << t_history[i] / year << ", " << max_Eint_history[i] * vol << "\n";
 			}
-			
+
 			csv_file.close();
 			amrex::Print() << "Energy history data written to sn_energy_history.csv\n";
 		} else {

@@ -61,10 +61,10 @@ namespace filesystem = experimental::filesystem;
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
+#include "cooling/DataTableCooling.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
-#include "cooling/DataTableCooling.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
 #include "hyperbolic_system.hpp"
