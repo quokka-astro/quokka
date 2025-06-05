@@ -189,6 +189,12 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	// Add initial condition to data vectors
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+		sim.userData_.T_vec_.push_back(T_initial);
+	}
+
 	// evolve
 	sim.evolve();
 
@@ -213,6 +219,7 @@ auto problem_main() -> int
 			try {
 				auto [t_ref, T_ref] = readReferenceCSV(reference_file);
 
+				
 				// Interpolate reference solution onto simulation timesteps
 				std::vector<double> T_ref_interp(sim.userData_.t_vec_.size());
 				interpolate_arrays(sim.userData_.t_vec_.data(), T_ref_interp.data(), static_cast<int>(sim.userData_.t_vec_.size()),
@@ -226,7 +233,7 @@ auto problem_main() -> int
 					sol_norm += std::abs(T_ref_interp[i]);
 				}
 				const double rel_error = err_norm / sol_norm;
-				const double error_tol = 0.05; // 5% tolerance
+				const double error_tol = 0.02; // should be about 1% between GrackleLike and Resampled cooling
 
 				amrex::Print() << "Reference solution comparison:" << '\n';
 				amrex::Print() << "  Data points in reference: " << t_ref.size() << '\n';
