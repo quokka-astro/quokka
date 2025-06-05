@@ -24,8 +24,8 @@
 using Real = amrex::Real;
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt, quokka::valarray<Real, N> &ynew,
-							       quokka::valarray<Real, N> &yerr) -> int
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
+							       quokka::valarray<Real, N> &ynew, quokka::valarray<Real, N> &yerr) -> int
 {
 	// Compute one step of the RK Heun-Euler (1)2 method
 
@@ -57,8 +57,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F const &rhs, Rea
 }
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt, quokka::valarray<Real, N> &ynew,
-							       quokka::valarray<Real, N> &yerr) -> int
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
+							       quokka::valarray<Real, N> &ynew, quokka::valarray<Real, N> &yerr) -> int
 {
 	// Compute one step of the RK Bogaki-Shampine (2)3 method
 	// https://sundials.readthedocs.io/en/latest/arkode/Butcher_link.html#bogacki-shampine-4-2-3
