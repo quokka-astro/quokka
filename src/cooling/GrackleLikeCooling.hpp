@@ -219,42 +219,47 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	return T_sol;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
-{
-	// unpack user_data
-	auto *udata = static_cast<ODEUserData *>(user_data);
-	const Real rho = udata->rho;
-	const Real gamma = udata->gamma;
-	grackleGpuConstTables const &tables = udata->tables;
+struct GrackleCoolingFunctor {
+	const Real rho;
+	const Real gamma;
+	grackleGpuConstTables const &tables;
 
-	// check whether temperature is out-of-bounds
-	const Real Tmin = tables.T_min;
-	const Real Tmax = tables.T_max;
-	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
-	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
-
-	// compute temperature and cooling rate
-	const Real Eint = y_data[0];
-
-	if (Eint <= Eint_min) {
-		// set cooling to value at Tmin
-		y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
-	} else if (Eint >= Eint_max) {
-		// set cooling to value at Tmax
-		y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
-	} else {
-		// ok, within tabulated cooling limits
-		const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
-		if (!std::isnan(T)) { // temp iteration succeeded
-			y_rhs[0] = cloudy_cooling_function(rho, T, tables);
-		} else { // temp iteration failed
-			y_rhs[0] = NAN;
-			return 1; // failed
-		}
+	AMREX_GPU_HOST_DEVICE GrackleCoolingFunctor(Real rho_in, Real gamma_in, grackleGpuConstTables const &tables_in)
+	    : rho(rho_in), gamma(gamma_in), tables(tables_in)
+	{
 	}
 
-	return 0; // success
-}
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs) const -> int
+	{
+		// check whether temperature is out-of-bounds
+		const Real Tmin = tables.T_min;
+		const Real Tmax = tables.T_max;
+		const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
+		const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
+
+		// compute temperature and cooling rate
+		const Real Eint = y_data[0];
+
+		if (Eint <= Eint_min) {
+			// set cooling to value at Tmin
+			y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
+		} else if (Eint >= Eint_max) {
+			// set cooling to value at Tmax
+			y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
+		} else {
+			// ok, within tabulated cooling limits
+			const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
+			if (!std::isnan(T)) { // temp iteration succeeded
+				y_rhs[0] = cloudy_cooling_function(rho, T, tables);
+			} else { // temp iteration failed
+				y_rhs[0] = NAN;
+				return 1; // failed
+			}
+		}
+
+		return 0; // success
+	}
+};
 
 template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, grackle_tables &cloudyTables, const Real T_floor) -> bool
 {
@@ -284,13 +289,13 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
-			ODEUserData user_data{rho, gamma, tables};
+			GrackleCoolingFunctor coolingFunctor(rho, gamma, tables);
 			quokka::valarray<Real, 1> y = {Eint};
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
 
 			// do integration with RK2 (Heun's method)
 			int nsteps = 0;
-			rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
+			rk_adaptive_integrate(coolingFunctor, 0, y, dt, rtol, abstol, nsteps);
 			nsubsteps(i, j, k) = nsteps;
 
 			// check if integration failed
