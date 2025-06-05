@@ -220,9 +220,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 }
 
 struct GrackleCoolingFunctor {
-	const Real rho;
-	const Real gamma;
-	grackleGpuConstTables const &tables;
+	Real rho;
+	Real gamma;
+	grackleGpuConstTables tables;
 
 	AMREX_GPU_HOST_DEVICE GrackleCoolingFunctor(Real rho_in, Real gamma_in, grackleGpuConstTables const &tables_in)
 	    : rho(rho_in), gamma(gamma_in), tables(tables_in)

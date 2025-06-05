@@ -46,7 +46,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho, R
 }
 
 struct ODECoolingFunctor {
-	const Real rho;
+	Real rho;
 
 	AMREX_GPU_HOST_DEVICE explicit ODECoolingFunctor(Real rho_in) : rho(rho_in) {}
 
@@ -81,7 +81,7 @@ auto problem_main() -> int
 	std::cout << "Initial edot = " << Edot0 << '\n';
 
 	// solve cooling
-	ODECoolingFunctor coolingFunctor(rho0);
+	ODECoolingFunctor const coolingFunctor(rho0);
 	quokka::valarray<Real, 1> y = {Eint0};
 	quokka::valarray<Real, 1> const abstol = 1.0e-20 * y;
 	const Real rtol = 1.0e-4; // appropriate for RK12

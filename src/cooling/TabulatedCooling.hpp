@@ -215,9 +215,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeMMW(double rho, double Egas
 }
 
 struct CloudyCoolingFunctor {
-	const Real rho;
-	const Real gamma;
-	cloudyGpuConstTables const &tables;
+	Real rho;
+	Real gamma;
+	cloudyGpuConstTables tables;
 
 	AMREX_GPU_HOST_DEVICE CloudyCoolingFunctor(Real rho_in, Real gamma_in, cloudyGpuConstTables const &tables_in)
 	    : rho(rho_in), gamma(gamma_in), tables(tables_in)

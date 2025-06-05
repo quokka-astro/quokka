@@ -24,7 +24,7 @@
 using Real = amrex::Real;
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt, quokka::valarray<Real, N> &ynew,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt, quokka::valarray<Real, N> &ynew,
 							       quokka::valarray<Real, N> &yerr) -> int
 {
 	// Compute one step of the RK Heun-Euler (1)2 method
@@ -57,7 +57,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F &&rhs, Real t0,
 }
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt, quokka::valarray<Real, N> &ynew,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt, quokka::valarray<Real, N> &ynew,
 							       quokka::valarray<Real, N> &yerr) -> int
 {
 	// Compute one step of the RK Bogaki-Shampine (2)3 method
@@ -125,7 +125,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(quokka::valarray<Real, 
 constexpr int maxStepsODEIntegrate = 2000;
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1, Real reltol,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1, Real reltol,
 								    quokka::valarray<Real, N> const &abstol, int &steps_taken)
 {
 	// Integrate dy/dt = rhs(y, t) from t0 to t1,
