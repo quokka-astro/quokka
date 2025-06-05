@@ -8,9 +8,10 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import h5py
 
-# Physical constants (cgs units)
-boltzmann_constant_cgs = 1.380658e-16  # erg/K
-m_H = 1.672623e-24  # g
+from grackle_tables import (
+    read_tables, cooling_rate, interpolate_mu, compute_temperature_from_nH_e,
+    m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction
+)
 
 
 def load_resampled_cooling_tables(filename):
@@ -115,36 +116,60 @@ def interpolate_table(rho, eint, tables, table='cooling_rates'):
     return cooling_rate
 
 
-def cooling_ode_system(t, y, tables=None, rho=None):
-    """ODE system for cooling evolution.
-    
+def cooling_ode_system_resampled(t, y, tables=None, rho=None):
+    """ODE system for cooling evolution.    
     The system evolves:
-    - density (constant in time for single zone)
     - specific internal energy (decreases due to cooling)
     
     Args:
         t: time (s)
-        y: state vector [rho, eint]
+        y: state vector [eint]
         tables: cooling table data
         
     Returns:
-        dydt: time derivatives [deint/dt]
+        dydt: time derivative
     """
     eint = y[0]
     if (eint > 0.):
-        # Interpolate cooling rate
         cooling_rate = interpolate_table(rho, eint, tables)
-    
         # deint/dt = cooling_rate * rho^2 / rho = cooling_rate * rho
         # Note: cooling_rate is already Edot/rho^2
+        # TODO(bwibking): why does this work?
+        #   The algebraic factors do not make sense, so I must have converted this elsewhere in a different way...
         deint_dt = cooling_rate * rho
     else:
         return np.nan
     
     return [deint_dt]
 
+def cooling_ode_system_original(t, y, tables=None, rho=None):
+    """ODE system for cooling evolution.    
+    The system evolves:
+    - specific internal energy (decreases due to cooling)
+    
+    Args:
+        t: time (s)
+        y: state vector [eint]
+        tables: cooling table data
+        
+    Returns:
+        dydt: time derivative
+    """
+    eint = y[0]
+    if (eint > 0.):
+        # Interpolate cooling rate
+        nH = cloudy_H_mass_fraction * (rho / m_H)
+        T = compute_temperature_from_nH_e(nH, eint, tables=tables)
+        Edot = cooling_rate(nH, T, redshift=0., tables=tables)
+        # TODO(bwibking): figure out how the input cooling rate is wrong here.
+        deint_dt = Edot / rho # this does not make sense algebrically, the input units must be wrong!!
+    else:
+        return np.nan
+    
+    return [deint_dt]
 
-def integrate_cooling_zone(rho0, T0, t_end, tables, n_output=100):
+
+def integrate_cooling_zone(rho0, T0, t_end, resampled_tables, grackle_tables, n_output=100):
     """Integrate the cooling evolution of a single zone.
     
     Args:
@@ -165,7 +190,7 @@ def integrate_cooling_zone(rho0, T0, t_end, tables, n_output=100):
     # For ideal gas: e_int = (3/2) * k_B * T / (mu * m_H)
     # We need to get mu from the tables, but for initial estimate use mu ~ 0.6
     mu_init = 0.6  # rough estimate
-    eint0 = (3.0 / 2.0) * boltzmann_constant_cgs * T0 / (mu_init * m_H)
+    eint0 = (3.0 / 2.0) * boltzmann_constant_cgs_ * T0 / (mu_init * m_H)
     
     print(f"Initial conditions:")
     print(f"  rho0 = {rho0:.3e} g/cm^3")
@@ -182,8 +207,8 @@ def integrate_cooling_zone(rho0, T0, t_end, tables, n_output=100):
     
     # Solve ODE
     print(f"\nIntegrating from t=0 to t={t_end:.3e} s...")
-    sol = solve_ivp(
-        lambda t, y: cooling_ode_system(t, y, tables=tables, rho=rho0),
+    sol_new = solve_ivp(
+        lambda t, y: cooling_ode_system_resampled(t, y, tables=resampled_tables, rho=rho0),
         t_span,
         y0,
         t_eval=t_eval,
@@ -192,25 +217,45 @@ def integrate_cooling_zone(rho0, T0, t_end, tables, n_output=100):
         atol=1e-10
     )
     
-    if not sol.success:
+    if not sol_new.success:
         print(f"Warning: Integration failed with message: {sol.message}")
+
+    # Solve ODE (using original method)
+    print(f"\nIntegrating from t=0 to t={t_end:.3e} s...")
+    sol_orig = solve_ivp(
+        lambda t, y: cooling_ode_system_original(t, y, tables=grackle_tables, rho=rho0),
+        t_span,
+        y0,
+        t_eval=t_eval,
+        method='RK45',
+        rtol=1e-4,
+        atol=1e-10
+    )
     
-    # Extract results
-    times = sol.t
-    eint = sol.y[0, :]
+    if not sol_orig.success:
+        print(f"Warning: Integration failed with message: {sol.message}")
+
+    results = []
+    for sol in [sol_new, sol_orig]:
+        # Extract results
+        times = sol.t
+        eint = sol.y[0, :]
+        
+        # Compute temperatures from specific internal energy
+        T = np.zeros_like(eint)
+        for i in range(len(times)):
+            # Interpolate temperature from tables
+            T[i] = interpolate_table(rho0, eint[i], resampled_tables, table='temperatures')
     
-    # Compute temperatures from specific internal energy
-    T = np.zeros_like(eint)
-    for i in range(len(times)):
-        # Interpolate temperature from tables
-        T[i] = interpolate_table(rho0, eint[i], tables, table='temperatures')
-    
-    return {
-        'times': times,
-        'rho': rho0,
-        'eint': eint,
-        'T': T
-    }
+        results.append( {
+            'times': times,
+            'rho': rho0,
+            'eint': eint,
+            'T': T
+        })
+        
+    return results
+
 
 
 def plot_cooling_evolution(results, output_file='cooling_evolution.png'):
@@ -265,65 +310,3 @@ def plot_cooling_evolution(results, output_file='cooling_evolution.png'):
     plt.tight_layout()
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
     print(f"\nPlot saved to {output_file}")
-
-
-def main():
-    """Main function to run the cooling integration."""
-    parser = argparse.ArgumentParser(
-        description='Integrate cooling evolution of a single zone using resampled Cloudy tables'
-    )
-    
-    parser.add_argument('cooling_table', type=str,
-                        help='Path to resampled cooling table HDF5 file')
-    
-    # Initial conditions
-    parser.add_argument('--rho0', type=float, default=1e-24,
-                        help='Initial density in g/cm^3 (default: 1e-24)')
-    parser.add_argument('--T0', type=float, default=1e6,
-                        help='Initial temperature in K (default: 1e6)')
-    
-    # Integration parameters
-    parser.add_argument('--t_end', type=float, default=1e15,
-                        help='End time in seconds (default: 1e15 ~ 30 Myr)')
-    parser.add_argument('--n_output', type=int, default=200,
-                        help='Number of output points (default: 200)')
-    
-    # Output options
-    parser.add_argument('--plot', type=str, default='cooling_evolution.png',
-                        help='Output plot filename (default: cooling_evolution.png)')
-    
-    args = parser.parse_args()
-    
-    # Load cooling tables
-    print(f"Loading cooling tables from {args.cooling_table}...")
-    tables = load_resampled_cooling_tables(args.cooling_table)
-    
-    # Check if initial conditions are within table bounds
-    rho_min = tables['metadata']['rho_min']
-    rho_max = tables['metadata']['rho_max']
-    eint_min = tables['metadata']['eint_min']
-    eint_max = tables['metadata']['eint_max']
-    
-    if args.rho0 < rho_min or args.rho0 > rho_max:
-        print(f"Warning: Initial density {args.rho0:.3e} is outside table bounds [{rho_min:.3e}, {rho_max:.3e}]")
-    
-    # Run integration
-    results = integrate_cooling_zone(
-        args.rho0,
-        args.T0,
-        args.t_end,
-        tables,
-        n_output=args.n_output
-    )
-    
-    # Print final state
-    print(f"\nFinal state at t = {results['times'][-1]:.3e} s:")
-    print(f"  rho = {args.rho0:.3e} g/cm^3")
-    print(f"  eint = {results['eint'][-1]:.3e} erg/g")
-    print(f"  T = {results['T'][-1]:.3e} K")
-    
-    # Plot results
-    plot_cooling_evolution(results, args.plot)
-    
-if __name__ == '__main__':
-    main()
