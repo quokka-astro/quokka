@@ -40,7 +40,7 @@ struct DataTableGpuConst {
 	
 	// Original interpolation method (for backward compatibility)
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
+	auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
 		// Clamp x and y to valid bounds
 		x = amrex::max(x_min, amrex::min(x, x_max));
@@ -125,7 +125,7 @@ struct DataTableGpuConst {
 	
 	// Convenience method: find interpolation data and compute value in one call
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	auto interpolate_split(amrex::Real x, amrex::Real y) const -> amrex::Real
+	auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
 		InterpData interp = find_interpolation_data(x, y);
 		return interpolate_with_data(interp);
