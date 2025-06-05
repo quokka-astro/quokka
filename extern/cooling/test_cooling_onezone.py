@@ -58,7 +58,7 @@ for name, rho0, T0, t_end in test_cases:
         print(f"  T = {results['T'][-1]:.3e} K")
     
         # Save plot
-        output_plot = f"{runname}_cooling_evolution_{name}.png"
+        output_plot = f"cooling_evolution_{name}_{runname}.png"
         plot_cooling_evolution(results, output_plot)
     
 print("\nAll test cases completed!")
