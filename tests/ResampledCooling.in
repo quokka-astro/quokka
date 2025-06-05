@@ -29,6 +29,12 @@ cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 # *****************************************************************
+# Time stepping and run control
+# *****************************************************************
+cfl = 0.8
+stop_time = 1.0e17
+
+# *****************************************************************
 # Reference solution comparison (optional)
 # *****************************************************************
 cooling_test.reference_solution_file = ../extern/cooling/grackle_reference_solution.csv

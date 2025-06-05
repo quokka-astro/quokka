@@ -169,11 +169,6 @@ auto problem_main() -> int
 	std::string output_csv_file = "";
 	pp.query("output_csv_file", output_csv_file);
 
-	// Problem parameters
-	const double CFL_number = 0.8;
-	const double max_time = 1.0e17; // s
-	const int max_timesteps = 1e6;
-
 	// Problem initialization
 	constexpr int ncomp_cc = Physics_Indices<ResampledCoolingTest>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -186,9 +181,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<ResampledCoolingTest> sim(BCs_cc);
 
-	sim.cflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.stopTime_ = max_time;
 	sim.plotfileInterval_ = -1;
 
 	// initialize
