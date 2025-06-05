@@ -95,9 +95,9 @@ template <> struct Physics_Traits<ResampledCoolingTest> {
 };
 
 // Initial conditions: hot gas that will cool down
-constexpr double T_initial = 1.0e7;  // K
+constexpr double T_initial = 1.0e7;	// K
 constexpr double rho_initial = 1.0e-26; // g cm^-3 (constant density for isochoric)
-      
+
 template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -108,7 +108,7 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 	const double m_u = C::m_u;
 	const double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
 	const double mu = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
-	
+
 	// For ideal gas: P = (gamma - 1) * rho * e_int
 	// and P = rho * k_B * T / (mu * m_u)
 	// Therefore: e_int = k_B * T / ((gamma - 1) * mu * m_u)
