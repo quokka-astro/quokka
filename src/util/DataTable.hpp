@@ -11,17 +11,17 @@
 namespace quokka
 {
 
-// Structure to hold interpolation indices and weights
+// Structure to hold interpolation indices and normalized coordinates
 struct InterpData {
 	int ix, iy, iix, iiy;  // grid indices
-	amrex::Real w11, w12, w21, w22;  // bilinear weights
 	amrex::Real x1, x2, y1, y2;     // actual coordinate values at grid points
+	amrex::Real h, v;               // normalized coordinates: h = (x-x1)/(x2-x1), v = (y-y1)/(y2-y1)
 	
 	// Default constructor
 	AMREX_GPU_HOST_DEVICE InterpData() 
 		: ix(0), iy(0), iix(0), iiy(0), 
-		  w11(0.0), w12(0.0), w21(0.0), w22(0.0),
-		  x1(0.0), x2(0.0), y1(0.0), y2(0.0) {}
+		  x1(0.0), x2(0.0), y1(0.0), y2(0.0),
+		  h(0.0), v(0.0) {}
 };
 
 // GPU-friendly struct containing const table references
@@ -49,7 +49,7 @@ struct DataTableGpuConst {
 		return interpolate2d(x, y, x_coords, y_coords, data);
 	}
 	
-	// Part 1: Find interpolation indices and weights
+	// Part 1: Find interpolation indices and normalized coordinates
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
 	auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData
 	{
@@ -82,42 +82,37 @@ struct DataTableGpuConst {
 		interp.y1 = y_coords(interp.iy);
 		interp.y2 = y_coords(interp.iiy);
 		
-		// Compute weights
-		if (interp.ix != interp.iix && interp.iy != interp.iiy) {
-			const amrex::Real vol = (interp.x2 - interp.x1) * (interp.y2 - interp.y1);
-			AMREX_ASSERT(vol > 0.0);
-			interp.w11 = (interp.x2 - x) * (interp.y2 - y) / vol;
-			interp.w12 = (interp.x2 - x) * (y - interp.y1) / vol;
-			interp.w21 = (x - interp.x1) * (interp.y2 - y) / vol;
-			interp.w22 = (x - interp.x1) * (y - interp.y1) / vol;
-		} else if (interp.ix == interp.iix && interp.iy != interp.iiy) {
-			const amrex::Real vol = (interp.y2 - interp.y1);
-			AMREX_ASSERT(vol > 0.0);
-			interp.w11 = (interp.y2 - y) / vol;
-			interp.w12 = (y - interp.y1) / vol;
-		} else if (interp.ix != interp.iix && interp.iy == interp.iiy) {
-			const amrex::Real vol = (interp.x2 - interp.x1);
-			AMREX_ASSERT(vol > 0.0);
-			interp.w11 = (interp.x2 - x) / vol;
-			interp.w21 = (x - interp.x1) / vol;
-		} else { // interp.ix == interp.iix && interp.iy == interp.iiy
-			interp.w11 = 1.0;
+		// Compute normalized coordinates
+		if (interp.ix != interp.iix) {
+			interp.h = (x - interp.x1) / (interp.x2 - interp.x1);
+		} else {
+			interp.h = 0.0;  // No variation in x direction
+		}
+		
+		if (interp.iy != interp.iiy) {
+			interp.v = (y - interp.y1) / (interp.y2 - interp.y1);
+		} else {
+			interp.v = 0.0;  // No variation in y direction
 		}
 		
 		return interp;
 	}
 	
-	// Part 2: Compute interpolated value using precomputed indices and weights
+	// Part 2: Compute interpolated value using precomputed indices and normalized coordinates
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
 	auto interpolate_with_data(const InterpData& interp) const -> amrex::Real
 	{
-		amrex::Real A = data(interp.ix, interp.iy);
-		amrex::Real B = data(interp.ix, interp.iiy);
-		amrex::Real C = data(interp.iix, interp.iy);
-		amrex::Real D = data(interp.iix, interp.iiy);
+		// Get the four corner values: (z1, z2, z3, z4) = (A, C, B, D)
+		// z1 = f(0,0) -> (x1, y1), z2 = f(1,0) -> (x2, y1)
+		// z3 = f(0,1) -> (x1, y2), z4 = f(1,1) -> (x2, y2)
+		amrex::Real z1 = data(interp.ix, interp.iy);    // A = data(ix, iy) - bottom left
+		amrex::Real z2 = data(interp.iix, interp.iy);   // C = data(iix, iy) - bottom right
+		amrex::Real z3 = data(interp.ix, interp.iiy);   // B = data(ix, iiy) - top left
+		amrex::Real z4 = data(interp.iix, interp.iiy);  // D = data(iix, iiy) - top right
 		
-		amrex::Real value = interp.w11 * A + interp.w12 * B + 
-		                    interp.w21 * C + interp.w22 * D;
+		// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
+		amrex::Real value = (1.0 - interp.v) * ((1.0 - interp.h) * z1 + interp.h * z2) + 
+		                    interp.v * ((1.0 - interp.h) * z3 + interp.h * z4);
 		AMREX_ASSERT(!std::isnan(value));
 		
 		return value;
@@ -131,56 +126,52 @@ struct DataTableGpuConst {
 		return interpolate_with_data(interp);
 	}
 	
-	// Compute numeric derivatives (∂f/∂x, ∂f/∂y) using bilinear interpolation
+	// Compute numeric derivatives (∂f/∂x, ∂f/∂y) using normalized coordinate algorithm
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
 	auto numeric_derivative(amrex::Real x, amrex::Real y) const -> amrex::Array<amrex::Real, 2>
 	{
-		// Get interpolation data
+		// Get interpolation data (includes precomputed h and v)
 		InterpData interp = find_interpolation_data(x, y);
 		
-		// Get the four corner values
-		amrex::Real A = data(interp.ix, interp.iy);    // (x1, y1)
-		amrex::Real B = data(interp.ix, interp.iiy);   // (x1, y2)  
-		amrex::Real C = data(interp.iix, interp.iy);   // (x2, y1)
-		amrex::Real D = data(interp.iix, interp.iiy);  // (x2, y2)
+		// Get the four corner values: (z1, z2, z3, z4) = (A, C, B, D)
+		// z1 = f(0,0) -> (x1, y1), z2 = f(1,0) -> (x2, y1)
+		// z3 = f(0,1) -> (x1, y2), z4 = f(1,1) -> (x2, y2)
+		amrex::Real z1 = data(interp.ix, interp.iy);    // A = data(ix, iy) - bottom left
+		amrex::Real z2 = data(interp.iix, interp.iy);   // C = data(iix, iy) - bottom right
+		amrex::Real z3 = data(interp.ix, interp.iiy);   // B = data(ix, iiy) - top left
+		amrex::Real z4 = data(interp.iix, interp.iiy);  // D = data(iix, iiy) - top right
 		
-		amrex::Real dfdx = 0.0;
-		amrex::Real dfdy = 0.0;
+		amrex::Real f_h = 0.0;
+		amrex::Real f_v = 0.0;
 		
-		// Compute derivatives based on interpolation case
+		// Compute derivatives in normalized coordinates
 		if (interp.ix != interp.iix && interp.iy != interp.iiy) {
-			// Full bilinear case: both x and y vary
-			const amrex::Real dx = interp.x2 - interp.x1;
-			const amrex::Real dy = interp.y2 - interp.y1;
-			const amrex::Real vol = dx * dy;
+			// Full bilinear case
+			// f_h = v (z4 - z3) + (1 - v) (z2 - z1)
+			f_h = interp.v * (z4 - z3) + (1.0 - interp.v) * (z2 - z1);
 			
-			// Partial derivative with respect to x
-			// d/dx of bilinear weights times values
-			dfdx = (-(interp.y2 - y) * A - (y - interp.y1) * B + 
-			        (interp.y2 - y) * C + (y - interp.y1) * D) / vol;
+			// f_v = h (z4 - z2) + (1 - h) (z3 - z1)
+			f_v = interp.h * (z4 - z2) + (1.0 - interp.h) * (z3 - z1);
 			
-			// Partial derivative with respect to y  
-			// d/dy of bilinear weights times values
-			dfdy = (-(interp.x2 - x) * A + (interp.x2 - x) * B -
-			        (x - interp.x1) * C + (x - interp.x1) * D) / vol;
-			        
 		} else if (interp.ix == interp.iix && interp.iy != interp.iiy) {
 			// Linear interpolation in y direction only
-			const amrex::Real dy = interp.y2 - interp.y1;
-			dfdx = 0.0;  // No variation in x direction
-			dfdy = (B - A) / dy;  // Linear derivative in y
+			f_h = 0.0;  // No variation in x direction
+			f_v = z3 - z1;  // Linear derivative in normalized v coordinate
 			
 		} else if (interp.ix != interp.iix && interp.iy == interp.iiy) {
-			// Linear interpolation in x direction only  
-			const amrex::Real dx = interp.x2 - interp.x1;
-			dfdx = (C - A) / dx;  // Linear derivative in x
-			dfdy = 0.0;  // No variation in y direction
+			// Linear interpolation in x direction only
+			f_h = z2 - z1;  // Linear derivative in normalized h coordinate
+			f_v = 0.0;  // No variation in y direction
 			
 		} else {
 			// Point interpolation - no derivatives
-			dfdx = 0.0;
-			dfdy = 0.0;
+			f_h = 0.0;
+			f_v = 0.0;
 		}
+		
+		// Convert to physical coordinates: f_x = f_h / (x2 - x1), f_y = f_v / (y2 - y1)
+		amrex::Real dfdx = (interp.ix != interp.iix) ? f_h / (interp.x2 - interp.x1) : 0.0;
+		amrex::Real dfdy = (interp.iy != interp.iiy) ? f_v / (interp.y2 - interp.y1) : 0.0;
 		
 		return {dfdx, dfdy};
 	}
