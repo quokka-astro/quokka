@@ -532,7 +532,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 }
 
 // Helper function for ResampledCooling
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real  /*gamma*/,
 								  quokka::ResampledCooling::resampledGpuConstTables const &tables)
 {
 	// return cell temperature
