@@ -116,20 +116,66 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	// get total gas mass
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	const double m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
+
 	amrex::Real eps_ff = 0.5;
 	amrex::ParmParse const pp("particles");
 	pp.query("eps_ff", eps_ff);
 
 	const amrex::Real eps_star = 0.5;
-	const double exp_Mstar_high_mean = 19.39;
-	const double exp_fstar_high = 0.220;
 	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
 	const amrex::Real prob_star_formation = (eps_ff / eps_star) * (sim.initDt_ / t_ff);
 	amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
 					 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
 
+	sim.maxTimesteps_ = 1;
 	sim.evolve();
+
+	const auto n_cells = sim.CountCells(0);
+	const auto [real_data_final, idata_final] =
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
+	const double m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
+
+	const double exp_Mstar_high_mean = 19.39; // Msun
+	const double exp_fstar_high = 0.220; // fraction of mass in high mass stars
+
+	const amrex::Real exp_m_star_per_cell = rho0 * cell_volume * eps_star;
+	const amrex::Real exp_m_star_high_per_cell = exp_m_star_per_cell * exp_fstar_high;
+	const amrex::Real exp_m_star_high_total = exp_m_star_high_per_cell * static_cast<amrex::Real>(n_cells) * prob_star_formation;
+	const amrex::Real exp_n_star_high_total = exp_m_star_high_total / (exp_Mstar_high_mean * C::M_solar);
+	// one low-mass star per cell
+	const amrex::Real exp_n_star_low_total = static_cast<amrex::Real>(n_cells) * prob_star_formation;
+	const amrex::Real exp_n_star_total = exp_n_star_high_total + exp_n_star_low_total;
+
+	// statistics from the simulation
+
+	const int mass_idx = 3;
+	double m_star_high_tot = 0.0;
+	double m_star_tot = 0.0;
+	int n_star_high = 0;
+	const int n_star_tot = static_cast<int>(real_data_final.size());
+	for (int i = 0; i < n_star_tot; ++i) {
+		if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
+			m_star_high_tot += real_data_final[i][mass_idx];
+			n_star_high++;
+		}
+		m_star_tot += real_data_final[i][mass_idx];
+	}
+	const double mean_mass_high_mass_stars = m_star_high_tot / n_star_high;
+
+	// get total mass in gas
+	const double m_gas_change = m_gas_init - m_gas_final;
+
+	amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " [" << exp_m_star_high_total / C::M_solar << "] M_sol \n";
+	amrex::Print() << "Number of high-mass stars [expected]   = " << n_star_high << " [" << exp_n_star_high_total << "] \n";
+	amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " [" << exp_Mstar_high_mean << "] M_sol \n";
+	amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_tot - n_star_high << " [" << exp_n_star_low_total << "] \n";
+	// amrex::Print() << "Number of all stars [expected]   = " << n_star_tot << " [" << exp_n_star_total << "] \n";
+	amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
 
 	return 0;
 }
