@@ -58,6 +58,6 @@ def main(f1, f2):
 
 if __name__ == "__main__":
     f1 = 'tests/sn_energy_history_grackle.csv'
-    # f2 = 'tests/sn_energy_history_resampled.csv'
-    f2 = 'tests/sn_energy_history_datatable.csv'
+    f2 = 'tests/sn_energy_history_resampled.csv'
+    # f2 = 'tests/sn_energy_history_datatable.csv'
     main(f1, f2)
