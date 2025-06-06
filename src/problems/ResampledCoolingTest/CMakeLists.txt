@@ -5,4 +5,5 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 add_test(NAME ResampledCoolingGrackle COMMAND test_resampled_cooling ResampledCooling.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ResampledCoolingDataTable COMMAND test_resampled_cooling CoolingDataTable.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ResampledCoolingCCT COMMAND test_resampled_cooling TabulatedCooling.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

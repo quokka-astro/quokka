@@ -15,6 +15,7 @@
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
+#include "cooling/DataTableCooling.hpp"
 #include "math/interpolate.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -153,6 +154,8 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
 		} else if (coolingTableType_ == "cloudy_cooling_tools") {
 			T = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudyTables_.const_tables());
+		} else if (coolingTableType_ == "datatable") {
+			T = quokka::DataTableCooling::ComputeTgasFromEgas(rho, Eint, dataTableTables_.const_tables());
 		} else {
 			amrex::Abort("Unsupported cooling table type: " + coolingTableType_);
 		}
