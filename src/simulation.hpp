@@ -1392,25 +1392,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// NOTE: CIC interpolation requires 1, but particles may have drifted
 		// 	into 1 ghost cell since last particle redistribute.
 		const int nghost_acc = 2;
-		const int nghost_phi = nghost_acc + 1;  // Need extra ghost cell for centered difference
+		const int nghost_phi = nghost_acc + 1; // Need extra ghost cell for centered difference
 
 		// Create potential MultiFab with sufficient ghost cells for gradient computation
 		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi);
-		
+
 		// Fill extended potential from existing phi using FillPatch
 		// This handles coarse-fine boundaries without InterpFromCoarseLevel
 		if (lev == 0) {
 			// Base level: just copy and fill boundaries
 			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
 			phi_extended.FillBoundary(geom[lev].periodicity());
-			
+
 			// Apply physical boundary conditions to phi
 			amrex::Vector<amrex::BCRec> phiBC(1);
 			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
 				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
-			
+
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
 			phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
@@ -1421,15 +1421,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
 				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
-			
+
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev-1], phiBC, boundaryFunctor);
-			
-			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev-1]}, {0.}, {&phi[lev]}, {0.}, 
-									  0, 0, 1, geom[lev-1], geom[lev], phiCoarseBdryFunct, 0, 
-									  phiBdryFunct, 0, refRatio(lev-1), &amrex::quadratic_interp, 
-									  phiBC, 0);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
+
+			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
+						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 		}
 
 		// Create cell-centered acceleration MultiFab
