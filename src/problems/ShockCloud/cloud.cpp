@@ -575,8 +575,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 		return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampled_tables);
 	} else {
 		return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
-	} 		return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
-
+	}
+	return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
 }
 
 template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
