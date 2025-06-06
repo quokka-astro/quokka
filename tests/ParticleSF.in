@@ -13,7 +13,7 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 32 32 32
+amr.n_cell          = 16 16 16
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 16    # grid size must be divisible by this
 amr.max_grid_size   = 16    # at least 128 for GPUs
@@ -30,6 +30,14 @@ particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 0
 particles.eps_ff = 0.5
 
-plotfile_interval = 1
-
 tiny_profiler.enabled = 0
+
+cooling.enabled = 1
+cooling.cooling_table_type = "grackle"
+cooling.hdf5_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+
+problem.n0 = 1.0e5
+problem.Tamb = 1.0e1
+problem.stage_2_max_timesteps = 200
+plotfile_interval = -1
+checkpoint_interval = -1

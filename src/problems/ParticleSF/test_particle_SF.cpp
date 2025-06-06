@@ -25,8 +25,8 @@ struct ParticleSFProblem {
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-constexpr double rho0 = 1.0e4 * mu;
 constexpr double year = 3.15576e+07; // in seconds
+AMREX_GPU_MANAGED Real n0 = 1.0e4; // NOLINT
 AMREX_GPU_MANAGED Real Tamb = 10.0; // NOLINT
 
 template <> struct Particle_Traits<ParticleSFProblem> {
@@ -61,7 +61,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const auto dx = geom[0].CellSizeArray();
 
-	const double rho = rho0;
+	const double rho = n0 * mu;
 	const double e_int = 1.0 / (gamma_ - 1.0) * rho * C::k_B * Tamb / mu;
 
 	// loop over the grid and set the initial condition
@@ -109,11 +109,19 @@ auto problem_main() -> int
 	sim.stopTime_ = 1.0e7 * year; // 10 Myr
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 
+	// Real Tamb and n0 from the input file
+	amrex::ParmParse const ppp("problem");
+	ppp.query("Tamb", Tamb);
+	ppp.query("n0", n0);
+	int max_timesteps = 10;
+	ppp.query("stage_2_max_timesteps", max_timesteps);
+
 	// set random state
 	const int seed = 42;
 	amrex::InitRandom(seed, 1); // all ranks should produce the same values
 
 	// initialize
+	sim.maxTimesteps_ = 1;
 	sim.setInitialConditions();
 
 	// get total gas mass
@@ -126,22 +134,19 @@ auto problem_main() -> int
 	pp.query("eps_ff", eps_ff);
 
 	const amrex::Real eps_star = 0.5;
+	const amrex::Real rho0 = n0 * mu;
 	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
 	const amrex::Real prob_star_formation = (eps_ff / eps_star) * (sim.initDt_ / t_ff);
 	amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
 					 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
 
-	sim.maxTimesteps_ = 1;
 	sim.evolve();
 
 	const auto n_cells = sim.CountCells(0);
 	const auto [real_data_final, idata_final] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
 	const double m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
-
-	sim.maxTimesteps_ = 10;
-	sim.evolve();
 
 	const double exp_Mstar_high_mean = 19.39; // Msun
 	const double exp_fstar_high = 0.220; // fraction of mass in high mass stars
@@ -161,6 +166,12 @@ auto problem_main() -> int
 	double m_star_tot = 0.0;
 	int n_star_high = 0;
 	const int n_star_tot = static_cast<int>(real_data_final.size());
+
+	if (n_star_tot == 0) {
+		amrex::Print() << "Test failed: No stars formed\n";
+		return 1;
+	}
+
 	for (int i = 0; i < n_star_tot; ++i) {
 		if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
 			m_star_high_tot += real_data_final[i][mass_idx];
@@ -179,6 +190,9 @@ auto problem_main() -> int
 	amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_tot - n_star_high << " [" << exp_n_star_low_total << "] \n";
 	// amrex::Print() << "Number of all stars [expected]   = " << n_star_tot << " [" << exp_n_star_total << "] \n";
 	amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
+
+	sim.maxTimesteps_ = max_timesteps;
+	sim.evolve();
 
 	return 0;
 }
