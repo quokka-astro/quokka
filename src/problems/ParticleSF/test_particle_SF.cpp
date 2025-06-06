@@ -26,8 +26,8 @@ struct ParticleSFProblem {
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double year = 3.15576e+07; // in seconds
-AMREX_GPU_MANAGED Real n0 = 1.0e4; // NOLINT
-AMREX_GPU_MANAGED Real Tamb = 10.0; // NOLINT
+AMREX_GPU_MANAGED Real n0 = 1.0e4;   // NOLINT
+AMREX_GPU_MANAGED Real Tamb = 10.0;  // NOLINT
 
 template <> struct Particle_Traits<ParticleSFProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -149,7 +149,7 @@ auto problem_main() -> int
 	const double m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 
 	const double exp_Mstar_high_mean = 19.39; // Msun
-	const double exp_fstar_high = 0.220; // fraction of mass in high mass stars
+	const double exp_fstar_high = 0.220;	  // fraction of mass in high mass stars
 
 	const amrex::Real exp_m_star_per_cell = rho0 * cell_volume * eps_star;
 	const amrex::Real exp_m_star_high_per_cell = exp_m_star_per_cell * exp_fstar_high;
@@ -184,9 +184,11 @@ auto problem_main() -> int
 	// get total mass in gas
 	const double m_gas_change = m_gas_init - m_gas_final;
 
-	amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " [" << exp_m_star_high_total / C::M_solar << "] M_sol \n";
+	amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " [" << exp_m_star_high_total / C::M_solar
+		       << "] M_sol \n";
 	amrex::Print() << "Number of high-mass stars [expected]   = " << n_star_high << " [" << exp_n_star_high_total << "] \n";
-	amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " [" << exp_Mstar_high_mean << "] M_sol \n";
+	amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " [" << exp_Mstar_high_mean
+		       << "] M_sol \n";
 	amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_tot - n_star_high << " [" << exp_n_star_low_total << "] \n";
 	// amrex::Print() << "Number of all stars [expected]   = " << n_star_tot << " [" << exp_n_star_total << "] \n";
 	amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
