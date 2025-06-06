@@ -81,8 +81,8 @@ auto readReferenceCSV(const std::string &filename) -> std::pair<std::vector<doub
 }
 
 template <> struct SimulationData<ResampledCoolingTest> {
-  std::vector<double> t_vec_;
-  std::vector<double> T_vec_;
+	std::vector<double> t_vec_;
+	std::vector<double> T_vec_;
 };
 
 template <> struct quokka::EOS_Traits<ResampledCoolingTest> {
