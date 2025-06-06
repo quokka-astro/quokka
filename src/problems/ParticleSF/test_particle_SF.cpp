@@ -120,5 +120,16 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("particles");
 	pp.query("eps_ff", eps_ff);
 
+	const amrex::Real eps_star = 0.5;
+	const double exp_Mstar_high_mean = 19.39;
+	const double exp_fstar_high = 0.220;
+	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
+	const amrex::Real prob_star_formation = (eps_ff / eps_star) * (sim.initDt_ / t_ff);
+	amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
+					 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
+
+	sim.evolve();
+
 	return 0;
 }
