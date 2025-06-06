@@ -12,10 +12,10 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
+#include "cooling/DataTableCooling.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
-#include "cooling/DataTableCooling.hpp"
 #include "math/interpolate.hpp"
 #include <fmt/format.h>
 #include <fstream>
