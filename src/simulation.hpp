@@ -1445,7 +1445,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 #if AMREX_SPACEDIM >= 2
 			accel_arr[bx](i, j, k, 1) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j - 1, k));
 #endif
-#if AMREX_SPACEDIM == 3
+#if AMREX_SPACEDIM == 3 // NOLINT(readability-redundant-preprocessor)
 			accel_arr[bx](i, j, k, 2) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k - 1));
 #endif
 		});
