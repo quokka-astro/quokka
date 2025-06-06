@@ -25,6 +25,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "cooling/ResampledCooling.hpp"
+#include "cooling/TabulatedCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/NSCBC_inflow.hpp"
@@ -274,85 +275,165 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 
 	if (dname == "temperature") {
 		const int ncomp = ncomp_in;
-		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
-		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			output[bx](i, j, k, ncomp) = Tgas;
-		});
+		if (coolingTableType_ == "resampled") {
+			auto tables = resampledTables_.const_tables();
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				output[bx](i, j, k, ncomp) = Tgas;
+			});
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			auto tables = cloudyTables_.const_tables();
+			constexpr Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
+				output[bx](i, j, k, ncomp) = Tgas;
+			});
+		}
 
 	} else if (dname == "c_s") {
 		const int ncomp = ncomp_in;
-		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
-		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
-			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
-		});
+		if (coolingTableType_ == "resampled") {
+			auto tables = resampledTables_.const_tables();
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
+				output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
+			});
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			auto tables = cloudyTables_.const_tables();
+			constexpr Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
+				Real const mu = quokka::TabulatedCooling::ComputeMMW(rho, Eint, gamma, tables);
+				Real const cs = std::sqrt(gamma * C::k_B * Tgas / (mu * (C::m_p + C::m_e)));
+				output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
+			});
+		}
 
 	} else if (dname == "nH") {
 		const int ncomp = ncomp_in;
-		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
-		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const nH = (tables.cloudy_H_mass_fraction * rho) / m_H;
-			output[bx](i, j, k, ncomp) = nH;
-		});
+		if (coolingTableType_ == "resampled") {
+			auto tables = resampledTables_.const_tables();
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const nH = (tables.cloudy_H_mass_fraction * rho) / m_H;
+				output[bx](i, j, k, ncomp) = nH;
+			});
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const nH = (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho) / m_H;
+				output[bx](i, j, k, ncomp) = nH;
+			});
+		}
 
 	} else if (dname == "pressure") {
 		const int ncomp = ncomp_in;
-		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
-		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const P_cgs = quokka::ResampledCooling::ComputePressureFromRhoEint(rho, Eint, tables);
-			Real const ndens_times_T = P_cgs / C::k_B; // convert to [K cm^-3]
-			output[bx](i, j, k, ncomp) = ndens_times_T;
-		});
+		if (coolingTableType_ == "resampled") {
+			auto tables = resampledTables_.const_tables();
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const P_cgs = quokka::ResampledCooling::ComputePressureFromRhoEint(rho, Eint, tables);
+				Real const ndens_times_T = P_cgs / C::k_B; // convert to [K cm^-3]
+				output[bx](i, j, k, ncomp) = ndens_times_T;
+			});
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			auto tables = cloudyTables_.const_tables();
+			constexpr Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
+				Real const mu = quokka::TabulatedCooling::ComputeMMW(rho, Eint, gamma, tables);
+				Real const n = rho / ((C::m_p + C::m_e) * mu);
+				Real const P_cgs = n * C::k_B * Tgas;
+				Real const ndens_times_T = P_cgs / C::k_B; // convert to [K cm^-3]
+				output[bx](i, j, k, ncomp) = ndens_times_T;
+			});
+		}
 
 	} else if (dname == "entropy") {
 		const int ncomp = ncomp_in;
-		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
-		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
-			Real const K_keV_cm2 = K_cgs / keV_in_ergs; // convert to units of keV cm^2
-			output[bx](i, j, k, ncomp) = K_keV_cm2;
-		});
+		if (coolingTableType_ == "resampled") {
+			auto tables = resampledTables_.const_tables();
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
+				Real const K_keV_cm2 = K_cgs / keV_in_ergs; // convert to units of keV cm^2
+				output[bx](i, j, k, ncomp) = K_keV_cm2;
+			});
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			// For TabulatedCooling, compute entropy using ideal gas law: K = P * rho^(-gamma)
+			auto tables = cloudyTables_.const_tables();
+			constexpr Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
+				Real const mu = quokka::TabulatedCooling::ComputeMMW(rho, Eint, gamma, tables);
+				Real const n = rho / ((C::m_p + C::m_e) * mu);
+				Real const P_cgs = n * C::k_B * Tgas;
+				Real const K_cgs = P_cgs * std::pow(rho, -gamma); // entropy K = P * rho^(-gamma)
+				Real const K_keV_cm2 = K_cgs / keV_in_ergs;	  // convert to units of keV cm^2
+				output[bx](i, j, k, ncomp) = K_keV_cm2;
+			});
+		}
 
 	} else if (dname == "mass") {
 		const int ncomp = ncomp_in;
@@ -383,21 +464,37 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 
 	} else if (dname == "cooling_length") {
 		const int ncomp = ncomp_in;
-		auto tables = resampledTables_.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
 
-		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			// compute cooling length in parsec
-			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
-			output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
-		});
+		if (coolingTableType_ == "resampled") {
+			auto tables = resampledTables_.const_tables();
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				// compute cooling length in parsec
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
+				output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
+			});
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			auto tables = cloudyTables_.const_tables();
+			constexpr Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
+			amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				// compute cooling length in parsec
+				Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const l_cool = quokka::TabulatedCooling::ComputeCoolingLength(rho, Eint, gamma, tables);
+				output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
+			});
+		}
 
 	} else if (dname == "lab_velocity_x") {
 		const int ncomp = ncomp_in;
@@ -434,8 +531,9 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
-							 quokka::ResampledCooling::resampledGpuConstTables const &tables)
+// Helper function for ResampledCooling
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real /*gamma*/,
+								  quokka::ResampledCooling::resampledGpuConstTables const &tables)
 {
 	// return cell temperature
 	Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -445,6 +543,40 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 	return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+}
+
+// Helper function for TabulatedCooling
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempTabulated(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
+								  quokka::TabulatedCooling::cloudyGpuConstTables const &tables)
+{
+	// return cell temperature
+	Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+	Real const x1Mom = state(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+	Real const x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
+	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+	return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
+}
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
+							 bool use_resampled_cooling, quokka::ResampledCooling::resampledGpuConstTables const &resampled_tables,
+							 quokka::TabulatedCooling::cloudyGpuConstTables const &cloudy_tables)
+{
+	// return cell temperature for either cooling type
+	Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+	Real const x1Mom = state(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+	Real const x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
+	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+
+	if (use_resampled_cooling) {
+		return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampled_tables);
+	} else {
+		return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
+	}
+	return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
 }
 
 template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -478,38 +610,73 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["sim_partialwind_mass"] = sim_partialwind_mass / solarmass_in_g;
 
 	// compute cloud mass according to temperature threshold
-	auto tables = resampledTables_.const_tables();
+	Real M_cl_1e4, M_cl_8000, M_cl_9000, M_cl_11000, M_cl_12000;
 
-	const Real M_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 1.0e4) ? rho : 0.0;
-		return result;
-	});
-	const Real M_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 8000.) ? rho : 0.0;
-		return result;
-	});
-	const Real M_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 9000.) ? rho : 0.0;
-		return result;
-	});
-	const Real M_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 1.1e4) ? rho : 0.0;
-		return result;
-	});
-	const Real M_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 1.2e4) ? rho : 0.0;
-		return result;
-	});
+	if (coolingTableType_ == "resampled") {
+		auto tables = resampledTables_.const_tables();
+		M_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 1.0e4) ? rho : 0.0;
+			return result;
+		});
+		M_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 8000.) ? rho : 0.0;
+			return result;
+		});
+		M_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 9000.) ? rho : 0.0;
+			return result;
+		});
+		M_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 1.1e4) ? rho : 0.0;
+			return result;
+		});
+		M_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 1.2e4) ? rho : 0.0;
+			return result;
+		});
+	} else if (coolingTableType_ == "cloudy_cooling_tools") {
+		auto tables = cloudyTables_.const_tables();
+		M_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 1.0e4) ? rho : 0.0;
+			return result;
+		});
+		M_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 8000.) ? rho : 0.0;
+			return result;
+		});
+		M_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 9000.) ? rho : 0.0;
+			return result;
+		});
+		M_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 1.1e4) ? rho : 0.0;
+			return result;
+		});
+		M_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const result = (T < 1.2e4) ? rho : 0.0;
+			return result;
+		});
+	}
 
 	stats["cloud_mass_1e4"] = M_cl_1e4 / solarmass_in_g;
 	stats["cloud_mass_8000"] = M_cl_8000 / solarmass_in_g;
@@ -517,36 +684,73 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["cloud_mass_11000"] = M_cl_11000 / solarmass_in_g;
 	stats["cloud_mass_12000"] = M_cl_12000 / solarmass_in_g;
 
-	const Real origM_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
-		return result;
-	});
-	const Real origM_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 8000.) ? rho_cloud : 0.0;
-		return result;
-	});
-	const Real origM_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 9000.) ? rho_cloud : 0.0;
-		return result;
-	});
-	const Real origM_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
-		return result;
-	});
-	const Real origM_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
-		return result;
-	});
+	Real origM_cl_1e4, origM_cl_8000, origM_cl_9000, origM_cl_11000, origM_cl_12000;
+
+	if (coolingTableType_ == "resampled") {
+		auto tables = resampledTables_.const_tables();
+		origM_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
+			return result;
+		});
+		origM_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 8000.) ? rho_cloud : 0.0;
+			return result;
+		});
+		origM_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 9000.) ? rho_cloud : 0.0;
+			return result;
+		});
+		origM_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
+			return result;
+		});
+		origM_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
+			return result;
+		});
+	} else if (coolingTableType_ == "cloudy_cooling_tools") {
+		auto tables = cloudyTables_.const_tables();
+		origM_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
+			return result;
+		});
+		origM_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 8000.) ? rho_cloud : 0.0;
+			return result;
+		});
+		origM_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 9000.) ? rho_cloud : 0.0;
+			return result;
+		});
+		origM_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
+			return result;
+		});
+		origM_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+			Real const T = ComputeCellTempTabulated(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
+			return result;
+		});
+	}
 
 	stats["cloud_mass_1e4_original"] = origM_cl_1e4 / solarmass_in_g;
 	stats["cloud_mass_8000_original"] = origM_cl_8000 / solarmass_in_g;
@@ -601,13 +805,20 @@ template <>
 auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
-	auto tables = resampledTables_.const_tables();
+
+	Real H_mass_fraction;
+	if (coolingTableType_ == "resampled") {
+		auto tables = resampledTables_.const_tables();
+		H_mass_fraction = tables.cloudy_H_mass_fraction;
+	} else {
+		H_mass_fraction = quokka::TabulatedCooling::cloudy_H_mass_fraction;
+	}
 
 	// compute (total) density projection
 	proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    return (tables.cloudy_H_mass_fraction * rho) / m_H;
+		    return (H_mass_fraction * rho) / m_H;
 	    });
 
 	// compute cloud partial density projection
@@ -615,7 +826,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial cloud density
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    return (tables.cloudy_H_mass_fraction * rho_cloud) / m_H;
+		    return (H_mass_fraction * rho_cloud) / m_H;
 	    });
 
 	// compute non-cloud partial density projection
@@ -623,7 +834,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial wind density
 		    Real const rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-		    return (tables.cloudy_H_mass_fraction * rho_wind) / m_H;
+		    return (H_mass_fraction * rho_wind) / m_H;
 	    });
 
 	return proj;
@@ -638,23 +849,41 @@ template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBox
 	const Real min_dx = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 	const Real resolved_length = static_cast<Real>(Ncells_per_lcool) * min_dx;
 
-	auto tables = resampledTables_.const_tables();
 	const auto state = state_new_cc_[lev].const_arrays();
 	const auto tag = tags.arrays();
 
-	amrex::ParallelFor(state_new_cc_[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-		Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-		Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-		Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-		Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-		Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
+	if (coolingTableType_ == "resampled") {
+		auto tables = resampledTables_.const_tables();
+		amrex::ParallelFor(state_new_cc_[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
 
-		if (l_cool < resolved_length) {
-			tag[bx](i, j, k) = amrex::TagBox::SET;
-		}
-	});
+			if (l_cool < resolved_length) {
+				tag[bx](i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	} else if (coolingTableType_ == "cloudy_cooling_tools") {
+		auto tables = cloudyTables_.const_tables();
+		constexpr Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
+		amrex::ParallelFor(state_new_cc_[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const l_cool = quokka::TabulatedCooling::ComputeCoolingLength(rho, Eint, gamma, tables);
+
+			if (l_cool < resolved_length) {
+				tag[bx](i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
 	amrex::Gpu::streamSynchronize();
 }
 
@@ -721,9 +950,15 @@ auto problem_main() -> int
 	amrex::Print() << fmt::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	// compute mass density of background, cloud
-	auto tables = sim.resampledTables_.const_tables();
-	::rho0 = nH_bg * m_H / tables.cloudy_H_mass_fraction;	 // g cm^-3
-	::rho1 = nH_cloud * m_H / tables.cloudy_H_mass_fraction; // g cm^-3
+	Real H_mass_fraction;
+	if (sim.coolingTableType_ == "resampled") {
+		auto tables = sim.resampledTables_.const_tables();
+		H_mass_fraction = tables.cloudy_H_mass_fraction;
+	} else {
+		H_mass_fraction = quokka::TabulatedCooling::cloudy_H_mass_fraction;
+	}
+	::rho0 = nH_bg * m_H / H_mass_fraction;	   // g cm^-3
+	::rho1 = nH_cloud * m_H / H_mass_fraction; // g cm^-3
 
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho1));
@@ -733,8 +968,16 @@ auto problem_main() -> int
 	constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
 	const Real Eint_bg = ::P0 / (gamma - 1.);
 	const Real Eint_cl = ::P0 / (gamma - 1.);
-	const Real T_bg = quokka::ResampledCooling::ComputeTgasFromEgas(rho0, Eint_bg, tables);
-	const Real T_cl = quokka::ResampledCooling::ComputeTgasFromEgas(rho1, Eint_cl, tables);
+	Real T_bg, T_cl;
+	if (sim.coolingTableType_ == "resampled") {
+		auto tables = sim.resampledTables_.const_tables();
+		T_bg = quokka::ResampledCooling::ComputeTgasFromEgas(rho0, Eint_bg, tables);
+		T_cl = quokka::ResampledCooling::ComputeTgasFromEgas(rho1, Eint_cl, tables);
+	} else if (sim.coolingTableType_ == "cloudy_cooling_tools") {
+		auto tables = sim.cloudyTables_.const_tables();
+		T_bg = quokka::TabulatedCooling::ComputeTgasFromEgas(rho0, Eint_bg, gamma, tables);
+		T_cl = quokka::TabulatedCooling::ComputeTgasFromEgas(rho1, Eint_cl, gamma, tables);
+	}
 	amrex::Print() << fmt::format("T_bg = {} K\n", T_bg);
 	amrex::Print() << fmt::format("T_cl = {} K\n", T_cl);
 
@@ -750,7 +993,14 @@ auto problem_main() -> int
 	const Real v_shock = M0 * x4;
 
 	const Real Eint_post = P_post / (gamma - 1.);
-	const Real T_post = quokka::ResampledCooling::ComputeTgasFromEgas(rho_post, Eint_post, tables);
+	Real T_post;
+	if (sim.coolingTableType_ == "resampled") {
+		auto tables = sim.resampledTables_.const_tables();
+		T_post = quokka::ResampledCooling::ComputeTgasFromEgas(rho_post, Eint_post, tables);
+	} else if (sim.coolingTableType_ == "cloudy_cooling_tools") {
+		auto tables = sim.cloudyTables_.const_tables();
+		T_post = quokka::TabulatedCooling::ComputeTgasFromEgas(rho_post, Eint_post, gamma, tables);
+	}
 	amrex::Print() << fmt::format("T_wind = {} K\n", T_post);
 
 	::v_wind = v_wind; // set global variables

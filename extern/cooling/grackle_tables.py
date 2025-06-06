@@ -151,3 +151,77 @@ def cooling_rate(nH, T, redshift=0., tables=None):
     Edot += compton_CMB
 
     return Edot
+
+
+def compute_temperature_from_nH_e(nH, e_int, tables=None, gamma = 5./3.):
+    """Convert gas specific internal energy to temperature.    
+    This is a Python implementation of the ComputeTgasFromEgas function from
+    src/cooling/GrackleLikeCooling.hpp. It solves for the temperature that gives
+    the correct internal energy through the mean molecular weight relationship.
+    
+    Args:
+        nH: hydrogen number density (cm^-3)
+        e_int: specific internal energy (erg/g)
+        gamma: adiabatic index == 5/3
+        tables: cooling tables object with interpolation data
+        T_min: minimum temperature (K) - if None, uses table minimum
+        T_max: maximum temperature (K) - if None, uses table maximum
+        mu_min: minimum mean molecular weight - if None, uses typical value
+        mu_max: maximum mean molecular weight - if None, uses typical value
+    
+    Returns:
+        T: temperature (K)
+    """
+    # Set default temperature bounds
+    T_min = 10.0 ** tables.log_T[0]
+    T_max = 10.0 ** tables.log_T[-1]
+    mu_min = np.min(tables.mmw)
+    mu_max = np.max(tables.mmw)
+    
+    # Check whether temperature is (obviously) out-of-bounds
+    eint_min = specific_energy_from_temperature(T_min, mu_max)
+    eint_max = specific_energy_from_temperature(T_max, mu_min)
+    if e_int <= eint_min:
+        return T_min
+    if e_int >= eint_max:
+        return T_max
+    
+    # Solve for temperature given Eint (with fixed adiabatic index gamma)
+    C = (gamma - 1.) * e_int * m_H / boltzmann_constant_cgs_
+    
+    # Define the function to find the root of: f(T) = C * mu(T) - T = 0
+    def f(T):
+        # Compute new mu from mu(T) table
+        T_clamped = np.clip(T, T_min, T_max)
+        mu = interpolate_mu(nH, T_clamped, tables=tables)
+        return C * mu - T
+    
+    # Compute temperature bounds using physics
+    T_lower = max(C * mu_min, T_min)
+    T_upper = min(C * mu_max, T_max)
+    
+    # Use scipy's TOMS748 method for root finding (same as C++ code)
+    from scipy.optimize import toms748    
+    try:
+        # TOMS748 method with relative tolerance
+        T_sol = toms748(f, T_lower, T_upper, rtol=1.0e-5, maxiter=100)
+    except ValueError as e:
+        # Root finding failed
+        print(f"Tgas iteration failed! e_int = {e_int:.17e}, nH = {nH:.3e}, T_lower = {T_lower:.3e}, T_upper = {T_upper:.3e}")
+        raise e
+    
+    return T_sol
+
+
+def specific_energy_from_temperature(T, mu):
+    """Convert temperature to specific internal energy.    
+    Args:
+        T: temperature (K)
+        mu: mean molecular weight in units of m_H
+    
+    Returns:
+        e_int: specific internal energy (erg/g)
+    """
+    # For ideal gas: e_int = (3/2) * k_B * T / (mu * m_H)
+    e_int = (3.0 / 2.0) * boltzmann_constant_cgs_ * T / (mu * m_H)
+    return e_int
