@@ -35,7 +35,8 @@ struct ResampledCoolingTest {
 // Function to read CSV reference solution
 auto readReferenceCSV(const std::string &filename) -> std::pair<std::vector<double>, std::vector<double>>
 {
-	std::vector<double> t_ref, T_ref;
+	std::vector<double> t_ref;
+	std::vector<double> T_ref;
 	std::ifstream file(filename);
 
 	if (!file.is_open()) {
@@ -54,17 +55,19 @@ auto readReferenceCSV(const std::string &filename) -> std::pair<std::vector<doub
 
 	while (std::getline(file, line)) {
 		std::stringstream ss(line);
-		std::string time_str, temp_str;
+		std::string time_str;
+		std::string temp_str;
 
 		// Expect CSV format: time, temperature
 		if (std::getline(ss, time_str, ',') && std::getline(ss, temp_str)) {
 			try {
-				double t = std::stod(time_str);
-				double T = std::stod(temp_str);
+				double const t = std::stod(time_str);
+				double const T = std::stod(temp_str);
 				t_ref.push_back(t);
 				T_ref.push_back(T);
 			} catch (const std::exception &e) {
-				// Skip invalid lines
+				// Skip invalid lines - this is expected for malformed CSV entries
+				(void)e; // suppress unused variable warning
 				continue;
 			}
 		}
@@ -78,8 +81,8 @@ auto readReferenceCSV(const std::string &filename) -> std::pair<std::vector<doub
 }
 
 template <> struct SimulationData<ResampledCoolingTest> {
-	std::vector<double> t_vec_;
-	std::vector<double> T_vec_;
+  std::vector<double> t_vec_;
+  std::vector<double> T_vec_;
 };
 
 template <> struct quokka::EOS_Traits<ResampledCoolingTest> {
@@ -161,11 +164,11 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 auto problem_main() -> int
 {
 	// Read runtime parameters
-	amrex::ParmParse pp("cooling_test");
-	std::string reference_file = "";
+	amrex::ParmParse const pp("cooling_test");
+	std::string reference_file;
 	pp.query("reference_solution_file", reference_file);
 
-	std::string output_csv_file = "";
+	std::string output_csv_file;
 	pp.query("output_csv_file", output_csv_file);
 
 	// Problem initialization
@@ -221,8 +224,8 @@ auto problem_main() -> int
 						   t_ref.data(), T_ref.data(), static_cast<int>(t_ref.size()));
 
 				// Compute L1 error norm
-				double err_norm = 0.;
-				double sol_norm = 0.;
+				double err_norm = 0.; // NOLINT(misc-const-correctness)
+				double sol_norm = 0.; // NOLINT(misc-const-correctness)
 				for (size_t i = 0; i < sim.userData_.t_vec_.size(); ++i) {
 					err_norm += std::abs(sim.userData_.T_vec_[i] - T_ref_interp[i]);
 					sol_norm += std::abs(T_ref_interp[i]);
@@ -312,7 +315,8 @@ auto problem_main() -> int
 				matplotlibcpp::plot(t_ref_Myr, T_ref, ref_args);
 				matplotlibcpp::legend();
 			} catch (const std::exception &e) {
-				// Continue without reference plot
+				// Continue without reference plot - this is expected if file is malformed
+				(void)e; // suppress unused variable warning
 			}
 		}
 		matplotlibcpp::xscale("log");
