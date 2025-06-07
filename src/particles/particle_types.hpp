@@ -314,6 +314,12 @@ inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use un
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
 
+// Random seed for particle creation. Default is 0, which means the random seed is not fixed.
+inline int particle_random_seed = 0; // NOLINT
+
+// Stable redistribute for particle creation. Default is 0 (false).
+inline int particle_stable_redistribute = 0; // NOLINT
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -339,6 +345,12 @@ inline void particleParmParse()
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
+
+	// Handle random seed
+	pp.query("random_seed", particle_random_seed);
+
+	// Handle stable redistribute
+	pp.query("stable_redistribute", particle_stable_redistribute);
 }
 
 } // namespace quokka

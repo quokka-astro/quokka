@@ -2293,12 +2293,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 	// Read particle parameters from input file
 	quokka::particleParmParse();
 
+	if (quokka::particle_random_seed != 0) {
+		amrex::InitRandom(static_cast<unsigned long>(quokka::particle_random_seed)); // NOLINT(google-runtime-int)
+	}
+
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
 		AMREX_ASSERT(RadParticles == nullptr);
 
 		// Create particle container
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
 		RadParticles->SetVerbose(0);
+
+		if (quokka::particle_stable_redistribute != 0) {
+			RadParticles->setStableRedistribute(1);
+		}
 
 		// Register with particle register - Rad particles do not allow creation
 		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad);
@@ -2315,6 +2323,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		CICParticles->SetVerbose(0);
 
+		if (quokka::particle_stable_redistribute != 0) {
+			RadParticles->setStableRedistribute(1);
+		}
+
 		// Register with particle register - CIC particles allow creation
 		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC);
 
@@ -2328,6 +2340,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		// Create particle container
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
 		CICRadParticles->SetVerbose(0);
+
+		if (quokka::particle_stable_redistribute != 0) {
+			RadParticles->setStableRedistribute(1);
+		}
 
 		// Register with particle register - CICRad particles do not allow creation
 		particleRegister_.registerParticleType(CICRadParticles.get(), quokka::ParticleType::CICRad);
@@ -2345,6 +2361,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
 		StochasticStellarPopParticles->SetVerbose(0);
 
+		if (quokka::particle_stable_redistribute != 0) {
+			RadParticles->setStableRedistribute(1);
+		}
+
 		// Register with particle register - StochasticStellarPop particles allow creation
 		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
 
@@ -2359,6 +2379,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
 		SinkParticles->SetVerbose(0);
 
+		if (quokka::particle_stable_redistribute != 0) {
+			RadParticles->setStableRedistribute(1);
+		}
+
 		// Register with particle register - Sink particles allow creation
 		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
 
@@ -2371,6 +2395,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		// Create particle container
 		TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
 		TestParticles->SetVerbose(0);
+
+		if (quokka::particle_stable_redistribute != 0) {
+			RadParticles->setStableRedistribute(1);
+		}
 
 		// Register with particle register - Test particles have all features enabled
 		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test);
