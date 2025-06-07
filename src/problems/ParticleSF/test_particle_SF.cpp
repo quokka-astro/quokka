@@ -157,7 +157,7 @@ auto problem_main() -> int
 	const amrex::Real exp_n_star_high_total = exp_m_star_high_total / (exp_Mstar_high_mean * C::M_solar);
 	// one low-mass star per cell
 	const amrex::Real exp_n_star_low_total = static_cast<amrex::Real>(n_cells) * prob_star_formation;
-	const amrex::Real exp_n_star_total = exp_n_star_high_total + exp_n_star_low_total;
+	// const amrex::Real exp_n_star_total = exp_n_star_high_total + exp_n_star_low_total;
 
 	// statistics from the simulation
 
