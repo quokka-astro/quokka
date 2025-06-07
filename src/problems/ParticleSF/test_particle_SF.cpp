@@ -196,5 +196,18 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = max_timesteps;
 	sim.evolve();
 
+	const auto [real_data_final2, idata_final2] =
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
+	amrex::ignore_unused(idata_final2);
+	// get total particle mass
+	double m_star_tot2 = 0.0;
+	for (const auto & i : real_data_final2) {
+		m_star_tot2 += i[mass_idx];
+	}
+	// get total gas mass
+	const double m_gas_final2 = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
+	const double m_gas_change2 = m_gas_init - m_gas_final2;
+	amrex::Print() << fmt::format("Mass of all stars [expected]   = {:.6e} [{:.6e}] M_sol \n", m_star_tot2 / C::M_solar, m_gas_change2 / C::M_solar);
+
 	return 0;
 }
