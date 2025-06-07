@@ -315,7 +315,7 @@ inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use un
 inline int particle_verbose = 0; // NOLINT print particle logistics
 
 // Random seed for particle creation. Default is 0, which means the random seed is not fixed.
-inline int particle_random_seed = 0; // NOLINT
+inline int particle_random_seed = 1024; // NOLINT
 
 // Stable redistribute for particle creation. Default is 0 (false).
 inline int particle_stable_redistribute = 0; // NOLINT
