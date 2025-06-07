@@ -2324,7 +2324,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICParticles->SetVerbose(0);
 
 		if (quokka::particle_stable_redistribute != 0) {
-			RadParticles->setStableRedistribute(1);
+			CICParticles->setStableRedistribute(1);
 		}
 
 		// Register with particle register - CIC particles allow creation
@@ -2342,7 +2342,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICRadParticles->SetVerbose(0);
 
 		if (quokka::particle_stable_redistribute != 0) {
-			RadParticles->setStableRedistribute(1);
+			CICRadParticles->setStableRedistribute(1);
 		}
 
 		// Register with particle register - CICRad particles do not allow creation
@@ -2362,7 +2362,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		StochasticStellarPopParticles->SetVerbose(0);
 
 		if (quokka::particle_stable_redistribute != 0) {
-			RadParticles->setStableRedistribute(1);
+			StochasticStellarPopParticles->setStableRedistribute(1);
 		}
 
 		// Register with particle register - StochasticStellarPop particles allow creation
@@ -2380,7 +2380,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		SinkParticles->SetVerbose(0);
 
 		if (quokka::particle_stable_redistribute != 0) {
-			RadParticles->setStableRedistribute(1);
+			SinkParticles->setStableRedistribute(1);
 		}
 
 		// Register with particle register - Sink particles allow creation
@@ -2397,7 +2397,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		TestParticles->SetVerbose(0);
 
 		if (quokka::particle_stable_redistribute != 0) {
-			RadParticles->setStableRedistribute(1);
+			TestParticles->setStableRedistribute(1);
 		}
 
 		// Register with particle register - Test particles have all features enabled
