@@ -77,7 +77,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 # this is necessary to avoid spurious FPEs due to vectorization
-if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR (CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
 	option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" OFF)
 else()
 	option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" ON)
