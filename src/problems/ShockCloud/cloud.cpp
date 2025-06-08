@@ -573,8 +573,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 
 	if (use_resampled_cooling) {
 		return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampled_tables);
-	} else {
-		return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
 	}
 	return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
 }
@@ -958,7 +956,7 @@ auto problem_main() -> int
 	amrex::Print() << fmt::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	// compute mass density of background, cloud
-	Real H_mass_fraction;
+	Real H_mass_fraction = NAN;
 	if (sim.coolingTableType_ == "resampled") {
 		auto tables = sim.resampledTables_.const_tables();
 		H_mass_fraction = tables.cloudy_H_mass_fraction;
@@ -1002,7 +1000,7 @@ auto problem_main() -> int
 	const Real v_shock = M0 * x4;
 
 	const Real Eint_post = P_post / (gamma - 1.);
-	Real T_post;
+	Real T_post = NAN;
 	if (sim.coolingTableType_ == "resampled") {
 		auto tables = sim.resampledTables_.const_tables();
 		T_post = quokka::ResampledCooling::ComputeTgasFromEgas(rho_post, Eint_post, tables);
