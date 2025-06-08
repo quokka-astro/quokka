@@ -32,11 +32,9 @@ particles.eps_ff = 0.5
 
 tiny_profiler.enabled = 0
 
-problem.n0 = 1.0e5
-problem.Tamb = 1.0e1
-problem.stage_2_max_timesteps = 20
 plotfile_interval = -1
 checkpoint_interval = -1
+max_timesteps = 1
 
 # *****************************************************************
 # Cooling parameters
