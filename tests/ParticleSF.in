@@ -34,7 +34,7 @@ tiny_profiler.enabled = 0
 
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
-problem.stage_2_max_timesteps = 3
+problem.stage_2_max_timesteps = 10
 plotfile_interval = -1
 checkpoint_interval = -1
 
