@@ -355,9 +355,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						// Set a minimum velocity dispersion equal to the sound speed squared (cs^2).
 						// This prevents sigma=0 and reflects that star-forming regions typically have
 						// turbulent and thermal energies in equipartition.
-						const double sigma_sq_x = std::max(numx / denominator, cs * cs);
-						const double sigma_sq_y = std::max(numy / denominator, cs * cs);
-						const double sigma_sq_z = std::max(numz / denominator, cs * cs);
+						const double sigma_sq_x = std::max(numx / denominator, cs * cs / 3.0);
+						const double sigma_sq_y = std::max(numy / denominator, cs * cs / 3.0);
+						const double sigma_sq_z = std::max(numz / denominator, cs * cs / 3.0);
 
 						const double signx = v_cm_x == 0.0 ? 1.0 : (std::abs(v_cm_x) / v_cm_x);
 						const double signy = v_cm_y == 0.0 ? 1.0 : (std::abs(v_cm_y) / v_cm_y);
