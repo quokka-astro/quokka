@@ -1,6 +1,8 @@
 #ifndef PARTICLE_DEPOSITION_HPP_
 #define PARTICLE_DEPOSITION_HPP_
 
+#include <algorithm>
+
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
@@ -358,6 +360,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 		AMREX_ASSERT(0.5 * (px * px + py * py + pz * pz) / rho_new <= e_kinetic_max);
 
 		// Find analytical solution of the following equation:
+		// 0.5 * (p + lambda d_p)^2 / rho_new = e_kinetic_max
+		// which simplifies to:
 		// d_p^2 lambda^2 + 2 d_p p lambda + p^2 - 2 rho_new e_kinetic_max = 0
 		// This quadratic equation, denoted as F(x) = 0, has some known properties which make the
 		// solution well constrained:
@@ -365,14 +369,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 		// 2. F(1) > 0 (otherwise we won't be in this else clause)
 		// Therefore, there must be one and only one solution in the range [0, 1], and it's the bigger
 		// one of the two solutions (so we take the plus sign in the quadratic formula).
-		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);
-		const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);
-		const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max);
-		const double discriminant = (b * b) - (4.0 * a * c);
-		AMREX_ASSERT(discriminant >= 0.0);
-		const double lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
-		AMREX_ASSERT(lambda >= 0.0);
-		AMREX_ASSERT(lambda <= 1.0);
+		// A special case is when a = 0, in which case the physical solution is the no kinetic energy is added to the state, therefore lambda = 0.
+		double lambda = 0.0;
+		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz); // a = d_p^2
+		if (a > std::numeric_limits<double>::min()) { // a > 0
+			const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz); // b = 2 d_p p
+			const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max); // c = p^2 - 2 rho_new e_kinetic_max
+			const double discriminant = (b * b) - (4.0 * a * c);
+			AMREX_ASSERT(discriminant >= 0.0);
+			lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
+			// lambda = std::max(lambda, 0.0);
+			AMREX_ASSERT(lambda >= 0.0);
+			AMREX_ASSERT(lambda <= 1.0);
+		}
 
 		// assert that lambda is a valid solution
 		AMREX_ASSERT_WITH_MESSAGE(std::abs((0.5 *
@@ -388,6 +397,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	}
 
 	const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	AMREX_ASSERT(e_int_new > 0.0);
 	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
@@ -502,6 +512,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 
 	// Step 3: Add the buffer to the state
+	AMREX_ASSERT_WITH_MESSAGE(HydroSystem<problem_t>::CheckStatesValid(state), "Hydro states invalid after deposition!");
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d);
 }
 
