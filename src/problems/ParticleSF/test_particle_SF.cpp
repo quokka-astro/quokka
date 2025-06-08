@@ -26,8 +26,9 @@ struct ParticleSFProblem {
 constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-const double year = 3.15576e+07;    // in seconds
-AMREX_GPU_MANAGED Real Tamb = 10.0; // NOLINT
+constexpr double year = 3.15576e+07; // in seconds
+AMREX_GPU_MANAGED Real n0 = 1.0e4;   // NOLINT
+AMREX_GPU_MANAGED Real Tamb = 10.0;  // NOLINT
 
 template <> struct Particle_Traits<ParticleSFProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -60,7 +61,6 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const double n0 = 1.0e5;
 	const double rho = n0 * mu;
 	const double e_int = 1.0 / (gamma_ - 1.0) * rho * C::k_B * Tamb / mu;
 
@@ -109,11 +109,20 @@ auto problem_main() -> int
 	sim.stopTime_ = 1.0e6 * year; // 1 Myr
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 
+	// Real Tamb and n0 from the input file
+	amrex::ParmParse const ppp("problem");
+	ppp.query("Tamb", Tamb);
+	ppp.query("n0", n0);
+	int max_timesteps = 10;
+	ppp.query("stage_2_max_timesteps", max_timesteps);
+
+	// set random state
+	const int seed = 42;
+	amrex::InitRandom(seed, 1); // all ranks should produce the same values
+
 	// initialize
+	sim.maxTimesteps_ = 1;
 	sim.setInitialConditions();
-
-	// evolve
 	sim.evolve();
-
 	return 0;
 }
