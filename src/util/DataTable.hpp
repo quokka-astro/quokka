@@ -76,14 +76,14 @@ struct DataTableGpuConst {
 		InterpData interp;
 
 		// Get table bounds - assumes uniform grid spacing
-		amrex::Real xi = x_coords(x_coords.begin);   // First x coordinate
-		amrex::Real xf = x_coords(x_coords.end - 1); // Last x coordinate
-		amrex::Real yi = y_coords(y_coords.begin);   // First y coordinate
-		amrex::Real yf = y_coords(y_coords.end - 1); // Last y coordinate
+		amrex::Real const xi = x_coords(x_coords.begin);   // First x coordinate
+		amrex::Real const xf = x_coords(x_coords.end - 1); // Last x coordinate
+		amrex::Real const yi = y_coords(y_coords.begin);   // First y coordinate
+		amrex::Real const yf = y_coords(y_coords.end - 1); // Last y coordinate
 
 		// Compute uniform grid spacing
-		amrex::Real dx = (xf - xi) / static_cast<amrex::Real>(x_coords.end - x_coords.begin - 1);
-		amrex::Real dy = (yf - yi) / static_cast<amrex::Real>(y_coords.end - y_coords.begin - 1);
+		amrex::Real const dx = (xf - xi) / static_cast<amrex::Real>(x_coords.end - x_coords.begin - 1);
+		amrex::Real const dy = (yf - yi) / static_cast<amrex::Real>(y_coords.end - y_coords.begin - 1);
 
 		// Clamp coordinates to valid table bounds (extrapolation not supported)
 		x = amrex::max(xi, amrex::min(x, xf));
@@ -126,16 +126,16 @@ struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
 		// Part 1: Find interpolation indices and normalized coordinates
-		InterpData interp = find_interpolation_data(x, y);
+		InterpData const interp = find_interpolation_data(x, y);
 
 		// Part 2: Compute interpolated value using precomputed indices and normalized coordinates
-		amrex::Real z1 = data(interp.ix, interp.iy);
-		amrex::Real z2 = data(interp.iix, interp.iy);
-		amrex::Real z3 = data(interp.ix, interp.iiy);
-		amrex::Real z4 = data(interp.iix, interp.iiy);
+		amrex::Real const z1 = data(interp.ix, interp.iy);
+		amrex::Real const z2 = data(interp.iix, interp.iy);
+		amrex::Real const z3 = data(interp.ix, interp.iiy);
+		amrex::Real const z4 = data(interp.iix, interp.iiy);
 
 		// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
-		amrex::Real value = (1.0 - interp.v) * ((1.0 - interp.h) * z1 + interp.h * z2) + interp.v * ((1.0 - interp.h) * z3 + interp.h * z4);
+		amrex::Real const value = (1.0 - interp.v) * ((1.0 - interp.h) * z1 + interp.h * z2) + interp.v * ((1.0 - interp.h) * z3 + interp.h * z4);
 		AMREX_ASSERT(!std::isnan(value));
 
 		return value;
@@ -145,13 +145,13 @@ struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto numeric_derivative(amrex::Real x, amrex::Real y) const -> amrex::Array<amrex::Real, 2>
 	{
 		// Part 1: Get interpolation data (includes precomputed h and v)
-		InterpData interp = find_interpolation_data(x, y);
+		InterpData const interp = find_interpolation_data(x, y);
 
 		// Part 2: Compute derivatives in normalized coordinates
-		amrex::Real z1 = data(interp.ix, interp.iy);
-		amrex::Real z2 = data(interp.iix, interp.iy);
-		amrex::Real z3 = data(interp.ix, interp.iiy);
-		amrex::Real z4 = data(interp.iix, interp.iiy);
+		amrex::Real const z1 = data(interp.ix, interp.iy);
+		amrex::Real const z2 = data(interp.iix, interp.iy);
+		amrex::Real const z3 = data(interp.ix, interp.iiy);
+		amrex::Real const z4 = data(interp.iix, interp.iiy);
 
 		amrex::Real f_h = 0.0;
 		amrex::Real f_v = 0.0;
@@ -182,8 +182,8 @@ struct DataTableGpuConst {
 		}
 
 		// Part 3: Convert to physical coordinates: f_x = f_h / (x2 - x1), f_y = f_v / (y2 - y1)
-		amrex::Real dfdx = (interp.ix != interp.iix) ? f_h / (interp.x2 - interp.x1) : 0.0;
-		amrex::Real dfdy = (interp.iy != interp.iiy) ? f_v / (interp.y2 - interp.y1) : 0.0;
+		amrex::Real const dfdx = (interp.ix != interp.iix) ? f_h / (interp.x2 - interp.x1) : 0.0;
+		amrex::Real const dfdy = (interp.iy != interp.iiy) ? f_v / (interp.y2 - interp.y1) : 0.0;
 
 		return {dfdx, dfdy};
 	}
