@@ -371,9 +371,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 		// one of the two solutions (so we take the plus sign in the quadratic formula).
 		// A special case is when a = 0, in which case the physical solution is the no kinetic energy is added to the state, therefore lambda = 0.
 		double lambda = 0.0;
-		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz); // a = d_p^2
-		if (a > std::numeric_limits<double>::min()) { // a > 0
-			const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz); // b = 2 d_p p
+		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);				      // a = d_p^2
+		if (a > std::numeric_limits<double>::min()) {						      // a > 0
+			const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);			      // b = 2 d_p p
 			const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max); // c = p^2 - 2 rho_new e_kinetic_max
 			const double discriminant = (b * b) - (4.0 * a * c);
 			AMREX_ASSERT(discriminant >= 0.0);

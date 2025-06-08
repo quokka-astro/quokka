@@ -191,10 +191,10 @@ auto problem_main() -> int
 		const double m_gas_change = m_gas_init - m_gas_final;
 
 		amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " [" << exp_m_star_high_total / C::M_solar
-						<< "] M_sol \n";
+			       << "] M_sol \n";
 		amrex::Print() << "Number of high-mass stars [expected]   = " << n_star_high << " [" << exp_n_star_high_total << "] \n";
 		amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " [" << exp_Mstar_high_mean
-						<< "] M_sol \n";
+			       << "] M_sol \n";
 		amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_low << " [" << exp_n_star_low_total << "] \n";
 		amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
 
@@ -232,13 +232,14 @@ auto problem_main() -> int
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// get total particle mass
 		double m_star_tot2 = 0.0;
-		for (const auto & i : real_data_final2) {
+		for (const auto &i : real_data_final2) {
 			m_star_tot2 += i[mass_idx];
 		}
 		// get total gas mass
 		const double m_gas_final2 = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 		const double m_gas_change2 = m_gas_init - m_gas_final2;
-		amrex::Print() << fmt::format("Mass of all stars [expected]   = {:.6e} [{:.6e}] M_sol \n", m_star_tot2 / C::M_solar, m_gas_change2 / C::M_solar);
+		amrex::Print() << fmt::format("Mass of all stars [expected]   = {:.6e} [{:.6e}] M_sol \n", m_star_tot2 / C::M_solar,
+					      m_gas_change2 / C::M_solar);
 
 		const double tol_m_star_tot2 = 0.1;
 		if (!((m_star_tot2 - m_gas_change2) / m_star_tot2 < tol_m_star_tot2)) {
