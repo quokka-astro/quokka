@@ -397,10 +397,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	}
 
 	const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
-	if (!(e_int_new > 0.0)) {
-		printf("e_int_new = %e, e_tot_new = %e, rho_new = %e, px_new = %e, py_new = %e, pz_new = %e\n", e_int_new, e_tot_new, rho_new, px_new, py_new,
-		       pz_new);
-	}
 	AMREX_ASSERT(e_int_new > 0.0);
 	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
