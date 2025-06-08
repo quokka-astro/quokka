@@ -39,8 +39,7 @@ particles.SN_scheme = SN_thermal_or_thermal_momentum
 
 particles.verbose = 1
 
-max_timesteps = 140   # this is the last step before the cooling solver fails
-# max_timesteps = 400
+max_timesteps = 400
 plotfile_interval = -1
 checkpoint_interval = -1
 
