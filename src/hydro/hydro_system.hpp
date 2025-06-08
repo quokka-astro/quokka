@@ -273,6 +273,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 
 					bool negativeDensity = (rho <= 0.);
 					bool negativePressure = (P <= 0.);
+					const bool negativeInternalEnergy = (thermal_energy <= 0.);
 
 					if constexpr (is_eos_isothermal()) {
 						if (negativeDensity) {
@@ -280,7 +281,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 							return {false};
 						}
 					} else {
-						if (negativeDensity || negativePressure) {
+						if (negativeDensity || negativePressure || negativeInternalEnergy) {
 							printf("invalid state at (%d, %d, %d): rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E,
 							       thermal_energy, P);
 							return {false};
