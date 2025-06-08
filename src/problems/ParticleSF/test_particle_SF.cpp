@@ -158,7 +158,6 @@ auto problem_main() -> int
 	const amrex::Real exp_n_star_high_total = exp_m_star_high_total / (exp_Mstar_high_mean * C::M_solar);
 	// one low-mass star per cell
 	const amrex::Real exp_n_star_low_total = static_cast<amrex::Real>(n_cells) * prob_star_formation;
-	// const amrex::Real exp_n_star_total = exp_n_star_high_total + exp_n_star_low_total;
 
 	// statistics from the simulation
 
@@ -191,7 +190,6 @@ auto problem_main() -> int
 	amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " [" << exp_Mstar_high_mean
 		       << "] M_sol \n";
 	amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_tot - n_star_high << " [" << exp_n_star_low_total << "] \n";
-	// amrex::Print() << "Number of all stars [expected]   = " << n_star_tot << " [" << exp_n_star_total << "] \n";
 	amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
 
 	sim.maxTimesteps_ = max_timesteps;

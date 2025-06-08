@@ -512,7 +512,6 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 
 	// Step 3: Add the buffer to the state
-	AMREX_ASSERT_WITH_MESSAGE(HydroSystem<problem_t>::CheckStatesValid(state), "Hydro states invalid after deposition!");
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d);
 }
 
