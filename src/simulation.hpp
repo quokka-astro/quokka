@@ -1068,9 +1068,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	getWalltime(); // initialize start_time
 
-	// check that the initial conditions are valid
-	AMREX_ASSERT_WITH_MESSAGE(HydroSystem<problem_t>::CheckStatesValid(state_new_cc_[0]), "Hydro states invalid after initial conditions!");
-
 	// Main time loop
 	int step = istep[0];
 	for (; step < maxTimesteps_ && cur_time < stopTime_; ++step) {

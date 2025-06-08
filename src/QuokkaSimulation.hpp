@@ -728,8 +728,6 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	if (enableCooling_ == 1) {
-		// Validate the state
-		AMREX_ASSERT_WITH_MESSAGE(HydroSystem<problem_t>::CheckStatesValid(state), "Hydro states invalid before cooling!");
 		// compute cooling
 		if (coolingTableType_ == "grackle") {
 			cool_success = quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);

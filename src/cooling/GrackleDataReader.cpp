@@ -57,6 +57,7 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 	double CoolUnit = (xbase1 * xbase1 * mh * mh) / (tbase1 * tbase1 * tbase1 * dbase1);
 
 	const double small_fastlog_value = FastMath::log10(1.0e-99 / CoolUnit);
+	AMREX_ASSERT(!std::isnan(small_fastlog_value));
 
 	// Read cooling data from hdf5 file
 	hid_t file_id = 0;
@@ -199,11 +200,8 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 		for (int64_t q = 0; q < my_cloudy.data_size; q++) {
 			// Convert to code units
 			AMREX_ASSERT(!std::isnan(temp_data[q]));
-			AMREX_ASSERT(!std::isnan(CoolUnit));
 			double value = temp_data[q] / CoolUnit;
 			// Convert to not-quite-log10 (using FastMath)
-			AMREX_ASSERT(!std::isnan(value));
-			AMREX_ASSERT(!std::isnan(small_fastlog_value));
 			temp_data[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
 		}
 
