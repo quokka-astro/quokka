@@ -34,7 +34,7 @@ tiny_profiler.enabled = 0
 
 plotfile_interval = -1
 checkpoint_interval = -1
-max_timesteps = 3
+max_timesteps = 1
 
 # *****************************************************************
 # Cooling parameters
