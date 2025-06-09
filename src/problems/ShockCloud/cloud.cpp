@@ -812,7 +812,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
 
-	Real H_mass_fraction;
+	Real H_mass_fraction = NAN;
 	if (coolingTableType_ == "resampled") {
 		auto tables = resampledTables_.const_tables();
 		H_mass_fraction = tables.cloudy_H_mass_fraction;
