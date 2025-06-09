@@ -170,11 +170,9 @@ auto problem_main() -> int
 	int status = 0;
 
 	// evolve to step 1
-	// sim.maxTimesteps_ = 1;
+	sim.maxTimesteps_ = 1;
 	sim.evolve();
-	return 0;
 
-#if 0
 	// get total gas mass after step 1
 	amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
@@ -198,21 +196,18 @@ auto problem_main() -> int
 
 	// Check relative error in the formation step and confirm mass is conserved to machine precision
 	const double rel_error_gas_mass_step1 = std::abs(m_tot_init - m_tot_step1) / m_tot_init;
-	amrex::Print() << "Step 1: rel_err(total_mass) = " << rel_error_gas_mass_step1 << "\n";
-	int status_step1 = 1;
+	amrex::Print() << "Step 1: total mass = " << m_tot_step1 << "\n";
+	amrex::Print() << "Step 1: (total_mass - initial_total_mass) / initial_total_mass = " << rel_error_gas_mass_step1 << "\n";
 	const double rel_error_total_mass_step1 = 1.0e-14;
-	if (rel_error_gas_mass_step1 < rel_error_total_mass_step1) {
-		status_step1 = 0;
-	}
-	status += status_step1;
-
-	if (status > 0) {
+	if (!(rel_error_gas_mass_step1 < rel_error_total_mass_step1)) {
+		status = 1;
 		amrex::Print() << "Test failed: mass not conserved to machine precision in the formation step !!!\n";
-		return status;
 	}
+
+	// return status;
 
 	// evolve to the end
-	sim.maxTimesteps_ = 10;
+	sim.maxTimesteps_ = 20;
 	sim.evolve();
 
 	// get total gas mass after the end
@@ -276,5 +271,4 @@ auto problem_main() -> int
 	}
 
 	return status;
-#endif
 }
