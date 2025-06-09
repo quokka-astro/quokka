@@ -573,8 +573,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 
 	if (use_resampled_cooling) {
 		return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampled_tables);
-	} else {
-		return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
 	}
 	return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudy_tables);
 }
@@ -610,7 +608,11 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["sim_partialwind_mass"] = sim_partialwind_mass / solarmass_in_g;
 
 	// compute cloud mass according to temperature threshold
-	Real M_cl_1e4, M_cl_8000, M_cl_9000, M_cl_11000, M_cl_12000;
+	Real M_cl_1e4 = 0.0;
+	Real M_cl_8000 = 0.0;
+	Real M_cl_9000 = 0.0;
+	Real M_cl_11000 = 0.0;
+	Real M_cl_12000 = 0.0;
 
 	if (coolingTableType_ == "resampled") {
 		auto tables = resampledTables_.const_tables();
@@ -684,7 +686,11 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["cloud_mass_11000"] = M_cl_11000 / solarmass_in_g;
 	stats["cloud_mass_12000"] = M_cl_12000 / solarmass_in_g;
 
-	Real origM_cl_1e4, origM_cl_8000, origM_cl_9000, origM_cl_11000, origM_cl_12000;
+	Real origM_cl_1e4 = 0.0;
+	Real origM_cl_8000 = 0.0;
+	Real origM_cl_9000 = 0.0;
+	Real origM_cl_11000 = 0.0;
+	Real origM_cl_12000 = 0.0;
 
 	if (coolingTableType_ == "resampled") {
 		auto tables = resampledTables_.const_tables();
@@ -806,7 +812,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
 
-	Real H_mass_fraction;
+	Real H_mass_fraction = NAN;
 	if (coolingTableType_ == "resampled") {
 		auto tables = resampledTables_.const_tables();
 		H_mass_fraction = tables.cloudy_H_mass_fraction;
@@ -950,7 +956,7 @@ auto problem_main() -> int
 	amrex::Print() << fmt::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	// compute mass density of background, cloud
-	Real H_mass_fraction;
+	Real H_mass_fraction = NAN;
 	if (sim.coolingTableType_ == "resampled") {
 		auto tables = sim.resampledTables_.const_tables();
 		H_mass_fraction = tables.cloudy_H_mass_fraction;
@@ -968,7 +974,8 @@ auto problem_main() -> int
 	constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
 	const Real Eint_bg = ::P0 / (gamma - 1.);
 	const Real Eint_cl = ::P0 / (gamma - 1.);
-	Real T_bg, T_cl;
+	Real T_bg = 0.0;
+	Real T_cl = 0.0;
 	if (sim.coolingTableType_ == "resampled") {
 		auto tables = sim.resampledTables_.const_tables();
 		T_bg = quokka::ResampledCooling::ComputeTgasFromEgas(rho0, Eint_bg, tables);
@@ -993,7 +1000,7 @@ auto problem_main() -> int
 	const Real v_shock = M0 * x4;
 
 	const Real Eint_post = P_post / (gamma - 1.);
-	Real T_post;
+	Real T_post = NAN;
 	if (sim.coolingTableType_ == "resampled") {
 		auto tables = sim.resampledTables_.const_tables();
 		T_post = quokka::ResampledCooling::ComputeTgasFromEgas(rho_post, Eint_post, tables);
