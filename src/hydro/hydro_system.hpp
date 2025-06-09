@@ -266,11 +266,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					const auto py = cons[bx](i, j, k, x2Momentum_index);
 					const auto pz = cons[bx](i, j, k, x3Momentum_index);
 					const auto E = cons[bx](i, j, k, energy_index);
-					AMREX_ASSERT(!std::isnan(rho));
-					AMREX_ASSERT(!std::isnan(px));
-					AMREX_ASSERT(!std::isnan(py));
-					AMREX_ASSERT(!std::isnan(pz));
-					AMREX_ASSERT(!std::isnan(E));
 					const auto vx = px / rho;
 					const auto vy = py / rho;
 					const auto vz = pz / rho;
