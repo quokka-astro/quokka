@@ -303,9 +303,12 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 				// Initialize particle properties
 				p.rdata(mass_idx) = particle_mass / num_particles;
-				p.rdata(mass_idx + 1) = vx;
-				p.rdata(mass_idx + 2) = vy;
-				p.rdata(mass_idx + 3) = vz;
+				// add a check to avoid compiler warnings about array-bounds
+				if (mass_idx + 3 < ParticleType::NReal) {
+					p.rdata(mass_idx + 1) = vx;
+					p.rdata(mass_idx + 2) = vy;
+					p.rdata(mass_idx + 3) = vz;
+				}
 			}
 
 			// update cell density to be the threshold density
