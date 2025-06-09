@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Quokka is a two-moment radiation hydrodynamics code using the piecewise-parabolic method with AMR and subcycling. It's built on AMReX and supports both CPU (MPI+vectorized) and GPU (CUDA/HIP) execution with a single C++17 codebase.
 
 ## Build & Test Commands
-- **Build**: `mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja -j6`
+- **Build**: `mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja -j6` (keep in mind that `-DAMReX_SPACEDIM` must be set to specify the dimensionality of the code, and that some targets only build for certain dimensionality)
 - **GPU Support**: Add `-DAMReX_GPU_BACKEND=CUDA` (NVIDIA) or `-DAMReX_GPU_BACKEND=HIP` (AMD)
 - **Run all tests**: `ctest` or `ninja test`
 - **Run specific test**: `ctest -R TestName`
@@ -49,7 +49,10 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 - 160 character line limit, 8-space indentation with tabs
 - Classes use PascalCase (e.g., `QuokkaSimulation`)
 - Member variables use camelCase with trailing underscore (e.g., `radiationCflNumber_`)
+- Member functions use PascalCase (e.g., `ReadCheckpointFile`)
 - Always use curly braces for single statement blocks
+- Always use a trailing return type for functions that do not return `void`
+- ALWAYS declare variables `const` when they are never modified after initialization.
 - Document APIs using Doxygen style comments
 - PRs should be focused on a single change and target the `development` branch
 - Static analysis with clang-tidy available for code quality checks
