@@ -179,6 +179,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int projectionInterval_ = -1;				     // -1 == no output
 	int statisticsInterval_ = -1;				     // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;			     // time interval for plt file
+	bool skipInitialPlotfile_ = false;			     // skip writing plotfile at t=0
 	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
 	int checkpointInterval_ = -1;				     // -1 == no output
 	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
@@ -728,6 +729,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default Time interval
 	pp.query("plottime_interval", plotTimeInterval_);
 
+	// Skip initial plotfile
+	pp.query("skip_initial_plotfile", skipInitialPlotfile_);
+
 	// Default Time interval
 	pp.query("checkpointtime_interval", checkpointTimeInterval_);
 
@@ -848,7 +852,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 #endif
 
-	if (plotfileInterval_ > 0 || plotTimeInterval_ > 0) {
+	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && !skipInitialPlotfile_) {
 		WritePlotFile();
 	}
 
