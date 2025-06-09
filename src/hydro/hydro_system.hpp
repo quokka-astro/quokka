@@ -10,6 +10,7 @@
 ///
 
 // c++ headers
+#include <algorithm>
 #include <cmath>
 
 // library headers
@@ -273,8 +274,8 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					const auto thermal_energy = E - kinetic_energy;
 					const auto P = ComputePressure(cons[bx], i, j, k);
 
-					bool negativeDensity = (rho <= 0.);
-					bool negativePressure = (P <= 0.);
+					bool const negativeDensity = (rho <= 0.);
+					bool const negativePressure = (P <= 0.);
 
 					if constexpr (is_eos_isothermal()) {
 						if (negativeDensity) {
@@ -427,7 +428,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 {
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
-	bool isDensityPositive = (rho > 0.);
+	bool const isDensityPositive = (rho > 0.);
 
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
@@ -654,7 +655,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		// compute coefficient as the minimum from adjacent cells along *each
 		// axis*
 		//  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
-		double chi_ijk = std::min({
+		double const chi_ijk = std::min({
 		    x1Chi_in[bx](i_in - 1, j_in, k_in),
 		    x1Chi_in[bx](i_in, j_in, k_in),
 		    x1Chi_in[bx](i_in + 1, j_in, k_in),
@@ -1032,7 +1033,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		amrex::Real dwl =
 		    std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index), q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
 		amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index), q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
-		dw = std::min(std::min(dwl, dwr), dw);
+		dw = std::min({dwl, dwr, dw});
 #endif
 
 		// solve the Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
