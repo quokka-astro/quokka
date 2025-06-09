@@ -145,7 +145,7 @@ auto problem_main() -> int
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 1.0e6 * year; // 1 Myr
+	sim.stopTime_ = 1.0e7 * year; // 1 Myr
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 	sim.doPoissonSolve_ = 1;
 
@@ -180,9 +180,9 @@ auto problem_main() -> int
 	const auto &real_data_step1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
 	const int n_stars_step1 = static_cast<int>(real_data_step1.size());
 
-	if (n_stars_step1 == 0) {
+	if (n_stars_step1 != 1) {
 		status = 1;
-		amrex::Print() << "Test failed: no particles created in the formation step !!!\n";
+		amrex::Print() << "Test failed: expected number of particles created in the formation step is 1, but got " << n_stars_step1 << "\n";
 		return status;
 	}
 
