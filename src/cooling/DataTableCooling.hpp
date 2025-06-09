@@ -149,20 +149,20 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real 
 	return cs;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
-{
-	// unpack user_data
-	auto *udata = static_cast<ODEUserData *>(user_data);
-	const Real rho = udata->rho;
-	dataTableGpuConstTables const &tables = udata->tables;
+struct DataTableCoolingFunctor {
+	Real rho;
+	dataTableGpuConstTables tables;
 
-	// compute cooling rate
-	const Real Eint = y_data[0];
+	AMREX_GPU_HOST_DEVICE DataTableCoolingFunctor(Real rho_in, dataTableGpuConstTables const &tables_in) : rho(rho_in), tables(tables_in) {}
 
-	y_rhs[0] = data_table_cooling_function(rho, Eint, tables);
-
-	return 0; // success
-}
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs) const -> int
+	{
+		// compute temperature and cooling rate
+		const Real Eint = y_data[0];
+		y_rhs[0] = data_table_cooling_function(rho, Eint, tables);
+		return 0; // success
+	}
+};
 
 template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, data_table_tables &dataTableTables, const Real E_floor) -> bool
 {
@@ -191,14 +191,13 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
 
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
-			ODEUserData user_data{rho, gamma, tables};
+			const DataTableCoolingFunctor user_rhs(rho, tables);
 			quokka::valarray<Real, 1> y = {Eint};
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * E_floor};
 
 			// do integration with RK2 (Heun's method)
 			int nsteps = 0;
-			rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
+			rk_adaptive_integrate(user_rhs, 0, y, dt, rtol, abstol, nsteps);
 			nsubsteps(i, j, k) = nsteps;
 
 			// check if integration failed
