@@ -608,11 +608,11 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["sim_partialwind_mass"] = sim_partialwind_mass / solarmass_in_g;
 
 	// compute cloud mass according to temperature threshold
-	Real M_cl_1e4;
-	Real M_cl_8000;
-	Real M_cl_9000;
-	Real M_cl_11000;
-	Real M_cl_12000;
+	Real M_cl_1e4 = 0.0;
+	Real M_cl_8000 = 0.0;
+	Real M_cl_9000 = 0.0;
+	Real M_cl_11000 = 0.0;
+	Real M_cl_12000 = 0.0;
 
 	if (coolingTableType_ == "resampled") {
 		auto tables = resampledTables_.const_tables();
@@ -974,8 +974,8 @@ auto problem_main() -> int
 	constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
 	const Real Eint_bg = ::P0 / (gamma - 1.);
 	const Real Eint_cl = ::P0 / (gamma - 1.);
-	Real T_bg;
-	Real T_cl;
+	Real T_bg = 0.0;
+	Real T_cl = 0.0;
 	if (sim.coolingTableType_ == "resampled") {
 		auto tables = sim.resampledTables_.const_tables();
 		T_bg = quokka::ResampledCooling::ComputeTgasFromEgas(rho0, Eint_bg, tables);
