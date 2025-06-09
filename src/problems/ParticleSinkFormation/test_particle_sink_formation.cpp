@@ -28,7 +28,7 @@ constexpr double gamma_ = 5. / 3.;
 const double rho0 = 1.0 * C::m_p; // g cm^-3
 const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
-const double year = 3.15576e+07; // in seconds
+const double year = 3.15576e+07;			// in seconds
 const double cs = std::sqrt(gamma_ * C::k_B * T0 / mu); // NOLINT
 
 template <> struct Particle_Traits<SinkProblem> {
