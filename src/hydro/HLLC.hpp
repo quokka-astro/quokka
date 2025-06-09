@@ -65,6 +65,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 			cs_tilde = 0.5 * (sL.cs + sR.cs);
 		} else {
 			// equation 4.12 of Kershaw+1998
+			if (C_tilde_P <= 0.0) {
+				printf("C_tilde_P, sL.Eint, sL.rho, drdp_L, sR.Eint, sR.rho, drdp_R, dedp_L, dedp_R = %f, %f, %f, %f, %f, %f, %f, %f, %f\n",
+				       C_tilde_P, sL.Eint, sL.rho, drdp_L, sR.Eint, sR.rho, drdp_R, dedp_L, dedp_R);
+			}
 			AMREX_ASSERT(C_tilde_P > 0.0);
 			cs_tilde = std::sqrt(cs_exp / C_tilde_P);
 		}
