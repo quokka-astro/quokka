@@ -8,6 +8,7 @@
 #include "particle_types.hpp"
 #include "stellarpop_data.hpp"
 #include <cmath>
+#include <limits>
 
 namespace quokka
 {
@@ -256,6 +257,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 				const amrex::Real cell_mass = cell_volume * cell_density;
+				const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
@@ -349,14 +351,13 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 								}
 							}
 						}
-						AMREX_ASSERT(denominator > 0.0);
-						AMREX_ASSERT(numx >= 0.0);
-						AMREX_ASSERT(numy >= 0.0);
-						AMREX_ASSERT(numz >= 0.0);
-
-						const double sigma_sq_x = numx / denominator;
-						const double sigma_sq_y = numy / denominator;
-						const double sigma_sq_z = numz / denominator;
+						// numx could be zero if the cells are static or have uniform velocity.
+						// Set a minimum velocity dispersion equal to the sound speed squared (cs^2).
+						// This prevents sigma=0 and reflects that star-forming regions typically have
+						// turbulent and thermal energies in equipartition.
+						const double sigma_sq_x = std::max(numx / denominator, cs * cs / 3.0);
+						const double sigma_sq_y = std::max(numy / denominator, cs * cs / 3.0);
+						const double sigma_sq_z = std::max(numz / denominator, cs * cs / 3.0);
 
 						const double signx = v_cm_x == 0.0 ? 1.0 : (std::abs(v_cm_x) / v_cm_x);
 						const double signy = v_cm_y == 0.0 ? 1.0 : (std::abs(v_cm_y) / v_cm_y);

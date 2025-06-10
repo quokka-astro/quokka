@@ -45,20 +45,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho, R
 	return cooling_source_term;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
-{
-	// unpack user_data
-	auto *udata = static_cast<ODEUserData *>(user_data);
-	Real const rho = udata->rho;
+struct ODECoolingFunctor {
+	Real rho;
 
-	// compute temperature
-	Real const Eint = y_data[0];
-	Real const T = quokka::EOS<ODETest>::ComputeTgasFromEint(rho, Eint);
+	AMREX_GPU_HOST_DEVICE explicit ODECoolingFunctor(Real rho_in) : rho(rho_in) {}
 
-	// compute cooling function
-	y_rhs[0] = cooling_function(rho, T);
-	return 0;
-}
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs) const -> int
+	{
+		// compute temperature
+		Real const Eint = y_data[0];
+		Real const T = quokka::EOS<ODETest>::ComputeTgasFromEint(rho, Eint);
+
+		// compute cooling function
+		y_rhs[0] = cooling_function(rho, T);
+		return 0;
+	}
+};
 
 auto problem_main() -> int
 {
@@ -79,12 +81,12 @@ auto problem_main() -> int
 	std::cout << "Initial edot = " << Edot0 << '\n';
 
 	// solve cooling
-	ODEUserData user_data{rho0};
+	ODECoolingFunctor const coolingFunctor(rho0);
 	quokka::valarray<Real, 1> y = {Eint0};
 	quokka::valarray<Real, 1> const abstol = 1.0e-20 * y;
 	const Real rtol = 1.0e-4; // appropriate for RK12
 	int steps_taken = 0;
-	rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol, steps_taken);
+	rk_adaptive_integrate(coolingFunctor, 0, y, max_time, rtol, abstol, steps_taken);
 
 	const Real Tgas = quokka::EOS<ODETest>::ComputeTgasFromEint(rho0, y[0]);
 	// for n_H = 0.01 cm^{-3} (for IK cooling function)

@@ -179,6 +179,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int projectionInterval_ = -1;				     // -1 == no output
 	int statisticsInterval_ = -1;				     // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;			     // time interval for plt file
+	bool skipInitialPlotfile_ = false;			     // skip writing plotfile at t=0
 	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
 	int checkpointInterval_ = -1;				     // -1 == no output
 	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
@@ -736,6 +737,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default Time interval
 	pp.query("plottime_interval", plotTimeInterval_);
 
+	// Skip initial plotfile
+	pp.query("skip_initial_plotfile", skipInitialPlotfile_);
+
 	// Default Time interval
 	pp.query("checkpointtime_interval", checkpointTimeInterval_);
 
@@ -856,7 +860,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 #endif
 
-	if (plotfileInterval_ > 0 || plotTimeInterval_ > 0) {
+	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && !skipInitialPlotfile_) {
 		WritePlotFile();
 	}
 
@@ -1395,90 +1399,69 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		return;
 	}
 
-	// Create acceleration MultiFabs for each level
-	amrex::Vector<amrex::Vector<amrex::MultiFab>> accel(finest_level + 1);
-
-	// set boundary conditions for accelerations
-	amrex::Vector<amrex::BCRec> accelBC(1);
-	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-		// lower boundary
-		if (BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i) == amrex::BCType::int_dir) {
-			accelBC[0].setLo(i, amrex::BCType::int_dir);
-		} else {
-			accelBC[0].setLo(i, amrex::BCType::foextrap);
-		}
-		// upper boundary
-		if (BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i) == amrex::BCType::int_dir) {
-			accelBC[0].setHi(i, amrex::BCType::int_dir);
-		} else {
-			accelBC[0].setHi(i, amrex::BCType::foextrap);
-		}
-	}
-
 	// Compute accelerations and kick particles
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		// NOTE: CIC interpolation requires 1, but particles may have drifted
 		// 	into 1 ghost cell since last particle redistribute.
 		const int nghost_acc = 2;
+		const int nghost_phi = nghost_acc + 1; // Need extra ghost cell for centered difference
 
-		accel[lev].resize(AMREX_SPACEDIM);
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto ba_face = amrex::convert(boxArray(lev), amrex::IntVect::TheDimensionVector(idim));
-			accel[lev][idim].define(ba_face, DistributionMap(lev), 1, nghost_acc);
-			accel[lev][idim].setVal(0.);
-		}
+		// Create potential MultiFab with sufficient ghost cells for gradient computation
+		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi);
 
-		// Fill ghosts at coarse-fine boundary
-		// (This *also* fills valid cells, so we have to do it before computing the valid cell accelerations.)
-		if (lev > 0) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
-				amrex::InterpFromCoarseLevel(accel[lev][idim], 0., accel[lev - 1][idim], 0, 0, 1, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
-							     fineBdryFunct, 0, refRatio(lev - 1), &amrex::face_linear_interp, accelBC, 0);
-				// deallocate coarse MF
-				accel[lev - 1][idim].clear();
+		// Fill extended potential from existing phi using FillPatch
+		// This handles coarse-fine boundaries without InterpFromCoarseLevel
+		if (lev == 0) {
+			// Base level: just copy and fill boundaries
+			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
+			phi_extended.FillBoundary(geom[lev].periodicity());
+
+			// Apply physical boundary conditions to phi
+			amrex::Vector<amrex::BCRec> phiBC(1);
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
-		}
 
-		// Fill valid cells
-		const auto &phi_arr = phi[lev].const_arrays();
-		const auto dx_inv = geom[lev].InvCellSizeArray();
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto accel_arr = accel[lev][idim].arrays();
-			amrex::ParallelFor(accel[lev][idim], amrex::IntVect{0}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-				// compute face-centered acceleration -grad(phi)
-				if (idim == 0) {
-					accel_arr[bx](i, j, k) = -dx_inv[0] * (phi_arr[bx](i, j, k) - phi_arr[bx](i - 1, j, k));
-				}
-				if (idim == 1) {
-					accel_arr[bx](i, j, k) = -dx_inv[1] * (phi_arr[bx](i, j, k) - phi_arr[bx](i, j - 1, k));
-				}
-				if (idim == 2) {
-					accel_arr[bx](i, j, k) = -dx_inv[2] * (phi_arr[bx](i, j, k) - phi_arr[bx](i, j, k - 1));
-				}
-			});
-		}
-		amrex::Gpu::streamSynchronizeAll();
-
-		// Fill remaining ghost cells
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			// internal boundaries
-			accel[lev][idim].FillBoundary(geom[lev].periodicity());
-
-			// physical boundaries
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
-			fineBdryFunct(accel[lev][idim], 0, accel[lev][idim].nComp(), accel[lev][idim].nGrowVect(), 0., 0);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
+		} else {
+			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
+			amrex::Vector<amrex::BCRec> phiBC(1);
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+			}
 
-			// check for NaN
-			AMREX_ALWAYS_ASSERT(!accel[lev][idim].contains_nan());
+			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
+
+			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
+						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 		}
 
-		// average to cell centers
+		// Create cell-centered acceleration MultiFab
 		amrex::MultiFab accel_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
-		amrex::average_face_to_cellcenter(accel_cc, 0, amrex::GetVecOfConstPtrs(accel[lev]), nghost_acc);
+
+		// Compute acceleration directly from potential gradient at cell centers
+		const auto &phi_arr = phi_extended.const_arrays();
+		const auto dx_inv = geom[lev].InvCellSizeArray();
+		auto accel_arr = accel_cc.arrays();
+
+		amrex::ParallelFor(accel_cc, amrex::IntVect{nghost_acc}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			// Compute cell-centered acceleration using central differences of potential
+			// accel = -grad(phi)
+			accel_arr[bx](i, j, k, 0) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
+#if AMREX_SPACEDIM >= 2
+			accel_arr[bx](i, j, k, 1) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j - 1, k));
+#endif
+#if AMREX_SPACEDIM == 3 // NOLINT(readability-redundant-preprocessor)
+			accel_arr[bx](i, j, k, 2) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k - 1));
+#endif
+		});
+		amrex::Gpu::streamSynchronize();
 
 		// check for NaN
 		AMREX_ALWAYS_ASSERT(!accel_cc.contains_nan());
