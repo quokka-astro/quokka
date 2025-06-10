@@ -102,5 +102,5 @@ echo
 
 # Only run clang-tidy if there are files to process
 if [ ${#files_select[@]} -gt 0 ]; then
-    clang-tidy "${files_select[@]}" -p "$BUILD_DIR" $fix_flag
+    clang-tidy --extra-arg="-isysroot$(xcrun --show-sdk-path)" "${files_select[@]}" -p "$BUILD_DIR" $fix_flag
 fi

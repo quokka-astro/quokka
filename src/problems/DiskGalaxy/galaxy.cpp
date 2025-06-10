@@ -341,7 +341,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
-		auto tables = grackleTables_.const_tables();
+		auto tables = resampledTables_.const_tables();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
@@ -353,7 +353,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 				Real const x3Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<AgoraGalaxy>::energy_index);
 				Real const Eint = RadSystem<AgoraGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real const Tgas = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, HydroSystem<AgoraGalaxy>::gamma_, tables);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 				output(i, j, k, ncomp) = Tgas;
 			});
 		}
