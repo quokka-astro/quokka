@@ -1771,7 +1771,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	int nghost_extra_mhd = 0;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		nghost_extra_mhd = 0;
+		nghost_extra_mhd = 1;
 	}
 	for (int idim = 0; idim < 3; ++idim) {
 		flatCoefs[idim] = amrex::MultiFab(ba_cc, dm, 1, nghost_flattening + nghost_extra_mhd);
@@ -1890,7 +1890,12 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	}
 
 	if (reconstructionOrder_ == 3) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
+		}
+		else {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
+		}
 	} else if (reconstructionOrder_ == 2) {
 		// HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState, ng_reconstruct_total,
 		// 										      nvars);

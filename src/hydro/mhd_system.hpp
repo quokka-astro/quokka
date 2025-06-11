@@ -297,13 +297,13 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 		// note: only box_r is used. box_r_x1 is unused.
 		switch (dir) {
 			case FluxDir::X1:
-				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(cState, lState, rState, box_r, box_r_x1, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X1>(cState, lState, rState, box_r, box_r_x1, 1);
 				break;
 			case FluxDir::X2:
-				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X2>(cState, lState, rState, box_r, box_r_x1, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X2>(cState, lState, rState, box_r, box_r_x1, 1);
 				break;
 			case FluxDir::X3:
-				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X3>(cState, lState, rState, box_r, box_r_x1, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X3>(cState, lState, rState, box_r, box_r_x1, 1);
 				break;
 		}
 	} else if (reconstructionOrder == 2) {
