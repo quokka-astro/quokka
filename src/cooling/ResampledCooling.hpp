@@ -18,23 +18,20 @@
 #include "fmt/core.h"
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
-#include "math/Interpolate2D.hpp"
 #include "math/ODEIntegrate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/DataTable.hpp"
 
 namespace quokka::ResampledCooling
 {
 
 struct resampledGpuConstTables {
-	// these are non-owning, so can make a copy of the whole struct
-	amrex::Table1D<const Real> fast_log_rho;
-	amrex::Table1D<const Real> fast_log_eint;
-
-	amrex::Table2D<const Real> cooling_rates;
-	amrex::Table2D<const Real> temperatures;
-	amrex::Table2D<const Real> sound_speeds;
-	amrex::Table2D<const Real> pressures;
-	amrex::Table2D<const Real> entropies;
+	// GPU-friendly const table access
+	quokka::DataTableGpuConst cooling_rates;
+	quokka::DataTableGpuConst temperatures;
+	quokka::DataTableGpuConst sound_speeds;
+	quokka::DataTableGpuConst pressures;
+	quokka::DataTableGpuConst entropies;
 
 	// density range
 	amrex::Real rho_min;
@@ -51,14 +48,11 @@ struct resampledGpuConstTables {
 class resampled_tables
 {
       public:
-	std::unique_ptr<amrex::TableData<double, 1>> fast_log_rho;
-	std::unique_ptr<amrex::TableData<double, 1>> fast_log_eint;
-
-	std::unique_ptr<amrex::TableData<double, 2>> cooling_rates;
-	std::unique_ptr<amrex::TableData<double, 2>> temperatures;
-	std::unique_ptr<amrex::TableData<double, 2>> sound_speeds;
-	std::unique_ptr<amrex::TableData<double, 2>> pressures;
-	std::unique_ptr<amrex::TableData<double, 2>> entropies;
+	quokka::DataTable cooling_rates;
+	quokka::DataTable temperatures;
+	quokka::DataTable sound_speeds;
+	quokka::DataTable pressures;
+	quokka::DataTable entropies;
 
 	amrex::Real rho_min;
 	amrex::Real rho_max;
@@ -69,6 +63,12 @@ class resampled_tables
 	[[nodiscard]] auto const_tables() const -> resampledGpuConstTables;
 };
 
+struct ODEUserData {
+	Real rho{};
+	Real gamma{};
+	resampledGpuConstTables tables;
+};
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
@@ -76,8 +76,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
-	// Interpolate cooling rate from resampled tables
-	const Real Edot_over_rhosq = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.cooling_rates);
+	// Interpolate cooling rate from data tables
+	const Real Edot_over_rhosq = tables.cooling_rates.interpolate(fast_log_rho_val, fast_log_eint_val);
+	// unused computation of the numeric derivative, just to check if it compiles and runs
+	const Real d_Edot_over_d_rhosq = tables.cooling_rates.numeric_derivative(fast_log_rho_val, fast_log_eint_val)[0]; // NOLINT
 	const Real Edot = Edot_over_rhosq * (rho * rho);
 	return Edot;
 }
@@ -89,8 +91,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
-	// Interpolate temperature from resampled tables
-	const Real Tgas = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.temperatures);
+	// Interpolate temperature from data tables
+	const Real Tgas = tables.temperatures.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	return Tgas;
 }
@@ -103,8 +105,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rh
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
-	// Interpolate sound speed from resampled tables
-	const Real cs = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.sound_speeds);
+	// Interpolate sound speed from data tables
+	const Real cs = tables.sound_speeds.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	const Real Edot = resampled_cooling_function(rho, Eint, tables);
 	const Real t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
@@ -119,8 +121,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real co
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
-	// Interpolate pressure from resampled tables
-	const Real P = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.pressures);
+	// Interpolate pressure from data tables
+	const Real P = tables.pressures.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	return P;
 }
@@ -132,8 +134,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real con
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
-	// Interpolate entropy from resampled tables
-	const Real K = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.entropies);
+	// Interpolate entropy from data tables
+	const Real K = tables.entropies.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	return K;
 }
@@ -145,8 +147,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real 
 	const Real fast_log_rho_val = FastMath::fastlg(rho);
 	const Real fast_log_eint_val = FastMath::fastlg(eint);
 
-	// Interpolate sound speed from resampled tables
-	const Real cs = interpolate2d(fast_log_rho_val, fast_log_eint_val, tables.fast_log_rho, tables.fast_log_eint, tables.sound_speeds);
+	// Interpolate sound speed from data tables
+	const Real cs = tables.sound_speeds.interpolate(fast_log_rho_val, fast_log_eint_val);
 
 	return cs;
 }
