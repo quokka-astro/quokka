@@ -15,6 +15,7 @@ These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` 
 | ascent_interval | Integer | The number of coarse timesteps between Ascent outputs. |
 | plotfile_interval | Integer | The number of coarse timesteps between plotfile outputs. |
 | plottime_interval | Float | The time interval (in simulated time) between plotfile outputs. |
+| skip_initial_plotfile | Boolean (0/1) | Skip writing the initial plotfile at t=0. Default: 0 (false). |
 | projection_interval | Integer | The number of coarse timesteps between 2D projection outputs. |
 | statistics_interval | Integer | The number of coarse timesteps between statistics outputs. |
 | checkpoint_interval | Float | The number of coarse timesteps between checkpoint outputs. |
