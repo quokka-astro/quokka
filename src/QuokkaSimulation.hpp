@@ -62,7 +62,6 @@ namespace filesystem = experimental::filesystem;
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
-#include "cooling/DataTableCooling.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
@@ -134,7 +133,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	quokka::GrackleLikeCooling::grackle_tables grackleTables_;
 	quokka::TabulatedCooling::cloudy_tables cloudyTables_;
 	quokka::ResampledCooling::resampled_tables resampledTables_;
-	quokka::DataTableCooling::data_table_tables dataTableTables_;
 	std::string coolingTableType_{};
 	std::string coolingTableFilename_{};
 
@@ -494,10 +492,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				// read resampled cooling tables
 				amrex::Print() << "Reading resampled cooling tables...\n";
 				quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
-			} else if (coolingTableType_ == "datatable") {
-				// read DataTable cooling tables
-				amrex::Print() << "Reading DataTable cooling tables...\n";
-				quokka::DataTableCooling::readResampledData(coolingTableFilename_, dataTableTables_);
 			} else {
 				amrex::Abort("Invalid cooling table type!");
 			}
@@ -741,8 +735,6 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			cool_success = quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
 		} else if (coolingTableType_ == "resampled") {
 			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_);
-		} else if (coolingTableType_ == "datatable") {
-			cool_success = quokka::DataTableCooling::computeCooling<problem_t>(state, dt, dataTableTables_, tempFloor_);
 		} else {
 			amrex::Abort("Invalid cooling table type!");
 		}
