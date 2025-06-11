@@ -63,12 +63,6 @@ class resampled_tables
 	[[nodiscard]] auto const_tables() const -> resampledGpuConstTables;
 };
 
-struct ODEUserData {
-	Real rho{};
-	Real gamma{};
-	resampledGpuConstTables tables;
-};
-
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
