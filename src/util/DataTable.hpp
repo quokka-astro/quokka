@@ -200,6 +200,9 @@ class DataTable
 	DataTable(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
 		  const amrex::Vector<amrex::Vector<amrex::Real>> &data);
 
+	// Destructor
+	~DataTable() = default;
+
 	// Move constructor and assignment
 	DataTable(DataTable &&) = default;
 	auto operator=(DataTable &&) -> DataTable & = default;
