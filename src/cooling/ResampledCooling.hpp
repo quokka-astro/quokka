@@ -73,7 +73,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 	// Interpolate cooling rate from data tables
 	const Real Edot_over_rhosq = tables.cooling_rates.interpolate(fast_log_rho_val, fast_log_eint_val);
 	// unused computation of the numeric derivative, just to check if it compiles and runs
-	const Real d_Edot_over_d_rhosq = tables.cooling_rates.numeric_derivative(fast_log_rho_val, fast_log_eint_val)[0]; // NOLINT
+	// const Real d_Edot_over_d_rhosq = tables.cooling_rates.numeric_derivative(fast_log_rho_val, fast_log_eint_val)[0]; // NOLINT
 	const Real Edot = Edot_over_rhosq * (rho * rho);
 	return Edot;
 }
