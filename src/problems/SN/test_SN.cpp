@@ -240,7 +240,7 @@ auto problem_main() -> int
 			csv_file << "step, Time_yr, Max_Internal_Energy_erg\n";
 
 			// Write data
-			for (int i = 0; i < max_Eint_history.size(); ++i) {
+			for (int i = 0; i < static_cast<int>(max_Eint_history.size()); ++i) {
 				csv_file << i << ", " << t_history[i] / year << ", " << max_Eint_history[i] * vol << "\n";
 			}
 
