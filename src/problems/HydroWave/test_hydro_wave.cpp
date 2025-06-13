@@ -115,7 +115,7 @@ auto problem_main() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
+	// sim.plotfileInterval_ = -1; //moved to .in file
 
 	// set initial conditions
 	sim.setInitialConditions();

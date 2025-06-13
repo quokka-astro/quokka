@@ -13,6 +13,7 @@
 #include "hydro/EOS.hpp"
 #include <array>
 #include <iostream>
+#include <set>
 #if __has_include(<filesystem>)
 #include <filesystem>
 #elif __has_include(<experimental/filesystem>)
@@ -62,6 +63,7 @@ namespace filesystem = experimental::filesystem;
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
+#include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
@@ -130,6 +132,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	quokka::GrackleLikeCooling::grackle_tables grackleTables_;
 	quokka::TabulatedCooling::cloudy_tables cloudyTables_;
+	quokka::ResampledCooling::resampled_tables resampledTables_;
 	std::string coolingTableType_{};
 	std::string coolingTableFilename_{};
 
@@ -170,6 +173,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	inline void initialize()
 	{
 		defineComponentNames();
+		defineDefaultPlotfileVariables();
 		// read in runtime parameters
 		readParmParse();
 		// set gamma
@@ -185,7 +189,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
 	void defineComponentNames();
+	void defineDefaultPlotfileVariables();
 	void readParmParse();
+	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
@@ -360,6 +366,35 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 	}
 }
 
+template <typename problem_t> void QuokkaSimulation<problem_t>::defineDefaultPlotfileVariables()
+{
+	// Initialize plotfileVarsToInclude_cc_ with all cell-centered variables
+	this->plotfileVarsToInclude_cc_.insert(this->plotfileVarsToInclude_cc_.end(), this->componentNames_cc_.begin(), this->componentNames_cc_.end());
+
+	// Add all face-centered variables except RiemannSolverVelocity
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
+			const std::string &varname = this->componentNames_fc_flat_[icomp];
+			if (varname.find("RiemannSolverVelocity") == std::string::npos) {
+				this->plotfileVarsToInclude_cc_.push_back(varname);
+			}
+		}
+	}
+
+	// Add all derived variables
+	this->plotfileVarsToInclude_cc_.insert(this->plotfileVarsToInclude_cc_.end(), this->derivedNames_.begin(), this->derivedNames_.end());
+
+	// Detect name collisions and abort if any are found
+	std::set<std::string> seen_names;
+	for (const std::string &varname : this->plotfileVarsToInclude_cc_) {
+		if (!seen_names.insert(varname).second) {
+			amrex::Abort("Duplicate variable name '" + varname +
+				     "' found in plotfile variables list. "
+				     "This indicates a naming collision between cell-centered, face-centered, or derived variables.");
+		}
+	}
+}
+
 // initialize metadata
 template <typename problem_t> void AMRSimulation<problem_t>::initializeSimulationMetadata()
 {
@@ -443,9 +478,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("enabled", enableCooling_);
 		hpp.query("cooling_table_type", coolingTableType_);
 		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
-		hpp.query("hdf5_data_file", coolingTableFilename_);
-
 		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
+			hpp.query("hdf5_data_file", coolingTableFilename_);
 			if (coolingTableType_ == "grackle") {
 				// read Grackle tables
 				amrex::Print() << "Reading Grackle tables...\n";
@@ -454,6 +488,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				// read cloudy_cooling_tools tables
 				amrex::Print() << "Reading cloudy-cooling-tools tables...\n";
 				quokka::TabulatedCooling::readCloudyData(coolingTableFilename_, cloudyTables_);
+			} else if (coolingTableType_ == "resampled") {
+				// read resampled cooling tables
+				amrex::Print() << "Reading resampled cooling tables...\n";
+				quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
 			} else {
 				amrex::Abort("Invalid cooling table type!");
 			}
@@ -478,6 +516,21 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
 		rpp.query("print_iteration_counts", print_rad_counter_);
 	}
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::rereadRuntimeParameters()
+{
+	// Re-read runtime parameters to ensure they override any compile-time settings
+	// This is called at the beginning of evolve() to ensure user input takes precedence
+
+	// Call parent class rereadRuntimeParameters
+	AMRSimulation<problem_t>::rereadRuntimeParameters();
+
+	// Re-read QuokkaSimulation-specific parameters
+	readParmParse();
+
+	// Re-read particle parameters
+	quokka::particleParmParse();
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int
@@ -596,6 +649,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialCondit
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRadParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialRadParticles()");
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if Rad_particles are used
@@ -605,6 +659,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRad
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialCICParticles()");
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if CIC_particles are used
@@ -612,6 +667,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCIC
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICRadParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialCICRadParticles()");
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if CICRad_particles are used
@@ -619,6 +675,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCIC
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialStochasticStellarPopParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialStochasticStellarPopParticles()");
 	// Optional implementation
 	// StochasticStellarPop particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.
@@ -627,6 +684,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSto
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSinkParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialSinkParticles()");
 	// Optional implementation
 	// Sink particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.
@@ -635,6 +693,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSin
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTestParticles()
 {
+	const BL_PROFILE("QuokkaSimulation::createInitialTestParticles()");
 	// Optional implementation
 	// Test particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.
@@ -674,6 +733,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			cool_success = quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
 		} else if (coolingTableType_ == "cloudy_cooling_tools") {
 			cool_success = quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		} else if (coolingTableType_ == "resampled") {
+			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_);
 		} else {
 			amrex::Abort("Invalid cooling table type!");
 		}

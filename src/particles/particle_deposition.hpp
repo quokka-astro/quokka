@@ -1,8 +1,11 @@
 #ifndef PARTICLE_DEPOSITION_HPP_
 #define PARTICLE_DEPOSITION_HPP_
 
+#include <algorithm>
+
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_BLProfiler.H"
 #include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
@@ -205,6 +208,7 @@ template <typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
 {
+	const BL_PROFILE("SNFeedbackUtils::depositToBuffer()");
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
 	constexpr amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 	    stencil_weights_gpu = {{{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
@@ -356,6 +360,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 		AMREX_ASSERT(0.5 * (px * px + py * py + pz * pz) / rho_new <= e_kinetic_max);
 
 		// Find analytical solution of the following equation:
+		// 0.5 * (p + lambda d_p)^2 / rho_new = e_kinetic_max
+		// which simplifies to:
 		// d_p^2 lambda^2 + 2 d_p p lambda + p^2 - 2 rho_new e_kinetic_max = 0
 		// This quadratic equation, denoted as F(x) = 0, has some known properties which make the
 		// solution well constrained:
@@ -363,14 +369,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 		// 2. F(1) > 0 (otherwise we won't be in this else clause)
 		// Therefore, there must be one and only one solution in the range [0, 1], and it's the bigger
 		// one of the two solutions (so we take the plus sign in the quadratic formula).
-		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);
-		const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);
-		const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max);
-		const double discriminant = (b * b) - (4.0 * a * c);
-		AMREX_ASSERT(discriminant >= 0.0);
-		const double lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
-		AMREX_ASSERT(lambda >= 0.0);
-		AMREX_ASSERT(lambda <= 1.0);
+		// A special case is when a = 0, in which case the physical solution is the no kinetic energy is added to the state, therefore lambda = 0.
+		double lambda = 0.0;
+		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);				      // a = d_p^2
+		if (a > std::numeric_limits<double>::min()) {						      // a > 0
+			const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);			      // b = 2 d_p p
+			const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max); // c = p^2 - 2 rho_new e_kinetic_max
+			const double discriminant = (b * b) - (4.0 * a * c);
+			AMREX_ASSERT(discriminant >= 0.0);
+			lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
+			// lambda = std::max(lambda, 0.0);
+			AMREX_ASSERT(lambda >= 0.0);
+			AMREX_ASSERT(lambda <= 1.0);
+		}
 
 		// assert that lambda is a valid solution
 		AMREX_ASSERT_WITH_MESSAGE(std::abs((0.5 *
@@ -386,6 +397,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	}
 
 	const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+	AMREX_ASSERT(e_int_new > 0.0);
 	local_state(i, j, k, HydroSystem<problem_t>::density_index) = rho_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px_new;
 	local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py_new;
@@ -429,6 +441,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 
 template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
 {
+	const BL_PROFILE("SNFeedbackUtils::addBufferToState()");
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		auto const &local_state = state.array(mfi);
@@ -449,6 +462,7 @@ template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amre
 template <typename ContainerType>
 void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
 {
+	const BL_PROFILE("SNFeedbackUtils::updateEvolutionStage()");
 	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
 		return;
 	}
@@ -480,6 +494,7 @@ template <typename ContainerType, typename problem_t>
 void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		  int evolutionStageIndex, int birthTimeIndex)
 {
+	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
 		      "SN_stencil_size must be <= 3"); // SN_stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
 

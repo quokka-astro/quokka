@@ -19,7 +19,6 @@
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 
 struct SedovProblem {
@@ -254,7 +253,6 @@ auto problem_main() -> int
 	QuokkaSimulation<SedovProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.stopTime_ = 1.0;	      // seconds
 
 	// initialize
 	sim.setInitialConditions();

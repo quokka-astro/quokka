@@ -31,7 +31,6 @@ option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
 option(DISABLE_FMAD "Disable fused multiply-add instructions on GPU (on/off)" ON)
 option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
-option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" ON)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 
@@ -78,8 +77,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 # this is necessary to avoid spurious FPEs due to vectorization
-if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-  add_compile_options(-ffp-exception-behavior=strict)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR (CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+	option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" OFF)
+else()
+	option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" ON)
 endif()
 
 execute_process(COMMAND git rev-parse --abbrev-ref HEAD

@@ -5,3 +5,4 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
 endif()
 
 add_test(NAME HydroWave COMMAND test_hydro_wave hydro_wave.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME HydroWaveFC COMMAND test_hydro_wave hydro_wave_fc.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
