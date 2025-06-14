@@ -7,6 +7,11 @@
 /// \brief Defines a test problem for radiation pressure terms. This is also a trivial test for the PPL_fixed_slope opacity model.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
 #include <string>
 #include <vector>
 
@@ -18,7 +23,6 @@
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_radiation_tube.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
@@ -32,10 +36,10 @@ constexpr double kappa0 = 100.;	     // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g
 constexpr double gamma_gas = 5. / 3.;
 
-constexpr double rho0 = 1.0;		    // g cm^-3
-constexpr double T0 = 2.75e7;		    // K
-constexpr double rho1 = 2.1940476649492044; // g cm^-3
-constexpr double T1 = 2.2609633884436745e7; // K
+constexpr double rho0 = 1.0;		      // g cm^-3
+constexpr double T_lo = 2.75e7;		      // K
+constexpr double rho1 = 2.1940476649492044;   // g cm^-3
+constexpr double T_hi = 2.2609633884436745e7; // K
 constexpr double a_rad = C::a_rad;
 
 constexpr double a0 = 4.0295519855200705e7; // cm s^-1
@@ -62,8 +66,8 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double c_hat_over_c = 10.0 * a0 / C::c_light;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::k_B;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 3.3 * T0, 1000. * T0}; // Kelvin
-	// static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T0, 1000. * T0}; // Kelvin
+	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T_lo, 3.3 * T_lo, 1000. * T_lo}; // Kelvin
+	// static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0.01 * T_lo, 1000. * T_lo}; // Kelvin
 	static constexpr int beta_order = 1;
 	// static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
@@ -93,7 +97,7 @@ template <> struct SimulationData<TubeProblem> {
 template <> void QuokkaSimulation<TubeProblem>::preCalculateInitialConditions()
 {
 	// map initial conditions to the global variables
-	std::string filename = "../extern/pressure_tube/initial_conditions.txt";
+	std::string const filename = "../extern/pressure_tube/initial_conditions.txt";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 	std::string header;
@@ -137,8 +141,8 @@ template <> void QuokkaSimulation<TubeProblem>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -146,13 +150,13 @@ template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokk
 	auto const &rho_ptr = userData_.rho_arr_g.dataPtr();
 	auto const &Pgas_ptr = userData_.Pgas_arr_g.dataPtr();
 	auto const &Erad_ptr = userData_.Erad_arr_g.dataPtr();
-	int x_size = static_cast<int>(userData_.x_arr_g.size());
+	int const x_size = static_cast<int>(userData_.x_arr_g.size());
 
 	const auto radBoundaries_g = RadSystem_Traits<TubeProblem>::radBoundaries;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
 		amrex::Real const rho = interpolate_value(x, x_ptr, rho_ptr, x_size);
 		amrex::Real const Pgas = interpolate_value(x, x_ptr, Pgas_ptr, x_size);
@@ -206,12 +210,12 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	auto const radBoundaries_g = RadSystem<TubeProblem>::radBoundaries_;
 
 	// calculate radEnergyFractions
-	auto radEnergyFractionsT0 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T0);
-	auto radEnergyFractionsT1 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T1);
+	auto radEnergyFractionsT0 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T_lo);
+	auto radEnergyFractionsT1 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T_hi);
 
 	if (i < lo[0]) {
 		// left side boundary -- constant
-		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T0, 4);
+		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T_lo, 4);
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 			const double Frad = consVar(lo[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g);
 			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractionsT0[g];
@@ -220,7 +224,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
 		}
 
-		const double Egas = (C::k_B / mu) * rho0 * T0 / (gamma_gas - 1.0);
+		const double Egas = (C::k_B / mu) * rho0 * T_lo / (gamma_gas - 1.0);
 		const double x1Mom = consVar(lo[0], j, k, RadSystem<TubeProblem>::x1GasMomentum_index);
 		const double Ekin = 0.5 * (x1Mom * x1Mom) / rho0;
 		consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
@@ -231,7 +235,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
 	} else if (i > hi[0]) {
 		// right-side boundary -- constant
-		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T1, 4);
+		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T_hi, 4);
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 			const double Frad = consVar(hi[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g);
 			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractionsT1[g];
@@ -240,7 +244,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
 		}
 
-		const double Egas = (C::k_B / mu) * rho1 * T1 / (gamma_gas - 1.0);
+		const double Egas = (C::k_B / mu) * rho1 * T_hi / (gamma_gas - 1.0);
 		const double x1Mom = consVar(hi[0], j, k, RadSystem<TubeProblem>::x1GasMomentum_index);
 		const double Ekin = 0.5 * (x1Mom * x1Mom) / rho1;
 		consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
@@ -310,8 +314,8 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		xs[i] = position[i];
 
-		double rho_exact = values0.at(RadSystem<TubeProblem>::gasDensity_index)[i];
-		double rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
+		double const rho_exact = values0.at(RadSystem<TubeProblem>::gasDensity_index)[i];
+		double const rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
 		rho_err[i] = (rho - rho_exact) / rho_exact;
 
 		double Erad_0 = 0.0;
@@ -359,18 +363,18 @@ auto problem_main() -> int
 					7.55000000000000e+01, 8.05000000000000e+01, 8.55000000000000e+01, 9.05000000000000e+01, 9.55000000000000e+01,
 					1.00500000000000e+02, 1.05500000000000e+02, 1.10500000000000e+02, 1.15500000000000e+02, 1.20500000000000e+02,
 					1.25500000000000e+02};
-	std::vector<double> E1_exact = {1.97806231974620e+15, 1.96003267738932e+15, 1.94139375399209e+15, 1.92211477326756e+15, 1.90216201239978e+15,
-					1.88149879792274e+15, 1.86008566953792e+15, 1.83786164032564e+15, 1.81475431543605e+15, 1.79075351115540e+15,
-					1.76583321387339e+15, 1.73994821924481e+15, 1.71303490596213e+15, 1.68501210246915e+15, 1.65578211109368e+15,
-					1.62523187429012e+15, 1.59323434543658e+15, 1.55965009717319e+15, 1.52432919817267e+15, 1.48711344303233e+15,
-					1.44783897852076e+15, 1.40633941779824e+15, 1.36244954047942e+15, 1.31590909579761e+15, 1.26631043035030e+15,
-					1.21323876205627e+15};
-	std::vector<double> E2_exact = {2.34197994225380e+15, 2.29654950261068e+15, 2.25010503500791e+15, 2.20262123173244e+15, 2.15407068960022e+15,
-					2.10442459607726e+15, 2.05365387846208e+15, 2.00168645967436e+15, 1.94843446056395e+15, 1.89396262984460e+15,
-					1.83830481312661e+15, 1.78145970875519e+15, 1.72339649303787e+15, 1.66406088653085e+15, 1.60338168190632e+15,
-					1.54127777970988e+15, 1.47766576756342e+15, 1.41246806782681e+15, 1.34562168082733e+15, 1.27708749196767e+15,
-					1.20686010247924e+15, 1.13497806420176e+15, 1.06153434252058e+15, 9.86527809202386e+14, 9.09819537649705e+14,
-					8.31394523943729e+14};
+	std::vector<double> const E1_exact = {1.97806231974620e+15, 1.96003267738932e+15, 1.94139375399209e+15, 1.92211477326756e+15, 1.90216201239978e+15,
+					      1.88149879792274e+15, 1.86008566953792e+15, 1.83786164032564e+15, 1.81475431543605e+15, 1.79075351115540e+15,
+					      1.76583321387339e+15, 1.73994821924481e+15, 1.71303490596213e+15, 1.68501210246915e+15, 1.65578211109368e+15,
+					      1.62523187429012e+15, 1.59323434543658e+15, 1.55965009717319e+15, 1.52432919817267e+15, 1.48711344303233e+15,
+					      1.44783897852076e+15, 1.40633941779824e+15, 1.36244954047942e+15, 1.31590909579761e+15, 1.26631043035030e+15,
+					      1.21323876205627e+15};
+	std::vector<double> const E2_exact = {2.34197994225380e+15, 2.29654950261068e+15, 2.25010503500791e+15, 2.20262123173244e+15, 2.15407068960022e+15,
+					      2.10442459607726e+15, 2.05365387846208e+15, 2.00168645967436e+15, 1.94843446056395e+15, 1.89396262984460e+15,
+					      1.83830481312661e+15, 1.78145970875519e+15, 1.72339649303787e+15, 1.66406088653085e+15, 1.60338168190632e+15,
+					      1.54127777970988e+15, 1.47766576756342e+15, 1.41246806782681e+15, 1.34562168082733e+15, 1.27708749196767e+15,
+					      1.20686010247924e+15, 1.13497806420176e+15, 1.06153434252058e+15, 9.86527809202386e+14, 9.09819537649705e+14,
+					      8.31394523943729e+14};
 
 	// interpolate numerical solution onto exact solution tabulated points
 	std::vector<double> Erad_arr_numerical_interp_at_group_1(xs_exact.size());
@@ -399,7 +403,7 @@ auto problem_main() -> int
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
 	}
-	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
+	amrex::Print() << "Relative L1 norm = " << rel_err_norm << '\n';
 
 #ifdef HAVE_PYTHON
 	// Plot results: temperature
@@ -465,6 +469,6 @@ auto problem_main() -> int
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return status;
 }

@@ -2,13 +2,19 @@
 /// \brief Defines a single-group test problem for gas-dust-radiation coupling in uniform medium.
 ///
 
-#include "test_rad_dust.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "math/interpolate.hpp"
 #include "physics_info.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
+#include <fstream>
 #include <vector>
 
 struct DustProblem {
@@ -214,7 +220,7 @@ auto problem_main() -> int
 	}
 	const double error_tol = 0.003;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

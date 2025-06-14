@@ -7,13 +7,18 @@
 /// \brief Defines a test problem for radiation-matter coupling.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
 #include <vector>
 
 #include "AMReX_BC_TYPES.H"
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_radiation_matter_coupling.hpp"
 #include "util/fextract.hpp"
 
 struct CouplingProblem {
@@ -217,7 +222,7 @@ auto problem_main() -> int
 		}
 		const double rel_error = err_norm / sol_norm;
 		const double error_tol = 2e-5;
-		amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "relative L1 error norm = " << rel_error << '\n';
 		if (rel_error > error_tol) {
 			status = 1;
 		}
@@ -227,7 +232,7 @@ auto problem_main() -> int
 		// Plot results
 		std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
 		std::vector<double> &Trad = sim.userData_.Trad_vec_;
-		std::vector<double> &t = sim.userData_.t_vec_;
+		std::vector<double> const &t = sim.userData_.t_vec_;
 
 		matplotlibcpp::clf();
 		matplotlibcpp::yscale("log");
@@ -269,6 +274,6 @@ auto problem_main() -> int
 	}
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return status;
 }
