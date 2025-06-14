@@ -46,7 +46,8 @@ template <typename problem_t> class HyperbolicSystem
       public:
 	template <SlopeLimiter limiter> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real
 	{
-		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC || limiter == SlopeLimiter::EP , "Invalid slope limiter specified.");
+		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC || limiter == SlopeLimiter::EP,
+			      "Invalid slope limiter specified.");
 		if constexpr (limiter == SlopeLimiter::minmod) {
 			return minmod(x, y);
 		}
@@ -63,12 +64,8 @@ template <typename problem_t> class HyperbolicSystem
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto EP(double a, double b) -> double
-	{
-		return MC(a,b);
-	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto EP(double a, double b) -> double { return MC(a, b); }
 
-	
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod(double a, double b) -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
@@ -77,31 +74,26 @@ template <typename problem_t> class HyperbolicSystem
 	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto GetMinmaxSurroundingCell(arrayconst_t &q, int i, int j, int k, int n)
 	    -> std::pair<double, double>;
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto
-  	median(double a, double b, double c) -> double {
-    return std::max(std::min(a, b), std::min(std::max(a, b), c));
-  	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto median(double a, double b, double c) -> double
+	{
+		return std::max(std::min(a, b), std::min(std::max(a, b), c));
+	}
 
-	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
-  	MonotonizeEdges(double qL, double qR, double q, double qminus, double qplus)
-      -> std::pair<double, double>;
+	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto MonotonizeEdges(double qL, double qR, double q, double qminus, double qplus)
+	    -> std::pair<double, double>;
 
-  	template <FluxDir DIR>
-  	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
-  	ComputeWENOMoments(quokka::Array4View<const amrex::Real, DIR> const &q, int i,
-                     int j, int k, int n)
-      -> std::pair<amrex::Real, amrex::Real>;
+	template <FluxDir DIR>
+	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto ComputeWENOMoments(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j,
+											 int k, int n) -> std::pair<amrex::Real, amrex::Real>;
 
-  	template <FluxDir DIR>
-  	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
-  	ComputeWENO(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j,
-              int k, int n) -> std::pair<amrex::Real, amrex::Real>;
+	template <FluxDir DIR>
+	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto ComputeWENO(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
+										  int n) -> std::pair<amrex::Real, amrex::Real>;
 
-  	template <FluxDir DIR>
-  	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
- 	ComputeSteepPPM(quokka::Array4View<const amrex::Real, DIR> const &q, int i,
-                  int j, int k, int n) -> amrex::Real;
-	
+	template <FluxDir DIR>
+	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto ComputeSteepPPM(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
+										      int n) -> amrex::Real;
+
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
 
@@ -129,8 +121,7 @@ template <typename problem_t> class HyperbolicSystem
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
 	ReconstructStatesPLM_EP(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
-				quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);									  
-
+				quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
@@ -149,20 +140,19 @@ template <typename problem_t> class HyperbolicSystem
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
-					 int iReadFrom = 0, int iWriteFrom = 0);
+					    int iReadFrom = 0, int iWriteFrom = 0);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-										  amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars,
-										  int iReadFrom = 0, int iWriteFrom = 0);
+										     amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars,
+										     int iReadFrom = 0, int iWriteFrom = 0);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q,
-										  quokka::Array4View<amrex::Real, DIR> const &leftState,
-										  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
-										  int j_in, int k_in, int iReadFrom = 0, int iWriteFrom = 0);
-	
-	
+										     quokka::Array4View<amrex::Real, DIR> const &leftState,
+										     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
+										     int j_in, int k_in, int iReadFrom = 0, int iWriteFrom = 0);
+
 	template <typename F>
 #if defined(__x86_64__)
 	__attribute__((__target__("no-fma")))
@@ -403,117 +393,103 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM_EP(quokka::Array4View<amrex::R
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-HyperbolicSystem<problem_t>::MonotonizeEdges(double qL_in, double qR_in,
-                                             double q, double qminus,
-                                             double qplus)
-    -> std::pair<double, double> {
-  // compute monotone edge values
-  const double qL_star = median(q, qL_in, qminus);
-  const double qR_star = median(q, qR_in, qplus);
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::MonotonizeEdges(double qL_in, double qR_in, double q, double qminus, double qplus)
+    -> std::pair<double, double>
+{
+	// compute monotone edge values
+	const double qL_star = median(q, qL_in, qminus);
+	const double qR_star = median(q, qR_in, qplus);
 
-  // this does something weird to the left side of the sawtooth advection
-  // problem, but is absolutely essential for stability in other problems
-  const double qL = median(q, qL_star, 3. * q - 2. * qR_star);
-  const double qR = median(q, qR_star, 3. * q - 2. * qL_star);
+	// this does something weird to the left side of the sawtooth advection
+	// problem, but is absolutely essential for stability in other problems
+	const double qL = median(q, qL_star, 3. * q - 2. * qR_star);
+	const double qR = median(q, qR_star, 3. * q - 2. * qL_star);
 
-  return std::make_pair(qL, qR);
+	return std::make_pair(qL, qR);
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-HyperbolicSystem<problem_t>::ComputeSteepPPM(
-    quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
-    int n) -> amrex::Real {
-  // compute steepened PPM stencil value
-  double S = 0.5 * (q(i + 1, j, k, n) - q(i - 1, j, k, n));
-  double Sp = 0.5 * (q(i + 2, j, k, n) - q(i, j, k, n));
-  double S_M = 2. * MC(q(i + 1, j, k, n) - q(i, j, k, n),
-                       q(i, j, k, n) - q(i - 1, j, k, n));
-  double Sp_M = 2. * MC(q(i + 2, j, k, n) - q(i + 1, j, k, n),
-                        q(i + 1, j, k, n) - q(i, j, k, n));
-  S = median(0., S, S_M);
-  Sp = median(0., Sp, Sp_M);
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeSteepPPM(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
+										      int n) -> amrex::Real
+{
+	// compute steepened PPM stencil value
+	double S = 0.5 * (q(i + 1, j, k, n) - q(i - 1, j, k, n));
+	double Sp = 0.5 * (q(i + 2, j, k, n) - q(i, j, k, n));
+	double S_M = 2. * MC(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
+	double Sp_M = 2. * MC(q(i + 2, j, k, n) - q(i + 1, j, k, n), q(i + 1, j, k, n) - q(i, j, k, n));
+	S = median(0., S, S_M);
+	Sp = median(0., Sp, Sp_M);
 
-  return 0.5 * (q(i, j, k, n) + q(i + 1, j, k, n)) - (1. / 6.) * (Sp - S);
+	return 0.5 * (q(i, j, k, n) + q(i + 1, j, k, n)) - (1. / 6.) * (Sp - S);
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-HyperbolicSystem<problem_t>::ComputeWENOMoments(
-    quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
-    int n) -> std::pair<amrex::Real, amrex::Real> {
-  /// compute WENO-Z reconstruction following Balsara (2017).
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWENOMoments(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j,
+											 int k, int n) -> std::pair<amrex::Real, amrex::Real>
+{
+	/// compute WENO-Z reconstruction following Balsara (2017).
 
-  /// compute moments for each stencil
-  // left-biased stencil
-  const double sL_x =
-      -2.0 * q(i - 1, j, k, n) + 0.5 * q(i - 2, j, k, n) + 1.5 * q(i, j, k, n);
-  const double sL_xx =
-      0.5 * q(i - 2, j, k, n) - q(i - 1, j, k, n) + 0.5 * q(i, j, k, n);
+	/// compute moments for each stencil
+	// left-biased stencil
+	const double sL_x = -2.0 * q(i - 1, j, k, n) + 0.5 * q(i - 2, j, k, n) + 1.5 * q(i, j, k, n);
+	const double sL_xx = 0.5 * q(i - 2, j, k, n) - q(i - 1, j, k, n) + 0.5 * q(i, j, k, n);
 
-  // centered stencil
-  const double sC_x = 0.5 * (q(i + 1, j, k, n) - q(i - 1, j, k, n));
-  const double sC_xx =
-      0.5 * q(i - 1, j, k, n) - q(i, j, k, n) + 0.5 * q(i + 1, j, k, n);
+	// centered stencil
+	const double sC_x = 0.5 * (q(i + 1, j, k, n) - q(i - 1, j, k, n));
+	const double sC_xx = 0.5 * q(i - 1, j, k, n) - q(i, j, k, n) + 0.5 * q(i + 1, j, k, n);
 
-  // right-biased stencil
-  const double sR_x =
-      -1.5 * q(i, j, k, n) + 2.0 * q(i + 1, j, k, n) - 0.5 * q(i + 2, j, k, n);
-  const double sR_xx =
-      0.5 * q(i, j, k, n) - q(i + 1, j, k, n) + 0.5 * q(i + 2, j, k, n);
+	// right-biased stencil
+	const double sR_x = -1.5 * q(i, j, k, n) + 2.0 * q(i + 1, j, k, n) - 0.5 * q(i + 2, j, k, n);
+	const double sR_xx = 0.5 * q(i, j, k, n) - q(i + 1, j, k, n) + 0.5 * q(i + 2, j, k, n);
 
-  // compute smoothness indicators
-  const double IS_L = sL_x * sL_x + (13. / 3.) * (sL_xx * sL_xx);
-  const double IS_C = sC_x * sC_x + (13. / 3.) * (sC_xx * sC_xx);
-  const double IS_R = sR_x * sR_x + (13. / 3.) * (sR_xx * sR_xx);
+	// compute smoothness indicators
+	const double IS_L = sL_x * sL_x + (13. / 3.) * (sL_xx * sL_xx);
+	const double IS_C = sC_x * sC_x + (13. / 3.) * (sC_xx * sC_xx);
+	const double IS_R = sR_x * sR_x + (13. / 3.) * (sR_xx * sR_xx);
 
-  // use WENO-Z smoothness indicators with *symmetric* linear weights
-  // (1-2-3 problem fails with the [asymmetric] 'optimal' weights)
-  const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) +
-                         std::abs(q(i + 1, j, k, n))) /
-                        3.0;
-  const double eps = (q_mean > 0.0) ? 1.0e-40 * q_mean : 1.0e-40;
-  const double tau = std::abs(IS_L - IS_R);
-  double wL = 0.2 * (1. + tau / (IS_L + eps));
-  double wC = 0.6 * (1. + tau / (IS_C + eps));
-  double wR = 0.2 * (1. + tau / (IS_R + eps));
+	// use WENO-Z smoothness indicators with *symmetric* linear weights
+	// (1-2-3 problem fails with the [asymmetric] 'optimal' weights)
+	const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) + std::abs(q(i + 1, j, k, n))) / 3.0;
+	const double eps = (q_mean > 0.0) ? 1.0e-40 * q_mean : 1.0e-40;
+	const double tau = std::abs(IS_L - IS_R);
+	double wL = 0.2 * (1. + tau / (IS_L + eps));
+	double wC = 0.6 * (1. + tau / (IS_C + eps));
+	double wR = 0.2 * (1. + tau / (IS_R + eps));
 
-  // normalise weights
-  const double norm = wL + wC + wR;
-  wL /= norm;
-  wC /= norm;
-  wR /= norm;
+	// normalise weights
+	const double norm = wL + wC + wR;
+	wL /= norm;
+	wC /= norm;
+	wR /= norm;
 
-  // compute weighted moments
-  const double q_x = wL * sL_x + wC * sC_x + wR * sR_x;
-  const double q_xx = wL * sL_xx + wC * sC_xx + wR * sR_xx;
+	// compute weighted moments
+	const double q_x = wL * sL_x + wC * sC_x + wR * sR_x;
+	const double q_xx = wL * sL_xx + wC * sC_xx + wR * sR_xx;
 
-  return std::make_pair(q_x, q_xx);
+	return std::make_pair(q_x, q_xx);
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-HyperbolicSystem<problem_t>::ComputeWENO(
-    quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
-    int n) -> std::pair<amrex::Real, amrex::Real> {
-  /// compute WENO-Z reconstruction following Balsara (2017).
-  auto [q_x, q_xx] = ComputeWENOMoments(q, i, j, k, n);
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWENO(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
+										  int n) -> std::pair<amrex::Real, amrex::Real>
+{
+	/// compute WENO-Z reconstruction following Balsara (2017).
+	auto [q_x, q_xx] = ComputeWENOMoments(q, i, j, k, n);
 
-  // evaluate i-(1/2) and i+(1/2) values
-  const double qL = q(i, j, k, n) - 0.5 * q_x + (0.25 - 1. / 12.) * q_xx;
-  const double qR = q(i, j, k, n) + 0.5 * q_x + (0.25 - 1. / 12.) * q_xx;
+	// evaluate i-(1/2) and i+(1/2) values
+	const double qL = q(i, j, k, n) - 0.5 * q_x + (0.25 - 1. / 12.) * q_xx;
+	const double qR = q(i, j, k, n) + 0.5 * q_x + (0.25 - 1. / 12.) * q_xx;
 
-  return std::make_pair(qL, qR);
+	return std::make_pair(qL, qR);
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
+							  const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
 
@@ -536,8 +512,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-									     amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
-									     const int nvars, const int iReadFrom, const int iWriteFrom)
+										amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
+										const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
 
@@ -555,9 +531,9 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q,
-									     quokka::Array4View<amrex::Real, DIR> const &leftState,
-									     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in,
-									     int k_in, int iReadFrom, int iWriteFrom)
+										quokka::Array4View<amrex::Real, DIR> const &leftState,
+										quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
+										int j_in, int k_in, int iReadFrom, int iWriteFrom)
 {
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
@@ -596,13 +572,9 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 	const double c4 = 27. / 60.;
 	const double c5 = -3. / 60.;
 
-	const double a_minus = c1 * q(i + 2, j, k, n) + c2 * q(i + 1, j, k, n) +
-							c3 * q(i, j, k, n) + c4 * q(i - 1, j, k, n) +
-							c5 * q(i - 2, j, k, n);
+	const double a_minus = c1 * q(i + 2, j, k, n) + c2 * q(i + 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i - 1, j, k, n) + c5 * q(i - 2, j, k, n);
 
-	const double a_plus = c1 * q(i - 2, j, k, n) + c2 * q(i - 1, j, k, n) +
-							c3 * q(i, j, k, n) + c4 * q(i + 1, j, k, n) +
-							c5 * q(i + 2, j, k, n);
+	const double a_plus = c1 * q(i - 2, j, k, n) + c2 * q(i - 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i + 1, j, k, n) + c5 * q(i + 2, j, k, n);
 
 	// save neighboring values
 	const double a = q(i, j, k, n);
@@ -610,45 +582,38 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 	const double ap = q(i + 1, j, k, n);
 
 	// 1. monotonize
-	auto [new_a_minus, new_a_plus] =
-		MonotonizeEdges(a_minus, a_plus, a, am, ap);
+	auto [new_a_minus, new_a_plus] = MonotonizeEdges(a_minus, a_plus, a, am, ap);
 
 	// 2. check whether limiter was triggered on either side
-	const double q_mean =
-		(std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) +
-			std::abs(q(i + 1, j, k, n))) /
-		3.0;
+	const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) + std::abs(q(i + 1, j, k, n))) / 3.0;
 	const double eps = 1.0e-14 * q_mean;
 
-	if (std::abs(new_a_minus - a_minus) > eps ||
-		std::abs(new_a_plus - a_plus) > eps) {
+	if (std::abs(new_a_minus - a_minus) > eps || std::abs(new_a_plus - a_plus) > eps) {
 
 		// compute symmetric WENO-Z reconstruction
 		auto [a_minus_weno, a_plus_weno] = ComputeWENO(q, i, j, k, n);
 
 		if (new_a_minus == a || new_a_plus == a) {
-		// 3. to avoid clipping at extrema, use WENO value
-		a_minus_weno = median(a, a_minus_weno, a_minus);
-		a_plus_weno = median(a, a_plus_weno, a_plus);
+			// 3. to avoid clipping at extrema, use WENO value
+			a_minus_weno = median(a, a_minus_weno, a_minus);
+			a_plus_weno = median(a, a_plus_weno, a_plus);
 
-		auto [a_minus_mweno, a_plus_mweno] =
-			MonotonizeEdges(a_minus_weno, a_plus_weno, a, am, ap);
+			auto [a_minus_mweno, a_plus_mweno] = MonotonizeEdges(a_minus_weno, a_plus_weno, a, am, ap);
 
-		new_a_minus = median(a_minus_weno, a_minus_mweno, a_minus);
-		new_a_plus = median(a_plus_weno, a_plus_mweno, a_plus);
+			new_a_minus = median(a_minus_weno, a_minus_mweno, a_minus);
+			new_a_plus = median(a_plus_weno, a_plus_mweno, a_plus);
 		} else {
-		// 4. gradient is too steep, use one-sided 4th-order PPM stencil
-		double a_minus_ppm = ComputeSteepPPM(q, i - 1, j, k, n);
-		double a_plus_ppm = ComputeSteepPPM(q, i, j, k, n);
+			// 4. gradient is too steep, use one-sided 4th-order PPM stencil
+			double a_minus_ppm = ComputeSteepPPM(q, i - 1, j, k, n);
+			double a_plus_ppm = ComputeSteepPPM(q, i, j, k, n);
 
-		a_minus_ppm = median(a_minus_weno, a_minus_ppm, a_minus);
-		a_plus_ppm = median(a_plus_weno, a_plus_ppm, a_plus);
+			a_minus_ppm = median(a_minus_weno, a_minus_ppm, a_minus);
+			a_plus_ppm = median(a_plus_weno, a_plus_ppm, a_plus);
 
-		auto [a_minus_mppm, a_plus_mppm] =
-			MonotonizeEdges(a_minus_ppm, a_plus_ppm, a, am, ap);
+			auto [a_minus_mppm, a_plus_mppm] = MonotonizeEdges(a_minus_ppm, a_plus_ppm, a, am, ap);
 
-		new_a_minus = median(a_minus_mppm, a_minus_weno, a_minus);
-		new_a_plus = median(a_plus_mppm, a_plus_weno, a_plus);
+			new_a_minus = median(a_minus_mppm, a_minus_weno, a_minus);
+			new_a_plus = median(a_plus_mppm, a_plus_weno, a_plus);
 		}
 	}
 	rightState(i, j, k, iWriteFrom + n) = new_a_minus;

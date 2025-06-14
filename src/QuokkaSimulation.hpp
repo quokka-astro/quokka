@@ -1453,8 +1453,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds,
-							 reconstructionOrder_);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, reconstructionOrder_);
 			// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			//   auto mask = ec_emf_components_rk_ave[idim].OverlapMask(geom[lev].periodicity());
 			//   ec_emf_components_rk_ave[idim].WeightedSync(*mask, geom[lev].periodicity());
@@ -1604,8 +1603,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds,
-							 reconstructionOrder_);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, reconstructionOrder_);
 			// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			//   auto mask = ec_emf_components_rk_stage2[idim].OverlapMask(geom[lev].periodicity());
 			//   ec_emf_components_rk_stage2[idim].WeightedSync(*mask, geom[lev].periodicity());
@@ -1953,15 +1951,14 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	if (reconstructionOrder_ == 3) {
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
-		}
-		else {
+		} else {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
 		}
 	} else if (reconstructionOrder_ == 2) {
-		// HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState, ng_reconstruct_total,
-		// 										      nvars);
+		// HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState,
+		// ng_reconstruct_total, 										      nvars);
 		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::EP>(primVar_mf, leftState, rightState, ng_reconstruct_total,
-												      nvars);
+												  nvars);
 	} else if (reconstructionOrder_ == 1) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
 	} else {
