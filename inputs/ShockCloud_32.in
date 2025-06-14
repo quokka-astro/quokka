@@ -39,12 +39,12 @@ do_frame_shift = 1
 max_timesteps = 100000
 max_t_cc = 20.0
 
-plotfile_interval = 200
-checkpoint_interval = 1000
-ascent_interval = 200
+plotfile_interval = -1
+checkpoint_interval = -1
+ascent_interval = -1
 
 statistics_interval = 200
-projection_interval = 200
+projection_interval = -1
 projection.dirs = x z
 
 derived_vars = pressure entropy nH temperature cooling_length \
@@ -52,8 +52,14 @@ derived_vars = pressure entropy nH temperature cooling_length \
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
+
+## Resampled
+#cooling.cooling_table_type = resampled
+#cooling.hdf5_data_file = "../extern/cooling/isrf_1000Go_grains_resampled.h5"
+
+## CloudyCoolingTools
 cooling.cooling_table_type = cloudy_cooling_tools
-cooling.hdf5_data_file = "./isrf_1000Go_grains.h5"
+cooling.hdf5_data_file = "../extern/cooling/isrf_1000Go_grains.h5"
 
 nH_bg    = 0.003356403333 # cm^-3
 nH_cloud = 1.006921e+00   # cm^-3
@@ -65,7 +71,7 @@ Mach_shock = 1.888892847795999
 
 do_tracers = 1		# enable tracer particles
 
-quokka.diagnostics = slice_z hist1 hist2 hist3 hist4
+quokka.diagnostics = slice_z  # hist1 hist2 hist3 hist4
 
 ## z-slice output
 
