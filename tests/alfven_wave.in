@@ -34,3 +34,6 @@ max_timesteps = 2000
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
 hydro.use_dual_energy = 0
+
+mhd.emf_averaging_method = BalsaraSpicer
+#mhd.emf_averaging_method = LD04

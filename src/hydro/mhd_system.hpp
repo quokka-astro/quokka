@@ -15,11 +15,12 @@
 // internal headers
 #include "AMReX_GpuControl.H"
 #include "AMReX_ParmParse.H"
-#include "AMReX_Print.H"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
+
+AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04);
 
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_t>
@@ -34,22 +35,20 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds,
-			       int reconstructionOrder);
+			       int reconstructionOrder, EMFAvgType emf_avg_type);
 
-	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid,
-				  const int reconstructionOrder);
+	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
 	static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, const double dt,
-				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo,
-				      double time);
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, double dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo, double time);
 };
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder)
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
 {
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
 	// loop over each box-array on the level
@@ -254,33 +253,41 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 
 			// compute electric field on the cell-edge
 			const auto &E2_ave = ec_mf_emf_components[iedge][mfi].array();
-			// only operate on the real cells
-			amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-				const double E2_q0_ = E2_q0(i, j, k);
-				const double E2_q1_ = E2_q1(i, j, k);
-				const double E2_q2_ = E2_q2(i, j, k);
-				const double E2_q3_ = E2_q3(i, j, k);
 
-				// Balsara & Spicer scheme:
-				// E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
+			if (emf_avg_type == EMFAvgType::BalsaraSpicer) {
+				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+					const double E2_q0_ = E2_q0(i, j, k);
+					const double E2_q1_ = E2_q1(i, j, k);
+					const double E2_q2_ = E2_q2(i, j, k);
+					const double E2_q3_ = E2_q3(i, j, k);
+					// Balsara & Spicer averaging scheme:
+					E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
+				});
+			} else if (emf_avg_type == EMFAvgType::LD04) {
+				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+					const double E2_q0_ = E2_q0(i, j, k);
+					const double E2_q1_ = E2_q1(i, j, k);
+					const double E2_q2_ = E2_q2(i, j, k);
+					const double E2_q3_ = E2_q3(i, j, k);
 
-				// LD04 scheme:
-				const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-				const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-			        const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-				const double fspd_x1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
-				const double B0_p_ = B0_p(i, j, k);
-			        const double B0_m_ = B0_m(i, j, k);
-			        const double B1_p_ = B1_p(i, j, k);
-			        const double B1_m_ = B1_m(i, j, k);
-				const double denominator = (fspd_x0_m + fspd_x0_p) * (fspd_x1_m + fspd_x1_p);
+					// LD04 scheme:
+					const double fspd_x0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
+					const double fspd_x0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
+					const double fspd_x1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
+					const double fspd_x1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+					const double B0_p_ = B0_p(i, j, k);
+					const double B0_m_ = B0_m(i, j, k);
+					const double B1_p_ = B1_p(i, j, k);
+					const double B1_m_ = B1_m(i, j, k);
+					const double denominator = (fspd_x0_m + fspd_x0_p) * (fspd_x1_m + fspd_x1_p);
 
-				E2_ave(i, j, k) = ((fspd_x0_p * fspd_x1_p * E2_q0_ + fspd_x0_p * fspd_x1_m * E2_q1_ + fspd_x0_m * fspd_x1_m * E2_q2_ +
-				 		    fspd_x0_m * fspd_x1_p * E2_q3_) /
-				 		       denominator -
-				 		   fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
-				 		   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
-			});
+					E2_ave(i, j, k) = ((fspd_x0_p * fspd_x1_p * E2_q0_ + fspd_x0_p * fspd_x1_m * E2_q1_ + fspd_x0_m * fspd_x1_m * E2_q2_ +
+							    fspd_x0_m * fspd_x1_p * E2_q3_) /
+							       denominator -
+							   fspd_x1_m * fspd_x1_p / (fspd_x1_m + fspd_x1_p) * (B0_p_ - B0_m_) +
+							   fspd_x0_m * fspd_x0_p / (fspd_x0_m + fspd_x0_p) * (B1_p_ - B1_m_));
+				});
+			}
 		}
 	}
 }

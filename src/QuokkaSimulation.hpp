@@ -164,6 +164,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 
+	EMFAvgType emfAveragingType_ = EMFAvgType::BalsaraSpicer; // method to use to average EMF at edges
+
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
@@ -479,6 +481,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
+	}
+
+	// set MHD runtime parameters
+	{
+		amrex::ParmParse hpp("mhd");
+		hpp.query("emf_averaging_method", emfAveragingType_);
 	}
 
 	// set cooling runtime parameters
@@ -1431,7 +1439,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// Stage 1 of RK2-SSP
 	{
-		// std::cout << "rk2-stage 1" << std::endl;
 		//  advance all grids on local processor (Stage 1 of integrator)
 		auto const &stateOld_cc = state_old_cc_tmp;
 		auto &stateNew_cc = state_inter_cc_;
@@ -1446,6 +1453,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				    // primitive quantities
 		}
 		auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateOld_cc, stateOld_fc, nvars, lev);
+
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_rk_stage1;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1453,11 +1461,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, reconstructionOrder_);
-			// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			//   auto mask = ec_emf_components_rk_ave[idim].OverlapMask(geom[lev].periodicity());
-			//   ec_emf_components_rk_ave[idim].WeightedSync(*mask, geom[lev].periodicity());
-			// }
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, reconstructionOrder_,
+							 emfAveragingType_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1566,7 +1571,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// Stage 2 of RK2-SSP
 	if (integratorOrder_ == 2) {
-		// std::cout << "rk2-stage 2" << std::endl;
 		//  update ghost zones [intermediate stage stored in state_inter_cc_]
 		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, quokka::centering::cc, quokka::direction::na, PreInterpState,
 				       PostInterpState);
@@ -1596,6 +1600,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				    // primitive quantities
 		}
 		auto [fluxArrays, faceVel, fast_mhd_wavespeeds] = computeHydroFluxes(stateInter_cc, stateInter_fc, nvars, lev);
+
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_rk_stage2;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1603,11 +1608,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, reconstructionOrder_);
-			// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			//   auto mask = ec_emf_components_rk_stage2[idim].OverlapMask(geom[lev].periodicity());
-			//   ec_emf_components_rk_stage2[idim].WeightedSync(*mask, geom[lev].periodicity());
-			// }
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, reconstructionOrder_,
+							 emfAveragingType_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
