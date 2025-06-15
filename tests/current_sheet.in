@@ -26,9 +26,9 @@ amr.blocking_factor_z = 4
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = 50
+plotfile_interval = 100
 checkpoint_interval = -1
-cfl = 0.3
+cfl = 0.2
 stop_time = 10.0
 max_timesteps = 10000
 
@@ -36,4 +36,4 @@ hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
 hydro.artificial_viscosity_coefficient = 0.1
 hydro.use_dual_energy = 0
-density_floor = 1e-2
+
