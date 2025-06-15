@@ -27,10 +27,10 @@ do_reflux = 0
 do_subcycle = 0
 
 plotfile_interval = 100
-checkpoint_interval = -1
+checkpoint_interval = 1000
 cfl = 0.2
 stop_time = 10.0
-max_timesteps = 10000
+max_timesteps = 3e4
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
