@@ -276,10 +276,10 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 					const double B1_m_ = B1_m(i, j, k);
 
 					// LD04 scheme:
-					double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-					double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-					double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-					double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+					const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
+					const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
+					const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
+					const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
 
 					// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
 					// (-,+) | (+,+)
@@ -297,13 +297,11 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 					const double numerator = 0.5 * (num1 + num2);
 					const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
 
+					// NOTE: there is a sign error in Equation 56 of Felker & Stone
 					const double term2 =
-					    -((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) + ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
+					    ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
 
-					// VERY BIG HINT: this works perfectly for the AlfvenWaveLinear test when term2 is disabled!
-					// SOLUTION: there is a sign error in Equation 56 of Felker & Stone
-					// E2_ave(i, j, k) = (numerator / denominator);
-					E2_ave(i, j, k) = (numerator / denominator) - term2;
+					E2_ave(i, j, k) = (numerator / denominator) + term2;
 				});
 			}
 		}
