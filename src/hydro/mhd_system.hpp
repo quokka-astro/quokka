@@ -302,7 +302,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 
 					// VERY BIG HINT: this works perfectly for the AlfvenWaveLinear test when term2 is disabled!
 					// SOLUTION: there is a sign error in Equation 56 of Felker & Stone
-					//E2_ave(i, j, k) = (numerator / denominator);
+					// E2_ave(i, j, k) = (numerator / denominator);
 					E2_ave(i, j, k) = (numerator / denominator) - term2;
 				});
 			}
