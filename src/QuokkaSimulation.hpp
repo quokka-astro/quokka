@@ -164,7 +164,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 
-	EMFAvgType emfAveragingType_ = EMFAvgType::BalsaraSpicer; // method to use to average EMF at edges
+	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
