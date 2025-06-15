@@ -19,20 +19,21 @@ amr.max_level       = 0 # number of levels = max_level + 1
 amr.max_grid_size_x = 64
 amr.max_grid_size_y = 64
 amr.max_grid_size_z = 4
-amr.blocking_factor_x = 32
-amr.blocking_factor_y = 32
+amr.blocking_factor_x = 16
+amr.blocking_factor_y = 16
 amr.blocking_factor_z = 4
 
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = 100
+plotfile_interval = 50
 checkpoint_interval = -1
 cfl = 0.3
 stop_time = 10.0
 max_timesteps = 10000
 
 hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 2
+hydro.reconstruction_order = 3
+hydro.artificial_viscosity_coefficient = 0.1
 hydro.use_dual_energy = 0
 density_floor = 1e-2
