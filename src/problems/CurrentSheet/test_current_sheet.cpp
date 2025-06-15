@@ -8,7 +8,6 @@
 ///	  https://www.astro.princeton.edu/~jstone/Athena/tests/current-sheet/current-sheet.html
 ///
 
-#include <cassert>
 #include <cmath>
 
 #include "AMReX_Array.H"
@@ -58,20 +57,16 @@ template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// const double x = prob_lo[0] + (i + 0.5) * dx[0]; // NOLINT(readability-math-missing-parentheses)
-		const double y = prob_lo[1] + (j + 0.5) * dx[1]; // NOLINT(readability-math-missing-parentheses)
-		// const double z = prob_lo[2] + (k + 0.5) * dx[2]; // NOLINT(readability-math-missing-parentheses)
-
+		const double y = prob_lo[1] + ((j + 0.5) * dx[1]);
 		const double vx = A * std::sin(2.0 * M_PI * y);
-		const double vy = 0;
 
-		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
+		const double Ekin = 0.5 * rho0 * (vx * vx);
 		const double Eint = P0 / (gamma_gas - 1.0);
 		const double Emag = 0.5;
 
 		state_cc(i, j, k, HydroSystem<CurrentSheet>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<CurrentSheet>::x1Momentum_index) = rho0 * vx;
-		state_cc(i, j, k, HydroSystem<CurrentSheet>::x2Momentum_index) = rho0 * vy;
+		state_cc(i, j, k, HydroSystem<CurrentSheet>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<CurrentSheet>::x3Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<CurrentSheet>::internalEnergy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<CurrentSheet>::energy_index) = Eint + Ekin + Emag;
@@ -87,7 +82,7 @@ template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGridFaceV
 	const quokka::direction dir = grid_elem.dir_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double x = prob_lo[0] + (i + 0.5) * dx[0]; // NOLINT(readability-math-missing-parentheses)
+		const double x = prob_lo[0] + ((i + 0.5) * dx[0]);
 
 		double by = NAN;
 		if (std::abs(x) > 0.25) {
