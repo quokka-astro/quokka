@@ -41,7 +41,7 @@ template <> struct Physics_Traits<OrszagTang> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-constexpr double B0 = 1.0/gcem::sqrt(4.0*PI);
+constexpr double B0 = 1.0 / gcem::sqrt(4.0 * PI);
 
 template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -65,7 +65,7 @@ template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGrid(quokka
 		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
 		const double Eint = P0 / (gamma_gas - 1.0);
 
-		auto A_z = [=](double x, double y) { return B0/(4.0*M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
+		auto A_z = [=](double x, double y) { return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
 		auto B_x = [=](double xL, double yL) { return (A_z(xL, yL + dx[1]) - A_z(xL, yL)) / dx[1]; };
 		auto B_y = [=](double xL, double yL) { return -(A_z(xL + dx[0], yL) - A_z(xL, yL)) / dx[0]; };
 		const double bx = 0.5 * (B_x(x - 0.5 * dx[0], y - 0.5 * dx[1]) + B_x(x + 0.5 * dx[0], y - 0.5 * dx[1]));
@@ -93,7 +93,7 @@ template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGridFaceVar
 		const double xL = prob_lo[0] + (i * dx[0]);
 		const double yL = prob_lo[1] + (j * dx[1]);
 
-		auto A_z = [=](double x, double y) { return B0/(4.0*M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
+		auto A_z = [=](double x, double y) { return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
 		auto B_x = [=](double xL, double yL) { return (A_z(xL, yL + dx[1]) - A_z(xL, yL)) / dx[1]; };
 		auto B_y = [=](double xL, double yL) { return -(A_z(xL + dx[0], yL) - A_z(xL, yL)) / dx[0]; };
 		const double bx = B_x(xL, yL);
