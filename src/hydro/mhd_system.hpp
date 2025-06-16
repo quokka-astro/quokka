@@ -13,6 +13,7 @@
 // library headers
 
 // internal headers
+#include "AMReX_BLProfiler.H"
 #include "AMReX_GpuControl.H"
 #include "AMReX_ParmParse.H"
 #include "hydro_system.hpp"
@@ -50,6 +51,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
 {
+	const BL_PROFILE("MHDSystem::ComputeEMF()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
 	// loop over each box-array on the level
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
@@ -312,6 +314,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid,
 					 int reconstructionOrder)
 {
+        const BL_PROFILE("MHDSystem::ReconstructTo()")
 	amrex::Box const &box_r = amrex::grow(box_cValid, 1);
 	amrex::Box const &box_r_x1 = amrex::surroundingNodes(box_r, static_cast<int>(dir));
 	if (reconstructionOrder == 3) {
@@ -363,7 +366,8 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*prob_lo*/,
 					     double /*time*/)
 {
-	// compute the total right-hand-side for the MOL integration
+        const BL_PROFILE("MHDSystem::SolveInductionEqn()");
+        // compute the total right-hand-side for the MOL integration
 
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
