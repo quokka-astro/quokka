@@ -1124,9 +1124,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			kickParticlesAllLevels(dt_[0]);
 		}
 
-		// Only create particles at the finest level to avoid duplicate particle creation in regions where finer levels exist
-		particleRegister_.createParticlesFromState(state_new_cc_[finest_level], finest_level, cur_time, dt_[0]);
-
 		// Stellar evolution and SN deposition; only apply to star particles
 		if (particleRegister_.HasStarParticles()) {
 			// TODO(cch): Need to take care of AMR subcycling
@@ -1485,15 +1482,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Sink accretion, stage 1: compute the accretion rate
 	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
-	// Sink formation. To be implemented later. We use accretion_rate_at_level to limit star formation at accretion sites. One way to do this
-	// is to disallow star formation if at least one of the cells in the formation region has a positive accretion rate.
-	// particleRegister_.applySinkFormation(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
-
 	// Sink accretion, stage 2: update the particle states
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, geom[lev], lev, time, dt);
 
+	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
+	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+
 	// Deposit the SN particles into the MultiFab
-	particleRegister_.depositSN(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
+	// TODO(cch): put accretion_rate_at_level inside depositSN
+	particleRegister_.depositSN(state_new_cc_[lev], lev, time, dt);
 }
 #endif // AMREX_SPACEDIM == 3
 
