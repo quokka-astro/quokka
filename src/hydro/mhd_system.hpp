@@ -314,8 +314,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid,
 					 int reconstructionOrder)
 {
-        const BL_PROFILE("MHDSystem::ReconstructTo()")
-	amrex::Box const &box_r = amrex::grow(box_cValid, 1);
+	const BL_PROFILE("MHDSystem::ReconstructTo()") amrex::Box const &box_r = amrex::grow(box_cValid, 1);
 	amrex::Box const &box_r_x1 = amrex::surroundingNodes(box_r, static_cast<int>(dir));
 	if (reconstructionOrder == 3) {
 		// note: only box_r is used. box_r_x1 is unused.
@@ -366,8 +365,8 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 					     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*prob_lo*/,
 					     double /*time*/)
 {
-        const BL_PROFILE("MHDSystem::SolveInductionEqn()");
-        // compute the total right-hand-side for the MOL integration
+	const BL_PROFILE("MHDSystem::SolveInductionEqn()");
+	// compute the total right-hand-side for the MOL integration
 
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
