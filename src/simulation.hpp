@@ -294,19 +294,19 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
 				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
-	
+
 	// Convenience function to fill all face-centered dimensions at once using divergence-free interpolation
 	template <typename PreInterpHook, typename PostInterpHook>
-	void fillBoundaryConditionsAllFaces(int lev, amrex::Real time, PreInterpHook const &pre_interp, PostInterpHook const &post_interp, 
+	void fillBoundaryConditionsAllFaces(int lev, amrex::Real time, PreInterpHook const &pre_interp, PostInterpHook const &post_interp,
 					    FillPatchType fptype = FillPatchType::fillpatch_function);
-	
+
 	// Simple overload for the common case with no interpolation hooks
 	void fillBoundaryConditionsAllFaces(int lev, amrex::Real time, FillPatchType fptype = FillPatchType::fillpatch_function);
-	
+
 	template <typename PreInterpHook, typename PostInterpHook>
-	void fillBoundaryConditionsFaceArray(amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &S_filled_array, 
+	void fillBoundaryConditionsFaceArray(amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &S_filled_array,
 					     amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &state_array, int lev, amrex::Real time,
-					     PreInterpHook const &pre_interp, PostInterpHook const &post_interp, 
+					     PreInterpHook const &pre_interp, PostInterpHook const &post_interp,
 					     FillPatchType fptype = FillPatchType::fillpatch_class);
 
 	template <typename PreInterpHook, typename PostInterpHook>
@@ -317,11 +317,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithDataFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array,
-					amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &coarseData,
-					amrex::Vector<amrex::Real> &coarseTime,
-					amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &fineData,
-					amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp,
-					amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array, FillPatchType fptype,
+					amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &coarseData, amrex::Vector<amrex::Real> &coarseTime,
+					amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &fineData, amrex::Vector<amrex::Real> &fineTime,
+					int icomp, int ncomp, amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array, FillPatchType fptype,
 					PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
 
 	static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
@@ -2000,7 +1998,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
 	}
-	
+
 	// fill ghost zones for all face dimensions
 	// Option 1: Fill each dimension individually (maintains existing behavior)
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2009,7 +2007,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 		state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0, ncomp_per_dim_fc, nghost_fc, nghost_fc);
 	}
-	
+
 	// Option 2: Fill all dimensions at once using face_divfree_interp (uncomment to use)
 	// fillBoundaryConditionsAllFaces(level, time, FillPatchType::fillpatch_function);
 	// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2156,9 +2154,10 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 // This enables the use of face_divfree_interp for maintaining divergence-free constraint
 template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
-void AMRSimulation<problem_t>::fillBoundaryConditionsFaceArray(amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &S_filled_array, 
-							       amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &state_array, int const lev, amrex::Real const time,
-							       PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype)
+void AMRSimulation<problem_t>::fillBoundaryConditionsFaceArray(amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &S_filled_array,
+							       amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &state_array, int const lev,
+							       amrex::Real const time, PreInterpHook const &pre_interp, PostInterpHook const &post_interp,
+							       FillPatchType fptype)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditionsFaceArray()"); // NOLINT(misc-const-correctness)
 
@@ -2194,7 +2193,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditionsFaceArray(amrex::Array<amre
 // This automatically sets up the arrays and calls the array-based interface
 template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
-void AMRSimulation<problem_t>::fillBoundaryConditionsAllFaces(int lev, amrex::Real time, PreInterpHook const &pre_interp, PostInterpHook const &post_interp, 
+void AMRSimulation<problem_t>::fillBoundaryConditionsAllFaces(int lev, amrex::Real time, PreInterpHook const &pre_interp, PostInterpHook const &post_interp,
 							      FillPatchType fptype)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditionsAllFaces()"); // NOLINT(misc-const-correctness)
@@ -2203,20 +2202,19 @@ void AMRSimulation<problem_t>::fillBoundaryConditionsAllFaces(int lev, amrex::Re
 		// Create arrays of pointers to the face-centered MultiFabs
 		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> state_array;
 		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> filled_array;
-		
+
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			state_array[idim] = &state_new_fc_[lev][idim];
 			filled_array[idim] = &state_new_fc_[lev][idim]; // fill in-place
 		}
-		
+
 		// Use the array-based interface which supports face_divfree_interp
 		fillBoundaryConditionsFaceArray(filled_array, state_array, lev, time, pre_interp, post_interp, fptype);
 	}
 }
 
 // Simple overload for filling all face-centered boundary conditions with default hooks
-template <typename problem_t>
-void AMRSimulation<problem_t>::fillBoundaryConditionsAllFaces(int lev, amrex::Real time, FillPatchType fptype)
+template <typename problem_t> void AMRSimulation<problem_t>::fillBoundaryConditionsAllFaces(int lev, amrex::Real time, FillPatchType fptype)
 {
 	fillBoundaryConditionsAllFaces(lev, time, InterpHookNone, InterpHookNone, fptype);
 }
@@ -2331,7 +2329,7 @@ void AMRSimulation<problem_t>::FillPatchWithDataFaceArray(int lev, amrex::Real t
 	if (lev == 0) {
 		// At level 0, we just do single level fill for each dimension
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::FillPatchSingleLevel(*mf_array[idim], time, fineData[idim], fineTime, 0, icomp, ncomp, geom[lev], 
+			amrex::FillPatchSingleLevel(*mf_array[idim], time, fineData[idim], fineTime, 0, icomp, ncomp, geom[lev],
 						    finePhysicalBoundaryFunctor[idim], 0);
 		}
 	} else {
@@ -2339,7 +2337,7 @@ void AMRSimulation<problem_t>::FillPatchWithDataFaceArray(int lev, amrex::Real t
 		// First prepare the coarse and fine arrays
 		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> cmf;
 		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fmf;
-		
+
 		// For time interpolation, we need to handle multiple time levels
 		if (coarseTime.size() == 1) {
 			// No time interpolation needed
@@ -2347,28 +2345,25 @@ void AMRSimulation<problem_t>::FillPatchWithDataFaceArray(int lev, amrex::Real t
 				cmf[idim] = coarseData[idim][0];
 				fmf[idim] = fineData[idim][0];
 			}
-			
+
 			// Use the array version of FillPatchTwoLevels
-			amrex::FillPatchTwoLevels(mf_array, time, cmf, coarseTime[0], fmf, fineTime[0], 
-						  0, icomp, ncomp, geom[lev - 1], geom[lev],
-						  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, 
-						  refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
+			amrex::FillPatchTwoLevels(mf_array, time, cmf, coarseTime[0], fmf, fineTime[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],
+						  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
+						  &amrex::face_divfree_interp, BCs_array, 0);
 		} else {
 			// Time interpolation case
 			amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> cmf_vec;
 			amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> fmf_vec;
-			
+
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				cmf_vec[idim] = coarseData[idim];
 				fmf_vec[idim] = fineData[idim];
 			}
-			
+
 			// Use the array version with time interpolation
-			amrex::FillPatchTwoLevels(mf_array, time, cmf_vec, coarseTime, fmf_vec, fineTime,
-						  0, icomp, ncomp, geom[lev - 1], geom[lev],
-						  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0,
-						  refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0,
-						  pre_interp, post_interp);
+			amrex::FillPatchTwoLevels(mf_array, time, cmf_vec, coarseTime, fmf_vec, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
+						  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
+						  &amrex::face_divfree_interp, BCs_array, 0, pre_interp, post_interp);
 		}
 	}
 }
