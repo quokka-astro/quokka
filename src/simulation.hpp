@@ -2467,7 +2467,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 				// So for nvarPerDim_fc variables and AMREX_SPACEDIM dimensions:
 				// [x-var0, y-var0, z-var0, x-var1, y-var1, z-var1, ...]
 				const int var_idx = fc_comp_flat / AMREX_SPACEDIM; // which variable type
-				const int idim = fc_comp_flat % AMREX_SPACEDIM;    // which dimension
+				const int idim = fc_comp_flat % AMREX_SPACEDIM;	   // which dimension
 				const int fc_comp = var_idx;			   // component index within that dimension's MultiFab
 				AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, fc_comp, 1);
 				comp++;
