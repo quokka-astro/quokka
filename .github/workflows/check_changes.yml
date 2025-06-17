@@ -65,7 +65,7 @@ jobs:
       - id: set-output
         run: |
           echo "has_docs_changes=${{ steps.changes.outputs.docs }}" >> $GITHUB_OUTPUT
-          echo "has_non_docs_changes=${{ steps.changes.outputs.code }}" >> $GITHUB_OUTPUT
+          echo "has_non_docs_changes=${{ steps.changes.outputs.code == 'true' || steps.changes.outputs.workflows == 'true' }}" >> $GITHUB_OUTPUT
           echo "has_scripts_changes=${{ steps.changes.outputs.scripts }}" >> $GITHUB_OUTPUT 
           echo "has_cpp_changes=${{ steps.changes.outputs.cpp }}" >> $GITHUB_OUTPUT
           echo "has_py_changes=${{ steps.changes.outputs.py }}" >> $GITHUB_OUTPUT
