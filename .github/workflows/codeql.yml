@@ -16,10 +16,15 @@ permissions:
   contents: read
 
 jobs:
-  analyze:
+  check_changes:
     if: ${{ github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule' }}
+    uses: ./.github/workflows/check_changes.yml
+
+  analyze:
+    if: ${{ (github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule') && (needs.check_changes.outputs.has_cpp_changes == 'true' || needs.check_changes.outputs.has_py_changes == 'true') }}
     name: Analyze
     runs-on: ubuntu-latest
+    needs: check_changes
     permissions:
       actions: read
       contents: read
@@ -71,8 +76,8 @@ jobs:
           config-file: ./.github/workflows/codeql/codeql-config.yml
 
       - name: Build (py)
-        uses: github/codeql-action/autobuild@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
         if: ${{ matrix.language == 'python' }}
+        uses: github/codeql-action/autobuild@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
 
       - name: Build (C++)
         if: ${{ matrix.language == 'cpp' }}
@@ -97,6 +102,16 @@ jobs:
         uses: github/codeql-action/analyze@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
         with:
           category: "/language:${{ matrix.language }}"
+
+  success:
+    if: ${{ (github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule') && needs.check_changes.outputs.has_cpp_changes != 'true' && needs.check_changes.outputs.has_py_changes != 'true' && github.event_name != 'schedule' }}
+    name: CodeQL Success (No Changes)
+    runs-on: ubuntu-latest
+    needs: check_changes
+    steps:
+      - name: Success
+        run: |
+          echo "No C++ or Python changes detected - CodeQL analysis skipped successfully"
 
   save_pr_number:
     if: github.event_name == 'pull_request'
