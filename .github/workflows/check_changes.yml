@@ -13,6 +13,8 @@ on:
         value: ${{ jobs.check.outputs.has_cpp_changes }}
       has_py_changes:
         value: ${{ jobs.check.outputs.has_py_changes }}
+      has_workflow_changes:
+        value: ${{ jobs.check.outputs.has_workflow_changes }}
 
 jobs:
   check:
@@ -23,6 +25,7 @@ jobs:
       has_scripts_changes: ${{ steps.set-output.outputs.has_scripts_changes }}
       has_cpp_changes: ${{ steps.set-output.outputs.has_cpp_changes }}
       has_py_changes: ${{ steps.set-output.outputs.has_py_changes }}
+      has_workflow_changes: ${{ steps.set-output.outputs.has_workflow_changes }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -55,6 +58,9 @@ jobs:
             py:
               - '**/*.py'
               - '**/*.ipynb'
+            workflows:
+              - '.github/workflows/**/*.yml'
+              - '.github/workflows/**/*.yaml'
 
       - id: set-output
         run: |
@@ -63,3 +69,4 @@ jobs:
           echo "has_scripts_changes=${{ steps.changes.outputs.scripts }}" >> $GITHUB_OUTPUT 
           echo "has_cpp_changes=${{ steps.changes.outputs.cpp }}" >> $GITHUB_OUTPUT
           echo "has_py_changes=${{ steps.changes.outputs.py }}" >> $GITHUB_OUTPUT
+          echo "has_workflow_changes=${{ steps.changes.outputs.workflows }}" >> $GITHUB_OUTPUT
