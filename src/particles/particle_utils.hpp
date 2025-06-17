@@ -2,12 +2,14 @@
 #define PARTICLE_UTILS_HPP_
 
 #include "AMReX_Gpu.H"
+#include "fundamental_constants.H"
 
 namespace quokka::ParticleUtils
 {
 
 constexpr int stencil_size = 3;
 constexpr int SN_stencil_array_size = stencil_size + 1;
+constexpr double jeansNo = 0.25; // Jeans number
 
 static_assert(stencil_size <= 3, "stencil_size must be <= 3");
 
@@ -69,6 +71,12 @@ constexpr kernel_weights_array_t kernel_spherical_uniform_3_weights = {{{{{1.000
 									  {1.00000000000000, 1.00000000000000, 1.00000000000000, 1.00000000000000},
 									  {1.00000000000000, 1.00000000000000, 1.00000000000000, 1.00000000000000},
 									  {1.00000000000000, 1.00000000000000, 1.00000000000000, 1.00000000000000}}}}};
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double cs_cell, double dx) -> double
+{
+	return jeansNo * jeansNo * M_PI * cs_cell * cs_cell / (C::Gconst * (dx * dx));
+}
+
 } // namespace quokka::ParticleUtils
 
 #endif // PARTICLE_UTILS_HPP_
