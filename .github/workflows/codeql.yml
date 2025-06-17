@@ -102,23 +102,35 @@ jobs:
         with:
           category: "/language:${{ matrix.language }}"
 
+  # This job reports success when analysis actually runs
+  analyze-success:
+    name: Analysis Success
+    runs-on: ubuntu-latest
+    needs: [check_changes, analyze]
+    if: ${{ always() && (needs.check_changes.outputs.has_cpp_changes == 'true' || needs.check_changes.outputs.has_py_changes == 'true') }}
+    steps:
+      - name: Report analysis success
+        run: |
+          if [[ "${{ needs.analyze.result }}" == "success" ]]; then
+            echo "CodeQL analysis completed successfully"
+            exit 0
+          else
+            echo "CodeQL analysis failed"
+            exit 1
+          fi
+
   # This job ensures that PRs are not blocked when CodeQL analysis is skipped
   codeql-success:
     name: CodeQL Success
     runs-on: ubuntu-latest
-    needs: [check_changes, analyze]
+    needs: [check_changes]
     if: always()
     steps:
       - name: Report success
         run: |
           if [[ "${{ needs.check_changes.outputs.has_cpp_changes }}" == "true" || "${{ needs.check_changes.outputs.has_py_changes }}" == "true" ]]; then
-            if [[ "${{ needs.analyze.result }}" == "success" ]]; then
-              echo "CodeQL analysis completed successfully"
-              exit 0
-            else
-              echo "CodeQL analysis failed"
-              exit 1
-            fi
+            echo "Code changes detected, but analyze job was skipped or completed"
+            exit 0
           else
             echo "No code changes detected, skipping CodeQL analysis"
             exit 0
