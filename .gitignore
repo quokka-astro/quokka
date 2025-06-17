@@ -30,8 +30,7 @@ Backtrace.*
 # files in tests/ folder
 /tests/
 !/tests/matplotlibrc
-!/tests/leak_suppress.txt
-!/tests/ascent_actions.yaml
+# !/tests/ascent_actions.yaml
 
 # LaTeX files
 *.aux
