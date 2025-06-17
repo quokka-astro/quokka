@@ -1,0 +1,37 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -1.0  -0.578125  -1.0
+geometry.prob_hi     =  1.0    0.578125   1.0
+geometry.is_periodic =  1      1     1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 256 148 4
+amr.max_level       = 0 # number of levels = max_level + 1
+
+amr.max_grid_size_x = 64
+amr.max_grid_size_y = 64
+amr.max_grid_size_z = 4
+amr.blocking_factor_x = 4
+amr.blocking_factor_y = 4
+amr.blocking_factor_z = 4
+
+do_reflux = 0
+do_subcycle = 0
+
+plotfile_interval = 100
+checkpoint_interval = 1000
+cfl = 0.2
+stop_time = 3.0
+max_timesteps = 3e4
+
+hydro.rk_integrator_order = 2
+hydro.reconstruction_order = 3
+hydro.use_dual_energy = 0

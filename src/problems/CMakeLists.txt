@@ -68,6 +68,7 @@ add_subdirectory(OrszagTang)
 add_subdirectory(FastWave)
 add_subdirectory(FastWave2)
 add_subdirectory(FastWave3)
+add_subdirectory(FieldLoop)
 
 add_subdirectory(DiskGalaxy)
 add_subdirectory(BinaryOrbitCIC)
