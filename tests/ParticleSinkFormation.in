@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -2.393565931e+17 -2.393565931e+17 -2.393565931e+17 
-geometry.prob_hi     =  2.393565931e+17 2.393565931e+17 2.393565931e+17 
+geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
+geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -22,14 +22,10 @@ amr.grid_eff        = 0.7   # default
 
 do_reflux = 1
 do_subcycle = 0
-
-problem.particles_file = "sink4.txt"
-problem.refine_half_domain = false
+do_tracers = 0      # turn on tracer particles
 
 particles.verbose = 1
-particles.sink_particle_use_uniform_kernel = true
 
-max_timesteps = 1
 plotfile_interval = -1
 
 tiny_profiler.enabled = 0
