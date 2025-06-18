@@ -11,12 +11,17 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 
 using amrex::Real;
@@ -36,7 +41,7 @@ template <> struct Physics_Traits<ScalarProblem> {
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
-	static constexpr bool is_mhd_enabled = true;
+	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups; has to be defined even though radiation is disabled
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -82,14 +87,6 @@ template <> void QuokkaSimulation<ScalarProblem>::setInitialConditionsOnGrid(quo
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P);
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::scalar0_index) = scalar;
 	});
-}
-
-template <> void QuokkaSimulation<ScalarProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
-{
-	const amrex::Array4<double> &state_fc = grid_elem.array_;
-	const amrex::Box &indexRange = grid_elem.indexRange_;
-	// set B field to zero
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<HighMachProblem>::mhdFirstIndex) = 0; });
 }
 
 template <>
@@ -252,23 +249,16 @@ auto problem_main() -> int
 	const int ncomp_cc = Physics_Indices<ScalarProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+		BCs_cc[0].setLo(0, amrex::BCType::int_dir); // periodic
+		BCs_cc[0].setHi(0, amrex::BCType::int_dir);
+		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
-	const int ncomp_fc = Physics_Indices<ScalarProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(ncomp_fc);
-	for (int n = 0; n < ncomp_fc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_fc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_fc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
-
 	// Problem initialization
-	QuokkaSimulation<ScalarProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<ScalarProblem> sim(BCs_cc);
 
 	sim.computeReferenceSolution_ = true;
 
