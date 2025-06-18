@@ -17,16 +17,15 @@ constexpr double DELTA = 1.0e-4;
 template <class T> constexpr auto SQUARE(const T x) -> T { return x * x; }
 
 // density, momentum, total energy, transverse magnetic field
-template <int N_passiveScalars>
-struct ConsHydro1D {
-	double rho; // density
-	double mx;  // x-momentum
-	double my;  // y-momentum
-	double mz;  // z-momentum
-	double E;   // total energy density
-	double Eint; // specific internal energy
-	double by;  // y-magnetic field
-	double bz;  // z-magnetic field
+template <int N_passiveScalars> struct ConsHydro1D {
+	double rho;					   // density
+	double mx;					   // x-momentum
+	double my;					   // y-momentum
+	double mz;					   // z-momentum
+	double E;					   // total energy density
+	double Eint;					   // specific internal energy
+	double by;					   // y-magnetic field
+	double bz;					   // z-magnetic field
 	quokka::valarray<double, N_passiveScalars> scalar; // passive scalars, problem defined
 };
 
@@ -50,21 +49,20 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	//--- Step 1. Compute L/R states
 
 	// initialize left and right conserved states
-	ConsHydro1D <N_scalars> u_L{};
-	ConsHydro1D <N_scalars> u_R{};
+	ConsHydro1D<N_scalars> u_L{};
+	ConsHydro1D<N_scalars> u_R{};
 	// initialize temporary container to store flux across interface
 	quokka::valarray<double, fluxdim> F_x = {};
 	// initialize fluxes at left and right side of the interface
-	ConsHydro1D <N_scalars> f_L{};
-	ConsHydro1D <N_scalars> f_R{};
+	ConsHydro1D<N_scalars> f_L{};
+	ConsHydro1D<N_scalars> f_R{};
 	// initialise signal speeds (left to right)
 	std::array<double, 5> spds{};
 	// initialise four intermediate conserved states
-	ConsHydro1D <N_scalars> u_star_L{};
-	ConsHydro1D <N_scalars> u_dstar_L{};
-	ConsHydro1D <N_scalars> u_dstar_R{};
-	ConsHydro1D <N_scalars> u_star_R{};
-
+	ConsHydro1D<N_scalars> u_star_L{};
+	ConsHydro1D<N_scalars> u_dstar_L{};
+	ConsHydro1D<N_scalars> u_dstar_R{};
+	ConsHydro1D<N_scalars> u_star_R{};
 
 	// frequently used term
 	double const bx_sq = SQUARE(bx);
@@ -95,13 +93,11 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	u_R.Eint = sR.Eint;
 	u_R.by = sR.by;
 	u_R.bz = sR.bz;
-	
+
 	for (int n = 0; n < N_scalars; ++n) {
 		u_L.scalar[n] = sL.scalar[n];
 		u_R.scalar[n] = sR.scalar[n];
 	}
-
-
 
 	//--- Step 2. Compute L & R wave speeds according to MK5, eqn. (67)
 
@@ -135,7 +131,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	f_R.Eint = u_R.Eint * sR.u;
 	f_R.by = u_R.by * sR.u - bx * sR.v;
 	f_R.bz = u_R.bz * sR.u - bx * sR.w;
-	
+
 	// passive scalar fluxes right and left
 	for (int n = 0; n < N_scalars; ++n) {
 		f_L.scalar[n] = u_L.scalar[n] * sL.u;
@@ -158,13 +154,13 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// MK5: rho_i from eqn (43)
 	u_star_L.rho = u_L.rho * siui_L * sism_inv_L;
 	u_star_R.rho = u_R.rho * siui_R * sism_inv_R;
-	u_star_L.Eint = u_L.Eint * siui_L * sism_inv_L; 
-	u_star_R.Eint = u_R.Eint * siui_R * sism_inv_R; 
+	u_star_L.Eint = u_L.Eint * siui_L * sism_inv_L;
+	u_star_R.Eint = u_R.Eint * siui_R * sism_inv_R;
 	for (int n = 0; n < N_scalars; ++n) {
 		u_star_L.scalar[n] = u_L.scalar[n] * siui_L * sism_inv_L;
 		u_star_R.scalar[n] = u_R.scalar[n] * siui_R * sism_inv_R;
 	}
-	
+
 	double u_star_rho_inv_L = 1.0 / u_star_L.rho;
 	double u_star_rho_inv_R = 1.0 / u_star_R.rho;
 	double rho_sqrt_L = std::sqrt(u_star_L.rho);
@@ -273,7 +269,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 		u_dstar_R.E = u_star_R.E + rho_sqrt_R * bx_sign * (vb_star_R - tmp);
 	}
 
-	//Convert to arrays for simplified math
+	// Convert to arrays for simplified math
 
 	quokka::valarray<double, fluxdim> U_L = {u_L.rho, u_L.mx, u_L.my, u_L.mz, u_L.E, u_L.Eint};
 	quokka::valarray<double, fluxdim> U_R = {u_R.rho, u_R.mx, u_R.my, u_R.mz, u_R.E, u_R.Eint};
@@ -309,7 +305,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	U_dstar_L = spds[1] * (U_dstar_L - U_star_L);
 	U_star_L = spds[0] * (U_star_L - U_L);
- 	U_dstar_R = spds[3] * (U_dstar_R - U_star_R);
+	U_dstar_R = spds[3] * (U_dstar_R - U_star_R);
 	U_star_R = spds[4] * (U_star_R - U_R);
 
 	//--- Step 6. Compute fluxes
@@ -331,7 +327,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 		F_x = F_R + U_star_R + U_dstar_R;
 	} else {
 		// return u_star_R
-		F_x = F_R + U_star_R;	
+		F_x = F_R + U_star_R;
 	}
 
 	return std::make_tuple(std::move(F_x), fspd_m, fspd_p);
