@@ -17,14 +17,17 @@ constexpr double DELTA = 1.0e-4;
 template <class T> constexpr auto SQUARE(const T x) -> T { return x * x; }
 
 // density, momentum, total energy, transverse magnetic field
+template <int N_passiveScalars>
 struct ConsHydro1D {
 	double rho; // density
 	double mx;  // x-momentum
 	double my;  // y-momentum
 	double mz;  // z-momentum
 	double E;   // total energy density
+	double Eint; // specific internal energy
 	double by;  // y-magnetic field
 	double bz;  // z-magnetic field
+	quokka::valarray<double, N_passiveScalars> scalar; // passive scalars, problem defined
 };
 
 template <int N_scalars, int N_mscalars>
@@ -47,20 +50,21 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	//--- Step 1. Compute L/R states
 
 	// initialize left and right conserved states
-	ConsHydro1D u_L{};
-	ConsHydro1D u_R{};
+	ConsHydro1D <N_scalars> u_L{};
+	ConsHydro1D <N_scalars> u_R{};
 	// initialize temporary container to store flux across interface
-	ConsHydro1D f_x{};
+	quokka::valarray<double, fluxdim> F_x = {};
 	// initialize fluxes at left and right side of the interface
-	ConsHydro1D f_L{};
-	ConsHydro1D f_R{};
+	ConsHydro1D <N_scalars> f_L{};
+	ConsHydro1D <N_scalars> f_R{};
 	// initialise signal speeds (left to right)
 	std::array<double, 5> spds{};
 	// initialise four intermediate conserved states
-	ConsHydro1D u_star_L{};
-	ConsHydro1D u_dstar_L{};
-	ConsHydro1D u_dstar_R{};
-	ConsHydro1D u_star_R{};
+	ConsHydro1D <N_scalars> u_star_L{};
+	ConsHydro1D <N_scalars> u_dstar_L{};
+	ConsHydro1D <N_scalars> u_dstar_R{};
+	ConsHydro1D <N_scalars> u_star_R{};
+
 
 	// frequently used term
 	double const bx_sq = SQUARE(bx);
@@ -79,6 +83,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	u_L.my = sL.v * u_L.rho;
 	u_L.mz = sL.w * u_L.rho;
 	u_L.E = ke_L + pb_L + sL.P / (gamma - 1.0); // TODO(neco): generalise EOS
+	u_L.Eint = sL.Eint;
 	u_L.by = sL.by;
 	u_L.bz = sL.bz;
 	// set right conserved states
@@ -87,8 +92,16 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	u_R.my = sR.v * u_R.rho;
 	u_R.mz = sR.w * u_R.rho;
 	u_R.E = ke_R + pb_R + sR.P / (gamma - 1.0);
+	u_R.Eint = sR.Eint;
 	u_R.by = sR.by;
 	u_R.bz = sR.bz;
+	
+	for (int n = 0; n < N_scalars; ++n) {
+		u_L.scalar[n] = sL.scalar[n];
+		u_R.scalar[n] = sR.scalar[n];
+	}
+
+
 
 	//--- Step 2. Compute L & R wave speeds according to MK5, eqn. (67)
 
@@ -110,6 +123,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	f_L.my = u_L.my * sL.u - bx * u_L.by;
 	f_L.mz = u_L.mz * sL.u - bx * u_L.bz;
 	f_L.E = sL.u * (u_L.E + ptot_L - bx_sq) - bx * (sL.v * u_L.by + sL.w * u_L.bz);
+	f_L.Eint = u_L.Eint * sL.u;
 	f_L.by = u_L.by * sL.u - bx * sL.v;
 	f_L.bz = u_L.bz * sL.u - bx * sL.w;
 	// fluxes on the right side of the interface
@@ -118,8 +132,15 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	f_R.my = u_R.my * sR.u - bx * u_R.by;
 	f_R.mz = u_R.mz * sR.u - bx * u_R.bz;
 	f_R.E = sR.u * (u_R.E + ptot_R - bx_sq) - bx * (sR.v * u_R.by + sR.w * u_R.bz);
+	f_R.Eint = u_R.Eint * sR.u;
 	f_R.by = u_R.by * sR.u - bx * sR.v;
 	f_R.bz = u_R.bz * sR.u - bx * sR.w;
+	
+	// passive scalar fluxes right and left
+	for (int n = 0; n < N_scalars; ++n) {
+		f_L.scalar[n] = u_L.scalar[n] * sL.u;
+		f_R.scalar[n] = u_R.scalar[n] * sR.u;
+	}
 
 	//--- Step 4. Compute middle and Alfven wave speeds
 
@@ -137,6 +158,13 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// MK5: rho_i from eqn (43)
 	u_star_L.rho = u_L.rho * siui_L * sism_inv_L;
 	u_star_R.rho = u_R.rho * siui_R * sism_inv_R;
+	u_star_L.Eint = u_L.Eint * siui_L * sism_inv_L; 
+	u_star_R.Eint = u_R.Eint * siui_R * sism_inv_R; 
+	for (int n = 0; n < N_scalars; ++n) {
+		u_star_L.scalar[n] = u_L.scalar[n] * siui_L * sism_inv_L;
+		u_star_R.scalar[n] = u_R.scalar[n] * siui_R * sism_inv_R;
+	}
+	
 	double u_star_rho_inv_L = 1.0 / u_star_L.rho;
 	double u_star_rho_inv_R = 1.0 / u_star_R.rho;
 	double rho_sqrt_L = std::sqrt(u_star_L.rho);
@@ -212,6 +240,13 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 		u_dstar_R.rho = u_star_R.rho;
 		u_dstar_L.mx = u_star_L.mx;
 		u_dstar_R.mx = u_star_R.mx;
+		u_dstar_L.Eint = u_star_L.Eint;
+		u_dstar_R.Eint = u_star_R.Eint;
+		for (int n = 0; n < N_scalars; ++n) {
+			u_dstar_L.scalar[n] = u_star_L.scalar[n];
+			u_dstar_R.scalar[n] = u_star_R.scalar[n];
+		}
+
 		// MK5: eqn (59)
 		double tmp = rho_sum_inv * (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) +
 					    bx_sign * (u_star_R.by - u_star_L.by));
@@ -238,99 +273,68 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 		u_dstar_R.E = u_star_R.E + rho_sqrt_R * bx_sign * (vb_star_R - tmp);
 	}
 
+	//Convert to arrays for simplified math
+
+	quokka::valarray<double, fluxdim> U_L = {u_L.rho, u_L.mx, u_L.my, u_L.mz, u_L.E, u_L.Eint};
+	quokka::valarray<double, fluxdim> U_R = {u_R.rho, u_R.mx, u_R.my, u_R.mz, u_R.E, u_R.Eint};
+	for (int n = 0; n < N_scalars; ++n) {
+		const int nstart = fluxdim - N_scalars;
+		U_L[nstart + n] = u_L.scalar[n];
+		U_R[nstart + n] = u_R.scalar[n];
+	}
+
+	quokka::valarray<double, fluxdim> U_star_L = {u_star_L.rho, u_star_L.mx, u_star_L.my, u_star_L.mz, u_star_L.E, u_star_L.Eint};
+	quokka::valarray<double, fluxdim> U_star_R = {u_star_R.rho, u_star_R.mx, u_star_R.my, u_star_R.mz, u_star_R.E, u_star_R.Eint};
+	for (int n = 0; n < N_scalars; ++n) {
+		const int nstart = fluxdim - N_scalars;
+		U_star_L[nstart + n] = u_star_L.scalar[n];
+		U_star_R[nstart + n] = u_star_R.scalar[n];
+	}
+
+	quokka::valarray<double, fluxdim> U_dstar_L = {u_dstar_L.rho, u_dstar_L.mx, u_dstar_L.my, u_dstar_L.mz, u_dstar_L.E, u_dstar_L.Eint};
+	quokka::valarray<double, fluxdim> U_dstar_R = {u_dstar_R.rho, u_dstar_R.mx, u_dstar_R.my, u_dstar_R.mz, u_dstar_R.E, u_dstar_R.Eint};
+	for (int n = 0; n < N_scalars; ++n) {
+		const int nstart = fluxdim - N_scalars;
+		U_dstar_L[nstart + n] = u_dstar_L.scalar[n];
+		U_dstar_R[nstart + n] = u_dstar_R.scalar[n];
+	}
+
+	quokka::valarray<double, fluxdim> F_L = {f_L.rho, f_L.mx, f_L.my, f_L.mz, f_L.E, f_L.Eint};
+	quokka::valarray<double, fluxdim> F_R = {f_R.rho, f_R.mx, f_R.my, f_R.mz, f_R.E, f_R.Eint};
+	for (int n = 0; n < N_scalars; ++n) {
+		const int nstart = fluxdim - N_scalars;
+		F_L[nstart + n] = f_L.scalar[n];
+		F_R[nstart + n] = f_R.scalar[n];
+	}
+
+	U_dstar_L = spds[1] * (U_dstar_L - U_star_L);
+	U_star_L = spds[0] * (U_star_L - U_L);
+ 	U_dstar_R = spds[3] * (U_dstar_R - U_star_R);
+	U_star_R = spds[4] * (U_star_R - U_R);
+
 	//--- Step 6. Compute fluxes
-
-	u_dstar_L.rho = spds[1] * (u_dstar_L.rho - u_star_L.rho);
-	u_dstar_L.mx = spds[1] * (u_dstar_L.mx - u_star_L.mx);
-	u_dstar_L.my = spds[1] * (u_dstar_L.my - u_star_L.my);
-	u_dstar_L.mz = spds[1] * (u_dstar_L.mz - u_star_L.mz);
-	u_dstar_L.E = spds[1] * (u_dstar_L.E - u_star_L.E);
-	u_dstar_L.by = spds[1] * (u_dstar_L.by - u_star_L.by);
-	u_dstar_L.bz = spds[1] * (u_dstar_L.bz - u_star_L.bz);
-
-	u_star_L.rho = spds[0] * (u_star_L.rho - u_L.rho);
-	u_star_L.mx = spds[0] * (u_star_L.mx - u_L.mx);
-	u_star_L.my = spds[0] * (u_star_L.my - u_L.my);
-	u_star_L.mz = spds[0] * (u_star_L.mz - u_L.mz);
-	u_star_L.E = spds[0] * (u_star_L.E - u_L.E);
-	u_star_L.by = spds[0] * (u_star_L.by - u_L.by);
-	u_star_L.bz = spds[0] * (u_star_L.bz - u_L.bz);
-
-	u_dstar_R.rho = spds[3] * (u_dstar_R.rho - u_star_R.rho);
-	u_dstar_R.mx = spds[3] * (u_dstar_R.mx - u_star_R.mx);
-	u_dstar_R.my = spds[3] * (u_dstar_R.my - u_star_R.my);
-	u_dstar_R.mz = spds[3] * (u_dstar_R.mz - u_star_R.mz);
-	u_dstar_R.E = spds[3] * (u_dstar_R.E - u_star_R.E);
-	u_dstar_R.by = spds[3] * (u_dstar_R.by - u_star_R.by);
-	u_dstar_R.bz = spds[3] * (u_dstar_R.bz - u_star_R.bz);
-
-	u_star_R.rho = spds[4] * (u_star_R.rho - u_R.rho);
-	u_star_R.mx = spds[4] * (u_star_R.mx - u_R.mx);
-	u_star_R.my = spds[4] * (u_star_R.my - u_R.my);
-	u_star_R.mz = spds[4] * (u_star_R.mz - u_R.mz);
-	u_star_R.E = spds[4] * (u_star_R.E - u_R.E);
-	u_star_R.by = spds[4] * (u_star_R.by - u_R.by);
-	u_star_R.bz = spds[4] * (u_star_R.bz - u_R.bz);
 
 	if (spds[0] >= 0.0) {
 		// return u_L if flow is supersonic
-		f_x.rho = f_L.rho;
-		f_x.mx = f_L.mx;
-		f_x.my = f_L.my;
-		f_x.mz = f_L.mz;
-		f_x.E = f_L.E;
-		f_x.by = f_L.by;
-		f_x.bz = f_L.bz;
+		F_x = F_L;
 	} else if (spds[4] <= 0.0) {
 		// return u_R if flow is supersonic
-		f_x.rho = f_R.rho;
-		f_x.mx = f_R.mx;
-		f_x.my = f_R.my;
-		f_x.mz = f_R.mz;
-		f_x.E = f_R.E;
-		f_x.by = f_R.by;
-		f_x.bz = f_R.bz;
+		F_x = F_R;
 	} else if (spds[1] >= 0.0) {
 		// return u_star_L
-		f_x.rho = f_L.rho + u_star_L.rho;
-		f_x.mx = f_L.mx + u_star_L.mx;
-		f_x.my = f_L.my + u_star_L.my;
-		f_x.mz = f_L.mz + u_star_L.mz;
-		f_x.E = f_L.E + u_star_L.E;
-		f_x.by = f_L.by + u_star_L.by;
-		f_x.bz = f_L.bz + u_star_L.bz;
+		F_x = F_L + U_star_L;
 	} else if (spds[2] >= 0.0) {
 		// return u_dstar_L
-		f_x.rho = f_L.rho + u_star_L.rho + u_dstar_L.rho;
-		f_x.mx = f_L.mx + u_star_L.mx + u_dstar_L.mx;
-		f_x.my = f_L.my + u_star_L.my + u_dstar_L.my;
-		f_x.mz = f_L.mz + u_star_L.mz + u_dstar_L.mz;
-		f_x.E = f_L.E + u_star_L.E + u_dstar_L.E;
-		f_x.by = f_L.by + u_star_L.by + u_dstar_L.by;
-		f_x.bz = f_L.bz + u_star_L.bz + u_dstar_L.bz;
+		F_x = F_L + U_star_L + U_dstar_L;
 	} else if (spds[3] > 0.0) {
 		// return u_dstar_R
-		f_x.rho = f_R.rho + u_star_R.rho + u_dstar_R.rho;
-		f_x.mx = f_R.mx + u_star_R.mx + u_dstar_R.mx;
-		f_x.my = f_R.my + u_star_R.my + u_dstar_R.my;
-		f_x.mz = f_R.mz + u_star_R.mz + u_dstar_R.mz;
-		f_x.E = f_R.E + u_star_R.E + u_dstar_R.E;
-		f_x.by = f_R.by + u_star_R.by + u_dstar_R.by;
-		f_x.bz = f_R.bz + u_star_R.bz + u_dstar_R.bz;
+		F_x = F_R + U_star_R + U_dstar_R;
 	} else {
 		// return u_star_R
-		f_x.rho = f_R.rho + u_star_R.rho;
-		f_x.mx = f_R.mx + u_star_R.mx;
-		f_x.my = f_R.my + u_star_R.my;
-		f_x.mz = f_R.mz + u_star_R.mz;
-		f_x.E = f_R.E + u_star_R.E;
-		f_x.by = f_R.by + u_star_R.by;
-		f_x.bz = f_R.bz + u_star_R.bz;
+		F_x = F_R + U_star_R;	
 	}
 
-	// TODO(neco): Eint=0 for now; pscalars will also be needed in the future.
-	quokka::valarray<double, fluxdim> F_hydro = {f_x.rho, f_x.mx, f_x.my, f_x.mz, f_x.E, 0.0};
-	return std::make_tuple(std::move(F_hydro), fspd_m, fspd_p);
+	return std::make_tuple(std::move(F_x), fspd_m, fspd_p);
 }
 } // namespace quokka::Riemann
 
