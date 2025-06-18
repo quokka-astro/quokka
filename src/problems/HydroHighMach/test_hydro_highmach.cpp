@@ -7,6 +7,10 @@
 /// \brief Defines a test problem for a contact wave.
 ///
 
+#include <fmt/format.h>
+#include <fstream>
+#include <unistd.h>
+
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -14,20 +18,11 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
-#include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
-#include <fmt/format.h>
-#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include "util/fextract.hpp"
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
-#include "radiation/radiation_system.hpp"
-#include <fstream>
-#include <unistd.h>
 
 using amrex::Real;
 
@@ -46,7 +41,7 @@ template <> struct Physics_Traits<HighMachProblem> {
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -84,6 +79,14 @@ template <> void QuokkaSimulation<HighMachProblem>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, HydroSystem<HighMachProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
 		state_cc(i, j, k, HydroSystem<HighMachProblem>::internalEnergy_index) = P / (gamma - 1.);
 	});
+}
+
+template <> void QuokkaSimulation<HighMachProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	// set B field to zero
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<HighMachProblem>::mhdFirstIndex) = 0; });
 }
 
 template <>
@@ -204,7 +207,7 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 
 		// save solution values to csv file
 		std::ofstream csvfile;
-		csvfile.open("highmach_output.csv");
+		csvfile.open("mhd_highmach_output.csv");
 		csvfile << "# x density velocity pressure\n";
 		for (int i = 0; i < nx; ++i) {
 			csvfile << x.at(i) << " ";
@@ -227,7 +230,7 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::yscale("log");
 		matplotlibcpp::ylim(0.1, 31.623);
 		matplotlibcpp::title(fmt::format("density (t = {:.4f})", tNew_[0]));
-		matplotlibcpp::save("./hydro_highmach_density.pdf");
+		matplotlibcpp::save("./mhd_highmach_density.pdf");
 
 		// velocity
 		matplotlibcpp::clf();
@@ -235,7 +238,7 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::plot(x_exact, vx_exact, args_exact);
 		matplotlibcpp::ylim(-0.3, 0.3);
 		matplotlibcpp::title(fmt::format("velocity (t = {:.4f})", tNew_[0]));
-		matplotlibcpp::save("./hydro_highmach_velocity.pdf");
+		matplotlibcpp::save("./mhd_highmach_velocity.pdf");
 
 		// pressure
 		matplotlibcpp::clf();
@@ -244,7 +247,7 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::yscale("log");
 		matplotlibcpp::ylim(1.0e-17, 1.0);
 		matplotlibcpp::title(fmt::format("pressure (t = {:.4f})", tNew_[0]));
-		matplotlibcpp::save("./hydro_highmach_pressure.pdf");
+		matplotlibcpp::save("./mhd_highmach_pressure.pdf");
 #endif
 	}
 }
@@ -255,16 +258,23 @@ auto problem_main() -> int
 	const int ncomp_cc = Physics_Indices<HighMachProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[0].setLo(0, amrex::BCType::int_dir); // periodic
-		BCs_cc[0].setHi(0, amrex::BCType::int_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
+
+	const int ncomp_fc = Physics_Indices<HighMachProblem>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(ncomp_fc);
+	for (int n = 0; n < ncomp_cc; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
 	// Problem initialization
-	QuokkaSimulation<HighMachProblem> sim(BCs_cc);
+	QuokkaSimulation<HighMachProblem> sim(BCs_cc, BCs_fc);
 
 	sim.computeReferenceSolution_ = true;
 
