@@ -43,6 +43,18 @@ template <> struct Physics_Traits<OrszagTang> {
 
 constexpr double B0 = 1.0 / gcem::sqrt(4.0 * PI);
 
+AMREX_FORCE_INLINE auto A_z(double x, double y) -> double { return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
+
+AMREX_FORCE_INLINE auto B_x(double xL, double yL, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> double
+{
+	return (A_z(xL, yL + dx[1]) - A_z(xL, yL)) / dx[1];
+};
+
+AMREX_FORCE_INLINE auto B_y(double xL, double yL, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> double
+{
+	return -(A_z(xL + dx[0], yL) - A_z(xL, yL)) / dx[0];
+};
+
 template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract grid information
@@ -62,19 +74,16 @@ template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGrid(quokka
 		const double vx = std::sin(2 * M_PI * y);
 		const double vy = -std::sin(2 * M_PI * x);
 
+		const double Bx = 0.5 * (B_x(x - 0.5 * dx[0], y - 0.5 * dx[1], dx) + B_x(x + 0.5 * dx[0], y - 0.5 * dx[1], dx));
+		const double By = 0.5 * (B_y(x - 0.5 * dx[0], y - 0.5 * dx[1], dx) + B_y(x - 0.5 * dx[0], y + 0.5 * dx[1], dx));
+
 		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
 		const double Eint = P0 / (gamma_gas - 1.0);
-
-		auto A_z = [=](double x, double y) { return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
-		auto B_x = [=](double xL, double yL) { return (A_z(xL, yL + dx[1]) - A_z(xL, yL)) / dx[1]; };
-		auto B_y = [=](double xL, double yL) { return -(A_z(xL + dx[0], yL) - A_z(xL, yL)) / dx[0]; };
-		const double bx = 0.5 * (B_x(x - 0.5 * dx[0], y - 0.5 * dx[1]) + B_x(x + 0.5 * dx[0], y - 0.5 * dx[1]));
-		const double by = 0.5 * (B_y(x - 0.5 * dx[0], y - 0.5 * dx[1]) + B_y(x - 0.5 * dx[0], y + 0.5 * dx[1]));
-		const double Emag = 0.5 * (bx * bx + by * by);
+		const double Emag = 0.5 * (Bx * Bx + By * By);
 
 		state_cc(i, j, k, HydroSystem<OrszagTang>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<OrszagTang>::x1Momentum_index) = rho0 * vx;
-		state_cc(i, j, k, HydroSystem<OrszagTang>::x2Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<OrszagTang>::x2Momentum_index) = rho0 * vy;
 		state_cc(i, j, k, HydroSystem<OrszagTang>::x3Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<OrszagTang>::internalEnergy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<OrszagTang>::energy_index) = Eint + Ekin + Emag;
@@ -93,16 +102,10 @@ template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGridFaceVar
 		const double xL = prob_lo[0] + (i * dx[0]);
 		const double yL = prob_lo[1] + (j * dx[1]);
 
-		auto A_z = [=](double x, double y) { return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
-		auto B_x = [=](double xL, double yL) { return (A_z(xL, yL + dx[1]) - A_z(xL, yL)) / dx[1]; };
-		auto B_y = [=](double xL, double yL) { return -(A_z(xL + dx[0], yL) - A_z(xL, yL)) / dx[0]; };
-		const double bx = B_x(xL, yL);
-		const double by = B_y(xL, yL);
-
 		if (dir == quokka::direction::x) {
-			state_fc(i, j, k, Physics_Indices<OrszagTang>::mhdFirstIndex) = bx;
+			state_fc(i, j, k, Physics_Indices<OrszagTang>::mhdFirstIndex) = B_x(xL, yL, dx);
 		} else if (dir == quokka::direction::y) {
-			state_fc(i, j, k, Physics_Indices<OrszagTang>::mhdFirstIndex) = by;
+			state_fc(i, j, k, Physics_Indices<OrszagTang>::mhdFirstIndex) = B_y(xL, yL, dx);
 		} else if (dir == quokka::direction::z) {
 			state_fc(i, j, k, Physics_Indices<OrszagTang>::mhdFirstIndex) = 0;
 		}
