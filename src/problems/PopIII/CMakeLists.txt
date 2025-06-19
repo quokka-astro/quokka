@@ -25,10 +25,10 @@ if (AMReX_SPACEDIM EQUAL 3)
     )
 
     #re-run cmake if this file is changed
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tests/PopIII.in)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/inputs/PopIII.in)
 
     # Read the 'PopIII.in' file line by line
-    file(READ ${CMAKE_SOURCE_DIR}/tests/PopIII.in pop_in_contents)
+    file(READ ${CMAKE_SOURCE_DIR}/inputs/PopIII.in pop_in_contents)
 
     # Split the file contents into lines
     string(REPLACE "\n" ";" pop_in_lines "${pop_in_contents}")
@@ -64,15 +64,15 @@ if (AMReX_SPACEDIM EQUAL 3)
            message(FATAL_ERROR "No box size found to create initial perturbations for!")
         endif()
     else()
-        message(FATAL_ERROR "No matching line found in ${CMAKE_SOURCE_DIR}/tests/PopIII.in!")
+        message(FATAL_ERROR "No matching line found in ${CMAKE_SOURCE_DIR}/inputs/PopIII.in!")
     endif()
 
 
     add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_SOURCE_DIR}/src/turbulence/perturbation.py --kmin=2 --kmax=${result} --size=${first_digits} --alpha=1.8 --f_solenoidal=0.66667 ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    add_test(NAME PopIII COMMAND popiii PopIII.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME PopIII COMMAND popiii ../inputs/PopIII.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(ComputePerturbations PROPERTIES FIXTURES_SETUP PopIII_fixture)
     set_tests_properties(PopIII PROPERTIES FIXTURES_REQUIRED PopIII_fixture)
 
     # AMR test only works on Setonix because Gadi and avatar do not have enough memory per GPU
-    # add_test(NAME PopIIIAMR COMMAND popiii popiii_AMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    # add_test(NAME PopIIIAMR COMMAND popiii ../inputs/popiii_AMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

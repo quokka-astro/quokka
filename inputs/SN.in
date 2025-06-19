@@ -38,7 +38,7 @@ quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMom
 cooling.enabled = 1
 cooling.cooling_table_type = "grackle"
 cooling.hdf5_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
-problem.SN_particles_file = "SN.txt"
+problem.SN_particles_file = "../inputs/SN.txt"
 problem.refine_half_domain = false
 
 problem.n_amb = 1.0

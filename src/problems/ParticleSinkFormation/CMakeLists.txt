@@ -4,5 +4,5 @@ if (AMReX_SPACEDIM EQUAL 3)
         setup_target_for_cuda_compilation(test_particle_sink_formation)
     endif()
 
-    add_test(NAME ParticleSinkFormation COMMAND test_particle_sink_formation ParticleSinkFormation.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ParticleSinkFormation COMMAND test_particle_sink_formation ../inputs/ParticleSinkFormation.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

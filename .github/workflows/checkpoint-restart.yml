@@ -62,7 +62,7 @@ jobs:
       env:
         BUILD_DIR: ${{runner.workspace}}/build
         PLOTFILETOOLS_DIR: ${{github.workspace}}/extern/amrex/Tools/Plotfile
-      run: ./checkpoint_restart_test.sh
+      run: ../inputs/checkpoint_restart_test.sh
 
     - name: Upload output
       if: always()
