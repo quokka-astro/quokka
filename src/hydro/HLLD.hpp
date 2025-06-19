@@ -271,63 +271,63 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	// Convert to arrays for simplified math
 
-	quokka::valarray<double, fluxdim> U_L = {u_L.rho, u_L.mx, u_L.my, u_L.mz, u_L.E, u_L.Eint};
-	quokka::valarray<double, fluxdim> U_R = {u_R.rho, u_R.mx, u_R.my, u_R.mz, u_R.E, u_R.Eint};
+	quokka::valarray<double, fluxdim> U_L_array = {u_L.rho, u_L.mx, u_L.my, u_L.mz, u_L.E, u_L.Eint};
+	quokka::valarray<double, fluxdim> U_R_array = {u_R.rho, u_R.mx, u_R.my, u_R.mz, u_R.E, u_R.Eint};
 	for (int n = 0; n < N_scalars; ++n) {
 		const int nstart = fluxdim - N_scalars;
-		U_L[nstart + n] = u_L.scalar[n];
-		U_R[nstart + n] = u_R.scalar[n];
+		U_L_array[nstart + n] = u_L.scalar[n];
+		U_R_array[nstart + n] = u_R.scalar[n];
 	}
 
-	quokka::valarray<double, fluxdim> U_star_L = {u_star_L.rho, u_star_L.mx, u_star_L.my, u_star_L.mz, u_star_L.E, u_star_L.Eint};
-	quokka::valarray<double, fluxdim> U_star_R = {u_star_R.rho, u_star_R.mx, u_star_R.my, u_star_R.mz, u_star_R.E, u_star_R.Eint};
+	quokka::valarray<double, fluxdim> U_star_L_array = {u_star_L.rho, u_star_L.mx, u_star_L.my, u_star_L.mz, u_star_L.E, u_star_L.Eint};
+	quokka::valarray<double, fluxdim> U_star_R_array = {u_star_R.rho, u_star_R.mx, u_star_R.my, u_star_R.mz, u_star_R.E, u_star_R.Eint};
 	for (int n = 0; n < N_scalars; ++n) {
 		const int nstart = fluxdim - N_scalars;
-		U_star_L[nstart + n] = u_star_L.scalar[n];
-		U_star_R[nstart + n] = u_star_R.scalar[n];
+		U_star_L_array[nstart + n] = u_star_L.scalar[n];
+		U_star_R_array[nstart + n] = u_star_R.scalar[n];
 	}
 
-	quokka::valarray<double, fluxdim> U_dstar_L = {u_dstar_L.rho, u_dstar_L.mx, u_dstar_L.my, u_dstar_L.mz, u_dstar_L.E, u_dstar_L.Eint};
-	quokka::valarray<double, fluxdim> U_dstar_R = {u_dstar_R.rho, u_dstar_R.mx, u_dstar_R.my, u_dstar_R.mz, u_dstar_R.E, u_dstar_R.Eint};
+	quokka::valarray<double, fluxdim> U_dstar_L_array = {u_dstar_L.rho, u_dstar_L.mx, u_dstar_L.my, u_dstar_L.mz, u_dstar_L.E, u_dstar_L.Eint};
+	quokka::valarray<double, fluxdim> U_dstar_R_array = {u_dstar_R.rho, u_dstar_R.mx, u_dstar_R.my, u_dstar_R.mz, u_dstar_R.E, u_dstar_R.Eint};
 	for (int n = 0; n < N_scalars; ++n) {
 		const int nstart = fluxdim - N_scalars;
-		U_dstar_L[nstart + n] = u_dstar_L.scalar[n];
-		U_dstar_R[nstart + n] = u_dstar_R.scalar[n];
+		U_dstar_L_array[nstart + n] = u_dstar_L.scalar[n];
+		U_dstar_R_array[nstart + n] = u_dstar_R.scalar[n];
 	}
 
-	quokka::valarray<double, fluxdim> F_L = {f_L.rho, f_L.mx, f_L.my, f_L.mz, f_L.E, f_L.Eint};
-	quokka::valarray<double, fluxdim> F_R = {f_R.rho, f_R.mx, f_R.my, f_R.mz, f_R.E, f_R.Eint};
+	quokka::valarray<double, fluxdim> F_L_array = {f_L.rho, f_L.mx, f_L.my, f_L.mz, f_L.E, f_L.Eint};
+	quokka::valarray<double, fluxdim> F_R_array = {f_R.rho, f_R.mx, f_R.my, f_R.mz, f_R.E, f_R.Eint};
 	for (int n = 0; n < N_scalars; ++n) {
 		const int nstart = fluxdim - N_scalars;
-		F_L[nstart + n] = f_L.scalar[n];
-		F_R[nstart + n] = f_R.scalar[n];
+		F_L_array[nstart + n] = f_L.scalar[n];
+		F_R_array[nstart + n] = f_R.scalar[n];
 	}
 
-	U_dstar_L = spds[1] * (U_dstar_L - U_star_L);
-	U_star_L = spds[0] * (U_star_L - U_L);
-	U_dstar_R = spds[3] * (U_dstar_R - U_star_R);
-	U_star_R = spds[4] * (U_star_R - U_R);
+	U_dstar_L_array = spds[1] * (U_dstar_L_array - U_star_L_array);
+	U_star_L_array = spds[0] * (U_star_L_array - U_L_array);
+	U_dstar_R_array = spds[3] * (U_dstar_R_array - U_star_R_array);
+	U_star_R_array = spds[4] * (U_star_R_array - U_R_array);
 
 	//--- Step 6. Compute fluxes
 
 	if (spds[0] >= 0.0) {
 		// return u_L if flow is supersonic
-		F_x = F_L;
+		F_x = F_L_array;
 	} else if (spds[4] <= 0.0) {
 		// return u_R if flow is supersonic
-		F_x = F_R;
+		F_x = F_R_array;
 	} else if (spds[1] >= 0.0) {
 		// return u_star_L
-		F_x = F_L + U_star_L;
+		F_x = F_L_array + U_star_L_array;
 	} else if (spds[2] >= 0.0) {
 		// return u_dstar_L
-		F_x = F_L + U_star_L + U_dstar_L;
+		F_x = F_L_array + U_star_L_array + U_dstar_L_array;
 	} else if (spds[3] > 0.0) {
 		// return u_dstar_R
-		F_x = F_R + U_star_R + U_dstar_R;
+		F_x = F_R_array + U_star_R_array + U_dstar_R_array;
 	} else {
 		// return u_star_R
-		F_x = F_R + U_star_R;
+		F_x = F_R_array + U_star_R_array;
 	}
 
 	return std::make_tuple(std::move(F_x), fspd_m, fspd_p);
