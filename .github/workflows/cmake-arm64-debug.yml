@@ -40,6 +40,9 @@ jobs:
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev
 
+    - name: Install Canary
+      run: python3 -m pip install "canary-wm @ git+ssh://git@github.com/sandialabs/canary"
+
     - name: Configure CMake
       shell: bash
       working-directory: ${{runner.workspace}}/build
@@ -58,7 +61,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: ctest -j 4 -T Test -E "RadhydroPulseMG*" --output-on-failure
+      run: canary run --output-on-failure --workers=4 -k 'not RadhydroPulseMG' .
 
     - name: Upload test output
       if: always()
