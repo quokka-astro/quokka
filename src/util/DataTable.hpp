@@ -140,53 +140,6 @@ struct DataTableGpuConst {
 
 		return value;
 	}
-
-	// Compute numeric derivatives (∂f/∂x, ∂f/∂y) using normalized coordinate algorithm
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto numeric_derivative(amrex::Real x, amrex::Real y) const -> amrex::Array<amrex::Real, 2>
-	{
-		// Part 1: Get interpolation data (includes precomputed h and v)
-		InterpData const interp = find_interpolation_data(x, y);
-
-		// Part 2: Compute derivatives in normalized coordinates
-		amrex::Real const z1 = data(interp.ix, interp.iy);
-		amrex::Real const z2 = data(interp.iix, interp.iy);
-		amrex::Real const z3 = data(interp.ix, interp.iiy);
-		amrex::Real const z4 = data(interp.iix, interp.iiy);
-
-		amrex::Real f_h = 0.0;
-		amrex::Real f_v = 0.0;
-
-		// Compute derivatives in normalized coordinates
-		if (interp.ix != interp.iix && interp.iy != interp.iiy) {
-			// Full bilinear case
-			// f_h = v (z4 - z3) + (1 - v) (z2 - z1)
-			f_h = interp.v * (z4 - z3) + (1.0 - interp.v) * (z2 - z1);
-
-			// f_v = h (z4 - z2) + (1 - h) (z3 - z1)
-			f_v = interp.h * (z4 - z2) + (1.0 - interp.h) * (z3 - z1);
-
-		} else if (interp.ix == interp.iix && interp.iy != interp.iiy) {
-			// Linear interpolation in y direction only
-			f_h = 0.0;     // No variation in x direction
-			f_v = z3 - z1; // Linear derivative in normalized v coordinate
-
-		} else if (interp.ix != interp.iix && interp.iy == interp.iiy) {
-			// Linear interpolation in x direction only
-			f_h = z2 - z1; // Linear derivative in normalized h coordinate
-			f_v = 0.0;     // No variation in y direction
-
-		} else {
-			// Point interpolation - no derivatives
-			f_h = 0.0;
-			f_v = 0.0;
-		}
-
-		// Part 3: Convert to physical coordinates: f_x = f_h / (x2 - x1), f_y = f_v / (y2 - y1)
-		amrex::Real const dfdx = (interp.ix != interp.iix) ? f_h / (interp.x2 - interp.x1) : 0.0;
-		amrex::Real const dfdy = (interp.iy != interp.iiy) ? f_v / (interp.y2 - interp.y1) : 0.0;
-
-		return {dfdx, dfdy};
-	}
 };
 
 // Generic 2D data table class
