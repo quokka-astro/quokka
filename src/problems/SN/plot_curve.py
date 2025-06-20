@@ -16,7 +16,7 @@ def main(f1, f2, outfile):
     energy2 = table2[:, 2]
 
     # Create figure with two subplots
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+    _, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
 
     # First panel: Original comparison
     ax1.loglog(time1, energy1, 
