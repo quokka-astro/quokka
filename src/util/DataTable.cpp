@@ -70,8 +70,8 @@ auto DataTable::const_tables() const -> DataTableGpuConst
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
 
-	DataTableGpuConst tables{x_coords_->const_table(), y_coords_->const_table(), data_->const_table(), 
-				 x_min_, x_max_, y_min_, y_max_, dx_, dy_, x_size_, y_size_};
+	DataTableGpuConst tables{
+	    x_coords_->const_table(), y_coords_->const_table(), data_->const_table(), x_min_, x_max_, y_min_, y_max_, dx_, dy_, x_size_, y_size_};
 	return tables;
 }
 
