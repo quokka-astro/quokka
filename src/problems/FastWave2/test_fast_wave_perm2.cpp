@@ -58,7 +58,7 @@ constexpr double sin_theta = gcem::sin(theta_degrees * M_PI / 180.0);
 constexpr double num_modes = 1;
 constexpr double k_amplitude = 2 * M_PI * num_modes;
 
-// input perturbation: choose to do this via the relative denisty field in [0, 1]. remember, the linear regime is valid when this perturbation is small
+// input perturbation: choose to do this via the relative density field in [0, 1]. remember, the linear regime is valid when this perturbation is small
 constexpr double delta_b = 1e-6;
 
 constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);

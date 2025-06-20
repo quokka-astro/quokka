@@ -47,7 +47,7 @@ constexpr double sound_speed = 1.0;
 constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveLinear>::gamma;
 
 // we have set up the problem so that:
-// the direction of wave propogation, vec(k), is aligned with the x1-direction
+// the direction of wave propagation, vec(k), is aligned with the x1-direction
 // the background magnetic field sits in the x1-x2 plane
 
 // k = 2 pi / wave_length. note: wave_length should be an integer, because of periodic BCs + the requirement that the magnetic field be continuous. also, the
@@ -55,7 +55,7 @@ constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveLinear>::gamma;
 constexpr double num_modes = 1;
 constexpr double k_amplitude = 2.0 * M_PI * num_modes;
 
-// alignment between the background magnetic field and the direction of wave propogation (in the x1-x2 plane). recall that hat(k) = (1, 0, 0) and hat(delta_u) =
+// alignment between the background magnetic field and the direction of wave propagation (in the x1-x2 plane). recall that hat(k) = (1, 0, 0) and hat(delta_u) =
 // (0, 1, 0)
 constexpr double theta_degrees = 0.0; // degrees
 constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);

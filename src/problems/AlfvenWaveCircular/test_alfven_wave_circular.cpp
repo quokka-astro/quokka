@@ -41,7 +41,7 @@ template <> struct Physics_Traits<AlfvenWaveCircular> {
 constexpr double sound_speed = 1.0;
 constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveCircular>::gamma;
 
-// we have set up the problem so that the direction of wave propogation, vec(k), is aligned with the x1-direction, and the background magnetic field sits in the
+// we have set up the problem so that the direction of wave propagation, vec(k), is aligned with the x1-direction, and the background magnetic field sits in the
 // x1-x2 plane
 
 // k = 2 pi / wave_length. note: wave_length should be an integer, because of periodic BCs + the requirement that the magnetic field be continuous. also, the
