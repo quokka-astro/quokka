@@ -14,15 +14,14 @@ template <class T> constexpr auto SQUARE(const T x) -> T { return x * x; }
 namespace quokka::Riemann
 {
 
-    // density, momentum, total energy, transverse magnetic field
-template <int N_passiveScalars> 
-struct ConsHydro1D {
+// density, momentum, total energy, transverse magnetic field
+template <int N_passiveScalars> struct ConsHydro1D {
 	double rho;					   // density
 	double mx;					   // x-momentum
 	double my;					   // y-momentum
 	double mz;					   // z-momentum
 	double E;					   // total energy density
-	double Eint;				   // specific internal energy
+	double Eint;					   // specific internal energy
 	double by;					   // y-magnetic field
 	double bz;					   // z-magnetic field
 	quokka::valarray<double, N_passiveScalars> scalar; // passive scalars, problem defined
@@ -42,10 +41,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quo
 
 // Local Lax-Friedrichs (LLF) / Rusanov solver
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR, 
-                                             const double gamma, const double bx) -> quokka::valarray<double, fluxdim>
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
+					     const double gamma, const double bx) -> quokka::valarray<double, fluxdim>
 {
-    // initialize left and right conserved states
+	// initialize left and right conserved states
 	ConsHydro1D<N_scalars> u_L{};
 	ConsHydro1D<N_scalars> u_R{};
 	// initialize temporary container to store flux across interface
@@ -53,9 +52,9 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_msc
 	// initialize fluxes at left and right side of the interface
 	ConsHydro1D<N_scalars> f_L{};
 	ConsHydro1D<N_scalars> f_R{};
-    quokka::valarray<double, fluxdim> Du = {};
-    quokka::valarray<double, fluxdim> F = {};
-	
+	quokka::valarray<double, fluxdim> Du = {};
+	quokka::valarray<double, fluxdim> F = {};
+
 	double const bx_sq = SQUARE(bx);
 
 	// compute L/R states for select conserved variables
@@ -67,15 +66,14 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_msc
 	double const ke_L = 0.5 * sL.rho * (SQUARE(sL.u) + (SQUARE(sL.v) + SQUARE(sL.w)));
 	double const ke_R = 0.5 * sR.rho * (SQUARE(sR.u) + (SQUARE(sR.v) + SQUARE(sR.w)));
 
-    double ptot_L = sL.P + pb_L;
+	double ptot_L = sL.P + pb_L;
 	double ptot_R = sR.P + pb_R;
 
-    const double fspd_L = FastMagnetoSonicSpeed(gamma, sL, bx);
+	const double fspd_L = FastMagnetoSonicSpeed(gamma, sL, bx);
 	const double fspd_R = FastMagnetoSonicSpeed(gamma, sR, bx);
 	const double fspd_m = -std::min(0.0, std::min(sL.u - fspd_L, sR.u - fspd_R));
 	const double fspd_p = std::max(0.0, std::max(sL.u + fspd_L, sR.u + fspd_R));
 
- 
 	// set left conserved states
 	u_L.rho = sL.rho;
 	u_L.mx = sL.u * u_L.rho;
@@ -95,10 +93,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_msc
 	u_R.by = sR.by;
 	u_R.bz = sR.bz;
 
-    //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
+	//--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
-    const amrex::Real a = 0.5 * std::max(std::abs(sL.u) + fspd_L, std::abs(sR.u) + fspd_R);    
-    //--- Step 3.  Compute L/R fluxes
+	const amrex::Real a = 0.5 * std::max(std::abs(sL.u) + fspd_L, std::abs(sR.u) + fspd_R);
+	//--- Step 3.  Compute L/R fluxes
 	// fluxes on the left side of the interface, non-barotropic case
 	f_L.rho = u_L.mx;
 	f_L.mx = u_L.mx * sL.u + ptot_L - bx_sq;
@@ -118,21 +116,21 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_msc
 	f_R.by = u_R.by * sR.u - bx * sR.v;
 	f_R.bz = u_R.bz * sR.u - bx * sR.w;
 
-    // passive scalar fluxes right and left
+	// passive scalar fluxes right and left
 	for (int n = 0; n < N_scalars; ++n) {
 		f_L.scalar[n] = u_L.scalar[n] * sL.u;
 		f_R.scalar[n] = u_R.scalar[n] * sR.u;
 	}
 
-    //convert to arrays for simplified math
-   	quokka::valarray<double, fluxdim> U_L_array = {u_L.rho, u_L.mx, u_L.my, u_L.mz, u_L.E, u_L.Eint};
+	// convert to arrays for simplified math
+	quokka::valarray<double, fluxdim> U_L_array = {u_L.rho, u_L.mx, u_L.my, u_L.mz, u_L.E, u_L.Eint};
 	quokka::valarray<double, fluxdim> U_R_array = {u_R.rho, u_R.mx, u_R.my, u_R.mz, u_R.E, u_R.Eint};
 	for (int n = 0; n < N_scalars; ++n) {
 		const int nstart = fluxdim - N_scalars;
 		U_L_array[nstart + n] = u_L.scalar[n];
 		U_R_array[nstart + n] = u_R.scalar[n];
 	}
-    quokka::valarray<double, fluxdim> F_L_array = {f_L.rho, f_L.mx, f_L.my, f_L.mz, f_L.E, f_L.Eint};
+	quokka::valarray<double, fluxdim> F_L_array = {f_L.rho, f_L.mx, f_L.my, f_L.mz, f_L.E, f_L.Eint};
 	quokka::valarray<double, fluxdim> F_R_array = {f_R.rho, f_R.mx, f_R.my, f_R.mz, f_R.E, f_R.Eint};
 	for (int n = 0; n < N_scalars; ++n) {
 		const int nstart = fluxdim - N_scalars;
@@ -140,15 +138,15 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_msc
 		F_R_array[nstart + n] = f_R.scalar[n];
 	}
 
-    //--- Step 4.  Compute difference in L/R states dU
+	//--- Step 4.  Compute difference in L/R states dU
 
-    Du = U_R_array - U_L_array;
+	Du = U_R_array - U_L_array;
 
-    //--- Step 5.  Compute the LLF flux at interface (see Toro eq. 10.42).
+	//--- Step 5.  Compute the LLF flux at interface (see Toro eq. 10.42).
 
-    F = 0.5*(F_L_array + F_R_array - a* Du);
-    
-    return std::make_tuple(std::move(F_x), fspd_m, fspd_p); 
+	F = 0.5 * (F_L_array + F_R_array - a * Du);
+
+	return std::make_tuple(std::move(F_x), fspd_m, fspd_p);
 }
 } // namespace quokka::Riemann
 
