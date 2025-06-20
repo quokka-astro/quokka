@@ -35,6 +35,10 @@ void DataTable::initialize(const amrex::Vector<amrex::Real> &x_coords, const amr
 	y_min_ = y_coords.front();
 	y_max_ = y_coords.back();
 
+	// Calculate uniform grid spacing once during initialization for optimization
+	dx_ = (x_max_ - x_min_) / static_cast<amrex::Real>(x_size_ - 1);
+	dy_ = (y_max_ - y_min_) / static_cast<amrex::Real>(y_size_ - 1);
+
 	// Create x coordinates table
 	x_coords_ = std::make_unique<amrex::TableData<amrex::Real, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{x_size_ - 1}, amrex::The_Pinned_Arena());
 	auto x_table = x_coords_->table();
@@ -66,7 +70,8 @@ auto DataTable::const_tables() const -> DataTableGpuConst
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
 
-	DataTableGpuConst tables{x_coords_->const_table(), y_coords_->const_table(), data_->const_table(), x_min_, x_max_, y_min_, y_max_, x_size_, y_size_};
+	DataTableGpuConst tables{x_coords_->const_table(), y_coords_->const_table(), data_->const_table(), 
+				 x_min_, x_max_, y_min_, y_max_, dx_, dy_, x_size_, y_size_};
 	return tables;
 }
 

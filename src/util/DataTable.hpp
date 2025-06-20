@@ -32,6 +32,10 @@ struct DataTableGpuConst {
 	amrex::Real y_min{};
 	amrex::Real y_max{};
 
+	// Precomputed grid spacing for optimization
+	amrex::Real dx{};
+	amrex::Real dy{};
+
 	int x_size{};
 	int y_size{};
 
@@ -80,10 +84,6 @@ struct DataTableGpuConst {
 		amrex::Real const xf = x_coords(x_coords.end - 1); // Last x coordinate
 		amrex::Real const yi = y_coords(y_coords.begin);   // First y coordinate
 		amrex::Real const yf = y_coords(y_coords.end - 1); // Last y coordinate
-
-		// Compute uniform grid spacing
-		amrex::Real const dx = (xf - xi) / static_cast<amrex::Real>(x_coords.end - x_coords.begin - 1);
-		amrex::Real const dy = (yf - yi) / static_cast<amrex::Real>(y_coords.end - y_coords.begin - 1);
 
 		// Clamp coordinates to valid table bounds (extrapolation not supported)
 		x = amrex::max(xi, amrex::min(x, xf));
@@ -234,6 +234,10 @@ class DataTable
 	amrex::Real x_max_ = 0.0;
 	amrex::Real y_min_ = 0.0;
 	amrex::Real y_max_ = 0.0;
+
+	// Precomputed grid spacing for optimization
+	amrex::Real dx_ = 0.0;
+	amrex::Real dy_ = 0.0;
 
 	int x_size_ = 0;
 	int y_size_ = 0;
