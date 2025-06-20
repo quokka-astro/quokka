@@ -6,4 +6,5 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     add_test(NAME AlfvenWaveLinear COMMAND test_alfven_wave_linear ../inputs/alfven_wave.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    set_tests_properties(AlfvenWaveLinear PROPERTIES LABELS "MHD")
 endif()

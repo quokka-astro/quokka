@@ -5,5 +5,6 @@ if (AMReX_SPACEDIM EQUAL 3)
         setup_target_for_cuda_compilation(test_fast_wave_perm3)
     endif()
 
-    add_test(NAME FastWave3 COMMAND test_fast_wave_perm3 fast_wave.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME FastWave3 COMMAND test_fast_wave_perm3 ../inputs/fast_wave.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    set_tests_properties(FastWave3 PROPERTIES LABELS "MHD")
 endif()

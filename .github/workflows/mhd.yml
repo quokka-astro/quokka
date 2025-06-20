@@ -1,4 +1,4 @@
-name: MHD-AlfvenWave
+name: MHD-WaveTests
 
 on:
   push:
@@ -10,14 +10,12 @@ on:
     branches: [ development ]
 
 concurrency:
-  group: ${{ github.ref }}-${{ github.head_ref }}-mhd-alfvenwave
+  group: ${{ github.ref }}-${{ github.head_ref }}-mhd-wave-tests
   cancel-in-progress: true
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
-  BUILD_TARGET: test_alfven_wave_circular
-  CTEST_TARGET: AlfvenWaveCircular
 
 permissions:
   contents: read
@@ -42,11 +40,26 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=3
 
+    - name: Get MHD test executables
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      run: |
+        # Get all test names with MHD label and extract their associated executables
+        ctest -N -L MHD | grep "Test command:" | sed 's/.*Test command: //;s/ .*//' | sort -u > mhd_targets.txt
+        # Extract just the executable names (last part of path)
+        cat mhd_targets.txt | xargs -n1 basename > mhd_executables.txt
+        echo "MHD test executables to build:"
+        cat mhd_executables.txt
+
     - name: Build
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: cmake --build . --config $BUILD_TYPE --parallel 4 --target $BUILD_TARGET
+      # Build all MHD test targets
+      run: |
+        # Read the executables and build them
+        TARGETS=$(cat mhd_executables.txt | tr '\n' ' ')
+        echo "Building targets: $TARGETS"
+        cmake --build . --config $BUILD_TYPE --parallel 4 --target $TARGETS
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
@@ -54,9 +67,8 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute tests defined by the CMake configuration.  
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest --output-on-failure -R $CTEST_TARGET
+      # Execute all tests with the MHD label
+      run: ctest --output-on-failure -L MHD
 
     - name: Upload test output
       if: always()
