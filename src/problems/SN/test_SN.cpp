@@ -8,7 +8,8 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
-#include "math/interpolate.hpp"
+#include <fstream>
+#include <iomanip>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -20,9 +21,13 @@ struct SNProblem {
 
 static bool refine_half_domain = false; // NOLINT
 
-static double max_Eint_global = 0.0; // NOLINT
+static double max_Eint_global = 0.0;	       // NOLINT
+static double max_Eint_last = 0.0;	       // NOLINT
+static std::vector<double> max_Eint_history{}; // NOLINT
+static std::vector<double> t_history{};	       // NOLINT
 
 static std::string SN_particles_file = "SN_particles.txt"; // NOLINT
+static std::string coolingTableType_ = "grackle";	   // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
 // constexpr double mu = 1.295 * C::m_u; // neutral gas
@@ -140,6 +145,9 @@ template <> void QuokkaSimulation<SNProblem>::computeAfterTimestep()
 	// find the maximum temperature in the state_new_cc_[0]
 	const double max_internal_energy_density = state_new_cc_[0].max(HydroSystem<SNProblem>::internalEnergy_index);
 	max_Eint_global = std::max(max_Eint_global, max_internal_energy_density);
+	max_Eint_last = max_internal_energy_density;
+	max_Eint_history.push_back(max_internal_energy_density);
+	t_history.push_back(tNew_[0]);
 }
 
 auto problem_main() -> int
@@ -183,6 +191,9 @@ auto problem_main() -> int
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
 
+	amrex::ParmParse const cpp("cooling");
+	cpp.query("cooling_table_type", coolingTableType_);
+
 	// Problem initialization
 	QuokkaSimulation<SNProblem> sim(BCs_cc);
 
@@ -213,13 +224,43 @@ auto problem_main() -> int
 	const amrex::Real max_internal_energy = max_Eint_global * vol;
 	const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
 	int status = 1;
-	if (max_internal_energy > expected_minimum_max_internal_energy && mass_increase_rel_err < mass_increase_rel_err_tol) {
+	const bool pass_max_internal_energy = max_internal_energy > expected_minimum_max_internal_energy;
+	const bool pass_mass = mass_increase_rel_err < mass_increase_rel_err_tol;
+	bool is_pass = pass_max_internal_energy;
+	if (sim.maxTimesteps_ < 20) {
+		is_pass = is_pass && pass_mass;
+	} else {
+		// Write data to CSV file
+		std::ofstream csv_file("sn_energy_history_" + coolingTableType_ + ".csv");
+		if (csv_file.is_open()) {
+			// Set precision to 13 significant digits
+			csv_file << std::scientific << std::setprecision(13);
+
+			// Write header
+			csv_file << "step, Time_yr, Max_Internal_Energy_erg\n";
+
+			// Write data
+			for (int i = 0; i < static_cast<int>(max_Eint_history.size()); ++i) {
+				csv_file << i << ", " << t_history[i] / year << ", " << max_Eint_history[i] * vol << "\n";
+			}
+
+			csv_file.close();
+			amrex::Print() << "Energy history data written to sn_energy_history.csv\n";
+		} else {
+			amrex::Print() << "Error: Could not open CSV file for writing\n";
+		}
+	}
+
+	if (is_pass) {
 		status = 0;
 		amrex::Print() << "Test passed. Max internal energy in cells: " << max_internal_energy << "\n";
+		amrex::Print() << "Max internal energy last timestep: " << max_Eint_last * vol << "\n";
 	} else {
 		status = 1;
 		amrex::Print() << "Test failed. Max internal energy in cells too low: " << max_internal_energy << "\n";
 		amrex::Print() << "Expected minimum max internal energy: " << expected_minimum_max_internal_energy << "\n";
+		amrex::Print() << "OR\n";
+		amrex::Print() << "Mass increase relative error: " << mass_increase_rel_err << "\n";
 	}
 	amrex::Print() << "---------------------------------------------------------" << "\n";
 
