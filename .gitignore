@@ -27,6 +27,12 @@ Backtrace.*
 # Singularity Docker images
 *.sif
 
+# files in tests/ folder
+/tests/
+!/tests/matplotlibrc
+# !/tests/ascent_actions.yaml
+
+# LaTeX files
 *.aux
 *.dbl
 *.bbl

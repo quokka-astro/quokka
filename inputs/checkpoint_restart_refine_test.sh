@@ -39,18 +39,18 @@ STOP_TIME=0.025       # Run until t=0.025 for comparison
 
 # Create coarse AMR input file (32^3 base with 1 AMR level) based on working blast_32.in
 # Try multiple possible locations for blast_32.in to handle different CI environments
-if [ -f "blast_32.in" ]; then
+if [ -f "../inputs/blast_32.in" ]; then
+    cp "../inputs/blast_32.in" coarse_amr.in
+elif [ -f "blast_32.in" ]; then
     cp "blast_32.in" coarse_amr.in
-elif [ -f "$BUILD_DIR/../tests/blast_32.in" ]; then
-    cp "$BUILD_DIR/../tests/blast_32.in" coarse_amr.in
-elif [ -f "../tests/blast_32.in" ]; then
-    cp "../tests/blast_32.in" coarse_amr.in
+elif [ -f "$BUILD_DIR/../inputs/blast_32.in" ]; then
+    cp "$BUILD_DIR/../inputs/blast_32.in" coarse_amr.in
 else
     echo "❌ ERROR: Cannot find blast_32.in input file"
     echo "Tried locations:"
+    echo "  ../inputs/blast_32.in (inputs directory)"
     echo "  blast_32.in (current directory)"
-    echo "  $BUILD_DIR/../tests/blast_32.in"
-    echo "  ../tests/blast_32.in"
+    echo "  $BUILD_DIR/../inputs/blast_32.in"
     echo "Current directory: $(pwd)"
     echo "Files in current directory: $(ls -la)"
     exit 1
@@ -62,18 +62,18 @@ $SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' coarse_amr.in
 
 # Create fine AMR input file (64^3 base with 1 AMR level) based on working blast_32.in
 # Try multiple possible locations for blast_32.in to handle different CI environments  
-if [ -f "blast_32.in" ]; then
+if [ -f "../inputs/blast_32.in" ]; then
+    cp "../inputs/blast_32.in" fine_amr.in
+elif [ -f "blast_32.in" ]; then
     cp "blast_32.in" fine_amr.in
-elif [ -f "$BUILD_DIR/../tests/blast_32.in" ]; then
-    cp "$BUILD_DIR/../tests/blast_32.in" fine_amr.in
-elif [ -f "../tests/blast_32.in" ]; then
-    cp "../tests/blast_32.in" fine_amr.in
+elif [ -f "$BUILD_DIR/../inputs/blast_32.in" ]; then
+    cp "$BUILD_DIR/../inputs/blast_32.in" fine_amr.in
 else
     echo "❌ ERROR: Cannot find blast_32.in input file for fine_amr.in"
     echo "Tried locations:"
+    echo "  ../inputs/blast_32.in (inputs directory)"
     echo "  blast_32.in (current directory)"
-    echo "  $BUILD_DIR/../tests/blast_32.in"
-    echo "  ../tests/blast_32.in"
+    echo "  $BUILD_DIR/../inputs/blast_32.in"
     echo "Current directory: $(pwd)"
     echo "Files in current directory: $(ls -la)"
     exit 1
