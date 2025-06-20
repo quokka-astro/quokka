@@ -80,7 +80,9 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: canary run --output-on-failure --workers=3 .
+      run: |
+        export PATH="$HOME/Library/Python/3.11/bin:$PATH"
+        canary run --output-on-failure --workers=3 .
 
     - name: Upload test output
       if: always()
