@@ -72,6 +72,7 @@ jobs:
 
       - name: Build (py)
         uses: github/codeql-action/autobuild@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
+        if: ${{ matrix.language == 'python' }}
 
       - name: Build (C++)
         if: ${{ matrix.language == 'cpp' }}
