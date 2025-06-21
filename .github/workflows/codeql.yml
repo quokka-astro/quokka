@@ -16,15 +16,10 @@ permissions:
   contents: read
 
 jobs:
-  check_changes:
-    if: ${{ github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule' }}
-    uses: ./.github/workflows/check_changes.yml
-
   analyze:
-    if: ${{ github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule' && (github.event_name == 'schedule' || needs.check_changes.outputs.has_cpp_changes == 'true' || needs.check_changes.outputs.has_py_changes == 'true') }}
+    if: ${{ github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule' }}
     name: Analyze
     runs-on: ubuntu-latest
-    needs: check_changes
     permissions:
       actions: read
       contents: read
@@ -79,6 +74,7 @@ jobs:
         uses: github/codeql-action/autobuild@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
 
       - name: Build (C++)
+        if: ${{ matrix.language == 'cpp' }}
         run: |
           export CCACHE_COMPRESS=1
           export CCACHE_COMPRESSLEVEL=10
