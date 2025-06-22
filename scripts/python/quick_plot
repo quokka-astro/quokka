@@ -67,7 +67,7 @@ TECHNICAL DETAILS:
 ==================
 - Requires yt installed from: https://github.com/chongchonghe/yt
 - Supports AMReX/BoxLib simulation formats
-- Handles derived field creation for temperature and number density calculations, in which case mu = 1 m_p and gamma = 5/3 are assumed, unless '--use_ISM' is specified to use the ISM mean molecular weight corrections mu = 1.3971 m_p
+- Handles derived field creation for temperature and number density calculations, in which case mu = 1 m_p and gamma = 5/3 are assumed. The mean molecular weight can be specified with '--mean_molecular_weight' in atomic mass units.
 - Automatically filters out .old. directories
 - Supports both single-threaded and multi-process execution
 - Creates high-resolution output (300 DPI) with tight bounding boxes and padding
@@ -108,7 +108,7 @@ CLOUDY_H_MASS_FRACTION = 1.0 / (1.0 + 0.1 * 3.971)
 m_u = 1.660539e-24 * unyt.g
 
 
-def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, view_dir="z", center=None, top_left_text=None, use_ISM_mean_molecular_weight=False, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, skip_existing=False):
+def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, view_dir="z", center=None, top_left_text=None, mean_molecular_weight=1.0, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, skip_existing=False):
 
     print(f"processing {pltdir}")
 
@@ -120,9 +120,7 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
     # print(ds.derived_field_list)
     # return
 
-    mean_molecular_weight_per_H_atom = m_u
-    if use_ISM_mean_molecular_weight:
-        mean_molecular_weight_per_H_atom = m_u / CLOUDY_H_MASS_FRACTION
+    mean_molecular_weight_per_H_atom = mean_molecular_weight * m_u
 
     # add derived fields
     if field == ("gas", "number_density"):
@@ -131,9 +129,8 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
     elif field == ("gas", "temperature"):
         # add derived field
         k_B = unyt.physical_constants.boltzmann_constant
-        mu = unyt.physical_constants.proton_mass
         gamma = 5.0 / 3.0
-        ds.add_field(field, function=lambda field, data: data[("gas", "internal_energy_density")] * (gamma - 1.0) / (data[('gas', 'density')] / mu * k_B), units="K", sampling_type="cell")
+        ds.add_field(field, function=lambda field, data: data[("gas", "internal_energy_density")] * (gamma - 1.0) / (data[('gas', 'density')] / mean_molecular_weight_per_H_atom * k_B), units="K", sampling_type="cell")
     elif field == ("gas", "velocity"):
         # add derived field for velocity magnitude
         ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "velocity_x")]**2 + data[("gas", "velocity_y")]**2 + data[("gas", "velocity_z")]**2), units="cm/s", sampling_type="cell")
@@ -425,7 +422,7 @@ def parse_args():
     # text to annotate at top-left corner
     parser.add_argument("--top_left_text", type=str, default=None, help="Text to annotate at the top-left corner in white")
     # use ISM mean molecular weight
-    parser.add_argument("--use_ISM", action="store_true", help="Use ISM mean molecular weight. Default: False")
+    parser.add_argument("--mean_molecular_weight", type=float, default=1.0, help="Mean molecular weight in atomic mass units. Default: 1.0")
     # time interval between snapshots in Myr
     parser.add_argument("--time_interval", type=str, default=None, help="Time interval between snapshots. e.g. 1 or 0.1_Myr. Default: None (no filtering)")
     # figure size (in inches)
@@ -444,7 +441,7 @@ def parse_args():
 
 def main(args):
 
-    plot_slice_or_projection(args.pltdirs, args.outdir, args.field, args.kind, args.width, args.zlim, args.particles, args.grids, args.cell_edges, args.timeoff, args.skip_existing, args.dir, args.center, args.n_processes, args.print_field_list, args.first_only, args.top_left_text, args.use_ISM, args.time_interval, args.figsize, args.cmap, args.p_size, args.p_marker, args.p_color)
+    plot_slice_or_projection(args.pltdirs, args.outdir, args.field, args.kind, args.width, args.zlim, args.particles, args.grids, args.cell_edges, args.timeoff, args.skip_existing, args.dir, args.center, args.n_processes, args.print_field_list, args.first_only, args.top_left_text, args.mean_molecular_weight, args.time_interval, args.figsize, args.cmap, args.p_size, args.p_marker, args.p_color)
 
 
 if __name__ == "__main__":
