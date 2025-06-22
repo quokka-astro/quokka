@@ -108,7 +108,7 @@ CLOUDY_H_MASS_FRACTION = 1.0 / (1.0 + 0.1 * 3.971)
 m_u = 1.660539e-24 * unyt.g
 
 
-def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, view_dir="z", center=None, top_left_text=None, use_ISM_mean_molecular_weight=False, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None):
+def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, view_dir="z", center=None, top_left_text=None, use_ISM_mean_molecular_weight=False, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, skip_existing=False):
 
     print(f"processing {pltdir}")
 
@@ -141,17 +141,25 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
         # add derived field for momentum density
         ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "momentum_density_x")]**2 + data[("gas", "momentum_density_y")]**2 + data[("gas", "momentum_density_z")]**2), sampling_type="cell")
 
+    field_root = field if not isinstance(field, tuple) else field[1]
+
     # plot slice or projection
     field_rho = ("gas", "density")
     if kind in ["slc", "slice"]:
+        kind = "slc"
         slc = yt.SlicePlot(ds, view_dir, field, center=center)
     elif kind in ["prj", "proj", "projection"]:
+        kind = "prj"
         slc = yt.ProjectionPlot(ds, view_dir, field, weight_field=field_rho, center=center)
     else:
         raise ValueError(f"kind {kind} not supported")
     
-    # get output filename
-    # fig_name = slc.
+    # take a guess on the output filename: e.g. plt00008_Slice_z_density.png, and skip if it already exists
+    fn_slc = {"slc": "Slice", "prj": "Projection"}[kind]
+    fig_name = f"{ds.basename}_{fn_slc}_{view_dir}_{field_root}.png"
+    if skip_existing and os.path.exists(os.path.join(outdir, fig_name)):
+        print(f"skipping existing figure: {fig_name}")
+        return
 
     if cmap == "default":
         cmap = "viridis"
@@ -314,12 +322,7 @@ def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle
     assert view_dir in ["x", "y", "z"]
 
     if outdir != ".":
-        if os.path.exists(outdir):
-            if skip_existing:
-                print(f"skipping {outdir} because it exists")
-                return
-        else:
-            os.makedirs(outdir, exist_ok=True)
+        os.makedirs(outdir, exist_ok=True)
 
     if field is None or field in ["density", "rho", "den"]:
         field = ("gas", "density")
@@ -368,11 +371,11 @@ def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle
         if first_only:
             valid_pltdirs = [valid_pltdirs[0]]
         for pltdir in valid_pltdirs:
-            plot_one(pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center, top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color)
+            plot_one(pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center, top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing)
     else:
         # Create arguments for parallel processing
         plot_args = [
-            (pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center, top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color)
+            (pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center, top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing)
             for pltdir in valid_pltdirs
         ]
 
