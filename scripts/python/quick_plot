@@ -1,5 +1,92 @@
 #!/usr/bin/env python
-# note: requires yt>=4.3.0
+"""
+Quick Plot - QUOKKA simulation visualization tool base on YT
+
+This script provides a command-line interface for creating slice plots and projection plots
+from QUOKKA simulation data using the yt library. It's designed to work with AMReX/BoxLib
+format simulation outputs, particularly from the QUOKKA radiation-hydrodynamics code.
+
+MAIN FEATURES:
+=============
+- Create slice plots or projection plots of various physical fields
+- Support for multiple field types: density, temperature, velocity components, number density, momentum density
+- Particle annotation with customizable markers, sizes, and colors  
+- Parallel processing for batch plotting multiple snapshots
+- Time-based snapshot filtering to create evenly spaced sequences
+- Grid and cell edge annotations for mesh visualization
+- Customizable plot parameters: width, zoom limits, colormaps, figure size
+- Custom text annotations with LaTeX support
+
+SUPPORTED FIELDS:
+================
+- Density: 'density', 'rho', 'den' -> ("gas", "density")
+- Number density: 'n', 'nH', 'n_H', 'num_density' -> ("gas", "number_density") 
+- Temperature: 'temperature', 'T', 'temp' -> ("gas", "temperature")
+- Velocity components: 'vx', 'vy', 'vz' -> ("gas", "velocity_x/y/z")
+- Velocity magnitude: 'v', 'velocity' -> ("gas", "velocity")
+- Momentum density: 'p', 'momentum' -> ("gas", "momentum_density")
+- Boxlib fields: any other string -> ("boxlib", field_name)
+
+PLOT TYPES:
+===========
+- Slice plots ('slc', 'slice'): 2D cross-sections through 3D data
+- Projection plots ('prj', 'proj', 'projection'): Line-of-sight integrated quantities
+
+USAGE EXAMPLES:
+===============
+Basic density slice plot (the following commands are equivalent)
+    ./quick_plot plt00001 
+    ./quick_plot plt00001 -f rho
+    ./quick_plot plt00001 --field rho
+
+Temperature projection of all snapshots with custom width
+    ./quick_plot plt* -f T --kind proj --width 10_kpc
+
+Batch processing with particles and custom output
+    ./quick_plot plt00* -f rho --particles CIC_particles --outdir figures -j 4
+
+Time-filtered sequence with annotations. This is helpful when the output is too dense or is not regularly spaced in time.
+The '--grids' adds AMReX box boundaries to the plot. The '--top_left_text' adds text to the top-left corner of the plot.
+    ./quick_plot plt* --time_interval 1_Myr --grids --top_left_text "Simulation X"
+
+Advanced customization:
+    ./quick_plot plt* --field T --cmap hot --figsize 8 --zlim 1e3 1e6 --p_size 200 --p_marker "*"
+
+A comprehensive example:
+    ./quick_plot plt* --outdir figures -f T --kind proj --width 10_kpc --zlim 1e3 1e6 --p_size 200 --p_marker "*" --p_color "red" --grids --cell_edges --top_left_text "Simulation X" --time_interval 1_Myr --center 1e10,1e10,1e10 -j 4
+
+KEY FUNCTIONS:
+==============
+- plot_one(): Creates a single plot for one snapshot directory
+- filter_snapshots_by_time_interval(): Filters snapshots to create evenly spaced time sequences
+- plot_slice_or_projection(): Main orchestration function for batch processing
+- parse_args(): Command-line argument parsing with extensive options
+- main(): Entry point that coordinates the plotting workflow
+
+TECHNICAL DETAILS:
+==================
+- Requires yt installed from: https://github.com/chongchonghe/yt
+- Supports AMReX/BoxLib simulation formats
+- Handles derived field creation for temperature and number density calculations, in which case mu = 1 m_p and gamma = 5/3 are assumed, unless '--use_ISM' is specified to use the ISM mean molecular weight corrections mu = 1.3971 m_p
+- Automatically filters out .old. directories
+- Supports both single-threaded and multi-process execution
+- Creates high-resolution output (300 DPI) with tight bounding boxes and padding
+
+PARTICLE SUPPORT:
+=================
+- Annotates particle positions from multiple particle types simultaneously
+- Customizable particle appearance (size, marker style, color)
+- Automatic color cycling for multiple particle types, with default colors
+- Depth-based filtering to avoid cluttered visualization
+- Handles missing or empty particle datasets gracefully
+- Supports multiple particle types simultaneously
+
+OUTPUT:
+=======
+- Saves plots in PNG format with descriptive filenames
+- Optional custom output directory creation
+- Supports skipping existing files for incremental processing
+"""
 
 import os
 import sys
@@ -359,8 +446,7 @@ def main(args):
 
 if __name__ == "__main__":
 
-    args = parse_args()
-    # print(args)
-    main(args)
-
     # test_filter_snapshots_by_time_interval()
+
+    args = parse_args()
+    main(args)
