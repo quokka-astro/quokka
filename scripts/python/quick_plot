@@ -89,10 +89,7 @@ OUTPUT:
 """
 
 import os
-import sys
 import argparse
-from math import sqrt
-import glob
 import numpy as np
 from multiprocessing import Pool, cpu_count
 import pprint
@@ -105,6 +102,7 @@ assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
 yt.set_log_level(40)
 
 m_u = 1.660539e-24 * unyt.g
+
 
 def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, view_dir="z", center=None, top_left_text=None, mean_molecular_weight=1.0, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, skip_existing=False):
 
@@ -123,18 +121,22 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
     # add derived fields
     if field == ("gas", "number_density"):
         # be sure to use a name that does not conflict with existing fields. Do not use ("gas", "number_density")!!!
-        ds.add_field(field, function=lambda field, data: data[("gas", "density")] / mean_molecular_weight_per_H_atom, units="cm**-3", sampling_type="cell")
+        ds.add_field(field, function=lambda field, data: data[(
+            "gas", "density")] / mean_molecular_weight_per_H_atom, units="cm**-3", sampling_type="cell")
     elif field == ("gas", "temperature"):
         # add derived field
         k_B = unyt.physical_constants.boltzmann_constant
         gamma = 5.0 / 3.0
-        ds.add_field(field, function=lambda field, data: data[("gas", "internal_energy_density")] * (gamma - 1.0) / (data[('gas', 'density')] / mean_molecular_weight_per_H_atom * k_B), units="K", sampling_type="cell")
+        ds.add_field(field, function=lambda field, data: data[("gas", "internal_energy_density")] * (gamma - 1.0) / (
+            data[('gas', 'density')] / mean_molecular_weight_per_H_atom * k_B), units="K", sampling_type="cell")
     elif field == ("gas", "velocity"):
         # add derived field for velocity magnitude
-        ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "velocity_x")]**2 + data[("gas", "velocity_y")]**2 + data[("gas", "velocity_z")]**2), units="cm/s", sampling_type="cell")
+        ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "velocity_x")]**2 + data[(
+            "gas", "velocity_y")]**2 + data[("gas", "velocity_z")]**2), units="cm/s", sampling_type="cell")
     elif field == ("gas", "momentum_density"):
         # add derived field for momentum density
-        ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "momentum_density_x")]**2 + data[("gas", "momentum_density_y")]**2 + data[("gas", "momentum_density_z")]**2), sampling_type="cell")
+        ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "momentum_density_x")]**2 + data[(
+            "gas", "momentum_density_y")]**2 + data[("gas", "momentum_density_z")]**2), sampling_type="cell")
 
     field_root = field if not isinstance(field, tuple) else field[1]
 
@@ -145,10 +147,11 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
         slc = yt.SlicePlot(ds, view_dir, field, center=center)
     elif kind in ["prj", "proj", "projection"]:
         kind = "prj"
-        slc = yt.ProjectionPlot(ds, view_dir, field, weight_field=field_rho, center=center)
+        slc = yt.ProjectionPlot(ds, view_dir, field,
+                                weight_field=field_rho, center=center)
     else:
         raise ValueError(f"kind {kind} not supported")
-    
+
     # take a guess on the output filename: e.g. plt00008_Slice_z_density.png, and skip if it already exists
     fn_slc = {"slc": "Slice", "prj": "Projection"}[kind]
     fig_name = f"{ds.basename}_{fn_slc}_{view_dir}_{field_root}.png"
@@ -192,9 +195,11 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
         # check if particles exist
         if 'particles' in ds.parameters.keys():
             # print(ds['particle_info']['CIC_particles']['num_particles'])
-            colors = ['red', 'magenta', 'cyan', 'yellow', 'lime', 'hotpink', 'orange', 'deepskyblue']
+            colors = ['red', 'magenta', 'cyan', 'yellow',
+                      'lime', 'hotpink', 'orange', 'deepskyblue']
             if field == ("gas", "temperature"):
-                colors = ['green', 'lime', 'cyan', 'hotpink', 'orange', 'deepskyblue']
+                colors = ['green', 'lime', 'cyan',
+                          'hotpink', 'orange', 'deepskyblue']
             # get domain width
             Lx = ds.domain_right_edge[0] - ds.domain_left_edge[0]
             for i, par in enumerate(particle):
@@ -216,7 +221,8 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
                     # slc.annotate_particles(Lx, p_size=160., col=colors[i], marker='*', ptype=par)
                     # annotate particles at a depth of 0.1 * boxsize
                     color = p_color if p_color is not None else colors[i]
-                    slc.annotate_particles(Lx * 0.1, p_size=p_size, col=color, marker=p_marker, ptype=par)
+                    slc.annotate_particles(
+                        Lx * 0.1, p_size=p_size, col=color, marker=p_marker, ptype=par)
                 else:
                     print("no particles to annotate in ", pltdir)
                     print("pos =", pos)
@@ -232,13 +238,15 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
         slc.annotate_timestamp()
     if top_left_text is not None:
         # Add text annotation at the top-left corner with LaTeX support
-        slc.annotate_text((0.02, 0.98), top_left_text, coord_system='axis', text_args={'color': 'white', 'usetex': True, 'verticalalignment': 'top', 'horizontalalignment': 'left'})
+        slc.annotate_text((0.02, 0.98), top_left_text, coord_system='axis', text_args={
+                          'color': 'white', 'usetex': True, 'verticalalignment': 'top', 'horizontalalignment': 'left'})
     # get cwd
     cwd = os.getcwd()
     # change to outdir
     os.chdir(outdir)
     slc.set_figure_size(figsize)  # slightly smaller figure size
-    fn = slc.save(mpl_kwargs={"dpi": 300, "bbox_inches": "tight", "pad_inches": 0.1})
+    fn = slc.save(
+        mpl_kwargs={"dpi": 300, "bbox_inches": "tight", "pad_inches": 0.1})
     print(f"{fn} saved")
     # change back to cwd
     os.chdir(cwd)
@@ -250,39 +258,41 @@ def filter_snapshots_by_time_interval(pltdirs, time_interval):
         return pltdirs, None, None
 
     if '_' in time_interval:
-        time_interval, time_unit = float(time_interval.split('_')[0]), time_interval.split('_')[1]
+        time_interval, time_unit = float(time_interval.split('_')[
+                                         0]), time_interval.split('_')[1]
     else:
         time_interval = float(time_interval)
         time_unit = None
-        
+
     # Get times for all snapshots
     snapshot_times = []
     for pltdir in pltdirs:
         try:
             ds = yt.load(pltdir)
-            snapshot_times.append((pltdir, ds.current_time.to_value(time_unit)))
+            snapshot_times.append(
+                (pltdir, ds.current_time.to_value(time_unit)))
         except Exception as e:
             print(f"Warning: Could not load {pltdir}: {e}")
             continue
-    
+
     if not snapshot_times:
         return [], None, None
-        
+
     # Sort by time
     snapshot_times.sort(key=lambda x: x[1])
-    
+
     # Find snapshots closest to n * time_interval
     filtered_pltdirs = []
     filtered_times = []
     current_interval = 0
-    
+
     for pltdir, time in snapshot_times:
         target_time = current_interval * time_interval
         if time >= target_time:
             filtered_pltdirs.append(pltdir)
             filtered_times.append(time)
             current_interval += 1
-            
+
     return filtered_pltdirs, filtered_times, time_unit
 
 
@@ -291,7 +301,7 @@ def test_filter_snapshots_by_time_interval():
     times = [0.0, 1.1, 1.9, 4.1, 4.2, 4.9, 5.1, 5.9, 6.1, 7.3]
     times.sort()
     time_interval = 1.0
-    
+
     filtered_times = []
     current_interval = 0
     for time in times:
@@ -299,7 +309,7 @@ def test_filter_snapshots_by_time_interval():
         if time >= target_time:
             filtered_times.append(time)
             current_interval += 1
-            
+
     print("Original times:")
     print(times)
     print("Filtered times:")
@@ -342,13 +352,15 @@ def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle
     valid_pltdirs = [
         pltdir for pltdir in pltdirs if os.path.isdir(pltdir) and ".old." not in os.path.basename(pltdir)
     ]
-    
+
     # Filter snapshots by time interval if specified
     if time_interval is not None:
         print(f"Filtering snapshots by time interval of {time_interval} ...")
-        valid_pltdirs, filtered_times, time_unit = filter_snapshots_by_time_interval(valid_pltdirs, time_interval)
+        valid_pltdirs, filtered_times, time_unit = filter_snapshots_by_time_interval(
+            valid_pltdirs, time_interval)
         print(f"Filtered times: {filtered_times} {time_unit}")
-        print(f"Selected {len(valid_pltdirs)} snapshots based on time interval of {time_interval}")
+        print(
+            f"Selected {len(valid_pltdirs)} snapshots based on time interval of {time_interval}")
     print(f"Valid pltdirs: {valid_pltdirs}")
 
     # parse center
@@ -366,15 +378,18 @@ def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle
         if first_only:
             valid_pltdirs = [valid_pltdirs[0]]
         for pltdir in valid_pltdirs:
-            plot_one(pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center, top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing)
+            plot_one(pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center,
+                     top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing)
     else:
         # Create arguments for parallel processing
         plot_args = [
-            (pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center, top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing)
+            (pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center,
+             top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing)
             for pltdir in valid_pltdirs
         ]
 
-        print(f"Processing {len(valid_pltdirs)} directories using {n_processes} processes")
+        print(
+            f"Processing {len(valid_pltdirs)} directories using {n_processes} processes")
 
         # Process directories in parallel
         with Pool(processes=n_processes) as pool:
@@ -384,62 +399,88 @@ def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle
 def parse_args():
     parser = argparse.ArgumentParser()
     # plotfile directories, require at least one
-    parser.add_argument("pltdirs", type=str, nargs="+", help="Plotfile directories, require at least one. Use wildcards like plt00* to select multiple directories. Files with .old. in the name will be ignored.")
+    parser.add_argument("pltdirs", type=str, nargs="+",
+                        help="Plotfile directories, require at least one. Use wildcards like plt00* to select multiple directories. Files with .old. in the name will be ignored.")
     # task
-    parser.add_argument("--task", type=str, default="slc", help="Task to perform: slc or proj. Default: slc")
+    parser.add_argument("--task", type=str, default="slc",
+                        help="Task to perform: slc or proj. Default: slc")
     # pick field to plot
-    parser.add_argument("-f", "--field", type=str, default="density", help="Field to plot. Options: density, n, nH, T, vx, vy, vz, v, p. Default: density")
+    parser.add_argument("-f", "--field", type=str, default="density",
+                        help="Field to plot. Options: density, n, nH, T, vx, vy, vz, v, p. Default: density")
     # kind of plot: slc or proj
-    parser.add_argument("--kind", type=str, default="slc", help="Kind of plot: slc or proj. Default: slc")
+    parser.add_argument("--kind", type=str, default="slc",
+                        help="Kind of plot: slc or proj. Default: slc")
     # width, optional
-    parser.add_argument("-w", "--width", type=str, default=None, help="width of the plot, e.g. 1 or 10_kpc. Default: None (full width)")
+    parser.add_argument("-w", "--width", type=str, default=None,
+                        help="width of the plot, e.g. 1 or 10_kpc. Default: None (full width)")
     # output directory
-    parser.add_argument("-o", "--outdir", type=str, default=".", help="Directory to save the figures. Default: .")
+    parser.add_argument("-o", "--outdir", type=str, default=".",
+                        help="Directory to save the figures. Default: .")
     # zlim
-    parser.add_argument("--zlim", type=str, nargs=2, default=None, help="zlim of the plot, e.g. 1 or 10_kpc. Default: None (automatic)")
+    parser.add_argument("--zlim", type=str, nargs=2, default=None,
+                        help="zlim of the plot, e.g. 1 or 10_kpc. Default: None (automatic)")
     # view direction
-    parser.add_argument("--dir", type=str, default="z", help="view direction: x, y, or z. Default: z")
+    parser.add_argument("--dir", type=str, default="z",
+                        help="view direction: x, y, or z. Default: z")
     # center at direction
-    parser.add_argument("--center", type=str, default=None, help="center at direction, e.g. 0.5, 1.0_kpc. Default: None (domain center)")
+    parser.add_argument("--center", type=str, default=None,
+                        help="center at direction, e.g. 0.5, 1.0_kpc. Default: None (domain center)")
     # particle type to annotate
-    parser.add_argument("--particles", type=str, nargs="+", default=[], help="Particle type to annotate, e.g. CIC_particles, StochasticStellarPop_particles. Default: [] (no particles)")
+    parser.add_argument("--particles", type=str, nargs="+", default=[],
+                        help="Particle type to annotate, e.g. CIC_particles, StochasticStellarPop_particles. Default: [] (no particles)")
     # toggle annotate grid lines
-    parser.add_argument("--grids", action="store_true", help="Annotate grid lines. Default: False")
+    parser.add_argument("--grids", action="store_true",
+                        help="Annotate grid lines. Default: False")
     # toggle annotate cell edges
-    parser.add_argument("--cell_edges", action="store_true", help="Annotate cell edges. Default: False")
+    parser.add_argument("--cell_edges", action="store_true",
+                        help="Annotate cell edges. Default: False")
     # toggle annotate timestamp
-    parser.add_argument("--timeoff", action="store_true", help="Do not annotate timestamp. Default: False")
+    parser.add_argument("--timeoff", action="store_true",
+                        help="Do not annotate timestamp. Default: False")
     # skip existing folder
-    parser.add_argument("--skip_existing", action="store_true", help="Skip existing figures. Default: False")
+    parser.add_argument("--skip_existing", action="store_true",
+                        help="Skip existing figures. Default: False")
     # number of processes to use
-    parser.add_argument("-j", "--n_processes", type=int, default=1, help="Number of processes to use. Default: 1")
+    parser.add_argument("-j", "--n_processes", type=int,
+                        default=1, help="Number of processes to use. Default: 1")
     # print field list
-    parser.add_argument("--print_field_list", action="store_true", help="Print the list of derived fields and stop. Default: False")
+    parser.add_argument("--print_field_list", action="store_true",
+                        help="Print the list of derived fields and stop. Default: False")
     # plot the first one only
-    parser.add_argument("--first_only", action="store_true", help="Plot only the first snapshot. Default: False")
+    parser.add_argument("--first_only", action="store_true",
+                        help="Plot only the first snapshot. Default: False")
     # text to annotate at top-left corner
-    parser.add_argument("--top_left_text", type=str, default=None, help="Text to annotate at the top-left corner in white")
+    parser.add_argument("--top_left_text", type=str, default=None,
+                        help="Text to annotate at the top-left corner in white")
     # use ISM mean molecular weight
-    parser.add_argument("--mean_molecular_weight", type=float, default=1.0, help="Mean molecular weight in atomic mass units. Default: 1.0")
+    parser.add_argument("--mean_molecular_weight", type=float, default=1.0,
+                        help="Mean molecular weight in atomic mass units. Default: 1.0")
     # time interval between snapshots in Myr
-    parser.add_argument("--time_interval", type=str, default=None, help="Time interval between snapshots. e.g. 1 or 0.1_Myr. Default: None (no filtering)")
+    parser.add_argument("--time_interval", type=str, default=None,
+                        help="Time interval between snapshots. e.g. 1 or 0.1_Myr. Default: None (no filtering)")
     # figure size (in inches)
-    parser.add_argument("--figsize", type=float, default=6, help="Figure size in inches. Default: 6")
+    parser.add_argument("--figsize", type=float, default=6,
+                        help="Figure size in inches. Default: 6")
     # cmap
-    parser.add_argument("--cmap", type=str, default="default", help="Colormap to use, e.g. 'viridis', 'hot', 'jet'. Default: hot for temperature, viridis for everything else")
+    parser.add_argument("--cmap", type=str, default="default",
+                        help="Colormap to use, e.g. 'viridis', 'hot', 'jet'. Default: hot for temperature, viridis for everything else")
     # particle size
-    parser.add_argument("--p_size", type=float, default=160., help="Size of particles in the plot. Default: 160.0")
+    parser.add_argument("--p_size", type=float, default=160.,
+                        help="Size of particles in the plot. Default: 160.0")
     # particle marker
-    parser.add_argument("--p_marker", type=str, default='.', help="Marker style for particles. Common options: '.', '*', 'o', '+', 'x'. Default: '.'")
+    parser.add_argument("--p_marker", type=str, default='.',
+                        help="Marker style for particles. Common options: '.', '*', 'o', '+', 'x'. Default: '.'")
     # particle color
-    parser.add_argument("--p_color", type=str, default=None, help="Color for particles. Default: None (use default colors)")
+    parser.add_argument("--p_color", type=str, default=None,
+                        help="Color for particles. Default: None (use default colors)")
 
     return parser.parse_args()
 
 
 def main(args):
 
-    plot_slice_or_projection(args.pltdirs, args.outdir, args.field, args.kind, args.width, args.zlim, args.particles, args.grids, args.cell_edges, args.timeoff, args.skip_existing, args.dir, args.center, args.n_processes, args.print_field_list, args.first_only, args.top_left_text, args.mean_molecular_weight, args.time_interval, args.figsize, args.cmap, args.p_size, args.p_marker, args.p_color)
+    plot_slice_or_projection(args.pltdirs, args.outdir, args.field, args.kind, args.width, args.zlim, args.particles, args.grids, args.cell_edges, args.timeoff, args.skip_existing, args.dir, args.center,
+                             args.n_processes, args.print_field_list, args.first_only, args.top_left_text, args.mean_molecular_weight, args.time_interval, args.figsize, args.cmap, args.p_size, args.p_marker, args.p_color)
 
 
 if __name__ == "__main__":
