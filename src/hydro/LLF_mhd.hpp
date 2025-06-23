@@ -144,9 +144,9 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_msc
 
 	//--- Step 5.  Compute the LLF flux at interface (see Toro eq. 10.42).
 
-	F = 0.5 * (F_L_array + F_R_array - a * Du);
+	F = 0.5 * (F_L_array + F_R_array) - a * Du;
 
-	return std::make_tuple(std::move(F_x), fspd_m, fspd_p);
+	return std::make_tuple(std::move(F), fspd_m, fspd_p);
 }
 } // namespace quokka::Riemann
 
