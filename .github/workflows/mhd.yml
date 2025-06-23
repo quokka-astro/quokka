@@ -71,8 +71,8 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute all tests with the MHD label
-      run: canary run --output-on-failure --workers=2 -L MHD .
+      # Execute all tests with MHD in their name
+      run: canary run --output-on-failure --workers=2 -k MHD .
 
     - name: Upload test output
       if: always()
