@@ -40,7 +40,7 @@ template <> struct Physics_Traits<FieldLoop> {
 };
 
 constexpr double A = 1.0e-3;
-constexpr double R0 = 0.3;
+constexpr double R_0 = 0.3;
 
 template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -69,7 +69,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		// Az = MAX([A ( R0 - r )],0)
 		auto A_z = [=](double x, double y) {
 			const double R = std::sqrt(x * x + y * y);
-			return std::max(A * (R0 - R), 0.);
+			return std::max(A * (R_0 - R), 0.);
 		};
 		auto B_x = [=](double xL, double yL) { return (A_z(xL, yL + dx[1]) - A_z(xL, yL)) / dx[1]; };
 		auto B_y = [=](double xL, double yL) { return -(A_z(xL + dx[0], yL) - A_z(xL, yL)) / dx[0]; };
@@ -101,7 +101,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGridFaceVars
 		// Az = MAX([A ( R0 - r )],0)
 		auto A_z = [=](double x, double y) {
 			const double R = std::sqrt(x * x + y * y);
-			return std::max(A * (R0 - R), 0.);
+			return std::max(A * (R_0 - R), 0.);
 		};
 		auto B_x = [=](double xL, double yL) { return (A_z(xL, yL + dx[1]) - A_z(xL, yL)) / dx[1]; };
 		auto B_y = [=](double xL, double yL) { return -(A_z(xL + dx[0], yL) - A_z(xL, yL)) / dx[0]; };
