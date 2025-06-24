@@ -1,9 +1,6 @@
-# Use the CUDA image as the base image
+# Use the CUDA image as the base image. I build this on macOS. 
 FROM ghcr.io/quokka-astro/quokka-linux-amd64-cuda:development
-# FROM ghcr.io/quokka-astro/quokka-arm64-cuda:development
-# ENV TARGETARCH="linux-x64"
 ENV TARGETARCH="linux/amd64"
-# Also can be "linux-arm", "linux-arm64".
 
 USER root
 RUN apt update && \
@@ -15,8 +12,8 @@ RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 WORKDIR /azp/
 
-COPY ./start.sh ./
-RUN chmod +x ./start.sh
+# COPY ./start.sh ./
+# RUN chmod +x ./start.sh
 
 # Create agent user and set up home directory
 RUN useradd -m -d /home/agent agent
@@ -31,4 +28,5 @@ USER agent
 # RUN touch /home/agent/.token
 # RUN chmod 666 /home/agent/.token
 
-ENTRYPOINT [ "./start.sh" ]
+# # Do not use start.sh in the image. Put start.sh in the job folder and run it via 'singularity run ... ./start.sh'
+# ENTRYPOINT [ "./start.sh" ]
