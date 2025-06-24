@@ -14,15 +14,7 @@ if [ -n "$AZP_CLIENTID" ]; then
   echo "Token retrieved"
 fi
 
-if [ -z "${AZP_TOKEN_FILE}" ]; then
-  if [ -z "${AZP_TOKEN}" ]; then
-    echo 1>&2 "error: missing AZP_TOKEN environment variable"
-    exit 1
-  fi
-
-  AZP_TOKEN_FILE="/azp/.token"
-  echo -n "${AZP_TOKEN}" > "${AZP_TOKEN_FILE}"
-fi
+AZP_TOKEN_FILE="./token_file"
 
 unset AZP_CLIENTSECRET
 unset AZP_TOKEN
@@ -59,10 +51,17 @@ export VSO_AGENT_IGNORE="AZP_TOKEN,AZP_TOKEN_FILE"
 
 print_header "1. Determining matching Azure Pipelines agent..."
 
+echo "Debugging..."
+echo "AZP_URL=$AZP_URL"
+echo "TARGETARCH=$TARGETARCH"
+echo "AZP_TOKEN_FILE=$AZP_TOKEN_FILE"
+
 AZP_AGENT_PACKAGES=$(curl -LsS \
     -u user:$(cat "${AZP_TOKEN_FILE}") \
     -H "Accept:application/json" \
     "${AZP_URL}/_apis/distributedtask/packages/agent?platform=${TARGETARCH}&top=1")
+
+#echo $AZP_AGENT_PACKAGES
 
 AZP_AGENT_PACKAGE_LATEST_URL=$(echo "${AZP_AGENT_PACKAGES}" | jq -r ".value[0].downloadUrl")
 
@@ -83,6 +82,9 @@ trap "cleanup; exit 130" INT
 trap "cleanup; exit 143" TERM
 
 print_header "3. Configuring Azure Pipelines agent..."
+
+# avoid infinite loop in cleanup()
+./config.sh remove 2>/dev/null || true
 
 # Despite it saying "PAT", it can be the token through the service principal
 ./config.sh --unattended \
