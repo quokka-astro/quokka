@@ -5,7 +5,7 @@ ENV TARGETARCH="linux/amd64"
 USER root
 RUN apt update && \
   apt upgrade -y && \
-  apt install -y curl git jq libicu74
+  apt install -y curl git jq libicu74 python3-h5py
 
 # Install Azure CLI
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
