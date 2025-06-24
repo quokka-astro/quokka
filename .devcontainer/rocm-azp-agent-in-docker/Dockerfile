@@ -5,7 +5,7 @@ ENV TARGETARCH="linux/amd64"
 USER root
 RUN zypper --non-interactive refresh && \
   zypper --non-interactive update && \
-  zypper --non-interactive install curl git jq libicu74 python3-h5py && \
+  zypper --non-interactive install curl git jq libicu python3-h5py && \
   zypper clean --all
 
 # Install Azure CLI
