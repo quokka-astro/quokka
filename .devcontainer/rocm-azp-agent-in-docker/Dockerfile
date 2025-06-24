@@ -1,15 +1,18 @@
 # Use the AMD ROCm image as the base image. I build this on macOS (arm64).
-FROM ghcr.io/quokka-astro/quokka-linux-amd64-rocm:development
+FROM ghcr.io/quokka-astro/quokka-amd64-rocm-frontier:latest
 ENV TARGETARCH="linux/amd64"
 
 USER root
-RUN apt update && \
-  apt upgrade -y && \
-  apt install -y curl git jq libicu74 python3-h5py
+RUN zypper --non-interactive refresh && \
+  zypper --non-interactive update && \
+  zypper --non-interactive install curl git jq libicu74 python3-h5py && \
+  zypper clean --all
 
 # Install Azure CLI
-RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
-
+RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
+    zypper --non-interactive addrepo --name 'Azure CLI' --check https://packages.microsoft.com/yumrepos/azure-cli azure-cli && \
+    zypper --non-interactive install azure-cli
+		
 WORKDIR /azp/
 
 # COPY ./start.sh ./
