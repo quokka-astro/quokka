@@ -1,18 +1,34 @@
-# Use the AMD ROCm image as the base image. I build this on macOS (arm64).
+# Use the AMD ROCm image as the base image
 FROM ghcr.io/quokka-astro/quokka-amd64-rocm-frontier:latest
 ENV TARGETARCH="linux/amd64"
 
 USER root
-RUN zypper --non-interactive refresh && \
-  zypper --non-interactive update && \
-  zypper --non-interactive install curl git jq libicu python3-h5py && \
-  zypper clean --all
 
-# Install Azure CLI
+# Install required packages
+RUN zypper --non-interactive refresh && \
+    zypper --non-interactive update && \
+    zypper --non-interactive install \
+        curl \
+        git \
+        jq \
+        libicu-devel \
+        python3-h5py \
+        wget \
+        tar \
+        gzip \
+        which && \
+    zypper clean --all
+
+# Install Azure CLI for openSUSE
 RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
-    zypper --non-interactive addrepo --name 'Azure CLI' --check https://packages.microsoft.com/yumrepos/azure-cli azure-cli && \
-    zypper --non-interactive install azure-cli
-		
+    zypper --non-interactive addrepo \
+        --name 'Azure CLI' \
+        --check https://packages.microsoft.com/yumrepos/azure-cli \
+        azure-cli && \
+    zypper --non-interactive install azure-cli && \
+    zypper clean --all
+
+# Create directories and set permissions
 WORKDIR /azp/
 
 # COPY ./start.sh ./
@@ -22,6 +38,7 @@ WORKDIR /azp/
 RUN useradd -m -d /home/agent agent
 RUN chown -R agent:agent /azp /home/agent
 
+# Switch to agent user
 WORKDIR /home/agent
 USER agent
 # Another option is to run the agent as root.
