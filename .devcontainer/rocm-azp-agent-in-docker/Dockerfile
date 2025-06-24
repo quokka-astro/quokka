@@ -31,12 +31,10 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
 # Create directories and set permissions
 WORKDIR /azp/
 
-# COPY ./start.sh ./
-# RUN chmod +x ./start.sh
-
-# Create agent user and set up home directory
-RUN useradd -m -d /home/agent agent
-RUN chown -R agent:agent /azp /home/agent
+# Create agent user with proper groups
+RUN useradd -m -d /home/agent -s /bin/bash agent && \
+    usermod -a -G users agent && \
+    chown -R agent:agent /azp /home/agent
 
 # Switch to agent user
 WORKDIR /home/agent
