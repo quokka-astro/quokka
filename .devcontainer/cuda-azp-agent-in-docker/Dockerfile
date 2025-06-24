@@ -1,4 +1,4 @@
-# Use the CUDA image as the base image. I build this on macOS. 
+# Use the CUDA image as the base image. I build this on macOS (arm64).
 FROM ghcr.io/quokka-astro/quokka-linux-amd64-cuda:development
 ENV TARGETARCH="linux/amd64"
 
