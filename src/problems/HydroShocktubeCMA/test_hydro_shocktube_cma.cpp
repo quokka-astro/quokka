@@ -8,7 +8,14 @@
 /// Implementing shock tube proglem from Plewa and Muller 1999, A&A 342, 179
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 
@@ -17,14 +24,13 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_hydro_shocktube_cma.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 
 struct ShocktubeProblem {
 };
 
-bool consv_test_passes = true; // if mass scalar conservation check fails, set to false
+bool consv_test_passes = true; // if mass scalar conservation check fails, set to false. NOLINT
 
 template <> struct SimulationData<ShocktubeProblem> {
 	std::vector<double> t_vec_;	      // stores the time array
@@ -176,7 +182,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	}
 }
 
-template <> void QuokkaSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ShocktubeProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 

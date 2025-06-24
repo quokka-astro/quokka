@@ -2,13 +2,21 @@
 /// \brief Defines a test problem for line cooling and cosmic-ray heating in a uniform medium.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "QuokkaSimulation.hpp"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_dust_system.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
-#include "test_rad_line_cooling_MG.hpp"
 #include "util/fextract.hpp"
 
 static constexpr bool export_csv = true;
@@ -78,9 +86,9 @@ template <> struct RadSystem_Traits<CoolingProblemMG> {
 };
 
 template <> struct ISM_Traits<CoolingProblemMG> {
-	static constexpr bool enable_dust_gas_thermal_coupling_model = 1;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
-	static constexpr bool enable_photoelectric_heating = 1;
+	static constexpr bool enable_photoelectric_heating = true;
 };
 
 template <>
@@ -307,7 +315,7 @@ auto problem_main() -> int
 		sol_norm += std::abs(Tgas_interp[i]) + std::abs(Erad_line_interp[i]);
 	}
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	if (export_csv) {
 		std::ofstream file;

@@ -1,4 +1,4 @@
-add_executable(test_radhydro_pulse_MG_int test_radhydro_pulse_MG_int.cpp ../../util/fextract.cpp ${QuokkaObjSources})
+add_executable(test_radhydro_pulse_MG_int test_radhydro_pulse_MG_int.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
 		setup_target_for_cuda_compilation(test_radhydro_pulse_MG_int)
@@ -10,4 +10,4 @@ endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 # mkdir -p WORK_PATH
 # file(MAKE_DIRECTORY ${WORK_PATH})
 
-add_test(NAME RadhydroPulseMGint COMMAND test_radhydro_pulse_MG_int RadhydroPulse.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME RadhydroPulseMGint COMMAND test_radhydro_pulse_MG_int ../inputs/RadhydroPulse.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

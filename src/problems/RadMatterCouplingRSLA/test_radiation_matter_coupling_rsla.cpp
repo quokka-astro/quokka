@@ -7,10 +7,14 @@
 /// \brief Defines a test problem for radiation-matter coupling.
 ///
 
-#include "test_radiation_matter_coupling_rsla.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "QuokkaSimulation.hpp"
+#include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include <fmt/format.h>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -219,7 +223,7 @@ auto problem_main() -> int
 		}
 
 		std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
-		std::vector<double> &t = sim.userData_.t_vec_;
+		std::vector<double> const &t = sim.userData_.t_vec_;
 
 		// compute L1 error norm
 		double err_norm = 0.;
@@ -231,7 +235,7 @@ auto problem_main() -> int
 		const double rel_error = err_norm / sol_norm;
 		// When using C::a_rad as radiation_constant_cgs_, the relative error goes up to 3e-5, so I'm increasing the tolerance
 		const double error_tol = 5e-5;
-		amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "relative L1 error norm = " << rel_error << '\n';
 		if (rel_error > error_tol) {
 			status = 1;
 		}

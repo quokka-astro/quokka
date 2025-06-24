@@ -2,8 +2,12 @@
 /// \brief Defines a 2D test problem for radiating particles.
 ///
 
-#include "test_radparticle_2D.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
 
 struct ParticleProblem {
 };
@@ -56,7 +60,7 @@ template <> void QuokkaSimulation<ParticleProblem>::createInitialRadParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 2 + nGroups_; // birth_time death_time lum1
 	RadParticles->SetVerbose(1);
-	RadParticles->InitFromAsciiFile("RadParticles2D.txt", nreal_extra, nullptr);
+	RadParticles->InitFromAsciiFile("../inputs/RadParticles2D.txt", nreal_extra, nullptr);
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real

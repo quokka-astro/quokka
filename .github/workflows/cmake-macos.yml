@@ -19,8 +19,13 @@ permissions:
   contents: read
 
 jobs:
+  check_changes:
+    uses: ./.github/workflows/check_changes.yml
+
   build:
     runs-on: macos-14
+    needs: check_changes
+    if: needs.check_changes.outputs.has_non_docs_changes == 'true'
 
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -28,7 +33,7 @@ jobs:
         submodules: true
         fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of sonarcloud analysis
     
-    - uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
       with:
         python-version: '3.11'
         cache: 'pip' # caching pip dependencies
@@ -52,6 +57,9 @@ jobs:
     - name: Install pip dependencies
       run: python3 -m pip install --user numpy matplotlib
 
+    - name: Install Canary
+      run: python3 -m pip install --user "canary-wm @ git+https://github.com/sandialabs/canary"
+
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
       # access regardless of the host operating system
@@ -72,9 +80,9 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute tests defined by the CMake configuration.  
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest --output-on-failure -C $BUILD_TYPE -j3
+      run: |
+        export PATH="$HOME/Library/Python/3.11/bin:$PATH"
+        canary run --output-on-failure --workers=3 .
 
     - name: Upload test output
       if: always()
