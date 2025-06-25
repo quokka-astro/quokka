@@ -29,7 +29,7 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
 # Install Python packages with the new Python version
 RUN python3 -m pip install --upgrade pip && \
-    python3 -m pip install h5py cached-property
+    python3 -m pip install h5py cached-property numpy matplotlib 
 
 # Install Azure CLI for openSUSE
 RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
