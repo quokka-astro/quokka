@@ -9,40 +9,12 @@
 #include "hydro/HydroState.hpp"
 #include "util/valarray.hpp"
 
-template <class T> constexpr auto SQUARE(const T x) -> T { return x * x; }
-
 namespace quokka::Riemann
 {
-
-// density, momentum, total energy, transverse magnetic field
-template <int N_passiveScalars> struct ConsHydro1D {
-	double rho;					   // density
-	double mx;					   // x-momentum
-	double my;					   // y-momentum
-	double mz;					   // z-momentum
-	double E;					   // total energy density
-	double Eint;					   // specific internal energy
-	double by;					   // y-magnetic field
-	double bz;					   // z-magnetic field
-	quokka::valarray<double, N_passiveScalars> scalar; // passive scalars, problem defined
-};
-
-template <int N_scalars, int N_mscalars>
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quokka::HydroState<N_scalars, N_mscalars> const state, const double bx) -> double
-{
-	double gamma_pressure = gamma * state.P;
-	double byz_sq = SQUARE(state.by) + SQUARE(state.bz);
-	double const b_sq = SQUARE(bx) + byz_sq;
-	double const b_plus_gamma_pressure = b_sq + gamma_pressure;
-	double const b_minus_gamma_pressure = b_sq - gamma_pressure;
-	return std::sqrt(0.5 * (b_plus_gamma_pressure + std::sqrt(b_minus_gamma_pressure * b_minus_gamma_pressure + 4.0 * gamma_pressure * byz_sq)) /
-			 state.rho);
-}
-
 // Local Lax-Friedrichs (LLF) / Rusanov solver
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
-					     const double gamma, const double bx) -> quokka::valarray<double, fluxdim>
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF_MHD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
+					     const double gamma, const double bx) -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
 {
 	// initialize left and right conserved states
 	ConsHydro1D<N_scalars> u_L{};
@@ -79,7 +51,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_msc
 	u_L.mx = sL.u * u_L.rho;
 	u_L.my = sL.v * u_L.rho;
 	u_L.mz = sL.w * u_L.rho;
-	u_L.E = ke_L + pb_L + sL.P / (gamma - 1.0); // TODO(neco): generalise EOS
+	u_L.E = ke_L + pb_L + sL.P / (gamma - 1.0); 
 	u_L.Eint = sL.Eint;
 	u_L.by = sL.by;
 	u_L.bz = sL.bz;

@@ -14,33 +14,6 @@ namespace quokka::Riemann
 {
 constexpr double DELTA = 1.0e-4;
 
-template <class T> constexpr auto SQUARE(const T x) -> T { return x * x; }
-
-// density, momentum, total energy, transverse magnetic field
-template <int N_passiveScalars> struct ConsHydro1D {
-	double rho;					   // density
-	double mx;					   // x-momentum
-	double my;					   // y-momentum
-	double mz;					   // z-momentum
-	double E;					   // total energy density
-	double Eint;					   // specific internal energy
-	double by;					   // y-magnetic field
-	double bz;					   // z-magnetic field
-	quokka::valarray<double, N_passiveScalars> scalar; // passive scalars, problem defined
-};
-
-template <int N_scalars, int N_mscalars>
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quokka::HydroState<N_scalars, N_mscalars> const state, const double bx) -> double
-{
-	double gamma_pressure = gamma * state.P;
-	double byz_sq = SQUARE(state.by) + SQUARE(state.bz);
-	double b_sq = SQUARE(bx) + byz_sq;
-	double b_plus_gamma_pressure = b_sq + gamma_pressure;
-	double b_minus_gamma_pressure = b_sq - gamma_pressure;
-	return std::sqrt(0.5 * (b_plus_gamma_pressure + std::sqrt(b_minus_gamma_pressure * b_minus_gamma_pressure + 4.0 * gamma_pressure * byz_sq)) /
-			 state.rho);
-}
-
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,

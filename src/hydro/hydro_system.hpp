@@ -26,7 +26,8 @@
 #include "HLLC.hpp"
 #include "HLLD.hpp"
 #include "LLF.hpp"
-#include "hydro/EOS.hpp"
+#include "LLF_mhd.hpp"
+#include "EOS.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -43,7 +44,7 @@ template <typename problem_t> struct HydroSystem_Traits {
 	static constexpr bool reconstruct_eint = true;
 };
 
-enum class RiemannSolver { HLLC, LLF, HLLD };
+enum class RiemannSolver { HLLC, LLF, LLF_MHD, HLLD };
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
@@ -939,7 +940,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	amrex::MultiArray4<const double> x1ConsVar_fc_in;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		// TODO(Neco or someone else): the LLF solver should also output the fast MHD wavespeeds
-		if (RIEMANN == RiemannSolver::HLLD) {
+		if (RIEMANN == RiemannSolver::HLLD || RIEMANN == RiemannSolver::LLF_MHD ) {
 			x1FSpds_in = (*x1FSpds_mf).arrays();
 		}
 		x1ConsVar_fc_in = (*x1ConsVar_fc_mf).const_arrays();
