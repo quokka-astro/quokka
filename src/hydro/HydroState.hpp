@@ -44,7 +44,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quo
 	double gamma_pressure = gamma * state.P;
 	double byz_sq = SQUARE(state.by) + SQUARE(state.bz);
 	double const b_sq = SQUARE(bx) + byz_sq;
-	double b_plus_gamma_pressure = b_sq + gamma_pressure;
+	double const b_plus_gamma_pressure = b_sq + gamma_pressure;
 	double const b_minus_gamma_pressure = b_sq - gamma_pressure;
 	return std::sqrt(0.5 * (b_plus_gamma_pressure + std::sqrt(b_minus_gamma_pressure * b_minus_gamma_pressure + 4.0 * gamma_pressure * byz_sq)) /
 			 state.rho);
