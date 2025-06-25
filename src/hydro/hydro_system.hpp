@@ -939,7 +939,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	amrex::MultiArray4<double> x1FSpds_in;
 	amrex::MultiArray4<const double> x1ConsVar_fc_in;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		// TODO(Neco or someone else): the LLF solver should also output the fast MHD wavespeeds
 		if (RIEMANN == RiemannSolver::HLLD || RIEMANN == RiemannSolver::LLF_MHD) {
 			x1FSpds_in = (*x1FSpds_mf).arrays();
 		}
@@ -1140,6 +1139,12 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
+		} else if constexpr (RIEMANN == RiemannSolver::LLF_MHD) {
+			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_in[bx]);
+			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
+			F_canonical = F_canonical_tmp;
+			x1FSpds(i, j, k, 0) = fspd_m;
+			x1FSpds(i, j, k, 1) = fspd_p;
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_in[bx]);
 			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
