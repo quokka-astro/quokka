@@ -4,7 +4,7 @@ ENV TARGETARCH="linux/amd64"
 
 USER root
 
-# Install required packages
+# Install required packages including Python 3.11
 RUN zypper --non-interactive refresh && \
     zypper --non-interactive update && \
     zypper --non-interactive install \
@@ -12,12 +12,24 @@ RUN zypper --non-interactive refresh && \
         git \
         jq \
         libicu-devel \
-        python3-h5py \
         wget \
         tar \
         gzip \
-        which && \
+        which \
+        python311 \
+        python311-pip \
+        python311-devel \
+        python311-setuptools \
+        python311-wheel && \
     zypper clean --all
+
+# Set Python 3.11 as the default python3
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.11 1
+
+# Install Python packages with the new Python version
+RUN python3 -m pip install --upgrade pip && \
+    python3 -m pip install h5py cached-property
 
 # Install Azure CLI for openSUSE
 RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
