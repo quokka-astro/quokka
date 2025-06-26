@@ -178,7 +178,12 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	inline void initialize()
 	{
-		defineComponentNames();
+    static_assert(
+      !(Physics_Traits<problem_t>::is_mhd_enabled && (AMREX_SPACEDIM != 3)),
+      "MHD is only supported in 3D."
+    );
+    std::cout << "!!here!!" << max_level << std::endl;
+    defineComponentNames();
 		defineDefaultPlotfileVariables();
 		// read in runtime parameters
 		readParmParse();
