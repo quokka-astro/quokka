@@ -6,5 +6,5 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     add_test(NAME FCQuantities COMMAND test_fc_quantities ../inputs/fc_hydro_wave.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    set_tests_properties(AlfvenWaveLinear PROPERTIES LABELS "MHD")
+    set_tests_properties(FCQuantities PROPERTIES LABELS "MHD")
 endif()
