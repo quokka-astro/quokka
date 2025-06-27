@@ -179,11 +179,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	inline void initialize()
 	{
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled && (AMREX_SPACEDIM != 3)), "MHD is only supported in 3D.");
-    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-      if (max_level > 0) {
-        amrex::Error("MHD is only supported for uniform grids (max_level must be 0).");
-      }
-    }
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			if (max_level > 0) {
+				amrex::Error("MHD is only supported for uniform grids (max_level must be 0).");
+			}
+		}
 
 		defineComponentNames();
 		defineDefaultPlotfileVariables();
