@@ -202,12 +202,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> &BCs_cc) -> amrex::Vector<amrex::BCRec>
 	{
-    static_assert(
-      !(Physics_Traits<problem_t>::is_mhd_enabled),
-      "You are required to explicitly define the face-centered BCs when MHD is enabled."
-    );
-    
-    amrex::Vector<amrex::BCRec> BCs_fc(Physics_Indices<problem_t>::nvarPerDim_fc);
+		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "You are required to explicitly define the face-centered BCs when MHD is enabled.");
+
+		amrex::Vector<amrex::BCRec> BCs_fc(Physics_Indices<problem_t>::nvarPerDim_fc);
 
 		if (Physics_Traits<problem_t>::is_hydro_enabled) {
 			AMREX_ALWAYS_ASSERT(Physics_Indices<problem_t>::nvarPerDim_fc == 1);
