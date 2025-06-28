@@ -5,7 +5,7 @@ ENV TARGETARCH="linux/amd64"
 USER root
 RUN apt update && \
   apt upgrade -y && \
-  apt install -y curl git jq libicu74 python3-h5py
+  apt install -y curl git jq libicu74 python3-h5py gfortran
 
 # Install h5py
 # RUN pip3 install h5py 
