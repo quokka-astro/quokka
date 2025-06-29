@@ -453,7 +453,10 @@ auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVa
 {
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
-	const int reconstructRange = 1;
+	const int reconstructRange = 2; // fully reconstruct a parabola within *two* cells outside the valid region
+	// NOTE: one cell is needed to get L/R states at the FAB boundaries.
+	//   The extra cell is needed to get L/R states (and therefore the face velocity) for one ghost face.
+	//   (For hydro, we need *two* ghost face velocities!)
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
@@ -466,8 +469,8 @@ auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVa
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
 		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
 		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
-		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
-		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 1);
+		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange - 1);
+		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, reconstructRange - 1);
 	}
 
 	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVar, primVar, flux[0], facevel[0], leftState[0], rightState[0], reconstructRange, nvars);
@@ -497,14 +500,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 
 	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, x1LeftState, x1RightState, ng_reconstruct, nvars);
 
-	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux, x1LeftState, x1RightState, advectionVel, nvars);
-
-	// Fill face velocities with the advection velocity (including ghost cells)
-	const amrex::IntVect ngrowVec(AMREX_D_DECL(1, 1, 1));
-	auto x1FaceVel_in = x1FaceVel.arrays();
-	amrex::ParallelFor(x1FaceVel, ngrowVec, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		x1FaceVel_in[bx](i, j, k) = advectionVel;
-	});
+	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux, x1LeftState, x1RightState, x1FaceVel, advectionVel, nvars);
 }
 
 template <typename problem_t>

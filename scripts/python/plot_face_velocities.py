@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+# ABOUTME: Plot face velocities from FAB files with ghost cell validation
+# ABOUTME: Validates ghost cell consistency and outputs statistics for both correct and incorrect ghost cells
 """
-Plot face velocity and reconstructed state FAB files with ghost cells highlighted
+Plot face velocity and reconstructed state FAB files with ghost cells highlighted.
+Validates ghost cell consistency and outputs statistics for both correct and incorrect ghost cells.
 """
 
 import os
@@ -113,6 +116,7 @@ def parse_reconstructed_fab_file(filename):
 def check_ghost_cell_consistency(all_data_list, all_boxes, tolerance=1e-10):
     """Check if ghost cells match valid cells from adjacent boxes"""
     mismatches = []
+    correct_matches = []
     
     # Create a dictionary mapping indices to (box_id, value, is_ghost)
     index_map = {}
@@ -141,7 +145,7 @@ def check_ghost_cell_consistency(all_data_list, all_boxes, tolerance=1e-10):
                 'hi': hi_idx
             })
     
-    # Check for mismatches
+    # Check for mismatches and correct matches
     for idx, entries in index_map.items():
         if len(entries) > 1:  # This index appears in multiple boxes
             # Find valid cell value(s)
@@ -164,11 +168,19 @@ def check_ghost_cell_consistency(all_data_list, all_boxes, tolerance=1e-10):
                                 'ghost_value': ghost['value'],
                                 'difference': ghost['value'] - valid_val
                             })
+                        else:
+                            correct_matches.append({
+                                'index': idx,
+                                'valid_box': valid_entries[0]['box_id'],
+                                'valid_value': valid_val,
+                                'ghost_box': ghost['box_id'],
+                                'ghost_value': ghost['value']
+                            })
                 else:
                     # Multiple valid entries for same index - this shouldn't happen
                     print(f"Warning: Multiple valid cells at index {idx}")
     
-    return mismatches
+    return mismatches, correct_matches
 
 
 def plot_1d_face_velocities(dirname, timestep=0, level=0):
@@ -196,16 +208,24 @@ def plot_1d_face_velocities(dirname, timestep=0, level=0):
             all_boxes.append(box_info)
     
     # Check ghost cell consistency
-    mismatches = check_ghost_cell_consistency(all_data, all_boxes)
+    mismatches, correct_matches = check_ghost_cell_consistency(all_data, all_boxes)
+    
+    print(f"\n📊 Face velocity ghost cell statistics:")
+    print(f"  ✅ Correctly-filled ghost cells: {len(correct_matches)}")
+    print(f"  ⚠️  Disagreeing ghost cells: {len(mismatches)}")
+    
+    if correct_matches:
+        print(f"\n✅ Details of {len(correct_matches)} correctly-filled ghost cells:")
+        for m in correct_matches:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}")
     
     if mismatches:
-        print(f"\n⚠️  Found {len(mismatches)} ghost cell mismatches:")
+        print(f"\n⚠️  Details of {len(mismatches)} ghost cell mismatches:")
         for m in mismatches:
             print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
                   f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
                   f"diff = {m['difference']:.6e}")
-    else:
-        print("\n✅ All ghost cells match their corresponding valid cells!")
     
     fig, ax = plt.subplots(figsize=(12, 6))
     
@@ -394,6 +414,7 @@ def plot_2d_face_velocities(dirname, direction='x', timestep=0, level=0):
 def check_reconstructed_ghost_cells(all_data_list, all_boxes, var_col=1, tolerance=1e-10):
     """Check if ghost cells match valid cells from adjacent boxes for reconstructed states"""
     mismatches = []
+    correct_matches = []
     
     # Create a dictionary mapping indices to (box_id, value, is_ghost)
     index_map = {}
@@ -422,7 +443,7 @@ def check_reconstructed_ghost_cells(all_data_list, all_boxes, var_col=1, toleran
                 'hi': hi_idx
             })
     
-    # Check for mismatches
+    # Check for mismatches and correct matches
     for idx, entries in index_map.items():
         if len(entries) > 1:  # This index appears in multiple boxes
             # Find valid cell value(s)
@@ -445,11 +466,19 @@ def check_reconstructed_ghost_cells(all_data_list, all_boxes, var_col=1, toleran
                                 'ghost_value': ghost['value'],
                                 'difference': ghost['value'] - valid_val
                             })
+                        else:
+                            correct_matches.append({
+                                'index': idx,
+                                'valid_box': valid_entries[0]['box_id'],
+                                'valid_value': valid_val,
+                                'ghost_box': ghost['box_id'],
+                                'ghost_value': ghost['value']
+                            })
                 else:
                     # Multiple valid entries for same index - this shouldn't happen
                     print(f"Warning: Multiple valid cells at index {idx}")
     
-    return mismatches
+    return mismatches, correct_matches
 
 
 def plot_1d_reconstructed_states(dirname, timestep=0, level=0, variable='density'):
@@ -504,25 +533,41 @@ def plot_1d_reconstructed_states(dirname, timestep=0, level=0, variable='density
     # Check ghost cell consistency
     print(f"\nChecking ghost cell consistency for {variable}:")
     
-    left_mismatches = check_reconstructed_ghost_cells(all_left_data, all_left_boxes, var_col)
+    left_mismatches, left_correct = check_reconstructed_ghost_cells(all_left_data, all_left_boxes, var_col)
+    print(f"\n📊 LEFT state ghost cell statistics:")
+    print(f"  ✅ Correctly-filled ghost cells: {len(left_correct)}")
+    print(f"  ⚠️  Disagreeing ghost cells: {len(left_mismatches)}")
+    
+    if left_correct:
+        print(f"\n✅ Details of {len(left_correct)} correctly-filled LEFT state ghost cells:")
+        for m in left_correct:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}")
+    
     if left_mismatches:
-        print(f"\n⚠️  Found {len(left_mismatches)} LEFT state ghost cell mismatches:")
+        print(f"\n⚠️  Details of {len(left_mismatches)} LEFT state ghost cell mismatches:")
         for m in left_mismatches:
             print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
                   f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
                   f"diff = {m['difference']:.6e}")
-    else:
-        print("✅ All LEFT state ghost cells match their corresponding valid cells!")
     
-    right_mismatches = check_reconstructed_ghost_cells(all_right_data, all_right_boxes, var_col)
+    right_mismatches, right_correct = check_reconstructed_ghost_cells(all_right_data, all_right_boxes, var_col)
+    print(f"\n📊 RIGHT state ghost cell statistics:")
+    print(f"  ✅ Correctly-filled ghost cells: {len(right_correct)}")
+    print(f"  ⚠️  Disagreeing ghost cells: {len(right_mismatches)}")
+    
+    if right_correct:
+        print(f"\n✅ Details of {len(right_correct)} correctly-filled RIGHT state ghost cells:")
+        for m in right_correct:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}")
+    
     if right_mismatches:
-        print(f"\n⚠️  Found {len(right_mismatches)} RIGHT state ghost cell mismatches:")
+        print(f"\n⚠️  Details of {len(right_mismatches)} RIGHT state ghost cell mismatches:")
         for m in right_mismatches:
             print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
                   f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
                   f"diff = {m['difference']:.6e}")
-    else:
-        print("✅ All RIGHT state ghost cells match their corresponding valid cells!")
     
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
     
@@ -683,25 +728,61 @@ def plot_1d_combined(dirname, timestep=0, level=0, variable='xmom'):
     
     # Check ghost cell consistency
     print("\nChecking face velocity ghost cell consistency:")
-    facevel_mismatches = check_ghost_cell_consistency(all_facevel_data, all_facevel_boxes)
+    facevel_mismatches, facevel_correct = check_ghost_cell_consistency(all_facevel_data, all_facevel_boxes)
+    print(f"📊 Face velocity ghost cell statistics:")
+    print(f"  ✅ Correctly-filled ghost cells: {len(facevel_correct)}")
+    print(f"  ⚠️  Disagreeing ghost cells: {len(facevel_mismatches)}")
+    
+    if facevel_correct:
+        print(f"\n✅ Details of {len(facevel_correct)} correctly-filled face velocity ghost cells:")
+        for m in facevel_correct:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}")
+    
     if facevel_mismatches:
-        print(f"⚠️  Found {len(facevel_mismatches)} face velocity ghost cell mismatches")
-    else:
-        print("✅ All face velocity ghost cells match!")
+        print(f"\n⚠️  Details of {len(facevel_mismatches)} face velocity ghost cell mismatches:")
+        for m in facevel_mismatches:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
+                  f"diff = {m['difference']:.6e}")
     
     print(f"\nChecking {variable} reconstructed state ghost cell consistency:")
     
-    left_mismatches = check_reconstructed_ghost_cells(all_left_data, all_left_boxes, var_col)
-    if left_mismatches:
-        print(f"⚠️  Found {len(left_mismatches)} LEFT state ghost cell mismatches")
-    else:
-        print("✅ All LEFT state ghost cells match!")
+    left_mismatches, left_correct = check_reconstructed_ghost_cells(all_left_data, all_left_boxes, var_col)
+    print(f"\n📊 LEFT state ghost cell statistics:")
+    print(f"  ✅ Correctly-filled ghost cells: {len(left_correct)}")
+    print(f"  ⚠️  Disagreeing ghost cells: {len(left_mismatches)}")
     
-    right_mismatches = check_reconstructed_ghost_cells(all_right_data, all_right_boxes, var_col)
+    if left_correct:
+        print(f"\n✅ Details of {len(left_correct)} correctly-filled LEFT state ghost cells:")
+        for m in left_correct:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}")
+    
+    if left_mismatches:
+        print(f"\n⚠️  Details of {len(left_mismatches)} LEFT state ghost cell mismatches:")
+        for m in left_mismatches:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
+                  f"diff = {m['difference']:.6e}")
+    
+    right_mismatches, right_correct = check_reconstructed_ghost_cells(all_right_data, all_right_boxes, var_col)
+    print(f"\n📊 RIGHT state ghost cell statistics:")
+    print(f"  ✅ Correctly-filled ghost cells: {len(right_correct)}")
+    print(f"  ⚠️  Disagreeing ghost cells: {len(right_mismatches)}")
+    
+    if right_correct:
+        print(f"\n✅ Details of {len(right_correct)} correctly-filled RIGHT state ghost cells:")
+        for m in right_correct:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}")
+    
     if right_mismatches:
-        print(f"⚠️  Found {len(right_mismatches)} RIGHT state ghost cell mismatches")
-    else:
-        print("✅ All RIGHT state ghost cells match!")
+        print(f"\n⚠️  Details of {len(right_mismatches)} RIGHT state ghost cell mismatches:")
+        for m in right_mismatches:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
+                  f"diff = {m['difference']:.6e}")
     
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15))
     
