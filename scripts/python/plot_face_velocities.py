@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Plot face velocity FAB files with ghost cells highlighted
+Plot face velocity and reconstructed state FAB files with ghost cells highlighted
 """
 
 import os
@@ -62,6 +62,115 @@ def parse_fab_file(filename):
     return np.array(data), box_info
 
 
+def parse_reconstructed_fab_file(filename):
+    """Parse a reconstructed state FAB file and return the data and metadata"""
+    data = []
+    box_info = None
+    
+    with open(filename, 'r') as f:
+        for line in f:
+            if line.startswith('# Box:'):
+                # Parse box bounds like ((-2) (30) (1))
+                box_str = line.split(':', 1)[1].strip()
+                # Extract numbers from the box string
+                numbers = re.findall(r'-?\d+', box_str)
+                numbers = [int(n) for n in numbers]
+                
+                # Parse box format which can be:
+                # 1D: ((-2) (30) (1)) - single direction with placeholders
+                # 2D: ((-2,-2) (18,17) (1,0)) - two directions with placeholders  
+                
+                # Determine dimensionality from the data format
+                # Count commas to determine actual dimensions
+                comma_count = box_str.count(',')
+                
+                if comma_count == 0:  # 1D: ((-2) (30) (1))
+                    box_info = {
+                        'lo': [numbers[0]],
+                        'hi': [numbers[1]]
+                    }
+                elif comma_count == 3:  # 2D: ((-2,-2) (18,17) (1,0))
+                    box_info = {
+                        'lo': [numbers[0], numbers[1]], 
+                        'hi': [numbers[2], numbers[3]]
+                    }
+                elif comma_count == 5:  # 3D: ((lo_x,lo_y,lo_z) (hi_x,hi_y,hi_z))
+                    box_info = {
+                        'lo': [numbers[0], numbers[1], numbers[2]],
+                        'hi': [numbers[3], numbers[4], numbers[5]]
+                    }
+                else:
+                    print(f"Warning: Could not parse box format: {box_str}")
+                    box_info = None
+            elif not line.startswith('#'):
+                parts = line.strip().split()
+                if parts:
+                    data.append([float(x) for x in parts])
+    
+    return np.array(data), box_info
+
+
+def check_ghost_cell_consistency(all_data_list, all_boxes, tolerance=1e-10):
+    """Check if ghost cells match valid cells from adjacent boxes"""
+    mismatches = []
+    
+    # Create a dictionary mapping indices to (box_id, value, is_ghost)
+    index_map = {}
+    
+    for box_id, (data, box_info) in enumerate(zip(all_data_list, all_boxes)):
+        if data.size == 0:
+            continue
+            
+        indices = data[:, 0].astype(int)
+        values = data[:, 1] if data.shape[1] == 2 else data[:, 1:]  # Handle multi-component data
+        
+        lo_idx = box_info['lo'][0]
+        hi_idx = box_info['hi'][0]
+        
+        for idx, val in zip(indices, values):
+            is_ghost = (idx == lo_idx or idx == hi_idx)
+            
+            if idx not in index_map:
+                index_map[idx] = []
+            
+            index_map[idx].append({
+                'box_id': box_id,
+                'value': val,
+                'is_ghost': is_ghost,
+                'lo': lo_idx,
+                'hi': hi_idx
+            })
+    
+    # Check for mismatches
+    for idx, entries in index_map.items():
+        if len(entries) > 1:  # This index appears in multiple boxes
+            # Find valid cell value(s)
+            valid_entries = [e for e in entries if not e['is_ghost']]
+            ghost_entries = [e for e in entries if e['is_ghost']]
+            
+            if valid_entries and ghost_entries:
+                # There should be exactly one valid value
+                if len(valid_entries) == 1:
+                    valid_val = valid_entries[0]['value']
+                    
+                    # Check all ghost cells against this valid value
+                    for ghost in ghost_entries:
+                        if np.any(np.abs(ghost['value'] - valid_val) > tolerance):
+                            mismatches.append({
+                                'index': idx,
+                                'valid_box': valid_entries[0]['box_id'],
+                                'valid_value': valid_val,
+                                'ghost_box': ghost['box_id'],
+                                'ghost_value': ghost['value'],
+                                'difference': ghost['value'] - valid_val
+                            })
+                else:
+                    # Multiple valid entries for same index - this shouldn't happen
+                    print(f"Warning: Multiple valid cells at index {idx}")
+    
+    return mismatches
+
+
 def plot_1d_face_velocities(dirname, timestep=0, level=0):
     """Plot 1D face velocities from FAB files"""
     fab_dir = Path(f"facevel_lev{level}_step{timestep}")
@@ -76,13 +185,33 @@ def plot_1d_face_velocities(dirname, timestep=0, level=0):
         print(f"No FAB files found in {fab_dir}")
         return
     
+    # Collect all data for ghost cell checking
+    all_data = []
+    all_boxes = []
+    
+    for fab_file in fab_files:
+        data, box_info = parse_fab_file(fab_file)
+        if data.size > 0:
+            all_data.append(data)
+            all_boxes.append(box_info)
+    
+    # Check ghost cell consistency
+    mismatches = check_ghost_cell_consistency(all_data, all_boxes)
+    
+    if mismatches:
+        print(f"\n⚠️  Found {len(mismatches)} ghost cell mismatches:")
+        for m in mismatches:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
+                  f"diff = {m['difference']:.6e}")
+    else:
+        print("\n✅ All ghost cells match their corresponding valid cells!")
+    
     fig, ax = plt.subplots(figsize=(12, 6))
     
     colors = plt.cm.tab10(np.linspace(0, 1, len(fab_files)))
     
-    for i, fab_file in enumerate(fab_files):
-        data, box_info = parse_fab_file(fab_file)
-        
+    for i, (data, box_info) in enumerate(zip(all_data, all_boxes)):
         if data.size == 0:
             continue
             
@@ -262,8 +391,435 @@ def plot_2d_face_velocities(dirname, direction='x', timestep=0, level=0):
     plt.show()
 
 
+def check_reconstructed_ghost_cells(all_data_list, all_boxes, var_col=1, tolerance=1e-10):
+    """Check if ghost cells match valid cells from adjacent boxes for reconstructed states"""
+    mismatches = []
+    
+    # Create a dictionary mapping indices to (box_id, value, is_ghost)
+    index_map = {}
+    
+    for box_id, (data, box_info) in enumerate(zip(all_data_list, all_boxes)):
+        if data.size == 0:
+            continue
+            
+        indices = data[:, 0].astype(int)
+        values = data[:, var_col]  # Get the specific variable column
+        
+        lo_idx = box_info['lo'][0]
+        hi_idx = box_info['hi'][0]
+        
+        for idx, val in zip(indices, values):
+            is_ghost = (idx == lo_idx or idx == hi_idx)
+            
+            if idx not in index_map:
+                index_map[idx] = []
+            
+            index_map[idx].append({
+                'box_id': box_id,
+                'value': val,
+                'is_ghost': is_ghost,
+                'lo': lo_idx,
+                'hi': hi_idx
+            })
+    
+    # Check for mismatches
+    for idx, entries in index_map.items():
+        if len(entries) > 1:  # This index appears in multiple boxes
+            # Find valid cell value(s)
+            valid_entries = [e for e in entries if not e['is_ghost']]
+            ghost_entries = [e for e in entries if e['is_ghost']]
+            
+            if valid_entries and ghost_entries:
+                # There should be exactly one valid value
+                if len(valid_entries) == 1:
+                    valid_val = valid_entries[0]['value']
+                    
+                    # Check all ghost cells against this valid value
+                    for ghost in ghost_entries:
+                        if np.abs(ghost['value'] - valid_val) > tolerance:
+                            mismatches.append({
+                                'index': idx,
+                                'valid_box': valid_entries[0]['box_id'],
+                                'valid_value': valid_val,
+                                'ghost_box': ghost['box_id'],
+                                'ghost_value': ghost['value'],
+                                'difference': ghost['value'] - valid_val
+                            })
+                else:
+                    # Multiple valid entries for same index - this shouldn't happen
+                    print(f"Warning: Multiple valid cells at index {idx}")
+    
+    return mismatches
+
+
+def plot_1d_reconstructed_states(dirname, timestep=0, level=0, variable='density'):
+    """Plot 1D reconstructed states from FAB files"""
+    reconst_dir = Path(f"reconst_lev{level}_step{timestep}")
+    if not reconst_dir.exists():
+        print(f"Directory {reconst_dir} not found!")
+        return
+    
+    # Find all left and right state FAB files for x-direction
+    left_files = sorted(reconst_dir.glob("reconst_left_x_box_*.fab"))
+    right_files = sorted(reconst_dir.glob("reconst_right_x_box_*.fab"))
+    
+    if not left_files or not right_files:
+        print(f"No reconstructed state files found in {reconst_dir}")
+        return
+    
+    # Variable mapping: variable name -> column index
+    var_map = {
+        'density': 1,
+        'xmom': 2,
+        'ymom': 3,
+        'zmom': 4,
+        'energy': 5,
+        'intenergy': 6
+    }
+    
+    if variable not in var_map:
+        print(f"Unknown variable: {variable}. Available: {list(var_map.keys())}")
+        return
+    
+    var_col = var_map[variable]
+    
+    # Collect all data for ghost cell checking
+    all_left_data = []
+    all_left_boxes = []
+    all_right_data = []
+    all_right_boxes = []
+    
+    for left_file in left_files:
+        data, box_info = parse_reconstructed_fab_file(left_file)
+        if data.size > 0:
+            all_left_data.append(data)
+            all_left_boxes.append(box_info)
+    
+    for right_file in right_files:
+        data, box_info = parse_reconstructed_fab_file(right_file)
+        if data.size > 0:
+            all_right_data.append(data)
+            all_right_boxes.append(box_info)
+    
+    # Check ghost cell consistency
+    print(f"\nChecking ghost cell consistency for {variable}:")
+    
+    left_mismatches = check_reconstructed_ghost_cells(all_left_data, all_left_boxes, var_col)
+    if left_mismatches:
+        print(f"\n⚠️  Found {len(left_mismatches)} LEFT state ghost cell mismatches:")
+        for m in left_mismatches:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
+                  f"diff = {m['difference']:.6e}")
+    else:
+        print("✅ All LEFT state ghost cells match their corresponding valid cells!")
+    
+    right_mismatches = check_reconstructed_ghost_cells(all_right_data, all_right_boxes, var_col)
+    if right_mismatches:
+        print(f"\n⚠️  Found {len(right_mismatches)} RIGHT state ghost cell mismatches:")
+        for m in right_mismatches:
+            print(f"  Index {m['index']}: Box {m['valid_box']} (valid) = {m['valid_value']:.6e}, "
+                  f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
+                  f"diff = {m['difference']:.6e}")
+    else:
+        print("✅ All RIGHT state ghost cells match their corresponding valid cells!")
+    
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+    
+    colors = plt.cm.tab10(np.linspace(0, 1, max(len(left_files), len(right_files))))
+    
+    # Plot left states
+    for i, left_file in enumerate(left_files):
+        data, box_info = parse_reconstructed_fab_file(left_file)
+        
+        if data.size == 0:
+            continue
+            
+        # For reconstructed state data: columns are [i, density, xmom, ymom, zmom, energy, intenergy]
+        indices = data[:, 0].astype(int)
+        values = data[:, var_col]
+        
+        # Determine valid region (exclude first and last ghost cells)
+        lo_idx = box_info['lo'][0]
+        hi_idx = box_info['hi'][0]
+        
+        # Create masks for ghost and valid cells
+        is_ghost = np.logical_or(indices == lo_idx, indices == hi_idx)
+        
+        # Plot valid cells
+        valid_mask = ~is_ghost
+        ax1.plot(indices[valid_mask], values[valid_mask], 'o-', 
+                color=colors[i], label=f'Box {i} (valid)', markersize=3)
+        
+        # Plot ghost cells with different style
+        if np.any(is_ghost):
+            ax1.plot(indices[is_ghost], values[is_ghost], 's', 
+                    color=colors[i], markersize=4, markerfacecolor='none',
+                    markeredgewidth=1.5, label=f'Box {i} (ghost)')
+        
+        # Add vertical lines at box boundaries
+        if i > 0:  # Don't draw line before first box
+            ax1.axvline(x=lo_idx + 0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Plot right states
+    for i, right_file in enumerate(right_files):
+        data, box_info = parse_reconstructed_fab_file(right_file)
+        
+        if data.size == 0:
+            continue
+            
+        # For reconstructed state data: columns are [i, density, xmom, ymom, zmom, energy, intenergy]
+        indices = data[:, 0].astype(int)
+        values = data[:, var_col]
+        
+        # Determine valid region (exclude first and last ghost cells)
+        lo_idx = box_info['lo'][0]
+        hi_idx = box_info['hi'][0]
+        
+        # Create masks for ghost and valid cells
+        is_ghost = np.logical_or(indices == lo_idx, indices == hi_idx)
+        
+        # Plot valid cells
+        valid_mask = ~is_ghost
+        ax2.plot(indices[valid_mask], values[valid_mask], 'o-', 
+                color=colors[i], label=f'Box {i} (valid)', markersize=3)
+        
+        # Plot ghost cells with different style
+        if np.any(is_ghost):
+            ax2.plot(indices[is_ghost], values[is_ghost], 's', 
+                    color=colors[i], markersize=4, markerfacecolor='none',
+                    markeredgewidth=1.5, label=f'Box {i} (ghost)')
+        
+        # Add vertical lines at box boundaries
+        if i > 0:  # Don't draw line before first box
+            ax2.axvline(x=lo_idx + 0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Configure plots
+    ax1.set_xlabel('Face Index (i)')
+    ax1.set_ylabel(f'Left {variable}')
+    ax1.set_title(f'Left Reconstructed States ({variable}) at Level {level}, Timestep {timestep}\n'
+                  f'Ghost cells shown as squares')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    ax2.set_xlabel('Face Index (i)')
+    ax2.set_ylabel(f'Right {variable}')
+    ax2.set_title(f'Right Reconstructed States ({variable}) at Level {level}, Timestep {timestep}\n'
+                  f'Ghost cells shown as squares')
+    ax2.grid(True, alpha=0.3)
+    ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    plt.tight_layout()
+    plt.savefig(f'reconstructed_states_1d_{variable}_lev{level}_step{timestep}.png', dpi=150, bbox_inches='tight')
+    plt.show()
+
+
+def plot_1d_combined(dirname, timestep=0, level=0, variable='xmom'):
+    """Plot 1D face velocities and reconstructed states together"""
+    # Check if both directories exist
+    facevel_dir = Path(f"facevel_lev{level}_step{timestep}")
+    reconst_dir = Path(f"reconst_lev{level}_step{timestep}")
+    
+    if not facevel_dir.exists():
+        print(f"Directory {facevel_dir} not found!")
+        return
+    if not reconst_dir.exists():
+        print(f"Directory {reconst_dir} not found!")
+        return
+    
+    # Find all files
+    facevel_files = sorted(facevel_dir.glob("facevel_x_box_*.fab"))
+    left_files = sorted(reconst_dir.glob("reconst_left_x_box_*.fab"))
+    right_files = sorted(reconst_dir.glob("reconst_right_x_box_*.fab"))
+    
+    if not facevel_files:
+        print(f"No face velocity files found in {facevel_dir}")
+        return
+    if not left_files or not right_files:
+        print(f"No reconstructed state files found in {reconst_dir}")
+        return
+    
+    # Variable mapping for reconstructed states
+    var_map = {
+        'density': 1,
+        'xmom': 2,
+        'ymom': 3,
+        'zmom': 4,
+        'energy': 5,
+        'intenergy': 6
+    }
+    
+    if variable not in var_map:
+        print(f"Unknown variable: {variable}. Available: {list(var_map.keys())}")
+        return
+    
+    var_col = var_map[variable]
+    
+    # Collect all data for ghost cell checking
+    all_facevel_data = []
+    all_facevel_boxes = []
+    all_left_data = []
+    all_left_boxes = []
+    all_right_data = []
+    all_right_boxes = []
+    
+    for fab_file in facevel_files:
+        data, box_info = parse_fab_file(fab_file)
+        if data.size > 0:
+            all_facevel_data.append(data)
+            all_facevel_boxes.append(box_info)
+    
+    for left_file in left_files:
+        data, box_info = parse_reconstructed_fab_file(left_file)
+        if data.size > 0:
+            all_left_data.append(data)
+            all_left_boxes.append(box_info)
+    
+    for right_file in right_files:
+        data, box_info = parse_reconstructed_fab_file(right_file)
+        if data.size > 0:
+            all_right_data.append(data)
+            all_right_boxes.append(box_info)
+    
+    # Check ghost cell consistency
+    print("\nChecking face velocity ghost cell consistency:")
+    facevel_mismatches = check_ghost_cell_consistency(all_facevel_data, all_facevel_boxes)
+    if facevel_mismatches:
+        print(f"⚠️  Found {len(facevel_mismatches)} face velocity ghost cell mismatches")
+    else:
+        print("✅ All face velocity ghost cells match!")
+    
+    print(f"\nChecking {variable} reconstructed state ghost cell consistency:")
+    
+    left_mismatches = check_reconstructed_ghost_cells(all_left_data, all_left_boxes, var_col)
+    if left_mismatches:
+        print(f"⚠️  Found {len(left_mismatches)} LEFT state ghost cell mismatches")
+    else:
+        print("✅ All LEFT state ghost cells match!")
+    
+    right_mismatches = check_reconstructed_ghost_cells(all_right_data, all_right_boxes, var_col)
+    if right_mismatches:
+        print(f"⚠️  Found {len(right_mismatches)} RIGHT state ghost cell mismatches")
+    else:
+        print("✅ All RIGHT state ghost cells match!")
+    
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15))
+    
+    colors = plt.cm.tab10(np.linspace(0, 1, max(len(facevel_files), len(left_files))))
+    
+    # Plot face velocities
+    for i, fab_file in enumerate(facevel_files):
+        data, box_info = parse_fab_file(fab_file)
+        
+        if data.size == 0:
+            continue
+            
+        # For 1D data: columns are [i, value]
+        indices = data[:, 0].astype(int)
+        values = data[:, 1]
+        
+        # Determine valid region (exclude first and last ghost cells)
+        lo_idx = box_info['lo'][0]
+        hi_idx = box_info['hi'][0]
+        
+        # Create masks for ghost and valid cells
+        is_ghost = np.logical_or(indices == lo_idx, indices == hi_idx)
+        
+        # Plot valid cells
+        valid_mask = ~is_ghost
+        ax1.plot(indices[valid_mask], values[valid_mask], 'o-', 
+                color=colors[i], label=f'Box {i} (valid)', markersize=3)
+        
+        # Plot ghost cells with different style
+        if np.any(is_ghost):
+            ax1.plot(indices[is_ghost], values[is_ghost], 's', 
+                    color=colors[i], markersize=4, markerfacecolor='none',
+                    markeredgewidth=1.5, label=f'Box {i} (ghost)')
+        
+        # Add vertical lines at box boundaries
+        if i > 0:  # Don't draw line before first box
+            ax1.axvline(x=lo_idx + 0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Plot left reconstructed states
+    for i, left_file in enumerate(left_files):
+        data, box_info = parse_reconstructed_fab_file(left_file)
+        
+        if data.size == 0:
+            continue
+            
+        indices = data[:, 0].astype(int)
+        values = data[:, var_col]
+        
+        lo_idx = box_info['lo'][0]
+        hi_idx = box_info['hi'][0]
+        is_ghost = np.logical_or(indices == lo_idx, indices == hi_idx)
+        
+        valid_mask = ~is_ghost
+        ax2.plot(indices[valid_mask], values[valid_mask], 'o-', 
+                color=colors[i], label=f'Box {i} (valid)', markersize=3)
+        
+        if np.any(is_ghost):
+            ax2.plot(indices[is_ghost], values[is_ghost], 's', 
+                    color=colors[i], markersize=4, markerfacecolor='none',
+                    markeredgewidth=1.5, label=f'Box {i} (ghost)')
+        
+        if i > 0:
+            ax2.axvline(x=lo_idx + 0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Plot right reconstructed states
+    for i, right_file in enumerate(right_files):
+        data, box_info = parse_reconstructed_fab_file(right_file)
+        
+        if data.size == 0:
+            continue
+            
+        indices = data[:, 0].astype(int)
+        values = data[:, var_col]
+        
+        lo_idx = box_info['lo'][0]
+        hi_idx = box_info['hi'][0]
+        is_ghost = np.logical_or(indices == lo_idx, indices == hi_idx)
+        
+        valid_mask = ~is_ghost
+        ax3.plot(indices[valid_mask], values[valid_mask], 'o-', 
+                color=colors[i], label=f'Box {i} (valid)', markersize=3)
+        
+        if np.any(is_ghost):
+            ax3.plot(indices[is_ghost], values[is_ghost], 's', 
+                    color=colors[i], markersize=4, markerfacecolor='none',
+                    markeredgewidth=1.5, label=f'Box {i} (ghost)')
+        
+        if i > 0:
+            ax3.axvline(x=lo_idx + 0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Configure plots
+    ax1.set_xlabel('Face Index (i)')
+    ax1.set_ylabel('Face Velocity')
+    ax1.set_title(f'Face Velocities at Level {level}, Timestep {timestep}')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    ax2.set_xlabel('Face Index (i)')
+    ax2.set_ylabel(f'Left {variable}')
+    ax2.set_title(f'Left Reconstructed States ({variable})')
+    ax2.grid(True, alpha=0.3)
+    ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    ax3.set_xlabel('Face Index (i)')
+    ax3.set_ylabel(f'Right {variable}')
+    ax3.set_title(f'Right Reconstructed States ({variable})')
+    ax3.grid(True, alpha=0.3)
+    ax3.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    plt.tight_layout()
+    plt.savefig(f'combined_facevel_reconst_1d_{variable}_lev{level}_step{timestep}.png', dpi=150, bbox_inches='tight')
+    plt.show()
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Plot face velocity FAB files')
+    parser = argparse.ArgumentParser(description='Plot face velocity and reconstructed state FAB files')
+    parser.add_argument('--mode', type=str, default='facevel', choices=['facevel', 'reconst', 'combined'],
+                        help='Plotting mode: facevel (face velocities), reconst (reconstructed states), or combined')
     parser.add_argument('--dim', type=int, default=1, choices=[1, 2],
                         help='Dimensionality of the plot (1 or 2)')
     parser.add_argument('--timestep', type=int, default=0,
@@ -272,8 +828,11 @@ def main():
                         help='AMR level to plot')
     parser.add_argument('--direction', type=str, default='x', choices=['x', 'y', 'z'],
                         help='Direction for face velocities (for 2D plots)')
+    parser.add_argument('--variable', type=str, default='xmom', 
+                        choices=['density', 'xmom', 'ymom', 'zmom', 'energy', 'intenergy'],
+                        help='Variable to plot for reconstructed states')
     parser.add_argument('--dir', type=str, default='.',
-                        help='Directory containing facevel_* subdirectories')
+                        help='Directory containing facevel_* and reconst_* subdirectories')
     
     args = parser.parse_args()
     
@@ -281,10 +840,21 @@ def main():
     if args.dir != '.':
         os.chdir(args.dir)
     
-    if args.dim == 1:
-        plot_1d_face_velocities(args.dir, args.timestep, args.level)
-    elif args.dim == 2:
-        plot_2d_face_velocities(args.dir, args.direction, args.timestep, args.level)
+    if args.mode == 'facevel':
+        if args.dim == 1:
+            plot_1d_face_velocities(args.dir, args.timestep, args.level)
+        elif args.dim == 2:
+            plot_2d_face_velocities(args.dir, args.direction, args.timestep, args.level)
+    elif args.mode == 'reconst':
+        if args.dim == 1:
+            plot_1d_reconstructed_states(args.dir, args.timestep, args.level, args.variable)
+        else:
+            print("2D reconstructed state plotting not yet implemented")
+    elif args.mode == 'combined':
+        if args.dim == 1:
+            plot_1d_combined(args.dir, args.timestep, args.level, args.variable)
+        else:
+            print("2D combined plotting not yet implemented")
 
 
 if __name__ == '__main__':

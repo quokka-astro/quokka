@@ -102,13 +102,17 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
-	auto computeFluxes(amrex::MultiFab const &consVar, int nvars, int lev) -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+	auto computeFluxes(amrex::MultiFab const &consVar, int nvars, int lev) -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, 
+													     std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
 	void fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1LeftState,
 			  amrex::MultiFab &x1RightState, int ng_reconstruct, int nvars);
 
 	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArrays, int lev, int timestep);
+
+	void writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftStateArrays, 
+					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightStateArrays, int lev, int timestep);
 
 	double advectionVx_ = 1.0; // default
 	double advectionVy_ = 0.0; // default
@@ -362,10 +366,13 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 	{
 		auto const &stateOld = state_old_cc_[lev];
 		auto &stateNew = state_new_cc_[lev];
-		auto [fluxArrays, faceVelArrays] = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
+		auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 		// Write face velocities to disk
 		writeFaceVelocitiesToDisk(faceVelArrays, lev, cycleCount_);
+		
+		// Write reconstructed states to disk
+		writeReconstructedStatesToDisk(leftStateArrays, rightStateArrays, lev, cycleCount_);
 
 		// Stage 1 of RK2-SSP
 		LinearAdvectionSystem<problem_t>::PredictStep(stateOld, stateNew, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
@@ -393,7 +400,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 			auto const &stateInOld = state_old_cc_[lev];
 			auto const &stateInStar = state_new_cc_[lev];
 			auto &stateOut = state_new_cc_[lev];
-			auto [fluxArrays, faceVelArrays] = computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
+			auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] = computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 			// Stage 2 of RK2-SSP
 			LinearAdvectionSystem<problem_t>::AddFluxesRK2(stateOut, stateInOld, stateInStar, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
@@ -441,7 +448,8 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 template <typename problem_t>
 auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
-    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
+    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, 
+		  std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
@@ -468,7 +476,7 @@ auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVa
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
-	return std::make_pair(std::move(flux), std::move(facevel));
+	return std::make_tuple(std::move(flux), std::move(facevel), std::move(leftState), std::move(rightState));
 }
 
 template <typename problem_t>
@@ -555,6 +563,151 @@ void AdvectionSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex:
 					for (int j = lo[1]; j <= hi[1]; ++j) {
 						for (int i = lo[0]; i <= hi[0]; ++i) {
 							ofs << i << " " << j << " " << k << " " << arr(i,j,k,0) << "\n";
+						}
+					}
+				}
+#endif
+				ofs.close();
+			}
+		}
+	}
+}
+
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftStateArrays,
+								    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightStateArrays, int lev, int timestep)
+{
+	// Create directory for reconstructed states outputs if it doesn't exist
+	std::string dirname = fmt::format("reconst_lev{}_step{}", lev, timestep);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::UtilCreateDirectory(dirname, 0755);
+	}
+	amrex::ParallelDescriptor::Barrier();
+
+	// Write each direction's left and right states
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		std::string dimname = (idim == 0) ? "x" : (idim == 1) ? "y" : "z";
+		
+		// Write left states
+		for (amrex::MFIter mfi(leftStateArrays[idim]); mfi.isValid(); ++mfi) {
+			const amrex::Box& bx = mfi.fabbox(); // This includes ghost cells
+			const amrex::FArrayBox& fab = leftStateArrays[idim][mfi];
+			
+			// Create filename for this FAB
+			std::string filename = fmt::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
+			
+			// Write FAB to disk in ASCII format
+			std::ofstream ofs(filename, std::ios::out);
+			if (ofs.is_open()) {
+				// Write box information
+				ofs << "# Left reconstructed states for direction " << dimname << "\n";
+				ofs << "# Box: " << bx << "\n";
+				ofs << "# Number of components: " << fab.nComp() << "\n";
+#if AMREX_SPACEDIM == 1
+				ofs << "# Format: i comp0 comp1 ... compN\n";
+#elif AMREX_SPACEDIM == 2
+				ofs << "# Format: i j comp0 comp1 ... compN\n";
+#elif AMREX_SPACEDIM == 3
+				ofs << "# Format: i j k comp0 comp1 ... compN\n";
+#endif
+				
+				// Write data including ghost cells
+				const auto& arr = fab.array();
+				const auto lo = bx.smallEnd();
+				const auto hi = bx.bigEnd();
+				const int ncomp = fab.nComp();
+				
+#if AMREX_SPACEDIM == 1
+				for (int i = lo[0]; i <= hi[0]; ++i) {
+					ofs << i;
+					for (int n = 0; n < ncomp; ++n) {
+						ofs << " " << arr(i,0,0,n);
+					}
+					ofs << "\n";
+				}
+#elif AMREX_SPACEDIM == 2
+				for (int j = lo[1]; j <= hi[1]; ++j) {
+					for (int i = lo[0]; i <= hi[0]; ++i) {
+						ofs << i << " " << j;
+						for (int n = 0; n < ncomp; ++n) {
+							ofs << " " << arr(i,j,0,n);
+						}
+						ofs << "\n";
+					}
+				}
+#elif AMREX_SPACEDIM == 3
+				for (int k = lo[2]; k <= hi[2]; ++k) {
+					for (int j = lo[1]; j <= hi[1]; ++j) {
+						for (int i = lo[0]; i <= hi[0]; ++i) {
+							ofs << i << " " << j << " " << k;
+							for (int n = 0; n < ncomp; ++n) {
+								ofs << " " << arr(i,j,k,n);
+							}
+							ofs << "\n";
+						}
+					}
+				}
+#endif
+				ofs.close();
+			}
+		}
+		
+		// Write right states
+		for (amrex::MFIter mfi(rightStateArrays[idim]); mfi.isValid(); ++mfi) {
+			const amrex::Box& bx = mfi.fabbox(); // This includes ghost cells
+			const amrex::FArrayBox& fab = rightStateArrays[idim][mfi];
+			
+			// Create filename for this FAB
+			std::string filename = fmt::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
+			
+			// Write FAB to disk in ASCII format
+			std::ofstream ofs(filename, std::ios::out);
+			if (ofs.is_open()) {
+				// Write box information
+				ofs << "# Right reconstructed states for direction " << dimname << "\n";
+				ofs << "# Box: " << bx << "\n";
+				ofs << "# Number of components: " << fab.nComp() << "\n";
+#if AMREX_SPACEDIM == 1
+				ofs << "# Format: i comp0 comp1 ... compN\n";
+#elif AMREX_SPACEDIM == 2
+				ofs << "# Format: i j comp0 comp1 ... compN\n";
+#elif AMREX_SPACEDIM == 3
+				ofs << "# Format: i j k comp0 comp1 ... compN\n";
+#endif
+				
+				// Write data including ghost cells
+				const auto& arr = fab.array();
+				const auto lo = bx.smallEnd();
+				const auto hi = bx.bigEnd();
+				const int ncomp = fab.nComp();
+				
+#if AMREX_SPACEDIM == 1
+				for (int i = lo[0]; i <= hi[0]; ++i) {
+					ofs << i;
+					for (int n = 0; n < ncomp; ++n) {
+						ofs << " " << arr(i,0,0,n);
+					}
+					ofs << "\n";
+				}
+#elif AMREX_SPACEDIM == 2
+				for (int j = lo[1]; j <= hi[1]; ++j) {
+					for (int i = lo[0]; i <= hi[0]; ++i) {
+						ofs << i << " " << j;
+						for (int n = 0; n < ncomp; ++n) {
+							ofs << " " << arr(i,j,0,n);
+						}
+						ofs << "\n";
+					}
+				}
+#elif AMREX_SPACEDIM == 3
+				for (int k = lo[2]; k <= hi[2]; ++k) {
+					for (int j = lo[1]; j <= hi[1]; ++j) {
+						for (int i = lo[0]; i <= hi[0]; ++i) {
+							ofs << i << " " << j << " " << k;
+							for (int n = 0; n < ncomp; ++n) {
+								ofs << " " << arr(i,j,k,n);
+							}
+							ofs << "\n";
 						}
 					}
 				}
