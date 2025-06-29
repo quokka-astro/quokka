@@ -1669,7 +1669,8 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
 	const int flatteningGhost = 2;
-	const int reconstructGhost = 2; // increased from 1 to 2 to reconstruct one additional cell outside valid region
+	const int reconstructGhost = 3; // reconstruct *two* additional cells outside valid region
+	// we need two additional ghost cells in order to compute two ghost face velocities
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
@@ -1792,7 +1793,7 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
-	const int reconstructRange = 2; // increased from 1 to 2 to reconstruct one additional cell outside valid region
+	const int reconstructRange = 3; // reconstruct *two* additional cells outside valid region
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
@@ -1817,14 +1818,8 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 		     , hydroFOFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], reconstructRange, nvars);
 		     , hydroFOFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], reconstructRange, nvars);)
 
-	// write reconstructed states to disk for analysis (includes ghost zones)
-	writeReconstructedStatesToDisk(leftState, rightState, lev, istep[lev]);
-
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
-
-	// write face velocities to disk for analysis
-	writeFaceVelocitiesToDisk(facevel, lev, istep[lev]);
 
 	// return flux and face-centered velocities
 	return std::make_pair(std::move(flux), std::move(facevel));

@@ -175,7 +175,7 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf,
 	auto const &x1RightState_in = x1RightState_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)};
+	amrex::IntVect ng{AMREX_D_DECL(2, 2, 2)}; // add two ghost faces for velocities
 
 	amrex::ParallelFor(x1Flux_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
 		// construct ArrayViews for permuted indices

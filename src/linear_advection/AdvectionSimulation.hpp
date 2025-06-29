@@ -453,10 +453,10 @@ auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVa
 {
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
-	const int reconstructRange = 2; // fully reconstruct a parabola within *two* cells outside the valid region
+	const int reconstructRange = 3; // fully reconstruct a parabola within *three* cells outside the valid region
 	// NOTE: one cell is needed to get L/R states at the FAB boundaries.
-	//   The extra cell is needed to get L/R states (and therefore the face velocity) for one ghost face.
-	//   (For hydro, we need *two* ghost face velocities!)
+	//   The extra cells are needed to get L/R states (and therefore the face velocity) for *two* ghost faces.
+	//   (For hydro, we need *two* ghost face velocities in order to do particle MAC advection.)
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);

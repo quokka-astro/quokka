@@ -868,7 +868,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
 
 	// Include ghost cells when computing face velocities
-	amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)};
+	amrex::IntVect ng{AMREX_D_DECL(2, 2, 2)};
 	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
