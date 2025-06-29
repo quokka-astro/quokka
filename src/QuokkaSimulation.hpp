@@ -2284,6 +2284,8 @@ void QuokkaSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Mu
 				// Write box information
 				ofs << "# Face velocity FAB for direction " << dimname << "\n";
 				ofs << "# Box: " << bx << "\n";
+				ofs << "# Valid box: " << mfi.validbox() << "\n";
+				ofs << "# MultiFab ghost cells: " << faceVelArrays[idim].nGrow() << "\n";
 #if AMREX_SPACEDIM == 1
 				ofs << "# Format: i value\n";
 #elif AMREX_SPACEDIM == 2
@@ -2339,6 +2341,8 @@ void QuokkaSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amre
 				// Write box information
 				leftOfs << "# Left reconstructed state FAB for direction " << dimname << "\n";
 				leftOfs << "# Box: " << bx << "\n";
+				leftOfs << "# Valid box: " << mfi.validbox() << "\n";
+				leftOfs << "# MultiFab ghost cells: " << leftState[idim].nGrow() << "\n";
 #if AMREX_SPACEDIM == 1
 				leftOfs << "# Format: i density xmom ymom zmom energy intenergy\n";
 #elif AMREX_SPACEDIM == 2
@@ -2372,6 +2376,8 @@ void QuokkaSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amre
 				// Write box information
 				rightOfs << "# Right reconstructed state FAB for direction " << dimname << "\n";
 				rightOfs << "# Box: " << bx << "\n";
+				rightOfs << "# Valid box: " << mfi.validbox() << "\n";
+				rightOfs << "# MultiFab ghost cells: " << rightState[idim].nGrow() << "\n";
 #if AMREX_SPACEDIM == 1
 				rightOfs << "# Format: i density xmom ymom zmom energy intenergy\n";
 #elif AMREX_SPACEDIM == 2
