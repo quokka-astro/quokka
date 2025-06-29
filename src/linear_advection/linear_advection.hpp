@@ -43,8 +43,8 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 				 int nvars);
 
 	template <FluxDir DIR>
-	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf, amrex::MultiFab &x1FaceVel_mf, double advectionVx,
-				  int nvars);
+	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
+				  amrex::MultiFab &x1FaceVel_mf, double advectionVx, int nvars);
 };
 
 template <typename problem_t>
@@ -189,7 +189,7 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf,
 
 		// For advection, simply choose upwind side of the interface.
 		const double upwind_density = (vx < 0.0) ? x1RightState(i, j, k, density_index) : x1LeftState(i, j, k, density_index);
-		
+
 		if (vx < 0.0) { // upwind switch
 			// upwind direction is the right-side of the interface
 			x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
@@ -198,7 +198,7 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf,
 			// upwind direction is the left-side of the interface
 			x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
 		}
-		
+
 		// Compute face velocity as flux divided by upwind density (only for density component)
 		if (n == density_index) {
 			x1FaceVel(i, j, k) = x1Flux(i, j, k, n) / upwind_density;

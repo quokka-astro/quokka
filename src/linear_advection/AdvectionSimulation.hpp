@@ -102,12 +102,13 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
-	auto computeFluxes(amrex::MultiFab const &consVar, int nvars, int lev) -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, 
-													     std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+	auto computeFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
+	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
+			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
-	void fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1LeftState,
-			  amrex::MultiFab &x1RightState, int ng_reconstruct, int nvars);
+	void fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel,
+			  amrex::MultiFab &x1LeftState, amrex::MultiFab &x1RightState, int ng_reconstruct, int nvars);
 
 	double advectionVx_ = 1.0; // default
 	double advectionVy_ = 0.0; // default
@@ -365,7 +366,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 		// Write face velocities to disk
 		this->writeFaceVelocitiesToDisk(faceVelArrays, lev, cycleCount_);
-		
+
 		// Write reconstructed states to disk
 		this->writeReconstructedStatesToDisk(leftStateArrays, rightStateArrays, lev, cycleCount_);
 
@@ -395,7 +396,8 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 			auto const &stateInOld = state_old_cc_[lev];
 			auto const &stateInStar = state_new_cc_[lev];
 			auto &stateOut = state_new_cc_[lev];
-			auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] = computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
+			auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] =
+			    computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 			// Stage 2 of RK2-SSP
 			LinearAdvectionSystem<problem_t>::AddFluxesRK2(stateOut, stateInOld, stateInStar, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
@@ -443,8 +445,8 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 template <typename problem_t>
 auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
-    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, 
-		  std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
+    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
+		  std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
@@ -479,8 +481,9 @@ auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVa
 
 template <typename problem_t>
 template <FluxDir DIR>
-void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel,
-						  amrex::MultiFab &x1LeftState, amrex::MultiFab &x1RightState, const int ng_reconstruct, const int nvars)
+void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux,
+						  amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1LeftState, amrex::MultiFab &x1RightState,
+						  const int ng_reconstruct, const int nvars)
 {
 	amrex::Real advectionVel = NAN;
 	if constexpr (DIR == FluxDir::X1) {
@@ -497,7 +500,5 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 
 	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux, x1LeftState, x1RightState, x1FaceVel, advectionVel, nvars);
 }
-
-
 
 #endif // ADVECTION_SIMULATION_HPP_
