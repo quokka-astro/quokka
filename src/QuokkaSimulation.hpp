@@ -1665,9 +1665,9 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	const auto ba = grids[lev];
 	const auto dm = dmap[lev];
-	const int flatteningGhost = 2;
 	const int reconstructGhost = 3; // reconstruct *two* additional cells outside valid region
 	// we need two additional ghost cells in order to compute two ghost face velocities
+	const int flatteningGhost = reconstructGhost + 1;
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
@@ -1692,12 +1692,10 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	// conserved to primitive variables
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_cc_);
 
-#if 0
 	// compute flattening coefficients
 	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], flatteningGhost);
 		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], flatteningGhost);
 		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
-#endif
 
 	// compute flux functions
 	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], flatCoefs[0], flatCoefs[1], flatCoefs[2],
@@ -1772,7 +1770,7 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primV
 	}
 
 	// cell-centered kernel
-	// HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
