@@ -345,55 +345,65 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	const double e_int_new_tmp = d_e_int_d_rho * rho_new;
 	const double e_int_plus_kinetic = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
 
-	if (e_int_plus_kinetic <= e_tot_new * (1.0 + 1.0e-10)) {
+	const Real uncertainty_tol = static_cast<Real>(5.) * std::numeric_limits<Real>::epsilon();
+
+	if (e_int_plus_kinetic <= e_tot_new * (1.0 + uncertainty_tol)) {
 		e_tot_new = std::max(e_int_plus_kinetic, e_tot_new);
 	} else {
 		// find the lambda such that e_int_plus_kinetic == e_tot_new
 		const double e_kinetic_max = e_tot_new - e_int_new_tmp;
 		AMREX_ASSERT(e_kinetic_max >= 0.0);
 
-		// If this assertion fails, it means the SN energy (10^51 erg) is not enough to accelerate the
-		// SNR to match the velocity of the gas. This may ONLY happen when the SN star is nearly static
-		// at first and the background gas is moving at a speed >3171 km/s. This should NOT happen in
-		// practice.
-		// TODO(cch): deal with the special case where this assertion fails.
-		AMREX_ASSERT(0.5 * (px * px + py * py + pz * pz) / rho_new <= e_kinetic_max);
+		// If e_kinetic_max < (0.5 * (px * px + py * py + pz * pz) / rho_new), it means the SN energy (10^51 erg) is not enough to accelerate
+		// the SNR to match the velocity of the gas. This may ONLY happen when the SN star is nearly static at first and the background gas is
+		// moving at a speed >3171 km/s. This should NOT happen in practice. In this case, we keep temperature constant and match remnant
+		// velocity with the background gas.  A lazy workaround: keep temperature constant and match remnant velocity with the background gas.
+		if (e_kinetic_max < (0.5 * (px * px + py * py + pz * pz) / rho_new) * (1.0 + uncertainty_tol)) {
+			// keep temperature constant and match remnant velocity with the background gas.
+			px_new = rho_new * (px / rho);
+			py_new = rho_new * (py / rho);
+			pz_new = rho_new * (pz / rho);
+			e_tot_new = e_int_new_tmp + (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
+		} else {
 
-		// Find analytical solution of the following equation:
-		// 0.5 * (p + lambda d_p)^2 / rho_new = e_kinetic_max
-		// which simplifies to:
-		// d_p^2 lambda^2 + 2 d_p p lambda + p^2 - 2 rho_new e_kinetic_max = 0
-		// This quadratic equation, denoted as F(x) = 0, has some known properties which make the
-		// solution well constrained:
-		// 1. F(0) < 0 (see assertion above)
-		// 2. F(1) > 0 (otherwise we won't be in this else clause)
-		// Therefore, there must be one and only one solution in the range [0, 1], and it's the bigger
-		// one of the two solutions (so we take the plus sign in the quadratic formula).
-		// A special case is when a = 0, in which case the physical solution is the no kinetic energy is added to the state, therefore lambda = 0.
-		double lambda = 0.0;
-		const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);				      // a = d_p^2
-		if (a > std::numeric_limits<double>::min()) {						      // a > 0
-			const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);			      // b = 2 d_p p
-			const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max); // c = p^2 - 2 rho_new e_kinetic_max
-			const double discriminant = (b * b) - (4.0 * a * c);
-			AMREX_ASSERT(discriminant >= 0.0);
-			lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
-			// lambda = std::max(lambda, 0.0);
-			AMREX_ASSERT(lambda >= 0.0);
-			AMREX_ASSERT(lambda <= 1.0);
+			// Find analytical solution of the following equation:
+			// 0.5 * (p + lambda d_p)^2 / rho_new = e_kinetic_max
+			// which simplifies to:
+			// d_p^2 lambda^2 + 2 d_p p lambda + p^2 - 2 rho_new e_kinetic_max = 0
+			// This quadratic equation, denoted as F(x) = 0, has some known properties which make the
+			// solution well constrained:
+			// 1. F(0) < 0 (see assertion above)
+			// 2. F(1) > 0 (otherwise we won't be in this else clause)
+			// Therefore, there must be one and only one solution in the range [0, 1], and it's the bigger
+			// one of the two solutions (so we take the plus sign in the quadratic formula).
+			// A special case is when a = 0, in which case the physical solution is the no kinetic energy is added to the state, therefore lambda =
+			// 0.
+			double lambda = 0.0;
+			const double a = (d_px * d_px) + (d_py * d_py) + (d_pz * d_pz);				      // a = d_p^2
+			if (a > std::numeric_limits<double>::min()) {						      // a > 0
+				const double b = 2.0 * (px * d_px + py * d_py + pz * d_pz);			      // b = 2 d_p p
+				const double c = (px * px) + (py * py) + (pz * pz) - (2.0 * rho_new * e_kinetic_max); // c = p^2 - 2 rho_new e_kinetic_max
+				const double discriminant = (b * b) - (4.0 * a * c);
+				AMREX_ASSERT(discriminant >= 0.0);
+				lambda = (-b + std::sqrt(discriminant)) / (2.0 * a);
+				// lambda = std::max(lambda, 0.0);
+				AMREX_ASSERT(lambda >= 0.0);
+				AMREX_ASSERT(lambda <= 1.0);
+			}
+
+			// assert that lambda is a valid solution
+			AMREX_ASSERT_WITH_MESSAGE(std::abs((0.5 *
+							    ((px + lambda * d_px) * (px + lambda * d_px) + (py + lambda * d_py) * (py + lambda * d_py) +
+							     (pz + lambda * d_pz) * (pz + lambda * d_pz)) /
+							    rho_new) -
+							   e_kinetic_max) <= 1.0e-10 * e_kinetic_max,
+						  "lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
+
+			px_new = px + lambda * d_px;
+			py_new = py + lambda * d_py;
+			pz_new = pz + lambda * d_pz;
+
 		}
-
-		// assert that lambda is a valid solution
-		AMREX_ASSERT_WITH_MESSAGE(std::abs((0.5 *
-						    ((px + lambda * d_px) * (px + lambda * d_px) + (py + lambda * d_py) * (py + lambda * d_py) +
-						     (pz + lambda * d_pz) * (pz + lambda * d_pz)) /
-						    rho_new) -
-						   e_kinetic_max) <= 1.0e-10 * e_kinetic_max,
-					  "lambda is not a valid solution. This should NOT happen. @chongchonghe should be responsible for this.");
-
-		px_new = px + lambda * d_px;
-		py_new = py + lambda * d_py;
-		pz_new = pz + lambda * d_pz;
 	}
 
 	const double e_int_new = e_tot_new - (0.5 * ((px_new * px_new) + (py_new * py_new) + (pz_new * pz_new)) / rho_new);
