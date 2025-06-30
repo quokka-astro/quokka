@@ -365,10 +365,10 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 		auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 		// Write face velocities to disk
-		this->writeFaceVelocitiesToDisk(faceVelArrays, lev, cycleCount_);
+		//this->writeFaceVelocitiesToDisk(faceVelArrays, lev, cycleCount_);
 
 		// Write reconstructed states to disk
-		this->writeReconstructedStatesToDisk(leftStateArrays, rightStateArrays, lev, cycleCount_);
+		//this->writeReconstructedStatesToDisk(leftStateArrays, rightStateArrays, lev, cycleCount_);
 
 		// Stage 1 of RK2-SSP
 		LinearAdvectionSystem<problem_t>::PredictStep(stateOld, stateNew, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
