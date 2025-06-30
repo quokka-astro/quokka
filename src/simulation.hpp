@@ -3484,7 +3484,7 @@ void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Multi
 		} else {
 			dimname = "z";
 		}
-		
+
 		// Write each FAB in the MultiFab
 		for (amrex::MFIter mfi(faceVelArrays[idim]); mfi.isValid(); ++mfi) {
 			const amrex::Box &bx = mfi.fabbox(); // This includes ghost cells
@@ -3492,7 +3492,7 @@ void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Multi
 
 			// Create filename for this FAB
 			const std::string filename = fmt::format("{}/facevel_{}_box_{}.fab", dirname, dimname, mfi.index());
-			
+
 			// Write FAB to disk in ASCII format
 			std::ofstream ofs(filename, std::ios::out);
 			if (ofs.is_open()) {
@@ -3547,7 +3547,7 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 		} else {
 			dimname = "z";
 		}
-		
+
 		// Write left and right states for each FAB in the MultiFab
 		for (amrex::MFIter mfi(leftState[idim]); mfi.isValid(); ++mfi) {
 			const amrex::Box &bx = mfi.fabbox(); // This includes ghost cells
@@ -3557,7 +3557,7 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 			// Create filenames for this FAB's left and right states
 			const std::string leftFilename = fmt::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
 			const std::string rightFilename = fmt::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
-			
+
 			// Write left state FAB to disk
 			std::ofstream leftOfs(leftFilename, std::ios::out);
 			if (leftOfs.is_open()) {
