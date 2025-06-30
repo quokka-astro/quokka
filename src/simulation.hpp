@@ -360,7 +360,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
-	void writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int step);
+	void writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
+					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int step);
 
 	// ABOUTME: Used to handle universal refinement during checkpoint restart operations
 	struct RefinementContext {
@@ -430,7 +431,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_cc_ = 6;						    // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
+	int nghost_cc_ = 6; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
 	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
@@ -3486,9 +3487,9 @@ void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Multi
 		
 		// Write each FAB in the MultiFab
 		for (amrex::MFIter mfi(faceVelArrays[idim]); mfi.isValid(); ++mfi) {
-			const amrex::Box& bx = mfi.fabbox(); // This includes ghost cells
-			const amrex::FArrayBox& fab = faceVelArrays[idim][mfi];
-			
+			const amrex::Box &bx = mfi.fabbox(); // This includes ghost cells
+			const amrex::FArrayBox &fab = faceVelArrays[idim][mfi];
+
 			// Create filename for this FAB
 			const std::string filename = fmt::format("{}/facevel_{}_box_{}.fab", dirname, dimname, mfi.index());
 			
@@ -3507,12 +3508,12 @@ void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Multi
 #elif AMREX_SPACEDIM == 3
 				ofs << "# Format: i j k value\n";
 #endif
-				
+
 				// Write data
-				auto const& arr = fab.const_array();
+				auto const &arr = fab.const_array();
 				amrex::Loop(bx, [&](int i, int j, int k) {
 #if AMREX_SPACEDIM == 1
-					ofs << i << " " << arr(i,j,k,0) << "\n";
+					ofs << i << " " << arr(i, j, k, 0) << "\n";
 #elif AMREX_SPACEDIM == 2
 					ofs << i << " " << j << " " << arr(i,j,k,0) << "\n";
 #elif AMREX_SPACEDIM == 3
@@ -3526,7 +3527,8 @@ void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Multi
 }
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int timestep)
+void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
+							      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int timestep)
 {
 	// Create directory for reconstructed state outputs if it doesn't exist
 	std::string dirname = fmt::format("reconst_lev{}_step{}", lev, timestep);
@@ -3548,10 +3550,10 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 		
 		// Write left and right states for each FAB in the MultiFab
 		for (amrex::MFIter mfi(leftState[idim]); mfi.isValid(); ++mfi) {
-			const amrex::Box& bx = mfi.fabbox(); // This includes ghost cells
-			const amrex::FArrayBox& leftFab = leftState[idim][mfi];
-			const amrex::FArrayBox& rightFab = rightState[idim][mfi];
-			
+			const amrex::Box &bx = mfi.fabbox(); // This includes ghost cells
+			const amrex::FArrayBox &leftFab = leftState[idim][mfi];
+			const amrex::FArrayBox &rightFab = rightState[idim][mfi];
+
 			// Create filenames for this FAB's left and right states
 			const std::string leftFilename = fmt::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
 			const std::string rightFilename = fmt::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
@@ -3571,9 +3573,9 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 #elif AMREX_SPACEDIM == 3
 				leftOfs << "# Format: i j k density xmom ymom zmom energy intenergy\n";
 #endif
-				
+
 				// Write data (all hydro variables)
-				auto const& leftArr = leftFab.const_array();
+				auto const &leftArr = leftFab.const_array();
 				amrex::Loop(bx, [&](int i, int j, int k) {
 #if AMREX_SPACEDIM == 1
 					leftOfs << i;
@@ -3584,13 +3586,13 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 #endif
 					// Write all hydro variables (density, xmom, ymom, zmom, energy, intenergy)
 					for (int ivar = 0; ivar < leftFab.nComp(); ++ivar) {
-						leftOfs << " " << leftArr(i,j,k,ivar);
+						leftOfs << " " << leftArr(i, j, k, ivar);
 					}
 					leftOfs << "\n";
 				});
 				leftOfs.close();
 			}
-			
+
 			// Write right state FAB to disk
 			std::ofstream rightOfs(rightFilename, std::ios::out);
 			if (rightOfs.is_open()) {
@@ -3606,9 +3608,9 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 #elif AMREX_SPACEDIM == 3
 				rightOfs << "# Format: i j k density xmom ymom zmom energy intenergy\n";
 #endif
-				
+
 				// Write data (all hydro variables)
-				auto const& rightArr = rightFab.const_array();
+				auto const &rightArr = rightFab.const_array();
 				amrex::Loop(bx, [&](int i, int j, int k) {
 #if AMREX_SPACEDIM == 1
 					rightOfs << i;
@@ -3619,7 +3621,7 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 #endif
 					// Write all hydro variables (density, xmom, ymom, zmom, energy, intenergy)
 					for (int ivar = 0; ivar < rightFab.nComp(); ++ivar) {
-						rightOfs << " " << rightArr(i,j,k,ivar);
+						rightOfs << " " << rightArr(i, j, k, ivar);
 					}
 					rightOfs << "\n";
 				});

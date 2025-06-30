@@ -2253,6 +2253,4 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 							  consState, dx, use_wavespeed_correction_); // watch out for argument order!!
 }
 
-
-
 #endif // RADIATION_SIMULATION_HPP_
