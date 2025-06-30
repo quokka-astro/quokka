@@ -1709,10 +1709,10 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	amrex::Gpu::streamSynchronizeAll();
 
 	// write reconstructed states to disk for analysis (includes ghost zones)
-	this->writeReconstructedStatesToDisk(leftState, rightState, lev, istep[lev]);
+	//this->writeReconstructedStatesToDisk(leftState, rightState, lev, istep[lev]);
 
 	// write face velocities to disk for analysis
-	this->writeFaceVelocitiesToDisk(facevel, lev, istep[lev]);
+	//this->writeFaceVelocitiesToDisk(facevel, lev, istep[lev]);
 
 	// LOW LEVEL DEBUGGING: output all of the temporary MultiFabs
 	if (lowLevelDebuggingOutput_ == 1) {
