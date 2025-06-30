@@ -1090,19 +1090,36 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		}
 
 		// compute face-centered normal velocity
-		const double v_norm = (F[density_index] >= 0.) ? (F[density_index] / rho_R) : (F[density_index] / rho_L);
+		double v_norm = 0.0;
+		if (F[density_index] >= 0.) {
+			if (rho_R > 0.) {
+				v_norm = F[density_index] / rho_R;
+			}
+		} else {
+			if (rho_L > 0.) {
+				v_norm = F[density_index] / rho_L;
+			}
+		}
 		x1FaceVel(i, j, k) = v_norm;
 
 		// use the same logic as above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {
 			for (int n = 0; n < nmscalars_; ++n) {
 				const int nstart = nvar_ - nscalars_;
-				F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
+				if (fluxSum_U_L > 0.) {
+					F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
+				} else {
+					F[nstart + n] = 0.;
+				}
 			}
 		} else {
 			for (int n = 0; n < nmscalars_; ++n) {
 				const int nstart = nvar_ - nscalars_;
-				F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
+				if (fluxSum_U_R > 0.) {
+					F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
+				} else {
+					F[nstart + n] = 0.;
+				}
 			}
 		}
 
