@@ -402,7 +402,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 			px_new = px + lambda * d_px;
 			py_new = py + lambda * d_py;
 			pz_new = pz + lambda * d_pz;
-
 		}
 	}
 
