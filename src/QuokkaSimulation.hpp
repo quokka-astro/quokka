@@ -1317,8 +1317,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
 	const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
-	auto ba = grids[lev];
-	auto dm = dmap[lev];
+	const auto ba = grids[lev];
+	const auto dm = dmap[lev];
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
 		// initialize flux MultiFab
@@ -1663,8 +1663,8 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 {
 	BL_PROFILE("QuokkaSimulation::computeHydroFluxes()");
 
-	auto ba = grids[lev];
-	auto dm = dmap[lev];
+	const auto ba = grids[lev];
+	const auto dm = dmap[lev];
 	const int flatteningGhost = 2;
 	const int reconstructGhost = 3; // reconstruct *two* additional cells outside valid region
 	// we need two additional ghost cells in order to compute two ghost face velocities
@@ -1788,8 +1788,8 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 {
 	BL_PROFILE("QuokkaSimulation::computeFOHydroFluxes()");
 
-	auto ba = grids[lev];
-	auto dm = dmap[lev];
+	const auto ba = grids[lev];
+	const auto dm = dmap[lev];
 	const int reconstructRange = 3; // reconstruct *two* additional cells outside valid region
 
 	// allocate temporary MultiFabs

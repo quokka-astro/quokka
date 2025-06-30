@@ -298,7 +298,7 @@ def plot_1d_face_velocities(dirname, timestep=0, level=0):
                   f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
                   f"diff = {m['difference']:.6e}")
     
-    fig, ax = plt.subplots(figsize=(12, 6))
+    _, ax = plt.subplots(figsize=(12, 6))
     
     colors = plt.cm.tab10(np.linspace(0, 1, len(fab_files)))
     
@@ -542,7 +542,7 @@ def plot_1d_reconstructed_states(dirname, timestep=0, level=0, variable='density
                   f"Box {m['ghost_box']} (ghost) = {m['ghost_value']:.6e}, "
                   f"diff = {m['difference']:.6e}")
     
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+    _, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
     
     colors = plt.cm.tab10(np.linspace(0, 1, max(len(left_files), len(right_files))))
     

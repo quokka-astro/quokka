@@ -3475,7 +3475,14 @@ void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Multi
 
 	// Write each direction's face velocities
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		std::string dimname = (idim == 0) ? "x" : (idim == 1) ? "y" : "z";
+		std::string dimname;
+		if (idim == 0) {
+			dimname = "x";
+		} else if (idim == 1) {
+			dimname = "y";
+		} else {
+			dimname = "z";
+		}
 		
 		// Write each FAB in the MultiFab
 		for (amrex::MFIter mfi(faceVelArrays[idim]); mfi.isValid(); ++mfi) {
@@ -3483,7 +3490,7 @@ void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Multi
 			const amrex::FArrayBox& fab = faceVelArrays[idim][mfi];
 			
 			// Create filename for this FAB
-			std::string filename = fmt::format("{}/facevel_{}_box_{}.fab", dirname, dimname, mfi.index());
+			const std::string filename = fmt::format("{}/facevel_{}_box_{}.fab", dirname, dimname, mfi.index());
 			
 			// Write FAB to disk in ASCII format
 			std::ofstream ofs(filename, std::ios::out);
@@ -3530,7 +3537,14 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 
 	// Write each direction's reconstructed states
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		std::string dimname = (idim == 0) ? "x" : (idim == 1) ? "y" : "z";
+		std::string dimname;
+		if (idim == 0) {
+			dimname = "x";
+		} else if (idim == 1) {
+			dimname = "y";
+		} else {
+			dimname = "z";
+		}
 		
 		// Write left and right states for each FAB in the MultiFab
 		for (amrex::MFIter mfi(leftState[idim]); mfi.isValid(); ++mfi) {
@@ -3539,8 +3553,8 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 			const amrex::FArrayBox& rightFab = rightState[idim][mfi];
 			
 			// Create filenames for this FAB's left and right states
-			std::string leftFilename = fmt::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
-			std::string rightFilename = fmt::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
+			const std::string leftFilename = fmt::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
+			const std::string rightFilename = fmt::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
 			
 			// Write left state FAB to disk
 			std::ofstream leftOfs(leftFilename, std::ios::out);
