@@ -489,7 +489,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 	amrex::Gpu::Atomic::Max(p_max_velocity, cs);
 }
 
-template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
+template <typename problem_t>
+void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
 {
 	const BL_PROFILE("SNFeedbackUtils::addBufferToState()");
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
@@ -572,9 +573,9 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	amrex::Real max_velocity = max_velocity_buffer.data()[0];
 	constexpr amrex::Real c_light = C::c_light;
 	constexpr amrex::Real velocity_threshold = 0.03 * c_light;
-	
+
 	amrex::Print() << "SN remnant maximum net velocity (v_max + cs): " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
-	
+
 	if (max_velocity > velocity_threshold) {
 		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / c_light << " c) greater than 0.03 c threshold!" << "\n";
 	}
