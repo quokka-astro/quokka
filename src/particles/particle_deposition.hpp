@@ -415,12 +415,21 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
 
+	// Compute sound speed
+	Real cs = NAN;
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+	} else {
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
+	}
+
 	// Compute velocity magnitude and track maximum
 	const Real vx = px_new / rho_new;
 	const Real vy = py_new / rho_new;
 	const Real vz = pz_new / rho_new;
 	const Real velocity_magnitude = std::sqrt(vx * vx + vy * vy + vz * vz);
-	amrex::Gpu::Atomic::Max(p_max_velocity, velocity_magnitude);
+
+	amrex::Gpu::Atomic::Max(p_max_velocity, velocity_magnitude + cs);
 
 	// // log the state, for debugging on CPU.
 	// if (d_rho / rho > 1.0e-12) {
@@ -456,12 +465,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_new;
 
-	// Compute velocity magnitude and track maximum
-	const Real vx = px_new / rho_new;
-	const Real vy = py_new / rho_new;
-	const Real vz = pz_new / rho_new;
-	const Real velocity_magnitude = std::sqrt(vx * vx + vy * vy + vz * vz);
-	amrex::Gpu::Atomic::Max(p_max_velocity, velocity_magnitude);
+	// Compute sound speed. For thermal-only feedback, the gas velocity stays unchanged, so we only report sound speed.
+	Real cs = NAN;
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+	} else {
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
+	}
+
+	amrex::Gpu::Atomic::Max(p_max_velocity, cs);
 }
 
 template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
@@ -548,10 +560,10 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	constexpr amrex::Real c_light = C::c_light;
 	constexpr amrex::Real velocity_threshold = 0.03 * c_light;
 	
-	amrex::Print() << "SN remnant maximum velocity: " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
+	amrex::Print() << "SN remnant maximum net velocity (v_max + cs): " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
 	
 	if (max_velocity > velocity_threshold) {
-		amrex::Print() << "WARNING: SN remnant velocity (" << max_velocity / c_light << " c) greater than 0.05 c threshold!" << "\n";
+		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / c_light << " c) greater than 0.03 c threshold!" << "\n";
 	}
 	amrex::Print() << "\n";
 }
