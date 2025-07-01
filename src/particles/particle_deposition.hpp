@@ -331,6 +331,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	const double e_tot = local_state(i, j, k, HydroSystem<problem_t>::energy_index);
 
 	const double d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+
+	// Skip if there is no SN feedback
+	if (d_rho < 10. * std::numeric_limits<Real>::min()) {
+		return;
+	}
+
 	const double d_px = local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 	const double d_py = local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 	const double d_pz = local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
@@ -449,9 +455,16 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 								     amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k,
 								     amrex::Real *p_max_velocity)
 {
+	const Real d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+
+	// Skip if there is no SN feedback
+	if (d_rho < 10. * std::numeric_limits<Real>::min()) {
+		return;
+	}
+
 	// For SN_thermal_only, the buffer contains only mass and energy (and a small amount of momentum), so it's safe to add the
 	// buffer directly to the state.
-	const double rho_new = local_state(i, j, k, HydroSystem<problem_t>::density_index) + local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+	const double rho_new = local_state(i, j, k, HydroSystem<problem_t>::density_index) + d_rho;
 	const double px_new = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 	const double py_new = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 	const double pz_new = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
