@@ -548,15 +548,12 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	constexpr amrex::Real c_light = C::c_light;
 	constexpr amrex::Real velocity_threshold = 0.05 * c_light;
 	
-	if (max_velocity > 0.0) {
-		amrex::Print() << "SN feedback maximum velocity: " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
-		
-		if (max_velocity > velocity_threshold) {
-			amrex::Print() << "WARNING: SN feedback produced velocity (" << max_velocity / c_light << " c) greater than 0.05 c threshold!"
-				       << "\n";
-		}
-		amrex::Print() << "\n";
+	amrex::Print() << "SN remnant maximum velocity: " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
+	
+	if (max_velocity > velocity_threshold) {
+		amrex::Print() << "WARNING: SN remnant velocity (" << max_velocity / c_light << " c) greater than 0.05 c threshold!" << "\n";
 	}
+	amrex::Print() << "\n";
 }
 
 #endif // AMREX_SPACEDIM == 3
