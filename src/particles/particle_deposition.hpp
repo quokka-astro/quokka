@@ -546,7 +546,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	// Step 4: Check maximum velocity and print warning if needed
 	amrex::Real max_velocity = max_velocity_buffer.data()[0];
 	constexpr amrex::Real c_light = C::c_light;
-	constexpr amrex::Real velocity_threshold = 0.05 * c_light;
+	constexpr amrex::Real velocity_threshold = 0.03 * c_light;
 	
 	amrex::Print() << "SN remnant maximum velocity: " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
 	
