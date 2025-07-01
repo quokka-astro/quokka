@@ -570,7 +570,7 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d, p_max_velocity);
 
 	// Step 4: Check maximum velocity and print warning if needed
-	amrex::Real max_velocity = max_velocity_buffer.data()[0];
+	const amrex::Real max_velocity = max_velocity_buffer.data()[0];
 	constexpr amrex::Real c_light = C::c_light;
 	constexpr amrex::Real velocity_threshold = 0.03 * c_light;
 
