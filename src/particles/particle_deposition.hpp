@@ -3,6 +3,7 @@
 
 #include <algorithm>
 
+#include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
@@ -333,7 +334,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	const double d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 
 	// Skip if there is no SN feedback
-	if (d_rho < 10. * std::numeric_limits<Real>::min()) {
+	if (d_rho == 0.0) {
 		return;
 	}
 
@@ -458,7 +459,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 	const Real d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 
 	// Skip if there is no SN feedback
-	if (d_rho < 10. * std::numeric_limits<Real>::min()) {
+	if (d_rho == 0.0) {
 		return;
 	}
 
