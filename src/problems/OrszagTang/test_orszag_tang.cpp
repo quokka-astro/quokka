@@ -14,6 +14,7 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -43,14 +44,14 @@ template <> struct Physics_Traits<OrszagTang> {
 
 constexpr double B0 = 1.0 / gcem::sqrt(4.0 * PI);
 
-AMREX_FORCE_INLINE auto A_z(double x, double y) -> double { return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto A_z(double x, double y) -> double { return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
 
-AMREX_FORCE_INLINE auto B_x(double xL, double yL, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto B_x(double xL, double yL, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> double
 {
 	return (A_z(xL, yL + dx[1]) - A_z(xL, yL)) / dx[1];
 };
 
-AMREX_FORCE_INLINE auto B_y(double xL, double yL, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto B_y(double xL, double yL, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> double
 {
 	return -(A_z(xL + dx[0], yL) - A_z(xL, yL)) / dx[0];
 };
