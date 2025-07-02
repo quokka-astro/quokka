@@ -436,7 +436,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	const Real vz = pz_new / rho_new;
 	const Real velocity_magnitude = std::sqrt(vx * vx + vy * vy + vz * vz);
 
-	amrex::Gpu::Atomic::Max(p_max_velocity, velocity_magnitude + cs);
+	amrex::Gpu::Atomic::Max(&p_max_velocity[0], velocity_magnitude + cs);
 
 	// // log the state, for debugging on CPU.
 	// if (d_rho / rho > 1.0e-12) {
@@ -487,7 +487,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
 	}
 
-	amrex::Gpu::Atomic::Max(p_max_velocity, cs);
+	amrex::Gpu::Atomic::Max(&p_max_velocity[0], cs);
 }
 
 template <typename problem_t>
