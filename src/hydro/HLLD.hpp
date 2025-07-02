@@ -148,7 +148,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// MK5: eqn (41) can be calculated (more explicitly) via eqn (23)
 	double ptot_star_L = ptot_L + u_L.rho * siui_L * (spds[2] - sL.u);
 	double ptot_star_R = ptot_R + u_R.rho * siui_R * (spds[2] - sR.u);
-	double ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
+	double const ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
 
 	// MK5: u_L^(star, dstar) from, eqn (39)
 	u_star_L.mx = u_star_L.rho * spds[2];

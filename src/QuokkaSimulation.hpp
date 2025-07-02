@@ -136,8 +136,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	quokka::GrackleLikeCooling::grackle_tables grackleTables_;
 	quokka::TabulatedCooling::cloudy_tables cloudyTables_;
 	quokka::ResampledCooling::resampled_tables resampledTables_;
-	std::string coolingTableType_{};
-	std::string coolingTableFilename_{};
+	std::string coolingTableType_;
+	std::string coolingTableFilename_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
@@ -176,7 +176,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { initialize(); }
 
-	inline void initialize()
+	void initialize()
 	{
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled && (AMREX_SPACEDIM != 3)), "MHD is only supported in 3D.");
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -229,13 +229,13 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 	void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir);
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction dir);
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
-	[[nodiscard]] auto ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
+	[[nodiscard]] auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
 	// compute statistics
 	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
@@ -483,7 +483,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 {
 	// set hydro runtime parameters
 	{
-		amrex::ParmParse hpp("hydro");
+		amrex::ParmParse const hpp("hydro");
 		hpp.query("low_level_debugging_output", lowLevelDebuggingOutput_);
 		hpp.query("rk_integrator_order", integratorOrder_);
 		hpp.query("reconstruction_order", reconstructionOrder_);
@@ -494,13 +494,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 	// set MHD runtime parameters
 	{
-		amrex::ParmParse hpp("mhd");
+		amrex::ParmParse const hpp("mhd");
 		hpp.query("emf_averaging_method", emfAveragingType_);
 	}
 
 	// set cooling runtime parameters
 	{
-		amrex::ParmParse hpp("cooling");
+		amrex::ParmParse const hpp("cooling");
 		int alwaysReadTables = 0;
 		hpp.query("enabled", enableCooling_);
 		hpp.query("cooling_table_type", coolingTableType_);
@@ -528,7 +528,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 #ifdef CHEMISTRY
 	// set chemistry runtime parameters
 	{
-		amrex::ParmParse hpp("chemistry");
+		amrex::ParmParse const hpp("chemistry");
 		hpp.query("enabled", enableChemistry_);
 		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
 		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
@@ -537,7 +537,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 	// set radiation runtime parameters
 	{
-		amrex::ParmParse rpp("radiation");
+		amrex::ParmParse const rpp("radiation");
 		rpp.query("reconstruction_order", radiationReconstructionOrder_);
 		rpp.query("cfl", radiationCflNumber_);
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
@@ -567,7 +567,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfR
 	amrex::Real c_hat = RadSystem<problem_t>::c_hat_;
 	amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 	amrex::Real dtrad_tmp = radiationCflNumber_ * (dx_min / c_hat);
-	int nsubSteps = std::ceil(dt_lev_hydro / dtrad_tmp);
+	int const nsubSteps = std::ceil(dt_lev_hydro / dtrad_tmp);
 	return nsubSteps;
 }
 
@@ -1183,7 +1183,7 @@ auto QuokkaSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F co
 	auto profile = amrex::sumToLine(q[0], 0, q[0].nComp(), domain, axis);
 
 	// normalize profile
-	amrex::Long numCells = domain.numPts() / domain.length(axis);
+	amrex::Long const numCells = domain.numPts() / domain.length(axis);
 	for (double &bin : profile) {
 		bin /= static_cast<amrex::Real>(numCells);
 	}
@@ -1682,7 +1682,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
-			amrex::Long ncells_bad = redoFlag.sum(0);
+			amrex::Long const ncells_bad = redoFlag.sum(0);
 			if (ncells_bad > 0) {
 				// FOFC failed
 				if (Verbose()) {
@@ -2260,7 +2260,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		}
 
 		if (print_rad_counter_) {
-			auto h_iteration_counter = iteration_counter.copyToHost();
+			auto *h_iteration_counter = iteration_counter.copyToHost();
 			long global_solver_count = h_iteration_counter[0];	      // number of Newton-Raphson solvings
 			long global_iteration_sum = h_iteration_counter[1];	      // sum of Newton-Raphson iterations
 			int global_iteration_max = h_iteration_counter[2];	      // max number of Newton-Raphson iterations
@@ -2292,7 +2292,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			}
 		}
 
-		auto h_iteration_failure_counter = iteration_failure_counter.copyToHost();
+		auto *h_iteration_failure_counter = iteration_failure_counter.copyToHost();
 		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures
 		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures
 		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures

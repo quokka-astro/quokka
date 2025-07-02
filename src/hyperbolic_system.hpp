@@ -14,6 +14,7 @@
 ///
 
 // c++ headers
+#include <algorithm>
 #include <cmath>
 
 // library headers
@@ -61,7 +62,7 @@ template <typename problem_t> class HyperbolicSystem
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
 	{
-		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
+		return 0.5 * (sgn(a) + sgn(b)) * std::min({0.5 * std::abs(a + b), 2.0 * std::abs(a), 2.0 * std::abs(b)});
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto EP(double a, double b) -> double { return MC(a, b); }

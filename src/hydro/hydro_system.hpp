@@ -10,6 +10,7 @@
 ///
 
 // c++ headers
+#include <algorithm>
 #include <cmath>
 
 // library headers
@@ -73,7 +74,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		pressure_index,
 		primEint_index,	   // auxiliary internal energy (rho * e)
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
-		// TODO: = check what is enabled
+		// TODO(benwibking): = check what is enabled
 		x2Magnetic_index, // when magnetic fields exist, then we also store cc-ave of the two orthogonal b-fields, so they can be reconstructed to the
 				  // solving face
 		x3Magnetic_index,
@@ -301,7 +302,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			double b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
 
 			double bgp_p = b_sq + gp;
-			double bgp_m = b_sq - gp;
+			double const bgp_m = b_sq - gp;
 			fastest_wavespeed = std::max({std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx2 * bx2 + bx3 * bx3))) / rho),
 						      std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx1 * bx1 + bx3 * bx3))) / rho),
 						      std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * (bx1 * bx1 + bx2 * bx2))) / rho)});
@@ -340,7 +341,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					const auto P = ComputePressure(cons[bx], i, j, k);
 
 					bool negativeDensity = (rho <= 0.);
-					bool negativePressure = (P <= 0.);
+					bool const negativePressure = (P <= 0.);
 
 					if constexpr (is_eos_isothermal()) {
 						if (negativeDensity) {
@@ -493,7 +494,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 {
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
-	bool isDensityPositive = (rho > 0.);
+	bool const isDensityPositive = (rho > 0.);
 
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
@@ -720,7 +721,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		// compute coefficient as the minimum from adjacent cells along *each
 		// axis*
 		//  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
-		double chi_ijk = std::min({
+		double const chi_ijk = std::min({
 		    x1Chi_in[bx](i_in - 1, j_in, k_in),
 		    x1Chi_in[bx](i_in, j_in, k_in),
 		    x1Chi_in[bx](i_in + 1, j_in, k_in),
@@ -1128,7 +1129,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		amrex::Real dwl =
 		    std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index), q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
 		amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index), q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
-		dw = std::min(std::min(dwl, dwr), dw);
+		dw = std::min({dwl, dwr, dw});
 #endif
 
 		// solve the Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
