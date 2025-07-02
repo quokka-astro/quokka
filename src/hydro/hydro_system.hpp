@@ -920,8 +920,8 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 
 template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
-void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_cc_mf,
-					   amrex::MultiFab const &x1RightState_cc_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
+void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
+					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
 					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
 {
 
@@ -931,8 +931,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	auto const &x1LeftState_in = x1LeftState_cc_mf.const_arrays();
-	auto const &x1RightState_in = x1RightState_cc_mf.const_arrays();
+	auto const &x1LeftState_in = x1LeftState_mf.const_arrays();
+	auto const &x1RightState_in = x1RightState_mf.const_arrays();
 	auto const &primVar_in = primVar_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
