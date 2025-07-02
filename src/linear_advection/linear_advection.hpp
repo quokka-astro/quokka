@@ -201,7 +201,11 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf,
 
 		// Compute face velocity as flux divided by upwind density (only for density component)
 		if (n == density_index) {
-			x1FaceVel(i, j, k) = x1Flux(i, j, k, n) / upwind_density;
+			if (upwind_density != 0.0) {
+				x1FaceVel(i, j, k) = x1Flux(i, j, k, n) / upwind_density;
+			} else {
+				x1FaceVel(i, j, k) = 0.0;
+			}
 		}
 	});
 }
