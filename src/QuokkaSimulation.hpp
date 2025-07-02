@@ -306,7 +306,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	auto computeFOHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int lev)
-	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, 
+	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
 			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
@@ -320,8 +320,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			       int nvars);
 
 	template <FluxDir DIR>
-	void hydroFOFluxFunction(amrex::MultiFab &primVar,  amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &x1Flux, 
-					amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab ,AMREX_SPACEDIM> const &x1ConsVar_fc_mf,int ng_reconstruct_total, int nvars);
+	void hydroFOFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &x1Flux,
+				 amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf,
+				 int ng_reconstruct_total, int nvars);
 
 	void replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
 			   amrex::iMultiFab &redoFlag);
@@ -1444,10 +1445,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		// also create space to append the two magnetic field components orthogonal to the solving direction
 		nvars += 3; // add-hoc +3 because +1 (primScalar0_index) precedes +2 (x2Magnetic_index and x3Magnetic_index) at the end of the enum of
-				// primitive quantities
+			    // primitive quantities
 	}
 	auto [FOfluxArrays, FOfaceVel, FOfast_mhd_wavespeeds] = computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, nvars, lev);
-
 
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_fo;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1457,7 +1457,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, reconstructionOrder_,
-							emfAveragingType_);
+						 emfAveragingType_);
 	}
 	// TODO(neco): or hopefully someone else.
 	// MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, nghost_fc_, 1);
@@ -2044,12 +2044,12 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
 
 	// compute flux functions
-	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar,  leftState[0], rightState[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc,
-					reconstructRange, nvars);
-		     , hydroFOFluxFunction<FluxDir::X2>(primVar,  leftState[1], rightState[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc,
-					reconstructRange, nvars);
-		     , hydroFOFluxFunction<FluxDir::X3>(primVar,  leftState[2], rightState[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc,
-					reconstructRange, nvars);)
+	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc,
+						      reconstructRange, nvars);
+		     , hydroFOFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc,
+							reconstructRange, nvars);
+		     , hydroFOFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc,
+							reconstructRange, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -2060,16 +2060,17 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 
 template <typename problem_t>
 template <FluxDir DIR>
-void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &leftState,
-						      amrex::MultiFab &rightState, amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf, 
-						      const int ng_reconstruct, const int nvars)
+void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
+						      amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds,
+						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf, const int ng_reconstruct,
+						      const int nvars)
 {
 	int nghost_extra_mhd = 0;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		nghost_extra_mhd = 1;
 	}
-	
-	const int ng_reconstruct_total = ng_reconstruct	+ nghost_extra_mhd;
+
+	const int ng_reconstruct_total = ng_reconstruct + nghost_extra_mhd;
 
 	amrex::MultiArray4<const amrex::Real> x2State_fc_in;
 	amrex::MultiArray4<const amrex::Real> x3State_fc_in;
@@ -2104,15 +2105,15 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 			const double bx3_p = x3State_fc_in[bx](i + delta_x3[0], j + delta_x3[1], k + delta_x3[2], Physics_Indices<problem_t>::mhdFirstIndex);
 			primVar_in[bx](i, j, k, HydroSystem<problem_t>::x3Magnetic_index) = 0.5 * (bx3_m + bx3_p);
 		});
-	}// donor-cell reconstruction
+	} // donor-cell reconstruction
 	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
 	// LLF solver
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) { 
-		 HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(flux, faceVel, leftState, rightState, primVar_mf,
-		 									 artificialViscosityK_, &x1FSpds, &x1ConsVar_fc_mf[static_cast<int>(DIR)]);
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(
+		    flux, faceVel, leftState, rightState, primVar_mf, artificialViscosityK_, &x1FSpds, &x1ConsVar_fc_mf[static_cast<int>(DIR)]);
 	} else {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar_mf, artificialViscosityK_, nullptr,
-										nullptr);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar_mf, artificialViscosityK_,
+											nullptr, nullptr);
 	}
 }
 
