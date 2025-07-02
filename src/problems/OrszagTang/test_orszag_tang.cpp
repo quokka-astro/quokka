@@ -44,7 +44,10 @@ template <> struct Physics_Traits<OrszagTang> {
 
 constexpr double B0 = 1.0 / gcem::sqrt(4.0 * PI);
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto A_z(double x, double y) -> double { return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y)); };
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto A_z(double x, double y) -> double
+{
+	return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y));
+};
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto B_x(double xL, double yL, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> double
 {
