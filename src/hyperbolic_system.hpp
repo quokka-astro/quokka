@@ -546,35 +546,16 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	// (2.) Constrain interfaces to lie between surrounding cell-averaged
-	// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
-	// [See Eq. B8 of Mignone+ 2005.]
+	/// This implements the extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm (2007).
 
-#ifdef MULTIDIM_EXTREMA_CHECK
-	// N.B.: Checking all 27 nearest neighbors is *very* expensive on GPU
-	// (presumably due to lots of cache misses), so it is hard-coded disabled.
-	// Fortunately, almost all problems run stably without enabling this.
-	auto bounds = GetMinmaxSurroundingCell(q_in, i_in, j_in, k_in, iReadFrom + n);
-#else
-	// compute bounds from neighboring cell-averaged values along axis
-	const std::pair<double, double> bounds = std::minmax({q(i, j, k, iReadFrom + n), q(i - 1, j, k, iReadFrom + n), q(i + 1, j, k, iReadFrom + n)});
-#endif
-
-	// get interfaces
-
-	/// extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm
-	/// (2007).
-
-	// 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99,
-	// 1997)
-	const double c1 = 2. / 60.;
-	const double c2 = -13. / 60.;
-	const double c3 = 47. / 60.;
-	const double c4 = 27. / 60.;
-	const double c5 = -3. / 60.;
+	// 0. 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99, 1997)
+	constexpr double c1 = 2. / 60.;
+	constexpr double c2 = -13. / 60.;
+	constexpr double c3 = 47. / 60.;
+	constexpr double c4 = 27. / 60.;
+	constexpr double c5 = -3. / 60.;
 
 	const double a_minus = c1 * q(i + 2, j, k, n) + c2 * q(i + 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i - 1, j, k, n) + c5 * q(i - 2, j, k, n);
-
 	const double a_plus = c1 * q(i - 2, j, k, n) + c2 * q(i - 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i + 1, j, k, n) + c5 * q(i + 2, j, k, n);
 
 	// save neighboring values
