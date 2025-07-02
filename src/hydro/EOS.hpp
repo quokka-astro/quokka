@@ -95,7 +95,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	// initialize array of number densities
-	for (double & ii : chemstate.xn) {
+	for (double &ii : chemstate.xn) {
 		ii = -1.0;
 	}
 
@@ -139,7 +139,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	amrex::Real const Tgas_value = Tgas;
 	chemstate.T = Tgas_value;
 	// initialize array of number densities
-	for (double & ii : chemstate.xn) {
+	for (double &ii : chemstate.xn) {
 		ii = -1.0;
 	}
 
@@ -180,7 +180,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromPre
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
 	// initialize array of number densities
-	for (double & ii : chemstate.xn) {
+	for (double &ii : chemstate.xn) {
 		ii = -1.0;
 	}
 
@@ -224,7 +224,7 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
 	chemstate.T = NAN;
 	// initialize array of number densities
-	for (double & ii : chemstate.xn) {
+	for (double &ii : chemstate.xn) {
 		ii = -1.0;
 	}
 
@@ -272,7 +272,7 @@ EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real
 	chemstate.rho = rho;
 	chemstate.p = P;
 	// initialize array of number densities
-	for (double & ii : chemstate.xn) {
+	for (double &ii : chemstate.xn) {
 		ii = -1.0;
 	}
 
@@ -321,7 +321,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	// initialize array of number densities
-	for (double & ii : chemstate.xn) {
+	for (double &ii : chemstate.xn) {
 		ii = -1.0;
 	}
 
@@ -367,7 +367,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
 	// initialize array of number densities
-	for (double & ii : chemstate.xn) {
+	for (double &ii : chemstate.xn) {
 		ii = -1.0;
 	}
 
