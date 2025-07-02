@@ -1875,8 +1875,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	// compute flattening coefficients
 	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], flatteningGhost);
 		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], flatteningGhost);
-		     ,
-		     HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
+		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
 
 	// compute flux functions
 	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, flatCoefs[0],
@@ -1998,8 +1997,8 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar_mf,
-											 artificialViscosityK_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_vel_);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(
+		    flux, faceVel, leftState, rightState, primVar_mf, artificialViscosityK_, &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_vel_);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar_mf,
 											 artificialViscosityK_, nullptr, nullptr, nghost_vel_);

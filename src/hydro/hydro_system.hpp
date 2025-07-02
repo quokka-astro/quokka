@@ -126,7 +126,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <RiemannSolver RIEMANN, FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
-				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc, 
+				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc,
 				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
 	template <FluxDir DIR>
@@ -945,7 +945,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		}
 		x1ConsVar_fc_in = (*x1ConsVar_fc_mf).const_arrays();
 	}
-	
+
 	// Include ghost cells when computing face velocities
 	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
 	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
