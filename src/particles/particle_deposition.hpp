@@ -3,6 +3,7 @@
 
 #include <algorithm>
 
+#include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
@@ -317,7 +318,8 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state,
-								   amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
+								   amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k,
+								   amrex::Real *p_max_velocity)
 {
 	// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
 	// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
@@ -330,6 +332,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	const double e_tot = local_state(i, j, k, HydroSystem<problem_t>::energy_index);
 
 	const double d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+
+	// Skip if there is no SN feedback
+	if (d_rho == 0.0) {
+		return;
+	}
+
 	const double d_px = local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 	const double d_py = local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 	const double d_pz = local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
@@ -414,6 +422,22 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
 
+	// Compute sound speed
+	Real cs = NAN;
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+	} else {
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
+	}
+
+	// Compute velocity magnitude and track maximum
+	const Real vx = px_new / rho_new;
+	const Real vy = py_new / rho_new;
+	const Real vz = pz_new / rho_new;
+	const Real velocity_magnitude = std::sqrt(vx * vx + vy * vy + vz * vz);
+
+	amrex::Gpu::Atomic::Max(p_max_velocity, velocity_magnitude + cs);
+
 	// // log the state, for debugging on CPU.
 	// if (d_rho / rho > 1.0e-12) {
 	// 	// print original rho, px, py, pz, e_int, e_tot; new rho_new, px_new, py_new, pz_new, e_int_new,
@@ -429,11 +453,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state,
-								     amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k)
+								     amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k,
+								     amrex::Real *p_max_velocity)
 {
+	const Real d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+
+	// Skip if there is no SN feedback
+	if (d_rho == 0.0) {
+		return;
+	}
+
 	// For SN_thermal_only, the buffer contains only mass and energy (and a small amount of momentum), so it's safe to add the
 	// buffer directly to the state.
-	const double rho_new = local_state(i, j, k, HydroSystem<problem_t>::density_index) + local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
+	const double rho_new = local_state(i, j, k, HydroSystem<problem_t>::density_index) + d_rho;
 	const double px_new = local_state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 	const double py_new = local_state(i, j, k, HydroSystem<problem_t>::x2Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 	const double pz_new = local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) + local_buffer(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
@@ -446,9 +478,20 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 	local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
 	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_new;
+
+	// Compute sound speed. For thermal-only feedback, the gas velocity stays unchanged, so we only report sound speed.
+	Real cs = NAN;
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+	} else {
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
+	}
+
+	amrex::Gpu::Atomic::Max(p_max_velocity, cs);
 }
 
-template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d)
+template <typename problem_t>
+void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
 {
 	const BL_PROFILE("SNFeedbackUtils::addBufferToState()");
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
@@ -459,9 +502,9 @@ template <typename problem_t> void addBufferToState(amrex::MultiFab &state, amre
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
-				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k);
+				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity);
 			} else {
-				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k);
+				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity);
 			}
 		});
 	}
@@ -513,6 +556,10 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	// copy host variables to device
 	const SNScheme SN_scheme_d = SN_scheme;
 
+	// Initialize maximum velocity tracking
+	amrex::Gpu::Buffer<amrex::Real> max_velocity_buffer({0.0});
+	amrex::Real *p_max_velocity = max_velocity_buffer.data();
+
 	// Step 1: Local deposition within each box
 	SNFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
 								   birthTimeIndex, SN_scheme_d);
@@ -521,7 +568,19 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 
 	// Step 3: Add the buffer to the state
-	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d);
+	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d, p_max_velocity);
+
+	// Step 4: Check maximum velocity and print warning if needed
+	const amrex::Real max_velocity = max_velocity_buffer.data()[0];
+	constexpr amrex::Real c_light = C::c_light;
+	constexpr amrex::Real velocity_threshold = 0.03 * c_light;
+
+	amrex::Print() << "SN remnant maximum net velocity (v_max + cs): " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
+
+	if (max_velocity > velocity_threshold) {
+		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / c_light << " c) greater than 0.03 c threshold!" << "\n";
+	}
+	amrex::Print() << "\n";
 }
 
 #endif // AMREX_SPACEDIM == 3

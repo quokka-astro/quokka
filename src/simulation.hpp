@@ -1471,7 +1471,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Fill boundary before computing accretion rate. This is necessary because the computation of accretion rate uses 3 ghost cells, but the
 	// boundaries are not filled at this point.
-	// TODO(cch): we can fill the hydro variables only if no other variables are used in accretion rate computation
+	// TODO(cch): fill the hydro variables but not radiation variables, since radiation variables are used in accretion
 	state_new_cc_[lev].FillBoundary(geom[lev].periodicity());
 
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
@@ -1489,7 +1489,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
-	// TODO(cch): put accretion_rate_at_level inside depositSN
 	particleRegister_.depositSN(state_new_cc_[lev], lev, time, dt);
 }
 #endif // AMREX_SPACEDIM == 3
