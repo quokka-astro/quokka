@@ -125,9 +125,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void SyncDualEnergy(amrex::MultiFab &consVar_mf);
 
 	template <RiemannSolver RIEMANN, FluxDir DIR>
-	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_cc_mf,
-				  amrex::MultiFab const &x1RightState_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc,
-				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr);
+	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
+				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc, 
+				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
@@ -922,7 +922,7 @@ template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_cc_mf,
 					   amrex::MultiFab const &x1RightState_cc_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
-					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf)
+					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
 {
 
 	// By convention, the interfaces are defined on the left edge of each
@@ -931,8 +931,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	auto const &x1LeftState_cc_in = x1LeftState_cc_mf.const_arrays();
-	auto const &x1RightState_cc_in = x1RightState_cc_mf.const_arrays();
+	auto const &x1LeftState_in = x1LeftState_cc_mf.const_arrays();
+	auto const &x1RightState_in = x1RightState_cc_mf.const_arrays();
 	auto const &primVar_in = primVar_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
@@ -945,15 +945,12 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		}
 		x1ConsVar_fc_in = (*x1ConsVar_fc_mf).const_arrays();
 	}
-
-	amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(0, 0, 0));
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		ng = amrex::IntVect(AMREX_D_DECL(1, 1, 1)); //  - amrex::IntVect::TheDimensionVector(static_cast<int>(DIR))
-	}
-
+	
+	// Include ghost cells when computing face velocities
+	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
 	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
-		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_cc_in[bx]);
-		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_cc_in[bx]);
+		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
+		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
@@ -1194,19 +1191,36 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		}
 
 		// compute face-centered normal velocity
-		const double v_norm = (F[density_index] >= 0.) ? (F[density_index] / rho_R) : (F[density_index] / rho_L);
+		double v_norm = 0.0;
+		if (F[density_index] >= 0.) {
+			if (rho_R > 0.) {
+				v_norm = F[density_index] / rho_R;
+			}
+		} else {
+			if (rho_L > 0.) {
+				v_norm = F[density_index] / rho_L;
+			}
+		}
 		x1FaceVel(i, j, k) = v_norm;
 
 		// use the same logic as above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {
 			for (int n = 0; n < nmscalars_; ++n) {
 				const int nstart = nvar_ - nscalars_;
-				F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
+				if (fluxSum_U_L > 0.) {
+					F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
+				} else {
+					F[nstart + n] = 0.;
+				}
 			}
 		} else {
 			for (int n = 0; n < nmscalars_; ++n) {
 				const int nstart = nvar_ - nscalars_;
-				F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
+				if (fluxSum_U_R > 0.) {
+					F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
+				} else {
+					F[nstart + n] = 0.;
+				}
 			}
 		}
 

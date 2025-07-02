@@ -361,6 +361,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteProjectionPlotfile() const;
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
+	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
+	void writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
+					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int step);
 
 	// ABOUTME: Used to handle universal refinement during checkpoint restart operations
 	struct RefinementContext {
@@ -430,7 +433,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_cc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 5 : 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
+	int nghost_cc_ = 6; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
 	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 5 : 2; // 5 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
@@ -3459,6 +3462,173 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 		}
 	}
 #endif
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArrays, int lev, int timestep)
+{
+	// Create directory for face velocity outputs if it doesn't exist
+	std::string dirname = fmt::format("facevel_lev{}_step{}", lev, timestep);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::UtilCreateDirectory(dirname, 0755);
+	}
+	amrex::ParallelDescriptor::Barrier();
+
+	// Write each direction's face velocities
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		std::string dimname;
+		if (idim == 0) {
+			dimname = "x";
+		} else if (idim == 1) {
+			dimname = "y";
+		} else {
+			dimname = "z";
+		}
+
+		// Write each FAB in the MultiFab
+		for (amrex::MFIter mfi(faceVelArrays[idim]); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.fabbox(); // This includes ghost cells
+			const amrex::FArrayBox &fab = faceVelArrays[idim][mfi];
+
+			// Create filename for this FAB
+			const std::string filename = fmt::format("{}/facevel_{}_box_{}.fab", dirname, dimname, mfi.index());
+
+			// Write FAB to disk in ASCII format
+			std::ofstream ofs(filename, std::ios::out);
+			if (ofs.is_open()) {
+				// Write box information
+				ofs << "# Face velocity FAB for direction " << dimname << "\n";
+				ofs << "# Box: " << bx << "\n";
+				ofs << "# Valid box: " << mfi.validbox() << "\n";
+				ofs << "# MultiFab ghost cells: " << faceVelArrays[idim].nGrow() << "\n";
+#if AMREX_SPACEDIM == 1
+				ofs << "# Format: i value\n";
+#elif AMREX_SPACEDIM == 2
+				ofs << "# Format: i j value\n";
+#elif AMREX_SPACEDIM == 3
+				ofs << "# Format: i j k value\n";
+#endif
+
+				// Write data
+				auto const &arr = fab.const_array();
+				amrex::Loop(bx, [&](int i, int j, int k) {
+#if AMREX_SPACEDIM == 1
+					ofs << i << " " << arr(i, j, k, 0) << "\n";
+#elif AMREX_SPACEDIM == 2
+					ofs << i << " " << j << " " << arr(i,j,k,0) << "\n";
+#elif AMREX_SPACEDIM == 3
+					ofs << i << " " << j << " " << k << " " << arr(i,j,k,0) << "\n";
+#endif
+				});
+				ofs.close();
+			}
+		}
+	}
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
+							      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int timestep)
+{
+	// Create directory for reconstructed state outputs if it doesn't exist
+	std::string dirname = fmt::format("reconst_lev{}_step{}", lev, timestep);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::UtilCreateDirectory(dirname, 0755);
+	}
+	amrex::ParallelDescriptor::Barrier();
+
+	// Write each direction's reconstructed states
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		std::string dimname;
+		if (idim == 0) {
+			dimname = "x";
+		} else if (idim == 1) {
+			dimname = "y";
+		} else {
+			dimname = "z";
+		}
+
+		// Write left and right states for each FAB in the MultiFab
+		for (amrex::MFIter mfi(leftState[idim]); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.fabbox(); // This includes ghost cells
+			const amrex::FArrayBox &leftFab = leftState[idim][mfi];
+			const amrex::FArrayBox &rightFab = rightState[idim][mfi];
+
+			// Create filenames for this FAB's left and right states
+			const std::string leftFilename = fmt::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
+			const std::string rightFilename = fmt::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
+
+			// Write left state FAB to disk
+			std::ofstream leftOfs(leftFilename, std::ios::out);
+			if (leftOfs.is_open()) {
+				// Write box information
+				leftOfs << "# Left reconstructed state FAB for direction " << dimname << "\n";
+				leftOfs << "# Box: " << bx << "\n";
+				leftOfs << "# Valid box: " << mfi.validbox() << "\n";
+				leftOfs << "# MultiFab ghost cells: " << leftState[idim].nGrow() << "\n";
+#if AMREX_SPACEDIM == 1
+				leftOfs << "# Format: i density xmom ymom zmom energy intenergy\n";
+#elif AMREX_SPACEDIM == 2
+				leftOfs << "# Format: i j density xmom ymom zmom energy intenergy\n";
+#elif AMREX_SPACEDIM == 3
+				leftOfs << "# Format: i j k density xmom ymom zmom energy intenergy\n";
+#endif
+
+				// Write data (all hydro variables)
+				auto const &leftArr = leftFab.const_array();
+				amrex::Loop(bx, [&](int i, int j, int k) {
+#if AMREX_SPACEDIM == 1
+					leftOfs << i;
+#elif AMREX_SPACEDIM == 2
+					leftOfs << i << " " << j;
+#elif AMREX_SPACEDIM == 3
+					leftOfs << i << " " << j << " " << k;
+#endif
+					// Write all hydro variables (density, xmom, ymom, zmom, energy, intenergy)
+					for (int ivar = 0; ivar < leftFab.nComp(); ++ivar) {
+						leftOfs << " " << leftArr(i, j, k, ivar);
+					}
+					leftOfs << "\n";
+				});
+				leftOfs.close();
+			}
+
+			// Write right state FAB to disk
+			std::ofstream rightOfs(rightFilename, std::ios::out);
+			if (rightOfs.is_open()) {
+				// Write box information
+				rightOfs << "# Right reconstructed state FAB for direction " << dimname << "\n";
+				rightOfs << "# Box: " << bx << "\n";
+				rightOfs << "# Valid box: " << mfi.validbox() << "\n";
+				rightOfs << "# MultiFab ghost cells: " << rightState[idim].nGrow() << "\n";
+#if AMREX_SPACEDIM == 1
+				rightOfs << "# Format: i density xmom ymom zmom energy intenergy\n";
+#elif AMREX_SPACEDIM == 2
+				rightOfs << "# Format: i j density xmom ymom zmom energy intenergy\n";
+#elif AMREX_SPACEDIM == 3
+				rightOfs << "# Format: i j k density xmom ymom zmom energy intenergy\n";
+#endif
+
+				// Write data (all hydro variables)
+				auto const &rightArr = rightFab.const_array();
+				amrex::Loop(bx, [&](int i, int j, int k) {
+#if AMREX_SPACEDIM == 1
+					rightOfs << i;
+#elif AMREX_SPACEDIM == 2
+					rightOfs << i << " " << j;
+#elif AMREX_SPACEDIM == 3
+					rightOfs << i << " " << j << " " << k;
+#endif
+					// Write all hydro variables (density, xmom, ymom, zmom, energy, intenergy)
+					for (int ivar = 0; ivar < rightFab.nComp(); ++ivar) {
+						rightOfs << " " << rightArr(i, j, k, ivar);
+					}
+					rightOfs << "\n";
+				});
+				rightOfs.close();
+			}
+		}
+	}
 }
 
 #endif // SIMULATION_HPP_
