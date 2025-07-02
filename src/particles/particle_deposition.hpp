@@ -501,10 +501,11 @@ void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, con
 
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			auto p_max_velocity_local = p_max_velocity; // NOLINT
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
-				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity);
+				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity_local);
 			} else {
-				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity);
+				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity_local);
 			}
 		});
 	}
@@ -543,8 +544,8 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 } // namespace SNFeedbackUtils
 
 template <typename ContainerType, typename problem_t>
-void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex, int birthTimeIndex)
+auto SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		  int evolutionStageIndex, int birthTimeIndex) -> Real
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
@@ -572,15 +573,18 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 	// Step 4: Check maximum velocity and print warning if needed
 	const amrex::Real max_velocity = max_velocity_buffer.data()[0];
-	constexpr amrex::Real c_light = C::c_light;
-	constexpr amrex::Real velocity_threshold = 0.03 * c_light;
 
-	amrex::Print() << "SN remnant maximum net velocity (v_max + cs): " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
+	return max_velocity;
 
-	if (max_velocity > velocity_threshold) {
-		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / c_light << " c) greater than 0.03 c threshold!" << "\n";
-	}
-	amrex::Print() << "\n";
+	// constexpr amrex::Real c_light = C::c_light;
+	// constexpr amrex::Real velocity_threshold = 0.03 * c_light;
+
+	// amrex::Print() << "SN remnant maximum net velocity (v_max + cs): " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
+
+	// if (max_velocity > velocity_threshold) {
+	// 	amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / c_light << " c) greater than 0.03 c threshold!" << "\n";
+	// }
+	// amrex::Print() << "\n";
 }
 
 #endif // AMREX_SPACEDIM == 3
