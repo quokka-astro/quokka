@@ -2060,18 +2060,13 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf, const int ng_reconstruct,
 						      const int nvars)
 {
-	int nghost_extra_mhd = 0;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		nghost_extra_mhd = 1;
-	}
-
-	const int ng_reconstruct_total = ng_reconstruct + nghost_extra_mhd;
-
 	amrex::MultiArray4<const amrex::Real> x2State_fc_in;
 	amrex::MultiArray4<const amrex::Real> x3State_fc_in;
+
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		std::array<int, 3> delta_x2 = {0, 0, 0};
 		std::array<int, 3> delta_x3 = {0, 0, 0};
+
 		if constexpr (DIR == FluxDir::X1) {
 			delta_x2[1] = 1;
 			delta_x3[2] = 1;
@@ -2088,9 +2083,11 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 			x2State_fc_in = x1ConsVar_fc_mf[0].const_arrays();
 			x3State_fc_in = x1ConsVar_fc_mf[1].const_arrays();
 		}
+
 		auto primVar_in = primVar_mf.arrays();
 		primVar_mf.arrays();
 		amrex::IntVect ng{AMREX_D_DECL(nghost_fc_, nghost_fc_, nghost_fc_)};
+		
 		amrex::ParallelFor(primVar_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 			const double bx2_m = x2State_fc_in[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 			const double bx2_p = x2State_fc_in[bx](i + delta_x2[0], j + delta_x2[1], k + delta_x2[2], Physics_Indices<problem_t>::mhdFirstIndex);
@@ -2100,8 +2097,11 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 			const double bx3_p = x3State_fc_in[bx](i + delta_x3[0], j + delta_x3[1], k + delta_x3[2], Physics_Indices<problem_t>::mhdFirstIndex);
 			primVar_in[bx](i, j, k, HydroSystem<problem_t>::x3Magnetic_index) = 0.5 * (bx3_m + bx3_p);
 		});
-	} // donor-cell reconstruction
-	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
+	}
+	
+	// donor-cell reconstruction
+	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+
 	// LLF solver
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(
