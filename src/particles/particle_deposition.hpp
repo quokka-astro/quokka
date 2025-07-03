@@ -572,19 +572,11 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d, p_max_velocity);
 
 	// Step 4: Check maximum velocity and print warning if needed
-	const amrex::Real max_velocity = max_velocity_buffer.data()[0];
+	const auto h_max_velocity = max_velocity_buffer.copyToHost();
+	const Real max_velocity = h_max_velocity[0];
+	amrex::ParallelDescriptor::ReduceRealMax(max_velocity);
 
 	return max_velocity;
-
-	// constexpr amrex::Real c_light = C::c_light;
-	// constexpr amrex::Real velocity_threshold = 0.03 * c_light;
-
-	// amrex::Print() << "SN remnant maximum net velocity (v_max + cs): " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
-
-	// if (max_velocity > velocity_threshold) {
-	// 	amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / c_light << " c) greater than 0.03 c threshold!" << "\n";
-	// }
-	// amrex::Print() << "\n";
 }
 
 #endif // AMREX_SPACEDIM == 3
