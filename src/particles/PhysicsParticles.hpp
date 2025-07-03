@@ -125,7 +125,9 @@ class PhysicsParticleDescriptorBase
 	//----- Methods that are implemented for some but not all particle types, so they cannot be pure virtual -----
 
 	virtual auto depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) -> amrex::Real
-	{ /* Default empty implementation */ }
+	{
+		return 0.0_rt;
+	}
 
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }

@@ -572,7 +572,7 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d, p_max_velocity);
 
 	// Step 4: Check maximum velocity and print warning if needed
-	auto h_max_velocity = max_velocity_buffer.copyToHost();
+	auto *h_max_velocity = max_velocity_buffer.copyToHost();
 	Real max_velocity = h_max_velocity[0];
 	amrex::ParallelDescriptor::ReduceRealMax(max_velocity);
 
