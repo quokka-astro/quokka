@@ -27,8 +27,8 @@ do_tracers = 0      # turn on tracer particles
 hydro.artificial_viscosity_coefficient = 0.1
 
 cooling.enabled = 1
-cooling.cooling_table_type = "grackle"
-cooling.hdf5_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+cooling.cooling_table_type = "resampled"
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 problem.SN_particles_file = "../inputs/SN.txt"
 problem.refine_half_domain = false
 

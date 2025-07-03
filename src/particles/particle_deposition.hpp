@@ -436,7 +436,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	const Real vz = pz_new / rho_new;
 	const Real velocity_magnitude = std::sqrt(vx * vx + vy * vy + vz * vz);
 
-	amrex::Gpu::Atomic::Max(p_max_velocity, velocity_magnitude + cs);
+	amrex::Gpu::Atomic::Max(&p_max_velocity[0], velocity_magnitude + cs);
 
 	// // log the state, for debugging on CPU.
 	// if (d_rho / rho > 1.0e-12) {
@@ -487,7 +487,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
 	}
 
-	amrex::Gpu::Atomic::Max(p_max_velocity, cs);
+	amrex::Gpu::Atomic::Max(&p_max_velocity[0], cs);
 }
 
 template <typename problem_t>
@@ -501,10 +501,11 @@ void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, con
 
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			auto p_max_velocity_local = p_max_velocity; // NOLINT
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
-				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity);
+				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity_local);
 			} else {
-				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity);
+				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity_local);
 			}
 		});
 	}
@@ -543,8 +544,8 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 } // namespace SNFeedbackUtils
 
 template <typename ContainerType, typename problem_t>
-void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex, int birthTimeIndex)
+auto SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
+		  int evolutionStageIndex, int birthTimeIndex) -> Real
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
@@ -571,16 +572,11 @@ void SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d, p_max_velocity);
 
 	// Step 4: Check maximum velocity and print warning if needed
-	const amrex::Real max_velocity = max_velocity_buffer.data()[0];
-	constexpr amrex::Real c_light = C::c_light;
-	constexpr amrex::Real velocity_threshold = 0.03 * c_light;
+	auto *h_max_velocity = max_velocity_buffer.copyToHost();
+	Real max_velocity = h_max_velocity[0];
+	amrex::ParallelDescriptor::ReduceRealMax(max_velocity);
 
-	amrex::Print() << "SN remnant maximum net velocity (v_max + cs): " << max_velocity << " cm/s (" << max_velocity / c_light << " c)" << "\n";
-
-	if (max_velocity > velocity_threshold) {
-		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / c_light << " c) greater than 0.03 c threshold!" << "\n";
-	}
-	amrex::Print() << "\n";
+	return max_velocity;
 }
 
 #endif // AMREX_SPACEDIM == 3
