@@ -1492,10 +1492,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	const amrex::Real max_velocity = particleRegister_.depositSN(state_new_cc_[lev], lev, time, dt);
 
 	// Check if the maximum velocity is greater than the threshold
-	// constexpr amrex::Real v_over_c_threshold = 0.03;
-	// if (max_velocity > v_over_c_threshold * C::c_light) {
-	// 	amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold << " c threshold!" << "\n";
-	// }
+	constexpr amrex::Real v_over_c_threshold = 0.03;
+	if (max_velocity > v_over_c_threshold * C::c_light) {
+		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold << " c threshold!" << "\n";
+	}
 }
 #endif // AMREX_SPACEDIM == 3
 
