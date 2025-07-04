@@ -328,6 +328,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
 			   amrex::iMultiFab &redoFlag);
 
+	void replaceEMFs(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf_components, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FO_emf_components,
+			   amrex::iMultiFab &redoFlag);
+
 	// void PrintRadEnergySource(amrex::MultiFab const &radEnergySource);
 };
 
@@ -1459,8 +1462,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, reconstructionOrder_,
 						 emfAveragingType_);
 	}
-	// TODO(neco): or hopefully someone else.
-	// MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, nghost_fc_, 1);
 
 	// Stage 1 of RK2-SSP
 	{
@@ -1500,14 +1501,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
+		
+
 
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, ncompHydro_, redoFlag);
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateNew_fc, ec_emf_components_rk_stage1, dt_lev, geom[lev].CellSizeArray(),
-								geom[lev].ProbLoArray(), time);
-		}
+
 
 		// LOW LEVEL DEBUGGING: output rhs
 		if (lowLevelDebuggingOutput_ == 1) {
@@ -1536,7 +1536,25 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// do first-order flux correction (FOFC)
-		amrex::Gpu::streamSynchronizeAll(); // just in case
+		amrex::Gpu::streamSynchronizeAll(); // ensure device-side ops are finished
+
+		//The following out commented section is for debugging, it forces some cells to have the redoFlag, remove before final merge!
+		// int i = 0;
+		// int k = 0;
+		// int j_start = 0;
+		// int j_end   = 7;
+
+		// for (amrex::MFIter mfi(redoFlag); mfi.isValid(); ++mfi) {
+		// 	const amrex::Box& bx = mfi.validbox();
+		// 	auto arr = redoFlag.array(mfi);  // IArray4<int>
+
+		// 	for (int j = j_start; i <= j_end; ++i) {
+		// 		if (bx.contains(amrex::IntVect(AMREX_D_DECL(i, j, k)))) {
+		// 			arr(i, j, k) = 1;
+		// 		}
+		// 	}
+		// }
+
 		amrex::Long const ncells_bad = redoFlag.sum(0);
 		if (ncells_bad > 0) {
 			if (Verbose()) {
@@ -1549,11 +1567,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 			// synchronize redoFlag across ranks
 			redoFlag.FillBoundary(geom[lev].periodicity());
-
-			// TODO(Neco or someone else)
-			// // replace fluxes around troubled cells with Godunov fluxes
-			// replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
-			// replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
+			
+			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
+			replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				replaceEMFs(ec_emf_components_rk_stage1, ec_emf_components_fo, redoFlag); // replace emf components
+			}
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
@@ -1576,6 +1595,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 					return false;
 				}
 			}
+		}
+
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateNew_fc, ec_emf_components_rk_stage1, dt_lev, geom[lev].CellSizeArray(), geom[lev].ProbLoArray(), time);
 		}
 
 		// prevent vacuum
@@ -1650,10 +1673,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, avgFaceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, ncompHydro_, redoFlag);
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components_rk_ave, dt_lev, geom[lev].CellSizeArray(),
-								geom[lev].ProbLoArray(), time);
-		}
+		
 
 		// do first-order flux correction (FOFC)
 		amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -1669,10 +1689,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			// synchronize redoFlag across ranks
 			redoFlag.FillBoundary(geom[lev].periodicity());
 
-			// TODO(Neco or someone else)
-			// // replace fluxes around troubled cells with Godunov fluxes
-			// replaceFluxes(flux_rk2, FOfluxArrays, redoFlag);
-			// replaceFluxes(avgFaceVel, FOfaceVel, redoFlag); // needed for dual energy
+			replaceFluxes(flux_rk2, FOfluxArrays, redoFlag);
+			replaceFluxes(avgFaceVel, FOfaceVel, redoFlag); // needed for dual energy
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				replaceEMFs(ec_emf_components_rk_ave, ec_emf_components_fo, redoFlag); // replaces EMF components
+			}
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
@@ -1696,6 +1717,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				}
 			}
 		}
+
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components_rk_ave, dt_lev, geom[lev].CellSizeArray(),
+								geom[lev].ProbLoArray(), time);
+		}
+
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc);
@@ -1792,6 +1819,50 @@ void QuokkaSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AMRE
 				} else if (idim == 2) { // z-dir fluxes
 					if (flux_arrs[bx].contains(i, j, k + 1)) {
 						flux_arrs[bx](i, j, k + 1, n) = FOflux_arrs[bx](i, j, k + 1, n);
+					}
+				}
+			}
+		});
+	}
+}
+
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::replaceEMFs(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf_components, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FO_emf_components,
+						amrex::iMultiFab &redoFlag)
+{
+	BL_PROFILE("QuokkaSimulation::replaceFluxes()");
+
+	for (int iedge = 0; iedge < 3; ++iedge) { // loop over edges
+		// ensure that flux arrays have the same number of components
+		AMREX_ASSERT(emf_components[iedge].nComp() == FO_emf_components[iedge].nComp());
+		int ncomp = emf_components[iedge].nComp();
+
+		auto const &FO_emf_components_arrs = FO_emf_components[iedge].const_arrays();
+		auto const &redoFlag_arrs = redoFlag.const_arrays();
+		auto emf_components_arrs = emf_components[iedge].arrays();
+
+		amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)}; // must include 1 ghost zone ?
+
+		amrex::ParallelFor(redoFlag, ng, ncomp, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
+			if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
+				// replace fluxes with first-order ones at the faces of cell (i,j,k)
+				if (emf_components_arrs[bx].contains(i, j, k)) {
+					emf_components_arrs[bx](i, j, k, n) = FO_emf_components_arrs[bx](i, j, k, n);
+				}
+				if (iedge == 0) { // x-dir fluxes
+					if (emf_components_arrs[bx].contains(i , j + 1 , k)) { emf_components_arrs[bx](i , j + 1 , k, n) = FO_emf_components_arrs[bx](i , j + 1 , k, n); }
+					if (emf_components_arrs[bx].contains(i , j, k + 1 )) { emf_components_arrs[bx](i , j, k + 1 , n) = FO_emf_components_arrs[bx](i , j, k + 1 , n); }
+					if (emf_components_arrs[bx].contains(i , j + 1, k + 1)) { emf_components_arrs[bx](i , j + 1, k + 1, n) = FO_emf_components_arrs[bx](i , j + 1, k + 1, n);
+					}
+				} else 	if (iedge == 1) { // x-dir fluxes
+					if (emf_components_arrs[bx].contains(i + 1, j , k)) { emf_components_arrs[bx](i + 1, j , k, n) = FO_emf_components_arrs[bx](i + 1, j , k, n); }
+					if (emf_components_arrs[bx].contains(i , j, k + 1 )) { emf_components_arrs[bx](i , j, k + 1 , n) = FO_emf_components_arrs[bx](i , j, k + 1 , n); }
+					if (emf_components_arrs[bx].contains(i + 1, j, k + 1)) { emf_components_arrs[bx](i + 1, j, k + 1, n) = FO_emf_components_arrs[bx](i + 1, j, k + 1, n);
+					}
+				} else 	if (iedge == 2) { // x-dir fluxes
+					if (emf_components_arrs[bx].contains(i + 1, j , k)) { emf_components_arrs[bx](i + 1, j , k, n) = FO_emf_components_arrs[bx](i + 1, j , k, n); }
+					if (emf_components_arrs[bx].contains(i , j + 1, k )) { emf_components_arrs[bx](i , j + 1, k , n) = FO_emf_components_arrs[bx](i , j + 1, k , n); }
+					if (emf_components_arrs[bx].contains(i + 1 , j + 1, k )) { emf_components_arrs[bx](i +1 , j + 1, k , n) = FO_emf_components_arrs[bx](i +1 , j + 1, k , n);
 					}
 				}
 			}
