@@ -54,7 +54,7 @@ constexpr double bg_mag_amplitude = 1.;
 // theta is the angle between k and background magnetic field bg_mag
 constexpr double theta_degrees = 90.0; // degrees
 constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
-// const double sin_theta = std::sin(theta_degrees * M_PI / 180.0);
+
 
 // k = 2 pi / wave length
 // box length = 1, so |k| in [1, inf)
@@ -62,29 +62,22 @@ constexpr double num_modes = 1;
 constexpr double k_amplitude = 2 * M_PI * num_modes;
 
 // input perturbation: choose to do this via the relative density field in [0, 1]. remember, the linear regime is valid when this perturbation is small
-constexpr double delta_b = 1e-6;
+constexpr double delta_b = 1e-4;
 
 constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
 constexpr double magnetosonic_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
 constexpr double bg_mag_x3 = bg_mag_amplitude;
 
-auto compute_omega() -> double
-{
-	return std::sqrt(std::pow(k_amplitude, 2) / 2.0 *
-			 (std::pow(magnetosonic_speed, 2) +
-			  std::sqrt(std::pow(magnetosonic_speed, 4) - 4.0 * std::pow(alfven_speed, 2) * std::pow(sound_speed, 2) * std::pow(cos_theta, 2))));
-}
-
-const double omega = compute_omega(); // NOLINT(cert-err58-cpp)
+constexpr double omega = gcem::sqrt(gcem::pow(k_amplitude, 2) / 2.0 *
+			 (gcem::pow(magnetosonic_speed, 2) + gcem::sqrt(gcem::pow(magnetosonic_speed, 4) - 4.0 * 
+			  gcem::pow(alfven_speed, 2) * gcem::pow(sound_speed, 2) * gcem::pow(cos_theta, 2))));// NOLINT(cert-err58-cpp)
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double x2, double /*x3*/, double time)
 {
-	// return -bg_mag_x3 * x2;
 	return -x2 / 2.0 * (bg_mag_amplitude + delta_b * std::cos(omega * time - k_amplitude * x1));
 }
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/, double /*x3*/, double time) -> double
 {
-	// return delta_b / k_amplitude * std::sin(omega * time - k_amplitude * x1);
 	return bg_mag_amplitude * x1 / 2.0 + ((delta_b)*std::sin(omega * time - k_amplitude * x1) / (-2.0 * k_amplitude));
 }
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double /*x2*/, double /*x3*/, double /*time*/) -> double { return 0.0; }
