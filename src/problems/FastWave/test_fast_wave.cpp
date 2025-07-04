@@ -55,7 +55,6 @@ constexpr double bg_mag_amplitude = 1.;
 constexpr double theta_degrees = 90.0; // degrees
 constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
 
-
 // k = 2 pi / wave length
 // box length = 1, so |k| in [1, inf)
 constexpr double num_modes = 1;
@@ -68,9 +67,10 @@ constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
 constexpr double magnetosonic_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
 constexpr double bg_mag_x3 = bg_mag_amplitude;
 
-constexpr double omega = gcem::sqrt(gcem::pow(k_amplitude, 2) / 2.0 *
-			 (gcem::pow(magnetosonic_speed, 2) + gcem::sqrt(gcem::pow(magnetosonic_speed, 4) - 4.0 * 
-			  gcem::pow(alfven_speed, 2) * gcem::pow(sound_speed, 2) * gcem::pow(cos_theta, 2))));// NOLINT(cert-err58-cpp)
+constexpr double omega =
+    gcem::sqrt(gcem::pow(k_amplitude, 2) / 2.0 *
+	       (gcem::pow(magnetosonic_speed, 2) + gcem::sqrt(gcem::pow(magnetosonic_speed, 4) - 4.0 * gcem::pow(alfven_speed, 2) * gcem::pow(sound_speed, 2) *
+												     gcem::pow(cos_theta, 2)))); // NOLINT(cert-err58-cpp)
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double x2, double /*x3*/, double time)
 {
