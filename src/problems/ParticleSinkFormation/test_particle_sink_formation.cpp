@@ -48,6 +48,7 @@ template <> struct HydroSystem_Traits<SinkProblem> {
 template <> struct Physics_Traits<SinkProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
@@ -147,7 +148,6 @@ auto problem_main() -> int
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 1.0e7 * year; // 1 Myr
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
-	sim.doPoissonSolve_ = 1;
 
 	// initialize
 	sim.setInitialConditions();

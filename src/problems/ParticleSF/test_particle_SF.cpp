@@ -117,7 +117,6 @@ auto problem_main() -> int
 
 	// initialize
 	sim.maxTimesteps_ = 1;
-	// sim.doPoissonSolve_ = 1;
 	sim.setInitialConditions();
 
 	// get total gas mass

@@ -45,6 +45,7 @@ template <> struct HydroSystem_Traits<AgoraGalaxy> {
 template <> struct Physics_Traits<AgoraGalaxy> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -391,7 +392,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<AgoraGalaxy> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1; // enable self-gravity
 
 	// initialize
 	sim.setInitialConditions();
