@@ -31,6 +31,7 @@ struct SawtoothProblem {
 };
 
 template <> struct Physics_Traits<SawtoothProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
