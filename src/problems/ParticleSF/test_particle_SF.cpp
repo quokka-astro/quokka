@@ -40,6 +40,7 @@ template <> struct HydroSystem_Traits<ParticleSFProblem> {
 };
 
 template <> struct Physics_Traits<ParticleSFProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -117,7 +118,6 @@ auto problem_main() -> int
 
 	// initialize
 	sim.maxTimesteps_ = 1;
-	// sim.doPoissonSolve_ = 1;
 	sim.setInitialConditions();
 
 	// get total gas mass

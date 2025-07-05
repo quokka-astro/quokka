@@ -186,7 +186,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
-	int doPoissonSolve_ = 0;				     // 1 == self-gravity enabled, 0 == disabled
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
 	amrex::Vector<amrex::MultiFab> phi;
 
@@ -1100,7 +1099,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 #if AMREX_SPACEDIM == 3
 		// do particle leapfrog (first kick at time t)
-		if (doPoissonSolve_ != 0) {
+		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 			kickParticlesAllLevels(dt_[0]);
 		}
 #endif
@@ -1123,7 +1122,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
-		if (doPoissonSolve_ != 0) {
+		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 			kickParticlesAllLevels(dt_[0]);
 		}
 
@@ -1278,7 +1277,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_ != 0) {
+	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 		if (do_subcycle == 1) { // not supported
 			amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
 		}
@@ -1342,7 +1341,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(const amrex::Real dt)
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_ != 0) {
+	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 
 		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
 
@@ -1357,7 +1356,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(
 template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_ != 0) {
+	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 		if (poissonSupercycleInterval_ > 1) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(regrid_int <= 0, "Poisson supercycling is only allowed for static meshes!");
 		}
