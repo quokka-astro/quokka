@@ -164,7 +164,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	int nghost_vel_ = 2;			// number of ghost cells for face velocity computation (default == 2)
-
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
@@ -1400,6 +1399,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
 	const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
+
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
 		// initialize flux MultiFab
