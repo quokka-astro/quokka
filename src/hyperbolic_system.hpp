@@ -65,6 +65,11 @@ template <typename problem_t> class HyperbolicSystem
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 	}
 
+  [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto
+  median(double a, double b, double c) -> double {
+    return std::max(std::min(a, b), std::min(std::max(a, b), c));
+  }
+
 	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto GetMinmaxSurroundingCell(arrayconst_t &q, int i, int j, int k, int n)
 	    -> std::pair<double, double>;
 
