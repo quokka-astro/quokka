@@ -276,52 +276,6 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto HyperbolicSystem<problem_t>::GetMinmaxSurroundingCell(arrayconst_t &q, int i, int j, int k, int n) -> std::pair<double, double>
-{
-#if (AMREX_SPACEDIM == 1)
-	// 1D: compute bounds from self + all 2 surrounding cells
-	const std::pair<double, double> bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
-
-#elif (AMREX_SPACEDIM == 2)
-	// 2D: compute bounds from self + all 8 surrounding cells
-	const std::pair<double, double> bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n), q(i, j - 1, k, n), q(i, j + 1, k, n),
-							      q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n), q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
-
-#else  // AMREX_SPACEDIM == 3
-       // 3D: compute bounds from self + all 26 surrounding cells
-	const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
-							      q(i - 1, j, k, n),
-							      q(i + 1, j, k, n),
-							      q(i, j - 1, k, n),
-							      q(i, j + 1, k, n),
-							      q(i, j, k - 1, n),
-							      q(i, j, k + 1, n),
-							      q(i - 1, j - 1, k, n),
-							      q(i + 1, j - 1, k, n),
-							      q(i - 1, j + 1, k, n),
-							      q(i + 1, j + 1, k, n),
-							      q(i, j - 1, k - 1, n),
-							      q(i, j + 1, k - 1, n),
-							      q(i, j - 1, k + 1, n),
-							      q(i, j + 1, k + 1, n),
-							      q(i - 1, j, k - 1, n),
-							      q(i + 1, j, k - 1, n),
-							      q(i - 1, j, k + 1, n),
-							      q(i + 1, j, k + 1, n),
-							      q(i - 1, j - 1, k - 1, n),
-							      q(i + 1, j - 1, k - 1, n),
-							      q(i - 1, j - 1, k + 1, n),
-							      q(i + 1, j - 1, k + 1, n),
-							      q(i - 1, j + 1, k - 1, n),
-							      q(i + 1, j + 1, k - 1, n),
-							      q(i - 1, j + 1, k + 1, n),
-							      q(i + 1, j + 1, k + 1, n)});
-#endif // AMREX_SPACEDIM
-
-	return bounds;
-}
-
-template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
@@ -384,15 +338,8 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 	// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
 	// [See Eq. B8 of Mignone+ 2005.]
 
-#ifdef MULTIDIM_EXTREMA_CHECK
-	// N.B.: Checking all 27 nearest neighbors is *very* expensive on GPU
-	// (presumably due to lots of cache misses), so it is hard-coded disabled.
-	// Fortunately, almost all problems run stably without enabling this.
-	auto bounds = GetMinmaxSurroundingCell(q_in, i_in, j_in, k_in, iReadFrom + n);
-#else
 	// compute bounds from neighboring cell-averaged values along axis
 	const std::pair<double, double> bounds = std::minmax({q(i, j, k, iReadFrom + n), q(i - 1, j, k, iReadFrom + n), q(i + 1, j, k, iReadFrom + n)});
-#endif
 
 	// get interfaces
 	// PPM reconstruction following Colella & Woodward (1984), with
