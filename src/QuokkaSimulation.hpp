@@ -159,6 +159,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
+	int nghost_vel_ = 2;			// number of ghost cells for face velocity computation (default == 2)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -1317,8 +1318,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
 	const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
-	auto ba = grids[lev];
-	auto dm = dmap[lev];
+	const auto ba = grids[lev];
+	const auto dm = dmap[lev];
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
 		// initialize flux MultiFab
@@ -1663,10 +1664,11 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 {
 	BL_PROFILE("QuokkaSimulation::computeHydroFluxes()");
 
-	auto ba = grids[lev];
-	auto dm = dmap[lev];
-	const int flatteningGhost = 2;
-	const int reconstructGhost = 1;
+	const auto ba = grids[lev];
+	const auto dm = dmap[lev];
+	const int reconstructGhost = 3; // reconstruct *two* additional cells outside valid region
+	// we need two additional ghost cells in order to compute two ghost face velocities
+	const int flatteningGhost = reconstructGhost + 1;
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
@@ -1684,8 +1686,8 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
 		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
 		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
-		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
-		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost - 1);
+		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, reconstructGhost - 1);
 	}
 
 	// conserved to primitive variables
@@ -1706,6 +1708,12 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
+
+	// write reconstructed states to disk for analysis (includes ghost zones)
+	// this->writeReconstructedStatesToDisk(leftState, rightState, lev, istep[lev]);
+
+	// write face velocities to disk for analysis
+	// this->writeFaceVelocitiesToDisk(facevel, lev, istep[lev]);
 
 	// LOW LEVEL DEBUGGING: output all of the temporary MultiFabs
 	if (lowLevelDebuggingOutput_ == 1) {
@@ -1767,9 +1775,11 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primV
 
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_,
+											 nghost_vel_);
 	} else {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_,
+											 nghost_vel_);
 	}
 }
 
@@ -1779,9 +1789,9 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 {
 	BL_PROFILE("QuokkaSimulation::computeFOHydroFluxes()");
 
-	auto ba = grids[lev];
-	auto dm = dmap[lev];
-	const int reconstructRange = 1;
+	const auto ba = grids[lev];
+	const auto dm = dmap[lev];
+	const int reconstructRange = 3; // reconstruct *two* additional cells outside valid region
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
@@ -1794,8 +1804,8 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
 		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
 		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
-		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
-		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange - 1);
+		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, reconstructRange - 1);
 	}
 
 	// conserved to primitive variables
@@ -1821,7 +1831,8 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &pri
 	// donor-cell reconstruction
 	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	// LLF solver
-	HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+	HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_,
+										nghost_vel_);
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)

@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation for linear advection.
 
 #include <array>
+#include <fstream>
 
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
@@ -26,6 +27,7 @@
 #include "linear_advection/linear_advection.hpp"
 #include "simulation.hpp"
 #include "util/ArrayView.hpp"
+#include <fmt/format.h>
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class AdvectionSimulation : public AMRSimulation<problem_t>
@@ -100,11 +102,13 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
-	auto computeFluxes(amrex::MultiFab const &consVar, int nvars, int lev) -> std::array<amrex::MultiFab, AMREX_SPACEDIM>;
+	auto computeFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
+	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
+			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
-	void fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux, amrex::MultiFab &x1LeftState,
-			  amrex::MultiFab &x1RightState, int ng_reconstruct, int nvars);
+	void fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel,
+			  amrex::MultiFab &x1LeftState, amrex::MultiFab &x1RightState, int ng_reconstruct, int nvars);
 
 	double advectionVx_ = 1.0; // default
 	double advectionVy_ = 0.0; // default
@@ -358,7 +362,13 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 	{
 		auto const &stateOld = state_old_cc_[lev];
 		auto &stateNew = state_new_cc_[lev];
-		auto fluxArrays = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
+		auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
+
+		// Write face velocities to disk
+		// this->writeFaceVelocitiesToDisk(faceVelArrays, lev, cycleCount_);
+
+		// Write reconstructed states to disk
+		// this->writeReconstructedStatesToDisk(leftStateArrays, rightStateArrays, lev, cycleCount_);
 
 		// Stage 1 of RK2-SSP
 		LinearAdvectionSystem<problem_t>::PredictStep(stateOld, stateNew, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
@@ -386,7 +396,8 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 			auto const &stateInOld = state_old_cc_[lev];
 			auto const &stateInStar = state_new_cc_[lev];
 			auto &stateOut = state_new_cc_[lev];
-			auto fluxArrays = computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
+			auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] =
+			    computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 			// Stage 2 of RK2-SSP
 			LinearAdvectionSystem<problem_t>::AddFluxesRK2(stateOut, stateInOld, stateInStar, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
@@ -434,15 +445,20 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 template <typename problem_t>
 auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
-    -> std::array<amrex::MultiFab, AMREX_SPACEDIM>
+    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
+		  std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
-	const int reconstructRange = 1;
+	const int reconstructRange = 3; // fully reconstruct a parabola within *three* cells outside the valid region
+	// NOTE: one cell is needed to get L/R states at the FAB boundaries.
+	//   The extra cells are needed to get L/R states (and therefore the face velocity) for *two* ghost faces.
+	//   (For hydro, we need *two* ghost face velocities in order to do particle MAC advection.)
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
 
@@ -450,22 +466,24 @@ auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVa
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
 		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
 		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
-		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
+		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange - 1);
+		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, reconstructRange - 1);
 	}
 
-	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVar, primVar, flux[0], leftState[0], rightState[0], reconstructRange, nvars);
-		     , fluxFunction<FluxDir::X2>(consVar, primVar, flux[1], leftState[1], rightState[1], reconstructRange, nvars);
-		     , fluxFunction<FluxDir::X3>(consVar, primVar, flux[2], leftState[2], rightState[2], reconstructRange, nvars);)
+	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVar, primVar, flux[0], facevel[0], leftState[0], rightState[0], reconstructRange, nvars);
+		     , fluxFunction<FluxDir::X2>(consVar, primVar, flux[1], facevel[1], leftState[1], rightState[1], reconstructRange, nvars);
+		     , fluxFunction<FluxDir::X3>(consVar, primVar, flux[2], facevel[2], leftState[2], rightState[2], reconstructRange, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
-	return flux;
+	return std::make_tuple(std::move(flux), std::move(facevel), std::move(leftState), std::move(rightState));
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
 void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux,
-						  amrex::MultiFab &x1LeftState, amrex::MultiFab &x1RightState, const int ng_reconstruct, const int nvars)
+						  amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1LeftState, amrex::MultiFab &x1RightState,
+						  const int ng_reconstruct, const int nvars)
 {
 	amrex::Real advectionVel = NAN;
 	if constexpr (DIR == FluxDir::X1) {
@@ -476,14 +494,11 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 		advectionVel = advectionVz_;
 	}
 
-	// amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
-	// amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dim);
-
 	LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consState, primVar, nghost_cc_, nvars);
 
 	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, x1LeftState, x1RightState, ng_reconstruct, nvars);
 
-	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux, x1LeftState, x1RightState, advectionVel, nvars);
+	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux, x1LeftState, x1RightState, x1FaceVel, advectionVel, nvars);
 }
 
 #endif // ADVECTION_SIMULATION_HPP_
