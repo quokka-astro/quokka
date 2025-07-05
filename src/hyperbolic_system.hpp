@@ -128,8 +128,7 @@ template <typename problem_t> class HyperbolicSystem
 	    -> std::pair<amrex::Real, amrex::Real>;
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
-					    int nvars);
+	static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange, int nvars);
 
 	template <typename F>
 #if defined(__x86_64__)
