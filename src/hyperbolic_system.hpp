@@ -128,7 +128,19 @@ template <typename problem_t> class HyperbolicSystem
 	    -> std::pair<amrex::Real, amrex::Real>;
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange, int nvars);
+	static void ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
+					    int iReadFrom = 0, int iWriteFrom = 0);
+
+	template <FluxDir DIR>
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
+										     amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars,
+										     int iReadFrom = 0, int iWriteFrom = 0);
+
+	template <FluxDir DIR>
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q,
+										     quokka::Array4View<amrex::Real, DIR> const &leftState,
+										     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
+										     int j_in, int k_in, int iReadFrom = 0, int iWriteFrom = 0);
 
 	template <typename F>
 #if defined(__x86_64__)
@@ -498,89 +510,111 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
-							  const int nvars)
+void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
+							  const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
-	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM_EP()");
+	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
+
+	auto const &q_in = q_mf.const_arrays();
+	auto leftState_in = leftState_mf.arrays();
+	auto rightState_in = rightState_mf.arrays();
+	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+
+	// cell-centered kernel
+	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+		// construct ArrayViews for permuted indices
+		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
+
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
+										amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
+										const int nvars, const int iReadFrom, const int iWriteFrom)
+{
+	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
 
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
 	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
 	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
-	// edge of zone i, and xright_(i) is the "right"-side of the interface
-	// at the *left* edge of zone i.
+	// cell-centered kernel
+	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+	});
+}
 
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
+template <typename problem_t>
+template <FluxDir DIR>
+void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q,
+							  quokka::Array4View<amrex::Real, DIR> const &leftState,
+							  quokka::Array4View<amrex::Real, DIR> const &rightState, const int n, const int i_in, const int j_in,
+							  const int k_in, const int iReadFrom, const int iWriteFrom)
+{
+	/// Extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm (2007).
 
-	amrex::ParallelFor(cellRange, nvars, // cell-centered kernel
-			   [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-				   // permute array indices according to dir
-				   auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+	// permute array indices according to dir
+	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-				   /// extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm
-				   /// (2007).
+	// 0. 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99, 1997)
+	const double c1 = 2. / 60.;
+	const double c2 = -13. / 60.;
+	const double c3 = 47. / 60.;
+	const double c4 = 27. / 60.;
+	const double c5 = -3. / 60.;
 
-				   // 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99,
-				   // 1997)
-				   const double c1 = 2. / 60.;
-				   const double c2 = -13. / 60.;
-				   const double c3 = 47. / 60.;
-				   const double c4 = 27. / 60.;
-				   const double c5 = -3. / 60.;
+	const double a_minus = c1 * q(i + 2, j, k, n) + c2 * q(i + 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i - 1, j, k, n) + c5 * q(i - 2, j, k, n);
+	const double a_plus = c1 * q(i - 2, j, k, n) + c2 * q(i - 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i + 1, j, k, n) + c5 * q(i + 2, j, k, n);
 
-				   const double a_minus =
-				       c1 * q(i + 2, j, k, n) + c2 * q(i + 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i - 1, j, k, n) + c5 * q(i - 2, j, k, n);
+	// save neighboring values
+	const double a = q(i, j, k, n);
+	const double am = q(i - 1, j, k, n);
+	const double ap = q(i + 1, j, k, n);
 
-				   const double a_plus =
-				       c1 * q(i - 2, j, k, n) + c2 * q(i - 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i + 1, j, k, n) + c5 * q(i + 2, j, k, n);
+	// 1. monotonize
+	auto [new_a_minus, new_a_plus] = MonotonizeEdges(a_minus, a_plus, a, am, ap);
 
-				   // save neighboring values
-				   const double a = q(i, j, k, n);
-				   const double am = q(i - 1, j, k, n);
-				   const double ap = q(i + 1, j, k, n);
+	// 2. check whether limiter was triggered on either side
+	const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) + std::abs(q(i + 1, j, k, n))) / 3.0;
+	const double eps = 1.0e-14 * q_mean;
 
-				   // 1. monotonize
-				   auto [new_a_minus, new_a_plus] = MonotonizeEdges(a_minus, a_plus, a, am, ap);
+	if (std::abs(new_a_minus - a_minus) > eps || std::abs(new_a_plus - a_plus) > eps) {
 
-				   // 2. check whether limiter was triggered on either side
-				   const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) + std::abs(q(i + 1, j, k, n))) / 3.0;
-				   const double eps = 1.0e-14 * q_mean;
+		// compute symmetric WENO-Z reconstruction
+		auto [a_minus_weno, a_plus_weno] = ComputeWENO(q, i, j, k, n);
 
-				   if (std::abs(new_a_minus - a_minus) > eps || std::abs(new_a_plus - a_plus) > eps) {
+		if (new_a_minus == a || new_a_plus == a) {
+			// 3. to avoid clipping at extrema, use WENO value
+			a_minus_weno = median(a, a_minus_weno, a_minus);
+			a_plus_weno = median(a, a_plus_weno, a_plus);
 
-					   // compute symmetric WENO-Z reconstruction
-					   auto [a_minus_weno, a_plus_weno] = ComputeWENO(q, i, j, k, n);
+			auto [a_minus_mweno, a_plus_mweno] = MonotonizeEdges(a_minus_weno, a_plus_weno, a, am, ap);
 
-					   if (new_a_minus == a || new_a_plus == a) {
-						   // 3. to avoid clipping at extrema, use WENO value
-						   a_minus_weno = median(a, a_minus_weno, a_minus);
-						   a_plus_weno = median(a, a_plus_weno, a_plus);
+			new_a_minus = median(a_minus_weno, a_minus_mweno, a_minus);
+			new_a_plus = median(a_plus_weno, a_plus_mweno, a_plus);
+		} else {
+			// 4. gradient is too steep, use one-sided 4th-order PPM stencil
+			double a_minus_ppm = ComputeSteepPPM(q, i - 1, j, k, n);
+			double a_plus_ppm = ComputeSteepPPM(q, i, j, k, n);
 
-						   auto [a_minus_mweno, a_plus_mweno] = MonotonizeEdges(a_minus_weno, a_plus_weno, a, am, ap);
+			a_minus_ppm = median(a_minus_weno, a_minus_ppm, a_minus);
+			a_plus_ppm = median(a_plus_weno, a_plus_ppm, a_plus);
 
-						   new_a_minus = median(a_minus_weno, a_minus_mweno, a_minus);
-						   new_a_plus = median(a_plus_weno, a_plus_mweno, a_plus);
-					   } else {
-						   // 4. gradient is too steep, use one-sided 4th-order PPM stencil
-						   double a_minus_ppm = ComputeSteepPPM(q, i - 1, j, k, n);
-						   double a_plus_ppm = ComputeSteepPPM(q, i, j, k, n);
+			auto [a_minus_mppm, a_plus_mppm] = MonotonizeEdges(a_minus_ppm, a_plus_ppm, a, am, ap);
 
-						   a_minus_ppm = median(a_minus_weno, a_minus_ppm, a_minus);
-						   a_plus_ppm = median(a_plus_weno, a_plus_ppm, a_plus);
+			new_a_minus = median(a_minus_mppm, a_minus_weno, a_minus);
+			new_a_plus = median(a_plus_mppm, a_plus_weno, a_plus);
+		}
+	}
 
-						   auto [a_minus_mppm, a_plus_mppm] = MonotonizeEdges(a_minus_ppm, a_plus_ppm, a, am, ap);
-
-						   new_a_minus = median(a_minus_mppm, a_minus_weno, a_minus);
-						   new_a_plus = median(a_plus_mppm, a_plus_weno, a_plus);
-					   }
-				   }
-
-				   rightState(i, j, k, n) = new_a_minus;
-				   leftState(i + 1, j, k, n) = new_a_plus;
-			   });
+	rightState(i, j, k, n) = new_a_minus;
+	leftState(i + 1, j, k, n) = new_a_plus;
 }
 
 template <typename problem_t>
