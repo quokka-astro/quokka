@@ -116,7 +116,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	amrex::Real errorNorm_ = NAN;
 
-	static constexpr int reconstructOrder_ = 3; // PPM = 3 ['third order'], piecewise constant == 1
+	static constexpr int reconstructOrder_ = 5; // xPPM = 5 (fifth order), piecewise constant == 1
 	static constexpr int integratorOrder_ = 2;  // RK2-SSP = 2, forward Euler = 1
 };
 
@@ -496,7 +496,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 
 	LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consState, primVar, nghost_cc_, nvars);
 
-	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, x1LeftState, x1RightState, ng_reconstruct, nvars);
+	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar, x1LeftState, x1RightState, ng_reconstruct, nvars);
 
 	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux, x1LeftState, x1RightState, x1FaceVel, advectionVel, nvars);
 }
