@@ -569,8 +569,10 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amr
 	const double c4 = 27. / 60.;
 	const double c5 = -3. / 60.;
 
-	const double a_minus = c1 * q(i + 2, j, k, iReadFrom + n) + c2 * q(i + 1, j, k, iReadFrom + n) + c3 * q(i, j, k, iReadFrom + n) + c4 * q(i - 1, j, k, iReadFrom + n) + c5 * q(i - 2, j, k, iReadFrom + n);
-	const double a_plus = c1 * q(i - 2, j, k, iReadFrom + n) + c2 * q(i - 1, j, k, iReadFrom + n) + c3 * q(i, j, k, iReadFrom + n) + c4 * q(i + 1, j, k, iReadFrom + n) + c5 * q(i + 2, j, k, iReadFrom + n);
+	const double a_minus = c1 * q(i + 2, j, k, iReadFrom + n) + c2 * q(i + 1, j, k, iReadFrom + n) + c3 * q(i, j, k, iReadFrom + n) +
+			       c4 * q(i - 1, j, k, iReadFrom + n) + c5 * q(i - 2, j, k, iReadFrom + n);
+	const double a_plus = c1 * q(i - 2, j, k, iReadFrom + n) + c2 * q(i - 1, j, k, iReadFrom + n) + c3 * q(i, j, k, iReadFrom + n) +
+			      c4 * q(i + 1, j, k, iReadFrom + n) + c5 * q(i + 2, j, k, iReadFrom + n);
 
 	// save neighboring values
 	const double a = q(i, j, k, iReadFrom + n);
