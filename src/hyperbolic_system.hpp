@@ -569,25 +569,25 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amr
 	const double c4 = 27. / 60.;
 	const double c5 = -3. / 60.;
 
-	const double a_minus = c1 * q(i + 2, j, k, n) + c2 * q(i + 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i - 1, j, k, n) + c5 * q(i - 2, j, k, n);
-	const double a_plus = c1 * q(i - 2, j, k, n) + c2 * q(i - 1, j, k, n) + c3 * q(i, j, k, n) + c4 * q(i + 1, j, k, n) + c5 * q(i + 2, j, k, n);
+	const double a_minus = c1 * q(i + 2, j, k, iReadFrom + n) + c2 * q(i + 1, j, k, iReadFrom + n) + c3 * q(i, j, k, iReadFrom + n) + c4 * q(i - 1, j, k, iReadFrom + n) + c5 * q(i - 2, j, k, iReadFrom + n);
+	const double a_plus = c1 * q(i - 2, j, k, iReadFrom + n) + c2 * q(i - 1, j, k, iReadFrom + n) + c3 * q(i, j, k, iReadFrom + n) + c4 * q(i + 1, j, k, iReadFrom + n) + c5 * q(i + 2, j, k, iReadFrom + n);
 
 	// save neighboring values
-	const double a = q(i, j, k, n);
-	const double am = q(i - 1, j, k, n);
-	const double ap = q(i + 1, j, k, n);
+	const double a = q(i, j, k, iReadFrom + n);
+	const double am = q(i - 1, j, k, iReadFrom + n);
+	const double ap = q(i + 1, j, k, iReadFrom + n);
 
 	// 1. monotonize
 	auto [new_a_minus, new_a_plus] = MonotonizeEdges(a_minus, a_plus, a, am, ap);
 
 	// 2. check whether limiter was triggered on either side
-	const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) + std::abs(q(i + 1, j, k, n))) / 3.0;
+	const double q_mean = (std::abs(q(i - 1, j, k, iReadFrom + n)) + std::abs(q(i, j, k, iReadFrom + n)) + std::abs(q(i + 1, j, k, iReadFrom + n))) / 3.0;
 	const double eps = 1.0e-14 * q_mean;
 
 	if (std::abs(new_a_minus - a_minus) > eps || std::abs(new_a_plus - a_plus) > eps) {
 
 		// compute symmetric WENO-Z reconstruction
-		auto [a_minus_weno, a_plus_weno] = ComputeWENO(q, i, j, k, n);
+		auto [a_minus_weno, a_plus_weno] = ComputeWENO(q, i, j, k, iReadFrom + n);
 
 		if (new_a_minus == a || new_a_plus == a) {
 			// 3. to avoid clipping at extrema, use WENO value
@@ -600,8 +600,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amr
 			new_a_plus = median(a_plus_weno, a_plus_mweno, a_plus);
 		} else {
 			// 4. gradient is too steep, use one-sided 4th-order PPM stencil
-			double a_minus_ppm = ComputeSteepPPM(q, i - 1, j, k, n);
-			double a_plus_ppm = ComputeSteepPPM(q, i, j, k, n);
+			double a_minus_ppm = ComputeSteepPPM(q, i - 1, j, k, iReadFrom + n);
+			double a_plus_ppm = ComputeSteepPPM(q, i, j, k, iReadFrom + n);
 
 			a_minus_ppm = median(a_minus_weno, a_minus_ppm, a_minus);
 			a_plus_ppm = median(a_plus_weno, a_plus_ppm, a_plus);
@@ -613,8 +613,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amr
 		}
 	}
 
-	rightState(i, j, k, n) = new_a_minus;
-	leftState(i + 1, j, k, n) = new_a_plus;
+	rightState(i, j, k, iWriteFrom + n) = new_a_minus;
+	leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
 }
 
 template <typename problem_t>
