@@ -159,7 +159,7 @@ auto problem_main() -> int
 
 	// Compute reference solution
 	int status = 0;
-	const double err_tol = 0.015;
+	const double err_tol = 0.007;
 	if (sim.errorNorm_ > err_tol) {
 		status = 1;
 	}

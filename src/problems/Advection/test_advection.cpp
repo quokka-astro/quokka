@@ -158,7 +158,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	int status = 0;
-	const double err_tol = 0.015;
+	const double err_tol = 0.009;
 	if (sim.errorNorm_ > err_tol) {
 		status = 1;
 	}
