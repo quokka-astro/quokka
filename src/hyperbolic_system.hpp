@@ -552,7 +552,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q,
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q,
 							  quokka::Array4View<amrex::Real, DIR> const &leftState,
 							  quokka::Array4View<amrex::Real, DIR> const &rightState, const int n, const int i_in, const int j_in,
 							  const int k_in, const int iReadFrom, const int iWriteFrom)
