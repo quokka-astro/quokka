@@ -5,4 +5,6 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     add_test(NAME SN COMMAND test_SN ../inputs/SN.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME SN_long_grackle COMMAND test_SN ../inputs/SN_long_grackle.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME SN_long_resampled COMMAND test_SN ../inputs/SN_long_resampled.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

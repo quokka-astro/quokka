@@ -186,7 +186,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
-	int doPoissonSolve_ = 0;				     // 1 == self-gravity enabled, 0 == disabled
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
 	amrex::Vector<amrex::MultiFab> phi;
 
@@ -386,6 +385,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteProjectionPlotfile() const;
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
+	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
+	void writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
+					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int step);
 
 	// ABOUTME: Used to handle universal refinement during checkpoint restart operations
 	struct RefinementContext {
@@ -458,7 +460,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_cc_ = 4;						    // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
+	int nghost_cc_ = 6; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
 	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
@@ -1127,7 +1129,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 #if AMREX_SPACEDIM == 3
 		// do particle leapfrog (first kick at time t)
-		if (doPoissonSolve_ != 0) {
+		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 			kickParticlesAllLevels(dt_[0]);
 		}
 #endif
@@ -1150,7 +1152,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
-		if (doPoissonSolve_ != 0) {
+		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 			kickParticlesAllLevels(dt_[0]);
 		}
 
@@ -1305,7 +1307,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_ != 0) {
+	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 		if (do_subcycle == 1) { // not supported
 			amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
 		}
@@ -1369,7 +1371,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(const amrex::Real dt)
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_ != 0) {
+	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 
 		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
 
@@ -1384,7 +1386,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(
 template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
 {
 #if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_ != 0) {
+	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 		if (poissonSupercycleInterval_ > 1) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(regrid_int <= 0, "Poisson supercycling is only allowed for static meshes!");
 		}
@@ -1501,7 +1503,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Fill boundary before computing accretion rate. This is necessary because the computation of accretion rate uses 3 ghost cells, but the
 	// boundaries are not filled at this point.
-	// TODO(cch): we can fill the hydro variables only if no other variables are used in accretion rate computation
+	// TODO(cch): fill the hydro variables but not radiation variables, since radiation variables are used in accretion
 	state_new_cc_[lev].FillBoundary(geom[lev].periodicity());
 
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
@@ -1519,8 +1521,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Deposit the SN particles into the MultiFab
-	// TODO(cch): put accretion_rate_at_level inside depositSN
-	particleRegister_.depositSN(state_new_cc_[lev], lev, time, dt);
+	const amrex::Real max_velocity = particleRegister_.depositSN(state_new_cc_[lev], lev, time, dt);
+
+	// Check if the maximum velocity is greater than the threshold
+	constexpr amrex::Real v_over_c_threshold = 0.03;
+	if (max_velocity > v_over_c_threshold * C::c_light) {
+		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
+			       << " c threshold!" << "\n";
+	}
 }
 #endif // AMREX_SPACEDIM == 3
 
@@ -3803,6 +3811,173 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 		}
 	}
 #endif
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArrays, int lev, int timestep)
+{
+	// Create directory for face velocity outputs if it doesn't exist
+	std::string dirname = fmt::format("facevel_lev{}_step{}", lev, timestep);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::UtilCreateDirectory(dirname, 0755);
+	}
+	amrex::ParallelDescriptor::Barrier();
+
+	// Write each direction's face velocities
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		std::string dimname;
+		if (idim == 0) {
+			dimname = "x";
+		} else if (idim == 1) {
+			dimname = "y";
+		} else {
+			dimname = "z";
+		}
+
+		// Write each FAB in the MultiFab
+		for (amrex::MFIter mfi(faceVelArrays[idim]); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.fabbox(); // This includes ghost cells
+			const amrex::FArrayBox &fab = faceVelArrays[idim][mfi];
+
+			// Create filename for this FAB
+			const std::string filename = fmt::format("{}/facevel_{}_box_{}.fab", dirname, dimname, mfi.index());
+
+			// Write FAB to disk in ASCII format
+			std::ofstream ofs(filename, std::ios::out);
+			if (ofs.is_open()) {
+				// Write box information
+				ofs << "# Face velocity FAB for direction " << dimname << "\n";
+				ofs << "# Box: " << bx << "\n";
+				ofs << "# Valid box: " << mfi.validbox() << "\n";
+				ofs << "# MultiFab ghost cells: " << faceVelArrays[idim].nGrow() << "\n";
+#if AMREX_SPACEDIM == 1
+				ofs << "# Format: i value\n";
+#elif AMREX_SPACEDIM == 2
+				ofs << "# Format: i j value\n";
+#elif AMREX_SPACEDIM == 3
+				ofs << "# Format: i j k value\n";
+#endif
+
+				// Write data
+				auto const &arr = fab.const_array();
+				amrex::Loop(bx, [&](int i, int j, int k) {
+#if AMREX_SPACEDIM == 1
+					ofs << i << " " << arr(i, j, k, 0) << "\n";
+#elif AMREX_SPACEDIM == 2
+					ofs << i << " " << j << " " << arr(i,j,k,0) << "\n";
+#elif AMREX_SPACEDIM == 3
+					ofs << i << " " << j << " " << k << " " << arr(i,j,k,0) << "\n";
+#endif
+				});
+				ofs.close();
+			}
+		}
+	}
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
+							      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int timestep)
+{
+	// Create directory for reconstructed state outputs if it doesn't exist
+	std::string dirname = fmt::format("reconst_lev{}_step{}", lev, timestep);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::UtilCreateDirectory(dirname, 0755);
+	}
+	amrex::ParallelDescriptor::Barrier();
+
+	// Write each direction's reconstructed states
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		std::string dimname;
+		if (idim == 0) {
+			dimname = "x";
+		} else if (idim == 1) {
+			dimname = "y";
+		} else {
+			dimname = "z";
+		}
+
+		// Write left and right states for each FAB in the MultiFab
+		for (amrex::MFIter mfi(leftState[idim]); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.fabbox(); // This includes ghost cells
+			const amrex::FArrayBox &leftFab = leftState[idim][mfi];
+			const amrex::FArrayBox &rightFab = rightState[idim][mfi];
+
+			// Create filenames for this FAB's left and right states
+			const std::string leftFilename = fmt::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
+			const std::string rightFilename = fmt::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
+
+			// Write left state FAB to disk
+			std::ofstream leftOfs(leftFilename, std::ios::out);
+			if (leftOfs.is_open()) {
+				// Write box information
+				leftOfs << "# Left reconstructed state FAB for direction " << dimname << "\n";
+				leftOfs << "# Box: " << bx << "\n";
+				leftOfs << "# Valid box: " << mfi.validbox() << "\n";
+				leftOfs << "# MultiFab ghost cells: " << leftState[idim].nGrow() << "\n";
+#if AMREX_SPACEDIM == 1
+				leftOfs << "# Format: i density xmom ymom zmom energy intenergy\n";
+#elif AMREX_SPACEDIM == 2
+				leftOfs << "# Format: i j density xmom ymom zmom energy intenergy\n";
+#elif AMREX_SPACEDIM == 3
+				leftOfs << "# Format: i j k density xmom ymom zmom energy intenergy\n";
+#endif
+
+				// Write data (all hydro variables)
+				auto const &leftArr = leftFab.const_array();
+				amrex::Loop(bx, [&](int i, int j, int k) {
+#if AMREX_SPACEDIM == 1
+					leftOfs << i;
+#elif AMREX_SPACEDIM == 2
+					leftOfs << i << " " << j;
+#elif AMREX_SPACEDIM == 3
+					leftOfs << i << " " << j << " " << k;
+#endif
+					// Write all hydro variables (density, xmom, ymom, zmom, energy, intenergy)
+					for (int ivar = 0; ivar < leftFab.nComp(); ++ivar) {
+						leftOfs << " " << leftArr(i, j, k, ivar);
+					}
+					leftOfs << "\n";
+				});
+				leftOfs.close();
+			}
+
+			// Write right state FAB to disk
+			std::ofstream rightOfs(rightFilename, std::ios::out);
+			if (rightOfs.is_open()) {
+				// Write box information
+				rightOfs << "# Right reconstructed state FAB for direction " << dimname << "\n";
+				rightOfs << "# Box: " << bx << "\n";
+				rightOfs << "# Valid box: " << mfi.validbox() << "\n";
+				rightOfs << "# MultiFab ghost cells: " << rightState[idim].nGrow() << "\n";
+#if AMREX_SPACEDIM == 1
+				rightOfs << "# Format: i density xmom ymom zmom energy intenergy\n";
+#elif AMREX_SPACEDIM == 2
+				rightOfs << "# Format: i j density xmom ymom zmom energy intenergy\n";
+#elif AMREX_SPACEDIM == 3
+				rightOfs << "# Format: i j k density xmom ymom zmom energy intenergy\n";
+#endif
+
+				// Write data (all hydro variables)
+				auto const &rightArr = rightFab.const_array();
+				amrex::Loop(bx, [&](int i, int j, int k) {
+#if AMREX_SPACEDIM == 1
+					rightOfs << i;
+#elif AMREX_SPACEDIM == 2
+					rightOfs << i << " " << j;
+#elif AMREX_SPACEDIM == 3
+					rightOfs << i << " " << j << " " << k;
+#endif
+					// Write all hydro variables (density, xmom, ymom, zmom, energy, intenergy)
+					for (int ivar = 0; ivar < rightFab.nComp(); ++ivar) {
+						rightOfs << " " << rightArr(i, j, k, ivar);
+					}
+					rightOfs << "\n";
+				});
+				rightOfs.close();
+			}
+		}
+	}
 }
 
 #endif // SIMULATION_HPP_

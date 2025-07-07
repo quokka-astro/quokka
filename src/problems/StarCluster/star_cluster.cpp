@@ -49,6 +49,7 @@ template <> struct HydroSystem_Traits<StarCluster> {
 template <> struct Physics_Traits<StarCluster> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
@@ -234,7 +235,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<StarCluster> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.densityFloor_ = 0.01;
 
 	sim.userData_.R_sphere = R_sphere;

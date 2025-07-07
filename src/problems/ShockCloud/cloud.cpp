@@ -47,6 +47,7 @@ constexpr double keV_in_ergs = 1.60218e-9;   // ergs == 1 keV
 constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
 
 template <> struct Physics_Traits<ShockCloud> {
+	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;

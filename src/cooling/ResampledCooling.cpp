@@ -16,11 +16,8 @@
 #include <H5Ppublic.h>
 #include <hdf5.h>
 
-#include "AMReX_Arena.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_GpuContainers.H"
 #include "AMReX_Print.H"
-#include "AMReX_TableData.H"
 
 namespace quokka::ResampledCooling
 {
@@ -85,7 +82,10 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	H5Gclose(metadata_group);
 
-	// Read grid data
+	// Read coordinate grids
+	amrex::Vector<amrex::Real> rho_coords(n_rho);
+	amrex::Vector<amrex::Real> eint_coords(n_eint);
+
 	{
 		auto *temp_data = new double[n_rho]; // NOLINT(cppcoreguidelines-owning-memory)
 		dset_id = H5Dopen2(file_id, "/grids/fast_log_rho", H5P_DEFAULT);
@@ -93,11 +93,8 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read fast_log_rho dataset!");
 		H5Dclose(dset_id);
 
-		resampledTables.fast_log_rho =
-		    std::make_unique<amrex::TableData<double, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{n_rho - 1}, amrex::The_Pinned_Arena());
-		auto rho_table = resampledTables.fast_log_rho->table();
 		for (int i = 0; i < n_rho; ++i) {
-			rho_table(i) = temp_data[i];
+			rho_coords[i] = temp_data[i];
 		}
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 	}
@@ -109,117 +106,43 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read fast_log_eint dataset!");
 		H5Dclose(dset_id);
 
-		resampledTables.fast_log_eint =
-		    std::make_unique<amrex::TableData<double, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{n_eint - 1}, amrex::The_Pinned_Arena());
-		auto eint_table = resampledTables.fast_log_eint->table();
 		for (int i = 0; i < n_eint; ++i) {
-			eint_table(i) = temp_data[i];
+			eint_coords[i] = temp_data[i];
 		}
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 	}
 
-	// Read 2D data tables
-	const int64_t data_size = static_cast<int64_t>(n_rho) * static_cast<int64_t>(n_eint);
-
-	{
+	// Helper function to read 2D dataset and initialize DataTable
+	auto read2DDataset = [&](const std::string &dataset_name, quokka::DataTable &table) {
+		const int64_t data_size = static_cast<int64_t>(n_rho) * static_cast<int64_t>(n_eint);
 		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
-		dset_id = H5Dopen2(file_id, "/data/cooling_rates", H5P_DEFAULT);
+
+		dset_id = H5Dopen2(file_id, dataset_name.c_str(), H5P_DEFAULT);
 		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read cooling_rates dataset!");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + dataset_name + " dataset!").c_str());
 		H5Dclose(dset_id);
 
-		resampledTables.cooling_rates = std::make_unique<amrex::TableData<double, 2>>(
-		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
-		auto cooling_table = resampledTables.cooling_rates->table();
-
-		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
+		// Convert HDF5 C-order data to vector format expected by DataTable
+		amrex::Vector<amrex::Vector<amrex::Real>> data2d(n_rho);
 		for (int i = 0; i < n_rho; ++i) {
+			data2d[i].resize(n_eint);
 			for (int j = 0; j < n_eint; ++j) {
-				cooling_table(i, j) = temp_data[i * n_eint + j];
+				data2d[i][j] = temp_data[i * n_eint + j];
 			}
 		}
+
+		// Initialize DataTable
+		table.initialize(rho_coords, eint_coords, data2d);
+
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-	}
+	};
 
-	{
-		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
-		dset_id = H5Dopen2(file_id, "/data/temperatures", H5P_DEFAULT);
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read temperatures dataset!");
-		H5Dclose(dset_id);
-
-		resampledTables.temperatures = std::make_unique<amrex::TableData<double, 2>>(
-		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
-		auto temp_table = resampledTables.temperatures->table();
-
-		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
-		for (int i = 0; i < n_rho; ++i) {
-			for (int j = 0; j < n_eint; ++j) {
-				temp_table(i, j) = temp_data[i * n_eint + j];
-			}
-		}
-		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-	}
-
-	{
-		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
-		dset_id = H5Dopen2(file_id, "/data/sound_speeds", H5P_DEFAULT);
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read sound_speeds dataset!");
-		H5Dclose(dset_id);
-
-		resampledTables.sound_speeds = std::make_unique<amrex::TableData<double, 2>>(
-		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
-		auto sound_speed_table = resampledTables.sound_speeds->table();
-
-		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
-		for (int i = 0; i < n_rho; ++i) {
-			for (int j = 0; j < n_eint; ++j) {
-				sound_speed_table(i, j) = temp_data[i * n_eint + j];
-			}
-		}
-		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-	}
-
-	{
-		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
-		dset_id = H5Dopen2(file_id, "/data/pressures", H5P_DEFAULT);
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read pressures dataset!");
-		H5Dclose(dset_id);
-
-		resampledTables.pressures = std::make_unique<amrex::TableData<double, 2>>(
-		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
-		auto pressure_table = resampledTables.pressures->table();
-
-		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
-		for (int i = 0; i < n_rho; ++i) {
-			for (int j = 0; j < n_eint; ++j) {
-				pressure_table(i, j) = temp_data[i * n_eint + j];
-			}
-		}
-		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-	}
-
-	{
-		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
-		dset_id = H5Dopen2(file_id, "/data/entropies", H5P_DEFAULT);
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read entropies dataset!");
-		H5Dclose(dset_id);
-
-		resampledTables.entropies = std::make_unique<amrex::TableData<double, 2>>(
-		    amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{n_rho - 1, n_eint - 1}, amrex::The_Pinned_Arena());
-		auto entropy_table = resampledTables.entropies->table();
-
-		// Copy data with proper indexing (HDF5 uses C-order, AMReX tables use F-order)
-		for (int i = 0; i < n_rho; ++i) {
-			for (int j = 0; j < n_eint; ++j) {
-				entropy_table(i, j) = temp_data[i * n_eint + j];
-			}
-		}
-		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-	}
+	// Read all 2D datasets
+	read2DDataset("/data/cooling_rates", resampledTables.cooling_rates);
+	read2DDataset("/data/temperatures", resampledTables.temperatures);
+	read2DDataset("/data/sound_speeds", resampledTables.sound_speeds);
+	read2DDataset("/data/pressures", resampledTables.pressures);
+	read2DDataset("/data/entropies", resampledTables.entropies);
 
 	H5Fclose(file_id);
 
@@ -229,13 +152,11 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables
 {
-	resampledGpuConstTables tables{fast_log_rho->const_table(),
-				       fast_log_eint->const_table(),
-				       cooling_rates->const_table(),
-				       temperatures->const_table(),
-				       sound_speeds->const_table(),
-				       pressures->const_table(),
-				       entropies->const_table(),
+	resampledGpuConstTables tables{cooling_rates.const_tables(),
+				       temperatures.const_tables(),
+				       sound_speeds.const_tables(),
+				       pressures.const_tables(),
+				       entropies.const_tables(),
 				       rho_min,
 				       rho_max,
 				       eint_min,

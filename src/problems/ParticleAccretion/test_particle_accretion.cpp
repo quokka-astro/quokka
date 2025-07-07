@@ -60,6 +60,7 @@ template <> struct Physics_Traits<AccretionProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_self_gravity_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
@@ -295,7 +296,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1;      // enable self-gravity
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	sim.initDt_ = 3.0e10;	      // ~1 kyr
