@@ -122,7 +122,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
 
-	static void SyncDualEnergy(amrex::MultiFab &consVar_mf);
+	static void SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::Array<amrex::MultiFab, 3> &faceVar_mf);
 
 	template <RiemannSolver RIEMANN, FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
@@ -722,18 +722,12 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		// axis*
 		//  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
 		double const chi_ijk = std::min({
-		    x1Chi_in[bx](i_in - 1, j_in, k_in),
-		    x1Chi_in[bx](i_in, j_in, k_in),
-		    x1Chi_in[bx](i_in + 1, j_in, k_in),
+			x1Chi_in[bx](i_in - 1, j_in, k_in), x1Chi_in[bx](i_in, j_in, k_in), x1Chi_in[bx](i_in + 1, j_in, k_in),
 #if (AMREX_SPACEDIM >= 2)
-		    x2Chi_in[bx](i_in, j_in - 1, k_in),
-		    x2Chi_in[bx](i_in, j_in, k_in),
-		    x2Chi_in[bx](i_in, j_in + 1, k_in),
+			    x2Chi_in[bx](i_in, j_in - 1, k_in), x2Chi_in[bx](i_in, j_in, k_in), x2Chi_in[bx](i_in, j_in + 1, k_in),
 #endif
 #if (AMREX_SPACEDIM == 3)
-		    x3Chi_in[bx](i_in, j_in, k_in - 1),
-		    x3Chi_in[bx](i_in, j_in, k_in),
-		    x3Chi_in[bx](i_in, j_in, k_in + 1),
+			    x3Chi_in[bx](i_in, j_in, k_in - 1), x3Chi_in[bx](i_in, j_in, k_in), x3Chi_in[bx](i_in, j_in, k_in + 1),
 #endif
 		});
 
@@ -882,7 +876,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 	});
 }
 
-template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf)
+template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &faceVar_mf)
 {
 	// sync internal energy and total energy
 	// this step must be done as an operator-split step after *each* RK stage
@@ -890,6 +884,13 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 	const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
 
 	auto consVar = consVar_mf.arrays();
+	auto faceVar_x = faceVar_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto faceVar_y = faceVar_mf[1].const_arrays();
+#if AMREX_SPACEDIM == 3
+	auto faceVar_z = faceVar_mf[2].const_arrays();
+#endif
+#endif
 
 	amrex::ParallelFor(consVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		amrex::Real const rho = consVar[bx](i, j, k, density_index);
@@ -904,8 +905,21 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 			amrex::Abort("density is negative in SyncDualEnergy! abort!!");
 		}
 
+		// compute kinetic energy
 		amrex::Real const Ekin = (px * px + py * py + pz * pz) / (2.0 * rho);
-		amrex::Real const Eint_cons = Etot - Ekin;
+
+		// compute magnetic energy
+		amrex::Real Emag = 0;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			constexpr int mhd_idx = Physics_Indices<problem_t>::mhdFirstIndex;
+			amrex::Real const Bx = 0.5 * (faceVar_x[bx](i, j, k, mhd_idx) + faceVar_x[bx](i + 1, j, k, mhd_idx));
+			amrex::Real const By = 0.5 * (faceVar_y[bx](i, j, k, mhd_idx) + faceVar_y[bx](i, j + 1, k, mhd_idx));
+			amrex::Real const Bz = 0.5 * (faceVar_z[bx](i, j, k, mhd_idx) + faceVar_z[bx](i, j, k + 1, mhd_idx));
+			Emag = 0.5 * (Bx * Bx + By * By + Bz * Bz);
+		}
+
+		// compute internal energy from conserved vars
+		amrex::Real const Eint_cons = Etot - Ekin - Emag;
 
 		// Li et al. sync method
 		// replace Eint with Eint_cons == (Etot - Ekin) if (Eint_cons / E) > eta
@@ -913,7 +927,7 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 			consVar[bx](i, j, k, internalEnergy_index) = Eint_cons;
 		} else { // non-conservative sync
 			consVar[bx](i, j, k, internalEnergy_index) = Eint_aux;
-			consVar[bx](i, j, k, energy_index) = Eint_aux + Ekin;
+			consVar[bx](i, j, k, energy_index) = Eint_aux + Ekin + Emag;
 		}
 	});
 }

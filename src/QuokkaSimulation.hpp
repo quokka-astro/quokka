@@ -1078,7 +1078,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
 
 	// sync internal energy and total energy
-	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
+	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
 }
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
@@ -1604,7 +1604,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
-			HydroSystem<problem_t>::SyncDualEnergy(stateNew_cc);
+			HydroSystem<problem_t>::SyncDualEnergy(stateNew_cc, stateNew_fc);
 		}
 
 		if (do_reflux == 1) {
@@ -1725,7 +1725,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
-			HydroSystem<problem_t>::SyncDualEnergy(stateFinal_cc);
+			HydroSystem<problem_t>::SyncDualEnergy(stateFinal_cc, stateFinal_fc);
 		}
 
 		if (do_reflux == 1) {
