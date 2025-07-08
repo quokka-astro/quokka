@@ -116,7 +116,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	amrex::Real errorNorm_ = NAN;
 
-	static constexpr int integratorOrder_ = 2;  // RK2-SSP = 2, forward Euler = 1
+	static constexpr int integratorOrder_ = 2; // RK2-SSP = 2, forward Euler = 1
 };
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level)
