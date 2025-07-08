@@ -5,5 +5,5 @@ if (AMReX_SPACEDIM EQUAL 3)
         setup_target_for_cuda_compilation(test_field_loop)
     endif()
 
-    add_test(NAME FieldLoop COMMAND test_field_loop field_loop.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME FieldLoop COMMAND test_field_loop ../inputs/field_loop.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
