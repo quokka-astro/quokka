@@ -316,7 +316,7 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 {
 	const BL_PROFILE("MHDSystem::ReconstructTo()") amrex::Box const &box_r = amrex::grow(box_cValid, 1);
 	amrex::Box const &box_r_x1 = amrex::surroundingNodes(box_r, static_cast<int>(dir));
-	if (reconstructionOrder == 3) {
+	if (reconstructionOrder == 5) {
 		// note: only box_r is used. box_r_x1 is unused.
 		switch (dir) {
 			case FluxDir::X1:
@@ -327,18 +327,6 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 				break;
 			case FluxDir::X3:
 				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X3>(cState, lState, rState, box_r, box_r_x1, 1);
-				break;
-		}
-	} else if (reconstructionOrder == 2) {
-		switch (dir) {
-			case FluxDir::X1:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1, SlopeLimiter::MC>(cState, lState, rState, box_r_x1, 1);
-				break;
-			case FluxDir::X2:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2, SlopeLimiter::MC>(cState, lState, rState, box_r_x1, 1);
-				break;
-			case FluxDir::X3:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3, SlopeLimiter::MC>(cState, lState, rState, box_r_x1, 1);
 				break;
 		}
 	} else if (reconstructionOrder == 1) {
@@ -354,7 +342,7 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 				break;
 		}
 	} else {
-		amrex::Abort("Invalid reconstruction order specified!");
+		amrex::Abort("Invalid reconstruction order specified! Only xPPM and constant are supported for MHD.");
 	}
 }
 

@@ -35,5 +35,5 @@ max_timesteps = 3e4
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
 hydro.artificial_viscosity_coefficient = 0.1
-hydro.use_dual_energy = 0
+hydro.use_dual_energy = 1
 
