@@ -722,12 +722,18 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		// axis*
 		//  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
 		double const chi_ijk = std::min({
-			x1Chi_in[bx](i_in - 1, j_in, k_in), x1Chi_in[bx](i_in, j_in, k_in), x1Chi_in[bx](i_in + 1, j_in, k_in),
+		    x1Chi_in[bx](i_in - 1, j_in, k_in),
+		    x1Chi_in[bx](i_in, j_in, k_in),
+		    x1Chi_in[bx](i_in + 1, j_in, k_in),
 #if (AMREX_SPACEDIM >= 2)
-			    x2Chi_in[bx](i_in, j_in - 1, k_in), x2Chi_in[bx](i_in, j_in, k_in), x2Chi_in[bx](i_in, j_in + 1, k_in),
+		    x2Chi_in[bx](i_in, j_in - 1, k_in),
+		    x2Chi_in[bx](i_in, j_in, k_in),
+		    x2Chi_in[bx](i_in, j_in + 1, k_in),
 #endif
 #if (AMREX_SPACEDIM == 3)
-			    x3Chi_in[bx](i_in, j_in, k_in - 1), x3Chi_in[bx](i_in, j_in, k_in), x3Chi_in[bx](i_in, j_in, k_in + 1),
+		    x3Chi_in[bx](i_in, j_in, k_in - 1),
+		    x3Chi_in[bx](i_in, j_in, k_in),
+		    x3Chi_in[bx](i_in, j_in, k_in + 1),
 #endif
 		});
 
@@ -876,7 +882,8 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 	});
 }
 
-template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &faceVar_mf)
+template <typename problem_t>
+void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &faceVar_mf)
 {
 	// sync internal energy and total energy
 	// this step must be done as an operator-split step after *each* RK stage
