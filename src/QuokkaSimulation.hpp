@@ -1546,31 +1546,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// advect tracer particles using avgFaceVel
-#ifdef AMREX_PARTICLES
 	if (do_tracers != 0) {
-		// copy avgFaceVel to state_new_fc_[lev]
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::Copy(state_new_fc_[lev][idim], avgFaceVel[idim], Physics_Indices<problem_t>::velFirstIndex, 0,
-				    Physics_NumVars::numVelVars_per_dim, nghost_vel);
-		}
-
-		// fill ghost faces
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + 0.5 * dt_lev, quokka::centering::fc,
-					       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-					       FillPatchType::fillpatch_function);
-		}
-
-		// copy state_new_fc_[lev] to avgFaceVel
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::Copy(avgFaceVel[idim], state_new_fc_[lev][idim], 0, Physics_Indices<problem_t>::velFirstIndex,
-				    Physics_NumVars::numVelVars_per_dim, nghost_vel);
-		}
-
-		// advect particles
 		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
-#endif
 
 	// do Strang split source terms (second half-step)
 	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
