@@ -24,3 +24,4 @@ do_reflux = 0
 do_subcycle = 0
 
 plotfile_interval = 10000000
+hydro.reconstruction_order = 5  # extrema-preserving xPPM
