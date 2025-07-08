@@ -36,7 +36,7 @@ enum redoFlag { none = 0, redo = 1 };
 } // namespace quokka
 
 // Define enum for slope limiter type
-enum SlopeLimiter { minmod = 0, MC, EP };
+enum SlopeLimiter { minmod = 0, MC };
 
 using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
@@ -47,15 +47,12 @@ template <typename problem_t> class HyperbolicSystem
       public:
 	template <SlopeLimiter limiter> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real
 	{
-		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC || limiter == SlopeLimiter::EP,
+		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC,
 			      "Invalid slope limiter specified.");
 		if constexpr (limiter == SlopeLimiter::minmod) {
 			return minmod(x, y);
 		}
 		if constexpr (limiter == SlopeLimiter::MC) {
-			return MC(x, y);
-		}
-		if constexpr (limiter == SlopeLimiter::EP) {
 			return MC(x, y);
 		}
 	}
@@ -64,8 +61,6 @@ template <typename problem_t> class HyperbolicSystem
 	{
 		return 0.5 * (sgn(a) + sgn(b)) * std::min({0.5 * std::abs(a + b), 2.0 * std::abs(a), 2.0 * std::abs(b)});
 	}
-
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto EP(double a, double b) -> double { return MC(a, b); }
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod(double a, double b) -> double
 	{
@@ -100,11 +95,6 @@ template <typename problem_t> class HyperbolicSystem
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
 	ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 			     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
-
-	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
-	ReconstructStatesPLM_EP(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
-				quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
@@ -265,11 +255,6 @@ AMREX_GPU_HOST_DEVICE void
 HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 						  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in)
 {
-	if constexpr (limiter == SlopeLimiter::EP) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
-		return;
-	}
-
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
@@ -293,55 +278,6 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 	const auto rslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
 	leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
 	rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;	   // NOLINT
-}
-
-template <typename problem_t>
-template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE void
-HyperbolicSystem<problem_t>::ReconstructStatesPLM_EP(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
-						     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in)
-{
-	// permute array indices according to dir
-	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-	// Extremum-preserving PLM limiter based on Colella & Sekora (2008)
-	// Preserves accuracy at smooth extrema while maintaining TVD property
-
-	// Standard PLM slopes
-	const auto delta_l = q(i, j, k, n) - q(i - 1, j, k, n);
-	const auto delta_r = q(i + 1, j, k, n) - q(i, j, k, n);
-	const auto delta_ll = q(i - 1, j, k, n) - q(i - 2, j, k, n);
-
-	// Check for extrema at current cell
-	const bool is_extremum = (delta_l * delta_r <= 0.0);
-
-	// Left slope computation
-	auto lslope = MC(delta_l, delta_ll);
-	if (is_extremum) {
-		// At extrema, use a less restrictive limiter that preserves accuracy
-		// Use second-order differences to maintain higher-order accuracy
-		const auto d2_l = (q(i + 1, j, k, n) - 2.0 * q(i, j, k, n) + q(i - 1, j, k, n));
-		const auto d2_ll = (q(i, j, k, n) - 2.0 * q(i - 1, j, k, n) + q(i - 2, j, k, n));
-
-		// Use a combination of first and second derivatives for EP limiting
-		const auto ep_factor = std::min(1.0, std::abs(d2_l) > 1e-12 ? std::abs(d2_ll / d2_l) : 1.0);
-		lslope = ep_factor * delta_l;
-	}
-
-	// Right slope computation
-	auto rslope = MC(delta_r, delta_l);
-	if (is_extremum) {
-		// Similar EP limiting for right slope
-		const auto d2_r = (q(i + 2, j, k, n) - 2.0 * q(i + 1, j, k, n) + q(i, j, k, n));
-		const auto d2_c = (q(i + 1, j, k, n) - 2.0 * q(i, j, k, n) + q(i - 1, j, k, n));
-
-		const auto ep_factor = std::min(1.0, std::abs(d2_c) > 1e-12 ? std::abs(d2_r / d2_c) : 1.0);
-		rslope = ep_factor * delta_r;
-	}
-
-	// Standard PLM reconstruction with computed slopes
-	leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope;
-	rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;
 }
 
 template <typename problem_t>
