@@ -116,7 +116,6 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	amrex::Real errorNorm_ = NAN;
 
-	static constexpr int reconstructOrder_ = 5; // xPPM = 5 (fifth order), piecewise constant == 1
 	static constexpr int integratorOrder_ = 2;  // RK2-SSP = 2, forward Euler = 1
 };
 
