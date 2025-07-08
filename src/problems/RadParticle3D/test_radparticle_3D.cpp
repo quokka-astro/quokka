@@ -146,6 +146,6 @@ auto problem_main() -> int
 	amrex::Print() << "Relative L1 norm = " << rel_err << "\n";
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << "\n";
+	amrex::Print() << "Finished. Success? " << (status == 0 ? "Yes" : "No") << "\n";
 	return status;
 }

@@ -26,3 +26,5 @@ plotfile_interval = -1
 max_timesteps = 2
 
 particles.verbose = 1
+
+tiny_profiler.enabled = 0
