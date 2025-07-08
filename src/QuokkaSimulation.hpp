@@ -154,8 +154,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
-	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default)
-	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
+	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
@@ -1738,7 +1738,9 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &primV
 						    amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab const &x1Flat,
 						    amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
 {
-	if (reconstructionOrder_ == 3) {
+	if (reconstructionOrder_ == 5) {
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+	} else if (reconstructionOrder_ == 3) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 2) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar, leftState, rightState, ng_reconstruct, nvars);
@@ -2212,7 +2214,11 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 	// cell-centered kernel
 	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
 
-	if (radiationReconstructionOrder_ == 3) {
+	if (radiationReconstructionOrder_ == 5) {
+		// cell-centered kernel
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+										   x1ReconstructRange, nvars);
+	} else if (radiationReconstructionOrder_ == 3) {
 		// mixed interface/cell-centered kernel
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 										x1ReconstructRange, nvars);
