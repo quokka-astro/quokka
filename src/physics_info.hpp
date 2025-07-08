@@ -18,6 +18,7 @@ template <typename problem_t> struct Physics_Traits {
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 0;
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_self_gravity_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
@@ -55,11 +56,9 @@ template <typename problem_t> struct Physics_Indices {
 	static const int pscalarFirstIndex = Physics_NumVars::numHydroVars;
 	static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
 	// face-centered
-	static const int nvarPerDim_fc = Physics_NumVars::numVelVars_per_dim * static_cast<int>(Physics_Traits<problem_t>::is_hydro_enabled) +
-					 Physics_NumVars::numMHDVars_per_dim * static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled);
+	static const int nvarPerDim_fc = Physics_NumVars::numMHDVars_per_dim * static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled);
 	static const int nvarTotal_fc = AMREX_SPACEDIM * nvarPerDim_fc;
-	static const int velFirstIndex = 0;
-	static const int mhdFirstIndex = velFirstIndex + Physics_NumVars::numVelVars_per_dim;
+	static const int mhdFirstIndex = 0;
 };
 
 #endif // PHYSICS_INFO_HPP_

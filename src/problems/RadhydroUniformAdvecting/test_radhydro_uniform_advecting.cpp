@@ -68,6 +68,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 };
 
 template <> struct Physics_Traits<PulseProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

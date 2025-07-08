@@ -93,6 +93,7 @@ template <> struct quokka::EOS_Traits<SGProblem> {
 };
 
 template <> struct Physics_Traits<SGProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -156,6 +157,7 @@ template <> struct quokka::EOS_Traits<MGproblem> {
 };
 
 template <> struct Physics_Traits<MGproblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

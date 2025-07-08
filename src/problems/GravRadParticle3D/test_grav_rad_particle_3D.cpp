@@ -47,6 +47,7 @@ template <> struct Physics_Traits<ParticleProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = nGroups_; // number of radiation groups
@@ -167,7 +168,6 @@ auto problem_main() -> int
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.doPoissonSolve_ = 1;	       // enable self-gravity
 
 	// initialize
 	sim.setInitialConditions();

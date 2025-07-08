@@ -158,8 +158,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
-	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default)
-	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
+	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
@@ -1743,31 +1743,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// advect tracer particles using avgFaceVel
-#ifdef AMREX_PARTICLES
 	if (do_tracers != 0) {
-		// copy avgFaceVel to state_new_fc_[lev]
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::Copy(state_new_fc_[lev][idim], avgFaceVel[idim], Physics_Indices<problem_t>::velFirstIndex, 0,
-				    Physics_NumVars::numVelVars_per_dim, nghost_vel);
-		}
-
-		// fill ghost faces
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + 0.5 * dt_lev, quokka::centering::fc,
-					       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-					       FillPatchType::fillpatch_function);
-		}
-
-		// copy state_new_fc_[lev] to avgFaceVel
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::Copy(avgFaceVel[idim], state_new_fc_[lev][idim], 0, Physics_Indices<problem_t>::velFirstIndex,
-				    Physics_NumVars::numVelVars_per_dim, nghost_vel);
-		}
-
-		// advect particles
 		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
-#endif
 
 	// do Strang split source terms (second half-step)
 	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
@@ -2057,12 +2035,10 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 		});
 	}
 
-	if (reconstructionOrder_ == 3) {
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
-		} else {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct_total, nvars);
-		}
+	if (reconstructionOrder_ == 5) {
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+	} else if (reconstructionOrder_ == 3) {
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 2) {
 		// HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState,
 		// ng_reconstruct_total, 										      nvars);
@@ -2593,7 +2569,11 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 	// cell-centered kernel
 	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
 
-	if (radiationReconstructionOrder_ == 3) {
+	if (radiationReconstructionOrder_ == 5) {
+		// cell-centered kernel
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+										   x1ReconstructRange, nvars);
+	} else if (radiationReconstructionOrder_ == 3) {
 		// mixed interface/cell-centered kernel
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 										x1ReconstructRange, nvars);
