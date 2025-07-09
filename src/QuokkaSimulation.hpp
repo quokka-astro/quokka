@@ -376,11 +376,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 
 	// face-centred
 
-	// add face-centered velocities
-	for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-		componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});
-		componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-RiemannSolverVelocity"});
-	}
 	// add mhd state variables
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
@@ -395,13 +390,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineDefaultPlo
 	// Initialize plotfileVarsToInclude_cc_ with all cell-centered variables
 	this->plotfileVarsToInclude_cc_.insert(this->plotfileVarsToInclude_cc_.end(), this->componentNames_cc_.begin(), this->componentNames_cc_.end());
 
-	// Add all face-centered variables except RiemannSolverVelocity
+	// Add all face-centered variables
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
 			const std::string &varname = this->componentNames_fc_flat_[icomp];
-			if (varname.find("RiemannSolverVelocity") == std::string::npos) {
-				this->plotfileVarsToInclude_cc_.push_back(varname);
-			}
+			this->plotfileVarsToInclude_cc_.push_back(varname);
 		}
 	}
 
