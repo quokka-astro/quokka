@@ -23,6 +23,7 @@ constexpr double T0 = 10.0;		  // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
 constexpr double dt_ = 1.0e10; // s
+constexpr double formation_time = 1.5 * dt_;
 static bool refine_half_domain = false; // NOLINT
 
 constexpr double box_size_half = 3.0e18; // This should be fixed for this problem.
@@ -131,7 +132,6 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	template <typename problem_t> struct ParticleChecker {
 		amrex::Real current_time;
 		amrex::Real dt;
-		amrex::Real param1 = particle_param1;
 
 		double x_L = -box_size_half; // This is a hack. Since the domain size is not passed to here, we have to manually set it for this test problem
 		double offset = particle_offset_from_center_;
@@ -154,7 +154,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 			const int j_par2 = static_cast<int>(floor((offset - x_L) / dx[1]));
 			const int k_par2 = static_cast<int>(floor((offset - x_L) / dx[2]));
 
-			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
+			const bool is_create_particle = current_time <= formation_time && current_time + dt > formation_time;
 			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
 				return 1;
 			}
@@ -215,8 +215,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 					// set birth time to current time
 					p.rdata(birth_time_index) = current_time;
-					// set death time to current time + 2.5 * dt (2.5 time steps, so will evolve into SNRemnant at step 3)
-					p.rdata(birth_time_index + 1) = current_time + 2.5 * dt_;
+					// set death time to infinity, so that particle will never die
+					p.rdata(birth_time_index + 1) = std::numeric_limits<double>::max();
 
 					// Set particle evolution stage
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);

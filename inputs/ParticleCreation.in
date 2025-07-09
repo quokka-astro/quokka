@@ -24,7 +24,6 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-particles.param1 = 1.5e10 # create particles at this time, which is step 2
 particles.verbose = 1
 particles.disable_SN_feedback = true
 
