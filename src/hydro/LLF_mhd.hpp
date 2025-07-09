@@ -19,8 +19,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF_MHD(quokka::HydroState<N_scalars, N
 	// initialize left and right conserved states
 	ConsHydro1D<N_scalars> u_L{};
 	ConsHydro1D<N_scalars> u_R{};
-	// initialize temporary container to store flux across interface
-	quokka::valarray<double, fluxdim> F_x = {};
 	// initialize fluxes at left and right side of the interface
 	ConsHydro1D<N_scalars> f_L{};
 	ConsHydro1D<N_scalars> f_R{};
