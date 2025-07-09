@@ -8,27 +8,33 @@
 #include "math/interpolate.hpp"
 
 #include "QuokkaSimulation.hpp"
+#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 
 struct TestParticle {
 };
 
-constexpr double rho0 = 1.0e-5;
-constexpr double dt_ = 0.001;
+constexpr double mu = 1.0 * C::m_p;
+constexpr double gamma_ = 5. / 3.;
+const double rho0 = 1.0e8 * C::m_p; // g cm^-3
+const double T0 = 10.0;		  // K
+const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
+constexpr double dt_ = 1.0e10; // s
 static bool refine_half_domain = false; // NOLINT
 
+constexpr double box_size_half = 3.0e18; // This should be fixed for this problem.
+constexpr double particle_offset_from_center_ = 1e-3 * box_size_half;
+
 // locations of the particles: a 2x2x2 grids of particles
-constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
+// constexpr double box_left_edge_ = -2.0;
 // need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
-constexpr double particle_offset_from_center_ = 0.01;
-const static double SN_mass = 1.0e-5;	    // mass of SNProgenitor particles
+const static double SN_mass = 8.0 * C::M_solar;  // mass of SNProgenitor particles in grams
 constexpr int n_test_particles_init = 8;    // 8 test particles created at the start of the simulation
 constexpr int n_test_particles_created = 8; // 8 test particles created and live to the end
 
 template <> struct quokka::EOS_Traits<TestParticle> {
-	static constexpr double gamma = 1.0;	     // isothermal
-	static constexpr double cs_isothermal = 3.0; //
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double gamma = gamma_;
+	static constexpr double mean_molecular_weight = mu;
 };
 
 // Test enum to demonstrate type checking of particle_switch
@@ -46,7 +52,7 @@ template <> struct Particle_Traits<TestParticle> {
 };
 
 template <> struct HydroSystem_Traits<TestParticle> {
-	static constexpr bool reconstruct_eint = false;
+	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
 template <> struct Physics_Traits<TestParticle> {
@@ -56,11 +62,7 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
-	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gravitational_constant = 1.0;
-	static constexpr double c_light = 1.0;
-	static constexpr double radiation_constant = 1.0;
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
@@ -87,10 +89,10 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
-				if (p.rdata(0) > 1.0e-10) {
+				if (p.rdata(0) > SN_mass) {
 					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 				} else {
-					// For testing purposes, we mark particles with mass < 1.0e-10 as Removed. These particles will be removed in current
+					// For testing purposes, we mark particles with mass < SN_mass as Removed. These particles will be removed in current
 					// timestep.
 					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
 				}
@@ -112,7 +114,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		amrex::Real dt;
 		amrex::Real param1 = particle_param1;
 
-		double x_L = box_left_edge_;
+		double x_L = -box_size_half; // This is a hack. Since the domain size is not passed to here, we have to manually set it for this test problem
 		double offset = particle_offset_from_center_;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
@@ -194,15 +196,18 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 					// set birth time to current time
 					p.rdata(birth_time_index) = current_time;
-					// set death time to current time + 0.0025 (2.5 time steps, so will evolve into SNRemnant at step 3)
-					p.rdata(birth_time_index + 1) = current_time + 0.0025;
+					// set death time to current time + 2.5 * dt (2.5 time steps, so will evolve into SNRemnant at step 3)
+					p.rdata(birth_time_index + 1) = current_time + 2.5 * dt_;
 
 					// Set particle evolution stage
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
 				}
 
-				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.
-				state_arr(i, j, k, HydroSystem<problem_t>::density_index) -= 1.0e-20;
+				const amrex::Real volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+				const amrex::Real tot_SN_mass = num_particles * SN_mass;
+				const amrex::Real cell_mass = cell_density * volume;
+				AMREX_ASSERT(cell_mass > tot_SN_mass);
+				state_arr(i, j, k, HydroSystem<problem_t>::density_index) -= tot_SN_mass / volume;
 			}
 		}
 	};
@@ -226,12 +231,14 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<TestParticle>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<TestParticle>::x1Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<TestParticle>::x2Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<TestParticle>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = 0;
-		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = 0;
+		const double rho = rho0;
+		const double rho_e = CV * T0 * rho;
+		state_cc(i, j, k, HydroSystem<TestParticle>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = rho_e;
+		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = rho_e;
 	});
 }
 
