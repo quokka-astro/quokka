@@ -1,0 +1,28 @@
+# Example input file showing how to use DerivedFieldFactory
+
+# Legacy derived fields (still supported)
+derived_vars = "temperature" "sound_speed" "number_density"
+
+# New derived field factory configuration
+derived_fields.fields = "temperature" "vorticity" "bfield_divergence" "custom_field"
+
+# Built-in field configuration with parameters
+temperature.gamma = 1.4
+temperature.mean_molecular_weight = 2.33e-24
+temperature.boltzmann_constant = 1.380649e-16
+
+sound_speed.gamma = 1.4
+
+number_density.particle_mass = 1.67e-24
+
+# User-defined expression field
+custom_field.expression = "rho * (momx^2 + momy^2 + momz^2) / (2 * rho^2)"
+
+# Another user-defined field
+kinetic_energy.expression = "0.5 * rho * (momx^2 + momy^2 + momz^2) / rho^2"
+
+# Expression with spatial dependence
+spatial_field.expression = "rho * sin(2 * pi * x / 1.0) * cos(2 * pi * y / 1.0)"
+
+# Time-dependent field
+time_field.expression = "rho * sin(2 * pi * t / 1.0)"

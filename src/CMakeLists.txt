@@ -147,8 +147,13 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/math/interpolate.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/DataTable.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/derived_fields/DerivedFieldFactory.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/derived_fields/BuiltinFields.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/derived_fields/ExpressionField.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/derived_fields/RegisterBuiltinFields.cpp"
                         "${openPMDSources}")
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
 
 add_subdirectory(problems)
+add_subdirectory(derived_fields)

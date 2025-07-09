@@ -72,6 +72,7 @@ namespace filesystem = experimental::filesystem;
 #include "physics_numVars.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
+#include "derived_fields/DerivedFieldFactory.H"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
@@ -186,6 +187,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
+		// initialize derived field factory
+		DerivedFieldManager::getInstance().initFromParmParse();
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
@@ -219,6 +222,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+	
+	// compute derived variables implementation (for problem-specific overrides)
+	virtual void ComputeDerivedVarImpl(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const;
 
 	// compute projected vars
 	[[nodiscard]] auto ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
