@@ -20,6 +20,7 @@
 #include "AMReX_Geometry.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
+#include "AMReX_GpuDevice.H"
 
 namespace quokka::util {
 
@@ -29,9 +30,13 @@ class FewModesFT {
 private:
     int num_modes_;
     std::string prefix_;
-    std::vector<std::vector<Complex>> var_hat_;     // [component][mode]
-    std::vector<std::vector<Complex>> var_hat_new_; // [component][mode]
-    std::vector<std::vector<amrex::Real>> k_vec_;   // [dimension][mode]
+    // GPU-resident Fourier coefficient storage (real and imaginary parts separate for GPU efficiency)
+    amrex::Gpu::DeviceVector<amrex::Real> var_hat_real_d_;     // [component * num_modes + mode] - current coefficients
+    amrex::Gpu::DeviceVector<amrex::Real> var_hat_imag_d_;     // [component * num_modes + mode] - current coefficients
+    
+    // GPU-resident wave vector storage
+    amrex::Gpu::DeviceVector<amrex::Real> k_vec_d_;            // [dimension * num_modes + mode] - wave vectors
+    std::vector<std::vector<amrex::Real>> k_vec_;              // [dimension][mode] - kept for host access if needed
     amrex::Real k_peak_;                            // peak of the power spectrum
     std::vector<std::vector<std::vector<amrex::Real>>> random_num_; // [component][mode][real/imag]
     std::mt19937 rng_;
