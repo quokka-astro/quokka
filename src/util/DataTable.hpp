@@ -39,6 +39,9 @@ struct DataTableGpuConst {
 	int x_size{};
 	int y_size{};
 
+	// Whether coordinates are in log space
+	bool is_log{};
+
 	// Original interpolation method (for backward compatibility)
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
@@ -151,7 +154,7 @@ class DataTable
 
 	// Constructor with data
 	DataTable(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-		  const amrex::Vector<amrex::Vector<amrex::Real>> &data);
+		  const amrex::Vector<amrex::Vector<amrex::Real>> &data, bool is_log = false);
 
 	// Destructor
 	~DataTable() = default;
@@ -166,7 +169,10 @@ class DataTable
 
 	// Initialize from vectors
 	void initialize(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-			const amrex::Vector<amrex::Vector<amrex::Real>> &data);
+			const amrex::Vector<amrex::Vector<amrex::Real>> &data, bool is_log = false);
+
+	// Initialize from ASCII file
+	void read_from_ascii_2d(const std::string &filename);
 
 	// Get GPU-friendly const tables
 	[[nodiscard]] auto const_tables() const -> DataTableGpuConst;
@@ -194,6 +200,9 @@ class DataTable
 
 	int x_size_ = 0;
 	int y_size_ = 0;
+
+	// Whether coordinates are in log space
+	bool is_log_ = false;
 };
 
 } // namespace quokka

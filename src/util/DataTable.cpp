@@ -3,18 +3,21 @@
 #include "AMReX_Arena.H"
 #include "AMReX_BLassert.H"
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <cmath>
 
 namespace quokka
 {
 
 DataTable::DataTable(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-		     const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+		     const amrex::Vector<amrex::Vector<amrex::Real>> &data, bool is_log)
 {
-	initialize(x_coords, y_coords, data);
+	initialize(x_coords, y_coords, data, is_log);
 }
 
 void DataTable::initialize(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-			   const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+			   const amrex::Vector<amrex::Vector<amrex::Real>> &data, bool is_log)
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!x_coords.empty(), "X coordinates cannot be empty!");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!y_coords.empty(), "Y coordinates cannot be empty!");
@@ -23,6 +26,7 @@ void DataTable::initialize(const amrex::Vector<amrex::Real> &x_coords, const amr
 
 	x_size_ = static_cast<int>(x_coords.size());
 	y_size_ = static_cast<int>(y_coords.size());
+	is_log_ = is_log;
 
 	// Verify data dimensions
 	for (const auto &row : data) {
@@ -66,12 +70,74 @@ void DataTable::initialize(const amrex::Vector<amrex::Real> &x_coords, const amr
 	}
 }
 
+void DataTable::read_from_ascii_2d(const std::string &filename)
+{
+	std::ifstream file(filename);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), "Failed to open ASCII data file: " + filename);
+
+	// Read header
+	int is_log_int, n_dim, nx, ny;
+	amrex::Real x_min, x_max, y_min, y_max;
+
+	file >> is_log_int >> n_dim >> nx >> ny;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_dim == 2, "Only 2D tables are supported!");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx > 0 && ny > 0, "Grid dimensions must be positive!");
+
+	// Read ranges
+	char comma;
+	file >> x_min >> comma >> x_max;
+	file >> y_min >> comma >> y_max;
+
+	bool is_log = (is_log_int == 1);
+
+	// Create coordinate arrays
+	amrex::Vector<amrex::Real> x_coords(nx);
+	amrex::Vector<amrex::Real> y_coords(ny);
+
+	if (is_log) {
+		// Generate uniform grid in log space
+		amrex::Real log_x_min = std::log10(x_min);
+		amrex::Real log_x_max = std::log10(x_max);
+		amrex::Real log_y_min = std::log10(y_min);
+		amrex::Real log_y_max = std::log10(y_max);
+
+		for (int i = 0; i < nx; ++i) {
+			x_coords[i] = log_x_min + (log_x_max - log_x_min) * static_cast<amrex::Real>(i) / static_cast<amrex::Real>(nx - 1);
+		}
+		for (int j = 0; j < ny; ++j) {
+			y_coords[j] = log_y_min + (log_y_max - log_y_min) * static_cast<amrex::Real>(j) / static_cast<amrex::Real>(ny - 1);
+		}
+	} else {
+		// Generate uniform grid in linear space
+		for (int i = 0; i < nx; ++i) {
+			x_coords[i] = x_min + (x_max - x_min) * static_cast<amrex::Real>(i) / static_cast<amrex::Real>(nx - 1);
+		}
+		for (int j = 0; j < ny; ++j) {
+			y_coords[j] = y_min + (y_max - y_min) * static_cast<amrex::Real>(j) / static_cast<amrex::Real>(ny - 1);
+		}
+	}
+
+	// Read data values
+	amrex::Vector<amrex::Vector<amrex::Real>> data(nx);
+	for (int i = 0; i < nx; ++i) {
+		data[i].resize(ny);
+		for (int j = 0; j < ny; ++j) {
+			file >> data[i][j];
+		}
+	}
+
+	file.close();
+
+	// Initialize the table
+	initialize(x_coords, y_coords, data, is_log);
+}
+
 auto DataTable::const_tables() const -> DataTableGpuConst
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
 
 	DataTableGpuConst tables{
-	    x_coords_->const_table(), y_coords_->const_table(), data_->const_table(), x_min_, x_max_, y_min_, y_max_, dx_, dy_, x_size_, y_size_};
+	    x_coords_->const_table(), y_coords_->const_table(), data_->const_table(), x_min_, x_max_, y_min_, y_max_, dx_, dy_, x_size_, y_size_, is_log_};
 	return tables;
 }
 
