@@ -20,6 +20,7 @@
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
+#include "particle_radiation.hpp"
 #include "particle_types.hpp"
 #include "physics_info.hpp"
 #include <fmt/format.h>
