@@ -147,6 +147,7 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/math/interpolate.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/DataTable.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/util/FewModesFT.cpp"
                         "${openPMDSources}")
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
