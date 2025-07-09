@@ -63,7 +63,7 @@ constexpr double omega = gcem::sqrt(gcem::pow(alfven_speed, 2.0) * gcem::pow(k_a
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double /*x2*/, double x3, double time) -> double
 {
-	return bg_mag_amplitude * delta_b * x3 * gcem::sin(omega * time - k_amplitude * x1);
+	return bg_mag_amplitude * delta_b * x3 * std::sin(omega * time - k_amplitude * x1);
 }
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/, double /*x3*/, double time) -> double
