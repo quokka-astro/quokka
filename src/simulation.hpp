@@ -2730,6 +2730,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		// Create fc_vars directory if it doesn't exist
+		const std::string fc_vars_dir = plotfilename + "/fc_vars";
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::UtilCreateDirectory(fc_vars_dir, 0755);
+		}
+		amrex::ParallelDescriptor::Barrier();
+
 		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		auto varnames_fc = GetPlotfileVarNames_fc();
