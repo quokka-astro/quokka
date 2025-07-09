@@ -2736,7 +2736,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 			amrex::UtilCreateDirectory(fc_vars_dir, 0755);
 		}
 		amrex::ParallelDescriptor::Barrier();
-		
+
 		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		auto varnames_fc = GetPlotfileVarNames_fc();
