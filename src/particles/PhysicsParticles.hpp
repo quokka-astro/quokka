@@ -754,17 +754,40 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 template <typename ContainerType, typename problem_t, ParticleType particleType>
 class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, problem_t, particleType>
 {
+      private:
+	bool mass_based_luminosity_{false}; // Whether to use mass-based luminosity for radiation deposition
+
       public:
 	[[nodiscard]] auto isStarParticle() -> bool override { return true; }
 
+	// Getter for mass-based luminosity flag
+	[[nodiscard]] AMREX_FORCE_INLINE auto getMassBasedLuminosity() const -> bool { return mass_based_luminosity_; }
+
 	// Constructor - forwards all arguments to the base class
 	StarParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
-			       int evolution_stage_idx = -1, bool allows_accretion = false)
+			       int evolution_stage_idx = -1, bool allows_accretion = false, bool mass_based_luminosity = false)
 	    : PhysicsParticleDescriptor<ContainerType, problem_t, particleType>(container, mass_idx, lum_idx, birth_time_idx, allows_creation,
-										allows_destruction)
+										allows_destruction),
+	      mass_based_luminosity_(mass_based_luminosity)
 	{
 		this->setEvolutionStageIndex(evolution_stage_idx);
 		this->setAllowsAccretion(allows_accretion);
+	}
+
+	// Override depositRadiation to use mass-based luminosity when enabled
+	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
+	{
+		if (this->container_ != nullptr) {
+			if (mass_based_luminosity_ && this->getMassIndex() >= 0) {
+				// Use mass-based radiation deposition
+				amrex::ParticleToMesh(*this->container_, radEnergySource, lev,
+						      MassBasedRadDeposition{current_time, this->getMassIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
+			} else if (!mass_based_luminosity_ && this->getLumIndex() >= 0) {
+				// Use regular luminosity-based radiation deposition
+				amrex::ParticleToMesh(*this->container_, radEnergySource, lev,
+						      RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
+			}
+		}
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -911,17 +934,17 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		// Create the appropriate star particle descriptor based on the particle type
 		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
-		// allows_accretion
+		// allows_accretion, mass_based_luminosity
 		if (type == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
-			    false, StochasticStellarPopParticleStageIdx, false);
+			    false, StochasticStellarPopParticleStageIdx, false, true);
 		} else if (type == ParticleType::Sink) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx, -1,
-															    -1, true, false, -1, true);
+															    -1, true, false, -1, true, false);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
+			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false, true);
 		} else {
 			amrex::Abort("Unknown particle type for star particles");
 		}
