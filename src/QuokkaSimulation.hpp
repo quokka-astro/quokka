@@ -65,6 +65,7 @@ namespace filesystem = experimental::filesystem;
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
+#include "derived_fields/DerivedFieldFactory.H"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
 #include "hyperbolic_system.hpp"
@@ -72,7 +73,6 @@ namespace filesystem = experimental::filesystem;
 #include "physics_numVars.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
-#include "derived_fields/DerivedFieldFactory.H"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
@@ -222,7 +222,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
-	
+
 	// compute derived variables implementation (for problem-specific overrides)
 	virtual void ComputeDerivedVarImpl(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const;
 
