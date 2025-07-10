@@ -178,7 +178,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void initialize()
 	{
-		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled && (AMREX_SPACEDIM != 3)), "MHD is only supported in 3D.");
+#if (AMREX_SPACEDIM != 3)
+		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "MHD is only supported in 3D.");
+#endif // (AMREX_SPACEDIM != 3)
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			if (max_level > 0) {
 				amrex::Error("MHD is only supported for uniform grids (max_level must be 0).");
@@ -1028,37 +1030,39 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)
 {
-	if constexpr (AMREX_SPACEDIM == 3) {
-		// apply Poisson gravity operator on level 'lev'
-		auto const &dx = geom[lev].CellSizeArray();
-		auto const &phi = phi_mf.const_arrays();
-		auto state = state_new_cc_[lev].arrays();
+#if (AMREX_SPACEDIM == 3)
+	// apply Poisson gravity operator on level 'lev'
+	auto const &dx = geom[lev].CellSizeArray();
+	auto const &phi = phi_mf.const_arrays();
+	auto state = state_new_cc_[lev].arrays();
 
-		amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			// add operator-split gravitational acceleration
-			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-			amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-			amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-			const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
+	amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// add operator-split gravitational acceleration
+		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+		amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+		amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
 
-			// g = -grad \phi
-			amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
-			amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
-			amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
+		// g = -grad \phi
+		amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
+		amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
+		amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
 
-			px += dt * rho * gx;
-			py += dt * rho * gy;
-			pz += dt * rho * gz;
-			const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
-			const amrex::Real dKE = KE_new - KE_old;
+		px += dt * rho * gx;
+		py += dt * rho * gy;
+		pz += dt * rho * gz;
+		const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
+		const amrex::Real dKE = KE_new - KE_old;
 
-			state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
-			state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
-			state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
-			state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
-		});
-	}
+		state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
+		state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
+		state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
+		state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+	});
+#else
+	amrex::ignore_unused(phi_mf, lev, dt);
+#endif // (AMREX_SPACEDIM == 3)
 }
 
 // fix-up any unphysical states created by AMR operations
@@ -1191,7 +1195,7 @@ template <typename problem_t>
 void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 								 amrex::YAFluxRegister *fr_as_fine)
 {
-	BL_PROFILE_REGION("HydroSolver");
+	const BL_PROFILE_REGION("HydroSolver");
 	// timestep retries
 	const int max_retries = 6;
 	bool success = false;
