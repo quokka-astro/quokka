@@ -1085,14 +1085,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			velW_index = x3Velocity_index;
 		} else if constexpr (DIR == FluxDir::X2) {
 #if (AMREX_SPACEDIM == 2)
-				velN_index = x2Velocity_index;
-				velV_index = x1Velocity_index;
-				velW_index = x3Velocity_index; // unchanged in 2D
+			velN_index = x2Velocity_index;
+			velV_index = x1Velocity_index;
+			velW_index = x3Velocity_index; // unchanged in 2D
 #endif
 #if (AMREX_SPACEDIM == 3)
-				velN_index = x2Velocity_index;
-				velV_index = x3Velocity_index;
-				velW_index = x1Velocity_index;
+			velN_index = x2Velocity_index;
+			velV_index = x3Velocity_index;
+			velW_index = x1Velocity_index;
 #endif
 		} else if constexpr (DIR == FluxDir::X3) {
 			velN_index = x3Velocity_index;
