@@ -327,6 +327,14 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	// Total radiation energy in the field
+	amrex::Real total_Erad_init = 0.0;
+	for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
+		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<TestParticle>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+	}
+
 	// set force finest level to true for test particles
 	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->setForceFinestLevel(true);
 
@@ -338,12 +346,20 @@ auto problem_main() -> int
 	const int n_particle_expected = n_test_particles_init / 2 + n_test_particles_created;
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
+	// Total radiation energy in the field
+	amrex::Real total_Erad = 0.0;
+	for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
+		total_Erad += sim.state_new_cc_[0].sum(RadSystem<TestParticle>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+	}
+
 	int status = 0; // Initialize to success
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
 		amrex::Print() << "Expected number of test particles: " << n_particle_expected << "\n";
 		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
+
+		amrex::Print() << "Total radiation energy in the field: " << total_Erad << " (initial: " << total_Erad_init << ")\n";
 
 		status = 1;
 		if (n_particle_test == n_particle_expected) {

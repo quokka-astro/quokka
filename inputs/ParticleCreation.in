@@ -28,7 +28,7 @@ particles.verbose = 1
 particles.disable_SN_feedback = true
 
 stop_time = 8.0e12
-max_timesteps = 4
+max_timesteps = 1
 plotfile_interval = -1
 plottime_interval = 0.003
 checkpoint_interval = -1
