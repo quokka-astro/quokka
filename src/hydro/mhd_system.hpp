@@ -21,7 +21,7 @@
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 
-AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04);
+AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04); // NOLINT
 
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_t>
@@ -312,7 +312,8 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid,
 					 int reconstructionOrder)
 {
-	const BL_PROFILE("MHDSystem::ReconstructTo()") amrex::Box const &box_r = amrex::grow(box_cValid, 1);
+	const BL_PROFILE("MHDSystem::ReconstructTo()");
+	amrex::Box const &box_r = amrex::grow(box_cValid, 1);
 	amrex::Box const &box_r_x1 = amrex::surroundingNodes(box_r, static_cast<int>(dir));
 	if (reconstructionOrder == 5) {
 		// note: only box_r is used. box_r_x1 is unused.

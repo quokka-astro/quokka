@@ -2,9 +2,9 @@
 #ifndef RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_
 
-#include "radiation/radiation_system.hpp" // IWYU pragma: keep
+#include "radiation/radiation_system.hpp" // NOLINT IWYU pragma: keep
 
-#define LARGE 1.0e100
+constexpr double LARGE = 1.0e100;
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
@@ -263,17 +263,15 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
-#if 0
-					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
-					if (n == maxIter - 10) {
-						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0 << "; C_V = " << c_v
-							  << ", a_rad = " << radiation_constant_ << std::endl;
-					} else if (n >= maxIter - 10) {
-						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
-							  << ", tau = " << tau;
-						std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
-					}
-#endif
+					// // For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
+					// if (n == maxIter - 10) {
+					// 	std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0 << "; C_V = " << c_v
+					// 		  << ", a_rad = " << radiation_constant_ << std::endl;
+					// } else if (n >= maxIter - 10) {
+					// 	std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
+					// 		  << ", tau = " << tau;
+					// 	std::cout << ", F_G = " << F_G << ", F_D_abs_sum = " << F_D_abs << ", Etot0 = " << Etot0 << std::endl;
+					// }
 
 					const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
 					AMREX_ASSERT(!std::isnan(d_fourpiboverc_d_t));
