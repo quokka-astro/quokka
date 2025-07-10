@@ -164,6 +164,16 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		// First-capture the magnetic field arrays by accessing them early
+		// This forces NVCC to capture them before the constexpr if block
+		[[maybe_unused]] auto fc_x0_ref = cons_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+		[[maybe_unused]] auto fc_x1_ref = cons_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+		[[maybe_unused]] auto fc_x2_ref = cons_fc_x2[bx];
+#endif
+
 		const amrex::Real rho = cons_cc[bx](i, j, k, density_index);
 		const amrex::Real px = cons_cc[bx](i, j, k, x1Momentum_index);
 		const amrex::Real py = cons_cc[bx](i, j, k, x2Momentum_index);
@@ -185,17 +195,17 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			// note, bx is the box, and bxi is the magnetic-field component
-			const amrex::Real b_x0_m = cons_fc_x0[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x0_p = cons_fc_x0[bx](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x0_m = fc_x0_ref(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x0_p = fc_x0_ref(i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 			const amrex::Real b_x0 = 0.5 * (b_x0_m + b_x0_p);
 #if AMREX_SPACEDIM >= 2
-			const amrex::Real b_x1_m = cons_fc_x1[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x1_p = cons_fc_x1[bx](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x1_m = fc_x1_ref(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x1_p = fc_x1_ref(i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
 			const amrex::Real b_x1 = 0.5 * (b_x1_m + b_x1_p);
 #endif
 #if AMREX_SPACEDIM == 3
-			const amrex::Real b_x2_m = cons_fc_x2[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x2_p = cons_fc_x2[bx](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x2_m = fc_x2_ref(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x2_p = fc_x2_ref(i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
 			const amrex::Real b_x2 = 0.5 * (b_x2_m + b_x2_p);
 #endif
 			magnetic_energy = 0.5 * (AMREX_D_TERM(b_x0 * b_x0, +b_x1 * b_x1, +b_x2 * b_x2));
@@ -266,6 +276,9 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 						   amrex::Box const &indexRange)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// First-capture by early access
+		[[maybe_unused]] const auto fc_ref = cons_fc;
+
 		const auto rho = cons_cc(i, j, k, density_index);
 		const auto px = cons_cc(i, j, k, x1Momentum_index);
 		const auto py = cons_cc(i, j, k, x2Momentum_index);
@@ -289,12 +302,12 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			const auto pressure = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 			double gp = quokka::EOS<problem_t>::gamma_ * pressure;
 
-			const auto bx1_m = cons_fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx1_p = cons_fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx2_m = cons_fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx2_p = cons_fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx3_m = cons_fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx3_p = cons_fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx1_m = fc_ref[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx1_p = fc_ref[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx2_m = fc_ref[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx2_p = fc_ref[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx3_m = fc_ref[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx3_p = fc_ref[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
 
 			const auto bx1 = 0.5 * (bx1_m + bx1_p);
 			const auto bx2 = 0.5 * (bx2_m + bx2_p);
@@ -900,6 +913,15 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 #endif
 
 	amrex::ParallelFor(consVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		// first-capture
+		[[maybe_unused]] const auto faceVar_x_ref = faceVar_x[bx];
+#if AMREX_SPACEDIM >= 2
+		[[maybe_unused]] const auto faceVar_y_ref = faceVar_y[bx];
+#endif // AMREX_SPACEDIM >= 2
+#if AMREX_SPACEDIM == 3
+		[[maybe_unused]] const auto faceVar_z_ref = faceVar_z[bx];
+#endif // AMREX_SPACEDIM == 3
+
 		amrex::Real const rho = consVar[bx](i, j, k, density_index);
 		amrex::Real const px = consVar[bx](i, j, k, x1Momentum_index);
 		amrex::Real const py = consVar[bx](i, j, k, x2Momentum_index);
@@ -919,11 +941,11 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 		amrex::Real Emag = 0;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			constexpr int mhd_idx = Physics_Indices<problem_t>::mhdFirstIndex;
-			amrex::Real const Bx = 0.5 * (faceVar_x[bx](i, j, k, mhd_idx) + faceVar_x[bx](i + 1, j, k, mhd_idx));
+			amrex::Real const Bx = 0.5 * (faceVar_x_ref(i, j, k, mhd_idx) + faceVar_x_ref(i + 1, j, k, mhd_idx));
 #if AMREX_SPACEDIM >= 2
-			amrex::Real const By = 0.5 * (faceVar_y[bx](i, j, k, mhd_idx) + faceVar_y[bx](i, j + 1, k, mhd_idx));
+			amrex::Real const By = 0.5 * (faceVar_y_ref(i, j, k, mhd_idx) + faceVar_y_ref(i, j + 1, k, mhd_idx));
 #if AMREX_SPACEDIM == 3
-			amrex::Real const Bz = 0.5 * (faceVar_z[bx](i, j, k, mhd_idx) + faceVar_z[bx](i, j, k + 1, mhd_idx));
+			amrex::Real const Bz = 0.5 * (faceVar_z_ref(i, j, k, mhd_idx) + faceVar_z_ref(i, j, k + 1, mhd_idx));
 #endif
 #endif
 			Emag = 0.5 * (AMREX_D_TERM(Bx * Bx, +By * By, +Bz * Bz));
@@ -974,6 +996,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	// Include ghost cells when computing face velocities
 	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
 	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
+		// first capture
+		[[maybe_unused]] const auto x1ConsVar_fc_ref = x1ConsVar_fc_in[bx];
+		[[maybe_unused]] const auto x1FSpds_ref = x1FSpds_in[bx];
+
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
@@ -1021,7 +1047,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		double magnetic_energy_L = 0.0;
 		double magnetic_energy_R = 0.0;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			quokka::Array4View<const amrex::Real, DIR> x1ConsVar_fc(x1ConsVar_fc_in[bx]);
+			quokka::Array4View<const amrex::Real, DIR> x1ConsVar_fc(x1ConsVar_fc_ref);
 			bx1 = x1ConsVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 			by_L = x1LeftState(i, j, k, x2Magnetic_index);
 			bz_L = x1LeftState(i, j, k, x3Magnetic_index);
@@ -1164,13 +1190,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF_MHD) {
-			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_in[bx]);
+			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
 			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
-			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_in[bx]);
+			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
 			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
