@@ -1,0 +1,63 @@
+mag:
+  t1:
+    path: build/build-3D-clang
+    command: ninja -j8 test_alfven_wave_circular test_alfven_wave_linear test_current_sheet test_fast_wave test_fast_wave_perm2 test_fast_wave_perm3 test_field_loop test_orszag_tang
+
+sink:
+  b:
+    path: build/build-3D-MPI
+    command: ninja -j8 test_particle_sink
+  db: 
+    path: build/build-3D-debug
+    command: ninja -j8 test_particle_sink
+  r:
+    path: tests
+    command: ../build/build-3D-MPI/src/problems/ParticleSink/test_particle_sink ../inputs/ParticleSink.in && echo "Success!!" || echo "Failed!!"
+  dr:
+    path: tests
+    command: ../build/build-3D-debug/src/problems/ParticleSink/test_particle_sink ./ParticleSink.in && echo "Success!!" || echo "Failed!!"
+  plot:
+    path: tests
+    command: quick_plot --grids plt0000{0,1,2} -j 3 --particles Sink_particles --field n --zlim 5e-2 1e1
+  rr: 
+    targets: b r plot
+  rrb: 
+    targets: db dr plot
+  cl:
+    path: tests
+    command: qkclold
+  cpu:
+    targets: b r
+  debug:
+    targets: db dr
+
+acc:
+  b:
+    path: build/build-3D-MPI
+    command: ninja -j8 test_particle_accretion
+  db: 
+    path: build/build-3D-debug
+    command: ninja -j8 test_particle_accretion
+  r:
+    path: tests
+    command: ../build/build-3D-MPI/src/problems/ParticleAccretion/test_particle_accretion ./ParticleAccretion.in && echo "Success!!" || echo "Failed!!"
+  mpi:
+    path: tests
+    command: mpirun -np 8 ../build/build-3D-MPI/src/problems/ParticleAccretion/test_particle_accretion ./ParticleAccretion.in && echo "Success!!" || echo "Failed!!"
+  dr:
+    path: tests
+    command: ../build/build-3D-debug/src/problems/ParticleAccretion/test_particle_accretion ./ParticleAccretion.in && echo "Success!!" || echo "Failed!!"
+  plot:
+    path: tests
+    command: quick_plot --grids plt* -j 2 --particles Sink_particles --field n --zlim 1 3.0
+  rr: 
+    targets: b r plot
+  rrb: 
+    targets: db dr plot
+  cl:
+    path: tests
+    command: qkclold
+  cpu:
+    targets: b r
+  debug:
+    targets: db dr
