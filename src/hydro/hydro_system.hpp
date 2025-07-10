@@ -526,10 +526,10 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::
 	// the interface on the right of zone i.
 
 	auto const x1Flux = fluxArray[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
+#if (AMREX_SPACEDIM >= 2)
 	auto const x2Flux = fluxArray[1].const_arrays();
 #endif
-#if AMREX_SPACEDIM == 3
+#if (AMREX_SPACEDIM == 3)
 	auto const x3Flux = fluxArray[2].const_arrays();
 #endif
 	auto rhs = rhs_mf.arrays();
@@ -545,7 +545,7 @@ template <typename problem_t>
 void HydroSystem<problem_t>::PredictStep(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf, amrex::MultiFab const &rhs_mf, const double dt,
 					 const int nvars, amrex::iMultiFab &redoFlag_mf)
 {
-	BL_PROFILE("HydroSystem::PredictStep()");
+	const BL_PROFILE("HydroSystem::PredictStep()");
 
 	auto const &consVarOld = consVarOld_mf.const_arrays();
 	auto const &rhs = rhs_mf.const_arrays();
@@ -569,7 +569,7 @@ template <typename problem_t>
 void HydroSystem<problem_t>::AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf,
 					  const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf)
 {
-	BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
+	const BL_PROFILE("HydroSystem::AddFluxesRK2()");
 
 	auto const &U0 = U0_mf.const_arrays();
 	auto const &U1 = U1_mf.const_arrays();
@@ -754,12 +754,12 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		x1LeftState(i + 1, j, k, n) = new_a_plus;
 	});
 
-	if constexpr (AMREX_SPACEDIM < 2) {
-		amrex::ignore_unused(x2Chi_in);
-	}
-	if constexpr (AMREX_SPACEDIM < 3) {
-		amrex::ignore_unused(x3Chi_in);
-	}
+#if (AMREX_SPACEDIM < 2)
+	amrex::ignore_unused(x2Chi_in);
+#endif
+#if (AMREX_SPACEDIM < 3)
+	amrex::ignore_unused(x3Chi_in);
+#endif
 }
 
 // to ensure that physical quantities are within reasonable
@@ -1084,15 +1084,16 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			velV_index = x2Velocity_index;
 			velW_index = x3Velocity_index;
 		} else if constexpr (DIR == FluxDir::X2) {
-			if constexpr (AMREX_SPACEDIM == 2) {
+#if (AMREX_SPACEDIM == 2)
 				velN_index = x2Velocity_index;
 				velV_index = x1Velocity_index;
 				velW_index = x3Velocity_index; // unchanged in 2D
-			} else if constexpr (AMREX_SPACEDIM == 3) {
+#endif
+#if (AMREX_SPACEDIM == 3)
 				velN_index = x2Velocity_index;
 				velV_index = x3Velocity_index;
 				velW_index = x1Velocity_index;
-			}
+#endif
 		} else if constexpr (DIR == FluxDir::X3) {
 			velN_index = x3Velocity_index;
 			velV_index = x1Velocity_index;

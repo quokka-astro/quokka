@@ -569,7 +569,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfR
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignalLocal(int const level)
 {
-	BL_PROFILE("QuokkaSimulation::computeMaxSignalLocal()");
+	const BL_PROFILE("QuokkaSimulation::computeMaxSignalLocal()");
 
 	// hydro: loop over local grids, compute CFL timestep
 	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
@@ -643,7 +643,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
 {
-	BL_PROFILE("QuokkaSimulation::checkHydroStates()");
+	const BL_PROFILE("QuokkaSimulation::checkHydroStates()");
 
 	bool validStates = HydroSystem<problem_t>::CheckStatesValid(mf);
 	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
@@ -957,7 +957,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
 {
-	BL_PROFILE("QuokkaSimulation::advanceSingleTimestepAtLevel()");
+	const BL_PROFILE("QuokkaSimulation::advanceSingleTimestepAtLevel()");
 
 	// get flux registers
 	amrex::YAFluxRegister *fr_as_crse = nullptr;
@@ -1065,7 +1065,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 // (e.g., caused by the flux register or from interpolation)
 template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
 {
-	BL_PROFILE("QuokkaSimulation::FixupState()");
+	const BL_PROFILE("QuokkaSimulation::FixupState()");
 
 	// fix hydro state
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
@@ -1082,7 +1082,7 @@ template <typename problem_t>
 void QuokkaSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
 					    FillPatchType fptype)
 {
-	BL_PROFILE("AMRSimulation::FillPatch()");
+	const BL_PROFILE("AMRSimulation::FillPatch()");
 
 	amrex::Vector<amrex::MultiFab *> cmf;
 	amrex::Vector<amrex::MultiFab *> fmf;
@@ -1108,7 +1108,7 @@ void QuokkaSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Mu
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
-	BL_PROFILE("QuokkaSimulation::PreInterpState()");
+	const BL_PROFILE("QuokkaSimulation::PreInterpState()");
 
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -1127,7 +1127,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(a
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
-	BL_PROFILE("QuokkaSimulation::PostInterpState()");
+	const BL_PROFILE("QuokkaSimulation::PostInterpState()");
 
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -1150,7 +1150,7 @@ template <typename F>
 auto QuokkaSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F const &user_f) -> amrex::Gpu::HostVector<amrex::Real>
 {
 	// compute a 1D profile of user_f(i, j, k, state) along the given axis.
-	BL_PROFILE("QuokkaSimulation::computeAxisAlignedProfile()");
+	const BL_PROFILE("QuokkaSimulation::computeAxisAlignedProfile()");
 
 	// allocate temporary multifabs
 	amrex::Vector<amrex::MultiFab> q;
@@ -1355,7 +1355,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 						      amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev, amrex::Real time,
 						      amrex::Real dt_lev) -> bool
 {
-	BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
+	const BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
 
 	amrex::Real fluxScaleFactor = NAN;
 	if (integratorOrder_ == 2) {
@@ -1751,7 +1751,7 @@ template <typename problem_t>
 void QuokkaSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
 						amrex::iMultiFab &redoFlag)
 {
-	BL_PROFILE("QuokkaSimulation::replaceFluxes()");
+	const BL_PROFILE("QuokkaSimulation::replaceFluxes()");
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) { // loop over dimension
 		// ensure that flux arrays have the same number of components
@@ -1797,7 +1797,7 @@ template <typename problem_t>
 void QuokkaSimulation<problem_t>::replaceEMFs(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf_components,
 					      std::array<amrex::MultiFab, AMREX_SPACEDIM> &FO_emf_components, amrex::iMultiFab &redoFlag)
 {
-	BL_PROFILE("QuokkaSimulation::replaceFluxes()");
+	const BL_PROFILE("QuokkaSimulation::replaceFluxes()");
 
 	for (int iedge = 0; iedge < 3; ++iedge) { // loop over edges
 		// ensure that flux arrays have the same number of components
@@ -1856,7 +1856,7 @@ template <typename problem_t>
 void QuokkaSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes,
 						const int srccomp, const int dstcomp)
 {
-	BL_PROFILE("QuokkaSimulation::addFluxArrays()");
+	const BL_PROFILE("QuokkaSimulation::addFluxArrays()");
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto const &srcflux = srcfluxes[idim];
@@ -1869,7 +1869,7 @@ template <typename problem_t>
 auto QuokkaSimulation<problem_t>::expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
     -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
 {
-	BL_PROFILE("QuokkaSimulation::expandFluxArrays()");
+	const BL_PROFILE("QuokkaSimulation::expandFluxArrays()");
 
 	// This is needed because reflux arrays must have the same number of components as
 	// state_new_cc_[lev]
@@ -1890,7 +1890,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 						     const int nvars, const int lev)
     -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
-	BL_PROFILE("QuokkaSimulation::computeHydroFluxes()");
+	const BL_PROFILE("QuokkaSimulation::computeHydroFluxes()");
 
 	const auto ba = grids[lev];
 	const auto dm = dmap[lev];
@@ -2057,7 +2057,7 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 						       const int nvars, const int lev)
     -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
-	BL_PROFILE("QuokkaSimulation::computeFOHydroFluxes()");
+	const BL_PROFILE("QuokkaSimulation::computeFOHydroFluxes()");
 
 	const auto ba = grids[lev];
 	const auto dm = dmap[lev];
@@ -2303,10 +2303,10 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		if (print_rad_counter_) {
 			auto *h_iteration_counter = iteration_counter.copyToHost();
-			long global_solver_count = h_iteration_counter[0];	      // number of Newton-Raphson solvings
-			long global_iteration_sum = h_iteration_counter[1];	      // sum of Newton-Raphson iterations
+			long global_solver_count = h_iteration_counter[0];	      // number of Newton-Raphson solvings, NOLINT(google-runtime-int)
+			long global_iteration_sum = h_iteration_counter[1];	      // sum of Newton-Raphson iterations, NOLINT(google-runtime-int)
 			int global_iteration_max = h_iteration_counter[2];	      // max number of Newton-Raphson iterations
-			long global_decoupled_iteration_sum = h_iteration_counter[3]; // sum of decoupled gas-dust Newton-Raphson iterations
+			long global_decoupled_iteration_sum = h_iteration_counter[3]; // sum of decoupled gas-dust Newton-Raphson iterations, NOLINT(google-runtime-int)
 
 			amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
 			amrex::ParallelDescriptor::ReduceLongSum(global_iteration_sum);
@@ -2335,9 +2335,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		}
 
 		auto *h_iteration_failure_counter = iteration_failure_counter.copyToHost();
-		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures
-		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures
-		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures
+		long nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures, NOLINT(google-runtime-int)
+		long nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures, NOLINT(google-runtime-int)
+		long nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures, NOLINT(google-runtime-int)
 
 		amrex::ParallelDescriptor::ReduceLongSum(nf_coupling);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);

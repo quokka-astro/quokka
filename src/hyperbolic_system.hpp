@@ -623,7 +623,7 @@ void HyperbolicSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t 
 					      const double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
 					      const int nvars, F &&isStateValid, amrex::Array4<int> const &redoFlag)
 {
-	BL_PROFILE("HyperbolicSystem::PredictStep()");
+	const BL_PROFILE("HyperbolicSystem::PredictStep()");
 
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -650,7 +650,7 @@ void HyperbolicSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t 
 		}
 
 		// check if state is valid -- flag for re-do if not
-		if (!isStateValid(consVarNew, i, j, k)) {
+		if (!std::forward<F>(isStateValid)(consVarNew, i, j, k)) {
 			redoFlag(i, j, k) = quokka::redoFlag::redo;
 		} else {
 			redoFlag(i, j, k) = quokka::redoFlag::none;
@@ -664,7 +664,7 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0,
 					       const double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
 					       const int nvars, F &&isStateValid, amrex::Array4<int> const &redoFlag)
 {
-	BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
+	const BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
 
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -702,7 +702,7 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0,
 		}
 
 		// check if state is valid -- flag for re-do if not
-		if (!isStateValid(U_new, i, j, k)) {
+		if (!std::forward<F>(isStateValid)(U_new, i, j, k)) {
 			redoFlag(i, j, k) = quokka::redoFlag::redo;
 		} else {
 			redoFlag(i, j, k) = quokka::redoFlag::none;
