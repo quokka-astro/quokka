@@ -22,7 +22,6 @@
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-// constexpr double c = 2.99792458e10; // cgs
 constexpr double chat_over_c = 0.1;
 constexpr double c_rsla = chat_over_c * C::c_light;
 

@@ -27,8 +27,8 @@ constexpr double rho0 = 1.0;	     // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1000.; // K
 constexpr double T_initial = 300.;   // K
 
-constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;  // cm s^-1
+constexpr double a_rad = C::a_rad; // erg cm^-3 K^-4
+constexpr double c = C::c_light;   // cm s^-1
 
 template <> struct quokka::EOS_Traits<BeamProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;

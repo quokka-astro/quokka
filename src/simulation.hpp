@@ -72,10 +72,8 @@ namespace filesystem = experimental::filesystem;
 #include <fmt/ranges.h>
 #include <yaml-cpp/yaml.h>
 
-#ifdef AMREX_PARTICLES
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
-#endif
 
 #if AMREX_SPACEDIM == 3
 #include "AMReX_OpenBC.H"
@@ -497,7 +495,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	}();
 
 	// tracer particles
-#ifdef AMREX_PARTICLES
       public:
 	int do_tracers = 0;
 
@@ -513,7 +510,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 #endif // AMREX_SPACEDIM == 3
-#endif
 
 	// external objects
 #ifdef AMREX_USE_ASCENT
@@ -801,13 +797,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		InitFromScratch(time);
 		AverageDown();
 
-#ifdef AMREX_PARTICLES
 		if (do_tracers != 0) {
 			InitParticles();
 		}
 
 		InitPhyParticles();
-#endif
 
 		if (checkpointInterval_ > 0) {
 			WriteCheckpointFile();
@@ -1294,10 +1288,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
-#ifdef AMREX_PARTICLES
 		// deposit particle mass from all particles that have mass into rhs by accumulation
 		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
-#endif
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1518,7 +1510,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 					}
 				}
 
-#ifdef AMREX_PARTICLES
 				// redistribute particles
 				if (do_tracers != 0) {
 					TracerPC->Redistribute(lev);
@@ -1526,7 +1517,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 				// redistribute all particles in particleRegister_
 				particleRegister_.redistribute(lev);
-#endif
 
 				// do fix-up on all levels that have been re-gridded
 				for (int k = lev; k <= finest_level; ++k) {
@@ -1581,7 +1571,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
 	}
 
-#ifdef AMREX_PARTICLES
 	// redistribute tracer particles
 	if (do_tracers != 0) {
 		int redistribute_ngrow = 0;
@@ -1606,7 +1595,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// redistribute all particles in particleRegister_
 		particleRegister_.redistribute(lev, redistribute_ngrow);
 	}
-#endif
 }
 
 template <typename problem_t>
@@ -2257,7 +2245,6 @@ template <typename problem_t> template <typename F> auto AMRSimulation<problem_t
 	return result;
 }
 
-#ifdef AMREX_PARTICLES
 template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 {
 	const BL_PROFILE("AMRSimulation::InitParticles()");
@@ -2371,7 +2358,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 	particleRegister_.redistribute(0);
 }
-#endif
 
 // get plotfile name
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 5); }
@@ -2735,6 +2721,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		// Create fc_vars directory if it doesn't exist
+		const std::string fc_vars_dir = plotfilename + "/fc_vars";
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::UtilCreateDirectory(fc_vars_dir, 0755);
+		}
+		amrex::ParallelDescriptor::Barrier();
+
 		std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		auto varnames_fc = GetPlotfileVarNames_fc();
@@ -2749,7 +2742,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	}
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
 
-#ifdef AMREX_PARTICLES
 	// write particles
 	if (do_tracers != 0) {
 		TracerPC->WritePlotFile(plotfilename, "tracer_particles");
@@ -2757,7 +2749,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 
 	// write all particles in particleRegister_ to plotfile
 	particleRegister_.writePlotFile(plotfilename);
-#endif // AMREX_PARTICLES
 #endif
 }
 
@@ -3000,14 +2991,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	}
 
 	// write particle data
-#ifdef AMREX_PARTICLES
 	if (do_tracers != 0) {
 		TracerPC->Checkpoint(checkpointname, "tracer_particles", true);
 	}
 
 	// write all particles in particleRegister_ to checkpoint file
 	particleRegister_.writeCheckpoint(checkpointname, true);
-#endif
 
 	// create symlink and point it at this checkpoint dir
 	SetLastCheckpointSymlink(checkpointname);
@@ -3278,7 +3267,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// 5. Load MultiFab data with refinement handling
 	loadMultiFabData(refinement_context);
 
-#ifdef AMREX_PARTICLES
 	// read particle data
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
@@ -3313,7 +3301,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays, true);
 	}
 #endif // AMREX_SPACEDIM == 3
-#endif
 
 	areInitialConditionsDefined_ = true;
 }
