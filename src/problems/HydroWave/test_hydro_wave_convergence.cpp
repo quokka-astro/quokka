@@ -172,16 +172,15 @@ auto problem_main() -> int
 
 	bool convergence_passed = true;
 	const double expected_rate = 2.0; // PPM should give ~2nd order for smooth problems
-	const double tolerance = 0.3;     // Allow 30% deviation from expected rate
+	const double tolerance = 0.3;	  // Allow 30% deviation from expected rate
 
 	for (int i = 1; i < resolutions.size(); ++i) {
 		// Calculate convergence rate: p = log(E(2h)/E(h)) / log(2)
-		double const log_error_ratio = std::log(errors[i-1] / errors[i]);
-		double const log_dx_ratio = std::log(dx_values[i-1] / dx_values[i]);
+		double const log_error_ratio = std::log(errors[i - 1] / errors[i]);
+		double const log_dx_ratio = std::log(dx_values[i - 1] / dx_values[i]);
 		double const observed_rate = log_error_ratio / log_dx_ratio;
 
-		amrex::Print() << fmt::format("{:4d} -> {:4d}\t{:13.2f}\t{:13.1f}\n", 
-					     resolutions[i-1], resolutions[i], observed_rate, expected_rate);
+		amrex::Print() << fmt::format("{:4d} -> {:4d}\t{:13.2f}\t{:13.1f}\n", resolutions[i - 1], resolutions[i], observed_rate, expected_rate);
 
 		// Check if convergence rate is within acceptable range
 		if (std::abs(observed_rate - expected_rate) > tolerance) {
