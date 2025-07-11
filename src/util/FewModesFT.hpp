@@ -51,7 +51,7 @@ class FewModesFT
 	amrex::MultiFab phases_i_, phases_j_, phases_k_;
 
       public:
-	FewModesFT(const std::string &prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
+	FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
 		   amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, bool fill_ghosts = false);
 
 	void SetPhases(const amrex::Geometry &geom);

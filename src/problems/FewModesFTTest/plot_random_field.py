@@ -123,7 +123,7 @@ def plot_random_field(plotfile_path, output_dir="./"):
     ax.set_aspect('equal')
     
     # Add colorbar for vector magnitude
-    cbar = plt.colorbar(Q, ax=ax, label='|v|')
+    plt.colorbar(Q, ax=ax, label='|v|')
     
     # Save vector plot
     vector_output = os.path.join(output_dir, 'random_field_vectors.png')

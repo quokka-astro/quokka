@@ -5,6 +5,7 @@
 /// \file test_few_modes_ft.cpp
 /// \brief Test for FewModesFT Gaussian random vector field generator
 
+#include <array>
 #include <cmath>
 #include <iostream>
 
@@ -35,20 +36,20 @@ auto problem_main() -> int
 	constexpr amrex::Real prob_hi = 1.0;
 
 	// Set up domain
-	amrex::IntVect domain_lo(0, 0, 0);
-	amrex::IntVect domain_hi(n_cell - 1, n_cell - 1, n_cell - 1);
-	amrex::Box domain(domain_lo, domain_hi);
+	amrex::IntVect const domain_lo(0, 0, 0);
+	amrex::IntVect const domain_hi(n_cell - 1, n_cell - 1, n_cell - 1);
+	amrex::Box const domain(domain_lo, domain_hi);
 
-	amrex::RealBox real_box({prob_lo, prob_lo, prob_lo}, {prob_hi, prob_hi, prob_hi});
+	amrex::RealBox const real_box({prob_lo, prob_lo, prob_lo}, {prob_hi, prob_hi, prob_hi});
 
 	amrex::Array<int, AMREX_SPACEDIM> is_periodic = {1, 1, 1};
 
-	amrex::Geometry geom(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
+	amrex::Geometry const geom(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
 
 	// Create BoxArray and DistributionMapping
 	amrex::BoxArray ba(domain);
 	ba.maxSize(max_grid_size);
-	amrex::DistributionMapping dm(ba);
+	amrex::DistributionMapping const dm(ba);
 
 	// Create MultiFab for the vector field (3 components)
 	amrex::MultiFab mf(ba, dm, 3, 0);
@@ -67,8 +68,8 @@ auto problem_main() -> int
 	few_modes_ft.Generate(mf, dt);
 
 	// Compute some statistics
-	amrex::Real mean_field[3] = {0.0, 0.0, 0.0};
-	amrex::Real rms_field[3] = {0.0, 0.0, 0.0};
+	std::array<amrex::Real, 3> mean_field = {0.0, 0.0, 0.0};
+	std::array<amrex::Real, 3> rms_field = {0.0, 0.0, 0.0};
 
 	for (int n = 0; n < 3; ++n) {
 		mean_field[n] = mf.norm0(n);
@@ -85,7 +86,7 @@ auto problem_main() -> int
 	}
 
 	// Write plotfile
-	amrex::Vector<std::string> varnames = {"vx", "vy", "vz"};
+	amrex::Vector<std::string> const varnames = {"vx", "vy", "vz"};
 	amrex::WriteSingleLevelPlotfile("plt_few_modes_ft", mf, varnames, geom, 0.0, 0);
 
 	amrex::Print() << "Test completed successfully. Output written to plt_few_modes_ft.\n";
