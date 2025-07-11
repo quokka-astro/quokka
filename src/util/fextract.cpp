@@ -155,13 +155,13 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 		// Use a dummy Real value when vectors are empty to avoid passing null pointers
 		Real dummy_pos = 0.0;
 		Real dummy_data = 0.0;
-		const Real* pos_ptr = pos.empty() ? &dummy_pos : pos.data();
-		Real* allpos_ptr = allpos.empty() ? &dummy_data : allpos.data();
-		
+		const Real *pos_ptr = pos.empty() ? &dummy_pos : pos.data();
+		Real *allpos_ptr = allpos.empty() ? &dummy_data : allpos.data();
+
 		ParallelDescriptor::Gatherv(pos_ptr, numpts, allpos_ptr, recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
 		for (int i = 0; i < data.size(); ++i) {
-			const Real* data_ptr = data[i].empty() ? &dummy_data : data[i].data();
-			Real* alldata_ptr = alldata[i].empty() ? &dummy_data : alldata[i].data();
+			const Real *data_ptr = data[i].empty() ? &dummy_data : data[i].data();
+			Real *alldata_ptr = alldata[i].empty() ? &dummy_data : alldata[i].data();
 			ParallelDescriptor::Gatherv(data_ptr, numpts, alldata_ptr, recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
 		}
 		if (ParallelDescriptor::IOProcessor()) {
