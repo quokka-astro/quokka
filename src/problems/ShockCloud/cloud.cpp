@@ -900,8 +900,8 @@ auto problem_main() -> int
 	constexpr int nvars = QuokkaSimulation<ShockCloud>::nvarTotal_cc_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet
-		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // NSCBC outflow
+		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir_cc); // Dirichlet
+		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir_cc); // NSCBC outflow
 
 		boundaryConditions[n].setLo(1, amrex::BCType::int_dir); // periodic
 		boundaryConditions[n].setHi(1, amrex::BCType::int_dir);
