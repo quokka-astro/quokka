@@ -63,7 +63,7 @@ class FewModesFT
 };
 
 // Creates a random set of wave vectors with k_mag within k_peak/2 and 2*k_peak
-auto MakeRandomModes(int num_modes, amrex::Real k_peak, uint32_t rseed = 31224) -> std::vector<std::vector<amrex::Real>>;
+auto MakeRandomModes(int num_modes, amrex::Real k_peak, uint32_t rseed = 0) -> std::vector<std::vector<amrex::Real>>;
 
 } // namespace quokka::util
 

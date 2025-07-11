@@ -368,7 +368,13 @@ auto MakeRandomModes(int num_modes, amrex::Real k_peak, uint32_t rseed) -> std::
 	const int k_low = std::floor(k_peak / 2.0);
 	const int k_high = std::ceil(2.0 * k_peak);
 
-	std::mt19937 rng(rseed);
+	// Use random_device for truly random seed if rseed is 0, otherwise use provided seed
+	uint32_t actual_seed = rseed;
+	if (rseed == 0) {
+		std::random_device rd;
+		actual_seed = rd();
+	}
+	std::mt19937 rng(actual_seed);
 	std::uniform_int_distribution<> dist(-k_high, k_high);
 
 	int n_mode = 0;
