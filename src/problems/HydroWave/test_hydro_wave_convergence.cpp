@@ -105,8 +105,15 @@ auto runWaveTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> ncells = {nx, 4, 4};
+	amrex::Vector<int> const ncells = {nx, 4, 4};
 	pp.addarr("n_cell", ncells);
+
+	// Set domain bounds using AMReX parameter system
+	amrex::ParmParse pp_geom("geometry");
+	amrex::Vector<double> const prob_lo = {0.0, 0.0, 0.0};
+	amrex::Vector<double> const prob_hi = {1.0, 1.0, 1.0};
+	pp_geom.addarr("prob_lo", prob_lo);
+	pp_geom.addarr("prob_hi", prob_hi);
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 
