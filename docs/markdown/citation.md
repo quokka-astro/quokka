@@ -31,4 +31,4 @@ If you use any of the following numerical methods or physical modules, please al
 
 ## Scientific applications with Quokka
 
-- Galactic outflows: [@Vijayan_2024]
+- Galactic outflows: [@Vijayan_2024], [@Huang_2025], [@Vijayan_2025]

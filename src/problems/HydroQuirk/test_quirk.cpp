@@ -52,6 +52,7 @@ template <> struct HydroSystem_Traits<QuirkProblem> {
 };
 
 template <> struct Physics_Traits<QuirkProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
