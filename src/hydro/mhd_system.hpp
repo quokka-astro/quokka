@@ -328,6 +328,30 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X3>(cState, lState, rState, box_r, box_r_x1, 1);
 				break;
 		}
+	} else if (reconstructionOrder == 3) {
+		switch (dir) {
+			case FluxDir::X1:
+				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(cState, lState, rState, box_r, box_r_x1, 1);
+				break;
+			case FluxDir::X2:
+				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X2>(cState, lState, rState, box_r, box_r_x1, 1);
+				break;
+			case FluxDir::X3:
+				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X3>(cState, lState, rState, box_r, box_r_x1, 1);
+				break;
+		}
+	} else if (reconstructionOrder == 2) {
+		switch (dir) {
+			case FluxDir::X1:
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1, SlopeLimiter::minmod>(cState, lState, rState, box_r, 1);
+				break;
+			case FluxDir::X2:
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2, SlopeLimiter::minmod>(cState, lState, rState, box_r, 1);
+				break;
+			case FluxDir::X3:
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3, SlopeLimiter::minmod>(cState, lState, rState, box_r, 1);
+				break;
+		}
 	} else if (reconstructionOrder == 1) {
 		switch (dir) {
 			case FluxDir::X1:
@@ -341,7 +365,7 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 				break;
 		}
 	} else {
-		amrex::Abort("Invalid reconstruction order specified! Only xPPM and constant are supported for MHD.");
+		amrex::Abort("Invalid reconstruction order specified! Supported orders: 1 (constant), 2 (PLM), 3 (PPM), 5 (xPPM).");
 	}
 }
 

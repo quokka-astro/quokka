@@ -60,3 +60,12 @@ These parameters are read in the ``RadhydroSimulation<problem_t>::readParmParse(
 | cooling.enabled | Integer | If set to 1, turns on optically-thin radiative cooling as a Strang-split source term. Default: 0 (disabled). |
 | cooling.read_tables_even_if_disabled | Integer | If set to 1, reads the cooling tables even if the cooling module is disabled. |
 | cooling.grackle_data_file | String | The path to the cooling tables in Grackle-compatible HDF5 format. |
+
+## MHD
+
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+
+| Parameter Name | Type | Description |
+|----|----|----|
+| mhd.emf_averaging_method | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer` or `LD04`. Default: `LD04`. |
+| mhd.emf_reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |

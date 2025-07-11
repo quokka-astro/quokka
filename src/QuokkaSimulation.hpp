@@ -160,6 +160,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
 	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
+	int emfReconstructionOrder_ = 5;	// 1 == donor cell; 2 == PLM; 3 == PPM; 5 == xPPM (extrema-preserving, default)
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
@@ -494,6 +495,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const hpp("mhd");
 		hpp.query("emf_averaging_method", emfAveragingType_);
+		hpp.query("emf_reconstruction_order", emfReconstructionOrder_);
 	}
 
 	// set cooling runtime parameters
@@ -1456,7 +1458,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
-		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, reconstructionOrder_,
+		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_,
 						 emfAveragingType_);
 	}
 
@@ -1483,7 +1485,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, reconstructionOrder_,
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_,
 							 emfAveragingType_);
 		}
 
@@ -1649,7 +1651,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, reconstructionOrder_,
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, emfReconstructionOrder_,
 							 emfAveragingType_);
 		}
 
