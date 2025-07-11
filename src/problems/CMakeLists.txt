@@ -6,6 +6,7 @@ add_subdirectory(ParticleAccretion)
 add_subdirectory(ParticleSink)
 add_subdirectory(ParticleCreation)
 add_subdirectory(ParticleSinkFormation)
+add_subdirectory(ParticleDeposition)
 add_subdirectory(SN)
 
 add_subdirectory(ParticleSF)
