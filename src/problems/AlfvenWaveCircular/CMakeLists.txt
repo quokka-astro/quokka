@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_alfven_wave_circular test_alfven_wave_circular.cpp ../../math/interpolate.cpp ${QuokkaObjSources})
+    add_executable(test_alfven_wave_circular test_alfven_wave_circular.cpp ${QuokkaObjSources})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(test_alfven_wave_circular)

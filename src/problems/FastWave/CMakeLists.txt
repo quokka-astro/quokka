@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_fast_wave test_fast_wave.cpp ../../math/interpolate.cpp ${QuokkaObjSources})
+    add_executable(test_fast_wave test_fast_wave.cpp ${QuokkaObjSources})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(test_fast_wave)
