@@ -36,8 +36,8 @@ struct RandomBlast {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double seconds_in_year = C::year; // s == 1 yr
-constexpr double parsec_in_cm = C::pc;    // cm == 1 pc
-constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
+constexpr double parsec_in_cm = C::pc;	    // cm == 1 pc
+constexpr double m_H = C::m_p + C::m_e;	    // mass of hydrogen atom
 
 template <> struct Physics_Traits<RandomBlast> {
 	static constexpr bool is_self_gravity_enabled = false;

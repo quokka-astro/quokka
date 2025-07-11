@@ -31,8 +31,8 @@ struct ShockProblem {
 // [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]
 
 constexpr double a_rad = C::a_rad; // erg cm^-3 K^-4
-constexpr double c = C::c_light;  // cm s^-1
-constexpr double k_B = C::k_B;	     // erg K^-1
+constexpr double c = C::c_light;   // cm s^-1
+constexpr double k_B = C::k_B;	   // erg K^-1
 
 // constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
 // constexpr double sigma_a = 1.0e6;	// absorption cross section

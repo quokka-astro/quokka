@@ -40,11 +40,11 @@ using amrex::Real;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double seconds_in_year = C::year; // s == 1 yr
-constexpr double parsec_in_cm = C::pc;    // cm == 1 pc
+constexpr double seconds_in_year = C::year;   // s == 1 yr
+constexpr double parsec_in_cm = C::pc;	      // cm == 1 pc
 constexpr double solarmass_in_g = C::M_sun;   // g == 1 Msun
-constexpr double keV_in_ergs = C::keV_to_erg;   // ergs == 1 keV
-constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
+constexpr double keV_in_ergs = C::keV_to_erg; // ergs == 1 keV
+constexpr double m_H = C::m_p + C::m_e;	      // mass of hydrogen atom
 
 template <> struct Physics_Traits<ShockCloud> {
 	static constexpr bool is_self_gravity_enabled = false;
