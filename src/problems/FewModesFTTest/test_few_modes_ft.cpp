@@ -19,75 +19,76 @@
 
 #include "../../util/FewModesFT.hpp"
 
-auto problem_main() -> int {
-        // Problem parameters
-        constexpr int num_modes = 10;
-        constexpr amrex::Real k_peak = 2.0;
-        constexpr amrex::Real sol_weight = 0.5; // 50% solenoidal
-        constexpr amrex::Real t_corr = 1.0;
-        constexpr uint32_t rseed = 12345;
+auto problem_main() -> int
+{
+	// Problem parameters
+	constexpr int num_modes = 10;
+	constexpr amrex::Real k_peak = 2.0;
+	constexpr amrex::Real sol_weight = 0.5; // 50% solenoidal
+	constexpr amrex::Real t_corr = 1.0;
+	constexpr uint32_t rseed = 12345;
 
-        // Grid parameters
-        constexpr int n_cell = 64;
-        constexpr int max_grid_size = 32;
-        constexpr amrex::Real prob_lo = 0.0;
-        constexpr amrex::Real prob_hi = 1.0;
+	// Grid parameters
+	constexpr int n_cell = 64;
+	constexpr int max_grid_size = 32;
+	constexpr amrex::Real prob_lo = 0.0;
+	constexpr amrex::Real prob_hi = 1.0;
 
-        // Set up domain
-        amrex::IntVect domain_lo(0, 0, 0);
-        amrex::IntVect domain_hi(n_cell - 1, n_cell - 1, n_cell - 1);
-        amrex::Box domain(domain_lo, domain_hi);
+	// Set up domain
+	amrex::IntVect domain_lo(0, 0, 0);
+	amrex::IntVect domain_hi(n_cell - 1, n_cell - 1, n_cell - 1);
+	amrex::Box domain(domain_lo, domain_hi);
 
-        amrex::RealBox real_box({prob_lo, prob_lo, prob_lo}, {prob_hi, prob_hi, prob_hi});
+	amrex::RealBox real_box({prob_lo, prob_lo, prob_lo}, {prob_hi, prob_hi, prob_hi});
 
-        amrex::Array<int, AMREX_SPACEDIM> is_periodic = {1, 1, 1};
+	amrex::Array<int, AMREX_SPACEDIM> is_periodic = {1, 1, 1};
 
-        amrex::Geometry geom(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
+	amrex::Geometry geom(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
 
-        // Create BoxArray and DistributionMapping
-        amrex::BoxArray ba(domain);
-        ba.maxSize(max_grid_size);
-        amrex::DistributionMapping dm(ba);
+	// Create BoxArray and DistributionMapping
+	amrex::BoxArray ba(domain);
+	ba.maxSize(max_grid_size);
+	amrex::DistributionMapping dm(ba);
 
-        // Create MultiFab for the vector field (3 components)
-        amrex::MultiFab mf(ba, dm, 3, 0);
+	// Create MultiFab for the vector field (3 components)
+	amrex::MultiFab mf(ba, dm, 3, 0);
 
-        // Generate random wave vectors
-        auto k_vec = quokka::util::MakeRandomModes(num_modes, k_peak, rseed);
+	// Generate random wave vectors
+	auto k_vec = quokka::util::MakeRandomModes(num_modes, k_peak, rseed);
 
-        // Create FewModesFT object with ghost cells enabled for proper divergence calculation
-        quokka::util::FewModesFT few_modes_ft("test", num_modes, k_vec, k_peak, sol_weight, t_corr, rseed, ba, dm, true);
+	// Create FewModesFT object with ghost cells enabled for proper divergence calculation
+	quokka::util::FewModesFT few_modes_ft("test", num_modes, k_vec, k_peak, sol_weight, t_corr, rseed, ba, dm, true);
 
-        // Set up phases
-        few_modes_ft.SetPhases(geom);
+	// Set up phases
+	few_modes_ft.SetPhases(geom);
 
-        // Generate the random field
-        constexpr amrex::Real dt = 0.1;
-        few_modes_ft.Generate(mf, dt);
+	// Generate the random field
+	constexpr amrex::Real dt = 0.1;
+	few_modes_ft.Generate(mf, dt);
 
-        // Compute some statistics
-        amrex::Real mean_field[3] = {0.0, 0.0, 0.0};
-        amrex::Real rms_field[3] = {0.0, 0.0, 0.0};
+	// Compute some statistics
+	amrex::Real mean_field[3] = {0.0, 0.0, 0.0};
+	amrex::Real rms_field[3] = {0.0, 0.0, 0.0};
 
-        for (int n = 0; n < 3; ++n) {
-            mean_field[n] = mf.norm0(n);
-            rms_field[n] = mf.norm2(n) / std::sqrt(static_cast<amrex::Real>(n_cell * n_cell * n_cell));
-        }
+	for (int n = 0; n < 3; ++n) {
+		mean_field[n] = mf.norm0(n);
+		rms_field[n] = mf.norm2(n) / std::sqrt(static_cast<amrex::Real>(n_cell * n_cell * n_cell));
+	}
 
-        amrex::Print() << "FewModesFT Test Results:\n";
-        amrex::Print() << "Number of modes: " << num_modes << "\n";
-        amrex::Print() << "Peak wavenumber: " << k_peak << "\n";
-        amrex::Print() << "Solenoidal weight: " << sol_weight << "\n";
-        amrex::Print() << "Field statistics:\n";
-        for (int n = 0; n < 3; ++n) {
-            amrex::Print() << "  Component " << n << ": mean = " << mean_field[n] << ", RMS = " << rms_field[n] << "\n";
-        }
+	amrex::Print() << "FewModesFT Test Results:\n";
+	amrex::Print() << "Number of modes: " << num_modes << "\n";
+	amrex::Print() << "Peak wavenumber: " << k_peak << "\n";
+	amrex::Print() << "Solenoidal weight: " << sol_weight << "\n";
+	amrex::Print() << "Field statistics:\n";
+	for (int n = 0; n < 3; ++n) {
+		amrex::Print() << "  Component " << n << ": mean = " << mean_field[n] << ", RMS = " << rms_field[n] << "\n";
+	}
 
-        // Write plotfile
-        amrex::Vector<std::string> varnames = {"vx", "vy", "vz"};
-        amrex::WriteSingleLevelPlotfile("plt_few_modes_ft", mf, varnames, geom, 0.0, 0);
+	// Write plotfile
+	amrex::Vector<std::string> varnames = {"vx", "vy", "vz"};
+	amrex::WriteSingleLevelPlotfile("plt_few_modes_ft", mf, varnames, geom, 0.0, 0);
 
-        amrex::Print() << "Test completed successfully. Output written to plt_few_modes_ft.\n";
+	amrex::Print() << "Test completed successfully. Output written to plt_few_modes_ft.\n";
 
-    return 0;
+	return 0;
 }
