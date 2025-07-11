@@ -540,10 +540,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double vy_new = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
 						double vz_new = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
 
-						// Enforce maximum speed limit of 1000 km/s
+						// Enforce maximum speed limit for stellar particles
 						{
 							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
-							constexpr double max_speed = 1.0e8; // cm s^{-1}
+							const double max_speed = quokka::stellar_velocity_limit; // cm s^{-1}
 							if (speed > max_speed) {
 								double const scale = max_speed / speed;
 								vx_new *= scale;
