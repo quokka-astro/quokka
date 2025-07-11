@@ -20,7 +20,8 @@ namespace detail
 {
 // Standalone functions to avoid CUDA extended device lambda restrictions
 
-static void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *var_hat_imag_ptr, int size)
+namespace {
+void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *var_hat_imag_ptr, int size)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		var_hat_real_ptr[idx] = 0.0;
@@ -28,7 +29,7 @@ static void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *
 	});
 }
 
-static void compute_phase_i(int size, int lo_i, int ni, int num_modes, int gnx1, const amrex::Real *k_vec_ptr,
+void compute_phase_i(int size, int lo_i, int ni, int num_modes, int gnx1, const amrex::Real *k_vec_ptr,
 			    amrex::Array4<amrex::Real> const &phases_i_arr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
@@ -52,7 +53,7 @@ static void compute_phase_i(int size, int lo_i, int ni, int num_modes, int gnx1,
 	});
 }
 
-static void compute_phase_j(int size, int lo_j, int nj, int num_modes, int gnx2, const amrex::Real *k_vec_ptr,
+void compute_phase_j(int size, int lo_j, int nj, int num_modes, int gnx2, const amrex::Real *k_vec_ptr,
 			    amrex::Array4<amrex::Real> const &phases_j_arr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
@@ -70,7 +71,7 @@ static void compute_phase_j(int size, int lo_j, int nj, int num_modes, int gnx2,
 	});
 }
 
-static void compute_phase_k(int size, int lo_k, int nk, int num_modes, int gnx3, const amrex::Real *k_vec_ptr,
+void compute_phase_k(int size, int lo_k, int nk, int num_modes, int gnx3, const amrex::Real *k_vec_ptr,
 			    amrex::Array4<amrex::Real> const &phases_k_arr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
@@ -88,7 +89,7 @@ static void compute_phase_k(int size, int lo_k, int nk, int num_modes, int gnx3,
 	});
 }
 
-static void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const amrex::Real *k_vec_ptr,
+void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const amrex::Real *k_vec_ptr,
 				    const amrex::Real *random_num_ptr, amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
@@ -114,7 +115,7 @@ static void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak,
 	});
 }
 
-static void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
+void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
 			     amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
@@ -134,7 +135,7 @@ static void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_p
 	});
 }
 
-static void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
+void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
 			     amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(num_modes, [=] AMREX_GPU_DEVICE(int m) {
@@ -174,7 +175,7 @@ static void apply_projection(int num_modes, amrex::Real sol_weight, const amrex:
 	});
 }
 
-static void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amrex::Real *var_hat_real_ptr,
+void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amrex::Real *var_hat_real_ptr,
 				amrex::Real *var_hat_imag_ptr, const amrex::Real *var_hat_new_real_ptr, const amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
@@ -184,7 +185,7 @@ static void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_dif
 	});
 }
 
-static void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, const amrex::Real *var_hat_real_ptr,
+void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, const amrex::Real *var_hat_real_ptr,
 					      const amrex::Real *var_hat_imag_ptr, amrex::Array4<amrex::Real> const &mf_arr,
 					      amrex::Array4<amrex::Real const> const &phases_i_arr,
 					      amrex::Array4<amrex::Real const> const &phases_j_arr,
@@ -215,6 +216,8 @@ static void compute_inverse_fourier_transform(const amrex::Box &bx, int num_mode
 		}
 	});
 }
+
+} // anonymous namespace
 
 } // namespace detail
 
