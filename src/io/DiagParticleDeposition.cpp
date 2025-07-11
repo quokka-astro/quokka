@@ -1,10 +1,10 @@
 #include "io/DiagParticleDeposition.H"
-#include "AMReX_PlotFileUtil.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
+#include "particles/PhysicsParticles.hpp"
 #include "particles/particle_deposition_utils.hpp"
 #include "particles/particle_types.hpp"
-#include "particles/PhysicsParticles.hpp"
 #include "simulation.hpp"
 #include "yaml-cpp/yaml.h"
 #include <fstream>
@@ -77,7 +77,7 @@ void DiagParticleDeposition::prepare(int a_nlevels, const amrex::Vector<amrex::G
 }
 
 void DiagParticleDeposition::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-					  const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata)
+					 const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata)
 {
 	// Clear deposition data
 	for (auto &mf : m_depositionData) {
@@ -100,8 +100,7 @@ void DiagParticleDeposition::addVars(amrex::Vector<std::string> &a_varList)
 }
 
 void DiagParticleDeposition::initializeDepositionData(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms,
-						      const amrex::Vector<amrex::BoxArray> &a_grids,
-						      const amrex::Vector<amrex::DistributionMapping> &a_dmap)
+						      const amrex::Vector<amrex::BoxArray> &a_grids, const amrex::Vector<amrex::DistributionMapping> &a_dmap)
 {
 	// Resize deposition data vector
 	m_depositionData.resize(a_nlevels);

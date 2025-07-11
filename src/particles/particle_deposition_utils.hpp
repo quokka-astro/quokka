@@ -2,9 +2,9 @@
 #define PARTICLE_DEPOSITION_UTILS_HPP_
 
 #include <string>
-#include <vector>
-#include <unordered_map>
 #include <type_traits>
+#include <unordered_map>
+#include <vector>
 
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
@@ -30,10 +30,9 @@ struct ParticleMassDensityDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-				      });
+		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+			return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
 	}
 };
 
@@ -76,15 +75,14 @@ struct ParticleKineticEnergyDensityDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-					      const amrex::Real mass = part.rdata(mass_comp);
-					      const amrex::Real vx = part.rdata(vel_start_comp);
-					      const amrex::Real vy = part.rdata(vel_start_comp + 1);
-					      const amrex::Real vz = part.rdata(vel_start_comp + 2);
-					      const amrex::Real kinetic_energy = 0.5 * mass * (vx * vx + vy * vy + vz * vz);
-					      return kinetic_energy * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-				      });
+		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+			const amrex::Real mass = part.rdata(mass_comp);
+			const amrex::Real vx = part.rdata(vel_start_comp);
+			const amrex::Real vy = part.rdata(vel_start_comp + 1);
+			const amrex::Real vz = part.rdata(vel_start_comp + 2);
+			const amrex::Real kinetic_energy = 0.5 * mass * (vx * vx + vy * vy + vz * vz);
+			return kinetic_energy * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
 	}
 };
 
@@ -99,11 +97,10 @@ struct ParticleNumberDensityDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-		interp.ParticleToMesh(p, deposition_array, 0, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-					      // Deposit unit weight for number density
-					      return 1.0 * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-				      });
+		interp.ParticleToMesh(p, deposition_array, 0, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+			// Deposit unit weight for number density
+			return 1.0 * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
 	}
 };
 
@@ -128,7 +125,7 @@ void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &depos
 /// Deposit particle momentum density for a given particle type
 template <typename ContainerType>
 void depositParticleMomentumDensity(ContainerType *container, amrex::MultiFab &deposition_field, int lev, int mass_comp, int vel_start_comp,
-				     int start_mesh_comp = 0)
+				    int start_mesh_comp = 0)
 {
 	const BL_PROFILE("depositParticleMomentumDensity");
 
@@ -143,7 +140,7 @@ void depositParticleMomentumDensity(ContainerType *container, amrex::MultiFab &d
 /// Deposit particle kinetic energy density for a given particle type
 template <typename ContainerType>
 void depositParticleKineticEnergyDensity(ContainerType *container, amrex::MultiFab &deposition_field, int lev, int mass_comp, int vel_start_comp,
-					  int start_mesh_comp = 0)
+					 int start_mesh_comp = 0)
 {
 	const BL_PROFILE("depositParticleKineticEnergyDensity");
 
@@ -175,8 +172,8 @@ void depositParticleNumberDensity(ContainerType *container, amrex::MultiFab &dep
 
 /// Deposit properties for CIC particles
 template <typename ContainerType>
-void depositCICParticleProperties(ContainerType *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field,
-				   amrex::MultiFab &energy_field, amrex::MultiFab &number_field, int lev)
+void depositCICParticleProperties(ContainerType *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field, amrex::MultiFab &energy_field,
+				  amrex::MultiFab &number_field, int lev)
 {
 	static_assert(std::is_same_v<ContainerType, CICParticleContainer>, "Container type must be CICParticleContainer");
 
@@ -196,7 +193,7 @@ void depositCICParticleProperties(ContainerType *container, amrex::MultiFab &mas
 /// Deposit properties for StochasticStellarPop particles
 template <typename problem_t, typename ContainerType>
 void depositStochasticStellarPopParticleProperties(ContainerType *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field,
-						    amrex::MultiFab &energy_field, amrex::MultiFab &number_field, int lev)
+						   amrex::MultiFab &energy_field, amrex::MultiFab &number_field, int lev)
 {
 	static_assert(std::is_same_v<ContainerType, StochasticStellarPopParticleContainer<problem_t>>,
 		      "Container type must be StochasticStellarPopParticleContainer");
@@ -216,8 +213,8 @@ void depositStochasticStellarPopParticleProperties(ContainerType *container, amr
 
 /// Deposit properties for Sink particles
 template <typename ContainerType>
-void depositSinkParticleProperties(ContainerType *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field,
-				    amrex::MultiFab &energy_field, amrex::MultiFab &number_field, int lev)
+void depositSinkParticleProperties(ContainerType *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field, amrex::MultiFab &energy_field,
+				   amrex::MultiFab &number_field, int lev)
 {
 	static_assert(std::is_same_v<ContainerType, SinkParticleContainer>, "Container type must be SinkParticleContainer");
 
@@ -236,8 +233,8 @@ void depositSinkParticleProperties(ContainerType *container, amrex::MultiFab &ma
 
 /// Deposit properties for Test particles
 template <typename problem_t, typename ContainerType>
-void depositTestParticleProperties(ContainerType *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field,
-				    amrex::MultiFab &energy_field, amrex::MultiFab &number_field, int lev)
+void depositTestParticleProperties(ContainerType *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field, amrex::MultiFab &energy_field,
+				   amrex::MultiFab &number_field, int lev)
 {
 	static_assert(std::is_same_v<ContainerType, TestParticleContainer<problem_t>>, "Container type must be TestParticleContainer");
 
@@ -261,7 +258,7 @@ void depositTestParticleProperties(ContainerType *container, amrex::MultiFab &ma
 /// Generic function to deposit particle properties based on particle type
 template <typename problem_t>
 void depositParticlePropertiesByType(const std::string &particleType, void *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field,
-				      amrex::MultiFab &energy_field, amrex::MultiFab &number_field, int lev)
+				     amrex::MultiFab &energy_field, amrex::MultiFab &number_field, int lev)
 {
 	if (particleType == "CIC") {
 		auto *cicContainer = static_cast<CICParticleContainer *>(container);

@@ -2,8 +2,8 @@
 #define DIAG_PARTICLE_DEPOSITION_H_
 
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
@@ -17,7 +17,7 @@ namespace quokka
 /// Supports per-species deposition of mass, momentum, and energy
 class DiagParticleDeposition : public DiagBase::Register<DiagParticleDeposition>
 {
-public:
+      public:
 	static auto identifier() -> std::string { return "DiagParticleDeposition"; }
 
 	void init(const std::string &a_prefix, std::string_view a_diagName) override;
@@ -28,7 +28,7 @@ public:
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 	void close() override {}
 
-private:
+      private:
 	/// Particle types to deposit (e.g., "CIC", "StochasticStellarPop")
 	std::vector<std::string> m_particleTypes;
 

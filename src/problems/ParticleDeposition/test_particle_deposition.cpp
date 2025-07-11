@@ -1,5 +1,5 @@
 /// Test particle deposition utilities for per-species particle deposition
-/// This test verifies that particle properties (mass, momentum, energy, number density) 
+/// This test verifies that particle properties (mass, momentum, energy, number density)
 /// can be deposited onto the grid correctly for different particle types
 
 #include <cstdio>
@@ -12,8 +12,8 @@
 #include "AMReX_BLProfiler.H"
 #include "AMReX_Config.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_PlotFileUtil.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
@@ -21,9 +21,9 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "io/DiagParticleDeposition.H"
+#include "particles/PhysicsParticles.hpp"
 #include "particles/particle_deposition_utils.hpp"
 #include "particles/particle_types.hpp"
-#include "particles/PhysicsParticles.hpp"
 #include "physics_info.hpp"
 
 using namespace quokka;
@@ -56,10 +56,9 @@ template <> struct quokka::Physics_Traits<ParticleDepositionProblem> {
 };
 
 // Simulation class
-template <> 
-class QuokkaSimulation<ParticleDepositionProblem> : public AMRSimulation<ParticleDepositionProblem>
+template <> class QuokkaSimulation<ParticleDepositionProblem> : public AMRSimulation<ParticleDepositionProblem>
 {
-public:
+      public:
 	explicit QuokkaSimulation(amrex::LevelBld *a_lev_bld = nullptr, amrex::CartesianGrid *a_parent = nullptr)
 	    : AMRSimulation<ParticleDepositionProblem>(a_lev_bld, a_parent)
 	{
@@ -74,7 +73,7 @@ public:
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 	auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
-private:
+      private:
 	DiagParticleDeposition m_particleDepositionDiag;
 	std::vector<double> m_totalMass;
 	std::vector<double> m_totalMomentum;
@@ -82,13 +81,12 @@ private:
 	std::vector<double> m_totalNumber;
 };
 
-template <>
-void QuokkaSimulation<ParticleDepositionProblem>::setInitialConditions()
+template <> void QuokkaSimulation<ParticleDepositionProblem>::setInitialConditions()
 {
 	// Set initial gas conditions
-	const amrex::Real rho0 = 1.0e-3;  // Low density background
-	const amrex::Real P0 = 1.0e-6;    // Low pressure
-	const amrex::Real T0 = 1.0e4;     // 10^4 K
+	const amrex::Real rho0 = 1.0e-3; // Low density background
+	const amrex::Real P0 = 1.0e-6;	 // Low pressure
+	const amrex::Real T0 = 1.0e4;	 // 10^4 K
 	const amrex::Real eint0 = P0 / (rho0 * (quokka::EOS_Traits<ParticleDepositionProblem>::gamma - 1.0));
 
 	// Set initial state
@@ -116,11 +114,11 @@ void QuokkaSimulation<ParticleDepositionProblem>::setInitialConditions()
 	const int lev = 0;
 	const int nParticles = 10;
 	const amrex::Real particleMass = 1.0e-2;
-	const amrex::Real particleVelocity = 1.0e5;  // cm/s
+	const amrex::Real particleVelocity = 1.0e5; // cm/s
 
 	if (ParticleSwitch::CIC & quokka::Particle_Traits<ParticleDepositionProblem>::particle_switch) {
 		auto *cicContainer = particleRegister_.getCICParticleContainer();
-		
+
 		// Create particles uniformly distributed in the domain
 		for (int n = 0; n < nParticles; ++n) {
 			const amrex::Real x = 0.1 + 0.8 * static_cast<amrex::Real>(n) / (nParticles - 1);
@@ -149,8 +147,7 @@ void QuokkaSimulation<ParticleDepositionProblem>::setInitialConditions()
 	AMRSimulation<ParticleDepositionProblem>::setInitialConditions();
 }
 
-template <>
-void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimestep()
 {
 	// Test particle deposition utilities
 	const int lev = 0;
@@ -194,8 +191,7 @@ void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimestep()
 		       << ", Total energy = " << totalEnergy << ", Total number = " << totalNumber << "\n";
 }
 
-template <>
-void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const
+template <> void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const
 {
 	// Add derived variables for particle deposition fields
 	if (dname == "particle_mass_density") {
@@ -262,17 +258,17 @@ auto problem_main() -> int
 	amrex::Print() << "  Total number: " << finalNumber << "\n";
 
 	// Simple verification
-	const amrex::Real expectedMass = 10.0 * 1.0e-2;  // 10 particles * 1e-2 mass each
-	const amrex::Real expectedNumber = 10.0;          // 10 particles
-	
+	const amrex::Real expectedMass = 10.0 * 1.0e-2; // 10 particles * 1e-2 mass each
+	const amrex::Real expectedNumber = 10.0;	// 10 particles
+
 	const amrex::Real massTolerance = 1.0e-12;
 	const amrex::Real numberTolerance = 1.0e-12;
-	
+
 	if (std::abs(finalMass - expectedMass) > massTolerance) {
 		amrex::Print() << "ERROR: Mass conservation failed! Expected " << expectedMass << ", got " << finalMass << "\n";
 		return 1;
 	}
-	
+
 	if (std::abs(finalNumber - expectedNumber) > numberTolerance) {
 		amrex::Print() << "ERROR: Number conservation failed! Expected " << expectedNumber << ", got " << finalNumber << "\n";
 		return 1;
