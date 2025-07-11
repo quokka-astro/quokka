@@ -13,10 +13,10 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "util/fextract.hpp"
 
 struct WaveProblem {
@@ -103,16 +103,16 @@ auto runWaveTest(int nx) -> double
 		}
 	}
 
+	// Set grid dimensions using AMReX parameter system
+	amrex::ParmParse pp("amr");
+	amrex::Vector<int> ncells = {nx, 4, 4};
+	pp.addarr("n_cell", ncells);
+
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-
-	// Override default grid size with specified resolution
-	sim.ncellsBase_[0] = nx;
-	sim.ncellsBase_[1] = 4;
-	sim.ncellsBase_[2] = 4;
 
 	// set initial conditions
 	sim.setInitialConditions();
