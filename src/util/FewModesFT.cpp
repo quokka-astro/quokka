@@ -19,7 +19,7 @@ namespace quokka::util
 FewModesFT::FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
 		       amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, bool fill_ghosts)
     : num_modes_(num_modes), prefix_(std::move(prefix)), k_vec_(k_vec), k_peak_(k_peak), sol_weight_(sol_weight), t_corr_(t_corr), fill_ghosts_(fill_ghosts),
-      var_hat_real_d_(static_cast<std::size_t>(3 * num_modes)), var_hat_imag_d_(static_cast<std::size_t>(3 * num_modes)), k_vec_d_(static_cast<std::size_t>(3 * num_modes))
+      var_hat_real_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)), var_hat_imag_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)), k_vec_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes))
 {
 
 	if (num_modes > 100) {
@@ -191,7 +191,7 @@ void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 	}
 
 	// Copy random numbers to device-accessible memory
-	amrex::Gpu::DeviceVector<amrex::Real> random_num_d(static_cast<std::size_t>(3 * num_modes_ * 2));
+	amrex::Gpu::DeviceVector<amrex::Real> random_num_d(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes_) * static_cast<std::size_t>(2));
 	amrex::Real *random_num_ptr = random_num_d.data();
 
 	for (int n = 0; n < 3; ++n) {
@@ -207,8 +207,8 @@ void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 	amrex::Real *k_vec_ptr = k_vec_d_.data();
 
 	// Copy var_hat_new_ to device-accessible memory
-	amrex::Gpu::DeviceVector<amrex::Real> var_hat_new_real_d(static_cast<std::size_t>(3 * num_modes_));
-	amrex::Gpu::DeviceVector<amrex::Real> var_hat_new_imag_d(static_cast<std::size_t>(3 * num_modes_));
+	amrex::Gpu::DeviceVector<amrex::Real> var_hat_new_real_d(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes_));
+	amrex::Gpu::DeviceVector<amrex::Real> var_hat_new_imag_d(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes_));
 	amrex::Real *var_hat_new_real_ptr = var_hat_new_real_d.data();
 	amrex::Real *var_hat_new_imag_ptr = var_hat_new_imag_d.data();
 
