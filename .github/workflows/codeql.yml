@@ -3,8 +3,40 @@ name: CodeQL
 on:
   push:
     branches: [ "development" ]
+    paths:
+      - 'src/**'
+      - 'extern/amrex/**'
+      - 'extern/Microphysics/**'
+      - 'extern/fmt/**'
+      - 'extern/grackle_data_files/**'
+      - 'extern/openPMD-api/**'
+      - 'extern/yaml-cpp/**'
+      - 'inputs/**'
+      - 'CMakeLists.txt'
+      - '**/*.cpp'
+      - '**/*.c'
+      - '**/*.hpp'
+      - '**/*.h'
+      - '.github/workflows/codeql.yml'
+      - '.github/workflows/codeql/codeql-config.yml'
   pull_request:
     branches: [ "development" ]
+    paths:
+      - 'src/**'
+      - 'extern/amrex/**'
+      - 'extern/Microphysics/**'
+      - 'extern/fmt/**'
+      - 'extern/grackle_data_files/**'
+      - 'extern/openPMD-api/**'
+      - 'extern/yaml-cpp/**'
+      - 'inputs/**'
+      - 'CMakeLists.txt'
+      - '**/*.cpp'
+      - '**/*.c'
+      - '**/*.hpp'
+      - '**/*.h'
+      - '.github/workflows/codeql.yml'
+      - '.github/workflows/codeql/codeql-config.yml'
   schedule:
     - cron: "27 3 * * 0"
 
