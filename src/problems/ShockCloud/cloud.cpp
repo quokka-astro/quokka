@@ -41,10 +41,10 @@ struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double seconds_in_year = 3.1536e7;
-constexpr double parsec_in_cm = C::parsec;	      // cm == 1 pc
-constexpr double solarmass_in_g = C::M_solar;   // g == 1 Msun
+constexpr double parsec_in_cm = C::parsec;	  // cm == 1 pc
+constexpr double solarmass_in_g = C::M_solar;	  // g == 1 Msun
 constexpr double keV_in_ergs = 1000. * C::ev2erg; // ergs == 1 keV
-constexpr double m_H = C::m_p + C::m_e;	      // mass of hydrogen atom
+constexpr double m_H = C::m_p + C::m_e;		  // mass of hydrogen atom
 
 template <> struct Physics_Traits<ShockCloud> {
 	static constexpr bool is_self_gravity_enabled = false;

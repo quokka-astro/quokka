@@ -14,9 +14,9 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
+#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
-#include "fundamental_constants.H"
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
@@ -66,7 +66,7 @@ template <> struct Physics_Traits<ShellProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-constexpr amrex::Real Msun = C::M_solar;	    // g
+constexpr amrex::Real Msun = C::M_solar;	// g
 constexpr amrex::Real parsec_in_cm = C::parsec; // cm
 
 constexpr amrex::Real specific_luminosity = 2000.;			   // erg s^-1 g^-1
