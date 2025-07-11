@@ -19,6 +19,8 @@ permissions:
 jobs:
   check_changes:
     uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/hip.yml'
 
   tests-hip:
     name: HIP ROCm C++17

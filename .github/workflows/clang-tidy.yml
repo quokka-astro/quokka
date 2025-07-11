@@ -12,6 +12,8 @@ concurrency:
 jobs:
   check_changes:
     uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/clang-tidy.yml'
 
   build:
     runs-on: ubuntu-latest
