@@ -31,7 +31,7 @@ These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` 
 
 ## Hydrodynamics
 
-These parameters are read in the ``RadhydroSimulation<problem_t>::readParmParse()`` function in ``src/RadhydroSimulation.hpp``.
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
 
 | Parameter Name | Type | Description |
 |----|----|----|
@@ -44,19 +44,32 @@ These parameters are read in the ``RadhydroSimulation<problem_t>::readParmParse(
 
 ## Radiation
 
-These parameters are read in the ``RadhydroSimulation<problem_t>::readParmParse()`` function in ``src/RadhydroSimulation.hpp``.
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
 
 | Parameter Name | Type | Description |
 |----|----|----|
 | radiation.reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), or 3 (piecewise parabolic; PPM). Default: 3 (PPM). |
 | radiation.cfl | Float | Sets the CFL number for the radiation advance. This is independent of the hydro CFL number. |
+| radiation.dust_gas_interaction_coeff | Float | Coefficient for dust-gas interaction in radiation calculations. |
+| radiation.print_iteration_counts | Integer | If set to 1, prints radiation iteration counts for debugging. Default: 0 (disabled). |
 
 ## Optically-thin radiative cooling
 
-These parameters are read in the ``RadhydroSimulation<problem_t>::readParmParse()`` function in ``src/RadhydroSimulation.hpp``.
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
 
 | Parameter Name | Type | Description |
 |----|----|----|
 | cooling.enabled | Integer | If set to 1, turns on optically-thin radiative cooling as a Strang-split source term. Default: 0 (disabled). |
+| cooling.cooling_table_type | String | Specifies the type of cooling table to use. Options: "grackle", "cloudy_cooling_tools", "resampled". |
 | cooling.read_tables_even_if_disabled | Integer | If set to 1, reads the cooling tables even if the cooling module is disabled. |
-| cooling.grackle_data_file | String | The path to the cooling tables in Grackle-compatible HDF5 format. |
+| cooling.hdf5_data_file | String | The path to the cooling tables in HDF5 format. |
+
+## Chemistry
+
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+
+| Parameter Name | Type | Description |
+|----|----|----|
+| chemistry.enabled | Integer | If set to 1, turns on chemistry as a Strang-split source term. Default: 0 (disabled). |
+| chemistry.max_density_allowed | Float | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold. |
+| chemistry.min_density_allowed | Float | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
