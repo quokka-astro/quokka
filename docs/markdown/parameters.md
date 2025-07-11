@@ -91,7 +91,7 @@ These parameters are read in the ``particleParmParse()`` function in ``src/parti
 |----|----|----|
 | particles.disable_SN_feedback | Integer | If set to 1, disables SN feedback when a particle evolves from SNProgenitor to SNRemnant. Default: 0 (enabled). |
 | particles.sink_particle_use_uniform_kernel | Integer | If set to 1, uses uniform accretion kernel in a (7 dx)^3 box for sink particles. Default: 0 (disabled). |
-| particles.SN_scheme | string | Scheme for SN feedback. Options: 0 (SN_thermal_only), 1 (SN_thermal_or_thermal_momentum), 2 (SN_thermal_kinetic_or_thermal_momentum), 3 (SN_pure_kinetic_or_thermal_momentum). Default: 1. |
+| particles.SN_scheme | string | Scheme for SN feedback. Options: SN_thermal_only, SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, SN_pure_kinetic_or_thermal_momentum. Default: SN_thermal_or_thermal_momentum. |
 | particles.eps_ff | Float | Star formation efficiency parameter. Default: 0.01. |
 | particles.verbose | Integer | Verbosity level for particle operations. Higher values provide more detailed output. Default: 0. |
 | particles.param1 | Float | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0. |
