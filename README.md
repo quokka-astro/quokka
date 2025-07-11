@@ -43,4 +43,4 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 If you run into problems, please start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support. If you discover a bug, please let us know by opening an [Issue](https://github.com/BenWibking/quokka/issues).
 
 
-dummy change to test GPU workflow
+dummy change to test GPU workflow. This should not trigger any workflow.
