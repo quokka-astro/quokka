@@ -28,6 +28,15 @@ These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` 
 | density_floor | Float | The minimum density value allowed in the simulation. Enforced through EnforceLimits. |
 | temperature_floor | Float | The minimum temperature value allowed in the simulation. Enforced through EnforceLimits. |
 | max_walltime | String | The maximum walltime for the simulation in the format DD:HH:SS (days/hours/seconds). After 90% of this walltime elapses, the simulation will automatically stop and exit. |
+| particle_cfl | Float | Sets the CFL number for particle advection. This is independent of the hydro CFL number. |
+| plotfile_prefix | String | The prefix for plotfile output filenames. Default: "plt". |
+| checkpoint_prefix | String | The prefix for checkpoint output filenames. Default: "chk". |
+| do_subcycle | Integer | This turns on subcycling at coarse-fine boundaries (1) or turns it off (0). Default: 1 (on). |
+| poisson_supercycle_interval | Integer | The number of coarse timesteps between Poisson supercycle operations. |
+| print_cycle_timing | Integer | If set to 1, prints per-cycle timing information. Default: 0 (disabled). |
+| restartfile | String | The path to a checkpoint file from which to restart the simulation. |
+| amr.plot_nfiles | Integer | Maximum number of binary files per multifab for plotfiles. Controls parallel I/O chunking. |
+| amr.checkpoint_nfiles | Integer | Maximum number of binary files per multifab for checkpoints. Controls parallel I/O chunking. |
 
 ## Hydrodynamics
 
@@ -73,3 +82,17 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 | chemistry.enabled | Integer | If set to 1, turns on chemistry as a Strang-split source term. Default: 0 (disabled). |
 | chemistry.max_density_allowed | Float | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold. |
 | chemistry.min_density_allowed | Float | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
+
+## Particles
+
+These parameters are read in the ``particleParmParse()`` function in ``src/particles/particle_types.hpp``.
+
+| Parameter Name | Type | Description |
+|----|----|----|
+| particles.disable_SN_feedback | Integer | If set to 1, disables SN feedback when a particle evolves from SNProgenitor to SNRemnant. Default: 0 (enabled). |
+| particles.sink_particle_use_uniform_kernel | Integer | If set to 1, uses uniform accretion kernel in a (7 dx)^3 box for sink particles. Default: 0 (disabled). |
+| particles.SN_scheme | Integer | Scheme for SN feedback. Options: 0 (SN_thermal_only), 1 (SN_thermal_or_thermal_momentum), 2 (SN_thermal_kinetic_or_thermal_momentum), 3 (SN_pure_kinetic_or_thermal_momentum). Default: 1. |
+| particles.eps_ff | Float | Star formation efficiency parameter. Default: 0.01. |
+| particles.verbose | Integer | Verbosity level for particle operations. Higher values provide more detailed output. Default: 0. |
+| particles.param1 | Float | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0. |
+| particles.param2 | Float | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0. |
