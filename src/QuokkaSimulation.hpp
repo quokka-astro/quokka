@@ -1157,14 +1157,12 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		amrex::Copy(originalFineData, fineData, 0, 0, fineData.nComp(), 0);
 	}
 
-#ifdef AMREX_PARTICLES
 	amrex::AmrTracerParticleContainer::ContainerLike<amrex::DefaultAllocator> originalTracerPC;
 	if (do_tracers != 0) {
 		// save the pre-advance tracer particles
 		originalTracerPC = TracerPC->make_alike();	 // create empty particle container
 		originalTracerPC.copyParticles(*TracerPC, true); // do local copy of particles
 	}
-#endif
 
 	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
@@ -1185,12 +1183,10 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 				amrex::Copy(fr_as_fine->getFineData(), originalFineData, 0, 0, originalFineData.nComp(), 0);
 			}
 
-#ifdef AMREX_PARTICLES
 			if (do_tracers != 0) {
 				// reset the tracer particles to their pre-advance state
 				TracerPC->copyParticles(originalTracerPC, true);
 			}
-#endif
 		}
 
 		// create temporary multifab for old state
@@ -1881,7 +1877,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 			radEnergySource.setVal(0.0); // Initialize the MultiFab to zero
 
-#ifdef AMREX_PARTICLES
 			// for debugging, print the radEnergySource array
 			// if (i == 0) {
 			// 	amrex::Print() << "Initial,              ";
@@ -1898,7 +1893,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// 	PrintRadEnergySource(radEnergySource);
 			// 	amrex::Print() << "\n";
 			// }
-#endif
 
 			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 				const amrex::Box &indexRange = iter.validbox();
@@ -1932,10 +1926,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		radEnergySource.setVal(0.0); // Initialize the MultiFab to zero
 
-#ifdef AMREX_PARTICLES
 		// Deposit radiation from particles into radEnergySource. When there are no particles with luminosity, this will do nothing.
 		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
-#endif
 
 		// Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
 		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
