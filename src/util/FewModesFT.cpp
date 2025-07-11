@@ -16,6 +16,208 @@
 namespace quokka::util
 {
 
+namespace detail
+{
+// Standalone functions to avoid CUDA extended device lambda restrictions
+
+static void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *var_hat_imag_ptr, int size)
+{
+	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
+		var_hat_real_ptr[idx] = 0.0;
+		var_hat_imag_ptr[idx] = 0.0;
+	});
+}
+
+static void compute_phase_i(int size, int lo_i, int ni, int num_modes, int gnx1, const amrex::Real *k_vec_ptr,
+			    amrex::Array4<amrex::Real> const &phases_i_arr)
+{
+	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
+		const int i = lo_i + (idx % ni);
+		const int m = idx / ni;
+
+		const auto gi = static_cast<amrex::Real>(i % gnx1);
+		const amrex::Real w_kx = k_vec_ptr[0 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx1);
+
+		const amrex::Real cos_phase = std::cos(w_kx * gi);
+		const amrex::Real sin_phase = std::sin(w_kx * gi);
+
+		// Adjust phase factor for Complex->Real IFT: u_hat*(k) = u_hat(-k)
+		if (k_vec_ptr[0 * num_modes + m] == 0.0) {
+			phases_i_arr(i, 0, 0, m * 2) = 0.5 * cos_phase;
+			phases_i_arr(i, 0, 0, m * 2 + 1) = 0.5 * sin_phase;
+		} else {
+			phases_i_arr(i, 0, 0, m * 2) = cos_phase;
+			phases_i_arr(i, 0, 0, m * 2 + 1) = sin_phase;
+		}
+	});
+}
+
+static void compute_phase_j(int size, int lo_j, int nj, int num_modes, int gnx2, const amrex::Real *k_vec_ptr,
+			    amrex::Array4<amrex::Real> const &phases_j_arr)
+{
+	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
+		const int j = lo_j + (idx % nj);
+		const int m = idx / nj;
+
+		const auto gj = static_cast<amrex::Real>(j % gnx2);
+		const amrex::Real w_ky = k_vec_ptr[1 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx2);
+
+		const amrex::Real cos_phase = std::cos(w_ky * gj);
+		const amrex::Real sin_phase = std::sin(w_ky * gj);
+
+		phases_j_arr(0, j, 0, m * 2) = cos_phase;
+		phases_j_arr(0, j, 0, m * 2 + 1) = sin_phase;
+	});
+}
+
+static void compute_phase_k(int size, int lo_k, int nk, int num_modes, int gnx3, const amrex::Real *k_vec_ptr,
+			    amrex::Array4<amrex::Real> const &phases_k_arr)
+{
+	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
+		const int k = lo_k + (idx % nk);
+		const int m = idx / nk;
+
+		const auto gk = static_cast<amrex::Real>(k % gnx3);
+		const amrex::Real w_kz = k_vec_ptr[2 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx3);
+
+		const amrex::Real cos_phase = std::cos(w_kz * gk);
+		const amrex::Real sin_phase = std::sin(w_kz * gk);
+
+		phases_k_arr(0, 0, k, m * 2) = cos_phase;
+		phases_k_arr(0, 0, k, m * 2 + 1) = sin_phase;
+	});
+}
+
+static void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const amrex::Real *k_vec_ptr,
+				    const amrex::Real *random_num_ptr, amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
+{
+	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
+		const int n = idx / num_modes;
+		const int m = idx % num_modes;
+
+		const amrex::Real kx = k_vec_ptr[0 * num_modes + m];
+		const amrex::Real ky = k_vec_ptr[1 * num_modes + m];
+		const amrex::Real kz = k_vec_ptr[2 * num_modes + m];
+
+		const amrex::Real kmag = std::sqrt(kx * kx + ky * ky + kz * kz);
+
+		amrex::Real tmp = std::pow(kmag / k_peak, 2.0) * (2.0 - std::pow(kmag / k_peak, 2.0));
+		tmp = std::max(tmp, 0.0);
+
+		const int idx_real = (n * num_modes + m) * 2;
+		const int idx_imag = (n * num_modes + m) * 2 + 1;
+		const amrex::Real v_sqr_local = random_num_ptr[idx_real] * random_num_ptr[idx_real] + random_num_ptr[idx_imag] * random_num_ptr[idx_imag];
+		const amrex::Real norm = std::sqrt(-2.0 * std::log(v_sqr_local) / v_sqr_local);
+
+		var_hat_new_real_ptr[idx] = tmp * norm * random_num_ptr[idx_real];
+		var_hat_new_imag_ptr[idx] = tmp * norm * random_num_ptr[idx_imag];
+	});
+}
+
+static void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
+			     amrex::Real *var_hat_new_imag_ptr)
+{
+	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
+		const int n = idx / num_modes;
+		const int m = idx % num_modes;
+
+		if (k_vec_ptr[0 * num_modes + m] == 0.0) {
+			for (int m2 = 0; m2 < m; ++m2) {
+				if (k_vec_ptr[1 * num_modes + m] == -k_vec_ptr[1 * num_modes + m2] &&
+				    k_vec_ptr[2 * num_modes + m] == -k_vec_ptr[2 * num_modes + m2]) {
+					const int idx2 = n * num_modes + m2;
+					var_hat_new_real_ptr[idx] = var_hat_new_real_ptr[idx2];
+					var_hat_new_imag_ptr[idx] = -var_hat_new_imag_ptr[idx2];
+				}
+			}
+		}
+	});
+}
+
+static void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
+			     amrex::Real *var_hat_new_imag_ptr)
+{
+	amrex::ParallelFor(num_modes, [=] AMREX_GPU_DEVICE(int m) {
+		const amrex::Real kx = k_vec_ptr[0 * num_modes + m];
+		const amrex::Real ky = k_vec_ptr[1 * num_modes + m];
+		const amrex::Real kz = k_vec_ptr[2 * num_modes + m];
+
+		amrex::Real kmag = std::sqrt(kx * kx + ky * ky + kz * kz);
+
+		// Avoid division by zero
+		if (kmag == 0.0) {
+			kmag = 1.0;
+		}
+
+		// Make unit vector
+		const amrex::Real kx_unit = kx / kmag;
+		const amrex::Real ky_unit = ky / kmag;
+		const amrex::Real kz_unit = kz / kmag;
+
+		// Calculate dot product for each mode
+		const amrex::Real dot_real = var_hat_new_real_ptr[0 * num_modes + m] * kx_unit + var_hat_new_real_ptr[1 * num_modes + m] * ky_unit +
+					     var_hat_new_real_ptr[2 * num_modes + m] * kz_unit;
+		const amrex::Real dot_imag = var_hat_new_imag_ptr[0 * num_modes + m] * kx_unit + var_hat_new_imag_ptr[1 * num_modes + m] * ky_unit +
+					     var_hat_new_imag_ptr[2 * num_modes + m] * kz_unit;
+
+		// Apply projection to all components
+		const amrex::Real factor = 1.0 - 2.0 * sol_weight;
+
+		var_hat_new_real_ptr[0 * num_modes + m] = var_hat_new_real_ptr[0 * num_modes + m] * sol_weight + factor * dot_real * kx_unit;
+		var_hat_new_imag_ptr[0 * num_modes + m] = var_hat_new_imag_ptr[0 * num_modes + m] * sol_weight + factor * dot_imag * kx_unit;
+
+		var_hat_new_real_ptr[1 * num_modes + m] = var_hat_new_real_ptr[1 * num_modes + m] * sol_weight + factor * dot_real * ky_unit;
+		var_hat_new_imag_ptr[1 * num_modes + m] = var_hat_new_imag_ptr[1 * num_modes + m] * sol_weight + factor * dot_imag * ky_unit;
+
+		var_hat_new_real_ptr[2 * num_modes + m] = var_hat_new_real_ptr[2 * num_modes + m] * sol_weight + factor * dot_real * kz_unit;
+		var_hat_new_imag_ptr[2 * num_modes + m] = var_hat_new_imag_ptr[2 * num_modes + m] * sol_weight + factor * dot_imag * kz_unit;
+	});
+}
+
+static void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amrex::Real *var_hat_real_ptr,
+				amrex::Real *var_hat_imag_ptr, const amrex::Real *var_hat_new_real_ptr, const amrex::Real *var_hat_new_imag_ptr)
+{
+	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
+		// Update persistent GPU storage with evolved coefficients
+		var_hat_real_ptr[idx] = var_hat_real_ptr[idx] * c_drift + var_hat_new_real_ptr[idx] * c_diff;
+		var_hat_imag_ptr[idx] = var_hat_imag_ptr[idx] * c_drift + var_hat_new_imag_ptr[idx] * c_diff;
+	});
+}
+
+static void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, const amrex::Real *var_hat_real_ptr,
+					      const amrex::Real *var_hat_imag_ptr, amrex::Array4<amrex::Real> const &mf_arr,
+					      amrex::Array4<amrex::Real const> const &phases_i_arr,
+					      amrex::Array4<amrex::Real const> const &phases_j_arr,
+					      amrex::Array4<amrex::Real const> const &phases_k_arr)
+{
+	amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		for (int n = 0; n < 3; ++n) {
+			mf_arr(i, j, k, n) = 0.0;
+
+			for (int m = 0; m < num_modes; ++m) {
+				const amrex::Real phase_i_real = phases_i_arr(i, 0, 0, m * 2);
+				const amrex::Real phase_i_imag = phases_i_arr(i, 0, 0, m * 2 + 1);
+				const amrex::Real phase_j_real = phases_j_arr(0, j, 0, m * 2);
+				const amrex::Real phase_j_imag = phases_j_arr(0, j, 0, m * 2 + 1);
+				const amrex::Real phase_k_real = phases_k_arr(0, 0, k, m * 2);
+				const amrex::Real phase_k_imag = phases_k_arr(0, 0, k, m * 2 + 1);
+
+				// Complex multiplication: phase = phase_i * phase_j * phase_k
+				const amrex::Real temp_real = phase_i_real * phase_j_real - phase_i_imag * phase_j_imag;
+				const amrex::Real temp_imag = phase_i_real * phase_j_imag + phase_i_imag * phase_j_real;
+
+				const amrex::Real phase_real = temp_real * phase_k_real - temp_imag * phase_k_imag;
+				const amrex::Real phase_imag = temp_real * phase_k_imag + temp_imag * phase_k_real;
+
+				const int idx = n * num_modes + m;
+				mf_arr(i, j, k, n) += 2.0 * (var_hat_real_ptr[idx] * phase_real - var_hat_imag_ptr[idx] * phase_imag);
+			}
+		}
+	});
+}
+
+} // namespace detail
+
 FewModesFT::FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
 		       amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, bool fill_ghosts)
     : num_modes_(num_modes), prefix_(std::move(prefix)), var_hat_real_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)),
@@ -44,10 +246,7 @@ FewModesFT::FewModesFT(std::string prefix, int num_modes, const std::vector<std:
 	amrex::Real *var_hat_real_ptr = var_hat_real_d_.data();
 	amrex::Real *var_hat_imag_ptr = var_hat_imag_d_.data();
 
-	amrex::ParallelFor(3 * num_modes, [=] AMREX_GPU_DEVICE(int idx) {
-		var_hat_real_ptr[idx] = 0.0;
-		var_hat_imag_ptr[idx] = 0.0;
-	});
+	detail::initialize_coefficients(var_hat_real_ptr, var_hat_imag_ptr, 3 * num_modes);
 
 	// Initialize GPU-resident wave vectors
 	amrex::Real *k_vec_ptr = k_vec_d_.data();
@@ -108,25 +307,7 @@ void FewModesFT::SetPhases(const amrex::Geometry &geom)
 		auto phases_i_arr = phases_i_fab.array();
 
 		const int ni = hi_i - lo_i + 1;
-		amrex::ParallelFor(ni * num_modes, [=] AMREX_GPU_DEVICE(int idx) {
-			const int i = lo_i + (idx % ni);
-			const int m = idx / ni;
-
-			const auto gi = static_cast<amrex::Real>(i % gnx1);
-			const amrex::Real w_kx = k_vec_ptr[0 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx1);
-
-			const amrex::Real cos_phase = std::cos(w_kx * gi);
-			const amrex::Real sin_phase = std::sin(w_kx * gi);
-
-			// Adjust phase factor for Complex->Real IFT: u_hat*(k) = u_hat(-k)
-			if (k_vec_ptr[0 * num_modes + m] == 0.0) {
-				phases_i_arr(i, 0, 0, m * 2) = 0.5 * cos_phase;
-				phases_i_arr(i, 0, 0, m * 2 + 1) = 0.5 * sin_phase;
-			} else {
-				phases_i_arr(i, 0, 0, m * 2) = cos_phase;
-				phases_i_arr(i, 0, 0, m * 2 + 1) = sin_phase;
-			}
-		});
+		detail::compute_phase_i(ni * num_modes, lo_i, ni, num_modes, gnx1, k_vec_ptr, phases_i_arr);
 
 		// Calculate phases for j-direction
 		const auto lo_j = gbx.loVect()[1];
@@ -134,19 +315,7 @@ void FewModesFT::SetPhases(const amrex::Geometry &geom)
 		auto phases_j_arr = phases_j_fab.array();
 
 		const int nj = hi_j - lo_j + 1;
-		amrex::ParallelFor(nj * num_modes, [=] AMREX_GPU_DEVICE(int idx) {
-			const int j = lo_j + (idx % nj);
-			const int m = idx / nj;
-
-			const auto gj = static_cast<amrex::Real>(j % gnx2);
-			const amrex::Real w_ky = k_vec_ptr[1 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx2);
-
-			const amrex::Real cos_phase = std::cos(w_ky * gj);
-			const amrex::Real sin_phase = std::sin(w_ky * gj);
-
-			phases_j_arr(0, j, 0, m * 2) = cos_phase;
-			phases_j_arr(0, j, 0, m * 2 + 1) = sin_phase;
-		});
+		detail::compute_phase_j(nj * num_modes, lo_j, nj, num_modes, gnx2, k_vec_ptr, phases_j_arr);
 
 		// Calculate phases for k-direction
 		const auto lo_k = gbx.loVect()[2];
@@ -154,19 +323,7 @@ void FewModesFT::SetPhases(const amrex::Geometry &geom)
 		auto phases_k_arr = phases_k_fab.array();
 
 		const int nk = hi_k - lo_k + 1;
-		amrex::ParallelFor(nk * num_modes, [=] AMREX_GPU_DEVICE(int idx) {
-			const int k = lo_k + (idx % nk);
-			const int m = idx / nk;
-
-			const auto gk = static_cast<amrex::Real>(k % gnx3);
-			const amrex::Real w_kz = k_vec_ptr[2 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx3);
-
-			const amrex::Real cos_phase = std::cos(w_kz * gk);
-			const amrex::Real sin_phase = std::sin(w_kz * gk);
-
-			phases_k_arr(0, 0, k, m * 2) = cos_phase;
-			phases_k_arr(0, 0, k, m * 2 + 1) = sin_phase;
-		});
+		detail::compute_phase_k(nk * num_modes, lo_k, nk, num_modes, gnx3, k_vec_ptr, phases_k_arr);
 	}
 }
 
@@ -220,83 +377,15 @@ void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 	const auto k_peak = k_peak_;
 	const auto num_modes = num_modes_;
 
-	amrex::ParallelFor(3 * num_modes_, [=] AMREX_GPU_DEVICE(int idx) {
-		const int n = idx / num_modes;
-		const int m = idx % num_modes;
-
-		const amrex::Real kx = k_vec_ptr[0 * num_modes + m];
-		const amrex::Real ky = k_vec_ptr[1 * num_modes + m];
-		const amrex::Real kz = k_vec_ptr[2 * num_modes + m];
-
-		const amrex::Real kmag = std::sqrt(kx * kx + ky * ky + kz * kz);
-
-		amrex::Real tmp = std::pow(kmag / k_peak, 2.0) * (2.0 - std::pow(kmag / k_peak, 2.0));
-		tmp = std::max(tmp, 0.0);
-
-		const int idx_real = (n * num_modes + m) * 2;
-		const int idx_imag = (n * num_modes + m) * 2 + 1;
-		const amrex::Real v_sqr_local = random_num_ptr[idx_real] * random_num_ptr[idx_real] + random_num_ptr[idx_imag] * random_num_ptr[idx_imag];
-		const amrex::Real norm = std::sqrt(-2.0 * std::log(v_sqr_local) / v_sqr_local);
-
-		var_hat_new_real_ptr[idx] = tmp * norm * random_num_ptr[idx_real];
-		var_hat_new_imag_ptr[idx] = tmp * norm * random_num_ptr[idx_imag];
-	});
+	detail::generate_power_spectrum(3 * num_modes_, num_modes, k_peak, k_vec_ptr, random_num_ptr, var_hat_new_real_ptr, var_hat_new_imag_ptr);
 
 	// Enforce symmetry for complex to real transform on GPU
-	amrex::ParallelFor(3 * num_modes_, [=] AMREX_GPU_DEVICE(int idx) {
-		const int n = idx / num_modes;
-		const int m = idx % num_modes;
-
-		if (k_vec_ptr[0 * num_modes + m] == 0.0) {
-			for (int m2 = 0; m2 < m; ++m2) {
-				if (k_vec_ptr[1 * num_modes + m] == -k_vec_ptr[1 * num_modes + m2] &&
-				    k_vec_ptr[2 * num_modes + m] == -k_vec_ptr[2 * num_modes + m2]) {
-					const int idx2 = n * num_modes + m2;
-					var_hat_new_real_ptr[idx] = var_hat_new_real_ptr[idx2];
-					var_hat_new_imag_ptr[idx] = -var_hat_new_imag_ptr[idx2];
-				}
-			}
-		}
-	});
+	detail::enforce_symmetry(3 * num_modes_, num_modes, k_vec_ptr, var_hat_new_real_ptr, var_hat_new_imag_ptr);
 
 	// Apply projection if requested on GPU
 	if (sol_weight_ >= 0.0) {
 		const auto sol_weight = sol_weight_;
-		amrex::ParallelFor(num_modes_, [=] AMREX_GPU_DEVICE(int m) {
-			const amrex::Real kx = k_vec_ptr[0 * num_modes + m];
-			const amrex::Real ky = k_vec_ptr[1 * num_modes + m];
-			const amrex::Real kz = k_vec_ptr[2 * num_modes + m];
-
-			amrex::Real kmag = std::sqrt(kx * kx + ky * ky + kz * kz);
-
-			// Avoid division by zero
-			if (kmag == 0.0) {
-				kmag = 1.0;
-			}
-
-			// Make unit vector
-			const amrex::Real kx_unit = kx / kmag;
-			const amrex::Real ky_unit = ky / kmag;
-			const amrex::Real kz_unit = kz / kmag;
-
-			// Calculate dot product for each mode
-			const amrex::Real dot_real = var_hat_new_real_ptr[0 * num_modes + m] * kx_unit + var_hat_new_real_ptr[1 * num_modes + m] * ky_unit +
-						     var_hat_new_real_ptr[2 * num_modes + m] * kz_unit;
-			const amrex::Real dot_imag = var_hat_new_imag_ptr[0 * num_modes + m] * kx_unit + var_hat_new_imag_ptr[1 * num_modes + m] * ky_unit +
-						     var_hat_new_imag_ptr[2 * num_modes + m] * kz_unit;
-
-			// Apply projection to all components
-			const amrex::Real factor = 1.0 - 2.0 * sol_weight;
-
-			var_hat_new_real_ptr[0 * num_modes + m] = var_hat_new_real_ptr[0 * num_modes + m] * sol_weight + factor * dot_real * kx_unit;
-			var_hat_new_imag_ptr[0 * num_modes + m] = var_hat_new_imag_ptr[0 * num_modes + m] * sol_weight + factor * dot_imag * kx_unit;
-
-			var_hat_new_real_ptr[1 * num_modes + m] = var_hat_new_real_ptr[1 * num_modes + m] * sol_weight + factor * dot_real * ky_unit;
-			var_hat_new_imag_ptr[1 * num_modes + m] = var_hat_new_imag_ptr[1 * num_modes + m] * sol_weight + factor * dot_imag * ky_unit;
-
-			var_hat_new_real_ptr[2 * num_modes + m] = var_hat_new_real_ptr[2 * num_modes + m] * sol_weight + factor * dot_real * kz_unit;
-			var_hat_new_imag_ptr[2 * num_modes + m] = var_hat_new_imag_ptr[2 * num_modes + m] * sol_weight + factor * dot_imag * kz_unit;
-		});
+		detail::apply_projection(num_modes_, sol_weight, k_vec_ptr, var_hat_new_real_ptr, var_hat_new_imag_ptr);
 	}
 
 	// Get pointers to GPU-resident var_hat_ arrays
@@ -307,11 +396,7 @@ void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 	const amrex::Real c_drift = std::exp(-dt / t_corr_);
 	const amrex::Real c_diff = std::sqrt(1.0 - c_drift * c_drift);
 
-	amrex::ParallelFor(3 * num_modes_, [=] AMREX_GPU_DEVICE(int idx) {
-		// Update persistent GPU storage with evolved coefficients
-		var_hat_real_ptr[idx] = var_hat_real_ptr[idx] * c_drift + var_hat_new_real_ptr[idx] * c_diff;
-		var_hat_imag_ptr[idx] = var_hat_imag_ptr[idx] * c_drift + var_hat_new_imag_ptr[idx] * c_diff;
-	});
+	detail::evolve_coefficients(3 * num_modes_, c_drift, c_diff, var_hat_real_ptr, var_hat_imag_ptr, var_hat_new_real_ptr, var_hat_new_imag_ptr);
 
 	amrex::Gpu::streamSynchronize();
 
@@ -330,30 +415,7 @@ void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 
 		const auto num_modes = num_modes_;
 
-		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			for (int n = 0; n < 3; ++n) {
-				mf_arr(i, j, k, n) = 0.0;
-
-				for (int m = 0; m < num_modes; ++m) {
-					const amrex::Real phase_i_real = phases_i_arr(i, 0, 0, m * 2);
-					const amrex::Real phase_i_imag = phases_i_arr(i, 0, 0, m * 2 + 1);
-					const amrex::Real phase_j_real = phases_j_arr(0, j, 0, m * 2);
-					const amrex::Real phase_j_imag = phases_j_arr(0, j, 0, m * 2 + 1);
-					const amrex::Real phase_k_real = phases_k_arr(0, 0, k, m * 2);
-					const amrex::Real phase_k_imag = phases_k_arr(0, 0, k, m * 2 + 1);
-
-					// Complex multiplication: phase = phase_i * phase_j * phase_k
-					const amrex::Real temp_real = phase_i_real * phase_j_real - phase_i_imag * phase_j_imag;
-					const amrex::Real temp_imag = phase_i_real * phase_j_imag + phase_i_imag * phase_j_real;
-
-					const amrex::Real phase_real = temp_real * phase_k_real - temp_imag * phase_k_imag;
-					const amrex::Real phase_imag = temp_real * phase_k_imag + temp_imag * phase_k_real;
-
-					const int idx = n * num_modes + m;
-					mf_arr(i, j, k, n) += 2.0 * (var_hat_real_ptr[idx] * phase_real - var_hat_imag_ptr[idx] * phase_imag);
-				}
-			}
-		});
+		detail::compute_inverse_fourier_transform(bx, num_modes, var_hat_real_ptr, var_hat_imag_ptr, mf_arr, phases_i_arr, phases_j_arr, phases_k_arr);
 	}
 }
 
