@@ -409,6 +409,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 		amrex::Real eps_ff_ = eps_ff;
+		amrex::Real stellar_velocity_limit_ = stellar_velocity_limit;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
@@ -540,10 +541,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double vy_new = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
 						double vz_new = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
 
-						// Enforce maximum speed limit of 1000 km/s
+						// Enforce maximum speed limit for stellar particles
 						{
 							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
-							constexpr double max_speed = 1.0e8; // cm s^{-1}
+							const double max_speed = stellar_velocity_limit_; // cm s^{-1}
 							if (speed > max_speed) {
 								double const scale = max_speed / speed;
 								vx_new *= scale;
