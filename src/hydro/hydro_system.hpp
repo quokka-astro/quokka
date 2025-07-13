@@ -913,15 +913,6 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 #endif
 
 	amrex::ParallelFor(consVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		// first-capture
-		[[maybe_unused]] const auto faceVar_x_ref = faceVar_x[bx];
-#if AMREX_SPACEDIM >= 2
-		[[maybe_unused]] const auto faceVar_y_ref = faceVar_y[bx];
-#endif // AMREX_SPACEDIM >= 2
-#if AMREX_SPACEDIM == 3
-		[[maybe_unused]] const auto faceVar_z_ref = faceVar_z[bx];
-#endif // AMREX_SPACEDIM == 3
-
 		amrex::Real const rho = consVar[bx](i, j, k, density_index);
 		amrex::Real const px = consVar[bx](i, j, k, x1Momentum_index);
 		amrex::Real const py = consVar[bx](i, j, k, x2Momentum_index);
@@ -939,14 +930,14 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 
 		// compute magnetic energy
 		amrex::Real Emag = 0;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		if (Physics_Traits<problem_t>::is_mhd_enabled) { // cannot be 'if constexpr' due to CUDA limitation
 			constexpr int mhd_idx = Physics_Indices<problem_t>::mhdFirstIndex;
-			amrex::Real const Bx = 0.5 * (faceVar_x_ref(i, j, k, mhd_idx) + faceVar_x_ref(i + 1, j, k, mhd_idx));
+			amrex::Real const Bx = 0.5 * (faceVar_x[bx](i, j, k, mhd_idx) + faceVar_x[bx](i + 1, j, k, mhd_idx));
 #if AMREX_SPACEDIM >= 2
-			amrex::Real const By = 0.5 * (faceVar_y_ref(i, j, k, mhd_idx) + faceVar_y_ref(i, j + 1, k, mhd_idx));
-#if AMREX_SPACEDIM == 3
-			amrex::Real const Bz = 0.5 * (faceVar_z_ref(i, j, k, mhd_idx) + faceVar_z_ref(i, j, k + 1, mhd_idx));
+			amrex::Real const By = 0.5 * (faceVar_y[bx](i, j, k, mhd_idx) + faceVar_y[bx](i, j + 1, k, mhd_idx));
 #endif
+#if AMREX_SPACEDIM == 3
+			amrex::Real const Bz = 0.5 * (faceVar_z[bx](i, j, k, mhd_idx) + faceVar_z[bx](i, j, k + 1, mhd_idx));
 #endif
 			Emag = 0.5 * (AMREX_D_TERM(Bx * Bx, +By * By, +Bz * Bz));
 		}
