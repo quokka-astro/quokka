@@ -780,8 +780,9 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 		if (this->container_ != nullptr) {
 			if (mass_based_luminosity_ && this->getMassIndex() >= 0) {
 				// Use mass-based radiation deposition
-				amrex::ParticleToMesh(*this->container_, radEnergySource, lev,
-						      MassBasedRadDeposition<problem_t>{current_time, this->getMassIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
+				amrex::ParticleToMesh(
+				    *this->container_, radEnergySource, lev,
+				    MassBasedRadDeposition<problem_t>{current_time, this->getMassIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
 			} else if (!mass_based_luminosity_ && this->getLumIndex() >= 0) {
 				// Use regular luminosity stored in particle data
 				amrex::ParticleToMesh(*this->container_, radEnergySource, lev,
