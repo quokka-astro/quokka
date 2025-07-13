@@ -1952,9 +1952,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		if (print_rad_counter_) {
 			auto h_iteration_counter = iteration_counter.copyToHost();
-			int64_t global_solver_count = h_iteration_counter[0];	      // number of Newton-Raphson solvings
-			int64_t global_iteration_sum = h_iteration_counter[1];	      // sum of Newton-Raphson iterations
-			int global_iteration_max = h_iteration_counter[2];	      // max number of Newton-Raphson iterations
+			int64_t global_solver_count = h_iteration_counter[0];		 // number of Newton-Raphson solvings
+			int64_t global_iteration_sum = h_iteration_counter[1];		 // sum of Newton-Raphson iterations
+			int global_iteration_max = h_iteration_counter[2];		 // max number of Newton-Raphson iterations
 			int64_t global_decoupled_iteration_sum = h_iteration_counter[3]; // sum of decoupled gas-dust Newton-Raphson iterations
 
 			amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
@@ -1985,8 +1985,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		auto h_iteration_failure_counter = iteration_failure_counter.copyToHost();
 		int64_t nf_coupling = h_iteration_failure_counter[0]; // number of matter-radiation coupling failures
-		int64_t nf_dust = h_iteration_failure_counter[1];	   // number of dust temperature failures
-		int64_t nf_outer = h_iteration_failure_counter[2];	   // number of outer iterations failures
+		int64_t nf_dust = h_iteration_failure_counter[1];     // number of dust temperature failures
+		int64_t nf_outer = h_iteration_failure_counter[2];    // number of outer iterations failures
 
 		amrex::ParallelDescriptor::ReduceLongSum(nf_coupling);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);
