@@ -8,17 +8,33 @@ geometry.is_periodic =  1    1    1
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 0       # verbosity in Amr
+amr.v              = 1       # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 12 8 4
-amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 4     # grid size must be divisible by this
+amr.n_cell          = 64 4 4
+amr.max_level       = 0
+amr.max_grid_size_x = 128
+amr.max_grid_size_y = 4
+amr.max_grid_size_z = 4
+amr.blocking_factor_x = 16
+amr.blocking_factor_y = 4
+amr.blocking_factor_z = 4
 
 do_reflux = 0
 do_subcycle = 0
 
 plotfile_interval = 100
-checkpoint_interval = 200
+plotfile_prefix = alfven_wave_linear_plt
+checkpoint_interval = -1
+cfl = 0.3
+stop_time = 5.0
+max_timesteps = 8000
+
+hydro.rk_integrator_order = 2
+hydro.reconstruction_order = 5
+hydro.use_dual_energy = 0
+
+#mhd.emf_averaging_method = BalsaraSpicer
+mhd.emf_averaging_method = LD04
