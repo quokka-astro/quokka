@@ -20,9 +20,9 @@
 struct SelfGravityProblem {
 };
 
-constexpr double rho_ambient = 1.0e-3;  // ambient density
-constexpr double rho_center = 1.0;      // central density
-constexpr double cloud_radius = 0.1;    // radius of the dense cloud
+constexpr double rho_ambient = 1.0e-3;	    // ambient density
+constexpr double rho_center = 1.0;	    // central density
+constexpr double cloud_radius = 0.1;	    // radius of the dense cloud
 constexpr double pressure_ambient = 1.0e-3; // ambient pressure
 constexpr double pressure_center = 1.0e-2;  // central pressure
 
@@ -54,9 +54,7 @@ template <> struct SimulationData<SelfGravityProblem> {
 	amrex::Real cloud_center_z = 0.5;
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-QuokkaSimulation<SelfGravityProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void QuokkaSimulation<SelfGravityProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// Extract simulation data
 	const amrex::Real cloud_center_x = userData_.cloud_center_x;
@@ -75,9 +73,8 @@ QuokkaSimulation<SelfGravityProblem>::setInitialConditionsOnGrid(quokka::grid co
 		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 
-		const amrex::Real distance = std::sqrt((x - cloud_center_x) * (x - cloud_center_x) +
-		                                       (y - cloud_center_y) * (y - cloud_center_y) +
-		                                       (z - cloud_center_z) * (z - cloud_center_z));
+		const amrex::Real distance = std::sqrt((x - cloud_center_x) * (x - cloud_center_x) + (y - cloud_center_y) * (y - cloud_center_y) +
+						       (z - cloud_center_z) * (z - cloud_center_z));
 
 		amrex::Real rho, pressure;
 		if (distance <= cloud_radius) {
@@ -105,14 +102,14 @@ QuokkaSimulation<SelfGravityProblem>::setInitialConditionsOnGrid(quokka::grid co
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-QuokkaSimulation<SelfGravityProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &/*grid_elem*/)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void QuokkaSimulation<SelfGravityProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const & /*grid_elem*/)
 {
 	// No face-centered variables for this problem
 }
 
-template <> void QuokkaSimulation<SelfGravityProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-                                                                               amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+template <>
+void QuokkaSimulation<SelfGravityProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	// No analytical reference solution for this test
 	// (In practice, one could compare to spherically symmetric collapse solutions)

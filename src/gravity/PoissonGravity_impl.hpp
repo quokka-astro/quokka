@@ -14,10 +14,8 @@
 #include <AMReX_MultiFabUtil.H>
 
 template <typename problem_t>
-PoissonGravity<problem_t>::PoissonGravity(const amrex::Vector<amrex::Geometry> &geom,
-                                         const amrex::Vector<amrex::BoxArray> &grids,
-                                         const amrex::Vector<amrex::DistributionMapping> &dmap,
-                                         int max_level)
+PoissonGravity<problem_t>::PoissonGravity(const amrex::Vector<amrex::Geometry> &geom, const amrex::Vector<amrex::BoxArray> &grids,
+					  const amrex::Vector<amrex::DistributionMapping> &dmap, int max_level)
     : geom_(geom), grids_(grids), dmap_(dmap), max_level_(max_level)
 {
 	BL_PROFILE("PoissonGravity::PoissonGravity()");
@@ -36,8 +34,7 @@ PoissonGravity<problem_t>::PoissonGravity(const amrex::Vector<amrex::Geometry> &
 	}
 }
 
-template <typename problem_t>
-void PoissonGravity<problem_t>::read_parameters()
+template <typename problem_t> void PoissonGravity<problem_t>::read_parameters()
 {
 	BL_PROFILE("PoissonGravity::read_parameters()");
 
@@ -55,8 +52,7 @@ void PoissonGravity<problem_t>::read_parameters()
 	}
 }
 
-template <typename problem_t>
-void PoissonGravity<problem_t>::setup_poisson_solver(int level)
+template <typename problem_t> void PoissonGravity<problem_t>::setup_poisson_solver(int level)
 {
 	BL_PROFILE("PoissonGravity::setup_poisson_solver()");
 
@@ -84,8 +80,7 @@ void PoissonGravity<problem_t>::setup_poisson_solver(int level)
 	mlmg_[level]->setRelTol(tolerance_);
 }
 
-template <typename problem_t>
-void PoissonGravity<problem_t>::setup_boundary_conditions(int level)
+template <typename problem_t> void PoissonGravity<problem_t>::setup_boundary_conditions(int level)
 {
 	BL_PROFILE("PoissonGravity::setup_boundary_conditions()");
 
@@ -119,10 +114,7 @@ void PoissonGravity<problem_t>::setup_boundary_conditions(int level)
 }
 
 template <typename problem_t>
-void PoissonGravity<problem_t>::solve_for_phi(int level,
-                                             const amrex::MultiFab &density,
-                                             amrex::MultiFab &gravitational_potential,
-                                             amrex::Real /*time*/)
+void PoissonGravity<problem_t>::solve_for_phi(int level, const amrex::MultiFab &density, amrex::MultiFab &gravitational_potential, amrex::Real /*time*/)
 {
 	BL_PROFILE("PoissonGravity::solve_for_phi()");
 
@@ -146,14 +138,11 @@ void PoissonGravity<problem_t>::solve_for_phi(int level,
 	mlmg_[level]->solve({&gravitational_potential}, {&rhs}, rel_tol, abs_tol);
 
 	if (verbose_ > 1) {
-		amrex::Print() << "PoissonGravity: Level " << level 
-		               << " solve completed in " << mlmg_[level]->getNumIters() 
-		               << " iterations\n";
+		amrex::Print() << "PoissonGravity: Level " << level << " solve completed in " << mlmg_[level]->getNumIters() << " iterations\n";
 	}
 }
 
-template <typename problem_t>
-auto PoissonGravity<problem_t>::compute_rhs_from_density(int level, const amrex::MultiFab &density) -> amrex::MultiFab
+template <typename problem_t> auto PoissonGravity<problem_t>::compute_rhs_from_density(int level, const amrex::MultiFab &density) -> amrex::MultiFab
 {
 	BL_PROFILE("PoissonGravity::compute_rhs_from_density()");
 
@@ -167,18 +156,15 @@ auto PoissonGravity<problem_t>::compute_rhs_from_density(int level, const amrex:
 		auto const &rhs_fab = rhs.array(mfi);
 		auto const &rho_fab = density.const_array(mfi);
 
-		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			rhs_fab(i, j, k) = four_pi_G * rho_fab(i, j, k);
-		});
+		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) { rhs_fab(i, j, k) = four_pi_G * rho_fab(i, j, k); });
 	}
 
 	return rhs;
 }
 
 template <typename problem_t>
-void PoissonGravity<problem_t>::compute_gravitational_acceleration(int level,
-                                                                 const amrex::MultiFab &gravitational_potential,
-                                                                 amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &gravitational_acceleration)
+void PoissonGravity<problem_t>::compute_gravitational_acceleration(int level, const amrex::MultiFab &gravitational_potential,
+								   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &gravitational_acceleration)
 {
 	BL_PROFILE("PoissonGravity::compute_gravitational_acceleration()");
 
@@ -209,10 +195,9 @@ void PoissonGravity<problem_t>::compute_gravitational_acceleration(int level,
 }
 
 template <typename problem_t>
-void PoissonGravity<problem_t>::apply_operator_split_gravity_update(int level,
-                                                                  amrex::MultiFab &state,
-                                                                  const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &gravitational_acceleration,
-                                                                  amrex::Real dt)
+void PoissonGravity<problem_t>::apply_operator_split_gravity_update(int level, amrex::MultiFab &state,
+								    const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &gravitational_acceleration,
+								    amrex::Real dt)
 {
 	BL_PROFILE("PoissonGravity::apply_operator_split_gravity_update()");
 
@@ -259,8 +244,7 @@ void PoissonGravity<problem_t>::apply_operator_split_gravity_update(int level,
 #endif
 
 			// Update energy: ΔE = (old_momentum + 0.5*Δmomentum) · g * Δt
-			amrex::Real energy_update = (old_mx + 0.5 * dmx) * gx_fab(i, j, k) * dt +
-						    (old_my + 0.5 * dmy) * gy_fab(i, j, k) * dt;
+			amrex::Real energy_update = (old_mx + 0.5 * dmx) * gx_fab(i, j, k) * dt + (old_my + 0.5 * dmy) * gy_fab(i, j, k) * dt;
 #if AMREX_SPACEDIM == 3
 			energy_update += (old_mz + 0.5 * dmz) * gz_fab(i, j, k) * dt;
 #endif
@@ -271,10 +255,8 @@ void PoissonGravity<problem_t>::apply_operator_split_gravity_update(int level,
 }
 
 template <typename problem_t>
-void PoissonGravity<problem_t>::set_dirichlet_boundary_conditions(int level,
-                                                                amrex::MultiFab &gravitational_potential,
-                                                                const amrex::MultiFab &coarse_potential,
-                                                                amrex::Real /*time*/)
+void PoissonGravity<problem_t>::set_dirichlet_boundary_conditions(int level, amrex::MultiFab &gravitational_potential, const amrex::MultiFab &coarse_potential,
+								  amrex::Real /*time*/)
 {
 	BL_PROFILE("PoissonGravity::set_dirichlet_boundary_conditions()");
 
@@ -290,19 +272,18 @@ void PoissonGravity<problem_t>::set_dirichlet_boundary_conditions(int level,
 }
 
 template <typename problem_t>
-void PoissonGravity<problem_t>::interpolate_boundary_conditions_from_coarse_level(int level,
-                                                                                amrex::MultiFab &fine_potential,
-                                                                                const amrex::MultiFab &coarse_potential)
+void PoissonGravity<problem_t>::interpolate_boundary_conditions_from_coarse_level(int level, amrex::MultiFab &fine_potential,
+										  const amrex::MultiFab &coarse_potential)
 {
 	BL_PROFILE("PoissonGravity::interpolate_boundary_conditions_from_coarse_level()");
 
 	// This is a simplified placeholder implementation
 	// In a full implementation, this would use AMReX's FillPatch functionality
 	// to properly interpolate boundary conditions in space and time from the coarser level
-	
+
 	// For now, we fill with a simple boundary fill
 	fine_potential.FillBoundary(geom_[level].periodicity());
-	
+
 	// TODO: Implement proper interpolation from coarse_potential to fine_potential boundaries
 	// This should use AMReX's interpolation routines to:
 	// 1. Identify fine grid cells that are adjacent to coarse-fine boundaries
@@ -310,16 +291,8 @@ void PoissonGravity<problem_t>::interpolate_boundary_conditions_from_coarse_leve
 	// 3. Handle time interpolation if coarse_potential is from a different time
 }
 
-template <typename problem_t>
-void PoissonGravity<problem_t>::set_gravitational_constant(amrex::Real G_const)
-{
-	gravitational_constant_ = G_const;
-}
+template <typename problem_t> void PoissonGravity<problem_t>::set_gravitational_constant(amrex::Real G_const) { gravitational_constant_ = G_const; }
 
-template <typename problem_t>
-auto PoissonGravity<problem_t>::get_gravitational_constant() const -> amrex::Real
-{
-	return gravitational_constant_;
-}
+template <typename problem_t> auto PoissonGravity<problem_t>::get_gravitational_constant() const -> amrex::Real { return gravitational_constant_; }
 
 #endif // POISSONGRAVITY_IMPL_HPP_

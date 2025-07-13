@@ -1,7 +1,6 @@
 #include "QuokkaSimulation.hpp"
 
-template <typename problem_t>
-void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev)
+template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev)
 {
 #ifdef QUOKKA_USE_GRAVITY
 	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
@@ -15,9 +14,7 @@ void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, in
 			auto const &rhs_fab = rhs.array(mfi);
 			auto const &state_fab = state.const_array(mfi);
 
-			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-				rhs_fab(i, j, k) = four_pi_G * state_fab(i, j, k, irho);
-			});
+			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) { rhs_fab(i, j, k) = four_pi_G * state_fab(i, j, k, irho); });
 		}
 	} else {
 		// Self-gravity disabled, set RHS to zero
@@ -29,8 +26,7 @@ void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, in
 #endif
 }
 
-template <typename problem_t>
-void QuokkaSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt)
+template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt)
 {
 #ifdef QUOKKA_USE_GRAVITY
 	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {

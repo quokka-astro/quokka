@@ -19,23 +19,20 @@
 #include <AMReX_Geometry.H>
 #include <AMReX_GpuQualifiers.H>
 #include <AMReX_IntVect.H>
-#include <AMReX_MLPoisson.H>
 #include <AMReX_MLMG.H>
+#include <AMReX_MLPoisson.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_Vector.H>
 
 #include "physics_info.hpp"
 
-template <typename problem_t>
-class PoissonGravity
+template <typename problem_t> class PoissonGravity
 {
-    public:
+      public:
 	// Constructor
-	explicit PoissonGravity(const amrex::Vector<amrex::Geometry> &geom, 
-	                       const amrex::Vector<amrex::BoxArray> &grids,
-	                       const amrex::Vector<amrex::DistributionMapping> &dmap,
-	                       int max_level);
+	explicit PoissonGravity(const amrex::Vector<amrex::Geometry> &geom, const amrex::Vector<amrex::BoxArray> &grids,
+				const amrex::Vector<amrex::DistributionMapping> &dmap, int max_level);
 
 	// Destructor
 	~PoissonGravity() = default;
@@ -49,32 +46,24 @@ class PoissonGravity
 	auto operator=(PoissonGravity &&) -> PoissonGravity & = default;
 
 	// Main interface functions
-	void solve_for_phi(int level, 
-	                   const amrex::MultiFab &density,
-	                   amrex::MultiFab &gravitational_potential,
-	                   amrex::Real time = 0.0);
+	void solve_for_phi(int level, const amrex::MultiFab &density, amrex::MultiFab &gravitational_potential, amrex::Real time = 0.0);
 
-	void compute_gravitational_acceleration(int level,
-	                                       const amrex::MultiFab &gravitational_potential,
-	                                       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &gravitational_acceleration);
+	void compute_gravitational_acceleration(int level, const amrex::MultiFab &gravitational_potential,
+						amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &gravitational_acceleration);
 
-	void apply_operator_split_gravity_update(int level,
-	                                        amrex::MultiFab &state,
-	                                        const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &gravitational_acceleration,
-	                                        amrex::Real dt);
+	void apply_operator_split_gravity_update(int level, amrex::MultiFab &state,
+						 const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &gravitational_acceleration, amrex::Real dt);
 
 	// Boundary condition handling
-	void set_dirichlet_boundary_conditions(int level,
-	                                      amrex::MultiFab &gravitational_potential,
-	                                      const amrex::MultiFab &coarse_potential,
-	                                      amrex::Real time = 0.0);
+	void set_dirichlet_boundary_conditions(int level, amrex::MultiFab &gravitational_potential, const amrex::MultiFab &coarse_potential,
+					       amrex::Real time = 0.0);
 
 	// Configuration and parameters
 	void read_parameters();
 	void set_gravitational_constant(amrex::Real G_const);
 	auto get_gravitational_constant() const -> amrex::Real;
 
-    private:
+      private:
 	// AMR grid information
 	const amrex::Vector<amrex::Geometry> &geom_;
 	const amrex::Vector<amrex::BoxArray> &grids_;
@@ -95,9 +84,7 @@ class PoissonGravity
 	void setup_poisson_solver(int level);
 	void setup_boundary_conditions(int level);
 	auto compute_rhs_from_density(int level, const amrex::MultiFab &density) -> amrex::MultiFab;
-	void interpolate_boundary_conditions_from_coarse_level(int level,
-	                                                     amrex::MultiFab &fine_potential,
-	                                                     const amrex::MultiFab &coarse_potential);
+	void interpolate_boundary_conditions_from_coarse_level(int level, amrex::MultiFab &fine_potential, const amrex::MultiFab &coarse_potential);
 };
 
 // Include template implementation
