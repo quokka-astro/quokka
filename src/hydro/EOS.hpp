@@ -67,7 +67,7 @@ template <typename problem_t> class EOS
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real;
 
-        static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
+	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
