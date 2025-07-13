@@ -39,6 +39,7 @@ template <typename problem_t> struct EOS_Traits {
 template <typename problem_t> class EOS
 {
       private:
+	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr amrex::Real mean_molecular_weight_ = EOS_Traits<problem_t>::mean_molecular_weight;
 
       public:
@@ -67,7 +68,6 @@ template <typename problem_t> class EOS
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real;
 
-	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
 			return C::k_B;
@@ -95,8 +95,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	// initialize array of number densities
-	for (double &ii : chemstate.xn) {
-		ii = -1.0;
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
 	}
 
 	if (massScalars) {
@@ -139,8 +139,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	amrex::Real const Tgas_value = Tgas;
 	chemstate.T = Tgas_value;
 	// initialize array of number densities
-	for (double &ii : chemstate.xn) {
-		ii = -1.0;
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
 	}
 
 	if (massScalars) {
@@ -180,8 +180,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromPre
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
 	// initialize array of number densities
-	for (double &ii : chemstate.xn) {
-		ii = -1.0;
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
 	}
 
 	if (massScalars) {
@@ -217,15 +217,13 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	amrex::Real dEint_dT = NAN;
 
 #ifdef CHEMISTRY
-	amrex::ignore_unused(Tgas);
-
 	eos_t chemstate;
 	chemstate.rho = rho;
 	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
 	chemstate.T = NAN;
 	// initialize array of number densities
-	for (double &ii : chemstate.xn) {
-		ii = -1.0;
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
 	}
 
 	if (massScalars) {
@@ -272,8 +270,8 @@ EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real
 	chemstate.rho = rho;
 	chemstate.p = P;
 	// initialize array of number densities
-	for (double &ii : chemstate.xn) {
-		ii = -1.0;
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
 	}
 
 	if (massScalars) {
@@ -321,8 +319,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	// initialize array of number densities
-	for (double &ii : chemstate.xn) {
-		ii = -1.0;
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
 	}
 
 	if (massScalars) {
@@ -367,8 +365,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
 	// initialize array of number densities
-	for (double &ii : chemstate.xn) {
-		ii = -1.0;
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
 	}
 
 	if (massScalars) {
