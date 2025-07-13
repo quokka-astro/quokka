@@ -68,7 +68,9 @@ struct MassBasedRadDeposition {
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		interp.ParticleToMesh(p, radEnergySource, massIndex, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
 			const Real age = current_time - part.rdata(birthTimeIndex);
-			return simple_luminosity(part.rdata(massIndex), age, comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			const Real stellar_mass = part.rdata(massIndex);
+			const Real lum_density = simple_luminosity(stellar_mass, age, comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			return lum_density;
 		});
 	}
 };

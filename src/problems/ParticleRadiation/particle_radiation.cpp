@@ -17,10 +17,10 @@ struct ParticleRadiationProblem {
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-constexpr double rho0 = 1.0e8 * C::m_p; // g cm^-3
+constexpr double rho0 = 1.0e-8 * C::m_p; // g cm^-3
 constexpr double T0 = 10.0;		  // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
-constexpr double initial_Erad = 1.0e-60 * CV * rho0 * T0;
+constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
 constexpr double dt_ = 1.0e10; // s
 constexpr double chat_over_c = 1.0e-5;
 constexpr double formation_time = 1.5 * dt_;
@@ -47,8 +47,8 @@ enum class TestEnum : unsigned int {
 };
 
 template <> struct Particle_Traits<ParticleRadiationProblem> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
 template <> struct HydroSystem_Traits<ParticleRadiationProblem> {
@@ -86,12 +86,12 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
-	TestParticles->SetVerbose(1);
-	TestParticles->InitFromAsciiFile("../inputs/TestParticlesNoRad.txt", nreal_extra, nullptr);
+	StochasticStellarPopParticles->SetVerbose(1);
+	StochasticStellarPopParticles->InitFromAsciiFile("../inputs/TestParticlesNoRad.txt", nreal_extra, nullptr);
 
-	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
-	// do not have particles, TestParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
-	for (auto &kv : TestParticles->GetParticles()) {
+	// Using a for loop from lev = 0 to StochasticStellarPopParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
+	// do not have particles, StochasticStellarPopParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
+	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
 			auto &particle_array = ikv.second.GetArrayOfStructs();
 			const int np = particle_array.numParticles();
@@ -241,7 +241,8 @@ auto problem_main() -> int
 		const double lum = 4e33;
 		const double mass = 100;
 		const double mass_SN = 8;
-		const double change_of_total_energy_expected = 2 * (lum * mass) * (sim.maxTimesteps_ * dt_);
+		const double change_of_total_energy_expected = 4 * (lum * mass) * sim.tNew_[0];
+		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
 		amrex::Print() << "Expected change of total energy: " << change_of_total_energy_expected << "\n";
 
 		const double relative_error = std::abs(change_of_total_energy - change_of_total_energy_expected) / total_energy;
