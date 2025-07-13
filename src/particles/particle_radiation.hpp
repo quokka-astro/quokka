@@ -13,10 +13,14 @@ namespace quokka
 
 // Template trait for luminosity functions - can be specialized for different problems
 template <typename problem_t> struct LuminosityTraits {
-	AMREX_GPU_DEVICE static auto simple_luminosity(const Real /*mass*/, const Real /*age*/, const int /*group*/) -> Real
+	AMREX_GPU_DEVICE static auto stellarLuminosity(const Real /*mass*/, const Real /*age*/) -> amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups>
 	{
-		// Default implementation returns 0
-		return 0.0;
+		// Default implementation returns array of zeros
+		amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups> result{};
+		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+			result[g] = 0.0;
+		}
+		return result;
 	}
 };
 
@@ -64,8 +68,8 @@ template <typename problem_t> struct MassBasedRadDeposition {
 		interp.ParticleToMesh(p, radEnergySource, massIndex, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
 			const Real age = current_time - part.rdata(birthTimeIndex);
 			const Real stellar_mass = part.rdata(massIndex);
-			const Real lum_density =
-			    LuminosityTraits<problem_t>::simple_luminosity(stellar_mass, age, comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			const auto luminosity_array = LuminosityTraits<problem_t>::stellarLuminosity(stellar_mass, age);
+			const Real lum_density = luminosity_array[comp] * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
 			return lum_density;
 		});
 	}

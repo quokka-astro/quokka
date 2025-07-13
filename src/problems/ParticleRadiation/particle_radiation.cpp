@@ -85,12 +85,16 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleRadiationProblem>::Comp
 // Template specialization for ParticleRadiationProblem luminosity function
 template <>
 struct quokka::LuminosityTraits<ParticleRadiationProblem> {
-	AMREX_GPU_DEVICE static auto simple_luminosity(const Real mass, const Real age, const int group) -> Real
+	AMREX_GPU_DEVICE static auto stellarLuminosity(const Real mass, const Real age) -> amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups>
 	{
 		// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer validation.
 		// L/(M / M_sun) = L_sun = 4e33 erg/s
 		const double is_on = age < 1.0e14 ? 1.0 : 0.0;		   // 3 Myr
-		return 4.0e33 * (mass / C::M_solar) * (group + 1) * is_on; // erg / s
+		amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups> result{};
+		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
+			result[g] = 4.0e33 * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
+		}
+		return result;
 	}
 };
 
