@@ -15,7 +15,19 @@
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 
+namespace quokka
+{
 //-------------------- Radiation depositions --------------------
+
+// Template trait for luminosity functions - can be specialized for different problems
+template <typename problem_t>
+struct LuminosityTraits {
+	AMREX_GPU_DEVICE static auto simple_luminosity(const Real mass, const Real age, const int group) -> Real
+	{
+		// Default implementation returns 0
+		return 0.0;
+	}
+};
 
 // Functor for depositing radiation energy from particles onto the grid
 struct RadDeposition {
@@ -43,15 +55,10 @@ struct RadDeposition {
 	}
 };
 
-// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer validation.
-// L/(M / M_sun) = L_sun = 4e33 erg/s
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto simple_luminosity(const Real mass, const Real age, const int group) -> Real
-{
-	const double is_on = age < 1.0e14 ? 1.0 : 0.0;		   // 3 Myr
-	return 4.0e33 * (mass / C::M_solar) * (group + 1) * is_on; // erg / s
-}
+
 
 // Functor for depositing radiation energy from particles onto the grid using mass-based luminosity
+template <typename problem_t>
 struct MassBasedRadDeposition {
 	double current_time{}; // Current simulation time
 	int massIndex{};       // Index for particle mass
@@ -69,10 +76,11 @@ struct MassBasedRadDeposition {
 		interp.ParticleToMesh(p, radEnergySource, massIndex, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
 			const Real age = current_time - part.rdata(birthTimeIndex);
 			const Real stellar_mass = part.rdata(massIndex);
-			const Real lum_density = simple_luminosity(stellar_mass, age, comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			const Real lum_density = LuminosityTraits<problem_t>::simple_luminosity(stellar_mass, age, comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
 			return lum_density;
 		});
 	}
 };
+} // namespace quokka
 
 #endif

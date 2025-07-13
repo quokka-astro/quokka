@@ -81,6 +81,18 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleRadiationProblem>::Comp
 	return 0.0;
 }
 
+// Template specialization for ParticleRadiationProblem luminosity function
+template <>
+struct quokka::LuminosityTraits<ParticleRadiationProblem> {
+	AMREX_GPU_DEVICE static auto simple_luminosity(const Real mass, const Real age, const int group) -> Real
+	{
+		// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer validation.
+		// L/(M / M_sun) = L_sun = 4e33 erg/s
+		const double is_on = age < 1.0e14 ? 1.0 : 0.0;		   // 3 Myr
+		return 4.0e33 * (mass / C::M_solar) * (group + 1) * is_on; // erg / s
+	}
+};
+
 template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStochasticStellarPopParticles()
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
@@ -248,7 +260,7 @@ auto problem_main() -> int
 		const double relative_error = std::abs(change_of_total_energy - change_of_total_energy_expected) / total_energy;
 		amrex::Print() << "Relative error: " << relative_error << "\n";
 
-		const double tolerance = 1e-6;
+		const double tolerance = 1e-12; // should be accurate to machine precision
 		if (!(relative_error < tolerance)) {
 			status = 1;
 			amrex::Print() << "Test failed: change of total energy mismatch.\n";
