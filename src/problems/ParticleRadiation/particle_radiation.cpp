@@ -12,7 +12,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/valarray.hpp"
 
-struct TestParticle {
+struct ParticleRadiationProblem {
 };
 
 constexpr double mu = 1.0 * C::m_p;
@@ -36,7 +36,7 @@ const static double SN_mass = 8.0 * C::M_solar;  // mass of SNProgenitor particl
 constexpr int n_test_particles_init = 4;    // 4 test particles created at the start of the simulation
 constexpr int n_test_particles_created = 8; // 8 test particles created and live to the end
 
-template <> struct quokka::EOS_Traits<TestParticle> {
+template <> struct quokka::EOS_Traits<ParticleRadiationProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
 };
@@ -46,21 +46,16 @@ enum class TestEnum : unsigned int {
 	MISTAKE = 0b00000100U,
 };
 
-template <> struct Particle_Traits<TestParticle> {
-	// The following will cause a compile error
-	// static constexpr int particle_switch = 1;
-	// static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
-	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
-	// This is the correct way to define the particle switch
+template <> struct Particle_Traits<ParticleRadiationProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
-template <> struct HydroSystem_Traits<TestParticle> {
+template <> struct HydroSystem_Traits<ParticleRadiationProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<TestParticle> {
+template <> struct Physics_Traits<ParticleRadiationProblem> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = true;
 	static constexpr bool is_mhd_enabled = false;
@@ -70,29 +65,29 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> struct RadSystem_Traits<TestParticle> {
+template <> struct RadSystem_Traits<ParticleRadiationProblem> {
 	static constexpr double c_hat_over_c = chat_over_c;
 	static constexpr double Erad_floor = initial_Erad;
 	static constexpr int beta_order = 0;
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TestParticle>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleRadiationProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TestParticle>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleRadiationProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0;
 }
 
-template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
+template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStochasticStellarPopParticles()
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	TestParticles->SetVerbose(1);
-	TestParticles->InitFromAsciiFile("../inputs/TestParticles.txt", nreal_extra, nullptr);
+	TestParticles->InitFromAsciiFile("../inputs/TestParticlesNoRad.txt", nreal_extra, nullptr);
 
 	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
 	// do not have particles, TestParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
@@ -110,13 +105,7 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
-				if (p.rdata(0) > SN_mass) {
-					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-				} else {
-					// For testing purposes, we mark particles with mass < SN_mass as Removed. These particles will be removed in current
-					// timestep.
-					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
-				}
+				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 			});
 		}
 	}
@@ -125,7 +114,7 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -137,49 +126,49 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 		const double rho_e = CV * T0 * rho;
 
 		// Set radiation variables
-		for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<TestParticle>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
-			state_cc(i, j, k, RadSystem<TestParticle>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<TestParticle>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<TestParticle>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}
-		state_cc(i, j, k, RadSystem<TestParticle>::gasEnergy_index) = rho_e;
-		state_cc(i, j, k, RadSystem<TestParticle>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<TestParticle>::gasInternalEnergy_index) = rho_e;
-		state_cc(i, j, k, RadSystem<TestParticle>::x1GasMomentum_index) = 0.0;
-		state_cc(i, j, k, RadSystem<TestParticle>::x2GasMomentum_index) = 0.0;
-		state_cc(i, j, k, RadSystem<TestParticle>::x3GasMomentum_index) = 0.0;
+		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::gasEnergy_index) = rho_e;
+		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::gasInternalEnergy_index) = rho_e;
+		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x1GasMomentum_index) = 0.0;
+		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x2GasMomentum_index) = 0.0;
+		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x3GasMomentum_index) = 0.0;
 	});
 }
 
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<TestParticle>::x1GasMomentum_index) && (dim == 0)) {
+		if ((n == RadSystem<ParticleRadiationProblem>::x1GasMomentum_index) && (dim == 0)) {
 			return true;
 		}
-		if ((n == RadSystem<TestParticle>::x2GasMomentum_index) && (dim == 1)) {
+		if ((n == RadSystem<ParticleRadiationProblem>::x2GasMomentum_index) && (dim == 1)) {
 			return true;
 		}
-		if ((n == RadSystem<TestParticle>::x3GasMomentum_index) && (dim == 2)) {
+		if ((n == RadSystem<ParticleRadiationProblem>::x3GasMomentum_index) && (dim == 2)) {
 			return true;
 		}
 		// Check radiation flux components
-		for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
-			if ((n == RadSystem<TestParticle>::x1RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 0)) {
+		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
+			if ((n == RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 0)) {
 				return true;
 			}
-			if ((n == RadSystem<TestParticle>::x2RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 1)) {
+			if ((n == RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 1)) {
 				return true;
 			}
-			if ((n == RadSystem<TestParticle>::x3RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 2)) {
+			if ((n == RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 2)) {
 				return true;
 			}
 		}
 		return false;
 	};
 
-	const int ncomp_cc = RadSystem<TestParticle>::nvar_;
+	const int ncomp_cc = RadSystem<ParticleRadiationProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -194,8 +183,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<TestParticle> sim(BCs_cc);
-	sim.doPoissonSolve_ = 0; // enable self-gravity
+	QuokkaSimulation<ParticleRadiationProblem> sim(BCs_cc);
 	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
 
@@ -210,29 +198,29 @@ auto problem_main() -> int
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	// Total radiation energy in the field
 	amrex::Real total_Erad_init = 0.0;
-	for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
-		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<TestParticle>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+	for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
+		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
 	}
 
 	// total gas energy
-	const amrex::Real total_gas_energy_init = sim.state_new_cc_[0].sum(RadSystem<TestParticle>::gasEnergy_index) * vol;
+	const amrex::Real total_gas_energy_init = sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::gasEnergy_index) * vol;
 
 	// set force finest level to true for test particles
-	// sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->setForceFinestLevel(true);
+	// sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->setForceFinestLevel(true);
 
 	// evolve
 	sim.evolve();
 
-	// ----- Check Test particles -----
+	// ----- Check Stochastic particles -----
 
 	// Total radiation energy in the field
 	amrex::Real total_Erad = 0.0;
-	for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
-		total_Erad += sim.state_new_cc_[0].sum(RadSystem<TestParticle>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+	for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
+		total_Erad += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
 	}
 
 	// total gas energy
-	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(RadSystem<TestParticle>::gasEnergy_index) * vol;
+	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::gasEnergy_index) * vol;
 
 	int status = 0; // Initialize to success
 
@@ -262,11 +250,11 @@ auto problem_main() -> int
 		const double tolerance = 1e-6;
 		if (!(relative_error < tolerance)) {
 			status = 1;
-			amrex::Print() << "Test failed: radiation energy mismatch.\n";
+			amrex::Print() << "Test failed: change of total energy mismatch.\n";
 		} 
 		
 		if (status == 0) {
-			amrex::Print() << "Test passed.\n";
+			amrex::Print() << "Test passed: change of total energy within tolerance.\n";
 		}
 	}
 
