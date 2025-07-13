@@ -30,9 +30,9 @@ struct ShockProblem {
 // parameters taken from Section 9.5 of Skinner et al. (2019)
 // [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]
 
-constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;  // cm s^-1
-constexpr double k_B = C::k_B;	     // erg K^-1
+constexpr double a_rad = C::a_rad; // erg cm^-3 K^-4
+constexpr double c = C::c_light;   // cm s^-1
+constexpr double k_B = C::k_B;	   // erg K^-1
 
 // constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
 // constexpr double sigma_a = 1.0e6;	// absorption cross section
@@ -74,6 +74,7 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 };
 
 template <> struct Physics_Traits<ShockProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

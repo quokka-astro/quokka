@@ -22,7 +22,6 @@
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-// constexpr double c = 2.99792458e10; // cgs
 constexpr double chat_over_c = 0.1;
 constexpr double c_rsla = chat_over_c * C::c_light;
 
@@ -49,6 +48,7 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 };
 
 template <> struct Physics_Traits<CouplingProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

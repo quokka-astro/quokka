@@ -3,8 +3,40 @@ name: CodeQL
 on:
   push:
     branches: [ "development" ]
+    paths:
+      - 'src/**'
+      - 'extern/amrex/**'
+      - 'extern/Microphysics/**'
+      - 'extern/fmt/**'
+      - 'extern/grackle_data_files/**'
+      - 'extern/openPMD-api/**'
+      - 'extern/yaml-cpp/**'
+      - 'inputs/**'
+      - 'CMakeLists.txt'
+      - '**/*.cpp'
+      - '**/*.c'
+      - '**/*.hpp'
+      - '**/*.h'
+      - '.github/workflows/codeql.yml'
+      - '.github/workflows/codeql/codeql-config.yml'
   pull_request:
     branches: [ "development" ]
+    paths:
+      - 'src/**'
+      - 'extern/amrex/**'
+      - 'extern/Microphysics/**'
+      - 'extern/fmt/**'
+      - 'extern/grackle_data_files/**'
+      - 'extern/openPMD-api/**'
+      - 'extern/yaml-cpp/**'
+      - 'inputs/**'
+      - 'CMakeLists.txt'
+      - '**/*.cpp'
+      - '**/*.c'
+      - '**/*.hpp'
+      - '**/*.h'
+      - '.github/workflows/codeql.yml'
+      - '.github/workflows/codeql/codeql-config.yml'
   schedule:
     - cron: "27 3 * * 0"
 
@@ -64,14 +96,14 @@ jobs:
               -DCMAKE_CXX_COMPILER="/usr/local/bin/g++"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@39edc492dbe16b1465b0cafca41432d857bdb31a # v3.29.1
+        uses: github/codeql-action/init@181d5eefc20863364f96762470ba6f862bdef56b # v3.29.2
         with:
           languages: ${{ matrix.language }}
           queries: +security-and-quality
           config-file: ./.github/workflows/codeql/codeql-config.yml
 
       - name: Build (py)
-        uses: github/codeql-action/autobuild@39edc492dbe16b1465b0cafca41432d857bdb31a # v3.29.1
+        uses: github/codeql-action/autobuild@181d5eefc20863364f96762470ba6f862bdef56b # v3.29.2
         if: ${{ matrix.language == 'python' }}
 
       - name: Build (C++)
@@ -94,7 +126,7 @@ jobs:
           make -j 4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@39edc492dbe16b1465b0cafca41432d857bdb31a # v3.29.1
+        uses: github/codeql-action/analyze@181d5eefc20863364f96762470ba6f862bdef56b # v3.29.2
         with:
           category: "/language:${{ matrix.language }}"
 

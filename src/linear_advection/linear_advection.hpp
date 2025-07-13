@@ -43,8 +43,8 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 				 int nvars);
 
 	template <FluxDir DIR>
-	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf, double advectionVx,
-				  int nvars);
+	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
+				  amrex::MultiFab &x1FaceVel_mf, double advectionVx, int nvars);
 };
 
 template <typename problem_t>
@@ -165,7 +165,7 @@ void LinearAdvectionSystem<problem_t>::AddFluxesRK2(amrex::MultiFab &U_new_mf, a
 template <typename problem_t>
 template <FluxDir DIR>
 void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
-						     const double vx, const int nvars)
+						     amrex::MultiFab &x1FaceVel_mf, const double vx, const int nvars)
 {
 	// By convention, the interfaces are defined on the left edge of each zone, i.e.
 	// xinterface_(i) is the solution to the Riemann problem at the left edge of zone i.
@@ -174,18 +174,22 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf,
 	auto const &x1LeftState_in = x1LeftState_mf.const_arrays();
 	auto const &x1RightState_in = x1RightState_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(0, 0, 0)};
+	auto x1FaceVel_in = x1FaceVel_mf.arrays();
+	amrex::IntVect ng{AMREX_D_DECL(2, 2, 2)}; // add two ghost faces for velocities
 
 	amrex::ParallelFor(x1Flux_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
 		// construct ArrayViews for permuted indices
 		quokka::Array4View<amrex::Real const, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<amrex::Real const, DIR> x1RightState(x1RightState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
 
 		// permute array indices according to dir
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
 		// For advection, simply choose upwind side of the interface.
+		const double upwind_density = (vx < 0.0) ? x1RightState(i, j, k, density_index) : x1LeftState(i, j, k, density_index);
+
 		if (vx < 0.0) { // upwind switch
 			// upwind direction is the right-side of the interface
 			x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
@@ -193,6 +197,15 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf,
 		} else {
 			// upwind direction is the left-side of the interface
 			x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
+		}
+
+		// Compute face velocity as flux divided by upwind density (only for density component)
+		if (n == density_index) {
+			if (upwind_density != 0.0) {
+				x1FaceVel(i, j, k) = x1Flux(i, j, k, n) / upwind_density;
+			} else {
+				x1FaceVel(i, j, k) = 0.0;
+			}
 		}
 	});
 }

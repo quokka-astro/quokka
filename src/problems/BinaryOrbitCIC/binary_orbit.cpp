@@ -48,6 +48,7 @@ template <> struct HydroSystem_Traits<BinaryOrbit> {
 
 template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -184,7 +185,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1; // enable self-gravity
 
 	// initialize
 	sim.setInitialConditions();

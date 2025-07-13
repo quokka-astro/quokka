@@ -35,11 +35,12 @@ using amrex::Real;
 struct RandomBlast {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double seconds_in_year = 3.1536e7; // s == 1 yr
-constexpr double parsec_in_cm = 3.086e18;    // cm == 1 pc
-constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
+constexpr double seconds_in_year = 3.1536e7;
+constexpr double parsec_in_cm = C::parsec; // cm == 1 pc
+constexpr double m_H = C::m_p + C::m_e;	   // mass of hydrogen atom
 
 template <> struct Physics_Traits<RandomBlast> {
+	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
