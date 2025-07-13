@@ -15,10 +15,12 @@
 struct ParticleRadiationProblem {
 };
 
+constexpr double m_stars_over_M_solar = 100.0; // mass of stars read from file
+constexpr double star_lum_per_M_solar = 4.0e33;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double rho0 = 1.0e-8 * C::m_p; // g cm^-3
-constexpr double T0 = 10.0;		  // K
+constexpr double T0 = 10.0;		 // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
 constexpr double dt_ = 1.0e10; // s
@@ -32,9 +34,9 @@ constexpr double particle_offset_from_center_ = 1e-3 * box_size_half;
 // locations of the particles: a 2x2x2 grids of particles
 // constexpr double box_left_edge_ = -2.0;
 // need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
-const static double SN_mass = 8.0 * C::M_solar;  // mass of SNProgenitor particles in grams
-constexpr int n_test_particles_init = 4;    // 4 test particles created at the start of the simulation
-constexpr int n_test_particles_created = 8; // 8 test particles created and live to the end
+const static double SN_mass = 8.0 * C::M_solar; // mass of SNProgenitor particles in grams
+constexpr int n_test_particles_init = 4;	// 4 test particles created at the start of the simulation
+constexpr int n_test_particles_created = 8;	// 8 test particles created and live to the end
 
 template <> struct quokka::EOS_Traits<ParticleRadiationProblem> {
 	static constexpr double gamma = gamma_;
@@ -83,16 +85,16 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleRadiationProblem>::Comp
 }
 
 // Template specialization for ParticleRadiationProblem luminosity function
-template <>
-struct quokka::LuminosityTraits<ParticleRadiationProblem> {
-	AMREX_GPU_DEVICE static auto stellarLuminosity(const Real mass, const Real age) -> amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups>
+template <> struct quokka::LuminosityTraits<ParticleRadiationProblem> {
+	AMREX_GPU_DEVICE static auto stellarLuminosity(const Real mass, const Real age)
+	    -> amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups>
 	{
 		// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer validation.
 		// L/(M / M_sun) = L_sun = 4e33 erg/s
-		const double is_on = age < 1.0e14 ? 1.0 : 0.0;		   // 3 Myr
+		const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
 		amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups> result{};
 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			result[g] = 4.0e33 * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
+			result[g] = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
 		}
 		return result;
 	}
@@ -106,8 +108,9 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile("../inputs/TestParticlesNoRad.txt", nreal_extra, nullptr);
 
-	// Using a for loop from lev = 0 to StochasticStellarPopParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
-	// do not have particles, StochasticStellarPopParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
+	// Using a for loop from lev = 0 to StochasticStellarPopParticles->maxLevel() won't work because not all levels necessarily have particles, and when
+	// some levels do not have particles, StochasticStellarPopParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual
+	// particle container.
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
 			auto &particle_array = ikv.second.GetArrayOfStructs();
@@ -255,10 +258,7 @@ auto problem_main() -> int
 		amrex::Print() << "Change of total energy: " << change_of_total_energy << "\n";
 
 		// expected answer
-		const double lum = 4e33;
-		const double mass = 100;
-		const double mass_SN = 8;
-		const double change_of_total_energy_expected = 4 * (lum * mass) * sim.tNew_[0];
+		const double change_of_total_energy_expected = 4 * (star_lum_per_M_solar * m_stars_over_M_solar) * sim.tNew_[0];
 		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
 		amrex::Print() << "Expected change of total energy: " << change_of_total_energy_expected << "\n";
 
@@ -269,8 +269,8 @@ auto problem_main() -> int
 		if (!(relative_error < tolerance)) {
 			status = 1;
 			amrex::Print() << "Test failed: change of total energy mismatch.\n";
-		} 
-		
+		}
+
 		if (status == 0) {
 			amrex::Print() << "Test passed: change of total energy within tolerance.\n";
 		}
