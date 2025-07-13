@@ -30,6 +30,13 @@ else()
   set(openPMDSources "")
 endif()
 
+if(QUOKKA_GRAVITY)
+  message(STATUS "Building Quokka with self-gravity support")
+  add_compile_definitions(QUOKKA_USE_GRAVITY)
+else()
+  message(STATUS "Building Quokka *without* self-gravity support")
+endif()
+
 # HDF5
 find_package(HDF5 REQUIRED)
 

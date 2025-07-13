@@ -1,0 +1,60 @@
+# Self-gravity test problem input file
+# Tests the PoissonGravity class with a self-gravitating gas cloud
+
+# Problem-specific parameters
+problem.cloud_center_x = 0.5
+problem.cloud_center_y = 0.5 
+problem.cloud_center_z = 0.5
+
+# Gravity parameters
+gravity.gravitational_constant = 1.0
+gravity.tolerance = 1.0e-12
+gravity.max_iterations = 200
+gravity.verbose = 1
+
+# AMR parameters
+amr.max_level = 1
+amr.ref_ratio = 2
+amr.blocking_factor = 8
+amr.max_grid_size = 32
+amr.n_error_buf = 2
+
+# Refinement criteria
+amr.refinement_indicators = density_gradient
+amr.density_gradient.max_level = 1
+amr.density_gradient.field_name = density
+amr.density_gradient.gradient = 0.1
+
+# Domain
+geometry.coord_sys = 0  # Cartesian
+geometry.prob_lo = 0.0 0.0 0.0
+geometry.prob_hi = 1.0 1.0 1.0
+geometry.is_periodic = 0 0 0
+
+# Resolution  
+amr.n_cell = 32 32 32
+
+# Time stepping
+hydro.cfl_number = 0.4
+amr.max_step = 10
+amr.stop_time = 0.1
+
+# Output
+amr.plot_int = 5
+amr.plot_file = "selfgrav_plt"
+amr.check_int = -1
+
+# Hydro options
+hydro.reconstruction_order = 3
+hydro.integrator_order = 2
+
+# Physics options
+eos.eos_gamma = 1.66666667  # 5/3
+
+# Verbosity
+amr.v = 1
+hydro.v = 0
+
+# Disable other physics
+cooling.enabled = 0
+chemistry.enabled = 0
