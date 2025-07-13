@@ -8,37 +8,27 @@
 #include "math/interpolate.hpp"
 
 #include "QuokkaSimulation.hpp"
-#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
-#include "radiation/radiation_system.hpp"
-#include "util/valarray.hpp"
 
 struct TestParticle {
 };
 
-constexpr double mu = 1.0 * C::m_p;
-constexpr double gamma_ = 5. / 3.;
-constexpr double rho0 = 1.0e8 * C::m_p; // g cm^-3
-constexpr double T0 = 10.0;		  // K
-constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
-constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
-constexpr double dt_ = 1.0e10; // s
-constexpr double formation_time = 1.5 * dt_;
+constexpr double rho0 = 1.0e-5;
+constexpr double dt_ = 0.001;
 static bool refine_half_domain = false; // NOLINT
 
-constexpr double box_size_half = 3.0e18; // This should be fixed for this problem.
-constexpr double particle_offset_from_center_ = 1e-3 * box_size_half;
-
 // locations of the particles: a 2x2x2 grids of particles
-// constexpr double box_left_edge_ = -2.0;
+constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
 // need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
-const static double SN_mass = 8.0 * C::M_solar;  // mass of SNProgenitor particles in grams
-constexpr int n_test_particles_init = 4;    // 4 test particles created at the start of the simulation
+constexpr double particle_offset_from_center_ = 0.01;
+const static double SN_mass = 1.0e-5;	    // mass of SNProgenitor particles
+constexpr int n_test_particles_init = 8;    // 8 test particles created at the start of the simulation
 constexpr int n_test_particles_created = 8; // 8 test particles created and live to the end
 
 template <> struct quokka::EOS_Traits<TestParticle> {
-	static constexpr double gamma = gamma_;
-	static constexpr double mean_molecular_weight = mu;
+	static constexpr double gamma = 1.0;	     // isothermal
+	static constexpr double cs_isothermal = 3.0; //
+	static constexpr double mean_molecular_weight = 1.0;
 };
 
 // Test enum to demonstrate type checking of particle_switch
@@ -56,7 +46,7 @@ template <> struct Particle_Traits<TestParticle> {
 };
 
 template <> struct HydroSystem_Traits<TestParticle> {
-	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
+	static constexpr bool reconstruct_eint = false;
 };
 
 template <> struct Physics_Traits<TestParticle> {
@@ -67,24 +57,12 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double gravitational_constant = 1.0;
+	static constexpr double c_light = 1.0;
+	static constexpr double radiation_constant = 1.0;
 };
-
-template <> struct RadSystem_Traits<TestParticle> {
-	static constexpr double c_hat_over_c = 1.0e-5;
-	static constexpr double Erad_floor = initial_Erad;
-	static constexpr int beta_order = 0;
-};
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TestParticle>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return 1.0e-30; // very low opacity for testing
-}
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TestParticle>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
-{
-	return 1.0e-10; // very low opacity for testing
-}
 
 template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 {
@@ -110,10 +88,10 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
-				if (p.rdata(0) > SN_mass) {
+				if (p.rdata(0) > 1.0e-10) {
 					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 				} else {
-					// For testing purposes, we mark particles with mass < SN_mass as Removed. These particles will be removed in current
+					// For testing purposes, we mark particles with mass < 1.0e-10 as Removed. These particles will be removed in current
 					// timestep.
 					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
 				}
@@ -133,8 +111,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	template <typename problem_t> struct ParticleChecker {
 		amrex::Real current_time;
 		amrex::Real dt;
+		amrex::Real param1 = particle_param1;
 
-		double x_L = -box_size_half; // This is a hack. Since the domain size is not passed to here, we have to manually set it for this test problem
+		double x_L = box_left_edge_;
 		double offset = particle_offset_from_center_;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
@@ -155,7 +134,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 			const int j_par2 = static_cast<int>(floor((offset - x_L) / dx[1]));
 			const int k_par2 = static_cast<int>(floor((offset - x_L) / dx[2]));
 
-			const bool is_create_particle = current_time <= formation_time && current_time + dt > formation_time;
+			const bool is_create_particle = current_time <= param1 && current_time + dt > param1;
 			if (is_create_particle && (i == i_par1 || i == i_par2) && (j == j_par1 || j == j_par2) && (k == k_par1 || k == k_par2)) {
 				return 1;
 			}
@@ -189,11 +168,11 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
-				const amrex::Real cell_density = state_arr(i, j, k, RadSystem<problem_t>::gasDensity_index);
+				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
-				const amrex::Real vx = state_arr(i, j, k, RadSystem<problem_t>::x1GasMomentum_index) / cell_density;
-				const amrex::Real vy = state_arr(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) / cell_density;
-				const amrex::Real vz = state_arr(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) / cell_density;
+				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
 
 				// Create all particles
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
@@ -216,18 +195,15 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 					// set birth time to current time
 					p.rdata(birth_time_index) = current_time;
-					// set death time to infinity, so that particle will never die
-					p.rdata(birth_time_index + 1) = std::numeric_limits<double>::max();
+					// set death time to current time + 0.0025 (2.5 time steps, so will evolve into SNRemnant at step 3)
+					p.rdata(birth_time_index + 1) = current_time + 0.0025;
 
 					// Set particle evolution stage
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
 				}
 
-				const amrex::Real volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-				const amrex::Real tot_SN_mass = num_particles * SN_mass;
-				const amrex::Real cell_mass = cell_density * volume;
-				AMREX_ASSERT(cell_mass > tot_SN_mass);
-				state_arr(i, j, k, RadSystem<problem_t>::gasDensity_index) -= tot_SN_mass / volume;
+				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.
+				state_arr(i, j, k, HydroSystem<problem_t>::density_index) -= 1.0e-20;
 			}
 		}
 	};
@@ -250,25 +226,13 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto Erad0 = initial_Erad;
-
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double rho = rho0;
-		const double rho_e = CV * T0 * rho;
-
-		// Set radiation variables
-		for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<TestParticle>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
-			state_cc(i, j, k, RadSystem<TestParticle>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<TestParticle>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<TestParticle>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-		}
-		state_cc(i, j, k, RadSystem<TestParticle>::gasEnergy_index) = rho_e;
-		state_cc(i, j, k, RadSystem<TestParticle>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<TestParticle>::gasInternalEnergy_index) = rho_e;
-		state_cc(i, j, k, RadSystem<TestParticle>::x1GasMomentum_index) = 0.0;
-		state_cc(i, j, k, RadSystem<TestParticle>::x2GasMomentum_index) = 0.0;
-		state_cc(i, j, k, RadSystem<TestParticle>::x3GasMomentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::density_index) = rho0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x1Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x2Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::x3Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = 0;
 	});
 }
 
@@ -277,31 +241,19 @@ template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vecto
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<TestParticle>::x1GasMomentum_index) && (dim == 0)) {
+		if ((n == HydroSystem<TestParticle>::x1Momentum_index) && (dim == 0)) {
 			return true;
 		}
-		if ((n == RadSystem<TestParticle>::x2GasMomentum_index) && (dim == 1)) {
+		if ((n == HydroSystem<TestParticle>::x2Momentum_index) && (dim == 1)) {
 			return true;
 		}
-		if ((n == RadSystem<TestParticle>::x3GasMomentum_index) && (dim == 2)) {
+		if ((n == HydroSystem<TestParticle>::x3Momentum_index) && (dim == 2)) {
 			return true;
-		}
-		// Check radiation flux components
-		for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
-			if ((n == RadSystem<TestParticle>::x1RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 0)) {
-				return true;
-			}
-			if ((n == RadSystem<TestParticle>::x2RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 1)) {
-				return true;
-			}
-			if ((n == RadSystem<TestParticle>::x3RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 2)) {
-				return true;
-			}
 		}
 		return false;
 	};
 
-	const int ncomp_cc = RadSystem<TestParticle>::nvar_;
+	const int ncomp_cc = Physics_Indices<TestParticle>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -327,14 +279,6 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	// Total radiation energy in the field
-	amrex::Real total_Erad_init = 0.0;
-	for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
-		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<TestParticle>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
-	}
-
 	// set force finest level to true for test particles
 	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->setForceFinestLevel(true);
 
@@ -346,20 +290,12 @@ auto problem_main() -> int
 	const int n_particle_expected = n_test_particles_init / 2 + n_test_particles_created;
 	const int n_particle_test = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Test)->getNumParticles();
 
-	// Total radiation energy in the field
-	amrex::Real total_Erad = 0.0;
-	for (int g = 0; g < Physics_Traits<TestParticle>::nGroups; ++g) {
-		total_Erad += sim.state_new_cc_[0].sum(RadSystem<TestParticle>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
-	}
-
 	int status = 0; // Initialize to success
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
 		amrex::Print() << "Expected number of test particles: " << n_particle_expected << "\n";
 		amrex::Print() << "Actual number of test particles: " << n_particle_test << "\n";
-
-		amrex::Print() << "Total radiation energy in the field: " << total_Erad << " (initial: " << total_Erad_init << ")\n";
 
 		status = 1;
 		if (n_particle_test == n_particle_expected) {
