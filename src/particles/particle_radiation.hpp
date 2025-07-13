@@ -1,28 +1,19 @@
 #ifndef PARTICLE_RADIATION_HPP_
 #define PARTICLE_RADIATION_HPP_
 
-#include <algorithm>
-
-#include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
-#include "AMReX_BLProfiler.H"
 #include "AMReX_Extension.H"
-#include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
-#include "AMReX_REAL.H"
-#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
-#include "particles/particle_types.hpp"
 
 namespace quokka
 {
 //-------------------- Radiation depositions --------------------
 
 // Template trait for luminosity functions - can be specialized for different problems
-template <typename problem_t>
-struct LuminosityTraits {
-	AMREX_GPU_DEVICE static auto simple_luminosity(const Real mass, const Real age, const int group) -> Real
+template <typename problem_t> struct LuminosityTraits {
+	AMREX_GPU_DEVICE static auto simple_luminosity(const Real /*mass*/, const Real /*age*/, const int /*group*/) -> Real
 	{
 		// Default implementation returns 0
 		return 0.0;
@@ -55,11 +46,8 @@ struct RadDeposition {
 	}
 };
 
-
-
 // Functor for depositing radiation energy from particles onto the grid using mass-based luminosity
-template <typename problem_t>
-struct MassBasedRadDeposition {
+template <typename problem_t> struct MassBasedRadDeposition {
 	double current_time{}; // Current simulation time
 	int massIndex{};       // Index for particle mass
 	int start_mesh_comp{}; // Starting component in mesh data
@@ -76,7 +64,8 @@ struct MassBasedRadDeposition {
 		interp.ParticleToMesh(p, radEnergySource, massIndex, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
 			const Real age = current_time - part.rdata(birthTimeIndex);
 			const Real stellar_mass = part.rdata(massIndex);
-			const Real lum_density = LuminosityTraits<problem_t>::simple_luminosity(stellar_mass, age, comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			const Real lum_density =
+			    LuminosityTraits<problem_t>::simple_luminosity(stellar_mass, age, comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
 			return lum_density;
 		});
 	}
