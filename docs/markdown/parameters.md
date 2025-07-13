@@ -28,6 +28,7 @@ These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` 
 | density_floor | Float | The minimum density value allowed in the simulation. Enforced through EnforceLimits. |
 | temperature_floor | Float | The minimum temperature value allowed in the simulation. Enforced through EnforceLimits. |
 | max_walltime | String | The maximum walltime for the simulation in the format DD:HH:SS (days/hours/seconds). After 90% of this walltime elapses, the simulation will automatically stop and exit. |
+| dt_cutoff | Float | Timestep drop detector threshold. If the timestep drops below dt_cutoff * current_time, the simulation aborts with an error message. This helps detect numerical instabilities early. Default: 0.0 (disabled). |
 
 ## Hydrodynamics
 
