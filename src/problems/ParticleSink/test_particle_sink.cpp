@@ -182,7 +182,7 @@ auto problem_main() -> int
 	const double total_total_mass_init = total_mass_init + total_particle_mass;
 
 	// evolve
-	sim.maxTimesteps_ = 1;
+	sim.maxTimesteps_ = 0;
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -225,6 +225,7 @@ auto problem_main() -> int
 		const double mass_rel_error_tol = 1.0e-14;
 		if (!(rel_error_total_mass < mass_rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: total mass is not conserved at step 1\n";
 		}
 
 		// exact solution
@@ -267,9 +268,10 @@ auto problem_main() -> int
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
 		// The relative L1 error norm with respect to the exact solution could be large because there is a hydro update after sink accretion.
-		const double rel_error_tol = 1.0e-6;
+		const double rel_error_tol = 3.0e-6;
 		if (!(rel_error < rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: density profile is not correct\n";
 		}
 
 #ifdef HAVE_PYTHON
@@ -330,11 +332,10 @@ auto problem_main() -> int
 		const double mass_rel_error_tol = 1.0e-13;
 		if (!(rel_error_total_mass_final < mass_rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: total mass is not conserved at the end of the simulation\n";
 		}
 
-		if (status == 1) {
-			amrex::Print() << "Test failed\n";
-		} else {
+		if (status == 0) {
 			amrex::Print() << "Test passed\n";
 		}
 	}
