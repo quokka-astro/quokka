@@ -269,8 +269,8 @@ auto problem_main() -> int
 		const double change_of_total_energy = total_energy - total_energy_init;
 		amrex::Print() << "Change of total energy: " << change_of_total_energy << "\n";
 
-		// expected answer
-		const double change_of_total_energy_expected = 4 * (star_lum_per_M_solar * m_stars_over_M_solar) * sim.tNew_[0];
+		// expected answer. Raidation is not deposited into cells, so we have to subtract dt_ from the total time. 
+		const double change_of_total_energy_expected = 4 * (star_lum_per_M_solar * m_stars_over_M_solar) * (sim.tNew_[0] - dt_);
 		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
 		amrex::Print() << "Expected change of total energy: " << change_of_total_energy_expected << "\n";
 
