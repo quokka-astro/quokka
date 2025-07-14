@@ -9,22 +9,6 @@
 
 namespace quokka
 {
-//-------------------- Radiation depositions --------------------
-
-// // Template trait for luminosity functions - can be specialized for different problems
-// template <typename problem_t, typename ContainerType> struct LuminosityTraits {
-// 	AMREX_GPU_DEVICE static auto stellarLuminosity(const ContainerType &/*p*/, const amrex::Real /*current_time*/, const int /*massIndex*/, const int
-// /*birthTimeIndex*/, const int /*lumIndex*/) -> amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups>
-// 	{
-// 		// Default implementation returns array of zeros
-// 		amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups> result{};
-// 		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-// 			result[g] = 0.0;
-// 		}
-// 		return result;
-// 	}
-// };
-
 // Functor for depositing radiation energy from particles onto the grid
 struct RadDeposition {
 	double current_time{}; // Current simulation time
