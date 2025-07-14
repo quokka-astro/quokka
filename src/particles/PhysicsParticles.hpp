@@ -120,6 +120,7 @@ class PhysicsParticleDescriptorBase
 
 	// Destroy particles at level lev_min and above
 	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
+
 	virtual void splitParticles(int lev, int splitFactor) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 

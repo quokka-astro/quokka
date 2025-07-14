@@ -1074,17 +1074,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 				particleMeshInteraction(cur_time, dt_[0]);
 			}
 
+#if AMREX_SPACEDIM == 3
 			// Use the new type-aware particle destruction method
 			// TODO(cch): Need to take care of AMR subcycling
 			particleRegister_.destroyParticles(0, cur_time, dt_[0]);
-		}
 
-#if AMREX_SPACEDIM == 3
-		// do particle leapfrog (first kick at time t)
-		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
-			kickParticlesAllLevels(dt_[0]);
-		}
+			// do particle leapfrog (first kick at time t)
+			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+				kickParticlesAllLevels(dt_[0]);
+			}
 #endif
+		}
 
 		// hyperbolic advance over all levels
 		// (N.B. when AMR is enabled, regridding may happen during this function!)
