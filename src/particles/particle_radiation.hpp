@@ -6,6 +6,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "hydro/hydro_system.hpp"
+#include "particle_types.hpp"
 #include "physics_info.hpp"
 
 namespace quokka
@@ -36,9 +37,6 @@ struct RadDeposition {
 	}
 };
 
-// Forward declaration for particle types
-#include "particle_types.hpp"
-
 // Traits class for specializing particle property update behavior
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 	// Default implementation - does nothing
@@ -52,7 +50,7 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 
 	// Main method to update particle properties using the traits
 	template <typename problem_t, typename ContainerType>
-	static void updateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
+	static void UpdateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
 	{
 		if (container != nullptr) {
 			// Apply the updater to all particles across all levels
@@ -98,7 +96,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 	// Main method to update particle properties using the specialized traits
 	template <typename problem_t, typename ContainerType>
-	static void updateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
+	static void UpdateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
 	{
 		if (container != nullptr) {
 			// Apply the updater to all particles across all levels
@@ -140,7 +138,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::Test> {
 
 	// Main method to update particle properties using the specialized traits
 	template <typename problem_t, typename ContainerType>
-	static void updateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
+	static void UpdateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
 	{
 		if (container != nullptr) {
 			// Apply the updater to all particles across all levels

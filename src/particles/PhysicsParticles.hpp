@@ -106,9 +106,6 @@ class PhysicsParticleDescriptorBase
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
-	// Update particle properties (e.g., luminosity) based on current state
-	virtual void updateParticleProperties(amrex::Real current_time) = 0;
-
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 
@@ -148,6 +145,10 @@ class PhysicsParticleDescriptorBase
 					amrex::Real dt)
 	{ /* Default empty implementation */
 	}
+
+	// Update particle properties (e.g., luminosity) based on current state
+	virtual void updateParticleProperties(amrex::Real current_time) { /* Default empty implementation */ }
+
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -720,14 +721,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	// Default implementation - do nothing for regular particles
-	void updateParticleProperties(amrex::Real current_time) override
-	{
-		// Use the traits system to update particle properties
-		ParticlePropertyUpdateTraits<particleType_>::template updateProperties<problem_t>(container_, this->getMassIndex(), this->getLumIndex(),
-												  this->getBirthTimeIndex(), current_time);
-	}
-
 #if AMREX_SPACEDIM == 3
 	// Implement cell tagging around particles
 	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) const override
@@ -783,7 +776,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	void updateParticleProperties(amrex::Real current_time) override
 	{
 		// Use the traits system to update particle properties
-		ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t>(this->container_, this->getMassIndex(), this->getLumIndex(),
+		ParticlePropertyUpdateTraits<particleType>::template UpdateProperties<problem_t>(this->container_, this->getMassIndex(), this->getLumIndex(),
 												 this->getBirthTimeIndex(), current_time);
 	}
 
