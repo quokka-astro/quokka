@@ -50,29 +50,6 @@ struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
 		}
 	}
 };
-
-// Example specialization for Test particles - demonstrates how users can customize behavior
-template <>
-struct ParticlePropertyUpdateTraits<ParticleType::Test> {
-	static constexpr double test_lum_scale = 1.0e32;
-
-	template <typename problem_t, typename ParticleType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, int mass_idx, int lum_idx, int birth_time_idx,
-									 amrex::Real current_time) noexcept
-	{
-		amrex::ignore_unused(birth_time_idx, current_time);
-		if (mass_idx >= 0 && lum_idx >= 0) {
-			const amrex::Real mass = p.rdata(mass_idx);
-			
-			// Simple test luminosity function - can be overridden by users
-			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-				const amrex::Real test_luminosity = test_lum_scale * mass * (g + 1);
-				p.rdata(lum_idx + g) = test_luminosity;
-			}
-		}
-	}
-};
-
 } // namespace quokka
 
 #endif

@@ -148,7 +148,6 @@ class PhysicsParticleDescriptorBase
 
 	// Update particle properties (e.g., luminosity) based on current state
 	virtual void updateParticleProperties(amrex::Real current_time) { /* Default empty implementation */ }
-
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -721,31 +720,31 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	// Default implementation using traits system
-	void updateParticleProperties(amrex::Real current_time) override
-	{
-		// Use the traits system to update particle properties directly
-		if (container_ != nullptr) {
-			// Apply the updater to all particles across all levels
-			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
-				for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
+	// // Default implementation using traits system
+	// void updateParticleProperties(amrex::Real current_time) override
+	// {
+	// 	// Use the traits system to update particle properties directly
+	// 	if (container_ != nullptr) {
+	// 		// Apply the updater to all particles across all levels
+	// 		for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
+	// 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
+	// 				auto &particles = pIter.GetArrayOfStructs();
+	// 				auto *pData = particles().data();
+	// 				const amrex::Long np = pIter.numParticles();
 
-					const int mass_idx = this->getMassIndex();
-					const int lum_idx = this->getLumIndex();
-					const int birth_time_idx = this->getBirthTimeIndex();
+	// 				const int mass_idx = this->getMassIndex();
+	// 				const int lum_idx = this->getLumIndex();
+	// 				const int birth_time_idx = this->getBirthTimeIndex();
 
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT
-						ParticlePropertyUpdateTraits<particleType_>::template updateProperties<problem_t>(
-							p, mass_idx, lum_idx, birth_time_idx, current_time);
-					});
-				}
-			}
-		}
-	}
+	// 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+	// 					auto &p = pData[idx]; // NOLINT
+	// 					ParticlePropertyUpdateTraits<particleType_>::template updateProperties<problem_t>(
+	// 						p, mass_idx, lum_idx, birth_time_idx, current_time);
+	// 				});
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 #if AMREX_SPACEDIM == 3
 	// Implement cell tagging around particles
