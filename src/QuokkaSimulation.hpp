@@ -2303,9 +2303,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			auto *h_iteration_counter = iteration_counter.copyToHost();
 			long global_solver_count = h_iteration_counter[0];  // number of Newton-Raphson solvings, NOLINT(google-runtime-int)
 			long global_iteration_sum = h_iteration_counter[1]; // sum of Newton-Raphson iterations, NOLINT(google-runtime-int)
-			int global_iteration_max = h_iteration_counter[2];  // max number of Newton-Raphson iterations
-			long global_decoupled_iteration_sum =
-			    h_iteration_counter[3]; // sum of decoupled gas-dust Newton-Raphson iterations, NOLINT(google-runtime-int)
+			int global_iteration_max = h_iteration_counter[2];  // max number of Newton-Raphson iterations, NOLINT(google-runtime-int)
+			// sum of decoupled gas-dust Newton-Raphson iterations
+			long global_decoupled_iteration_sum = h_iteration_counter[3]; // NOLINT(google-runtime-int)
 
 			amrex::ParallelDescriptor::ReduceLongSum(global_solver_count);
 			amrex::ParallelDescriptor::ReduceLongSum(global_iteration_sum);
