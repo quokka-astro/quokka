@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04@sha256:a74f174cf8541b418e50787382d0edb5cd2b817754da2eaf892bae3468a62264
+.devcontainer/gcc-container/DockerfileFROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04@sha256:a7cddc16b93b4ccfab0d33c805460a826703211ec30e3c04761aec17d71275cb
 
 RUN apt-get --yes -qq update \
  && apt-get --yes -qq upgrade \
@@ -10,17 +10,17 @@ RUN apt-get --yes -qq update \
  && apt-get --yes -qq clean \
  && rm -rf /var/lib/apt/lists/*
 
-# install Clang 19.x
+# install Clang 20.x
 RUN mkdir -m 0755 -p /etc/apt/keyrings/ && \
  curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg.key && \
- echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | tee /etc/apt/sources.list.d/llvm.list > /dev/null
+ echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | tee /etc/apt/sources.list.d/llvm.list > /dev/null
 
 RUN apt-get clean && apt-get update -y && \
- apt-get install -y --no-install-recommends clang-19 llvm-19 libomp-19-dev libclang-rt-19-dev clangd-19 && \
+ apt-get install -y --no-install-recommends clang-20 llvm-20 libomp-20-dev libclang-rt-20-dev clangd-20 && \
  rm -rf /var/lib/apt/lists/*
  
 # Create symlink for clangd
-RUN ln -s /usr/bin/clangd-19 /usr/bin/clangd
+RUN ln -s /usr/bin/clangd-20 /usr/bin/clangd
 
 # install blosc2 (needed for ADIOS2)
 RUN pip3 install blosc2 --break-system-packages

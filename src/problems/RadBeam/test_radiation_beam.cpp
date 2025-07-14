@@ -11,6 +11,10 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
+#include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
@@ -23,8 +27,8 @@ constexpr double rho0 = 1.0;	     // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1000.; // K
 constexpr double T_initial = 300.;   // K
 
-constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;  // cm s^-1
+constexpr double a_rad = C::a_rad; // erg cm^-3 K^-4
+constexpr double c = C::c_light;   // cm s^-1
 
 template <> struct quokka::EOS_Traits<BeamProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
@@ -38,6 +42,7 @@ template <> struct RadSystem_Traits<BeamProblem> {
 };
 
 template <> struct Physics_Traits<BeamProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -184,10 +189,10 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		const double py = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
 		const double pz = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
 
-		double E_inc = a_rad * std::pow(T_hohlraum, 4);
-		double Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-		double Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-		double Fz_bdry = 0.;
+		double const E_inc = a_rad * std::pow(T_hohlraum, 4);
+		double const Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+		double const Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+		double const Fz_bdry = 0.;
 
 		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
@@ -277,10 +282,10 @@ auto problem_main() -> int
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // left x2 -- inflow
 		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
-		if (AMREX_SPACEDIM == 3) {
-			BCs_cc[n].setLo(2, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(2, amrex::BCType::int_dir);
-		}
+#if (AMREX_SPACEDIM == 3)
+		BCs_cc[n].setLo(2, amrex::BCType::int_dir); // periodic
+		BCs_cc[n].setHi(2, amrex::BCType::int_dir);
+#endif
 	}
 
 	// Problem initialization

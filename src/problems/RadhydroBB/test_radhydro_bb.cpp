@@ -2,7 +2,16 @@
 /// \brief Defines a test problem for blackbody spectrum in a uniform advecting medium.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "QuokkaSimulation.hpp"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 #include <unordered_map>
 
 #include "AMReX_Array.H"
@@ -14,7 +23,6 @@
 
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
-#include "test_radhydro_bb.hpp"
 
 static constexpr bool export_csv = true;
 
@@ -103,6 +111,7 @@ template <> struct quokka::EOS_Traits<PulseProblem> {
 };
 
 template <> struct Physics_Traits<PulseProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -314,7 +323,7 @@ auto problem_main() -> int
 	// insert a dummy breakpoint
 	int aa = 0;
 	aa += 1;
-	std::cout << aa << std::endl;
+	std::cout << aa << '\n';
 
 	// assert nu_exact[0] = 0.001 and nu_exact[-1] = 100
 	AMREX_ASSERT(nu_exact[0] == 0.001);
@@ -348,7 +357,7 @@ auto problem_main() -> int
 		sol_norm_T += std::abs(Trad_exact[i]);
 	}
 	const double rel_error_T = err_norm_T / sol_norm_T;
-	amrex::Print() << "Relative L1 error norm for T_gas = " << rel_error_T << std::endl;
+	amrex::Print() << "Relative L1 error norm for T_gas = " << rel_error_T << '\n';
 
 	for (int g = 0; g < n_groups_; ++g) {
 		err_norm += std::abs(Fnu_exact[g] - F_r_spec[g]);
@@ -357,7 +366,7 @@ auto problem_main() -> int
 
 	const double error_tol = 0.1;
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 #ifdef HAVE_PYTHON
 	// plot temperature

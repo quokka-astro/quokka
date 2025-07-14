@@ -156,13 +156,14 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 
 //-------------------- Stellar evolution stage enum --------------------
 
-// Enum for StellarEvolution particle stage
-enum class StellarEvolutionStage {
-	LowMassStar,  // Low mass star stage
-	SNProgenitor, // Supernova progenitor stage
-	SNRemnant,    // Supernova remnant stage
-	Removed	      // Mark for removal
-};
+// Enum for particle evolution stages. This is designed to be shared among several particle types. However, not all particle types will use all stages.
+// - LowMassStar: singular low mass star
+// - SNProgenitor: singular high-mass stars (> 9 Msun). Depending on the SF and SN scheme, these stars will either explode as supernovae in
+//   the end of their lifetime unconditionally, or conditionally according to their evolutional track.
+// - SNRemnant: Supernova remnant stage
+// - LowMassComposite: composite of low-mass stars
+// - Removed: marked for removal
+enum class StellarEvolutionStage { LowMassStar, SNProgenitor, SNRemnant, LowMassComposite, Removed };
 
 //-------------------- Stellar population particles --------------------
 
@@ -301,6 +302,9 @@ inline bool disable_SN_feedback = false; // NOLINT
 inline amrex::Real particle_param1 = -1.0; // NOLINT
 inline amrex::Real particle_param2 = -1.0; // NOLINT
 
+inline amrex::Real particle_param3 = -1.0; // NOLINT
+inline amrex::Real eps_ff = 0.01;	   // NOLINT
+
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
@@ -309,6 +313,9 @@ inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use un
 
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
+
+// Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
+inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
@@ -326,8 +333,14 @@ inline void particleParmParse()
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
 
+	// Stochastic SF parameters
+	pp.query("eps_ff", eps_ff);
+
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
+
+	// Stellar velocity limit parameter
+	pp.query("stellar_velocity_limit", stellar_velocity_limit);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);

@@ -2,11 +2,17 @@
 /// \brief Defines a Marshak wave problem with variable opacity.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BLassert.H"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_radiation_marshak_Vaytet.hpp"
 #include "util/fextract.hpp"
 
 // constexpr int n_groups_ = 2; // Be careful
@@ -104,6 +110,7 @@ template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
 };
 
 template <> struct Physics_Traits<SuOlsonProblemCgs> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -393,7 +400,7 @@ auto problem_main() -> int
 			fstream << ", " << "Trad_" << i;
 		}
 		for (int i = 0; i < nx; ++i) {
-			fstream << std::endl;
+			fstream << '\n';
 			fstream << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i];
 			for (int j = 0; j < n_groups_; ++j) {
 				fstream << ", " << Trad_g[j][i];
@@ -409,7 +416,7 @@ auto problem_main() -> int
 			fstream_coll << ", " << "Trad_" << i;
 		}
 		for (int i = 0; i < nx; ++i) {
-			fstream_coll << std::endl;
+			fstream_coll << '\n';
 			fstream_coll << std::scientific << std::setprecision(14) << xs[i] << ", " << Tgas[i] << ", " << Trad[i];
 			for (int j = 0; j < n_coll; ++j) {
 				fstream_coll << ", " << Trad_coll[j][i];
@@ -475,7 +482,7 @@ auto problem_main() -> int
 	}
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	std::cout << "Finished." << '\n';
 
 	// if ((rel_error > error_tol) || std::isnan(rel_error)) {
 	// 	status = 1;

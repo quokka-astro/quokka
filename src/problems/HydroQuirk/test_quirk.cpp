@@ -7,7 +7,14 @@
 /// \brief Defines a test problem for the odd-even decoupling instability.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <algorithm>
+#include <fmt/format.h>
+#include <fstream>
 #include <vector>
 
 #include "AMReX.H"
@@ -45,6 +52,7 @@ template <> struct HydroSystem_Traits<QuirkProblem> {
 };
 
 template <> struct Physics_Traits<QuirkProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -62,7 +70,7 @@ constexpr Real pl = 26.85;
 constexpr Real dr = 1.0;
 constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
-int ishock_g = 0;
+constexpr int ishock_g = 0;
 
 template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -72,21 +80,21 @@ template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	Real xshock = 0.4;
+	Real const xshock = 0.4;
 	int ishock = 0;
 	for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + static_cast<Real>(0.5))) < xshock; ++ishock) {
 	}
 	ishock--;
 	amrex::Print() << "ishock = " << ishock << "\n";
 
-	Real dd = dl - 0.135;
-	Real ud = ul + 0.219;
-	Real pd = pl - 1.31;
+	Real const dd = dl - 0.135;
+	Real const ud = ul + 0.219;
+	Real const pd = pl - 1.31;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		double vx = NAN;
-		double vy = 0.;
-		double vz = 0.;
+		double const vy = 0.;
+		double const vz = 0.;
 		double rho = NAN;
 		double P = NAN;
 
@@ -136,9 +144,9 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
 		// (no AMR should be used for this problem, and the odd-even decoupling will
 		// manifest in every row along the shock, if it happens)
 
-		amrex::MultiFab &mf_state = state_new_cc_[0];
+		amrex::MultiFab const &mf_state = state_new_cc_[0];
 		int box_no = -1;
-		int ilo = ishock_g;
+		int const ilo = ishock_g;
 		int jlo = 0;
 		int klo = 0;
 		for (amrex::MFIter mfi(mf_state); mfi.isValid(); ++mfi) {
@@ -146,7 +154,7 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
 			amrex::GpuArray<int, 3> box_lo = bx.loVect3d();
 			jlo = box_lo[1];
 			klo = box_lo[2];
-			amrex::IntVect cell{AMREX_D_DECL(ilo, jlo, klo)};
+			amrex::IntVect const cell{AMREX_D_DECL(ilo, jlo, klo)};
 			if (bx.contains(cell)) {
 				box_no = mfi.index();
 				break;
@@ -155,25 +163,25 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
 
 		AMREX_ALWAYS_ASSERT(box_no != -1);
 		auto const &state = mf_state.const_array(box_no);
-		amrex::Box bx = amrex::makeSingleCellBox(ilo, jlo, klo);
+		amrex::Box const bx = amrex::makeSingleCellBox(ilo, jlo, klo);
 		Real host_s = NAN;
 		amrex::AsyncArray async_s(&host_s, 1);
 		Real *s = async_s.data();
 
 		amrex::launch(bx, [=] AMREX_GPU_DEVICE(amrex::Box const &tbx) {
 			amrex::GpuArray<int, 3> const idx = tbx.loVect3d();
-			int i = idx[0];
-			int j = idx[1];
-			int k = idx[2];
-			Real dodd = state(i, j + 1, k, HydroSystem<QuirkProblem>::density_index);
-			Real podd = HydroSystem<QuirkProblem>::ComputePressure(state, i, j + 1, k);
-			Real deven = state(i, j, k, HydroSystem<QuirkProblem>::density_index);
-			Real peven = HydroSystem<QuirkProblem>::ComputePressure(state, i, j, k);
+			int const i = idx[0];
+			int const j = idx[1];
+			int const k = idx[2];
+			Real const dodd = state(i, j + 1, k, HydroSystem<QuirkProblem>::density_index);
+			Real const podd = HydroSystem<QuirkProblem>::ComputePressure(state, i, j + 1, k);
+			Real const deven = state(i, j, k, HydroSystem<QuirkProblem>::density_index);
+			Real const peven = HydroSystem<QuirkProblem>::ComputePressure(state, i, j, k);
 
 			// the 'entropy function' s == P / rho^gamma
 			const Real gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
-			Real sodd = podd / std::pow(dodd, gamma);
-			Real seven = peven / std::pow(deven, gamma);
+			Real const sodd = podd / std::pow(dodd, gamma);
+			Real const seven = peven / std::pow(deven, gamma);
 			s[0] = std::abs(sodd - seven);
 		});
 

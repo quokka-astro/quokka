@@ -7,7 +7,13 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
 #include <cmath>
+#include <fstream>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_ParmParse.H"
@@ -28,6 +34,7 @@ template <> struct HydroSystem_Traits<RTProblem> {
 };
 
 template <> struct Physics_Traits<RTProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -46,8 +53,8 @@ amrex::Real constexpr g_z = 0;
 template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -67,13 +74,13 @@ template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka:
 			scalar = 0.0;
 		}
 
-		double amp = A * amrex::Random(rng);
+		double const amp = A * amrex::Random(rng);
 
-		double vx = 0;
-		double vy = amp * (1.0 + std::cos(8.0 * M_PI * y / 3.0)) / 2.0;
-		double vz = 0;
-		double P0 = 2.5;
-		double P = P0 + rho * g_y * y;
+		double const vx = 0;
+		double const vy = amp * (1.0 + std::cos(8.0 * M_PI * y / 3.0)) / 2.0;
+		double const vz = 0;
+		double const P0 = 2.5;
+		double const P = P0 + rho * g_y * y;
 
 		AMREX_ASSERT(!std::isnan(vx));
 		AMREX_ASSERT(!std::isnan(vy));

@@ -2,13 +2,21 @@
 /// \brief Defines a test problem for line cooling and cosmic-ray heating in a uniform medium.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "QuokkaSimulation.hpp"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_dust_system.hpp"
 #include <cmath>
+#include <fmt/format.h>
+#include <fstream>
 
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
-#include "test_rad_line_cooling.hpp"
 #include "util/fextract.hpp"
 
 static constexpr bool export_csv = true;
@@ -47,6 +55,7 @@ template <> struct quokka::EOS_Traits<CoolingProblem> {
 };
 
 template <> struct Physics_Traits<CoolingProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -266,7 +275,7 @@ auto problem_main() -> int
 		sol_norm += std::abs(Tgas_exact_vec[i]) + std::abs(Erad_exact_vec[i]);
 	}
 	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
 	if (export_csv) {
 		std::ofstream file;

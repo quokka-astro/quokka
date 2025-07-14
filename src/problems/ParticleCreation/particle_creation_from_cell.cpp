@@ -5,10 +5,10 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "math/interpolate.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "particle_creation_from_cell.hpp"
 
 struct TestParticle {
 };
@@ -51,6 +51,7 @@ template <> struct HydroSystem_Traits<TestParticle> {
 
 template <> struct Physics_Traits<TestParticle> {
 	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -69,7 +70,7 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	TestParticles->SetVerbose(1);
-	TestParticles->InitFromAsciiFile("TestParticles.txt", nreal_extra, nullptr);
+	TestParticles->InitFromAsciiFile("../inputs/TestParticles.txt", nreal_extra, nullptr);
 
 	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
 	// do not have particles, TestParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
@@ -117,12 +118,12 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
-		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) const -> int
+		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const & /*state_arr*/,
+						 amrex::Array4<const amrex::Real> const & /*state_accretion_rate_arr*/, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const & /*engine*/) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
-			amrex::ignore_unused(state_arr);
 
 			// Calculate cell indices for the particle locations
 			const int i_par1 = static_cast<int>(floor((-offset - x_L) / dx[0]));
@@ -160,9 +161,10 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		}
 
 		template <typename ParticleType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset) const
+		AMREX_GPU_DEVICE void
+		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*state_accretion_rate_arr*/, int i,
+			   int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+			   amrex::Long base_offset, amrex::RandomEngine const & /*engine*/) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
@@ -208,13 +210,13 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
-	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt,
-				    int evolution_stage_index, int birth_time_index)
+	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev,
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
-		    container, mass_idx, state, lev, current_time, dt, evolution_stage_index, birth_time_index);
+		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index);
 	}
 };
 } // namespace quokka
@@ -267,7 +269,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
 

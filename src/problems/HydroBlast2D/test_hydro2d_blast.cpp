@@ -7,6 +7,9 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
@@ -17,10 +20,13 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_TagBox.H"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_hydro2d_blast.hpp"
 
 struct BlastProblem {
 };
@@ -31,6 +37,7 @@ template <> struct quokka::EOS_Traits<BlastProblem> {
 };
 
 template <> struct Physics_Traits<BlastProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -45,7 +52,7 @@ template <> struct Physics_Traits<BlastProblem> {
 template <> void QuokkaSimulation<BlastProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -55,14 +62,14 @@ template <> void QuokkaSimulation<BlastProblem>::setInitialConditionsOnGrid(quok
 	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 		amrex::Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		double vx = 0.;
-		double vy = 0.;
-		double vz = 0.;
-		double rho = 1.0;
+		double const vx = 0.;
+		double const vy = 0.;
+		double const vz = 0.;
+		double const rho = 1.0;
 		double P = NAN;
 
 		if (R < 0.1) { // inside circle
@@ -178,6 +185,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return 0;
 }

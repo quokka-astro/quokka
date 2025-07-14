@@ -19,8 +19,15 @@ permissions:
   contents: read
 
 jobs:
+  check_changes:
+    uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/cmake-macos.yml'
+
   build:
     runs-on: macos-14
+    needs: check_changes
+    if: needs.check_changes.outputs.has_non_docs_changes == 'true'
 
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -52,6 +59,9 @@ jobs:
     - name: Install pip dependencies
       run: python3 -m pip install --user numpy matplotlib
 
+    - name: Install Canary
+      run: python3 -m pip install --user "canary-wm @ git+https://github.com/sandialabs/canary"
+
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
       # access regardless of the host operating system
@@ -72,9 +82,9 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute tests defined by the CMake configuration.  
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest --output-on-failure -C $BUILD_TYPE -j3
+      run: |
+        export PATH="$HOME/Library/Python/3.11/bin:$PATH"
+        canary run --output-on-failure --workers=3 .
 
     - name: Upload test output
       if: always()

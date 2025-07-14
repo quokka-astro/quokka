@@ -7,18 +7,22 @@
 /// \brief Defines a test Marshak wave problem with weak coupling between dust and gas.
 ///
 
-#include "test_radiation_marshak_dust_and_PE.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
+#include "radiation/radiation_dust_system.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
+#include <fmt/format.h>
 
 struct MarshakProblem {
 };
 
 constexpr double PE_rate = 1.0;	       // photoelectric heating rate in s^-1 (actual rate is PE_rate * E_FUV)
-AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR
-AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV
+AMREX_GPU_MANAGED double kappa1 = NAN; // dust opacity at IR. NOLINT
+AMREX_GPU_MANAGED double kappa2 = NAN; // dust opacity at FUV. NOLINT
 
 constexpr bool dust_on = true;
 constexpr bool PE_on = true;
@@ -46,6 +50,7 @@ template <> struct quokka::EOS_Traits<MarshakProblem> {
 };
 
 template <> struct Physics_Traits<MarshakProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -190,7 +195,7 @@ auto problem_main() -> int
 	const int max_timesteps = 5000;
 
 	// read user parameters
-	amrex::ParmParse pp("problem");
+	amrex::ParmParse const pp("problem");
 	pp.query("kappa1", kappa1);
 	pp.query("kappa2", kappa2);
 
@@ -273,7 +278,7 @@ auto problem_main() -> int
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
 	}
-	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
+	amrex::Print() << "Relative L1 norm = " << rel_err_norm << '\n';
 
 #ifdef HAVE_PYTHON
 	// Plot erad1
@@ -332,6 +337,6 @@ auto problem_main() -> int
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return status;
 }

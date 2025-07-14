@@ -7,11 +7,17 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
+#include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_hydro_sms.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
@@ -27,6 +33,7 @@ template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -41,15 +48,15 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		double m = NAN;
 		double rho = NAN;
 		double E = NAN;
@@ -64,7 +71,7 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 			E = 8.4168;
 		}
 
-		double Eint = E - 0.5 * (m * m) / rho;
+		double const Eint = E - 0.5 * (m * m) / rho;
 
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
@@ -115,7 +122,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		E = 8.4168;
 	}
 
-	double Eint = E - 0.5 * (m * m) / rho;
+	double const Eint = E - 0.5 * (m * m) / rho;
 
 	for (int n = 0; n < numcomp; ++n) {
 		consVar(i, j, k, n) = 0;
@@ -135,10 +142,10 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 {
 
 	auto const box = geom[0].Domain();
-	int nx = (box.hiVect3d()[0] - box.loVect3d()[0]) + 1;
+	int const nx = (box.hiVect3d()[0] - box.loVect3d()[0]) + 1;
 	std::vector<double> xs(nx);
 	for (int i = 0; i < nx; ++i) {
-		xs.at(i) = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		xs.at(i) = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 	}
 
 	// compute exact solution
@@ -151,7 +158,7 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 		double rho = NAN;
 		double P = NAN;
 		const double vshock = 0.1096;
-		amrex::Real x = xs[i];
+		amrex::Real const x = xs[i];
 
 		if (x < (0.5 + vshock * tNew_[0])) {
 			rho = 3.86;
@@ -190,9 +197,9 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
-			amrex::Real rho = rho_arr[i];
-			amrex::Real vx = vx_arr[i];
-			amrex::Real P = P_arr[i];
+			amrex::Real const rho = rho_arr[i];
+			amrex::Real const vx = vx_arr[i];
+			amrex::Real const P = P_arr[i];
 
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
@@ -215,13 +222,13 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 		std::vector<double> P(nx);
 
 		for (int i = 0; i < nx; ++i) {
-			amrex::Real rho = values.at(HydroSystem<ShocktubeProblem>::density_index)[i];
-			amrex::Real xmom = values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index)[i];
-			amrex::Real Egas = values.at(HydroSystem<ShocktubeProblem>::energy_index)[i];
+			amrex::Real const rho = values.at(HydroSystem<ShocktubeProblem>::density_index)[i];
+			amrex::Real const xmom = values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index)[i];
+			amrex::Real const Egas = values.at(HydroSystem<ShocktubeProblem>::energy_index)[i];
 
-			amrex::Real xvel = xmom / rho;
-			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = quokka::EOS<ShocktubeProblem>::ComputePressure(rho, Eint);
+			amrex::Real const xvel = xmom / rho;
+			amrex::Real const Eint = Egas - xmom * xmom / (2.0 * rho);
+			amrex::Real const pressure = quokka::EOS<ShocktubeProblem>::ComputePressure(rho, Eint);
 
 			d.at(i) = rho;
 			vx.at(i) = xvel;
@@ -231,7 +238,7 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 #ifdef HAVE_PYTHON
 		// Plot results
 		matplotlibcpp::clf();
-		int s = 2; // stride
+		int const s = 2; // stride
 		std::map<std::string, std::string> d_args;
 		std::unordered_map<std::string, std::string> dexact_args;
 		d_args["label"] = "simulation";

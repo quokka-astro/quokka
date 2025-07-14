@@ -7,10 +7,17 @@
 /// \brief Defines a 2D test problem for radiation in the transport regime.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "QuokkaSimulation.hpp"
+#include "radiation/radiation_system.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"
@@ -41,6 +48,7 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 };
 
 template <> struct Physics_Traits<ShadowProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
@@ -111,15 +119,15 @@ AMRSimulation<ShadowProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 template <> void QuokkaSimulation<ShadowProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 		amrex::Real const xc = 0.5;
 		amrex::Real const yc = 0.0;
 		amrex::Real const x0 = 0.1;

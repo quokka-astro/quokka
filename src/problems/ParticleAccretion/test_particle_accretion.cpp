@@ -1,7 +1,6 @@
 /// \file particle_sink_accretion.cpp
 /// \brief Defines a test problem for Bondi-Hoyle accretion.
 
-#include "test_particle_accretion.hpp"
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
@@ -16,6 +15,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include <fstream>
 #include <gcem.hpp>
 
 #ifdef HAVE_PYTHON
@@ -60,6 +60,7 @@ template <> struct Physics_Traits<AccretionProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_self_gravity_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
@@ -76,7 +77,7 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile("sink.txt", nreal_extra, nullptr);
+	SinkParticles->InitFromAsciiFile("../inputs/sink.txt", nreal_extra, nullptr);
 
 	// manually set particle mass to M_star_in_Msun * C::M_solar
 	for (auto &kv : SinkParticles->GetParticles()) {
@@ -295,7 +296,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1;      // enable self-gravity
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	sim.initDt_ = 3.0e10;	      // ~1 kyr
@@ -304,10 +304,39 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	// get total gas mass of the initial state
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<AccretionProblem>::density_index) * vol;
+	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
+
+	// get total particle mass of the initial state
+	const auto &real_data_init = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
+	amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
+
+	const double m_tot_init = m_gas_init + m_stars_init;
+
 	// evolve
 	sim.evolve();
 
+	// get total gas mass of the final state
+	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<AccretionProblem>::density_index) * vol;
+	amrex::Print() << "Final gas mass = " << m_gas_final << "\n";
+
+	// get total particle mass of the final state
+	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
+	amrex::Real const m_stars_final =
+	    std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
+	amrex::Print() << "Final particle mass = " << m_stars_final << "\n";
+
+	const double m_tot_final = m_gas_final + m_stars_final;
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// check mass conservation
+		const double rel_error_total_mass = std::abs(m_tot_final - m_tot_init) / m_tot_init;
+		amrex::Print() << "rel_error_total_mass = " << rel_error_total_mass << "\n";
+
 		// plot particle mass vs time
 		std::vector<Real> &time = sim.userData_.time;
 		std::vector<Real> &Mstar_ = sim.userData_.Mstar;

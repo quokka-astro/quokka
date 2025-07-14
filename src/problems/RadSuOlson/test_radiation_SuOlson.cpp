@@ -7,6 +7,14 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
+#include "QuokkaSimulation.hpp"
+#include "math/interpolate.hpp"
+#include "radiation/radiation_system.hpp"
+#include <cmath>
+#include <fmt/format.h>
 #include <limits>
 
 #include "AMReX_Array.H"
@@ -17,7 +25,6 @@
 
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_radiation_SuOlson.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -55,6 +62,7 @@ template <> struct quokka::EOS_Traits<MarshakProblem> {
 };
 
 template <> struct Physics_Traits<MarshakProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
@@ -76,7 +84,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckO
 	return kappa / rho;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> amrex::Real
 {
 	return kappa / rho;
 }
@@ -114,8 +122,8 @@ quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, con
 	return alpha_SuOlson * std::pow(Tgas, 3);
 }
 
-const auto initial_Egas = 1e-10 * quokka::EOS<MarshakProblem>::ComputeEintFromTgas(rho0, T_hohlraum);
-const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum));
+const auto initial_Egas = 1e-10 * quokka::EOS<MarshakProblem>::ComputeEintFromTgas(rho0, T_hohlraum); // NOLINT
+const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum));      // NOLINT
 
 template <>
 void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange,
@@ -123,7 +131,6 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
 						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
 {
-
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const xl = (i + 0.) * dx[0];
 		amrex::Real const xr = (i + 1.) * dx[0];
@@ -234,7 +241,7 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	int nx = static_cast<int>(position.size());
+	int const nx = static_cast<int>(position.size());
 
 	// compare with exact solution
 	int status = 0;
@@ -262,25 +269,25 @@ auto problem_main() -> int
 
 		std::vector<double> xs_exact = {0.01, 0.1, 0.17783, 0.31623, 0.45, 0.5, 0.56234, 0.75, 1.0, 1.33352, 1.77828, 3.16228, 5.62341};
 
-		std::vector<double> Erad_diffusion_exact_0p1 = {0.09403, 0.09326, 0.09128, 0.08230, 0.06086, 0.04766, 0.03171,
-								0.00755, 0.00064, 0.,	   0.,	    0.,	     0.};
-		std::vector<double> Erad_transport_exact_0p1 = {0.09531, 0.09531, 0.09532, 0.09529, 0.08823, 0.04765, 0.00375, 0., 0., 0., 0., 0., 0.};
+		std::vector<double> const Erad_diffusion_exact_0p1 = {0.09403, 0.09326, 0.09128, 0.08230, 0.06086, 0.04766, 0.03171,
+								      0.00755, 0.00064, 0.,	 0.,	  0.,	   0.};
+		std::vector<double> const Erad_transport_exact_0p1 = {0.09531, 0.09531, 0.09532, 0.09529, 0.08823, 0.04765, 0.00375, 0., 0., 0., 0., 0., 0.};
 
-		std::vector<double> Erad_diffusion_exact_1p0 = {0.50359, 0.49716, 0.48302, 0.43743, 0.36656, 0.33271, 0.29029,
-								0.18879, 0.10150, 0.04060, 0.01011, 0.00003, 0.};
+		std::vector<double> const Erad_diffusion_exact_1p0 = {0.50359, 0.49716, 0.48302, 0.43743, 0.36656, 0.33271, 0.29029,
+								      0.18879, 0.10150, 0.04060, 0.01011, 0.00003, 0.};
 		std::vector<double> Erad_transport_exact_1p0 = {0.64308, 0.63585, 0.61958, 0.56187, 0.44711, 0.35801, 0.25374,
 								0.11430, 0.03648, 0.00291, 0.,	    0.,	     0.};
 
 		std::vector<double> Egas_transport_exact_1p0 = {0.27126, 0.26839, 0.26261, 0.23978, 0.18826, 0.14187, 0.08838,
 								0.03014, 0.00625, 0.00017, 0.,	    0.,	     0.};
 
-		std::vector<double> Erad_diffusion_exact_3p1 = {0.95968, 0.95049, 0.93036, 0.86638, 0.76956, 0.72433,
-								0.66672, 0.51507, 0.35810, 0.21309, 0.10047, 0.00634};
-		std::vector<double> Erad_transport_exact_3p1 = {1.20052, 1.18869, 1.16190, 1.07175, 0.90951, 0.79902,
-								0.66678, 0.44675, 0.27540, 0.14531, 0.05968, 0.00123};
+		std::vector<double> const Erad_diffusion_exact_3p1 = {0.95968, 0.95049, 0.93036, 0.86638, 0.76956, 0.72433,
+								      0.66672, 0.51507, 0.35810, 0.21309, 0.10047, 0.00634};
+		std::vector<double> const Erad_transport_exact_3p1 = {1.20052, 1.18869, 1.16190, 1.07175, 0.90951, 0.79902,
+								      0.66678, 0.44675, 0.27540, 0.14531, 0.05968, 0.00123};
 
-		std::vector<double> Erad_diffusion_exact_10p0 = {1.86585, 1.85424, 1.82889, 1.74866, 1.62824, 1.57237, 1.50024,
-								 1.29758, 1.06011, 0.79696, 0.52980, 0.12187, 0.00445};
+		std::vector<double> const Erad_diffusion_exact_10p0 = {1.86585, 1.85424, 1.82889, 1.74866, 1.62824, 1.57237, 1.50024,
+								       1.29758, 1.06011, 0.79696, 0.52980, 0.12187, 0.00445};
 		std::vector<double> Erad_transport_exact_10p0 = {2.23575, 2.21944, 2.18344, 2.06448, 1.86072, 1.73178, 1.57496,
 								 1.27398, 0.98782, 0.70822, 0.45016, 0.09673, 0.00375};
 
@@ -317,7 +324,7 @@ auto problem_main() -> int
 		const double rel_error = err_norm / sol_norm;
 		const double error_tol = 0.03; // this will not agree to better than this, due to
 					       // not being able to capture fEdd < 1/3 behavior
-		amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 		if (rel_error > error_tol) {
 			status = 1;
 		}

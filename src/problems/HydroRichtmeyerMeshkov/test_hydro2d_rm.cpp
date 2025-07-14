@@ -7,11 +7,17 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "math/interpolate.hpp"
+#include <fmt/format.h>
+#include <fstream>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
@@ -29,6 +35,7 @@ template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
 };
 
 template <> struct Physics_Traits<RichtmeyerMeshkovProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -78,7 +85,7 @@ template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::computeAfterTimeste
 							n_lower = HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index;
 						}
 
-						amrex::Real comp_lower = state(j, i, k, n_lower);
+						amrex::Real const comp_lower = state(j, i, k, n_lower);
 
 						const amrex::Real average = std::fabs(comp_upper + comp_lower);
 						const amrex::Real residual = std::abs(comp_upper - comp_lower) / average;
@@ -102,8 +109,8 @@ template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::computeAfterTimeste
 template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -112,9 +119,9 @@ template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::setInitialCondition
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
-		double vx = 0.;
-		double vy = 0.;
-		double vz = 0.;
+		double const vx = 0.;
+		double const vy = 0.;
+		double const vz = 0.;
 		double rho = NAN;
 		double P = NAN;
 

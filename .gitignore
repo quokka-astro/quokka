@@ -20,9 +20,19 @@ __pycache__
 *.sarif
 Backtrace.*
 
+# Agora galaxy uncompressed data
+/extern/agora_data/vcirc.dat
+/extern/agora_data/AgoraGalaxy_particles_LOW.txt
+
 # Singularity Docker images
 *.sif
 
+# files in tests/ folder
+/tests/
+!/tests/matplotlibrc
+# !/tests/ascent_actions.yaml
+
+# LaTeX files
 *.aux
 *.dbl
 *.bbl
