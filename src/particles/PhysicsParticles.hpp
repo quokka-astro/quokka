@@ -776,18 +776,6 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 		this->setAllowsAccretion(allows_accretion);
 	}
 
-	// Override depositRadiation to use lum_idx to determine deposition type
-	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
-	{
-		if (this->container_ != nullptr) {
-			if (this->getLumIndex() >= 0) {
-				// Use regular luminosity stored in particle data
-				amrex::ParticleToMesh(*this->container_, radEnergySource, lev,
-						      RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
-			}
-		}
-	}
-
 	// Override updateParticleProperties for star particles
 	void updateParticleProperties(amrex::Real current_time) override
 	{
@@ -814,7 +802,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 							// Get stellar luminosity array from the trait
 							const auto luminosity_array = LuminosityTraits<problem_t>::stellarLuminosity(mass, age);
 
-							// Update luminosity components (assuming they are stored consecutively starting at lum_idx)
+							// Update luminosity components (they are stored consecutively starting at lum_idx)
 							for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
 								if (lum_idx + g < ContainerType::ParticleType::NReal) {
 									p.rdata(lum_idx + g) = luminosity_array[g];

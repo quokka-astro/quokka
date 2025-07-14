@@ -1065,6 +1065,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// do user-specified calculations before the level update
 		computeBeforeTimestep();
 
+		// Stellar evolution and SN deposition; only apply to star particles
+		if (particleRegister_.HasStarParticles()) {
+			// Update particle properties (e.g., luminosity) before particle-mesh interaction
+			particleRegister_.updateParticleProperties(cur_time);
+			// TODO(cch): Need to take care of AMR subcycling
+			particleMeshInteraction(cur_time, dt_[0]);
+		}
+
+		// Use the new type-aware particle destruction method
+		// TODO(cch): Need to take care of AMR subcycling
+		particleRegister_.destroyParticles(0, cur_time, dt_[0]);
+
 #if AMREX_SPACEDIM == 3
 		// do particle leapfrog (first kick at time t)
 		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
@@ -1094,17 +1106,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			kickParticlesAllLevels(dt_[0]);
 		}
 
-		// Stellar evolution and SN deposition; only apply to star particles
-		if (particleRegister_.HasStarParticles()) {
-			// Update particle properties (e.g., luminosity) before particle-mesh interaction
-			particleRegister_.updateParticleProperties(cur_time);
-			// TODO(cch): Need to take care of AMR subcycling
-			particleMeshInteraction(cur_time, dt_[0]);
-		}
-
-		// Use the new type-aware particle destruction method
-		// TODO(cch): Need to take care of AMR subcycling
-		particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 #endif
 
 		cur_time += dt_[0];
