@@ -6,7 +6,6 @@
 #include "AMReX_Extension.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "hydro/hydro_system.hpp"
-// Forward declaration for particle types
 #include "particle_types.hpp"
 #include "physics_info.hpp"
 

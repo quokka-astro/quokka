@@ -771,6 +771,7 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 		this->setAllowsAccretion(allows_accretion);
 	}
 
+#if AMREX_SPACEDIM == 3
 	// Override updateParticleProperties for star particles
 	void updateParticleProperties(amrex::Real current_time) override
 	{
@@ -797,7 +798,6 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 		}
 	}
 
-#if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	auto depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) -> amrex::Real override
 	{
@@ -1149,6 +1149,15 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 	}
+
+	// Update particle properties for all registered particles
+	void updateParticleProperties(amrex::Real current_time)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::updateParticleProperties()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->updateParticleProperties(current_time);
+		}
+	}
 #endif // AMREX_SPACEDIM == 3
 
 	// Print particle statistics
@@ -1160,15 +1169,6 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->printParticleStatistics();
-		}
-	}
-
-	// Update particle properties for all registered particles
-	void updateParticleProperties(amrex::Real current_time)
-	{
-		const BL_PROFILE("PhysicsParticleRegister::updateParticleProperties()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->updateParticleProperties(current_time);
 		}
 	}
 
