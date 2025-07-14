@@ -790,8 +790,8 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 						auto &p = pData[idx]; // NOLINT
-						ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t>(
-							p, mass_idx, lum_idx, birth_time_idx, current_time);
+						ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t>(p, mass_idx, lum_idx,
+																 birth_time_idx, current_time);
 					});
 				}
 			}

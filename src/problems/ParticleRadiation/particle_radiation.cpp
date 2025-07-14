@@ -135,7 +135,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 			// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
 			// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
 			const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
-			
+
 			// Update luminosity components (they are stored consecutively starting at lum_idx)
 			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
 				const amrex::Real luminosity = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
@@ -143,7 +143,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 			}
 		}
 	}
-	};
+};
 } // namespace quokka
 
 template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

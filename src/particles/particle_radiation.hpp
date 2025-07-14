@@ -12,8 +12,7 @@
 namespace quokka
 {
 // Traits class for specializing particle property update behavior
-template <ParticleType particleType>
-struct ParticlePropertyUpdateTraits {
+template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 	// Default implementation - does nothing
 	template <typename problem_t, typename ParticleType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, int mass_idx, int lum_idx, int birth_time_idx,
