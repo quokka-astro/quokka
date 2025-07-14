@@ -109,6 +109,9 @@ class PhysicsParticleDescriptorBase
 	// Update particle properties (e.g., luminosity) based on current state
 	virtual void updateParticleProperties(amrex::Real current_time) = 0;
 
+	// Destroy particles at level lev_min and above
+	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
+
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 
@@ -118,8 +121,6 @@ class PhysicsParticleDescriptorBase
 	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
 
-	// Destroy particles at level lev_min and above
-	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
 	virtual void splitParticles(int lev, int splitFactor) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
 
@@ -394,6 +395,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return 0;
 	}
 
+	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) override
+	{
+		if (container_ != nullptr) {
+			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
+			    container_, this->getMassIndex(), lev_min, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
+		}
+	}
+
 #if AMREX_SPACEDIM == 3
 
 	// Implementation of mass deposition from particles to grid
@@ -469,14 +478,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					});
 				}
 			}
-		}
-	}
-
-	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) override
-	{
-		if (container_ != nullptr) {
-			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
-			    container_, this->getMassIndex(), lev_min, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 
@@ -1090,6 +1091,19 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
+	// Destroy particles based on particle type
+	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::destroyParticles()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			// Only destroy particles if the descriptor allows destruction
+			if (descriptor->getAllowsDestruction()) {
+				// Call the appropriate particle destruction method based on the particle type
+				descriptor->destroyParticles(lev_min, current_time, dt);
+			}
+		}
+	}
+
 #if AMREX_SPACEDIM == 3
 	// Update positions of all massive particles
 	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
@@ -1125,19 +1139,6 @@ template <typename problem_t> class PhysicsParticleRegister
 
 				// redistribute particles
 				// descriptor->redistribute(lev);
-			}
-		}
-	}
-
-	// Destroy particles based on particle type
-	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt)
-	{
-		const BL_PROFILE("PhysicsParticleRegister::destroyParticles()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			// Only destroy particles if the descriptor allows destruction
-			if (descriptor->getAllowsDestruction()) {
-				// Call the appropriate particle destruction method based on the particle type
-				descriptor->destroyParticles(lev_min, current_time, dt);
 			}
 		}
 	}
