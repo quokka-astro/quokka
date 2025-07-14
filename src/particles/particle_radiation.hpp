@@ -49,31 +49,6 @@ struct RadDeposition {
 				      });
 	}
 };
-
-// Functor for depositing radiation energy from particles onto the grid using mass-based luminosity
-template <typename problem_t> struct MassBasedRadDeposition {
-	double current_time{}; // Current simulation time
-	int massIndex{};       // Index for particle mass
-	int start_mesh_comp{}; // Starting component in mesh data
-	int num_comp{};	       // Number of components to deposit
-	int birthTimeIndex{};  // Index for particle birth time
-
-	// Operator to perform mass-based radiation deposition using linear interpolation
-	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<Real> const &radEnergySource,
-							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &plo,
-							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &dxi) const noexcept
-	{
-		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-		interp.ParticleToMesh(p, radEnergySource, massIndex, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			const Real age = current_time - part.rdata(birthTimeIndex);
-			const Real stellar_mass = part.rdata(massIndex);
-			const auto luminosity_array = LuminosityTraits<problem_t>::stellarLuminosity(stellar_mass, age);
-			const Real lum_density = luminosity_array[comp] * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-			return lum_density;
-		});
-	}
-};
 } // namespace quokka
 
 #endif

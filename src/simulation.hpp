@@ -1096,6 +1096,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// Stellar evolution and SN deposition; only apply to star particles
 		if (particleRegister_.HasStarParticles()) {
+			// Update particle properties (e.g., luminosity) before particle-mesh interaction
+			particleRegister_.updateParticleProperties(cur_time);
 			// TODO(cch): Need to take care of AMR subcycling
 			particleMeshInteraction(cur_time, dt_[0]);
 		}

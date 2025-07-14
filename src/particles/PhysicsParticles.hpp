@@ -106,6 +106,9 @@ class PhysicsParticleDescriptorBase
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
+	// Update particle properties (e.g., luminosity) based on current state
+	virtual void updateParticleProperties(amrex::Real current_time) = 0;
+
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 
@@ -716,6 +719,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	// Default implementation - do nothing for regular particles
+	void updateParticleProperties(amrex::Real /*current_time*/) override
+	{
+		// Default implementation does nothing
+	}
+
 #if AMREX_SPACEDIM == 3
 	// Implement cell tagging around particles
 	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) const override
@@ -754,39 +763,66 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 template <typename ContainerType, typename problem_t, ParticleType particleType>
 class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, problem_t, particleType>
 {
-      private:
-	bool mass_based_luminosity_{false}; // Whether to use mass-based luminosity for radiation deposition
-
       public:
 	[[nodiscard]] auto isStarParticle() -> bool override { return true; }
 
-	// Getter for mass-based luminosity flag
-	[[nodiscard]] AMREX_FORCE_INLINE auto getMassBasedLuminosity() const -> bool { return mass_based_luminosity_; }
-
 	// Constructor - forwards all arguments to the base class
 	StarParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
-			       int evolution_stage_idx = -1, bool allows_accretion = false, bool mass_based_luminosity = false)
+			       int evolution_stage_idx = -1, bool allows_accretion = false)
 	    : PhysicsParticleDescriptor<ContainerType, problem_t, particleType>(container, mass_idx, lum_idx, birth_time_idx, allows_creation,
-										allows_destruction),
-	      mass_based_luminosity_(mass_based_luminosity)
+										allows_destruction)
 	{
 		this->setEvolutionStageIndex(evolution_stage_idx);
 		this->setAllowsAccretion(allows_accretion);
 	}
 
-	// Override depositRadiation to use mass-based luminosity when enabled
+	// Override depositRadiation to use lum_idx to determine deposition type
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
 	{
 		if (this->container_ != nullptr) {
-			if (mass_based_luminosity_ && this->getMassIndex() >= 0) {
-				// Use mass-based radiation deposition
-				amrex::ParticleToMesh(
-				    *this->container_, radEnergySource, lev,
-				    MassBasedRadDeposition<problem_t>{current_time, this->getMassIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
-			} else if (!mass_based_luminosity_ && this->getLumIndex() >= 0) {
+			if (this->getLumIndex() >= 0) {
 				// Use regular luminosity stored in particle data
 				amrex::ParticleToMesh(*this->container_, radEnergySource, lev,
 						      RadDeposition{current_time, this->getLumIndex(), 0, nGroups, this->getBirthTimeIndex()}, false);
+			}
+		}
+	}
+
+	// Override updateParticleProperties for star particles
+	void updateParticleProperties(amrex::Real current_time) override
+	{
+		if (this->container_ != nullptr && this->getLumIndex() >= 0) {
+			// Update luminosity for star particles based on mass and age
+			// Only update if we have a valid luminosity index
+			const int mass_idx = this->getMassIndex();
+			const int lum_idx = this->getLumIndex();
+			const int birth_time_idx = this->getBirthTimeIndex();
+
+			// For particles with both mass and luminosity indices (the birth_time_idx check is only for compiler check)
+			if (mass_idx >= 0 && lum_idx >= 0 && birth_time_idx >= 0) {
+				for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
+					for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
+						auto &particles = pIter.GetArrayOfStructs();
+						auto *pData = particles().data();
+						const amrex::Long np = pIter.numParticles();
+
+						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+							const amrex::Real age = current_time - p.rdata(birth_time_idx);
+							const amrex::Real mass = p.rdata(mass_idx);
+
+							// Get stellar luminosity array from the trait
+							const auto luminosity_array = LuminosityTraits<problem_t>::stellarLuminosity(mass, age);
+
+							// Update luminosity components (assuming they are stored consecutively starting at lum_idx)
+							for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+								if (lum_idx + g < ContainerType::ParticleType::NReal) {
+									p.rdata(lum_idx + g) = luminosity_array[g];
+								}
+							}
+						});
+					}
+				}
 			}
 		}
 	}
@@ -935,17 +971,17 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		// Create the appropriate star particle descriptor based on the particle type
 		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
-		// allows_accretion, mass_based_luminosity
+		// allows_accretion
 		if (type == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
-			    false, StochasticStellarPopParticleStageIdx, false, true);
+			    false, StochasticStellarPopParticleStageIdx, false);
 		} else if (type == ParticleType::Sink) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx, -1,
-															    -1, true, false, -1, true, false);
+															    -1, true, false, -1, true);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false, true);
+			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
 		} else {
 			amrex::Abort("Unknown particle type for star particles");
 		}
@@ -1154,6 +1190,15 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->printParticleStatistics();
+		}
+	}
+
+	// Update particle properties for all registered particles
+	void updateParticleProperties(amrex::Real current_time)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::updateParticleProperties()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->updateParticleProperties(current_time);
 		}
 	}
 
