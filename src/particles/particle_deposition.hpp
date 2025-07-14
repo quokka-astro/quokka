@@ -23,6 +23,34 @@ constexpr int SN_stencil_array_size = SN_stencil_size + 1;
 constexpr double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr double m_u = C::m_u;
 
+//-------------------- Radiation depositions --------------------
+
+// Functor for depositing radiation energy from particles onto the grid
+struct RadDeposition {
+	double current_time{}; // Current simulation time
+	int start_part_comp{}; // Starting component in particle data
+	int start_mesh_comp{}; // Starting component in mesh data
+	int num_comp{};	       // Number of components to deposit
+	int birthTimeIndex{};  // Index for particle birth time
+
+	// Operator to perform radiation deposition using linear interpolation
+	template <typename ContainerType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &radEnergySource,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	{
+		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		// Deposit radiation energy only if particle is active
+		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
+				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+					      if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
+						      return 0.0;
+					      }
+					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+				      });
+	}
+};
+
 #if AMREX_SPACEDIM == 3
 
 //-------------------- Mass depositions --------------------
