@@ -1083,21 +1083,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// do user-specified calculations before the level update
 		computeBeforeTimestep();
 
-		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
-			// Stellar evolution and SN deposition; only apply to star particles
-			if (particleRegister_.HasStarParticles()) {
-				// Update particle properties (e.g., luminosity) before particle-mesh interaction
-				particleRegister_.updateParticleProperties(cur_time);
-				// TODO(cch): Need to take care of AMR subcycling
-				particleMeshInteraction(cur_time, dt_[0]);
-			}
-
 #if AMREX_SPACEDIM == 3
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			// These particle actions only apply in 3D
+
 			// TODO(cch): Need to take care of AMR subcycling
 			particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 
-			// Stellar evolution and SN deposition; only apply to star particles
 			if (particleRegister_.HasStarParticles()) {
+				// Update particle properties (e.g., luminosity) before particle-mesh interaction
+				particleRegister_.updateParticleProperties(cur_time);
+
+				// Stellar evolution and SN deposition; only apply to star particles
 				// TODO(cch): Need to take care of AMR subcycling
 				particleMeshInteraction(cur_time, dt_[0]);
 			}
@@ -1106,8 +1103,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
 				kickParticlesAllLevels(dt_[0]);
 			}
-#endif
 		}
+#endif
 
 		// hyperbolic advance over all levels
 		// (N.B. when AMR is enabled, regridding may happen during this function!)
