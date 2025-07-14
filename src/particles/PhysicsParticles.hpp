@@ -106,12 +106,6 @@ class PhysicsParticleDescriptorBase
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
-	// Update particle properties (e.g., luminosity) based on current state
-	virtual void updateParticleProperties(amrex::Real current_time) = 0;
-
-	// Destroy particles at level lev_min and above
-	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
-
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 
@@ -120,6 +114,9 @@ class PhysicsParticleDescriptorBase
 
 	// Kick particles at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void kickParticles(int lev, amrex::Real dt, amrex::MultiFab const &accel) = 0;
+
+	// Destroy particles at level lev_min and above
+	virtual void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) = 0;
 
 	virtual void splitParticles(int lev, int splitFactor) = 0;
 	[[nodiscard]] virtual auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> = 0;
@@ -148,6 +145,9 @@ class PhysicsParticleDescriptorBase
 					amrex::Real dt)
 	{ /* Default empty implementation */
 	}
+
+	// Update particle properties (e.g., luminosity) based on current state
+	virtual void updateParticleProperties(amrex::Real current_time) { /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -395,14 +395,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return 0;
 	}
 
-	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) override
-	{
-		if (container_ != nullptr) {
-			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
-			    container_, this->getMassIndex(), lev_min, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
-		}
-	}
-
 #if AMREX_SPACEDIM == 3
 
 	// Implementation of mass deposition from particles to grid
@@ -478,6 +470,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					});
 				}
 			}
+		}
+	}
+
+	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt) override
+	{
+		if (container_ != nullptr) {
+			ParticleDestructionTraits<particleType_>::template destroyParticles<problem_t, ContainerType>(
+			    container_, this->getMassIndex(), lev_min, current_time, dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 		}
 	}
 
@@ -720,12 +720,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	// Default implementation - do nothing for regular particles
-	void updateParticleProperties(amrex::Real /*current_time*/) override
-	{
-		// Default implementation does nothing
-	}
-
 #if AMREX_SPACEDIM == 3
 	// Implement cell tagging around particles
 	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) const override
@@ -777,46 +771,33 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 		this->setAllowsAccretion(allows_accretion);
 	}
 
+#if AMREX_SPACEDIM == 3
 	// Override updateParticleProperties for star particles
 	void updateParticleProperties(amrex::Real current_time) override
 	{
-		if (this->container_ != nullptr && this->getLumIndex() >= 0) {
-			// Update luminosity for star particles based on mass and age
-			// Only update if we have a valid luminosity index
-			const int mass_idx = this->getMassIndex();
-			const int lum_idx = this->getLumIndex();
-			const int birth_time_idx = this->getBirthTimeIndex();
+		// Use the traits system to update particle properties directly
+		if (this->container_ != nullptr) {
+			// Apply the updater to all particles across all levels
+			for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
+				for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
+					auto &particles = pIter.GetArrayOfStructs();
+					auto *pData = particles().data();
+					const amrex::Long np = pIter.numParticles();
 
-			// For particles with both mass and luminosity indices (the birth_time_idx check is only for compiler check)
-			if (mass_idx >= 0 && lum_idx >= 0 && birth_time_idx >= 0) {
-				for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
-					for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
-						auto &particles = pIter.GetArrayOfStructs();
-						auto *pData = particles().data();
-						const amrex::Long np = pIter.numParticles();
+					const int mass_idx = this->getMassIndex();
+					const int lum_idx = this->getLumIndex();
+					const int birth_time_idx = this->getBirthTimeIndex();
 
-						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-							const amrex::Real age = current_time - p.rdata(birth_time_idx);
-							const amrex::Real mass = p.rdata(mass_idx);
-
-							// Get stellar luminosity array from the trait
-							const auto luminosity_array = LuminosityTraits<problem_t>::stellarLuminosity(mass, age);
-
-							// Update luminosity components (they are stored consecutively starting at lum_idx)
-							for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-								if (lum_idx + g < ContainerType::ParticleType::NReal) {
-									p.rdata(lum_idx + g) = luminosity_array[g];
-								}
-							}
-						});
-					}
+					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+						auto &p = pData[idx]; // NOLINT
+						ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t>(p, mass_idx, lum_idx,
+																 birth_time_idx, current_time);
+					});
 				}
 			}
 		}
 	}
 
-#if AMREX_SPACEDIM == 3
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	auto depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) -> amrex::Real override
 	{
@@ -1091,19 +1072,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Destroy particles based on particle type
-	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt)
-	{
-		const BL_PROFILE("PhysicsParticleRegister::destroyParticles()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			// Only destroy particles if the descriptor allows destruction
-			if (descriptor->getAllowsDestruction()) {
-				// Call the appropriate particle destruction method based on the particle type
-				descriptor->destroyParticles(lev_min, current_time, dt);
-			}
-		}
-	}
-
 #if AMREX_SPACEDIM == 3
 	// Update positions of all massive particles
 	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
@@ -1143,6 +1111,19 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
+	// Destroy particles based on particle type
+	void destroyParticles(int lev_min, amrex::Real current_time, amrex::Real dt)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::destroyParticles()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			// Only destroy particles if the descriptor allows destruction
+			if (descriptor->getAllowsDestruction()) {
+				// Call the appropriate particle destruction method based on the particle type
+				descriptor->destroyParticles(lev_min, current_time, dt);
+			}
+		}
+	}
+
 	// Compute maximum particle speed across all particle types
 	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect>
 	{
@@ -1168,6 +1149,15 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 	}
+
+	// Update particle properties for all registered particles
+	void updateParticleProperties(amrex::Real current_time)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::updateParticleProperties()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->updateParticleProperties(current_time);
+		}
+	}
 #endif // AMREX_SPACEDIM == 3
 
 	// Print particle statistics
@@ -1179,15 +1169,6 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->printParticleStatistics();
-		}
-	}
-
-	// Update particle properties for all registered particles
-	void updateParticleProperties(amrex::Real current_time)
-	{
-		const BL_PROFILE("PhysicsParticleRegister::updateParticleProperties()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->updateParticleProperties(current_time);
 		}
 	}
 

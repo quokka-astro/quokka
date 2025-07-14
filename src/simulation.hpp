@@ -168,6 +168,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real particleCflNumber_ = 0.5; // default
 	amrex::Real dtToleranceFactor_ = 1.1; // default
+	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
 	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
@@ -686,6 +687,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default stopping time
 	pp.query("stop_time", stopTime_);
 
+	// Default timestep cutoff (safety feature)
+	pp.query("dt_cutoff", dtCutoff_);
+
 	// Default ascent render interval
 	pp.query("ascent_interval", ascentInterval_);
 
@@ -1062,27 +1066,29 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		computeTimestep();
 
+		// Check for timestep drop (safety feature)
+		if (dtCutoff_ > 0.0) {
+			const amrex::Real dt_min_allowed = dtCutoff_ * cur_time;
+			if ((cur_time > 0.0) && (dt_[0] < dt_min_allowed)) {
+				amrex::Print() << "ERROR: Timestep has dropped below cutoff threshold!\n";
+				amrex::Print() << "Current time: " << cur_time << "\n";
+				amrex::Print() << "Current timestep: " << dt_[0] << "\n";
+				amrex::Print() << "Minimum allowed timestep: " << dt_min_allowed << "\n";
+				amrex::Print() << "dt_cutoff parameter: " << dtCutoff_ << "\n";
+				amrex::Print() << "This may indicate a stability issue in the simulation.\n";
+				amrex::Abort("Timestep drop detected - aborting simulation for safety");
+			}
+		}
+
 		// do user-specified calculations before the level update
 		computeBeforeTimestep();
 
-		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
-			// Stellar evolution and SN deposition; only apply to star particles
-			if (particleRegister_.HasStarParticles()) {
-				// Update particle properties (e.g., luminosity) before particle-mesh interaction
-				particleRegister_.updateParticleProperties(cur_time);
-				// TODO(cch): Need to take care of AMR subcycling
-				particleMeshInteraction(cur_time, dt_[0]);
-			}
-
-			// Use the new type-aware particle destruction method
-			// TODO(cch): Need to take care of AMR subcycling
-			particleRegister_.destroyParticles(0, cur_time, dt_[0]);
-		}
-
 #if AMREX_SPACEDIM == 3
-		// do particle leapfrog (first kick at time t)
-		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
-			kickParticlesAllLevels(dt_[0]);
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			// do particle leapfrog (first kick at time t)
+			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+				kickParticlesAllLevels(dt_[0]);
+			}
 		}
 #endif
 
@@ -1108,10 +1114,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
-		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
-			kickParticlesAllLevels(dt_[0]);
-		}
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+				kickParticlesAllLevels(dt_[0]);
+			}
 
+			// Stellar evolution and SN deposition; only apply to star particles
+			if (particleRegister_.HasStarParticles()) {
+				// Update particle properties (e.g., luminosity) before particle-mesh interaction
+				particleRegister_.updateParticleProperties(cur_time);
+
+				// TODO(cch): Need to take care of AMR subcycling
+				particleMeshInteraction(cur_time, dt_[0]);
+			}
+
+			// Use the new type-aware particle destruction method
+			// TODO(cch): Need to take care of AMR subcycling
+			particleRegister_.destroyParticles(0, cur_time, dt_[0]);
+		}
 #endif
 
 		cur_time += dt_[0];

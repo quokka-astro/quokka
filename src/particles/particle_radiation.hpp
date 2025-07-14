@@ -6,47 +6,20 @@
 #include "AMReX_Extension.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "hydro/hydro_system.hpp"
+#include "particle_types.hpp"
+#include "physics_info.hpp"
 
 namespace quokka
 {
-//-------------------- Radiation depositions --------------------
-
-// Template trait for luminosity functions - can be specialized for different problems
-template <typename problem_t> struct LuminosityTraits {
-	AMREX_GPU_DEVICE static auto stellarLuminosity(const Real /*mass*/, const Real /*age*/) -> amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups>
+// Traits class for specializing particle property update behavior
+template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
+	// Default implementation - does nothing
+	template <typename problem_t, typename ParticleType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, int mass_idx, int lum_idx, int birth_time_idx,
+									 amrex::Real current_time) noexcept
 	{
-		// Default implementation returns array of zeros
-		amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups> result{};
-		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-			result[g] = 0.0;
-		}
-		return result;
-	}
-};
-
-// Functor for depositing radiation energy from particles onto the grid
-struct RadDeposition {
-	double current_time{}; // Current simulation time
-	int start_part_comp{}; // Starting component in particle data
-	int start_mesh_comp{}; // Starting component in mesh data
-	int num_comp{};	       // Number of components to deposit
-	int birthTimeIndex{};  // Index for particle birth time
-
-	// Operator to perform radiation deposition using linear interpolation
-	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<Real> const &radEnergySource,
-							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &plo,
-							    amrex::GpuArray<Real, AMREX_SPACEDIM> const &dxi) const noexcept
-	{
-		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-		// Deposit radiation energy only if particle is active
-		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-					      if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
-						      return 0.0;
-					      }
-					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-				      });
+		// Default implementation does nothing
+		amrex::ignore_unused(p, mass_idx, lum_idx, birth_time_idx, current_time);
 	}
 };
 } // namespace quokka

@@ -84,22 +84,6 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleRadiationProblem>::Comp
 	return 0.0;
 }
 
-// Template specialization for ParticleRadiationProblem luminosity function
-template <> struct quokka::LuminosityTraits<ParticleRadiationProblem> {
-	AMREX_GPU_DEVICE static auto stellarLuminosity(const Real mass, const Real age)
-	    -> amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups>
-	{
-		// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer validation.
-		// L/(M / M_sun) = L_sun = 4e33 erg/s
-		const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
-		amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups> result{};
-		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			result[g] = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
-		}
-		return result;
-	}
-};
-
 template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStochasticStellarPopParticles()
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
@@ -133,6 +117,34 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 	// Ensure GPU operations are complete
 	amrex::Gpu::streamSynchronize();
 }
+
+// Specialization for star particles with stellar evolution
+namespace quokka
+{
+template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
+	static constexpr double star_lum_per_M_solar = 4.0e33;
+
+	template <typename problem_t, typename ParticleType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, int mass_idx, int lum_idx, int birth_time_idx,
+									 amrex::Real current_time) noexcept
+	{
+		if (mass_idx >= 0 && birth_time_idx >= 0 && lum_idx >= 0) {
+			const amrex::Real age = current_time - p.rdata(birth_time_idx);
+			const amrex::Real mass = p.rdata(mass_idx);
+
+			// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
+			// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
+			const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
+
+			// Update luminosity components (they are stored consecutively starting at lum_idx)
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				const amrex::Real luminosity = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
+				p.rdata(lum_idx + g) = luminosity;
+			}
+		}
+	}
+};
+} // namespace quokka
 
 template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -257,8 +269,8 @@ auto problem_main() -> int
 		const double change_of_total_energy = total_energy - total_energy_init;
 		amrex::Print() << "Change of total energy: " << change_of_total_energy << "\n";
 
-		// expected answer
-		const double change_of_total_energy_expected = 4 * (star_lum_per_M_solar * m_stars_over_M_solar) * sim.tNew_[0];
+		// expected answer. Raidation is not deposited into cells, so we have to subtract dt_ from the total time.
+		const double change_of_total_energy_expected = 4 * (star_lum_per_M_solar * m_stars_over_M_solar) * (sim.tNew_[0] - dt_);
 		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
 		amrex::Print() << "Expected change of total energy: " << change_of_total_energy_expected << "\n";
 
