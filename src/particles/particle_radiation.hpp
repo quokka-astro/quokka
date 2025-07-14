@@ -6,6 +6,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "hydro/hydro_system.hpp"
+// Forward declaration for particle types
 #include "particle_types.hpp"
 #include "physics_info.hpp"
 
@@ -37,6 +38,30 @@ struct RadDeposition {
 	}
 };
 
+// Common implementation for updating particle properties
+namespace ParticlePropertyUpdateImpl
+{
+template <typename TraitsType, typename problem_t, typename ContainerType>
+static void UpdateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
+{
+	if (container != nullptr) {
+		// Apply the updater to all particles across all levels
+		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
+			for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				auto *pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					TraitsType::template updateProperties<problem_t>(p, mass_idx, lum_idx, birth_time_idx, current_time);
+				});
+			}
+		}
+	}
+}
+} // namespace ParticlePropertyUpdateImpl
+
 // Traits class for specializing particle property update behavior
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 	// Default implementation - does nothing
@@ -48,25 +73,12 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 		amrex::ignore_unused(p, mass_idx, lum_idx, birth_time_idx, current_time);
 	}
 
-	// Main method to update particle properties using the traits
+	// Main method to update particle properties using the common implementation
 	template <typename problem_t, typename ContainerType>
 	static void UpdateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
 	{
-		if (container != nullptr) {
-			// Apply the updater to all particles across all levels
-			for (int lev = 0; lev <= container->finestLevel(); ++lev) {
-				for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
-
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-						updateProperties<problem_t>(p, mass_idx, lum_idx, birth_time_idx, current_time);
-					});
-				}
-			}
-		}
+		ParticlePropertyUpdateImpl::UpdateProperties<ParticlePropertyUpdateTraits<particleType>, problem_t>(container, mass_idx, lum_idx,
+														    birth_time_idx, current_time);
 	}
 };
 
@@ -94,25 +106,12 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		}
 	}
 
-	// Main method to update particle properties using the specialized traits
+	// Use the common UpdateProperties implementation
 	template <typename problem_t, typename ContainerType>
 	static void UpdateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
 	{
-		if (container != nullptr) {
-			// Apply the updater to all particles across all levels
-			for (int lev = 0; lev <= container->finestLevel(); ++lev) {
-				for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
-
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-						updateProperties<problem_t>(p, mass_idx, lum_idx, birth_time_idx, current_time);
-					});
-				}
-			}
-		}
+		ParticlePropertyUpdateImpl::UpdateProperties<ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop>, problem_t>(
+		    container, mass_idx, lum_idx, birth_time_idx, current_time);
 	}
 };
 
@@ -136,25 +135,12 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::Test> {
 		}
 	}
 
-	// Main method to update particle properties using the specialized traits
+	// Use the common UpdateProperties implementation
 	template <typename problem_t, typename ContainerType>
 	static void UpdateProperties(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, amrex::Real current_time)
 	{
-		if (container != nullptr) {
-			// Apply the updater to all particles across all levels
-			for (int lev = 0; lev <= container->finestLevel(); ++lev) {
-				for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
-
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-						updateProperties<problem_t>(p, mass_idx, lum_idx, birth_time_idx, current_time);
-					});
-				}
-			}
-		}
+		ParticlePropertyUpdateImpl::UpdateProperties<ParticlePropertyUpdateTraits<ParticleType::Test>, problem_t>(container, mass_idx, lum_idx,
+															  birth_time_idx, current_time);
 	}
 };
 
