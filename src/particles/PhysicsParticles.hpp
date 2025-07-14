@@ -780,15 +780,15 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 	// Override updateParticleProperties for star particles
 	void updateParticleProperties(amrex::Real current_time) override
 	{
-		if (this->container_ != nullptr && this->getLumIndex() >= 0) {
-			// Update luminosity for star particles based on mass and age
-			// Only update if we have a valid luminosity index
+		if (this->container_ != nullptr) {
+			// Update particle state based on stellar properties
 			const int mass_idx = this->getMassIndex();
-			const int lum_idx = this->getLumIndex();
 			const int birth_time_idx = this->getBirthTimeIndex();
 
-			// For particles with both mass and luminosity indices (the birth_time_idx check is only for compiler check)
-			if (mass_idx >= 0 && lum_idx >= 0 && birth_time_idx >= 0) {
+			constexpr double star_lum_per_M_solar = 4.0e33;
+
+			if (mass_idx >= 0 && birth_time_idx >= 0) {
+				// For particles with both mass and birth time indices (the birth_time_idx check is only for compiler check)
 				for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
 					for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
 						auto &particles = pIter.GetArrayOfStructs();
@@ -797,17 +797,24 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+							// Get stellar luminosity array from the trait
+							// const auto luminosity_array = LuminosityTraits<problem_t, ContainerType>::stellarLuminosity(p,
+							// current_time, mass_idx, birth_time_idx, lum_idx);
+
 							const amrex::Real age = current_time - p.rdata(birth_time_idx);
 							const amrex::Real mass = p.rdata(mass_idx);
 
-							// Get stellar luminosity array from the trait
-							const auto luminosity_array = LuminosityTraits<problem_t>::stellarLuminosity(mass, age);
+							// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
+							// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
+							const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
+							amrex::GpuArray<Real, Physics_Traits<problem_t>::nGroups> result{};
+							for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+								result[g] = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
+							}
 
 							// Update luminosity components (they are stored consecutively starting at lum_idx)
 							for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-								if (lum_idx + g < ContainerType::ParticleType::NReal) {
-									p.rdata(lum_idx + g) = luminosity_array[g];
-								}
+								p.rdata(this->getLumIndex() + g) = result[g];
 							}
 						});
 					}

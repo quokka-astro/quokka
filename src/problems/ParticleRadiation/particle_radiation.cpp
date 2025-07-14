@@ -84,21 +84,25 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleRadiationProblem>::Comp
 	return 0.0;
 }
 
-// Template specialization for ParticleRadiationProblem luminosity function
-template <> struct quokka::LuminosityTraits<ParticleRadiationProblem> {
-	AMREX_GPU_DEVICE static auto stellarLuminosity(const Real mass, const Real age)
-	    -> amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups>
-	{
-		// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer validation.
-		// L/(M / M_sun) = L_sun = 4e33 erg/s
-		const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
-		amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups> result{};
-		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			result[g] = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
-		}
-		return result;
-	}
-};
+// // Template specialization for ParticleRadiationProblem luminosity function
+// template <> struct quokka::LuminosityTraits<ParticleRadiationProblem, quokka::StochasticStellarPopParticleContainer<ParticleRadiationProblem>> {
+// 	AMREX_GPU_DEVICE static auto stellarLuminosity(const quokka::StochasticStellarPopParticleContainer<ParticleRadiationProblem> &part, const amrex::Real
+// current_time, const int mass_idx, const int birth_time_idx, const int /*lum_idx*/)
+// 	    -> amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups>
+// 	{
+// 		const amrex::Real age = current_time - part.rdata(birth_time_idx);
+// 		const amrex::Real mass = part.rdata(mass_idx);
+
+// 		// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer validation.
+// 		// L/(M / M_sun) = L_sun = 4e33 erg/s
+// 		const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
+// 		amrex::GpuArray<Real, Physics_Traits<ParticleRadiationProblem>::nGroups> result{};
+// 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
+// 			result[g] = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
+// 		}
+// 		return result;
+// 	}
+// };
 
 template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStochasticStellarPopParticles()
 {
