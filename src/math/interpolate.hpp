@@ -7,16 +7,16 @@
 
 // Boundary policies for interpolation
 enum class BoundaryPolicy {
-	ErrorOnBounds,  // Return NAN and assert on out-of-bounds (default behavior)
-	Clamp,          // Return first/last element on out-of-bounds
-	Extrapolation   // Linear extrapolation beyond bounds
+	ErrorOnBounds, // Return NAN and assert on out-of-bounds (default behavior)
+	Clamp,	       // Return first/last element on out-of-bounds
+	Extrapolation  // Linear extrapolation beyond bounds
 };
 
 AMREX_GPU_HOST_DEVICE auto binary_search_with_guess(double key, const double *arr, int64_t len, int64_t guess) -> int64_t;
 
 AMREX_GPU_HOST_DEVICE void interpolate_arrays(double *x, double *y, int len, double *arr_x, const double *arr_y, int arr_len);
 
-template<BoundaryPolicy Policy = BoundaryPolicy::ErrorOnBounds>
+template <BoundaryPolicy Policy = BoundaryPolicy::ErrorOnBounds>
 AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len) -> double;
 
 #endif // INTERPOLATE_H_

@@ -130,8 +130,7 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, const doub
 	}
 }
 
-template<BoundaryPolicy Policy>
-AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len) -> double
+template <BoundaryPolicy Policy> AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len) -> double
 {
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
@@ -166,8 +165,8 @@ AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, doub
 			// Linear extrapolation using the last two points
 			j = arr_len - 2;
 		}
-	} 
-	
+	}
+
 	if (j == arr_len - 1) {
 		y = arr_y[j];
 	} else if (x == arr_x[j]) { // avoid roundoff error
