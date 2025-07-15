@@ -91,7 +91,7 @@ template <> struct quokka::EOS_Traits<MetalProblem> {
 };
 
 template <> struct Physics_Traits<MetalProblem> {
-	static constexpr bool is_gravity_enabled = false;
+	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
