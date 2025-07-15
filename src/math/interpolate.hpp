@@ -9,7 +9,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
 
-#define LIKELY_IN_CACHE_SIZE 8
+constexpr int LIKELY_IN_CACHE_SIZE = 8;
 
 // Boundary policies for interpolation
 enum class BoundaryPolicy {
@@ -184,7 +184,5 @@ AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, doub
 
 	return y;
 }
-
-#undef LIKELY_IN_CACHE_SIZE
 
 #endif // INTERPOLATE_H_
