@@ -53,8 +53,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 	const double mass_in_Msun = mass_star / C::M_solar;
 	AMREX_ASSERT(mass_in_Msun >= 0.0);
 
-	// Interpolate to find the fate of all masses, using bounds_error=false to clamp to first/last element
-	amrex::Real fate_interp = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), FATE_ARR_SIZE, false); // NOLINT
+	// Interpolate to find the fate of all masses, using clamp policy to return first/last element for out-of-bounds
+	amrex::Real fate_interp = interpolate_value<BoundaryPolicy::Clamp>(mass_in_Msun, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
 	return (fate_interp < 0.5 ? 0 : 1);
 }
 
@@ -111,6 +111,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_s
 	auto const &y_arr = interp_death_time;
 	const double mass_in_Msun = mass_star / C::M_solar;
 	AMREX_ASSERT(mass_in_Msun >= 0.0);
-	amrex::Real death_time = interpolate_value(mass_in_Msun, x_arr.data(), y_arr.data(), AGE_ARR_SIZE, false) * YR_TO_SEC; // NOLINT
+	amrex::Real death_time = interpolate_value<BoundaryPolicy::Clamp>(mass_in_Msun, x_arr.data(), y_arr.data(), AGE_ARR_SIZE) * YR_TO_SEC; // NOLINT
 	return death_time;
 }

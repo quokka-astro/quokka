@@ -130,8 +130,8 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, const doub
 	}
 }
 
-AMREX_GPU_HOST_DEVICE
-auto interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len, bool bounds_error) -> double
+template<BoundaryPolicy Policy>
+AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len) -> double
 {
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
@@ -143,18 +143,26 @@ auto interpolate_value(double x, double const *arr_x, double const *arr_y, int a
 
 	double y = NAN;
 	if (j == -1) {
-		if (bounds_error) {
+		if constexpr (Policy == BoundaryPolicy::ErrorOnBounds) {
 			y = NAN;
 			AMREX_ASSERT(false);
-		} else {
+		} else if constexpr (Policy == BoundaryPolicy::Clamp) {
 			y = arr_y[0]; // return first element when x is below range
+		} else if constexpr (Policy == BoundaryPolicy::Extrapolation) {
+			// Linear extrapolation using the first two points
+			const double slope = (arr_y[1] - arr_y[0]) / (arr_x[1] - arr_x[0]);
+			y = slope * (x - arr_x[0]) + arr_y[0];
 		}
 	} else if (j == arr_len) {
-		if (bounds_error) {
+		if constexpr (Policy == BoundaryPolicy::ErrorOnBounds) {
 			y = NAN;
 			AMREX_ASSERT(false);
-		} else {
+		} else if constexpr (Policy == BoundaryPolicy::Clamp) {
 			y = arr_y[arr_len - 1]; // return last element when x is above range
+		} else if constexpr (Policy == BoundaryPolicy::Extrapolation) {
+			// Linear extrapolation using the last two points
+			const double slope = (arr_y[arr_len - 1] - arr_y[arr_len - 2]) / (arr_x[arr_len - 1] - arr_x[arr_len - 2]);
+			y = slope * (x - arr_x[arr_len - 1]) + arr_y[arr_len - 1];
 		}
 	} else if (j == arr_len - 1) {
 		y = arr_y[j];
@@ -164,8 +172,13 @@ auto interpolate_value(double x, double const *arr_x, double const *arr_y, int a
 		const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
 		y = slope * (x - arr_x[j]) + arr_y[j];
 	}
-	if (bounds_error) {
+	if constexpr (Policy == BoundaryPolicy::ErrorOnBounds) {
 		AMREX_ASSERT(!std::isnan(y));
 	}
 	return y;
 }
+
+// Explicit template instantiations for all boundary policies
+template AMREX_GPU_HOST_DEVICE auto interpolate_value<BoundaryPolicy::ErrorOnBounds>(double x, double const *arr_x, double const *arr_y, int arr_len) -> double;
+template AMREX_GPU_HOST_DEVICE auto interpolate_value<BoundaryPolicy::Clamp>(double x, double const *arr_x, double const *arr_y, int arr_len) -> double;
+template AMREX_GPU_HOST_DEVICE auto interpolate_value<BoundaryPolicy::Extrapolation>(double x, double const *arr_x, double const *arr_y, int arr_len) -> double;
