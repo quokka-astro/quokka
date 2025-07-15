@@ -13,9 +13,9 @@
 
 // Boundary policies for interpolation
 enum class BoundaryPolicy {
-	ErrorOnBounds,  // Return NAN and assert on out-of-bounds (default behavior)
-	Clamp,          // Return first/last element on out-of-bounds
-	Extrapolation   // Linear extrapolation beyond bounds
+	ErrorOnBounds, // Return NAN and assert on out-of-bounds (default behavior)
+	Clamp,	       // Return first/last element on out-of-bounds
+	Extrapolation  // Linear extrapolation beyond bounds
 };
 
 /** @brief find index of a sorted array such that arr[i] <= key < arr[i + 1].
