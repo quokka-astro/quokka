@@ -37,8 +37,7 @@ enum class BoundaryPolicy {
  * @param guess initial guess of index
  * @return index
  */
-AMREX_GPU_HOST_DEVICE inline
-auto binary_search_with_guess(const double key, const double *arr, int64_t len, int64_t guess) -> int64_t
+AMREX_GPU_HOST_DEVICE inline auto binary_search_with_guess(const double key, const double *arr, int64_t len, int64_t guess) -> int64_t
 {
 	int64_t imin = 0;
 	int64_t imax = len;
@@ -110,8 +109,7 @@ auto binary_search_with_guess(const double key, const double *arr, int64_t len, 
 	return imin - 1;
 }
 
-AMREX_GPU_HOST_DEVICE inline
-void interpolate_arrays(double *x, double *y, int len, double *arr_x, const double *arr_y, int arr_len)
+AMREX_GPU_HOST_DEVICE inline void interpolate_arrays(double *x, double *y, int len, double *arr_x, const double *arr_y, int arr_len)
 {
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
@@ -137,7 +135,7 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, const doub
 	}
 }
 
-template<BoundaryPolicy Policy = BoundaryPolicy::ErrorOnBounds>
+template <BoundaryPolicy Policy = BoundaryPolicy::ErrorOnBounds>
 AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len) -> double
 {
 	/* Note: arr_x must be sorted in ascending order,
@@ -173,8 +171,8 @@ AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, doub
 			// Linear extrapolation using the last two points
 			j = arr_len - 2;
 		}
-	} 
-	
+	}
+
 	if (j == arr_len - 1) { // NOLINT
 		y = arr_y[j];
 	} else if (x == arr_x[j]) { // avoid roundoff error
