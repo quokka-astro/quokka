@@ -146,25 +146,29 @@ AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, doub
 		if constexpr (Policy == BoundaryPolicy::ErrorOnBounds) {
 			y = NAN;
 			AMREX_ASSERT(false);
+			return y;
 		} else if constexpr (Policy == BoundaryPolicy::Clamp) {
 			y = arr_y[0]; // return first element when x is below range
+			return y;
 		} else if constexpr (Policy == BoundaryPolicy::Extrapolation) {
 			// Linear extrapolation using the first two points
-			const double slope = (arr_y[1] - arr_y[0]) / (arr_x[1] - arr_x[0]);
-			y = slope * (x - arr_x[0]) + arr_y[0];
+			j = 0;
 		}
 	} else if (j == arr_len) {
 		if constexpr (Policy == BoundaryPolicy::ErrorOnBounds) {
 			y = NAN;
 			AMREX_ASSERT(false);
+			return y;
 		} else if constexpr (Policy == BoundaryPolicy::Clamp) {
 			y = arr_y[arr_len - 1]; // return last element when x is above range
+			return y;
 		} else if constexpr (Policy == BoundaryPolicy::Extrapolation) {
 			// Linear extrapolation using the last two points
-			const double slope = (arr_y[arr_len - 1] - arr_y[arr_len - 2]) / (arr_x[arr_len - 1] - arr_x[arr_len - 2]);
-			y = slope * (x - arr_x[arr_len - 1]) + arr_y[arr_len - 1];
+			j = arr_len - 2;
 		}
-	} else if (j == arr_len - 1) {
+	} 
+	
+	if (j == arr_len - 1) {
 		y = arr_y[j];
 	} else if (x == arr_x[j]) { // avoid roundoff error
 		y = arr_y[j];
@@ -172,9 +176,7 @@ AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, doub
 		const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
 		y = slope * (x - arr_x[j]) + arr_y[j];
 	}
-	if constexpr (Policy == BoundaryPolicy::ErrorOnBounds) {
-		AMREX_ASSERT(!std::isnan(y));
-	}
+
 	return y;
 }
 
