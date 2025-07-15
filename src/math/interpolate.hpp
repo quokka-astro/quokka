@@ -123,11 +123,9 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, const doub
 	for (int i = 0; i < len; i++) {
 		j = binary_search_with_guess(x[i], arr_x, arr_len, j);
 
-		if (j == -1) {
+		if (j == -1 || j == arr_len) {
 			y[i] = NAN;
-		} else if (j == arr_len) {
-			y[i] = NAN;
-		} else if (j == arr_len - 1) {
+		} else if (j == arr_len - 1) { // NOLINT
 			y[i] = arr_y[j];
 		} else if (x[i] == arr_x[j]) { // avoid roundoff error
 			y[i] = arr_y[j];
@@ -177,7 +175,7 @@ AMREX_GPU_HOST_DEVICE auto interpolate_value(double x, double const *arr_x, doub
 		}
 	} 
 	
-	if (j == arr_len - 1) {
+	if (j == arr_len - 1) { // NOLINT
 		y = arr_y[j];
 	} else if (x == arr_x[j]) { // avoid roundoff error
 		y = arr_y[j];
