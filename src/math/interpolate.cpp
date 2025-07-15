@@ -76,12 +76,12 @@ auto binary_search_with_guess(const double key, const double *arr, int64_t len, 
 		} /* key >= arr[guess + 1] */
 		if (key < arr[guess + 2]) {
 			return guess + 1;
-		} 
-		
+		}
+
 		/* key >= arr[guess + 2] */
 		imin = guess + 2;
 		/* last attempt to restrict search to items in
-			* cache */
+		 * cache */
 		if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
 			imax = guess + LIKELY_IN_CACHE_SIZE;
 		}
