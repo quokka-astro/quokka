@@ -99,7 +99,7 @@ AMREX_GPU_HOST_DEVICE inline auto binary_search_with_guess(const double key, con
 
 	/* finally, find index by bisection */
 	while (imin < imax) {
-		const int64_t imid = imin + ((imax - imin) >> 1);
+		const int64_t imid = imin + ((imax - imin) / 2); // equivalent to imin + ((imax - imin) >> 1) as long as imax - imin is non-negative
 		if (key >= arr[imid]) {
 			imin = imid + 1;
 		} else {
