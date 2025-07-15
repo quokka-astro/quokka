@@ -133,7 +133,7 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *ar
 }
 
 AMREX_GPU_HOST_DEVICE
-double interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len)
+double interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len, bool bounds_error)
 {
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
@@ -145,11 +145,19 @@ double interpolate_value(double x, double const *arr_x, double const *arr_y, int
 
 	double y = NAN;
 	if (j == -1) {
-		y = NAN;
-		AMREX_ASSERT(false);
+		if (bounds_error) {
+			y = NAN;
+			AMREX_ASSERT(false);
+		} else {
+			y = arr_y[0]; // return first element when x is below range
+		}
 	} else if (j == arr_len) {
-		y = NAN;
-		AMREX_ASSERT(false);
+		if (bounds_error) {
+			y = NAN;
+			AMREX_ASSERT(false);
+		} else {
+			y = arr_y[arr_len - 1]; // return last element when x is above range
+		}
 	} else if (j == arr_len - 1) {
 		y = arr_y[j];
 	} else if (x == arr_x[j]) { // avoid roundoff error
@@ -158,6 +166,8 @@ double interpolate_value(double x, double const *arr_x, double const *arr_y, int
 		const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
 		y = slope * (x - arr_x[j]) + arr_y[j];
 	}
-	AMREX_ASSERT(!std::isnan(y));
+	if (bounds_error) {
+		AMREX_ASSERT(!std::isnan(y));
+	}
 	return y;
 }
