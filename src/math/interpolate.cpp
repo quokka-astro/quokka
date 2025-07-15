@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 
@@ -26,7 +27,7 @@
  * @return index
  */
 AMREX_GPU_HOST_DEVICE
-int64_t binary_search_with_guess(const double key, const double *arr, int64_t len, int64_t guess)
+auto binary_search_with_guess(const double key, const double *arr, int64_t len, int64_t guess) -> int64_t
 {
 	int64_t imin = 0;
 	int64_t imax = len;
@@ -34,7 +35,9 @@ int64_t binary_search_with_guess(const double key, const double *arr, int64_t le
 	/* Handle keys outside of the arr range first */
 	if (key > arr[len - 1]) {
 		return len;
-	} else if (key < arr[0]) {
+	}
+
+	if (key < arr[0]) {
 		return -1;
 	}
 
@@ -43,19 +46,16 @@ int64_t binary_search_with_guess(const double key, const double *arr, int64_t le
 	 * From above we know key >= arr[0] when we start.
 	 */
 	if (len <= 4) {
-		int64_t i;
+		int64_t i = 0;
 
-		for (i = 1; i < len && key >= arr[i]; ++i)
+		for (i = 1; i < len && key >= arr[i]; ++i) {
 			;
+		}
 		return i - 1;
 	}
 
-	if (guess > len - 3) {
-		guess = len - 3;
-	}
-	if (guess < 1) {
-		guess = 1;
-	}
+	guess = std::min(guess, len - 3);
+	guess = std::max<int64_t>(guess, 1);
 
 	/* check most likely values: guess - 1, guess, guess + 1 */
 	if (key < arr[guess]) {
@@ -73,19 +73,17 @@ int64_t binary_search_with_guess(const double key, const double *arr, int64_t le
 		/* key >= arr[guess] */
 		if (key < arr[guess + 1]) {
 			return guess;
-		} else {
-			/* key >= arr[guess + 1] */
-			if (key < arr[guess + 2]) {
-				return guess + 1;
-			} else {
-				/* key >= arr[guess + 2] */
-				imin = guess + 2;
-				/* last attempt to restrict search to items in
-				 * cache */
-				if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
-					imax = guess + LIKELY_IN_CACHE_SIZE;
-				}
-			}
+		} /* key >= arr[guess + 1] */
+		if (key < arr[guess + 2]) {
+			return guess + 1;
+		} 
+		
+		/* key >= arr[guess + 2] */
+		imin = guess + 2;
+		/* last attempt to restrict search to items in
+			* cache */
+		if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
+			imax = guess + LIKELY_IN_CACHE_SIZE;
 		}
 	}
 
@@ -104,7 +102,7 @@ int64_t binary_search_with_guess(const double key, const double *arr, int64_t le
 #undef LIKELY_IN_CACHE_SIZE
 
 AMREX_GPU_HOST_DEVICE
-void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *arr_y, int arr_len)
+void interpolate_arrays(double *x, double *y, int len, double *arr_x, const double *arr_y, int arr_len)
 {
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
@@ -133,7 +131,7 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *ar
 }
 
 AMREX_GPU_HOST_DEVICE
-double interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len, bool bounds_error)
+auto interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len, bool bounds_error) -> double
 {
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
