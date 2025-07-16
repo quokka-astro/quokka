@@ -277,10 +277,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixed
 	auto const &x_arr = z_data;
 	auto const &y_arr = logg_data;
 	const amrex::Real ginterp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
+	AMREX_ASSERT(!std::isnan(ginterp));
 
 	grad_potential[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
 	grad_potential[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + (z * z / (z_star * z_star)), -0.5));
 	grad_potential[2] += (z / std::abs(z)) * std::pow(10., ginterp);
+	AMREX_ASSERT(!std::isnan(grad_potential[2]));
 
 	return grad_potential;
 }
