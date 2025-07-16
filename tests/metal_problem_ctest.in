@@ -36,3 +36,5 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 projection_interval = 500
 projection.dirs = y
+
+tiny_profiler.enabled = 1
