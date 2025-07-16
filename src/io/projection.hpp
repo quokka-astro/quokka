@@ -82,9 +82,9 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 		auto const &domain_box = geom[lev].Domain();
 		auto const &dx = geom[lev].CellSizeArray();
 		auto const &arr = q[lev].const_arrays();
-		
-		amrex::BaseFab<amrex::Real> proj =
-		    amrex::ReduceToPlane<ReduceOp, amrex::Real>(int(dir), domain_box, q[lev], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+
+		amrex::BaseFab<amrex::Real> proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
+		    int(dir), domain_box, q[lev], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
 			    return dx[int(dir)] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 		    });
 		amrex::Gpu::streamSynchronize();
@@ -109,22 +109,25 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 		const amrex::BoxArray ba(box2d);
 		const amrex::DistributionMapping dm(amrex::Vector<int>{0});
 		proj_levels[lev].define(ba, dm, 1, 0);
-		
+
 		// copy projection data to MultiFab
 		auto proj_arr = proj_levels[lev].arrays();
 		auto const &proj_data = proj_host.const_array();
-		
+
 		if (dir == amrex::Direction::x) {
-			amrex::ParallelFor(proj_levels[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(0, i, j); });
+			amrex::ParallelFor(proj_levels[lev],
+					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(0, i, j); });
 		}
 #if AMREX_SPACEDIM >= 2
 		else if (dir == amrex::Direction::y) {
-			amrex::ParallelFor(proj_levels[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(i, 0, j); });
+			amrex::ParallelFor(proj_levels[lev],
+					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(i, 0, j); });
 		}
 #endif
 #if AMREX_SPACEDIM == 3
 		else if (dir == amrex::Direction::z) {
-			amrex::ParallelFor(proj_levels[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(i, j, 0); });
+			amrex::ParallelFor(proj_levels[lev],
+					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(i, j, 0); });
 		}
 #endif
 		amrex::Gpu::streamSynchronize();
@@ -134,7 +137,8 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 	return proj_levels;
 }
 
-void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj, amrex::Vector<amrex::Geometry> const &geom, amrex::Real time, int istep);
+void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
+		     amrex::Vector<amrex::Geometry> const &geom, amrex::Real time, int istep);
 
 } // namespace quokka::diagnostics
 

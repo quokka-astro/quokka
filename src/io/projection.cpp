@@ -511,7 +511,8 @@ auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &
 
 } // namespace detail
 
-void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj, amrex::Vector<amrex::Geometry> const &geom, amrex::Real time, int istep)
+void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
+		     amrex::Vector<amrex::Geometry> const &geom, amrex::Real time, int istep)
 {
 	// write multi-level projections to plotfile preserving AMR structure
 	if (proj.empty()) {
@@ -521,7 +522,7 @@ void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string,
 	auto const &firstProj = proj.begin()->second;
 	const int nlevels = static_cast<int>(firstProj.size());
 	const int ncomp = static_cast<int>(proj.size());
-	
+
 	amrex::Vector<std::string> varnames;
 	for (auto const &kv : proj) {
 		varnames.push_back(kv.first);
@@ -538,19 +539,19 @@ void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string,
 	// construct output multifabs for all levels
 	amrex::Vector<amrex::MultiFab> mf_all(nlevels);
 	amrex::Vector<const amrex::MultiFab *> mf_all_ptr(nlevels);
-	
+
 	for (int lev = 0; lev < nlevels; ++lev) {
 		// use the BoxArray and DistributionMapping from the first projection
 		const amrex::BoxArray &ba = firstProj[lev].boxArray();
 		const amrex::DistributionMapping &dm = firstProj[lev].DistributionMap();
 		mf_all[lev].define(ba, dm, ncomp, 0);
 		mf_all_ptr[lev] = &mf_all[lev];
-		
+
 		// copy all projections into a single MultiFab for this level
 		int icomp = 0;
 		for (auto const &kv : proj) {
 			const amrex::MultiFab &proj_mf = kv.second[lev];
-			
+
 			// copy component icomp from proj_mf to mf_all[lev]
 			amrex::MultiFab::Copy(mf_all[lev], proj_mf, 0, icomp, 1, 0);
 			++icomp;
