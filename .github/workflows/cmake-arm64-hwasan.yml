@@ -23,6 +23,8 @@ permissions:
 jobs:
   check_changes:
     uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/cmake-arm64-hwasan.yml'
 
   build:
     runs-on: ubuntu-24.04-arm
