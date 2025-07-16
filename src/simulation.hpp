@@ -597,13 +597,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	const amrex::Box domain = Geom()[0].Domain();
 	const amrex::IntVect ncells{
 	    AMREX_D_DECL(domain.bigEnd(0) - domain.smallEnd(0) + 1, domain.bigEnd(1) - domain.smallEnd(1) + 1, domain.bigEnd(2) - domain.smallEnd(2) + 1)};
-	
+
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		if (ncells[idim] < nghost_cc_) {
-			amrex::Print() << "Number of cells in dimension " << idim << " (" << ncells[idim] 
-				       << ") is less than nghost_cc_ (" << nghost_cc_ << ")! "
-				       << "This will cause out-of-bounds access when filling ghost cells."
-				       << std::endl; // NOLINT(performance-avoid-endl)
+			amrex::Print() << "Number of cells in dimension " << idim << " (" << ncells[idim] << ") is less than nghost_cc_ (" << nghost_cc_
+				       << ")! "
+				       << "This will cause out-of-bounds access when filling ghost cells." << std::endl; // NOLINT(performance-avoid-endl)
 			amrex::Abort("Insufficient grid resolution for ghost cell operations!");
 		}
 	}
