@@ -237,7 +237,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
 
 	// compute projected vars
-	[[nodiscard]] virtual auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
+	[[nodiscard]] virtual auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> = 0;
 
 	// compute statistics
 	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
@@ -2842,8 +2842,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlot
 	for (auto &dir_str : dirs) {
 		// compute projections along axis 'dir'
 		amrex::Direction dir = dir_from_string(dir_str);
-		std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-		quokka::diagnostics::WriteProjection(dir, proj, tNew_[0], istep[0]);
+		std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> proj = ComputeProjections(dir);
+		quokka::diagnostics::WriteProjection(dir, proj, Geom(), tNew_[0], istep[0]);
 	}
 }
 

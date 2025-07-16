@@ -809,9 +809,9 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 }
 
 template <>
-auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>>
 {
-	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
+	std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> proj;
 
 	Real H_mass_fraction = NAN;
 	if (coolingTableType_ == "resampled") {

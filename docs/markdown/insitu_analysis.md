@@ -14,25 +14,27 @@ There are three built-in diagnostics that can be configured to output at periodi
 
 ### 2D Projections
 
-This diagnostic outputs 2D axis-aligned projections as AMReX plotfiles prefixed with ``proj``.
+This diagnostic outputs 2D axis-aligned projections as AMReX plotfiles prefixed with ``proj``. 
+
+**AMR Structure Preservation**: As of recent updates, 2D projections now preserve the full AMR structure from the 3D simulation, maintaining higher resolution where needed instead of averaging down to level 0. This provides better detail but may result in larger output files.
 
 Currently, using this diagnostic requires implementing a custom function in the problem generator for your simulation. (In the future, this diagnostic may be improved so that it can be configured entirely with runtime parameters.)
 
-The problem generator must call ``computePlaneProjection(F const &user_f, const int dir)`` where ``user_f`` is a lambda function that returns the value to project and ``dir`` is the axis along which the projection is taken.
+The problem generator must call ``quokka::diagnostics::ComputePlaneProjection(F const &user_f, const int dir)`` where ``user_f`` is a lambda function that returns the value to project and ``dir`` is the axis along which the projection is taken.
 
 *Example problem generator implementation:*
 
 ```cpp
-template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+template <> auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>>
 {
   // compute density projection
-  std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
-  proj["nH"] = computePlaneProjection<amrex::ReduceOpSum>(
+  std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> proj;
+  proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+      state_new_cc_, finestLevel(), geom, ref_ratio, dir,
       [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
         Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-        return (quokka::cooling::cloudy_H_mass_fraction * rho) / m_H;
-      },
-      dir);
+        return (H_mass_fraction * rho) / m_H;
+      });
   return proj;
 }
 ```
