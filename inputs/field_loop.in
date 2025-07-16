@@ -13,12 +13,12 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 256 128 8
+amr.n_cell          = 128 64 8
 amr.max_level       = 0 # number of levels = max_level + 1
 
-amr.max_grid_size = 256
-amr.blocking_factor_x = 256
-amr.blocking_factor_y = 128
+amr.max_grid_size = 128
+amr.blocking_factor_x = 32
+amr.blocking_factor_y = 32
 amr.blocking_factor_z = 8
 
 do_reflux = 0
