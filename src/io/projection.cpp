@@ -573,7 +573,7 @@ void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string,
 	}
 
 	// create level steps vector
-	amrex::Vector<int> level_steps(nlevels, istep);
+	amrex::Vector<int> const level_steps(nlevels, istep);
 
 	detail::Write2DMultiLevelPlotfile(filename, nlevels, mf_all_ptr, varnames, geom2d, time, level_steps, ref_ratio);
 }

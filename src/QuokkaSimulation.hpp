@@ -221,7 +221,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
-	[[nodiscard]] auto ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> override;
+	[[nodiscard]] auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> override;
 
 	// compute statistics
 	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;

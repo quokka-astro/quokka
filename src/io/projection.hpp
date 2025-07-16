@@ -52,7 +52,7 @@ void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar);
 
 template <typename ReduceOp, typename F>
 auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, const int finest_level, amrex::Vector<amrex::Geometry> const &geom,
-			    amrex::Vector<amrex::IntVect> const &ref_ratio, const amrex::Direction dir, F const &user_f) -> amrex::Vector<amrex::MultiFab>
+			    amrex::Vector<amrex::IntVect> const & /*ref_ratio*/, const amrex::Direction dir, F const &user_f) -> amrex::Vector<amrex::MultiFab>
 {
 	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
 	// preserves AMR structure by applying ReduceToPlane to each level separately.
@@ -84,8 +84,8 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 		auto const &arr = q[lev].const_arrays();
 
 		amrex::BaseFab<amrex::Real> proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
-		    int(dir), domain_box, q[lev], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-			    return dx[int(dir)] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
+		    static_cast<int>(dir), domain_box, q[lev], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+			    return dx[static_cast<int>(dir)] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 		    });
 		amrex::Gpu::streamSynchronize();
 
@@ -94,10 +94,10 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 		proj_host.copy<amrex::RunOn::Device>(proj);
 		amrex::Gpu::streamSynchronize();
 
-		if constexpr (std::is_same<ReduceOp, amrex::ReduceOpSum>::value) {
+		if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpSum>) {
 			amrex::ParallelReduce::Sum(proj_host.dataPtr(), static_cast<int>(proj_host.size()), amrex::ParallelDescriptor::ioProcessor,
 						   amrex::ParallelDescriptor::Communicator());
-		} else if constexpr (std::is_same<ReduceOp, amrex::ReduceOpMin>::value) {
+		} else if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpMin>) {
 			amrex::ParallelReduce::Min(proj_host.dataPtr(), static_cast<int>(proj_host.size()), amrex::ParallelDescriptor::ioProcessor,
 						   amrex::ParallelDescriptor::Communicator());
 		} else {
@@ -137,7 +137,7 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 	return proj_levels;
 }
 
-void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
 		     amrex::Vector<amrex::Geometry> const &geom, amrex::Real time, int istep);
 
 } // namespace quokka::diagnostics
