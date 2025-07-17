@@ -338,21 +338,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// void PrintRadEnergySource(amrex::MultiFab const &radEnergySource);
 };
 
-// For debugging only; will be removed on release
-// template <typename problem_t> void QuokkaSimulation<problem_t>::PrintRadEnergySource(amrex::MultiFab const &radEnergySource)
-// {
-// 	amrex::Print() << "radEnergySource_arr.data() = ";
-// 	for (amrex::MFIter iter(radEnergySource); iter.isValid(); ++iter) {
-// 		const amrex::Box &indexRange = iter.validbox();
-// 		auto const &radEnergySource_arr = radEnergySource.array(iter);
-// 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-// 			if (j == 16) {
-// 				std::cout << radEnergySource_arr(i, j, k) << ", ";
-// 			}
-// 		});
-// 	}
-// }
-
 template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentNames()
 {
 
@@ -1532,23 +1517,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		// do first-order flux correction (FOFC)
 		amrex::Gpu::streamSynchronizeAll(); // ensure device-side ops are finished
 
-		// The following out commented section is for debugging, it forces some cells to have the redoFlag, remove before final merge!
-		//  int i = 0;
-		//  int k = 0;
-		//  int j_start = 0;
-		//  int j_end   = 7;
-
-		// for (amrex::MFIter mfi(redoFlag); mfi.isValid(); ++mfi) {
-		// 	const amrex::Box& bx = mfi.validbox();
-		// 	auto arr = redoFlag.array(mfi);  // IArray4<int>
-
-		// 	for (int j = j_start; i <= j_end; ++i) {
-		// 		if (bx.contains(amrex::IntVect(AMREX_D_DECL(i, j, k)))) {
-		// 			arr(i, j, k) = 1;
-		// 		}
-		// 	}
-		// }
-
 		amrex::Long const ncells_bad = redoFlag.sum(0);
 		if (ncells_bad > 0) {
 			if (Verbose()) {
@@ -1820,7 +1788,7 @@ void QuokkaSimulation<problem_t>::replaceEMFs(std::array<amrex::MultiFab, AMREX_
 				if (emf_components_arrs[bx].contains(i, j, k)) {
 					emf_components_arrs[bx](i, j, k, n) = FO_emf_components_arrs[bx](i, j, k, n);
 				}
-				if (iedge == 0) { // x-dir fluxes
+				if (iedge == 0) { // x-edge components
 					if (emf_components_arrs[bx].contains(i, j + 1, k)) {
 						emf_components_arrs[bx](i, j + 1, k, n) = FO_emf_components_arrs[bx](i, j + 1, k, n);
 					}
@@ -1830,7 +1798,7 @@ void QuokkaSimulation<problem_t>::replaceEMFs(std::array<amrex::MultiFab, AMREX_
 					if (emf_components_arrs[bx].contains(i, j + 1, k + 1)) {
 						emf_components_arrs[bx](i, j + 1, k + 1, n) = FO_emf_components_arrs[bx](i, j + 1, k + 1, n);
 					}
-				} else if (iedge == 1) { // x-dir fluxes
+				} else if (iedge == 1) { // y-edge components
 					if (emf_components_arrs[bx].contains(i + 1, j, k)) {
 						emf_components_arrs[bx](i + 1, j, k, n) = FO_emf_components_arrs[bx](i + 1, j, k, n);
 					}
@@ -1840,7 +1808,7 @@ void QuokkaSimulation<problem_t>::replaceEMFs(std::array<amrex::MultiFab, AMREX_
 					if (emf_components_arrs[bx].contains(i + 1, j, k + 1)) {
 						emf_components_arrs[bx](i + 1, j, k + 1, n) = FO_emf_components_arrs[bx](i + 1, j, k + 1, n);
 					}
-				} else if (iedge == 2) { // x-dir fluxes
+				} else if (iedge == 2) { //z-edge components
 					if (emf_components_arrs[bx].contains(i + 1, j, k)) {
 						emf_components_arrs[bx](i + 1, j, k, n) = FO_emf_components_arrs[bx](i + 1, j, k, n);
 					}
