@@ -1099,9 +1099,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		computeBeforeTimestep();
 
 #if AMREX_SPACEDIM == 3
-		// do particle leapfrog (first kick at time t)
-		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
-			kickParticlesAllLevels(dt_[0]);
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			// do particle leapfrog (first kick at time t)
+			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+				kickParticlesAllLevels(dt_[0]);
+			}
 		}
 #endif
 
@@ -1113,9 +1115,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
 #if AMREX_SPACEDIM == 3
-		// drift particles from t to (t + dt)
-		// N.B.: MUST be done *before* Poisson solve at new time!
-		particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if (particleRegister_.HasMassiveParticles()) {
+				// drift particles from t to (t + dt)
+				// N.B.: MUST be done *before* Poisson solve at new time!
+				particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
+			}
+		}
 #endif
 
 		// elliptic solve over entire AMR grid (post-timestep)
@@ -1123,19 +1129,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
-		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
-			kickParticlesAllLevels(dt_[0]);
-		}
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+				kickParticlesAllLevels(dt_[0]);
+			}
 
-		// Stellar evolution and SN deposition; only apply to star particles
-		if (particleRegister_.HasStarParticles()) {
+			// Stellar evolution and SN deposition; only apply to star particles
+			if (particleRegister_.HasStarParticles()) {
+				// Update particle properties (e.g., luminosity) before particle-mesh interaction
+				particleRegister_.updateParticleProperties(cur_time);
+
+				// TODO(cch): Need to take care of AMR subcycling
+				particleMeshInteraction(cur_time, dt_[0]);
+			}
+
+			// Use the new type-aware particle destruction method
 			// TODO(cch): Need to take care of AMR subcycling
-			particleMeshInteraction(cur_time, dt_[0]);
+			particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 		}
-
-		// Use the new type-aware particle destruction method
-		// TODO(cch): Need to take care of AMR subcycling
-		particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 #endif
 
 		cur_time += dt_[0];
@@ -1171,8 +1182,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 
 		// print particle statistics
-		if (quokka::particle_verbose > 0) {
-			particleRegister_.printParticleStatistics();
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if (quokka::particle_verbose > 0) {
+				particleRegister_.printParticleStatistics();
+			}
 		}
 
 		// write diagnostics
@@ -1316,7 +1329,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		}
 
 		// deposit particle mass from all particles that have mass into rhs by accumulation
-		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if (particleRegister_.HasMassiveParticles()) {
+				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
+			}
+		}
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
