@@ -1808,7 +1808,7 @@ void QuokkaSimulation<problem_t>::replaceEMFs(std::array<amrex::MultiFab, AMREX_
 					if (emf_components_arrs[bx].contains(i + 1, j, k + 1)) {
 						emf_components_arrs[bx](i + 1, j, k + 1, n) = FO_emf_components_arrs[bx](i + 1, j, k + 1, n);
 					}
-				} else if (iedge == 2) { //z-edge components
+				} else if (iedge == 2) { // z-edge components
 					if (emf_components_arrs[bx].contains(i + 1, j, k)) {
 						emf_components_arrs[bx](i + 1, j, k, n) = FO_emf_components_arrs[bx](i + 1, j, k, n);
 					}
