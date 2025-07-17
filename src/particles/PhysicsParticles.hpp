@@ -784,10 +784,6 @@ class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, p
 					auto *pData = particles().data();
 					const amrex::Long np = pIter.numParticles();
 
-					const int mass_idx = this->getMassIndex();
-					const int lum_idx = this->getLumIndex();
-					const int birth_time_idx = this->getBirthTimeIndex();
-
 					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 						auto &p = pData[idx]; // NOLINT
 						ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t>(p, current_time);
