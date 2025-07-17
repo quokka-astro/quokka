@@ -13,7 +13,7 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 100 6 6
+amr.n_cell          = 100 8 8
 amr.max_level       = 0 # number of levels = max_level + 1
 
 amr.max_grid_size_x = 100
