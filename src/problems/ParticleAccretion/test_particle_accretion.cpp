@@ -24,9 +24,9 @@
 
 using amrex::Real;
 
-bool turnon_fextract = false;	     // NOLINT
+bool turnon_fextract = false;		       // NOLINT
 constexpr bool particle_in_cell_center = true; // NOLINT
-bool return_1_at_fail = false;	     // NOLINT
+bool return_1_at_fail = false;		       // NOLINT
 std::string sink_file = "../inputs/sink.txt";  // NOLINT
 
 struct AccretionProblem {
@@ -39,12 +39,12 @@ constexpr double mu = 2.33 * C::m_p;
 constexpr double k_B = C::k_B;
 constexpr double cs0 = gcem::sqrt(k_B * T0 / mu); // = 18821.95750 cm / s for T = 10 K
 
-double rho0 = C::m_p;			// NOLINT
-double t_end_over_t_b = 10.0; // NOLINT
+double rho0 = C::m_p;				 // NOLINT
+double t_end_over_t_b = 10.0;			 // NOLINT
 AMREX_GPU_MANAGED double M_star_in_Msun = 1.0;	 // NOLINT
 AMREX_GPU_MANAGED double uniform_density = -1.0; // NOLINT. Default is not using uniform density. If set to a positive value, the density will be set to this
 						 // value instead of an exact solution to the Bondi problem.
-bool refine_center = true;	 // NOLINT
+bool refine_center = true;			 // NOLINT
 
 // constexpr double r_B = C::Gconst * C::M_solar / (cs0 * cs0);
 
@@ -90,7 +90,7 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 
 	const int max_lev = max_level;
 
-	// For the test problem in the Sink Particle paper, we want to set max_lev to 2. 
+	// For the test problem in the Sink Particle paper, we want to set max_lev to 2.
 	// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_lev == 2, "amx_lev is not 2");
 
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[max_lev].CellSizeArray();
@@ -464,7 +464,7 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	// sim.initDt_ = 3.0e10;	      // ~1 kyr
-	sim.tempFloor_ = 10.0;	      // K
+	sim.tempFloor_ = 10.0; // K
 	sim.stopTime_ = t_end;
 
 	// initialize
@@ -515,7 +515,7 @@ auto problem_main() -> int
 		amrex::Real const m_stars_init = M_star_in_g;
 
 		amrex::Real const m_stars_final =
-				std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
+		    std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
 
 		amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
 		amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
