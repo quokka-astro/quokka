@@ -1072,9 +1072,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::driftParticlesAllLevels()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			if (descriptor->getMassIndex() >= 0) {
-				descriptor->driftParticles(0, lev_max, dt);
+		if (!quokka::disable_particle_drift) {
+			for (const auto &[type, descriptor] : particleRegistry_) {
+				if (descriptor->getMassIndex() >= 0) {
+					descriptor->driftParticles(0, lev_max, dt);
+				}
 			}
 		}
 	}
