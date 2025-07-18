@@ -541,6 +541,7 @@ auto problem_main() -> int
 			// const double rel_error_total_mass = std::abs(m_tot_final - m_tot_init) / m_tot_init;
 			// amrex::Print() << "rel_error_total_mass = " << rel_error_total_mass << "\n";
 
+#ifdef HAVE_PYTHON
 			// plot density profile at beginning and end
 			matplotlibcpp::clf();
 			std::map<std::string, std::string> rho_args;
@@ -555,6 +556,7 @@ auto problem_main() -> int
 			matplotlibcpp::ylabel("Density / rho0");
 			matplotlibcpp::legend();
 			matplotlibcpp::save("sink_accretion_density_profile.png");
+#endif
 		}
 
 		// plot particle mass vs time
