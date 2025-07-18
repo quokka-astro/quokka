@@ -32,7 +32,7 @@ problem.star_mass = 0.005
 max_timesteps = 8
 problem.turnon_fextract = false
 problem.uniform_density = 1.0e-25
-problem.sink_file = "sink_moving.txt"
+problem.sink_file = "../inputs/sink_moving.txt"
 
 particles.disable_particle_drift = false
 
