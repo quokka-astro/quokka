@@ -11,6 +11,25 @@ pr:
   branches:
     include:
     - development
+  paths:
+    include:
+    - src/*
+    - tests/*
+    - inputs/*
+    - CMakeLists.txt
+    - .ci/*
+    - extern/amrex/*
+    - extern/Microphysics/*
+    - extern/fmt/*
+    - extern/yaml-cpp/*
+    - extern/openPMD-api/*
+    exclude:
+    - docs/*
+    - paper/*
+    - scripts/*
+    - '*.md'
+    - '*.rst'
+    - '*.txt'
 
 jobs:
   - job: HIP_Build_Test

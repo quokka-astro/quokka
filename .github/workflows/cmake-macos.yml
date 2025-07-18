@@ -21,6 +21,8 @@ permissions:
 jobs:
   check_changes:
     uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/cmake-macos.yml'
 
   build:
     runs-on: macos-14
