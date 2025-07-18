@@ -195,7 +195,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc) { initialize(); }
+
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
+
+	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> & /*BCs_cc*/) -> amrex::Vector<amrex::BCRec>
+	{
+		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "You are required to explicitly define the face-centered BCs when MHD is enabled.");
+		amrex::Vector<amrex::BCRec> BCs_fc(0);
+		return BCs_fc;
+	}
 
 	void initialize();
 	void PerformanceHints();
@@ -404,7 +412,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// Nghost = number of ghost cells for each array
 	int nghost_cc_ = 6; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
-	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
+	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 2; // 6 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
 	std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> componentNames_fc_;
@@ -566,10 +574,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	dt_.resize(nlevs_max, 1.e100);
 	state_new_cc_.resize(nlevs_max);
 	state_old_cc_.resize(nlevs_max);
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		state_new_fc_.resize(nlevs_max);
-		state_old_fc_.resize(nlevs_max);
-	}
+	state_new_fc_.resize(nlevs_max);
+	state_old_fc_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
 	flux_reg_.resize(nlevs_max + 1);
 	fillpatcher_.resize(nlevs_max + 1);
@@ -589,6 +595,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 					  "Increase blocking factor to >= ceil(nghost,ref_ratio)*ref_ratio."
 				       << std::endl; // NOLINT(performance-avoid-endl)
 			amrex::Abort("Grids not properly nested!");
+		}
+	}
+
+	// check that ncells >= nghost_cc_ in each dimension
+	// (this is necessary to prevent out-of-bounds access when filling ghost cells)
+	const amrex::Box domain = Geom()[0].Domain();
+	const amrex::IntVect ncells{
+	    AMREX_D_DECL(domain.bigEnd(0) - domain.smallEnd(0) + 1, domain.bigEnd(1) - domain.smallEnd(1) + 1, domain.bigEnd(2) - domain.smallEnd(2) + 1)};
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		if (ncells[idim] < nghost_cc_) {
+			amrex::Print() << "Number of cells in dimension " << idim << " (" << ncells[idim] << ") is less than nghost_cc_ (" << nghost_cc_
+				       << ")! "
+				       << "This will cause out-of-bounds access when filling ghost cells." << std::endl; // NOLINT(performance-avoid-endl)
+			amrex::Abort("Insufficient grid resolution for ghost cell operations!");
 		}
 	}
 
@@ -1084,9 +1105,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		computeBeforeTimestep();
 
 #if AMREX_SPACEDIM == 3
-		// do particle leapfrog (first kick at time t)
-		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
-			kickParticlesAllLevels(dt_[0]);
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			// do particle leapfrog (first kick at time t)
+			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+				kickParticlesAllLevels(dt_[0]);
+			}
 		}
 #endif
 
@@ -1098,9 +1121,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
 #if AMREX_SPACEDIM == 3
-		// drift particles from t to (t + dt)
-		// N.B.: MUST be done *before* Poisson solve at new time!
-		particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if (particleRegister_.HasMassiveParticles()) {
+				// drift particles from t to (t + dt)
+				// N.B.: MUST be done *before* Poisson solve at new time!
+				particleRegister_.driftParticlesAllLevels(dt_[0], finest_level);
+			}
+		}
 #endif
 
 		// elliptic solve over entire AMR grid (post-timestep)
@@ -1108,19 +1135,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
-		if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
-			kickParticlesAllLevels(dt_[0]);
-		}
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
+				kickParticlesAllLevels(dt_[0]);
+			}
 
-		// Stellar evolution and SN deposition; only apply to star particles
-		if (particleRegister_.HasStarParticles()) {
+			// Stellar evolution and SN deposition; only apply to star particles
+			if (particleRegister_.HasStarParticles()) {
+				// Update particle properties (e.g., luminosity) before particle-mesh interaction
+				particleRegister_.updateParticleProperties(cur_time);
+
+				// TODO(cch): Need to take care of AMR subcycling
+				particleMeshInteraction(cur_time, dt_[0]);
+			}
+
+			// Use the new type-aware particle destruction method
 			// TODO(cch): Need to take care of AMR subcycling
-			particleMeshInteraction(cur_time, dt_[0]);
+			particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 		}
-
-		// Use the new type-aware particle destruction method
-		// TODO(cch): Need to take care of AMR subcycling
-		particleRegister_.destroyParticles(0, cur_time, dt_[0]);
 #endif
 
 		cur_time += dt_[0];
@@ -1156,8 +1188,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 
 		// print particle statistics
-		if (quokka::particle_verbose > 0) {
-			particleRegister_.printParticleStatistics();
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if (quokka::particle_verbose > 0) {
+				particleRegister_.printParticleStatistics();
+			}
 		}
 
 		// write diagnostics
@@ -1301,7 +1335,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		}
 
 		// deposit particle mass from all particles that have mass into rhs by accumulation
-		particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
+		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
+			if (particleRegister_.HasMassiveParticles()) {
+				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
+			}
+		}
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -2419,13 +2457,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 		// Fill ghost zones for state_new_cc_
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
 				       InterpHookNone, FillPatchType::fillpatch_function);
-	}
 
-	// Fill ghost zones for state_new_fc_
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		// Fill ghost zones for state_new_fc_
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+						       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+			}
 		}
 	}
 
@@ -2483,7 +2521,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 	const int ncomp_plotMF_fc = nvar_dim_tot_fc;
 
 	amrex::MultiFab plotMF_fc(amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim)), dmap[lev], ncomp_plotMF_fc, nghost_fc_);
-
 	// Fill ghost zones for state_new_fc_
 	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
 		fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
