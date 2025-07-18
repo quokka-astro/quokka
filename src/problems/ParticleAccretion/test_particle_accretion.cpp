@@ -409,16 +409,52 @@ auto problem_main() -> int
 
 	// particle mass
 	pp.query("star_mass", M_star_in_Msun);
+	pp.query("sink_file", sink_file);
+	pp.query("turnon_fextract", turnon_fextract);
+	pp.query("rho0", rho0);
+	pp.query("uniform_density", uniform_density);
+	pp.query("return_1_at_fail", return_1_at_fail);
+	pp.query("t_end_over_t_b", t_end_over_t_b);
+	pp.query("refine_center", refine_center);
 
 	const double M_star_in_g = M_star_in_Msun * C::M_solar;
+	const Real r_BH = C::Gconst * M_star_in_g / (cs0 * cs0);
+	const Real t_BH = r_BH / cs0;
+	const Real t_end = t_end_over_t_b * t_BH;
 
-	// boundary conditions
+	auto isNormalComp = [=](int n, int dim) {
+		if ((n == HydroSystem<AccretionProblem>::x1Momentum_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == HydroSystem<AccretionProblem>::x2Momentum_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == HydroSystem<AccretionProblem>::x3Momentum_index) && (dim == 2)) {
+			return true;
+		}
+		return false;
+	};
+
 	const int ncomp_cc = Physics_Indices<AccretionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+			// // periodic boundaries
+			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			// octant symmetry
+			// // FOextrap
+			// for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			// 	BCs_cc[n].setLo(i, amrex::BCType::foextrap);
+			// 	BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+			// }
+			if (isNormalComp(n, i)) {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+			} else {
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+			}
 		}
 	}
 
@@ -426,44 +462,99 @@ auto problem_main() -> int
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.initDt_ = 3.0e10;	      // ~1 kyr
+	// sim.initDt_ = 3.0e10;	      // ~1 kyr
 	sim.tempFloor_ = 10.0;	      // K
+	sim.stopTime_ = t_end;
 
 	// initialize
 	sim.setInitialConditions();
 
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.time.push_back(0.0);
+		sim.userData_.Mstar.push_back(M_star_in_g);
+	}
+
+	// set particle to live in refined region
+	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->setForceFinestLevel(true);
+
+	// get cell density as a function of x
+	// Note: fextract does not work with MPI
+	amrex::Vector<amrex::Real> position;
+	amrex::Vector<amrex::Gpu::HostVector<amrex::Real>> values0;
+	if (turnon_fextract) {
+		std::tie(position, values0) = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	}
+
 	// get total gas mass of the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<AccretionProblem>::density_index) * vol;
-	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
 
 	// get total particle mass of the initial state
-	const auto &real_data_init = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
-	amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
-
-	const double m_tot_init = m_gas_init + m_stars_init;
+	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<AccretionProblem>::density_index) * vol;
 
 	// evolve
 	sim.evolve();
 
+	amrex::Vector<amrex::Gpu::HostVector<amrex::Real>> values1;
+	if (turnon_fextract) {
+		// get cell density as a function of x
+		values1 = std::get<1>(fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true));
+	}
+
 	// get total gas mass of the final state
 	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<AccretionProblem>::density_index) * vol;
-	amrex::Print() << "Final gas mass = " << m_gas_final << "\n";
 
 	// get total particle mass of the final state
-	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevelZero().first;
-	amrex::Real const m_stars_final =
-	    std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
-	amrex::Print() << "Final particle mass = " << m_stars_final << "\n";
+	const int finest_level = sim.finestLevel();
+	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(finest_level).first;
 
-	const double m_tot_final = m_gas_final + m_stars_final;
+	int status = 0;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// check mass conservation
-		const double rel_error_total_mass = std::abs(m_tot_final - m_tot_init) / m_tot_init;
-		amrex::Print() << "rel_error_total_mass = " << rel_error_total_mass << "\n";
+		amrex::Real const m_stars_init = M_star_in_g;
+
+		amrex::Real const m_stars_final =
+				std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0, [](Real acc, const auto &p) { return acc + p[3]; });
+
+		amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
+		amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
+		amrex::Print() << "Final gas mass = " << m_gas_final << "\n";
+		amrex::Print() << "Final particle mass = " << m_stars_final << "\n";
+
+		if (turnon_fextract) {
+			const int nx = static_cast<int>(position.size());
+			const double m_tot_init = m_gas_init + m_stars_init;
+			const double m_tot_final = m_gas_final + m_stars_final;
+			std::vector<double> x(nx);
+			std::vector<double> rho(nx);
+			std::vector<double> rho1(nx);
+
+			for (int i = 0; i < nx; ++i) {
+				x[i] = position[i];
+				rho[i] = values0.at(HydroSystem<AccretionProblem>::density_index)[i] / rho0;
+				rho1[i] = values1.at(HydroSystem<AccretionProblem>::density_index)[i] / rho0;
+			}
+
+			// Mass will not be conserved because of the open boundary conditions
+			// // check mass conservation
+			// const double rel_error_total_mass = std::abs(m_tot_final - m_tot_init) / m_tot_init;
+			// amrex::Print() << "rel_error_total_mass = " << rel_error_total_mass << "\n";
+
+			// plot density profile at beginning and end
+			matplotlibcpp::clf();
+			std::map<std::string, std::string> rho_args;
+			rho_args["label"] = "Initial";
+			rho_args["color"] = "red";
+			matplotlibcpp::plot(x, rho, rho_args);
+			std::map<std::string, std::string> rho1_args;
+			rho1_args["label"] = "Final";
+			rho1_args["color"] = "blue";
+			matplotlibcpp::plot(x, rho1, rho1_args);
+			matplotlibcpp::xlabel("x");
+			matplotlibcpp::ylabel("Density / rho0");
+			matplotlibcpp::legend();
+			matplotlibcpp::save("sink_accretion_density_profile.png");
+		}
 
 		// plot particle mass vs time
 		std::vector<Real> &time = sim.userData_.time;
@@ -477,36 +568,43 @@ auto problem_main() -> int
 		// compute exact accretion rate
 		const Real r_BH = C::Gconst * M_star_in_g / (cs0 * cs0);
 		const Real lam = std::exp(1.5) / 4.0;
-		const Real Mdot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * (lam * cs0);
+		const Real rho_bg = uniform_density > 0.0 ? uniform_density : rho0;
+		const Real Mdot_exact = 4.0 * M_PI * rho_bg * r_BH * r_BH * (lam * cs0);
 		amrex::Print() << "Mdot_exact = " << Mdot_exact << "\n";
 
 		// Estimate the accretion rate from the particle data
 		const int last_step = static_cast<int>(time.size()) - 1;
-		int first_step = 0;
-		if (sim.istep[0] >= 22) {
-			first_step = last_step - 20;
-		}
-		const Real Mdot_sim = (Mstar_[last_step] - Mstar_[first_step]) / (time[last_step] - time[first_step]);
-		if (sim.istep[0] >= 22) {
+		const int n_steps_to_average = last_step > 4 ? 4 : last_step;
+		if (last_step >= 1) {
+			const int first_step = last_step - n_steps_to_average;
+			const Real Mdot_sim = (Mstar_[last_step] - Mstar_[first_step]) / (time[last_step] - time[first_step]);
 			amrex::Print() << "Steady state Mdot_sim = " << Mdot_sim << "\n";
-		} else {
-			amrex::Print() << "From first to last step, Mdot_sim = " << Mdot_sim << "\n";
-		}
 
-		// compute relative difference
-		const Real rel_diff = std::abs(Mdot_sim - Mdot_exact) / Mdot_exact;
-		amrex::Print() << "rel_diff = " << rel_diff << "\n";
+			// compute relative difference
+			const Real rel_diff = std::abs(Mdot_sim - Mdot_exact) / Mdot_exact;
+			amrex::Print() << "rel_diff = " << rel_diff << "\n";
+
+			// Check if accretion rate is within tolerance when star mass is small (i.e. when the accretion rate is exactly Bondi accretion rate)
+			if (return_1_at_fail) {
+				const Real rel_diff_tol = 0.01;
+				if (!(rel_diff < rel_diff_tol)) {
+					status = 1;
+				}
+			}
+		}
 
 #ifdef HAVE_PYTHON
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(time, Mstar_);
+		// plot scatter plot of Mstar vs time
+		matplotlibcpp::scatter(time, Mstar_, 10.0);
 		matplotlibcpp::xlabel("Time");
 		matplotlibcpp::ylabel("Particle Mass");
 		const std::string title = fmt::format("Exact Bondi accretion rate = {:.2e} g/s", Mdot_exact);
 		matplotlibcpp::title(title);
-		matplotlibcpp::save("particle_mass.png");
+		matplotlibcpp::save("sink_accretion_particle_mass.png");
 #endif
 	}
 
-	return 0;
+	return status;
 }
