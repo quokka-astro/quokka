@@ -314,6 +314,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 			aa = 1.0;
 		} else {
 			// interpolate for v
+			vv = interpolate_value<BoundaryPolicy::Clamp>(xx, x_array_ptr, v_array_ptr, array_size);
 			const Real lam = std::exp(1.5) / 4.0;
 			if (xx <= x_array_ptr[0]) {
 				xx = x_array_ptr[0];
@@ -326,7 +327,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 			} else {
 				// vv = interpolate_value(xx, x_array_ptr, v_array_ptr, array_size);
 				// aa = lam / (xx * xx * vv);
-				aa = interpolate_value(xx, x_array_ptr, a_array_ptr, array_size);
+				aa = interpolate_value<BoundaryPolicy::Clamp>(xx, x_array_ptr, a_array_ptr, array_size);
 				vv = std::sqrt(lam / (xx * xx * aa));
 			}
 		}
