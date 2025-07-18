@@ -367,7 +367,6 @@ template <> void QuokkaSimulation<AccretionProblem>::refineGrid(int lev, amrex::
 
 	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 
-	auto const &state = state_new_cc_[lev].const_arrays();
 	const auto &prob_lo = geom[lev].ProbLoArray();
 	auto tag = tags.arrays();
 
