@@ -281,107 +281,107 @@ template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::Mu
 	}
 }
 
-// // Code for producing in-situ Projection plots
-// template <>
-// auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
-// {
-// 	// compute density projection
-// 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
+// Code for producing in-situ Projection plots
+template <>
+auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+{
+	// compute density projection
+	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
 
-// 	proj["mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-// 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-// 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-// 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-// 		    return (rho * vx3);
-// 	    });
+	proj["mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
+		    return (rho * vx3);
+	    });
 
-// 	proj["hot_mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-// 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-// 		    double flux = NAN;
-// 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-// 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-// 		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
-// 		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
-// 		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
-// 		    if (primTemp > 1.e6) {
-// 			    flux = rho * vx3;
-// 		    } else {
-// 			    flux = 0.0;
-// 		    }
-// 		    return flux;
-// 	    });
+	proj["hot_mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    double flux = NAN;
+		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
+		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
+		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
+		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+		    if (primTemp > 1.e6) {
+			    flux = rho * vx3;
+		    } else {
+			    flux = 0.0;
+		    }
+		    return flux;
+	    });
 
-// 	proj["warm_mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-// 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-// 		    double flux = NAN;
-// 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-// 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-// 		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
-// 		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
-// 		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
-// 		    if (primTemp < 2.e4) {
-// 			    flux = rho * vx3;
-// 		    } else {
-// 			    flux = 0.0;
-// 		    }
-// 		    return flux;
-// 	    });
+	proj["warm_mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    double flux = NAN;
+		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
+		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
+		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
+		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+		    if (primTemp < 2.e4) {
+			    flux = rho * vx3;
+		    } else {
+			    flux = 0.0;
+		    }
+		    return flux;
+	    });
 
-// 	proj["scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-// 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-// 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-// 		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
-// 		    Real const vz = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-// 		    return (rhoZ * vz);
-// 	    });
+	proj["scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
+		    Real const vz = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
+		    return (rhoZ * vz);
+	    });
 
-// 	proj["warm_scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-// 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-// 		    double flux = NAN;
-// 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-// 		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
-// 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-// 		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
-// 		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
-// 		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
-// 		    if (primTemp < 2.e4) {
-// 			    flux = rhoZ * vx3;
-// 		    } else {
-// 			    flux = 0.0;
-// 		    }
-// 		    return flux;
-// 	    });
+	proj["warm_scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    double flux = NAN;
+		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
+		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
+		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
+		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
+		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+		    if (primTemp < 2.e4) {
+			    flux = rhoZ * vx3;
+		    } else {
+			    flux = 0.0;
+		    }
+		    return flux;
+	    });
 
-// 	proj["hot_scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-// 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-// 		    double flux = NAN;
-// 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-// 		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
-// 		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-// 		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
-// 		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
-// 		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
-// 		    if (primTemp > 1.e6) {
-// 			    flux = rhoZ * vx3;
-// 		    } else {
-// 			    flux = 0.0;
-// 		    }
-// 		    return flux;
-// 	    });
+	proj["hot_scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    double flux = NAN;
+		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
+		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
+		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
+		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
+		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+		    if (primTemp > 1.e6) {
+			    flux = rhoZ * vx3;
+		    } else {
+			    flux = 0.0;
+		    }
+		    return flux;
+	    });
 
-// 	proj["rho"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-// 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-// 		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-// 		    return (rho);
-// 	    });
+	proj["rho"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+		    return (rho);
+	    });
 
-// 	proj["scalar"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-// 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-// 		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
-// 		    return (rhoZ);
-// 	    });
-// 	return proj;
-// }
+	proj["scalar"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
+		    return (rhoZ);
+	    });
+	return proj;
+}
 
 // Implement User-defined diode BC
 template <>
