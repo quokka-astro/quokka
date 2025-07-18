@@ -524,8 +524,8 @@ auto problem_main() -> int
 
 		if (turnon_fextract) {
 			const int nx = static_cast<int>(position.size());
-			const double m_tot_init = m_gas_init + m_stars_init;
-			const double m_tot_final = m_gas_final + m_stars_final;
+			// const double m_tot_init = m_gas_init + m_stars_init;
+			// const double m_tot_final = m_gas_final + m_stars_final;
 			std::vector<double> x(nx);
 			std::vector<double> rho(nx);
 			std::vector<double> rho1(nx);
