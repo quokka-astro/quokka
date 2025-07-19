@@ -18,7 +18,7 @@ namespace quokka
 template <typename T> class optional
 {
       private:
-	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays) - intentional type-erased storage
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays) - intentional type-erased storage
 	alignas(T) mutable char storage_[sizeof(T)]{};
 	bool has_value_{false};
 
@@ -26,7 +26,7 @@ template <typename T> class optional
 	using value_type = T;
 
 	// Default constructor
-	AMREX_GPU_HOST_DEVICE constexpr optional() noexcept {}
+	AMREX_GPU_HOST_DEVICE constexpr optional() noexcept = default;
 
 	// Nullopt constructor  
 	AMREX_GPU_HOST_DEVICE constexpr optional(std::nullopt_t) noexcept {}
@@ -175,23 +175,23 @@ template <typename T> class optional
 };
 
 // Comparison operators
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr bool operator==(const optional<T> &lhs, const optional<U> &rhs)
+template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator==(const optional<T> &lhs, const optional<U> &rhs) -> bool
 {
 	return lhs.has_value() == rhs.has_value() && (!lhs.has_value() || *lhs == *rhs);
 }
 
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr bool operator!=(const optional<T> &lhs, const optional<U> &rhs) { return !(lhs == rhs); }
+template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(const optional<T> &lhs, const optional<U> &rhs) -> bool { return !(lhs == rhs); }
 
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr bool operator<(const optional<T> &lhs, const optional<U> &rhs)
+template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator<(const optional<T> &lhs, const optional<U> &rhs) -> bool
 {
 	return rhs.has_value() && (!lhs.has_value() || *lhs < *rhs);
 }
 
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr bool operator<=(const optional<T> &lhs, const optional<U> &rhs) { return !(rhs < lhs); }
+template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator<=(const optional<T> &lhs, const optional<U> &rhs) -> bool { return !(rhs < lhs); }
 
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr bool operator>(const optional<T> &lhs, const optional<U> &rhs) { return rhs < lhs; }
+template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator>(const optional<T> &lhs, const optional<U> &rhs) -> bool { return rhs < lhs; }
 
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr bool operator>=(const optional<T> &lhs, const optional<U> &rhs) { return !(lhs < rhs); }
+template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator>=(const optional<T> &lhs, const optional<U> &rhs) -> bool { return !(lhs < rhs); }
 
 // Comparison with nullopt
 template <typename T> AMREX_GPU_HOST_DEVICE constexpr bool operator==(const optional<T> &opt, std::nullopt_t) noexcept { return !opt.has_value(); }
