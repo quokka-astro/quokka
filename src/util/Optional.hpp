@@ -18,17 +18,18 @@ namespace quokka
 template <typename T> class optional
 {
       private:
-	alignas(T) mutable char storage_[sizeof(T)];
-	bool has_value_;
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays) - intentional type-erased storage
+	alignas(T) mutable char storage_[sizeof(T)]{};
+	bool has_value_{false};
 
       public:
 	using value_type = T;
 
 	// Default constructor
-	AMREX_GPU_HOST_DEVICE constexpr optional() noexcept : has_value_(false) {}
+	AMREX_GPU_HOST_DEVICE constexpr optional() noexcept {}
 
-	// Nullopt constructor
-	AMREX_GPU_HOST_DEVICE constexpr optional(std::nullopt_t) noexcept : has_value_(false) {}
+	// Nullopt constructor  
+	AMREX_GPU_HOST_DEVICE constexpr optional(std::nullopt_t) noexcept {}
 
 	// Copy constructor
 	AMREX_GPU_HOST_DEVICE constexpr optional(const optional &other) : has_value_(other.has_value_)
