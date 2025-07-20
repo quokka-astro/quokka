@@ -6,59 +6,30 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file Optional.hpp
-/// \brief Implements a GPU-compatible optional class.
+/// \brief Implements a minimal GPU-compatible optional class for EOS.hpp usage.
 
 #include "AMReX_GpuQualifiers.H"
-#include <type_traits>
 #include <utility>
 
 namespace quokka
 {
 
-// Define our own nullopt_t since std::nullopt_t may not be available in GPU contexts
-struct nullopt_t {
-	explicit constexpr nullopt_t() = default;
-};
-inline constexpr nullopt_t nullopt{};
-
-template <typename T> class optional // NOLINT(cppcoreguidelines-special-member-functions,hicpp-special-member-functions)
+template <typename T> class optional
 {
       private:
-	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays) - intentional type-erased storage
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
 	alignas(T) mutable char storage_[sizeof(T)]{};
 	bool has_value_{false};
 
       public:
-	using value_type = T;
-
-	// Default constructor
+	// Default constructor - creates empty optional
 	AMREX_GPU_HOST_DEVICE constexpr optional() noexcept = default;
 
-	// Nullopt constructor  
-	AMREX_GPU_HOST_DEVICE explicit constexpr optional(nullopt_t /*unused*/) noexcept {}
-
-	// Copy constructor
-	AMREX_GPU_HOST_DEVICE constexpr optional(const optional &other) : has_value_(other.has_value_)
+	// Value constructor - creates optional containing a value
+	// NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+	AMREX_GPU_HOST_DEVICE constexpr optional(const T &value) : has_value_(true)
 	{
-		if (has_value_) {
-			new (storage_) T(other.value());
-		}
-	}
-
-	// Move constructor
-	AMREX_GPU_HOST_DEVICE constexpr optional(optional &&other) noexcept(std::is_nothrow_move_constructible_v<T>) : has_value_(other.has_value_)
-	{
-		if (has_value_) {
-			new (storage_) T(std::move(other.value()));
-			other.reset();
-		}
-	}
-
-	// Value constructor
-	template <typename U, typename = std::enable_if_t<std::is_constructible_v<T, U &&>>>
-	AMREX_GPU_HOST_DEVICE constexpr optional(U &&value) : has_value_(true)
-	{
-		new (storage_) T(std::forward<U>(value));
+		new (storage_) T(value);
 	}
 
 	// Destructor
@@ -69,165 +40,12 @@ template <typename T> class optional // NOLINT(cppcoreguidelines-special-member-
 		}
 	}
 
-	// Copy assignment
-	AMREX_GPU_HOST_DEVICE constexpr optional &operator=(const optional &other)
-	{
-		if (this != &other) {
-			if (has_value_ && other.has_value_) {
-				value() = other.value();
-			} else if (other.has_value_) {
-				new (storage_) T(other.value());
-				has_value_ = true;
-			} else {
-				reset();
-			}
-		}
-		return *this;
-	}
-
-	// Move assignment
-	AMREX_GPU_HOST_DEVICE constexpr optional &operator=(optional &&other) noexcept(std::is_nothrow_move_assignable_v<T> &&
-										       std::is_nothrow_move_constructible_v<T>)
-	{
-		if (this != &other) {
-			if (has_value_ && other.has_value_) {
-				value() = std::move(other.value());
-			} else if (other.has_value_) {
-				new (storage_) T(std::move(other.value()));
-				has_value_ = true;
-			} else {
-				reset();
-			}
-			other.reset();
-		}
-		return *this;
-	}
-
-	// Value assignment
-	template <typename U, typename = std::enable_if_t<std::is_constructible_v<T, U &&>>> AMREX_GPU_HOST_DEVICE constexpr optional &operator=(U &&value)
-	{
-		if (has_value_) {
-			this->value() = std::forward<U>(value);
-		} else {
-			new (storage_) T(std::forward<U>(value));
-			has_value_ = true;
-		}
-		return *this;
-	}
-
-	// Nullopt assignment
-	AMREX_GPU_HOST_DEVICE constexpr optional &operator=(nullopt_t) noexcept
-	{
-		reset();
-		return *this;
-	}
-
-	// Dereference operators (the problematic ones from std::optional)
-	AMREX_GPU_HOST_DEVICE constexpr const T &operator*() const & noexcept { return *reinterpret_cast<const T *>(storage_); }
-
-	AMREX_GPU_HOST_DEVICE constexpr T &operator*() & noexcept { return *reinterpret_cast<T *>(storage_); }
-
-	AMREX_GPU_HOST_DEVICE constexpr const T &&operator*() const && noexcept { return std::move(*reinterpret_cast<const T *>(storage_)); }
-
-	AMREX_GPU_HOST_DEVICE constexpr T &&operator*() && noexcept { return std::move(*reinterpret_cast<T *>(storage_)); }
-
-	// Arrow operators
-	AMREX_GPU_HOST_DEVICE constexpr const T *operator->() const noexcept { return reinterpret_cast<const T *>(storage_); }
-
-	AMREX_GPU_HOST_DEVICE constexpr T *operator->() noexcept { return reinterpret_cast<T *>(storage_); }
-
-	// has_value() and operator bool
-	AMREX_GPU_HOST_DEVICE constexpr bool has_value() const noexcept { return has_value_; }
-
+	// Boolean conversion - check if optional has a value
 	AMREX_GPU_HOST_DEVICE constexpr explicit operator bool() const noexcept { return has_value_; }
 
-	// value() functions
-	AMREX_GPU_HOST_DEVICE constexpr const T &value() const & { return *reinterpret_cast<const T *>(storage_); }
-
-	AMREX_GPU_HOST_DEVICE constexpr T &value() & { return *reinterpret_cast<T *>(storage_); }
-
-	AMREX_GPU_HOST_DEVICE constexpr const T &&value() const && { return std::move(*reinterpret_cast<const T *>(storage_)); }
-
-	AMREX_GPU_HOST_DEVICE constexpr T &&value() && { return std::move(*reinterpret_cast<T *>(storage_)); }
-
-	// value_or() functions
-	template <typename U> AMREX_GPU_HOST_DEVICE constexpr T value_or(U &&default_value) const &
-	{
-		return has_value_ ? value() : static_cast<T>(std::forward<U>(default_value));
-	}
-
-	template <typename U> AMREX_GPU_HOST_DEVICE constexpr T value_or(U &&default_value) &&
-	{
-		return has_value_ ? std::move(value()) : static_cast<T>(std::forward<U>(default_value));
-	}
-
-	// reset() function
-	AMREX_GPU_HOST_DEVICE constexpr void reset() noexcept
-	{
-		if (has_value_) {
-			reinterpret_cast<T *>(storage_)->~T();
-			has_value_ = false;
-		}
-	}
-
-	// emplace() function
-	template <typename... Args> AMREX_GPU_HOST_DEVICE constexpr T &emplace(Args &&...args)
-	{
-		reset();
-		new (storage_) T(std::forward<Args>(args)...);
-		has_value_ = true;
-		return value();
-	}
+	// Dereference operator - access the contained value
+	AMREX_GPU_HOST_DEVICE constexpr const T &operator*() const & noexcept { return *reinterpret_cast<const T *>(storage_); }
 };
-
-// Comparison operators
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator==(const optional<T> &lhs, const optional<U> &rhs) -> bool
-{
-	return lhs.has_value() == rhs.has_value() && (!lhs.has_value() || *lhs == *rhs);
-}
-
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(const optional<T> &lhs, const optional<U> &rhs) -> bool { return !(lhs == rhs); }
-
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator<(const optional<T> &lhs, const optional<U> &rhs) -> bool
-{
-	return rhs.has_value() && (!lhs.has_value() || *lhs < *rhs);
-}
-
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator<=(const optional<T> &lhs, const optional<U> &rhs) -> bool { return !(rhs < lhs); }
-
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator>(const optional<T> &lhs, const optional<U> &rhs) -> bool { return rhs < lhs; }
-
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator>=(const optional<T> &lhs, const optional<U> &rhs) -> bool { return !(lhs < rhs); }
-
-// Comparison with nullopt
-template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator==(const optional<T> &opt, nullopt_t /*unused*/) noexcept -> bool { return !opt.has_value(); }
-
-template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator==(nullopt_t /*unused*/, const optional<T> &opt) noexcept -> bool { return !opt.has_value(); }
-
-template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(const optional<T> &opt, nullopt_t /*unused*/) noexcept -> bool { return opt.has_value(); }
-
-template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(nullopt_t /*unused*/, const optional<T> &opt) noexcept -> bool { return opt.has_value(); }
-
-// Comparison with values
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator==(const optional<T> &opt, const U &value) -> bool
-{
-	return opt.has_value() && *opt == value;
-}
-
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator==(const T &value, const optional<U> &opt) -> bool
-{
-	return opt.has_value() && value == *opt;
-}
-
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(const optional<T> &opt, const U &value) -> bool
-{
-	return !opt.has_value() || *opt != value;
-}
-
-template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(const T &value, const optional<U> &opt) -> bool
-{
-	return !opt.has_value() || value != *opt;
-}
 
 } // namespace quokka
 
