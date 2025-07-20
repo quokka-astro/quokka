@@ -27,10 +27,7 @@ template <typename T> class optional
 
 	// Value constructor - creates optional containing a value
 	// NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
-	AMREX_GPU_HOST_DEVICE constexpr optional(const T &value) : has_value_(true)
-	{
-		new (storage_) T(value);
-	}
+	AMREX_GPU_HOST_DEVICE constexpr optional(const T &value) : has_value_(true) { new (storage_) T(value); }
 
 	// Destructor
 	AMREX_GPU_HOST_DEVICE ~optional()
