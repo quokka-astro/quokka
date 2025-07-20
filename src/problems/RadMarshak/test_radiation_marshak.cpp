@@ -211,7 +211,7 @@ auto problem_main() -> int
 	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
 	const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
 
-	constexpr int nvars = RadSystem<SuOlsonProblem>::nvar_;
+	constexpr int nvars = RadSystem<SuOlsonProblem>::nvar_; // NOLINT(cppcoreguidelines-init-variables)
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // custom (Marshak) x1
@@ -255,13 +255,13 @@ auto problem_main() -> int
 			const double x = position[i];
 			xs.at(i) = std::sqrt(3.0) * x;
 
-			const double Erad_t = values.at(RadSystem<SuOlsonProblem>::radEnergy_index)[i];
+			const double Erad_t = values.at(RadSystem<SuOlsonProblem>::radEnergy_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 			Erad.at(i) = Erad_t;
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
-			const double Etot_t = values.at(RadSystem<SuOlsonProblem>::gasEnergy_index)[i];
-			const double rho = values.at(RadSystem<SuOlsonProblem>::gasDensity_index)[i];
-			const double x1GasMom = values.at(RadSystem<SuOlsonProblem>::x1GasMomentum_index)[i];
+			const double Etot_t = values.at(RadSystem<SuOlsonProblem>::gasEnergy_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
+			const double rho = values.at(RadSystem<SuOlsonProblem>::gasDensity_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
+			const double x1GasMom = values.at(RadSystem<SuOlsonProblem>::x1GasMomentum_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 			const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 
 			const double Egas_t = (Etot_t - Ekin);

@@ -21,7 +21,7 @@ struct nullopt_t {
 };
 inline constexpr nullopt_t nullopt{};
 
-template <typename T> class optional
+template <typename T> class optional // NOLINT(cppcoreguidelines-special-member-functions,hicpp-special-member-functions)
 {
       private:
 	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays) - intentional type-erased storage
@@ -35,7 +35,7 @@ template <typename T> class optional
 	AMREX_GPU_HOST_DEVICE constexpr optional() noexcept = default;
 
 	// Nullopt constructor  
-	AMREX_GPU_HOST_DEVICE constexpr optional(nullopt_t) noexcept {}
+	AMREX_GPU_HOST_DEVICE explicit constexpr optional(nullopt_t /*unused*/) noexcept {}
 
 	// Copy constructor
 	AMREX_GPU_HOST_DEVICE constexpr optional(const optional &other) : has_value_(other.has_value_)
@@ -200,13 +200,13 @@ template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator>
 template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator>=(const optional<T> &lhs, const optional<U> &rhs) -> bool { return !(lhs < rhs); }
 
 // Comparison with nullopt
-template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator==(const optional<T> &opt, nullopt_t) noexcept -> bool { return !opt.has_value(); }
+template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator==(const optional<T> &opt, nullopt_t /*unused*/) noexcept -> bool { return !opt.has_value(); }
 
-template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator==(nullopt_t, const optional<T> &opt) noexcept -> bool { return !opt.has_value(); }
+template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator==(nullopt_t /*unused*/, const optional<T> &opt) noexcept -> bool { return !opt.has_value(); }
 
-template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(const optional<T> &opt, nullopt_t) noexcept -> bool { return opt.has_value(); }
+template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(const optional<T> &opt, nullopt_t /*unused*/) noexcept -> bool { return opt.has_value(); }
 
-template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(nullopt_t, const optional<T> &opt) noexcept -> bool { return opt.has_value(); }
+template <typename T> AMREX_GPU_HOST_DEVICE constexpr auto operator!=(nullopt_t /*unused*/, const optional<T> &opt) noexcept -> bool { return opt.has_value(); }
 
 // Comparison with values
 template <typename T, typename U> AMREX_GPU_HOST_DEVICE constexpr auto operator==(const optional<T> &opt, const U &value) -> bool

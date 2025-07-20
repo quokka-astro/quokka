@@ -93,14 +93,14 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
     -> amrex::Real
 {
 	// return temperature for an ideal gas given density and internal energy
-	amrex::Real Tgas = NAN;
+	amrex::Real Tgas = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
 #ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
+	for (int ii = 0; ii < NumSpec; ++ii) { // NOLINT(modernize-loop-convert)
 		chemstate.xn[ii] = -1.0;
 	}
 
@@ -135,7 +135,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
     -> amrex::Real
 {
 	// return internal energy density given density and temperature
-	amrex::Real Eint = NAN;
+	amrex::Real Eint = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
 #ifdef CHEMISTRY
 	eos_t chemstate;
@@ -144,7 +144,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	amrex::Real const Tgas_value = Tgas;
 	chemstate.T = Tgas_value;
 	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
+	for (int ii = 0; ii < NumSpec; ++ii) { // NOLINT(modernize-loop-convert)
 		chemstate.xn[ii] = -1.0;
 	}
 
@@ -178,14 +178,14 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromPre
     -> amrex::Real
 {
 	// return internal energy density given density and pressure
-	amrex::Real Eint = NAN;
+	amrex::Real Eint = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
 #ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
 	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
+	for (int ii = 0; ii < NumSpec; ++ii) { // NOLINT(modernize-loop-convert)
 		chemstate.xn[ii] = -1.0;
 	}
 
@@ -228,7 +228,7 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
 	chemstate.T = NAN;
 	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
+	for (int ii = 0; ii < NumSpec; ++ii) { // NOLINT(modernize-loop-convert)
 		chemstate.xn[ii] = -1.0;
 	}
 
@@ -277,7 +277,7 @@ EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real
 	chemstate.rho = rho;
 	chemstate.p = P;
 	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
+	for (int ii = 0; ii < NumSpec; ++ii) { // NOLINT(modernize-loop-convert)
 		chemstate.xn[ii] = -1.0;
 	}
 
@@ -326,7 +326,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
+	for (int ii = 0; ii < NumSpec; ++ii) { // NOLINT(modernize-loop-convert)
 		chemstate.xn[ii] = -1.0;
 	}
 
@@ -372,7 +372,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
 	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
+	for (int ii = 0; ii < NumSpec; ++ii) { // NOLINT(modernize-loop-convert)
 		chemstate.xn[ii] = -1.0;
 	}
 
