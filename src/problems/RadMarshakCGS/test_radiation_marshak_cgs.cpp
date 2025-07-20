@@ -268,8 +268,8 @@ auto problem_main() -> int
 			Erad.at(i) = Erad_t;
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
-			const double Etot_t = values.at(RadSystem<SuOlsonProblemCgs>::gasEnergy_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
-			const double rho = values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
+			const double Etot_t = values.at(RadSystem<SuOlsonProblemCgs>::gasEnergy_index)[i];	 // NOLINT(cppcoreguidelines-init-variables)
+			const double rho = values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i];	 // NOLINT(cppcoreguidelines-init-variables)
 			const double x1GasMom = values.at(RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 			const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 

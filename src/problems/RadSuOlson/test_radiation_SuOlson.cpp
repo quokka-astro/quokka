@@ -254,9 +254,9 @@ auto problem_main() -> int
 
 		for (int i = 0; i < nx; ++i) {
 			xs.at(i) = position[i];
-			const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
-			const auto Etot_t = values.at(RadSystem<MarshakProblem>::gasEnergy_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
-			const auto rho = values.at(RadSystem<MarshakProblem>::gasDensity_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
+			const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
+			const auto Etot_t = values.at(RadSystem<MarshakProblem>::gasEnergy_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
+			const auto rho = values.at(RadSystem<MarshakProblem>::gasDensity_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
 			const auto x1GasMom = values.at(RadSystem<MarshakProblem>::x1GasMomentum_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 
 			Erad.at(i) = Erad_t;
