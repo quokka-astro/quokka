@@ -112,7 +112,7 @@ template <> struct std::formatter<amrex::IntVect> {
 };
 
 template <> struct std::formatter<amrex::RealVect> {
-	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+	static constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
 	auto format(const amrex::RealVect &rv, std::format_context &ctx) const { return std::format_to(ctx.out(), "[{}, {}, {}]", rv[0], rv[1], rv[2]); }
 };
