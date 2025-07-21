@@ -15,7 +15,7 @@
 
 **For detailed instructions on installing the code, please refer to the [Quokka Documentation](https://quokka-astro.github.io/quokka/index.html). You can start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support, or open an [Issue](https://github.com/BenWibking/quokka/issues) for any bug reports.**
 
-Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-parabolic method, with AMR and subcycling in time. Runs on CPUs (MPI+vectorized) or NVIDIA GPUs (MPI+CUDA) with a single-source codebase. Written in C++17. (100% Fortran-free.)
+Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-parabolic method, with AMR and subcycling in time. Runs on CPUs (MPI+vectorized) or NVIDIA GPUs (MPI+CUDA) with a single-source codebase. Written in C++20. (100% Fortran-free.)
 
 Here is a [a Kelvin-Helmholz instability simulated with Quokka](https://vimeo.com/714653592) on a 512x512 uniform grid:
 
@@ -30,7 +30,7 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 ![Image of Quokka with Baby in Pouch](extern/quokka2.png)
 
 ## Dependencies
-* C++ compiler (with C++17 support)
+* C++ compiler (with C++20 support)
 * CMake 3.16+
 * Python 3.8+
 * MPI library with GPU-aware support (OpenMPI, MPICH, or Cray MPI)
