@@ -89,7 +89,10 @@ template <typename T> class optional
 	AMREX_GPU_HOST_DEVICE constexpr explicit operator bool() const noexcept { return has_value_; }
 
 	// Dereference operator - access the contained value
-	AMREX_GPU_HOST_DEVICE constexpr auto operator*() const & noexcept -> const T & { return *reinterpret_cast<const T *>(storage_); } // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+	AMREX_GPU_HOST_DEVICE constexpr auto operator*() const & noexcept -> const T &
+	{
+		return *reinterpret_cast<const T *>(storage_);
+	} // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 };
 
 } // namespace quokka
