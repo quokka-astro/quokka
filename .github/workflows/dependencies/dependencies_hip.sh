@@ -39,8 +39,11 @@ sudo apt-get update
 # other: rocm-dev rocm-utils
 sudo apt-get install -y --no-install-recommends \
     build-essential \
+    gcc-13          \
+    g++-13          \
     libc++-dev      \
     libc++abi-dev   \
+    libstdc++-13-dev \
     gfortran        \
     libnuma-dev     \
     libopenmpi-dev  \
