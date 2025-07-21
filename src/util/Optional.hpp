@@ -93,7 +93,8 @@ template <typename T> class optional
 	// Dereference operator - access the contained value
 	AMREX_GPU_HOST_DEVICE constexpr auto operator*() const & noexcept -> const T &
 	{
-		return *reinterpret_cast<const T *>(storage_);
+		return *reinterpret_cast<const T *>(storage_); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+		}
 	} // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 };
 
