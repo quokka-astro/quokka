@@ -97,7 +97,7 @@ quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double E
 template <>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas,
-						quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+						[[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return rho * c_v * Tgas;
 }

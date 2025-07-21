@@ -29,6 +29,54 @@ template <typename T> class optional
 	// NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
 	AMREX_GPU_HOST_DEVICE constexpr optional(const T &value) : has_value_(true) { new (storage_) T(value); }
 
+	// Copy constructor
+	AMREX_GPU_HOST_DEVICE optional(const optional &other) : has_value_(other.has_value_)
+	{
+		if (has_value_) {
+			new (storage_) T(*other);
+		}
+	}
+
+	// Move constructor
+	AMREX_GPU_HOST_DEVICE optional(optional &&other) noexcept : has_value_(other.has_value_)
+	{
+		if (has_value_) {
+			new (storage_) T(std::move(*other));
+			other.has_value_ = false;
+		}
+	}
+
+	// Copy assignment operator
+	AMREX_GPU_HOST_DEVICE auto operator=(const optional &other) -> optional &
+	{
+		if (this != &other) {
+			if (has_value_) {
+				reinterpret_cast<T *>(storage_)->~T(); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+			}
+			has_value_ = other.has_value_;
+			if (has_value_) {
+				new (storage_) T(*other);
+			}
+		}
+		return *this;
+	}
+
+	// Move assignment operator
+	AMREX_GPU_HOST_DEVICE auto operator=(optional &&other) noexcept -> optional &
+	{
+		if (this != &other) {
+			if (has_value_) {
+				reinterpret_cast<T *>(storage_)->~T(); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+			}
+			has_value_ = other.has_value_;
+			if (has_value_) {
+				new (storage_) T(std::move(*other));
+				other.has_value_ = false;
+			}
+		}
+		return *this;
+	}
+
 	// Destructor
 	AMREX_GPU_HOST_DEVICE ~optional()
 	{
