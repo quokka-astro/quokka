@@ -42,6 +42,7 @@ template <typename T> class optional
 	{
 		if (has_value_) {
 			new (storage_) T(std::move(*other));
+			reinterpret_cast<T *>(other.storage_)->~T(); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 			other.has_value_ = false;
 		}
 	}
@@ -71,6 +72,7 @@ template <typename T> class optional
 			has_value_ = other.has_value_;
 			if (has_value_) {
 				new (storage_) T(std::move(*other));
+				reinterpret_cast<T *>(other.storage_)->~T(); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 				other.has_value_ = false;
 			}
 		}
