@@ -16,7 +16,6 @@
 #include "AMReX_iMultiFab.H"
 
 #include "GrackleDataReader.hpp"
-#include "fmt/core.h"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
@@ -317,7 +316,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 
 	int nmax = nsubstepsMF.max(0);
 	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+	amrex::Print() << std::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
 
 	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {

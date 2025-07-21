@@ -16,7 +16,7 @@
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
 #include "math/interpolate.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 #include <iomanip>
 #include <sstream>

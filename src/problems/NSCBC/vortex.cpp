@@ -7,7 +7,7 @@
 /// \brief Implements a subsonic vortex flow problem with Navier-Stokes
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
-#include <fmt/format.h>
+#include <format>
 #include <random>
 #include <tuple>
 #include <vector>

@@ -25,7 +25,7 @@ namespace quokka::ResampledCooling
 void readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables)
 {
 	amrex::Print() << "Initializing resampled cooling.\n";
-	amrex::Print() << fmt::format("resampled_table_file: {}.\n", hdf5_file);
+	amrex::Print() << std::format("resampled_table_file: {}.\n", hdf5_file);
 
 	// Read cooling data from HDF5 file
 	hid_t file_id = 0;
@@ -146,8 +146,8 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	H5Fclose(file_id);
 
-	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
-	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
+	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
+	amrex::Print() << std::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
 }
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables

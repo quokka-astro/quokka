@@ -21,7 +21,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
-#include <fmt/format.h>
+#include <format>
 
 #include "QuokkaSimulation.hpp"
 #include "cooling/GrackleLikeCooling.hpp"

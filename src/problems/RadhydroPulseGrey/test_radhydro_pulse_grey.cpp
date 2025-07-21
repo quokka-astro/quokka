@@ -12,7 +12,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 struct PulseProblem {
@@ -371,11 +371,11 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("temperature (K)");
 	matplotlibcpp::ylim(0.98e7, 2.02e7);
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
+	matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./radhydro_pulse_temperature_greynew.pdf");
 	// save to file with tNew_[0] in the name
-	matplotlibcpp::save(fmt::format("./radhydro_pulse_grey_temperature.pdf", sim2.tNew_[0]));
+	matplotlibcpp::save(std::format("./radhydro_pulse_grey_temperature.pdf", sim2.tNew_[0]));
 
 	// plot gas density profile
 	matplotlibcpp::clf();
@@ -388,7 +388,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("density (g cm^-3)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_grey_density.pdf");
 
@@ -403,7 +403,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("velocity (km s^-1)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_grey_velocity.pdf");
 

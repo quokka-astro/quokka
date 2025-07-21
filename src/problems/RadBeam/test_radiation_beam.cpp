@@ -13,7 +13,7 @@
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"

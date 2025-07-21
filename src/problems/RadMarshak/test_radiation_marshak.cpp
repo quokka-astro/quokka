@@ -13,7 +13,7 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 #include <cmath>
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "AMReX_BLassert.H"
@@ -343,7 +343,7 @@ auto problem_main() -> int
 		matplotlibcpp::ylim(0.0, 1.0);	// dimensionless
 		matplotlibcpp::xscale("log");
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+		matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 		matplotlibcpp::save("./marshak_wave_temperature.pdf");
 
 		// material temperature
@@ -363,7 +363,7 @@ auto problem_main() -> int
 		matplotlibcpp::ylim(0.0, 1.0);	// dimensionless
 		matplotlibcpp::xscale("log");
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+		matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 		matplotlibcpp::save("./marshak_wave_gastemperature.pdf");
 #endif
 	}

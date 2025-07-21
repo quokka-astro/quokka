@@ -23,7 +23,6 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_Print.H"
 #include "AMReX_TableData.H"
-#include "fmt/core.h"
 #include "math/FastMath.hpp"
 
 namespace quokka::GrackleLikeCooling
@@ -41,8 +40,8 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 	}
 
 	if (grackle_verbose) {
-		amrex::Print() << fmt::format("Initializing Grackle-like cooling: {}.\n", group_name);
-		amrex::Print() << fmt::format("grackle_data_file: {}.\n", grackle_data_file);
+		amrex::Print() << std::format("Initializing Grackle-like cooling: {}.\n", group_name);
+		amrex::Print() << std::format("grackle_data_file: {}.\n", grackle_data_file);
 	}
 
 	// Get unit conversion factors (assuming z=0)
@@ -72,7 +71,7 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 
 	// Open cooling dataset and get grid dimensions
 	std::string parameter_name;
-	parameter_name = fmt::format("/CoolingRates/{}/Cooling", group_name);
+	parameter_name = std::format("/CoolingRates/{}/Cooling", group_name);
 
 	dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 			   H5P_DEFAULT); // new API in HDF5 1.8.0+
@@ -108,7 +107,7 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 	for (int64_t q = 0; q < my_cloudy.grid_rank; q++) {
 
 		if (q < my_cloudy.grid_rank - 1) {
-			parameter_name = fmt::format("Parameter{}", q + 1);
+			parameter_name = std::format("Parameter{}", q + 1);
 		} else {
 			parameter_name = "Temperature";
 		}
@@ -135,7 +134,7 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 		}
 
 		if (grackle_verbose) {
-			amrex::Print() << fmt::format("\t{}: {} to {} ({} steps).\n", parameter_name, my_cloudy.grid_parameters[q](0),
+			amrex::Print() << std::format("\t{}: {} to {} ({} steps).\n", parameter_name, my_cloudy.grid_parameters[q](0),
 						      my_cloudy.grid_parameters[q](static_cast<int>(my_cloudy.grid_dimension[q]) - 1),
 						      my_cloudy.grid_dimension[q]);
 		}
@@ -179,7 +178,7 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 		// Read Heating data
 		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
-		parameter_name = fmt::format("/CoolingRates/{}/Heating", group_name);
+		parameter_name = std::format("/CoolingRates/{}/Heating", group_name);
 
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
@@ -218,7 +217,7 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 		// tables use row-major (C-order) indexing!
 		my_cloudy.mmw_data = amrex::Table3D<double>(temp_data, lo, hi);
 
-		parameter_name = fmt::format("/CoolingRates/{}/MMW", group_name);
+		parameter_name = std::format("/CoolingRates/{}/MMW", group_name);
 
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+

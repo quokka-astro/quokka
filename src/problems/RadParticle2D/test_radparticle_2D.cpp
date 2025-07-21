@@ -7,7 +7,7 @@
 #endif
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include <fmt/format.h>
+#include <format>
 
 struct ParticleProblem {
 };

@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <fmt/format.h>
+#include <format>
 
 #include "AMReX.H"
 #include "AMReX_BCRec.H"

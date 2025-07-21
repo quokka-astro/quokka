@@ -9,7 +9,7 @@
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include <cassert>
-#include <fmt/format.h>
+#include <format>
 #include <ostream>
 #include <stdexcept>
 #include <valarray>

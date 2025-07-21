@@ -114,7 +114,6 @@ endif(WARNINGS_AS_ERRORS)
 # endif()
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -127,7 +126,6 @@ setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_
 include_directories(${gamma_law_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
 
 link_libraries(AMReX::amrex)
-link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
 link_libraries(yaml-cpp::yaml-cpp)
 

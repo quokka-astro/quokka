@@ -10,7 +10,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include <array>
-#include <fmt/format.h>
+#include <format>
 #include <random>
 #include <vector>
 

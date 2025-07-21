@@ -10,7 +10,7 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 #include <cmath>
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "AMReX_Array.H"

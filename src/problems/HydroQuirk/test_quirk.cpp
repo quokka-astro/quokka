@@ -13,7 +13,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include <algorithm>
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 #include <vector>
 

@@ -10,7 +10,7 @@
 ///
 
 // external headers
-#include <fmt/format.h>
+#include <format>
 
 // internal headers
 #include "hydro/mhd_system.hpp"

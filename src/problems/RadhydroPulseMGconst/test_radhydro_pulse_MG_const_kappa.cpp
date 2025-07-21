@@ -13,7 +13,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 // Single-group problem
@@ -422,7 +422,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_MG_temperature.pdf");
 
@@ -437,7 +437,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("density (g cm^-3)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_MG_density.pdf");
 
@@ -452,7 +452,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("velocity (km s^-1)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_MG_velocity.pdf");
 

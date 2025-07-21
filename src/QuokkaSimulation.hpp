@@ -460,7 +460,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::getScalarVariabl
 	names.reserve(nscalars);
 	for (int n = 0; n < nscalars; ++n) {
 		// write string 'scalar_1', etc.
-		names.push_back(fmt::format("scalar_{}", n));
+		names.push_back(std::format("scalar_{}", n));
 	}
 	return names;
 }
@@ -622,7 +622,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 		const amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
 		const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
-		amrex::AllPrint() << fmt::format("...[level {}] \tcell density = {:e}, |v| = {:e}, cs = {:e}\n", lev, rho, vel_mag, cs);
+		amrex::AllPrint() << std::format("...[level {}] \tcell density = {:e}, |v| = {:e}, cs = {:e}\n", lev, rho, vel_mag, cs);
 	}
 }
 

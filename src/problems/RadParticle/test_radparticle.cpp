@@ -16,7 +16,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 
 struct ParticleProblem {
 };
@@ -211,7 +211,7 @@ auto problem_main() -> int
 	// matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
 
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(std::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::save("./radparticle.pdf");
 #endif // HAVE_PYTHON
 

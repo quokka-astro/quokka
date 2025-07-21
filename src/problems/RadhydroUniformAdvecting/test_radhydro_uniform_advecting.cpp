@@ -12,7 +12,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 struct PulseProblem {
@@ -255,7 +255,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
+	matplotlibcpp::title(std::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	if constexpr (beta_order_ == 1) {
 		matplotlibcpp::ylim(1.0 - 1.0e-7, 1.0 + 1.0e-7);
 	}
@@ -274,7 +274,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("v / v0 (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
+	matplotlibcpp::title(std::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_uniform_advecting_velocity_dimensionless.pdf");
 #endif

@@ -16,6 +16,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "util/fextract.hpp"
+#include <format>
 #include <gcem.hpp>
 
 #ifdef HAVE_PYTHON
@@ -602,7 +603,7 @@ auto problem_main() -> int
 		matplotlibcpp::scatter(time, Mstar_, 10.0);
 		matplotlibcpp::xlabel("Time");
 		matplotlibcpp::ylabel("Particle Mass");
-		const std::string title = fmt::format("Exact Bondi accretion rate = {:.2e} g/s", Mdot_exact);
+		const std::string title = std::format("Exact Bondi accretion rate = {:.2e} g/s", Mdot_exact);
 		matplotlibcpp::title(title);
 		matplotlibcpp::save("sink_accretion_particle_mass.png");
 #endif

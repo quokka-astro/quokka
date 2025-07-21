@@ -23,7 +23,7 @@
 #include "particle_radiation.hpp"
 #include "particle_types.hpp"
 #include "physics_info.hpp"
-#include <fmt/format.h>
+#include <format>
 
 namespace quokka
 {
@@ -681,7 +681,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		if (container_ != nullptr) {
 			// TODO(cch): add a getParticleTypeName() method to PhysicsParticleDescriptor and call it here
 			const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType_);
-			amrex::Print() << fmt::format("number of {} = {}\n", particle_type_name, getNumParticles());
+			amrex::Print() << std::format("number of {} = {}\n", particle_type_name, getNumParticles());
 
 			const int max_number_to_print = 100;
 
@@ -696,9 +696,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					amrex::Print() << "Level " << lev << "\n";
 					// Print header for detailed particle data
 					if (evolution_stage_idx >= 0) {
-						amrex::Print() << fmt::format("\t{:>20} | {:>20}\n", "mass", "evolution stage");
+						amrex::Print() << std::format("\t{:>20} | {:>20}\n", "mass", "evolution stage");
 					} else {
-						amrex::Print() << fmt::format("\t{:>20}\n", "mass");
+						amrex::Print() << std::format("\t{:>20}\n", "mass");
 					}
 
 					// Print each particle's data with aligned columns
@@ -706,14 +706,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					int i = 0;
 					for (; i < n_print; ++i) {
 						if (evolution_stage_idx >= 0) {
-							amrex::Print() << fmt::format("\t{:20.13e} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
+							amrex::Print() << std::format("\t{:20.13e} | {:>20}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()],
 										      int_data[i][evolution_stage_idx]);
 						} else {
-							amrex::Print() << fmt::format("\t{:20.13e}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()]);
+							amrex::Print() << std::format("\t{:20.13e}\n", real_data[i][AMREX_SPACEDIM + getMassIndex()]);
 						}
 					}
 					if (i == max_number_to_print) {
-						amrex::Print() << fmt::format("\t...\n");
+						amrex::Print() << std::format("\t...\n");
 					}
 				}
 			}
@@ -1162,7 +1162,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const BL_PROFILE("PhysicsParticleRegister::printParticleStatistics()");
 		amrex::Print() << ">>> Particle statistics:\n";
-		amrex::Print() << fmt::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
+		amrex::Print() << std::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->printParticleStatistics();

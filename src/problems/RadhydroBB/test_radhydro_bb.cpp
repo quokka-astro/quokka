@@ -10,7 +10,7 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 #include <cmath>
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 #include <unordered_map>
 
@@ -387,14 +387,14 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::ylim(0.0, 1.0);
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
+	matplotlibcpp::title(std::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	// if constexpr (beta_order_ == 1) {
 	// 	matplotlibcpp::ylim(1.0 - 1.0e-7, 1.0 + 1.0e-7);
 	// }
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./adv_temp.pdf");
 	// save to adv_temp_{n_groups_}bins.pdf
-	matplotlibcpp::save(fmt::format("./adv_temp_{}_bins.pdf", n_groups_));
+	matplotlibcpp::save(std::format("./adv_temp_{}_bins.pdf", n_groups_));
 
 	// plot spectrum
 	matplotlibcpp::clf();
@@ -414,11 +414,11 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("frequency (dimensionless)");
 	matplotlibcpp::ylabel("spectrum density (dimensionless)");
 	// matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
+	matplotlibcpp::title(std::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./adv_spectrum.pdf");
 	// save to adv_spectrum_{n_groups_}bins.pdf
-	matplotlibcpp::save(fmt::format("./adv_spectrum_{}_bins.pdf", n_groups_));
+	matplotlibcpp::save(std::format("./adv_spectrum_{}_bins.pdf", n_groups_));
 
 	// plot flux spectrum
 	matplotlibcpp::clf();
@@ -438,11 +438,11 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("frequency (dimensionless)");
 	matplotlibcpp::ylabel("flux density (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
+	matplotlibcpp::title(std::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./adv_flux_spectrum.pdf");
 	// save to adv_flux_spectrum_{n_groups_}bins.pdf
-	matplotlibcpp::save(fmt::format("./adv_flux_spectrum_{}_bins.pdf", n_groups_));
+	matplotlibcpp::save(std::format("./adv_flux_spectrum_{}_bins.pdf", n_groups_));
 #endif
 
 	if (export_csv) {
