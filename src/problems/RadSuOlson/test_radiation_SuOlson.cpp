@@ -91,17 +91,17 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMea
 
 [[maybe_unused]] static constexpr int nmscalars_ = Physics_Traits<MarshakProblem>::numMassScalars;
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
-									    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<MarshakProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
+						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
-									    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<MarshakProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
+						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas * Tgas * Tgas * Tgas);
 }
