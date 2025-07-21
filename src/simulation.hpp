@@ -108,7 +108,8 @@ static constexpr auto QUOKKA_VERSION = "25.03";
 template <> struct std::formatter<amrex::IntVect> {
 	static constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-	static auto format(const amrex::IntVect &iv, std::format_context &ctx) {
+	static auto format(const amrex::IntVect &iv, std::format_context &ctx)
+	{
 #if AMREX_SPACEDIM == 1
 		return std::format_to(ctx.out(), "[{}]", iv[0]);
 #elif AMREX_SPACEDIM == 2
@@ -122,7 +123,8 @@ template <> struct std::formatter<amrex::IntVect> {
 template <> struct std::formatter<amrex::RealVect> {
 	static constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-	static auto format(const amrex::RealVect &rv, std::format_context &ctx) {
+	static auto format(const amrex::RealVect &rv, std::format_context &ctx)
+	{
 #if AMREX_SPACEDIM == 1
 		return std::format_to(ctx.out(), "[{}]", rv[0]);
 #elif AMREX_SPACEDIM == 2
