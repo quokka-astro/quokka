@@ -275,13 +275,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
 				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
 
-
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 			       amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData, amrex::Vector<amrex::Real> &fineTime,
 			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, FillPatchType fptype,
 			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
-
 
 	static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
 	virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -1930,7 +1928,6 @@ void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Multi
 	}
 }
 
-
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditionsAtLevel_cc(int level, amrex::Real time)
 {
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -2114,8 +2111,6 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 						// using custom Dirichlet BCs, e.g., radiation
 						// variables in a hydro-only problem)
 }
-
-
 
 // Compute a new multifab 'mf' by copying in state from given data and filling
 // ghost cells
