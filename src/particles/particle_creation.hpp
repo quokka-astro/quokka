@@ -476,7 +476,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double numy = 0.0;
 						double numz = 0.0;
 						double denominator = 0.0;
-						double km_per_s = 1.e5;
+						double const km_per_s = 1.e5;
 						double v_min = 3.0;   // Minimum velocity from the distribution
 						double v_max = 385.0; // Maximum velocity from the distribution
 						double beta = 1.8;    // Slope of the velocity distribution
