@@ -45,6 +45,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_BCRec.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
+#include "AMReX_EdgeFluxRegister.H"
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
@@ -68,7 +69,6 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
-#include "AMReX_EdgeFluxRegister.H"
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <yaml-cpp/yaml.h>
@@ -1722,13 +1722,15 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 		if (emf_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
 			AMREX_ASSERT(emf_as_crse == emf_reg_[lev + 1].get());
-			emf_as_crse->CrseAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)}, dt_lev);
+			emf_as_crse->CrseAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
+					     dt_lev);
 		}
 
 		if (emf_as_fine != nullptr) {
 			AMREX_ASSERT(lev > 0);
 			AMREX_ASSERT(emf_as_fine == emf_reg_[lev].get());
-			emf_as_fine->FineAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)}, dt_lev);
+			emf_as_fine->FineAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
+					     dt_lev);
 		}
 	}
 #endif
@@ -1786,12 +1788,12 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 									   Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
-		
+
 		// Initialize EdgeFluxRegister for MHD
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = AMREX_SPACEDIM; // EMF has AMREX_SPACEDIM components
-			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), 
-										    Geom(level), Geom(level - 1), nemf_vars);
+			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
+										    Geom(level - 1), nemf_vars);
 		}
 	}
 
@@ -1848,12 +1850,12 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 									   Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
-		
+
 		// Initialize EdgeFluxRegister for MHD
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = AMREX_SPACEDIM; // EMF has AMREX_SPACEDIM components
-			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), 
-										    Geom(level), Geom(level - 1), nemf_vars);
+			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
+										    Geom(level - 1), nemf_vars);
 		}
 	}
 
@@ -2058,12 +2060,12 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 									   Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
-		
+
 		// Initialize EdgeFluxRegister for MHD
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = AMREX_SPACEDIM; // EMF has AMREX_SPACEDIM components
-			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), 
-										    Geom(level), Geom(level - 1), nemf_vars);
+			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
+										    Geom(level - 1), nemf_vars);
 		}
 	}
 

@@ -280,9 +280,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void printCoordinates(int lev, const amrex::IntVect &cell_idx);
 
-	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
-					    amrex::YAFluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse = nullptr,
-					    amrex::EdgeFluxRegister *emf_as_fine = nullptr);
+	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
+					    amrex::EdgeFluxRegister *emf_as_crse = nullptr, amrex::EdgeFluxRegister *emf_as_fine = nullptr);
 
 	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
 				 amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
@@ -1355,8 +1354,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCoordinates
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
-						      amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
-						      amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool
+						      amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
+						      amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time,
+						      amrex::Real dt_lev) -> bool
 {
 	const BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
 
