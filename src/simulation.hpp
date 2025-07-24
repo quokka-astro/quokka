@@ -1815,13 +1815,21 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 		const int nghost_fc = state_new_fc_[level][0].nGrow();
 		amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_new_fc;
 		amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_old_fc;
-		// define
+		amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
+		// define arrays
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			int_state_new_fc[idim] = amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
 			int_state_old_fc[idim] = amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
+			BCs_array[idim] = BCs_fc_;
 		}
-		// TODO(neco): fillPatchFC
-		// swap
+		// create array of pointers for FillCoarsePatchFaceArray
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> int_state_new_fc_ptr;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			int_state_new_fc_ptr[idim] = &int_state_new_fc[idim];
+		}
+		FillCoarsePatchFaceArray(level, time, int_state_new_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
+
+		// swap pointers
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			std::swap(int_state_new_fc[idim], state_new_fc_[level][idim]);
 			std::swap(int_state_old_fc[idim], state_old_fc_[level][idim]);
