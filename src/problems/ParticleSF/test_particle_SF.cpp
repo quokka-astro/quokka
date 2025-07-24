@@ -207,14 +207,14 @@ auto problem_main() -> int
 					vmax = vtot; // update maximum velocity
 				}
 				log_vel = std::log(vtot); // store log of velocity in km/s
-				int bin_index = int((log_vel - log_v_min) / bin_width);
+				int const bin_index = static_cast<int>((log_vel - log_v_min) / bin_width);
 				if (bin_index >= 0 && bin_index < n_bins) {
 					hist[bin_index]++;
 				}
 			}
 		}
 
-		double slope_predicted = (std::log(hist[n_bins]) - std::log(hist[0])) / (log_v_max - log_v_min);
+		double const slope_predicted = (std::log(hist[n_bins]) - std::log(hist[0])) / (log_v_max - log_v_min);
 		amrex::Print() << "Slope of velocity distribution = " << slope_predicted << "\n";
 		amrex::Print() << "Minimum velocity = " << vmin << " km/s\n";
 		amrex::Print() << "Maximum velocity = " << vmax << " km/s\n";
