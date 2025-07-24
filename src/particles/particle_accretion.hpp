@@ -9,6 +9,7 @@
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
+#include <limits>
 
 namespace quokka
 {
@@ -23,7 +24,11 @@ constexpr AccretionScheme accretion_scheme = AccretionScheme::BondiHoyle;
 namespace SinkAccretionUtils
 {
 
-constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
+// constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
+constexpr int stencil_size = 3;
+constexpr int rho_infty_stencil_size = stencil_size; // 0: use the cell that the particle is in
+
+constexpr double r_acc_tolerance = 1.0001;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
@@ -52,15 +57,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	double sum_py = 0.0;
 	double sum_pz = 0.0;
 	double sum_cs = 0.0;
-	for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
-		for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
-			for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-				const double x = par_x - plo[0] - ii * dx[0];
-				const double y = par_y - plo[1] - jj * dx[1];
-				const double z = par_z - plo[2] - kk * dx[2];
+	for (int ii = ix - rho_infty_stencil_size; ii <= ix + rho_infty_stencil_size; ++ii) {
+		for (int jj = iy - rho_infty_stencil_size; jj <= iy + rho_infty_stencil_size; ++jj) {
+			for (int kk = iz - rho_infty_stencil_size; kk <= iz + rho_infty_stencil_size; ++kk) {
+				const double x = par_x - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+				const double y = par_y - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+				const double z = par_z - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 				const double r_sqr = x * x + y * y + z * z;
 				const double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
-				if (r_sqr > r_acc_sqr) {
+				// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+				if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 					continue;
 				}
 				const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
@@ -155,16 +161,17 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - ii * dx[0];
-					const double y = p.pos(1) - plo[1] - jj * dx[1];
-					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
 						// use a large accretion radius; this has the effect of using a cubic, uniform kernel
 						r_acc_sqr = std::numeric_limits<double>::infinity();
 					}
-					if (r_sqr > r_acc_sqr) {
+					// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+					if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 						continue;
 					}
 					double w = compute_accretion_kernel(r_sqr, r_K);
@@ -180,16 +187,17 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - ii * dx[0];
-					const double y = p.pos(1) - plo[1] - jj * dx[1];
-					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
 						// use a large accretion radius; this has the effect of using a cubic, uniform kernel
 						r_acc_sqr = std::numeric_limits<double>::infinity();
 					}
-					if (r_sqr > r_acc_sqr) {
+					// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+					if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 						continue;
 					}
 					double w = compute_accretion_kernel(r_sqr, r_K);
@@ -236,23 +244,25 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
 		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
 
-		// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
-		constexpr double J = 0.25;
-		double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k);
-		if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
-			cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
+		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1
+		// The condition "accretion_rate_cell > 0.0" is essential as we only want to apply this to the accretion zone. There could be a
+		// Jeans-violating cell that is not in a accretion zone emerging at the beginning of a step.
+		if (accretion_rate_cell > std::numeric_limits<double>::min()) {
+			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
+			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k);
+			if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
+				cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
+			}
+			const double rho_J = ParticleUtils::computeJeansDensity(cs_cell, dx_max);
+			const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
+				const double accretion_rate_cell_new = rho_J / rho_cell - 1.0;
+				local_accretion_rate_arr[bx](i, j, k) = accretion_rate_cell_new;
+				local_scale_down_arr[bx](i, j, k) = accretion_rate_cell_new / accretion_rate_cell;
+			}
+			AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
+			AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
 		}
-		const double rho_J = J * J * M_PI * cs_cell * cs_cell / (C::Gconst * (dx_max * dx_max));
-
-		// If (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1
-		const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
-		if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
-			const double accretion_rate_cell_new = rho_J / rho_cell - 1.0;
-			local_accretion_rate_arr[bx](i, j, k) = accretion_rate_cell_new;
-			local_scale_down_arr[bx](i, j, k) = accretion_rate_cell_new / accretion_rate_cell;
-		}
-		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
-		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
 	});
 
 	// synchronize scale_down
@@ -290,16 +300,17 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - ii * dx[0];
-					const double y = p.pos(1) - plo[1] - jj * dx[1];
-					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
 						// use a large accretion radius; this has the effect of using a cubic, uniform kernel
 						r_acc_sqr = std::numeric_limits<double>::infinity();
 					}
-					if (r_sqr > r_acc_sqr) {
+					// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+					if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 						continue;
 					}
 					double w = compute_accretion_kernel(r_sqr, r_K);
@@ -319,16 +330,17 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - ii * dx[0];
-					const double y = p.pos(1) - plo[1] - jj * dx[1];
-					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
 						// use a large accretion radius; this has the effect of using a cubic, uniform kernel
 						r_acc_sqr = std::numeric_limits<double>::infinity();
 					}
-					if (r_sqr > r_acc_sqr) {
+					// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+					if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 						continue;
 					}
 					double w = compute_accretion_kernel(r_sqr, r_K);
@@ -398,6 +410,7 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 		AMREX_ASSERT(accretion_rate_cell <= 0.0);
 		AMREX_ASSERT(accretion_rate_cell > -1.0);
 		const double accretion_down_factor = 1.0 + accretion_rate_cell;
+		AMREX_ASSERT(accretion_down_factor > std::numeric_limits<double>::min());
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= accretion_down_factor;

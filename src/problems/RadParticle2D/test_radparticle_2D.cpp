@@ -34,6 +34,7 @@ template <> struct Particle_Traits<ParticleProblem> {
 };
 
 template <> struct Physics_Traits<ParticleProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -60,7 +61,7 @@ template <> void QuokkaSimulation<ParticleProblem>::createInitialRadParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 2 + nGroups_; // birth_time death_time lum1
 	RadParticles->SetVerbose(1);
-	RadParticles->InitFromAsciiFile("RadParticles2D.txt", nreal_extra, nullptr);
+	RadParticles->InitFromAsciiFile("../inputs/RadParticles2D.txt", nreal_extra, nullptr);
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real

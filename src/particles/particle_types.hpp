@@ -314,6 +314,12 @@ inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use un
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
 
+// Disable particle drift
+inline bool disable_particle_drift = false; // NOLINT
+
+// Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
+inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -335,6 +341,12 @@ inline void particleParmParse()
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
+
+	// Disable particle drift
+	pp.query("disable_particle_drift", disable_particle_drift);
+
+	// Stellar velocity limit parameter
+	pp.query("stellar_velocity_limit", stellar_velocity_limit);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);

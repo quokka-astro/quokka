@@ -52,6 +52,7 @@ constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drift
 constexpr double Lx = 0.01575;		  // cm
 
 template <> struct Physics_Traits<ShockProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

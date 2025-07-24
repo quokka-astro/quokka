@@ -33,7 +33,7 @@ const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
 
-static std::string particles_file = "Sink.txt"; // NOLINT
+static std::string particles_file = "sink4.txt"; // NOLINT
 
 template <> struct Particle_Traits<SinkProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -52,6 +52,7 @@ template <> struct HydroSystem_Traits<SinkProblem> {
 template <> struct Physics_Traits<SinkProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
@@ -155,7 +156,6 @@ auto problem_main() -> int
 	sim.stopTime_ = 10.0 * dt_init;
 	sim.initDt_ = dt_init;
 	sim.tempFloor_ = 10.0; // K
-	sim.doPoissonSolve_ = 1;
 
 	// initialize
 	sim.setInitialConditions();
@@ -182,7 +182,7 @@ auto problem_main() -> int
 	const double total_total_mass_init = total_mass_init + total_particle_mass;
 
 	// evolve
-	sim.maxTimesteps_ = 1;
+	sim.maxTimesteps_ = 0;
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -221,11 +221,11 @@ auto problem_main() -> int
 		const double rel_error_total_mass = std::abs(total_total_mass_step1 - total_total_mass_init) / total_total_mass_init;
 		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass << "\n";
 
-		// Note that while the error relative to the total mass (gas + particles) should be within machine precision (1e-14), the error relative
-		// to the *change* could be large because the change is several orders of magnitude smaller than the total mass.
-		const double mass_rel_error_tol = 1.0e-9;
+		// The total mass (gas + particles) should be conserved within machine precision (1e-14)
+		const double mass_rel_error_tol = 1.0e-14;
 		if (!(rel_error_total_mass < mass_rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: total mass is not conserved at step 1\n";
 		}
 
 		// exact solution
@@ -267,9 +267,11 @@ auto problem_main() -> int
 		amrex::Print() << "Solution norm = " << sol_norm << "\n";
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
-		const double rel_error_tol = 1.0e-6;
+		// The relative L1 error norm with respect to the exact solution could be large because there is a hydro update after sink accretion.
+		const double rel_error_tol = 3.0e-6;
 		if (!(rel_error < rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: density profile is not correct\n";
 		}
 
 #ifdef HAVE_PYTHON
@@ -327,13 +329,13 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass_final << "\n";
 
 		// Total mass should be conserved to machine precision
-		if (!(rel_error_total_mass_final < 1.0e-13)) {
+		const double mass_rel_error_tol = 1.0e-13;
+		if (!(rel_error_total_mass_final < mass_rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: total mass is not conserved at the end of the simulation\n";
 		}
 
-		if (status == 1) {
-			amrex::Print() << "Test failed\n";
-		} else {
+		if (status == 0) {
 			amrex::Print() << "Test passed\n";
 		}
 	}

@@ -48,6 +48,7 @@ template <> struct HydroSystem_Traits<BinaryOrbit> {
 
 template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -82,7 +83,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
-	CICParticles->InitFromAsciiFile("BinaryOrbit_particles.txt", nreal_extra, nullptr);
+	CICParticles->InitFromAsciiFile("../inputs/BinaryOrbit_particles.txt", nreal_extra, nullptr);
 
 	// test particle splitting
 	// (this is intended to only be used when restarting at a higher resolution)
@@ -184,7 +185,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);
-	sim.doPoissonSolve_ = 1; // enable self-gravity
 
 	// initialize
 	sim.setInitialConditions();

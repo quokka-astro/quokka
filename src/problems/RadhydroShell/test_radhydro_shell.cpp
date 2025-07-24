@@ -14,6 +14,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
+#include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include <fstream>
@@ -53,6 +54,7 @@ template <> struct HydroSystem_Traits<ShellProblem> {
 };
 
 template <> struct Physics_Traits<ShellProblem> {
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -64,8 +66,8 @@ template <> struct Physics_Traits<ShellProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-constexpr amrex::Real Msun = 2.0e33;	       // g
-constexpr amrex::Real parsec_in_cm = 3.086e18; // cm
+constexpr amrex::Real Msun = C::M_solar;	// g
+constexpr amrex::Real parsec_in_cm = C::parsec; // cm
 
 constexpr amrex::Real specific_luminosity = 2000.;			   // erg s^-1 g^-1
 constexpr amrex::Real GMC_mass = 1.0e6 * Msun;				   // g
