@@ -476,13 +476,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double numy = 0.0;
 						double numz = 0.0;
 						double denominator = 0.0;
-						double vx_adj = NAN;
-						double vy_adj = NAN;
-						double vz_adj = NAN;
-						double rho_adj = NAN;
-						double v_cm_x = NAN;
-						double v_cm_y = NAN;
-						double v_cm_z = NAN;
 						double km_per_s = 1.e5;
 						double v_min = 3.0;   // Minimum velocity from the distribution
 						double v_max = 385.0; // Maximum velocity from the distribution
