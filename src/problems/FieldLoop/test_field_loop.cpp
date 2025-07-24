@@ -119,6 +119,29 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGridFaceVars
 	});
 }
 
+template <> void QuokkaSimulation<FieldLoop>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// static mesh refinement
+
+	auto const &dx = geom[lev].CellSizeArray();
+	auto const &plo = geom[lev].ProbLoArray();
+	auto const &phi = geom[lev].ProbHiArray();
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto tag = tags.array(mfi);
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const double x_frac = ((i + 0.5) * dx[0]) / (phi[0] - plo[0]);
+			const double y_frac = ((j + 0.5) * dx[1]) / (phi[1] - plo[1]);
+			const double z_frac = ((k + 0.5) * dx[2]) / (phi[2] - plo[2]);
+			
+			if (x_frac >= 0.7 && x_frac <= 0.8 && y_frac >= 0.3 && y_frac <= 0.7) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
 auto problem_main() -> int
 {
 	const int nvars_cc = Physics_Indices<FieldLoop>::nvarTotal_cc;
