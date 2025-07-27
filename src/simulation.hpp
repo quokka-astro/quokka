@@ -2383,7 +2383,6 @@ void AMRSimulation<problem_t>::FillCoarsePatchFaceArray(int lev, amrex::Real tim
 
 	AMREX_ASSERT(lev > 0);
 
-
 	amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> cmf_array;
 	amrex::Vector<amrex::Real> ctime;
 	GetDataFaceArray(lev - 1, time, cmf_array, ctime);
