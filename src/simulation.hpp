@@ -1800,7 +1800,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 
 		// Initialize EdgeFluxRegister for MHD
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			const int nemf_vars = AMREX_SPACEDIM; // EMF has AMREX_SPACEDIM components
+			const int nemf_vars = 1; // EMF has 1 component per dimension
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 										    Geom(level - 1), nemf_vars);
 		}
@@ -1862,7 +1862,7 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 
 		// Initialize EdgeFluxRegister for MHD
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			const int nemf_vars = AMREX_SPACEDIM; // EMF has AMREX_SPACEDIM components
+			const int nemf_vars = 1; // EMF has 1 component per dimension
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 										    Geom(level - 1), nemf_vars);
 		}
@@ -2072,7 +2072,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 
 		// Initialize EdgeFluxRegister for MHD
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			const int nemf_vars = AMREX_SPACEDIM; // EMF has AMREX_SPACEDIM components
+			const int nemf_vars = 1; // EMF has 1 component per dimension
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 										    Geom(level - 1), nemf_vars);
 		}
