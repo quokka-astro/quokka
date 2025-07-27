@@ -2382,7 +2382,7 @@ void AMRSimulation<problem_t>::FillCoarsePatchFaceArray(int lev, amrex::Real tim
 	BL_PROFILE("AMRSimulation::FillCoarsePatchFaceArray()"); // NOLINT(misc-const-correctness)
 
 	AMREX_ASSERT(lev > 0);
-	
+
 	// Debug output
 	amrex::Print() << "FillCoarsePatchFaceArray: lev=" << lev << ", icomp=" << icomp << ", ncomp=" << ncomp << std::endl;
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
