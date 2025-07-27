@@ -88,6 +88,7 @@ namespace filesystem = experimental::filesystem;
 // internal headers
 #include "fundamental_constants.H"
 #include "grid.hpp"
+#include "hydro/hydro_system.hpp"
 #include "io/DiagBase.H"
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
@@ -1698,15 +1699,23 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_
 		if (fr_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
 			AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
+			// Only add hydro components (0 to ncompHydro_)
+			const int srccomp = 0;
+			const int destcomp = 0;
+			const int numcomp = HydroSystem<problem_t>::nvar_;
 			fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi), fluxArrays[1].fabPtr(mfi), fluxArrays[2].fabPtr(mfi))},
-					    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+					    geom[lev].CellSize(), dt_lev, srccomp, destcomp, numcomp, amrex::RunOn::Gpu);
 		}
 
 		if (fr_as_fine != nullptr) {
 			AMREX_ASSERT(lev > 0);
 			AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
+			// Only add hydro components (0 to ncompHydro_)
+			const int srccomp = 0;
+			const int destcomp = 0;
+			const int numcomp = HydroSystem<problem_t>::nvar_;
 			fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi), fluxArrays[1].fabPtr(mfi), fluxArrays[2].fabPtr(mfi))},
-					    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+					    geom[lev].CellSize(), dt_lev, srccomp, destcomp, numcomp, amrex::RunOn::Gpu);
 		}
 	}
 }
@@ -2373,6 +2382,12 @@ void AMRSimulation<problem_t>::FillCoarsePatchFaceArray(int lev, amrex::Real tim
 	BL_PROFILE("AMRSimulation::FillCoarsePatchFaceArray()"); // NOLINT(misc-const-correctness)
 
 	AMREX_ASSERT(lev > 0);
+	
+	// Debug output
+	amrex::Print() << "FillCoarsePatchFaceArray: lev=" << lev << ", icomp=" << icomp << ", ncomp=" << ncomp << std::endl;
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		amrex::Print() << "  mf_array[" << idim << "]->nComp()=" << mf_array[idim]->nComp() << std::endl;
+	}
 
 	amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> cmf_array;
 	amrex::Vector<amrex::Real> ctime;
