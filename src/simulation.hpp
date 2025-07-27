@@ -2383,11 +2383,6 @@ void AMRSimulation<problem_t>::FillCoarsePatchFaceArray(int lev, amrex::Real tim
 
 	AMREX_ASSERT(lev > 0);
 
-	// Debug output
-	amrex::Print() << "FillCoarsePatchFaceArray: lev=" << lev << ", icomp=" << icomp << ", ncomp=" << ncomp << std::endl;
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		amrex::Print() << "  mf_array[" << idim << "]->nComp()=" << mf_array[idim]->nComp() << std::endl;
-	}
 
 	amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> cmf_array;
 	amrex::Vector<amrex::Real> ctime;
