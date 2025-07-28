@@ -1,21 +1,13 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
-/// \file test_radiation_streaming.cpp
-/// \brief Defines a test problem for radiation in the free-streaming regime.
+/// \file test_dust_dyn.cpp
+/// \brief Defines a test problem for dust drag force
 ///
 
+#include "QuokkaSimulation.hpp"
+#include "util/fextract.hpp"
+#include <fmt/format.h>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "AMReX.H"
-#include "QuokkaSimulation.hpp"
-#include "radiation/radiation_system.hpp"
-#include "util/fextract.hpp"
-#include "util/valarray.hpp"
-#include <fmt/format.h>
 
 struct StreamingProblem {
 };
