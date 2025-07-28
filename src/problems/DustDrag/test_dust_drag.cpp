@@ -14,6 +14,7 @@ struct StreamingProblem {
 
 constexpr double initial_Egas = 1.0e-5;
 constexpr double rho = 1.0;
+constexpr double v0 = 1.0;
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -43,7 +44,7 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const auto Egas0 = initial_Egas;
-	const auto vx0 = 1.0; // initial x velocity
+	const auto vx0 = v0; // initial x velocity
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -100,7 +101,7 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		vx_exact.at(i) = 1.0; // expected x velocity
+		vx_exact.at(i) = v0; // expected x velocity
 		// compute x velocity from momentum and density
 		const double momentum_x = values.at(RadSystem<StreamingProblem>::x1GasMomentum_index)[i];
 		const double density = values.at(RadSystem<StreamingProblem>::gasDensity_index)[i];
