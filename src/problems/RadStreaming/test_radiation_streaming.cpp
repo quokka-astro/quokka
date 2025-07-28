@@ -82,7 +82,8 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad0 * radEnergyFractions[g];
+			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) =
+			    Erad0 * radEnergyFractions[g];
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;

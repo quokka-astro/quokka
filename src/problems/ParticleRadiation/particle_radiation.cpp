@@ -231,7 +231,8 @@ auto problem_main() -> int
 	// Total radiation energy in the field
 	amrex::Real total_Erad_init = 0.0;
 	for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
+		total_Erad_init +=
+		    sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
 	}
 
 	// total gas energy
