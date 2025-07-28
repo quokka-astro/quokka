@@ -171,10 +171,10 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < n_groups_; ++g) {
-			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad_floor;
-			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = erad_floor;
+			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
+			state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
+			state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
 		}
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
@@ -253,7 +253,7 @@ auto problem_main() -> int
 		// const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
 		double Erad_t = 0.0;
 		for (int g = 0; g < n_groups_; ++g) {
-			Erad_t += values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+			Erad_t += values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 		}
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
@@ -282,8 +282,8 @@ auto problem_main() -> int
 	for (int g = 0; g < n_groups_; ++g) {
 		// bin_center.push_back(std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]));
 		bin_center.push_back(rad_boundaries_[g]);
-		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[ii];
-		const auto Frad_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g)[ii];
+		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[ii];
+		const auto Frad_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g)[ii];
 		const double bin_width = rad_boundaries_[g + 1] - rad_boundaries_[g];
 		E_r.push_back(Erad_t);
 		F_r.push_back(Frad_t);
