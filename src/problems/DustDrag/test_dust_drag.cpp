@@ -1,4 +1,4 @@
-/// \file test_dust_dyn.cpp
+/// \file test_dust_drag.cpp
 /// \brief Defines a test problem for dust drag force
 ///
 
@@ -63,7 +63,7 @@ auto problem_main() -> int
 	// const double Lx = 1.0;
 	const double CFL_number = 0.8;
 	const double tmax = 1.0;
-	const int max_timesteps = 10;
+	const int max_timesteps = 100;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;

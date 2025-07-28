@@ -10,7 +10,7 @@ add_subdirectory(ParticleSinkFormation)
 add_subdirectory(SN)
 add_subdirectory(ParticleSF)
 
-add_subdirectory(DustDyn)
+add_subdirectory(DustDrag)
 
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
