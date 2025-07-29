@@ -102,10 +102,10 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < nGroups_; ++g) {
-			state_cc(i, j, k, RadSystem<ParticleProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
-			state_cc(i, j, k, RadSystem<ParticleProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ParticleProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ParticleProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad0;
+			state_cc(i, j, k, RadSystem<ParticleProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 		state_cc(i, j, k, RadSystem<ParticleProblem>::gasEnergy_index) = Egas0;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::gasDensity_index) = rho0;
@@ -169,8 +169,8 @@ auto problem_main() -> int
 		xs.at(i) = x;
 		// erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
 		Erad_group0.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index)[i];
-		Erad_group1.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index + Physics_NumVars::numRadVars)[i];
-		Erad_group2.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index + 2 * Physics_NumVars::numRadVars)[i];
+		Erad_group1.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup)[i];
+		Erad_group2.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index + 2 * Physics_NumVars::numRadVarsPerGroup)[i];
 		tot_lum_group0 += Erad_group0.at(i) * dx;
 		tot_lum_group1 += Erad_group1.at(i) * dx;
 		tot_lum_group2 += Erad_group2.at(i) * dx;
