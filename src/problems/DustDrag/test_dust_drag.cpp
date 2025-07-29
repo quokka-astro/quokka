@@ -46,14 +46,22 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	const auto Egas0 = initial_Egas;
 	const auto vx0 = v0; // initial x velocity
 
+	const auto rho_dust = rho;
+	const auto vx_dust = v0;
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = rho * vx0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::energy_index) = Egas0;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::internalEnergy_index) = Egas0;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::x1Momentum_index) = rho * vx0;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::x2Momentum_index) = 0.;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::x3Momentum_index) = 0.;
+
+		// state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index) = rho_dust;
+		// state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust * vx_dust;
+		// state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index) = 0.;
+		// state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index) = 0.;
 	});
 }
 
@@ -67,7 +75,7 @@ auto problem_main() -> int
 	const int max_timesteps = 100;
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
+	constexpr int nvars = HydroSystem<StreamingProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -103,8 +111,8 @@ auto problem_main() -> int
 		xs.at(i) = x;
 		vx_exact.at(i) = v0; // expected x velocity
 		// compute x velocity from momentum and density
-		const double momentum_x = values.at(RadSystem<StreamingProblem>::x1GasMomentum_index)[i];
-		const double density = values.at(RadSystem<StreamingProblem>::gasDensity_index)[i];
+		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[i];
+		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[i];
 		vx_sim.at(i) = momentum_x / density;
 	}
 
