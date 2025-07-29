@@ -1,0 +1,55 @@
+# This file is used by Git to map multiple names/emails to canonical authors
+# Format: Proper Name <proper@email.com> <commit@email.com>
+# Format: Proper Name <proper@email.com> Commit Name <commit@email.com>
+
+# Aditi Vijayan
+Aditi Vijayan <aditi.vijayan@anu.edu.au> <45175933+aditivijayan@users.noreply.github.com>
+Aditi Vijayan <aditi.vijayan@anu.edu.au> <aditi@setonix-01.pawsey.org.au>
+Aditi Vijayan <aditi.vijayan@anu.edu.au> <aditi@setonix-03.pawsey.org.au>
+Aditi Vijayan <aditi.vijayan@anu.edu.au> <vijayanaditi@gmail.com>
+Aditi Vijayan <aditi.vijayan@anu.edu.au> aditivijayan <vijayanaditi@gmail.com>
+
+# Ben Wibking
+Ben Wibking <benwibking@gmail.com> <ben@wibking.com>
+Ben Wibking <benwibking@gmail.com> <benjamin.wibking@anu.edu.au>
+Ben Wibking <benwibking@gmail.com> <wibking.1@astronomy.ohio-state.edu>
+Ben Wibking <benwibking@gmail.com> <wibkingb@msu.edu>
+Ben Wibking <benwibking@gmail.com> Benjamin Wibking <benjamin.wibking@anu.edu.au>
+Ben Wibking <benwibking@gmail.com> Benjamin Wibking <wibkingb@msu.edu>
+
+# ChongChong He
+ChongChong He <chongchonghe99@gmail.com> <che1234@umd.edu>
+ChongChong He <chongchonghe99@gmail.com> <chongchong.he@anu.edu.au>
+ChongChong He <chongchonghe99@gmail.com> chongchonghe <chongchong.he@anu.edu.au>
+ChongChong He <chongchonghe99@gmail.com> chongchonghe <chongchonghe99@gmail.com>
+
+# Conrad Chan
+Conrad Chan <8309215+conradtchan@users.noreply.github.com>
+
+# Liz Cole
+Liz Cole <lizmcole@gmail.com> lizmcole <lizmcole@gmail.com>
+Liz Cole <lizmcole@gmail.com> lizmcole <lizmcole@users.noreply.github.com>
+
+# Mark Krumholz
+Mark Krumholz <mark.krumholz@anu.edu.au>
+
+# Neco Kriel
+Neco Kriel <necokriel@gmail.com> <43261821+AstroKriel@users.noreply.github.com>
+Neco Kriel <necokriel@gmail.com> neco kriel <necokriel@gmail.com>
+
+# Pakshing Li
+Pakshing Li <pakshingli@shao.ac.cn> pakshingli <pakshingli@shao.ac.cn>
+Pakshing Li <pakshingli@shao.ac.cn> pakshingli <pakshingLi@shao.ac.cn>
+Pakshing Li <pakshingli@shao.ac.cn> pakshingli <psli2000@hotmail.com>
+
+# Piyush Sharda
+Piyush Sharda <34922596+psharda@users.noreply.github.com> <psharda@RSAA-043527.local>
+Piyush Sharda <34922596+psharda@users.noreply.github.com> <psharda@RSAA-43608.local>
+
+# Bots (excluded from statistics by default in many tools)
+Claude Bot <noreply@anthropic.com> Claude <noreply@anthropic.com>
+Claude Bot <209825114+claude[bot]@users.noreply.github.com> claude[bot] <209825114+claude[bot]@users.noreply.github.com>
+Dependabot <49699333+dependabot[bot]@users.noreply.github.com> dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>
+Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+Pre-commit CI <66853113+pre-commit-ci[bot]@users.noreply.github.com> pre-commit-ci[bot] <66853113+pre-commit-ci[bot]@users.noreply.github.com>
+StepSecurity Bot <bot@stepsecurity.io>
