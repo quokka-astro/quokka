@@ -13,15 +13,15 @@ enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 
 // this struct is specialized by the user application code.
 template <typename problem_t> struct Physics_Traits {
-	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 0;
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
-	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr double boltzmann_constant = C::k_B;	    // Hydro, EOS
 	static constexpr double gravitational_constant = C::Gconst; // gravity
@@ -38,23 +38,16 @@ template <typename problem_t> struct Physics_Indices {
 	// number of cc quantities required for advection problems
 	static const int nvarTotal_cc_adv = 1;
 	// number of cc quantities required for rad /+ hydro problem
-	static constexpr int nvarTotal_cc_radhydro = []() constexpr {
-		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-			return Physics_Traits<problem_t>::numPassiveScalars +
-			       Physics_NumVars::numHydroVars *
-				   static_cast<int>(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) +
-			       Physics_NumVars::numRadVars * Physics_Traits<problem_t>::nGroups;
-		} else {
-			return Physics_Traits<problem_t>::numPassiveScalars +
-			       Physics_NumVars::numHydroVars *
-				   static_cast<int>(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled);
-		}
-	}();
+	// note that either hydro or radiation must be enabled, so numHydroVars is always counted
+	static constexpr int nvarTotal_cc_radhydro = Physics_Traits<problem_t>::numPassiveScalars +
+			       Physics_NumVars::numHydroVars + Physics_NumVars::numRadVars * Physics_Traits<problem_t>::nGroups * static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled) +
+						 Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups * static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled);
 	// cell-centered
 	static const int nvarTotal_cc = nvarTotal_cc_radhydro > 0 ? nvarTotal_cc_radhydro : nvarTotal_cc_adv;
 	static const int hydroFirstIndex = 0;
 	static const int pscalarFirstIndex = Physics_NumVars::numHydroVars;
-	static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
+	static const int dustFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
+	static const int radFirstIndex = dustFirstIndex + Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups * static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled);
 	// face-centered
 	static const int nvarPerDim_fc = Physics_NumVars::numMHDVars_per_dim * static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled);
 	static const int nvarTotal_fc = AMREX_SPACEDIM * nvarPerDim_fc;
