@@ -164,6 +164,7 @@ template <int Ndim> struct DataTableGpuConst {
 									      {1.0 - interp.normalized[1], interp.normalized[1]},
 									      {1.0 - interp.normalized[2], interp.normalized[2]}}};
 
+			// clang-format off
 			const amrex::Real value = (
 				w[2][0] * (w[1][0] * (w[0][0] * dataView_(ix[0], ix[1], ix[2]) +
 															w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2])) +
@@ -174,6 +175,7 @@ template <int Ndim> struct DataTableGpuConst {
 												w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2] + 1)) +
 						 w[1][1] * (w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2] + 1) +
 												w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2] + 1))));
+			// clang-format on
 
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
@@ -187,6 +189,7 @@ template <int Ndim> struct DataTableGpuConst {
 									      {1.0 - interp.normalized[3], interp.normalized[3]},
 											}};
 
+			// clang-format off
 			const amrex::Real value = (
 				w[3][0] *
 						(w[2][0] *
@@ -218,6 +221,7 @@ template <int Ndim> struct DataTableGpuConst {
 												w[1][1] * (w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2] + 1, ix[3] + 1) +
 																	 w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2] + 1, ix[3] + 1))))
 			);
+			// clang-format on
 
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
