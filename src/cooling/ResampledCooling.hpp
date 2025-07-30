@@ -27,11 +27,11 @@ namespace quokka::ResampledCooling
 
 struct resampledGpuConstTables {
 	// GPU-friendly const table access
-	quokka::DataTableGpuConst cooling_rates;
-	quokka::DataTableGpuConst temperatures;
-	quokka::DataTableGpuConst sound_speeds;
-	quokka::DataTableGpuConst pressures;
-	quokka::DataTableGpuConst entropies;
+	quokka::DataTableGpuConst<2> cooling_rates;
+	quokka::DataTableGpuConst<2> temperatures;
+	quokka::DataTableGpuConst<2> sound_speeds;
+	quokka::DataTableGpuConst<2> pressures;
+	quokka::DataTableGpuConst<2> entropies;
 
 	// density range
 	amrex::Real rho_min;
