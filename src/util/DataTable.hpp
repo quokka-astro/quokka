@@ -15,7 +15,7 @@ namespace quokka
 // Structure to hold interpolation indices and normalized coordinates
 template <int Ndim>
 struct InterpData {
-	std::array<int, Ndim> indices{};        // grid indices for each dimension (lower bounds)
+	std::array<int, Ndim> lower_indices{};        // grid indices for each dimension (lower bounds)
 	std::array<int, Ndim> upper_indices{};  // upper bound indices for each dimension
 	std::array<amrex::Real, Ndim> coords_lower{};  // actual coordinate values at lower grid points
 	std::array<amrex::Real, Ndim> coords_upper{};  // actual coordinate values at upper grid points
@@ -95,29 +95,29 @@ struct DataTableGpuConst {
 
 		// Find grid cell indices containing the point (x,y)
 		// indices are the "lower-left" indices of the containing cell
-		interp.indices[0] = amrex::max(x_coords.begin, amrex::min(static_cast<int>(std::floor((x - xi) / dx)), x_coords.end - 1));
-		interp.indices[1] = amrex::max(y_coords.begin, amrex::min(static_cast<int>(std::floor((y - yi) / dy)), y_coords.end - 1));
+		interp.lower_indices[0] = amrex::max(x_coords.begin, amrex::min(static_cast<int>(std::floor((x - xi) / dx)), x_coords.end - 1));
+		interp.lower_indices[1] = amrex::max(y_coords.begin, amrex::min(static_cast<int>(std::floor((y - yi) / dy)), y_coords.end - 1));
 
 		// upper_indices are the "upper-right" indices (handle boundary case)
-		interp.upper_indices[0] = (interp.indices[0] == x_coords.end - 1) ? interp.indices[0] : interp.indices[0] + 1;
-		interp.upper_indices[1] = (interp.indices[1] == y_coords.end - 1) ? interp.indices[1] : interp.indices[1] + 1;
+		interp.upper_indices[0] = (interp.lower_indices[0] == x_coords.end - 1) ? interp.lower_indices[0] : interp.lower_indices[0] + 1;
+		interp.upper_indices[1] = (interp.lower_indices[1] == y_coords.end - 1) ? interp.lower_indices[1] : interp.lower_indices[1] + 1;
 
 		// Get actual coordinate values at the four grid points
-		interp.coords_lower[0] = x_coords(interp.indices[0]);       // Left x-coordinate
+		interp.coords_lower[0] = x_coords(interp.lower_indices[0]);       // Left x-coordinate
 		interp.coords_upper[0] = x_coords(interp.upper_indices[0]); // Right x-coordinate
-		interp.coords_lower[1] = y_coords(interp.indices[1]);       // Bottom y-coordinate
+		interp.coords_lower[1] = y_coords(interp.lower_indices[1]);       // Bottom y-coordinate
 		interp.coords_upper[1] = y_coords(interp.upper_indices[1]); // Top y-coordinate
 
 		// Compute normalized coordinates within the grid cell [0,1] x [0,1]
 		// normalized[0] = 0 at coords_lower[0], normalized[0] = 1 at coords_upper[0]
 		// normalized[1] = 0 at coords_lower[1], normalized[1] = 1 at coords_upper[1]
-		if (interp.indices[0] != interp.upper_indices[0]) {
+		if (interp.lower_indices[0] != interp.upper_indices[0]) {
 			interp.normalized[0] = (x - interp.coords_lower[0]) / (interp.coords_upper[0] - interp.coords_lower[0]);
 		} else {
 			interp.normalized[0] = 0.0; // No variation in x direction (boundary case)
 		}
 
-		if (interp.indices[1] != interp.upper_indices[1]) {
+		if (interp.lower_indices[1] != interp.upper_indices[1]) {
 			interp.normalized[1] = (y - interp.coords_lower[1]) / (interp.coords_upper[1] - interp.coords_lower[1]);
 		} else {
 			interp.normalized[1] = 0.0; // No variation in y direction (boundary case)
@@ -133,9 +133,9 @@ struct DataTableGpuConst {
 		InterpData<2> const interp = find_interpolation_data(x, y);
 
 		// Part 2: Compute interpolated value using precomputed indices and normalized coordinates
-		amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
-		amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
-		amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1]);
+		amrex::Real const z1 = data(interp.lower_indices[0], interp.lower_indices[1]);
+		amrex::Real const z2 = data(interp.upper_indices[0], interp.lower_indices[1]);
+		amrex::Real const z3 = data(interp.lower_indices[0], interp.upper_indices[1]);
 		amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1]);
 
 		// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
