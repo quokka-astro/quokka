@@ -58,10 +58,10 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x3Momentum_index) = 0.;
 
-		// state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index) = rho_dust;
-		// state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust * vx_dust;
-		// state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index) = 0.;
-		// state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index) = 0.;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index) = rho_dust;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust * vx_dust;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index) = 0.;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index) = 0.;
 	});
 }
 
@@ -105,15 +105,21 @@ auto problem_main() -> int
 	// compute error norm for x velocity
 	std::vector<double> vx_sim(nx);
 	std::vector<double> vx_exact(nx);
+	std::vector<double> vx_dust_sim(nx);
+	std::vector<double> vx_dust_exact(nx);
 	std::vector<double> xs(nx);
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
 		vx_exact.at(i) = v0; // expected x velocity
+		vx_dust_exact.at(i) = v0; // expected x velocity of dust
 		// compute x velocity from momentum and density
-		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[i];
 		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[i];
+		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[i];
+		const double dust_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index)[i];
+		const double dust_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index)[i];
 		vx_sim.at(i) = momentum_x / density;
+		vx_dust_sim.at(i) = dust_momentum_x / dust_density;
 	}
 
 	double err_norm = 0.;
@@ -145,8 +151,27 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs, vx_exact, vx_exact_args);
 
 	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("gas velocity");
 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::save("./velocity_test.pdf");
+	matplotlibcpp::save("./dust_drag_gas_velocity.pdf");
+
+	// plot dust velocity
+	matplotlibcpp::clf();
+	matplotlibcpp::ylim(0.0, 1.1);
+	std::map<std::string, std::string> vx_dust_args;
+	std::map<std::string, std::string> vx_dust_exact_args;
+	vx_dust_args["label"] = "numerical solution";
+	vx_dust_args["linestyle"] = "-";
+	vx_dust_exact_args["label"] = "exact solution";
+	vx_dust_exact_args["linestyle"] = "--";
+	matplotlibcpp::plot(xs, vx_dust_sim, vx_dust_args);
+	matplotlibcpp::plot(xs, vx_dust_exact, vx_dust_exact_args);
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("dust velocity");
+	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::save("./dust_drag_dust_velocity.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
