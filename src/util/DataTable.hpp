@@ -161,14 +161,6 @@ class DataTable
 	// Default constructor
 	DataTable() = default;
 
-	// Constructor with data - specialized for 2D
-	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
-	DataTable(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-		  const amrex::Vector<amrex::Vector<amrex::Real>> &data)
-	{
-		initialize(x_coords, y_coords, data);
-	}
-
 	// Constructor with coordinate arrays and data - general n-dimensional interface
 	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
 		  const amrex::Vector<amrex::Vector<amrex::Real>> &data)
@@ -186,15 +178,6 @@ class DataTable
 	// Delete copy constructor and assignment (expensive operations)
 	DataTable(const DataTable &) = delete;
 	auto operator=(const DataTable &) -> DataTable & = delete;
-
-	// Initialize from vectors - specialized for 2D (backward compatibility)
-	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
-	void initialize(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-			const amrex::Vector<amrex::Vector<amrex::Real>> &data)
-	{
-		std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {x_coords, y_coords};
-		initialize(coord_arrays, data);
-	}
 
 	// Initialize from coordinate arrays - general n-dimensional interface
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
