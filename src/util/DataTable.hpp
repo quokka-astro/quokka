@@ -36,7 +36,7 @@ template <int Ndim> struct DataTableGpuConst {
 	    std::conditional_t<Ndim == 1, amrex::Table1D<const amrex::Real>,
 			       std::conditional_t<Ndim == 2, amrex::Table2D<const amrex::Real>,
 						  std::conditional_t<Ndim == 3, amrex::Table3D<const amrex::Real>, amrex::Table4D<const amrex::Real>>>>;
-	data_table_type data;
+	data_table_type dataView_;
 
 	std::array<amrex::Real, Ndim> coord_min{};
 	std::array<amrex::Real, Ndim> coord_max{};
@@ -127,8 +127,6 @@ template <int Ndim> struct DataTableGpuConst {
 	/// @return Interpolated value
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim> &interp) const -> amrex::Real
 	{
-		auto const dataView_ = data;
-
 		if constexpr (Ndim == 1) {
 			// 1D case (linear interpolation)
 			const int ix = interp.indices[0];
