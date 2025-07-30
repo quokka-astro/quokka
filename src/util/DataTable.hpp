@@ -16,7 +16,7 @@ namespace quokka
 
 // Structure to hold interpolation indices and normalized coordinates
 template <int Ndim> struct InterpData {
-	std::array<int, Ndim> indices{}; // grid indices for each dimension (lower bounds)
+	std::array<int, Ndim> indices{};	    // grid indices for each dimension (lower bounds)
 	std::array<amrex::Real, Ndim> normalized{}; // normalized coordinates in [0,1] for each dimension
 
 	// Default constructor
