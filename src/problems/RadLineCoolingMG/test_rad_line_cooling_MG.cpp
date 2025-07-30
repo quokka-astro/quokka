@@ -151,10 +151,10 @@ template <> void QuokkaSimulation<CoolingProblemMG>::setInitialConditionsOnGrid(
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < n_groups_; ++g) {
 			const auto Erad = g == n_groups_ - 1 ? Erad_FUV : Erad_floor_;
-			state_cc(i, j, k, RadSystem<CoolingProblemMG>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad;
-			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			state_cc(i, j, k, RadSystem<CoolingProblemMG>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad;
+			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
+			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
+			state_cc(i, j, k, RadSystem<CoolingProblemMG>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
 		}
 		state_cc(i, j, k, RadSystem<CoolingProblemMG>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
 		state_cc(i, j, k, RadSystem<CoolingProblemMG>::gasDensity_index) = rho0;
@@ -179,7 +179,7 @@ template <> void QuokkaSimulation<CoolingProblemMG>::computeAfterTimestep()
 		const amrex::Real rho = values.at(RadSystem<CoolingProblemMG>::gasDensity_index)[0];
 		const amrex::Real Egas_i = RadSystem<CoolingProblemMG>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
 		userData_.Tgas_vec_.push_back(quokka::EOS<CoolingProblemMG>::ComputeTgasFromEint(rho, Egas_i));
-		const double Erad_line_i = values.at(RadSystem<CoolingProblemMG>::radEnergy_index + Physics_NumVars::numRadVars * line_index)[0];
+		const double Erad_line_i = values.at(RadSystem<CoolingProblemMG>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * line_index)[0];
 		userData_.Erad_line_vec_.push_back(Erad_line_i);
 	}
 }
