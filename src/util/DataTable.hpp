@@ -131,9 +131,16 @@ template <int Ndim> struct DataTableGpuConst {
 
 		if constexpr (Ndim == 1) {
 			// 1D case (linear interpolation)
-			amrex::Real const z1 = data(interp.indices[0]);
-			amrex::Real const z2 = data(interp.upper_indices[0]);
-			amrex::Real const value = (1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2;
+			const int ix = interp.indices[0];
+
+			const std::array<amrex::Real, 2> w = {1.0 - interp.normalized[0], interp.normalized[0]};
+
+			const amrex::Real value = w[0] * dataView_(ix) + w[1] * dataView_(ix + 1);
+
+			// amrex::Real const z1 = data(interp.indices[0]);
+			// amrex::Real const z2 = data(interp.upper_indices[0]);
+			// amrex::Real const value = (1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2;
+
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
 		} else if constexpr (Ndim == 2) {
