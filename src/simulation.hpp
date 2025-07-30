@@ -10,9 +10,6 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
-#include "AMReX_MFInterpolater.H"
-#include "AMReX_Periodicity.H"
-#include "AMReX_String.H"
 #include <cfenv>
 #include <cmath>
 #include <cstdio>
@@ -56,15 +53,18 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_Interpolater.H"
+#include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Orientation.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Periodicity.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "AMReX_String.H"
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
@@ -1543,7 +1543,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	constexpr amrex::Real v_over_c_threshold = 0.03;
 	if (max_velocity > v_over_c_threshold * C::c_light) {
 		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
-			       << " c threshold!" << "\n";
+			       << " c threshold!"
+			       << "\n";
 	}
 }
 #endif // AMREX_SPACEDIM == 3
@@ -1633,8 +1634,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		}
 
 		// do post-timestep operations
-
-		// NOTE: with MHD, averaging down MUST be done before the reflux!!
 		AverageDownTo(lev); // average lev+1 down to lev
 
 		if (do_reflux != 0) {
@@ -1667,7 +1666,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				}
 			}
 		}
-
 		FixupState(lev); // fix any unphysical states created by reflux or averaging
 
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
@@ -2491,9 +2489,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 
 	// face-centred
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		// for each face-centering (number of dimensions)
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			// amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev), geom[crse_lev]);
+			amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev));
 		}
 	}
 }

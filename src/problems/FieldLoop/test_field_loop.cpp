@@ -142,6 +142,35 @@ template <> void QuokkaSimulation<FieldLoop>::ErrorEst(int lev, amrex::TagBoxArr
 	}
 }
 
+template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+{
+	// compute derived variables and save in 'mf'
+	if (dname == "magnetic_divergence") {
+		const amrex::Geometry &geom_lev = geom[lev];
+		const amrex::Real *dx = geom_lev.CellSize();
+		auto const &state_fc = state_new_fc_[lev];
+		auto output = mf.arrays();
+
+		// Get the face-centered magnetic field arrays
+		auto const &Bx_arr = state_fc[0].const_arrays();
+		auto const &By_arr = state_fc[1].const_arrays();
+		auto const &Bz_arr = state_fc[2].const_arrays();
+
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// Compute divergence using finite differences
+			amrex::Real divB = 
+				(Bx_arr[bx](i + 1, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex) - 
+				 Bx_arr[bx](i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex)) / dx[0] +
+				(By_arr[bx](i, j + 1, k, Physics_Indices<FieldLoop>::mhdFirstIndex) - 
+				 By_arr[bx](i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex)) / dx[1] +
+				(Bz_arr[bx](i, j, k + 1, Physics_Indices<FieldLoop>::mhdFirstIndex) - 
+				 Bz_arr[bx](i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex)) / dx[2];
+
+			output[bx](i, j, k, ncomp) = divB;
+		});
+	}
+}
+
 auto problem_main() -> int
 {
 	const int nvars_cc = Physics_Indices<FieldLoop>::nvarTotal_cc;
