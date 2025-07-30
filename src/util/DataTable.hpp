@@ -252,19 +252,20 @@ class DataTable
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
 
-		if constexpr (Ndim == 2) {
-			DataTableGpuConst<Ndim> tables{
-			    {coords_[0]->const_table(), coords_[1]->const_table()}, // coords array
-			    data_->const_table(),                                   // data
-			    coord_min_,                                             // coord_min array
-			    coord_max_,                                             // coord_max array
-			    dcoord_,                                                // dcoord array
-			    sizes_                                                  // sizes array
-			};
-			return tables;
-		} else {
-			static_assert(Ndim == 2, "Only 2D tables are currently supported");
+		std::array<amrex::Table1D<const amrex::Real>, Ndim> coord_tables{};
+		for (int i = 0; i < Ndim; ++i) {
+			coord_tables[i] = coords_[i]->const_table();
 		}
+
+		DataTableGpuConst<Ndim> tables{
+				coord_tables,
+				data_->const_table(),                                   // data
+				coord_min_,                                             // coord_min array
+				coord_max_,                                             // coord_max array
+				dcoord_,                                                // dcoord array
+				sizes_                                                  // sizes array
+		};
+		return tables;
 	}
 
 	// Check if table is initialized
