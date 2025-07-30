@@ -157,6 +157,18 @@ private:
 template <int Ndim>
 class DataTable
 {
+      private:
+	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
+	std::unique_ptr<amrex::TableData<amrex::Real, 2>> data_;  // Still 2D for now
+
+	std::array<amrex::Real, Ndim> coord_min_{};
+	std::array<amrex::Real, Ndim> coord_max_{};
+
+	// Precomputed grid spacing for optimization
+	std::array<amrex::Real, Ndim> dcoord_{};
+
+	std::array<int, Ndim> sizes_{};
+
       public:
 	// Default constructor
 	DataTable() = default;
@@ -279,18 +291,6 @@ class DataTable
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim, "Dimension index out of bounds!");
 		return sizes_[dim];
 	}
-
-      private:
-	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
-	std::unique_ptr<amrex::TableData<amrex::Real, 2>> data_;  // Still 2D for now
-
-	std::array<amrex::Real, Ndim> coord_min_{};
-	std::array<amrex::Real, Ndim> coord_max_{};
-
-	// Precomputed grid spacing for optimization
-	std::array<amrex::Real, Ndim> dcoord_{};
-
-	std::array<int, Ndim> sizes_{};
 };
 
 } // namespace quokka
