@@ -132,7 +132,8 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		}
 
 		// Initialize DataTable
-		table.initialize(rho_coords, eint_coords, data2d);
+		const std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {rho_coords, eint_coords};
+		table.initialize(coord_arrays, data2d);
 
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 	};

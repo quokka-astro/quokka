@@ -132,7 +132,7 @@ private:
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim>& interp) const -> amrex::Real
 	{
 		if constexpr (Ndim == 2) {
-			// Optimized 2D case (bilinear interpolation)
+			// 2D case (bilinear interpolation)
 			// Note: data table is currently 2D only, so we use direct indexing
 			amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
 			amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
@@ -147,8 +147,7 @@ private:
 			return value;
 		} else {
 			// General n-dimensional case would go here
-			// For now, only 2D is supported due to data table limitations
-			static_assert(Ndim == 2, "Only 2D interpolation is currently supported due to data table structure");
+			static_assert(Ndim == 2, "Only 2D interpolation is currently supported");
 			return 0.0; // This line should never be reached
 		}
 	}
