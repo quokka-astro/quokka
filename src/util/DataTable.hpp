@@ -258,17 +258,13 @@ class DataTable
 	// Check if table is initialized
 	[[nodiscard]] auto is_initialized() const -> bool
 	{
-		if constexpr (Ndim == 2) {
-			return (coords_[0] != nullptr && coords_[1] != nullptr && data_ != nullptr);
-		} else {
-			// For general case, check all coordinate arrays
-			for (int dim = 0; dim < Ndim; ++dim) {
-				if (coords_[dim] == nullptr) {
-					return false;
-				}
+		// Check all coordinate arrays
+		for (int dim = 0; dim < Ndim; ++dim) {
+			if (coords_[dim] == nullptr) {
+				return false;
 			}
-			return (data_ != nullptr);
 		}
+		return (data_ != nullptr);
 	}
 
 	// Get dimension sizes
@@ -283,13 +279,6 @@ class DataTable
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim, "Dimension index out of bounds!");
 		return sizes_[dim];
 	}
-
-	// Backward compatibility methods for 2D
-	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
-	[[nodiscard]] auto x_size() const -> int { return sizes_[0]; }
-
-	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
-	[[nodiscard]] auto y_size() const -> int { return sizes_[1]; }
 
       private:
 	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
