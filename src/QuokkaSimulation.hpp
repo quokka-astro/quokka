@@ -1584,10 +1584,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if (do_reflux == 1) {
 			// increment flux registers
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
-			// increment EMF registers
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage1, lev, dt_lev);
-			}
+			// increment EMF registers - removed from first RK stage to avoid double accumulation
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
