@@ -6,7 +6,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_TableData.H"
-#include "math/Interpolate2D.hpp"
+
 #include <array>
 #include <memory>
 #include <type_traits>
@@ -30,8 +30,15 @@ struct InterpData {
 // GPU-friendly struct containing const table references
 template <int Ndim>
 struct DataTableGpuConst {
+	static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D interpolation is supported");
+
 	std::array<amrex::Table1D<const amrex::Real>, Ndim> coords;
-	amrex::Table2D<const amrex::Real> data;  // Keep 2D for now, can be generalized later
+	// Conditional type for arbitrary dimensions (1-4)
+	using data_table_type = std::conditional_t<Ndim==1, amrex::Table1D<const amrex::Real>,
+	                        std::conditional_t<Ndim==2, amrex::Table2D<const amrex::Real>,
+	                        std::conditional_t<Ndim==3, amrex::Table3D<const amrex::Real>,
+	                                                   amrex::Table4D<const amrex::Real> > > >;
+	data_table_type data;
 
 	std::array<amrex::Real, Ndim> coord_min{};
 	std::array<amrex::Real, Ndim> coord_max{};
@@ -124,16 +131,22 @@ struct DataTableGpuConst {
 private:
 	/// @brief Helper for n-dimensional interpolation
 	///
-	/// This function performs n-linear interpolation. Currently optimized for 2D case.
-	/// Can be extended to support true recursive n-dimensional interpolation in the future.
+	/// This function performs n-linear interpolation for 1D-4D cases.
+	/// Supports linear, bilinear, trilinear, and quadrilinear interpolation.
 	///
 	/// @param interp Interpolation data containing indices and normalized coordinates
 	/// @return Interpolated value
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim>& interp) const -> amrex::Real
 	{
-		if constexpr (Ndim == 2) {
+		if constexpr (Ndim == 1) {
+			// 1D case (linear interpolation)
+			amrex::Real const z1 = data(interp.indices[0]);
+			amrex::Real const z2 = data(interp.upper_indices[0]);
+			amrex::Real const value = (1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2;
+			AMREX_ASSERT(!std::isnan(value));
+			return value;
+		} else if constexpr (Ndim == 2) {
 			// 2D case (bilinear interpolation)
-			// Note: data table is currently 2D only, so we use direct indexing
 			amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
 			amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
 			amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1]);
@@ -145,9 +158,61 @@ private:
 			
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
+		} else if constexpr (Ndim == 3) {
+			// 3D case (trilinear interpolation)
+			amrex::Real const z1 = data(interp.indices[0], interp.indices[1], interp.indices[2]);
+			amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1], interp.indices[2]);
+			amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1], interp.indices[2]);
+			amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1], interp.indices[2]);
+			amrex::Real const z5 = data(interp.indices[0], interp.indices[1], interp.upper_indices[2]);
+			amrex::Real const z6 = data(interp.upper_indices[0], interp.indices[1], interp.upper_indices[2]);
+			amrex::Real const z7 = data(interp.indices[0], interp.upper_indices[1], interp.upper_indices[2]);
+			amrex::Real const z8 = data(interp.upper_indices[0], interp.upper_indices[1], interp.upper_indices[2]);
+
+			// Trilinear interpolation
+			amrex::Real const h = interp.normalized[0];
+			amrex::Real const v = interp.normalized[1];
+			amrex::Real const w = interp.normalized[2];
+			
+			amrex::Real const value = (1.0 - w) * ((1.0 - v) * ((1.0 - h) * z1 + h * z2) + v * ((1.0 - h) * z3 + h * z4)) +
+									  w * ((1.0 - v) * ((1.0 - h) * z5 + h * z6) + v * ((1.0 - h) * z7 + h * z8));
+			
+			AMREX_ASSERT(!std::isnan(value));
+			return value;
+		} else if constexpr (Ndim == 4) {
+			// 4D case (quadrilinear interpolation)
+			amrex::Real const z1  = data(interp.indices[0], interp.indices[1], interp.indices[2], interp.indices[3]);
+			amrex::Real const z2  = data(interp.upper_indices[0], interp.indices[1], interp.indices[2], interp.indices[3]);
+			amrex::Real const z3  = data(interp.indices[0], interp.upper_indices[1], interp.indices[2], interp.indices[3]);
+			amrex::Real const z4  = data(interp.upper_indices[0], interp.upper_indices[1], interp.indices[2], interp.indices[3]);
+			amrex::Real const z5  = data(interp.indices[0], interp.indices[1], interp.upper_indices[2], interp.indices[3]);
+			amrex::Real const z6  = data(interp.upper_indices[0], interp.indices[1], interp.upper_indices[2], interp.indices[3]);
+			amrex::Real const z7  = data(interp.indices[0], interp.upper_indices[1], interp.upper_indices[2], interp.indices[3]);
+			amrex::Real const z8  = data(interp.upper_indices[0], interp.upper_indices[1], interp.upper_indices[2], interp.indices[3]);
+			amrex::Real const z9  = data(interp.indices[0], interp.indices[1], interp.indices[2], interp.upper_indices[3]);
+			amrex::Real const z10 = data(interp.upper_indices[0], interp.indices[1], interp.indices[2], interp.upper_indices[3]);
+			amrex::Real const z11 = data(interp.indices[0], interp.upper_indices[1], interp.indices[2], interp.upper_indices[3]);
+			amrex::Real const z12 = data(interp.upper_indices[0], interp.upper_indices[1], interp.indices[2], interp.upper_indices[3]);
+			amrex::Real const z13 = data(interp.indices[0], interp.indices[1], interp.upper_indices[2], interp.upper_indices[3]);
+			amrex::Real const z14 = data(interp.upper_indices[0], interp.indices[1], interp.upper_indices[2], interp.upper_indices[3]);
+			amrex::Real const z15 = data(interp.indices[0], interp.upper_indices[1], interp.upper_indices[2], interp.upper_indices[3]);
+			amrex::Real const z16 = data(interp.upper_indices[0], interp.upper_indices[1], interp.upper_indices[2], interp.upper_indices[3]);
+
+			// Quadrilinear interpolation
+			amrex::Real const h = interp.normalized[0];
+			amrex::Real const v = interp.normalized[1];
+			amrex::Real const w = interp.normalized[2];
+			amrex::Real const u = interp.normalized[3];
+			
+			amrex::Real const value = (1.0 - u) * ((1.0 - w) * ((1.0 - v) * ((1.0 - h) * z1 + h * z2) + v * ((1.0 - h) * z3 + h * z4)) +
+													w * ((1.0 - v) * ((1.0 - h) * z5 + h * z6) + v * ((1.0 - h) * z7 + h * z8))) +
+									  u * ((1.0 - w) * ((1.0 - v) * ((1.0 - h) * z9 + h * z10) + v * ((1.0 - h) * z11 + h * z12)) +
+									       w * ((1.0 - v) * ((1.0 - h) * z13 + h * z14) + v * ((1.0 - h) * z15 + h * z16)));
+			
+			AMREX_ASSERT(!std::isnan(value));
+			return value;
 		} else {
-			// General n-dimensional case would go here
-			static_assert(Ndim == 2, "Only 2D interpolation is currently supported");
+			static_assert(false, "Only 1D-4D interpolation is supported");
 			return 0.0; // This line should never be reached
 		}
 	}
@@ -159,7 +224,7 @@ class DataTable
 {
       private:
 	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
-	std::unique_ptr<amrex::TableData<amrex::Real, 2>> data_;  // Still 2D for now
+	std::unique_ptr<amrex::TableData<amrex::Real, Ndim>> data_;  // Now supports arbitrary dimensions
 
 	std::array<amrex::Real, Ndim> coord_min_{};
 	std::array<amrex::Real, Ndim> coord_max_{};
@@ -192,26 +257,35 @@ class DataTable
 	auto operator=(const DataTable &) -> DataTable & = delete;
 
 	// Initialize from coordinate arrays - general n-dimensional interface
+	// For now, this implementation still expects 2D input data for backward compatibility
+	// TODO(cche): Extend to support true n-dimensional input data formats
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
 			const amrex::Vector<amrex::Vector<amrex::Real>> &data)
 	{
-		static_assert(Ndim == 2, "Currently only 2D tables are supported");
+		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 		
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data.empty(), "Data cannot be empty!");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == coords[0].size(), "Data first dimension must match first coordinate size!");
+		
+		// For 2D case, maintain backward compatibility with existing data format
+		if constexpr (Ndim == 2) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == coords[0].size(), "Data first dimension must match first coordinate size!");
+			// Verify data dimensions
+			for (const auto &row : data) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
+			}
+		} else {
+			// For non-2D cases, you'll need to implement appropriate data format validation
+			// This is a placeholder - extend as needed for your specific use cases
+			static_assert(Ndim == 2, "Non-2D data initialization not yet implemented. Please extend this method for your use case.");
+		}
 
 		// Store sizes
 		for (int dim = 0; dim < Ndim; ++dim) {
 			sizes_[dim] = static_cast<int>(coords[dim].size());
-		}
-
-		// Verify data dimensions
-		for (const auto &row : data) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
 		}
 
 		// Store coordinate bounds (assuming ascending order) and calculate grid spacing
@@ -231,19 +305,29 @@ class DataTable
 			}
 		}
 
-		// All above is generic to arbitrary Ndim, but this part is only for 2D
-		{
-			// Create 2D data table
-			data_ = std::make_unique<amrex::TableData<amrex::Real, 2>>(amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{sizes_[0] - 1, sizes_[1] - 1},
-											amrex::The_Pinned_Arena());
-			auto data_table = data_->table();
+		// Create n-dimensional data table
+		amrex::Array<int, Ndim> lo{};
+		amrex::Array<int, Ndim> hi{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			lo[dim] = 0;
+			hi[dim] = sizes_[dim] - 1;
+		}
+		
+		data_ = std::make_unique<amrex::TableData<amrex::Real, Ndim>>(lo, hi, amrex::The_Pinned_Arena());
+		auto data_table = data_->table();
 
+		// Copy data - for now only handle 2D input format
+		if constexpr (Ndim == 2) {
 			// Copy data (input is data[i][j], table is accessed as table(i,j))
 			for (int i = 0; i < sizes_[0]; ++i) {
 				for (int j = 0; j < sizes_[1]; ++j) {
 					data_table(i, j) = data[i][j];
 				}
 			}
+		} else {
+			// For other dimensions, you'll need to implement appropriate data copying
+			// This is a placeholder - extend as needed for your specific use cases
+			static_assert(Ndim == 2, "Non-2D data copying not yet implemented. Please extend this method for your use case.");
 		}
 	}
 
