@@ -2975,7 +2975,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			amrex::Print() << "Level " << lev << ": max dx*|div(B)| = " << max_divB_level
-				       << ", avg dx*|div(B)| = " << (cell_count_level > 0 ? sum_divB_level / static_cast<amrex::Real>(cell_count_level) : 0.0) << '\n';
+				       << ", avg dx*|div(B)| = " << (cell_count_level > 0 ? sum_divB_level / static_cast<amrex::Real>(cell_count_level) : 0.0)
+				       << '\n';
 		}
 	}
 
