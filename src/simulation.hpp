@@ -1633,7 +1633,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		}
 
 		// do post-timestep operations
-		
+
 		// NOTE: with MHD, averaging down MUST be done before the reflux!!
 		AverageDownTo(lev); // average lev+1 down to lev
 
@@ -1668,7 +1668,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 			}
 		}
 
-		FixupState(lev);    // fix any unphysical states created by reflux or averaging
+		FixupState(lev); // fix any unphysical states created by reflux or averaging
 
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
 	}
@@ -2523,7 +2523,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		// for each face-centering (number of dimensions)
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			//amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev), geom[crse_lev]);
+			// amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev), geom[crse_lev]);
 		}
 	}
 }
@@ -2930,7 +2930,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 		// FIXME(bwibking): why does this make a difference??
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 		}
 
 		for (amrex::MFIter mfi(state_new_fc_[lev][0]); mfi.isValid(); ++mfi) {
@@ -2950,9 +2950,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 					dx[0] +
 				    (By(i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex) - By(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
 					dx[1] +
-					(Bz(i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex) - Bz(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
+				    (Bz(i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex) - Bz(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
 					dx[2];
-				
+
 				// Normalize by cell size (use dx[0] as representative cell size)
 				amrex::Real const normalized_abs_divB = dx[0] * std::abs(divB);
 				amrex::Gpu::Atomic::Max(&max_divB_fab, normalized_abs_divB);
