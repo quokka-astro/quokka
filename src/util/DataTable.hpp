@@ -121,13 +121,6 @@ struct DataTableGpuConst {
 		return interpolate_from_indices(interp);
 	}
 
-	// Backward compatibility wrapper for 2D
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
-	{
-		static_assert(Ndim == 2, "This overload only works for 2D tables");
-		return interpolate(std::array<amrex::Real, 2>{x, y});
-	}
-
 private:
 	/// @brief Helper for n-dimensional interpolation
 	///
