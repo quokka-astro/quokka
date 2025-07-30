@@ -13,13 +13,12 @@ namespace quokka
 {
 
 // Structure to hold interpolation indices and normalized coordinates
-template <int Ndim>
-struct InterpData {
-	std::array<int, Ndim> lower_indices{};        // grid indices for each dimension (lower bounds)
-	std::array<int, Ndim> upper_indices{};  // upper bound indices for each dimension
-	std::array<amrex::Real, Ndim> coords_lower{};  // actual coordinate values at lower grid points
-	std::array<amrex::Real, Ndim> coords_upper{};  // actual coordinate values at upper grid points
-	std::array<amrex::Real, Ndim> normalized{};    // normalized coordinates in [0,1] for each dimension
+template <int Ndim> struct InterpData {
+	std::array<int, Ndim> lower_indices{};	      // grid indices for each dimension (lower bounds)
+	std::array<int, Ndim> upper_indices{};	      // upper bound indices for each dimension
+	std::array<amrex::Real, Ndim> coords_lower{}; // actual coordinate values at lower grid points
+	std::array<amrex::Real, Ndim> coords_upper{}; // actual coordinate values at upper grid points
+	std::array<amrex::Real, Ndim> normalized{};   // normalized coordinates in [0,1] for each dimension
 
 	// Default constructor
 	AMREX_GPU_HOST_DEVICE InterpData() = default;
@@ -103,9 +102,9 @@ struct DataTableGpuConst {
 		interp.upper_indices[1] = (interp.lower_indices[1] == y_coords.end - 1) ? interp.lower_indices[1] : interp.lower_indices[1] + 1;
 
 		// Get actual coordinate values at the four grid points
-		interp.coords_lower[0] = x_coords(interp.lower_indices[0]);       // Left x-coordinate
+		interp.coords_lower[0] = x_coords(interp.lower_indices[0]); // Left x-coordinate
 		interp.coords_upper[0] = x_coords(interp.upper_indices[0]); // Right x-coordinate
-		interp.coords_lower[1] = y_coords(interp.lower_indices[1]);       // Bottom y-coordinate
+		interp.coords_lower[1] = y_coords(interp.lower_indices[1]); // Bottom y-coordinate
 		interp.coords_upper[1] = y_coords(interp.upper_indices[1]); // Top y-coordinate
 
 		// Compute normalized coordinates within the grid cell [0,1] x [0,1]
@@ -139,7 +138,8 @@ struct DataTableGpuConst {
 		amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1]);
 
 		// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
-		amrex::Real const value = (1.0 - interp.normalized[1]) * ((1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2) + interp.normalized[1] * ((1.0 - interp.normalized[0]) * z3 + interp.normalized[0] * z4);
+		amrex::Real const value = (1.0 - interp.normalized[1]) * ((1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2) +
+					  interp.normalized[1] * ((1.0 - interp.normalized[0]) * z3 + interp.normalized[0] * z4);
 		AMREX_ASSERT(!std::isnan(value));
 
 		return value;
