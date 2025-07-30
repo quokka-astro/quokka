@@ -6,16 +6,20 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_TableData.H"
 #include "math/Interpolate2D.hpp"
+#include <array>
 #include <memory>
 
 namespace quokka
 {
 
 // Structure to hold interpolation indices and normalized coordinates
+template <int Ndim>
 struct InterpData {
-	int ix{}, iy{}, iix{}, iiy{};	    // grid indices
-	amrex::Real x1{}, x2{}, y1{}, y2{}; // actual coordinate values at grid points
-	amrex::Real h{}, v{};		    // normalized coordinates: h = (x-x1)/(x2-x1), v = (y-y1)/(y2-y1)
+	std::array<int, Ndim> indices{};        // grid indices for each dimension (lower bounds)
+	std::array<int, Ndim> upper_indices{};  // upper bound indices for each dimension
+	std::array<amrex::Real, Ndim> coords_lower{};  // actual coordinate values at lower grid points
+	std::array<amrex::Real, Ndim> coords_upper{};  // actual coordinate values at upper grid points
+	std::array<amrex::Real, Ndim> normalized{};    // normalized coordinates in [0,1] for each dimension
 
 	// Default constructor
 	AMREX_GPU_HOST_DEVICE InterpData() = default;
@@ -75,9 +79,9 @@ struct DataTableGpuConst {
 	///   - z3 = f(0,1) -> data(ix, iiy)  = (x1,y2) top-left
 	///   - z4 = f(1,1) -> data(iix, iiy) = (x2,y2) top-right
 	/// ```
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData<2>
 	{
-		InterpData interp;
+		InterpData<2> interp;
 
 		// Get table bounds - assumes uniform grid spacing
 		amrex::Real const xi = x_coords(x_coords.begin);   // First x coordinate
@@ -90,33 +94,33 @@ struct DataTableGpuConst {
 		y = amrex::max(yi, amrex::min(y, yf));
 
 		// Find grid cell indices containing the point (x,y)
-		// ix, iy are the "lower-left" indices of the containing cell
-		interp.ix = amrex::max(x_coords.begin, amrex::min(static_cast<int>(std::floor((x - xi) / dx)), x_coords.end - 1));
-		interp.iy = amrex::max(y_coords.begin, amrex::min(static_cast<int>(std::floor((y - yi) / dy)), y_coords.end - 1));
+		// indices are the "lower-left" indices of the containing cell
+		interp.indices[0] = amrex::max(x_coords.begin, amrex::min(static_cast<int>(std::floor((x - xi) / dx)), x_coords.end - 1));
+		interp.indices[1] = amrex::max(y_coords.begin, amrex::min(static_cast<int>(std::floor((y - yi) / dy)), y_coords.end - 1));
 
-		// iix, iiy are the "upper-right" indices (handle boundary case)
-		interp.iix = (interp.ix == x_coords.end - 1) ? interp.ix : interp.ix + 1;
-		interp.iiy = (interp.iy == y_coords.end - 1) ? interp.iy : interp.iy + 1;
+		// upper_indices are the "upper-right" indices (handle boundary case)
+		interp.upper_indices[0] = (interp.indices[0] == x_coords.end - 1) ? interp.indices[0] : interp.indices[0] + 1;
+		interp.upper_indices[1] = (interp.indices[1] == y_coords.end - 1) ? interp.indices[1] : interp.indices[1] + 1;
 
 		// Get actual coordinate values at the four grid points
-		interp.x1 = x_coords(interp.ix);  // Left x-coordinate
-		interp.x2 = x_coords(interp.iix); // Right x-coordinate
-		interp.y1 = y_coords(interp.iy);  // Bottom y-coordinate
-		interp.y2 = y_coords(interp.iiy); // Top y-coordinate
+		interp.coords_lower[0] = x_coords(interp.indices[0]);       // Left x-coordinate
+		interp.coords_upper[0] = x_coords(interp.upper_indices[0]); // Right x-coordinate
+		interp.coords_lower[1] = y_coords(interp.indices[1]);       // Bottom y-coordinate
+		interp.coords_upper[1] = y_coords(interp.upper_indices[1]); // Top y-coordinate
 
 		// Compute normalized coordinates within the grid cell [0,1] x [0,1]
-		// h = 0 at x1, h = 1 at x2
-		// v = 0 at y1, v = 1 at y2
-		if (interp.ix != interp.iix) {
-			interp.h = (x - interp.x1) / (interp.x2 - interp.x1);
+		// normalized[0] = 0 at coords_lower[0], normalized[0] = 1 at coords_upper[0]
+		// normalized[1] = 0 at coords_lower[1], normalized[1] = 1 at coords_upper[1]
+		if (interp.indices[0] != interp.upper_indices[0]) {
+			interp.normalized[0] = (x - interp.coords_lower[0]) / (interp.coords_upper[0] - interp.coords_lower[0]);
 		} else {
-			interp.h = 0.0; // No variation in x direction (boundary case)
+			interp.normalized[0] = 0.0; // No variation in x direction (boundary case)
 		}
 
-		if (interp.iy != interp.iiy) {
-			interp.v = (y - interp.y1) / (interp.y2 - interp.y1);
+		if (interp.indices[1] != interp.upper_indices[1]) {
+			interp.normalized[1] = (y - interp.coords_lower[1]) / (interp.coords_upper[1] - interp.coords_lower[1]);
 		} else {
-			interp.v = 0.0; // No variation in y direction (boundary case)
+			interp.normalized[1] = 0.0; // No variation in y direction (boundary case)
 		}
 
 		return interp;
@@ -126,16 +130,16 @@ struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
 	{
 		// Part 1: Find interpolation indices and normalized coordinates
-		InterpData const interp = find_interpolation_data(x, y);
+		InterpData<2> const interp = find_interpolation_data(x, y);
 
 		// Part 2: Compute interpolated value using precomputed indices and normalized coordinates
-		amrex::Real const z1 = data(interp.ix, interp.iy);
-		amrex::Real const z2 = data(interp.iix, interp.iy);
-		amrex::Real const z3 = data(interp.ix, interp.iiy);
-		amrex::Real const z4 = data(interp.iix, interp.iiy);
+		amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
+		amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
+		amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1]);
+		amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1]);
 
 		// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
-		amrex::Real const value = (1.0 - interp.v) * ((1.0 - interp.h) * z1 + interp.h * z2) + interp.v * ((1.0 - interp.h) * z3 + interp.h * z4);
+		amrex::Real const value = (1.0 - interp.normalized[1]) * ((1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2) + interp.normalized[1] * ((1.0 - interp.normalized[0]) * z3 + interp.normalized[0] * z4);
 		AMREX_ASSERT(!std::isnan(value));
 
 		return value;
