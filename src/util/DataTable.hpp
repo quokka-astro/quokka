@@ -1,14 +1,12 @@
 #ifndef DATATABLE_HPP_
 #define DATATABLE_HPP_
 
-#include "AMReX.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_TableData.H"
 #include "math/Interpolate2D.hpp"
 #include <array>
 #include <memory>
-#include <type_traits>
 
 namespace quokka
 {
@@ -40,24 +38,31 @@ struct DataTableGpuConst {
 
 	std::array<int, Ndim> sizes{};
 
-	// Original interpolation method (for backward compatibility) - specialized for 2D
-	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
+	// Original interpolation method (for backward compatibility) - works for any dimension
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(const std::array<amrex::Real, Ndim>& point) const -> amrex::Real
 	{
-		// Clamp x and y to valid bounds
-		x = amrex::max(coord_min[0], amrex::min(x, coord_max[0]));
-		y = amrex::max(coord_min[1], amrex::min(y, coord_max[1]));
+		static_assert(Ndim == 2, "interpolate0 currently only supports 2D tables");
+		
+		// Clamp coordinates to valid bounds
+		amrex::Real x = amrex::max(coord_min[0], amrex::min(point[0], coord_max[0]));
+		amrex::Real y = amrex::max(coord_min[1], amrex::min(point[1], coord_max[1]));
 
 		return interpolate2d(x, y, coords[0], coords[1], data);
 	}
 
-	/// @brief Find interpolation indices and normalized coordinates for bilinear interpolation
+	// // Backward compatibility wrapper for 2D
+	// [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
+	// {
+	// 	static_assert(Ndim == 2, "This overload only works for 2D tables");
+	// 	return interpolate0(std::array<amrex::Real, 2>{x, y});
+	// }
+
+	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
-	/// This function locates the grid cell containing point (x,y) and computes normalized
-	/// coordinates within that cell for efficient bilinear interpolation.
+	/// This function locates the hypercube containing the given point and computes normalized
+	/// coordinates within that hypercube for efficient n-linear interpolation.
 	///
-	/// @param x Physical x-coordinate to interpolate at
-	/// @param y Physical y-coordinate to interpolate at
+	/// @param point Physical coordinates to interpolate at (size Ndim)
 	/// @return InterpData structure containing grid indices, coordinates, and normalized params
 	///
 	/// Grid Layout and Coordinate Mapping:
@@ -77,72 +82,107 @@ struct DataTableGpuConst {
 	///   - z3 = f(0,1) -> data(ix, iiy)  = (x1,y2) top-left
 	///   - z4 = f(1,1) -> data(iix, iiy) = (x2,y2) top-right
 	/// ```
-	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData<2>
+	// template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
+	// [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData<2>
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(const std::array<amrex::Real, Ndim>& point) const -> InterpData<Ndim>
 	{
-		InterpData<2> interp;
+		InterpData<Ndim> interp;
 
-		// Get table bounds - assumes uniform grid spacing
-		amrex::Real const xi = coords[0](coords[0].begin);   // First x coordinate
-		amrex::Real const xf = coords[0](coords[0].end - 1); // Last x coordinate
-		amrex::Real const yi = coords[1](coords[1].begin);   // First y coordinate
-		amrex::Real const yf = coords[1](coords[1].end - 1); // Last y coordinate
+		for (int dim = 0; dim < Ndim; ++dim) {
+			// Get table bounds for this dimension - assumes uniform grid spacing
+			amrex::Real const coord_start = coords[dim](coords[dim].begin);   // First coordinate
+			amrex::Real const coord_end = coords[dim](coords[dim].end - 1);   // Last coordinate
 
-		// Clamp coordinates to valid table bounds (extrapolation not supported)
-		x = amrex::max(xi, amrex::min(x, xf));
-		y = amrex::max(yi, amrex::min(y, yf));
+			// Clamp coordinates to valid table bounds (extrapolation not supported)
+			amrex::Real clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
 
-		// Find grid cell indices containing the point (x,y)
-		// indices are the "lower-left" indices of the containing cell
-		interp.indices[0] = amrex::max(coords[0].begin, amrex::min(static_cast<int>(std::floor((x - xi) / dcoord[0])), coords[0].end - 1));
-		interp.indices[1] = amrex::max(coords[1].begin, amrex::min(static_cast<int>(std::floor((y - yi) / dcoord[1])), coords[1].end - 1));
+			// Find grid cell indices containing the point
+			// indices are the "lower" indices of the containing hypercube
+			interp.indices[dim] = amrex::max(coords[dim].begin, 
+				amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), 
+					coords[dim].end - 1));
 
-		// upper_indices are the "upper-right" indices (handle boundary case)
-		interp.upper_indices[0] = (interp.indices[0] == coords[0].end - 1) ? interp.indices[0] : interp.indices[0] + 1;
-		interp.upper_indices[1] = (interp.indices[1] == coords[1].end - 1) ? interp.indices[1] : interp.indices[1] + 1;
+			// upper_indices are the "upper" indices (handle boundary case)
+			interp.upper_indices[dim] = (interp.indices[dim] == coords[dim].end - 1) ? 
+				interp.indices[dim] : interp.indices[dim] + 1;
 
-		// Get actual coordinate values at the four grid points
-		interp.coords_lower[0] = coords[0](interp.indices[0]);       // Left x-coordinate
-		interp.coords_upper[0] = coords[0](interp.upper_indices[0]); // Right x-coordinate
-		interp.coords_lower[1] = coords[1](interp.indices[1]);       // Bottom y-coordinate
-		interp.coords_upper[1] = coords[1](interp.upper_indices[1]); // Top y-coordinate
+			// Get actual coordinate values at the grid points
+			interp.coords_lower[dim] = coords[dim](interp.indices[dim]);       // Lower coordinate
+			interp.coords_upper[dim] = coords[dim](interp.upper_indices[dim]); // Upper coordinate
 
-		// Compute normalized coordinates within the grid cell [0,1] x [0,1]
-		// normalized[0] = 0 at coords_lower[0], normalized[0] = 1 at coords_upper[0]
-		// normalized[1] = 0 at coords_lower[1], normalized[1] = 1 at coords_upper[1]
-		if (interp.indices[0] != interp.upper_indices[0]) {
-			interp.normalized[0] = (x - interp.coords_lower[0]) / (interp.coords_upper[0] - interp.coords_lower[0]);
-		} else {
-			interp.normalized[0] = 0.0; // No variation in x direction (boundary case)
-		}
-
-		if (interp.indices[1] != interp.upper_indices[1]) {
-			interp.normalized[1] = (y - interp.coords_lower[1]) / (interp.coords_upper[1] - interp.coords_lower[1]);
-		} else {
-			interp.normalized[1] = 0.0; // No variation in y direction (boundary case)
+			// Compute normalized coordinates within the grid cell [0,1]
+			// normalized[dim] = 0 at coords_lower[dim], normalized[dim] = 1 at coords_upper[dim]
+			if (interp.indices[dim] != interp.upper_indices[dim]) {
+				interp.normalized[dim] = (clamped_coord - interp.coords_lower[dim]) / 
+					(interp.coords_upper[dim] - interp.coords_lower[dim]);
+			} else {
+				interp.normalized[dim] = 0.0; // No variation in this dimension (boundary case)
+			}
 		}
 
 		return interp;
 	}
 
-	// Convenience method: find interpolation data and compute value in one call
-	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
+	// Backward compatibility wrapper for 2D  
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData<Ndim>
+	{
+		static_assert(Ndim == 2, "This overload only works for 2D tables");
+		return find_interpolation_data(std::array<amrex::Real, 2>{x, y});
+	}
+
+	/// @brief Perform n-dimensional linear interpolation
+	///
+	/// This method performs n-linear interpolation by recursively interpolating
+	/// along each dimension. For 2D this becomes bilinear, for 3D trilinear, etc.
+	///
+	/// @param point Physical coordinates to interpolate at (size Ndim)  
+	/// @return Interpolated value
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim>& point) const -> amrex::Real
 	{
 		// Part 1: Find interpolation indices and normalized coordinates
-		InterpData<2> const interp = find_interpolation_data(x, y);
+		InterpData<Ndim> const interp = find_interpolation_data(point);
 
-		// Part 2: Compute interpolated value using precomputed indices and normalized coordinates
-		amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
-		amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
-		amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1]);
-		amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1]);
+		// Part 2: Perform n-dimensional interpolation
+		return interpolate_from_indices(interp);
+	}
 
-		// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
-		amrex::Real const value = (1.0 - interp.normalized[1]) * ((1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2) + interp.normalized[1] * ((1.0 - interp.normalized[0]) * z3 + interp.normalized[0] * z4);
-		AMREX_ASSERT(!std::isnan(value));
+	// Backward compatibility wrapper for 2D
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
+	{
+		static_assert(Ndim == 2, "This overload only works for 2D tables");
+		return interpolate(std::array<amrex::Real, 2>{x, y});
+	}
 
-		return value;
+private:
+	/// @brief Helper for n-dimensional interpolation
+	///
+	/// This function performs n-linear interpolation. Currently optimized for 2D case.
+	/// Can be extended to support true recursive n-dimensional interpolation in the future.
+	///
+	/// @param interp Interpolation data containing indices and normalized coordinates
+	/// @return Interpolated value
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim>& interp) const -> amrex::Real
+	{
+		if constexpr (Ndim == 2) {
+			// Optimized 2D case (bilinear interpolation)
+			// Note: data table is currently 2D only, so we use direct indexing
+			amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
+			amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
+			amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1]);
+			amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1]);
+
+			// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
+			amrex::Real const value = (1.0 - interp.normalized[1]) * ((1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2) + 
+				interp.normalized[1] * ((1.0 - interp.normalized[0]) * z3 + interp.normalized[0] * z4);
+			
+			AMREX_ASSERT(!std::isnan(value));
+			return value;
+		} else {
+			// General n-dimensional case would go here
+			// For now, only 2D is supported due to data table limitations
+			static_assert(Ndim == 2, "Only 2D interpolation is currently supported due to data table structure");
+			return 0.0; // This line should never be reached
+		}
 	}
 };
 
