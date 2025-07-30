@@ -208,10 +208,10 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 
 		for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
-			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
+			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
+			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
+			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
 		}
 
 		// gas boundary conditions are the same on both sides
@@ -238,10 +238,10 @@ template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid
 		auto Erad_g = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiationMultiGroup(T_initial, radBoundaries_g);
 
 		for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
-			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
+			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
 		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
@@ -314,7 +314,7 @@ auto problem_main() -> int
 			double Erad_t = 0.;
 			// const double Erad_t = values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index)[i];
 			for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
-				Erad_t += values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+				Erad_t += values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 			}
 			const double Egas_t = values.at(RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index)[i];
 			const double rho = values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i];
@@ -331,7 +331,7 @@ auto problem_main() -> int
 			int group_counter = 0;
 			double Erad_sum = 0.;
 			for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
-				auto Erad_g = values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+				auto Erad_g = values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 				Trad_g[g].push_back(std::pow(Erad_g / a_rad, 1. / 4.));
 
 				if (counter == 0) {
