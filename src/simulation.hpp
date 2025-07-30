@@ -1758,49 +1758,19 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 	BL_PROFILE("AMRSimulation::incrementEMFRegisters()"); // NOLINT(misc-const-correctness)
 
 #if (AMREX_SPACEDIM == 3)
-	const amrex::Real *dx = geom[lev].CellSize();
-
-	// Compute norminf on all processors (requires MPI reduction)
-	amrex::Real const ex_max = ec_emf_components[0].norminf();
-	amrex::Real const ey_max = ec_emf_components[1].norminf();
-	amrex::Real const ez_max = ec_emf_components[2].norminf();
-
-	// Debug: Check EMF values
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::Print() << "[DEBUG EMF] Level " << lev << " incrementEMFRegisters: dt_lev = " << dt_lev << '\n';
-		amrex::Print() << "[DEBUG EMF] Cell sizes: dx = " << dx[0] << ", dy = " << dx[1] << ", dz = " << dx[2] << '\n';
-		amrex::Print() << "[DEBUG EMF] EMF components max values: Ex = " << ex_max << ", Ey = " << ey_max << ", Ez = " << ez_max << '\n';
-	}
-
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (emf_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
 			AMREX_ASSERT(emf_as_crse == emf_reg_[lev + 1].get());
-			if (amrex::ParallelDescriptor::IOProcessor() && mfi.index() == 0) {
-				amrex::Print() << "[DEBUG EMF] Level " << lev << " CrseAdd to register for level " << (lev + 1) << '\n';
-			}
-			// Use unscaled timestep value
-			amrex::Real dt_scaled = dt_lev;
-			if (amrex::ParallelDescriptor::IOProcessor() && mfi.index() == 0) {
-				amrex::Print() << "[DEBUG EMF] Testing dt scaling: dt_lev = " << dt_lev << ", dt_scaled = " << dt_scaled << '\n';
-			}
 			emf_as_crse->CrseAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
-					     dt_scaled);
+					     dt_lev);
 		}
 
 		if (emf_as_fine != nullptr) {
 			AMREX_ASSERT(lev > 0);
 			AMREX_ASSERT(emf_as_fine == emf_reg_[lev].get());
-			if (amrex::ParallelDescriptor::IOProcessor() && mfi.index() == 0) {
-				amrex::Print() << "[DEBUG EMF] Level " << lev << " FineAdd to register for level " << lev << '\n';
-			}
-			// Use unscaled timestep value
-			amrex::Real dt_scaled = dt_lev;
-			if (amrex::ParallelDescriptor::IOProcessor() && mfi.index() == 0) {
-				amrex::Print() << "[DEBUG EMF] Testing dt scaling: dt_lev = " << dt_lev << ", dt_scaled = " << dt_scaled << '\n';
-			}
 			emf_as_fine->FineAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
-					     dt_scaled);
+					     dt_lev);
 		}
 	}
 #endif
