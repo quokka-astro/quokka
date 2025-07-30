@@ -158,54 +158,66 @@ template <int Ndim> struct DataTableGpuConst {
 			return value;
 		} else if constexpr (Ndim == 3) {
 			// 3D case (trilinear interpolation)
-			amrex::Real const z1 = data(interp.indices[0], interp.indices[1], interp.indices[2]);
-			amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1], interp.indices[2]);
-			amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1], interp.indices[2]);
-			amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1], interp.indices[2]);
-			amrex::Real const z5 = data(interp.indices[0], interp.indices[1], interp.upper_indices[2]);
-			amrex::Real const z6 = data(interp.upper_indices[0], interp.indices[1], interp.upper_indices[2]);
-			amrex::Real const z7 = data(interp.indices[0], interp.upper_indices[1], interp.upper_indices[2]);
-			amrex::Real const z8 = data(interp.upper_indices[0], interp.upper_indices[1], interp.upper_indices[2]);
+			const auto ix = interp.indices;
 
-			// Trilinear interpolation
-			amrex::Real const h = interp.normalized[0];
-			amrex::Real const v = interp.normalized[1];
-			amrex::Real const w = interp.normalized[2];
+			const std::array<std::array<amrex::Real, 2>, 3> w = {{{1.0 - interp.normalized[0], interp.normalized[0]},
+									      {1.0 - interp.normalized[1], interp.normalized[1]},
+									      {1.0 - interp.normalized[2], interp.normalized[2]}}};
 
-			amrex::Real const value = (1.0 - w) * ((1.0 - v) * ((1.0 - h) * z1 + h * z2) + v * ((1.0 - h) * z3 + h * z4)) +
-						  w * ((1.0 - v) * ((1.0 - h) * z5 + h * z6) + v * ((1.0 - h) * z7 + h * z8));
+			const amrex::Real value = (
+				w[2][0] * (w[1][0] * (w[0][0] * dataView_(ix[0], ix[1], ix[2]) +
+															w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2])) +
+									 w[1][1] * (w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2]) +
+															w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2]))) +
+				w[2][1] *
+						(w[1][0] * (w[0][0] * dataView_(ix[0], ix[1], ix[2] + 1) +
+												w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2] + 1)) +
+						 w[1][1] * (w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2] + 1) +
+												w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2] + 1))));
 
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
 		} else if constexpr (Ndim == 4) {
 			// 4D case (quadrilinear interpolation)
-			amrex::Real const z1 = data(interp.indices[0], interp.indices[1], interp.indices[2], interp.indices[3]);
-			amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1], interp.indices[2], interp.indices[3]);
-			amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1], interp.indices[2], interp.indices[3]);
-			amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1], interp.indices[2], interp.indices[3]);
-			amrex::Real const z5 = data(interp.indices[0], interp.indices[1], interp.upper_indices[2], interp.indices[3]);
-			amrex::Real const z6 = data(interp.upper_indices[0], interp.indices[1], interp.upper_indices[2], interp.indices[3]);
-			amrex::Real const z7 = data(interp.indices[0], interp.upper_indices[1], interp.upper_indices[2], interp.indices[3]);
-			amrex::Real const z8 = data(interp.upper_indices[0], interp.upper_indices[1], interp.upper_indices[2], interp.indices[3]);
-			amrex::Real const z9 = data(interp.indices[0], interp.indices[1], interp.indices[2], interp.upper_indices[3]);
-			amrex::Real const z10 = data(interp.upper_indices[0], interp.indices[1], interp.indices[2], interp.upper_indices[3]);
-			amrex::Real const z11 = data(interp.indices[0], interp.upper_indices[1], interp.indices[2], interp.upper_indices[3]);
-			amrex::Real const z12 = data(interp.upper_indices[0], interp.upper_indices[1], interp.indices[2], interp.upper_indices[3]);
-			amrex::Real const z13 = data(interp.indices[0], interp.indices[1], interp.upper_indices[2], interp.upper_indices[3]);
-			amrex::Real const z14 = data(interp.upper_indices[0], interp.indices[1], interp.upper_indices[2], interp.upper_indices[3]);
-			amrex::Real const z15 = data(interp.indices[0], interp.upper_indices[1], interp.upper_indices[2], interp.upper_indices[3]);
-			amrex::Real const z16 = data(interp.upper_indices[0], interp.upper_indices[1], interp.upper_indices[2], interp.upper_indices[3]);
+			const auto ix = interp.indices;
 
-			// Quadrilinear interpolation
-			amrex::Real const h = interp.normalized[0];
-			amrex::Real const v = interp.normalized[1];
-			amrex::Real const w = interp.normalized[2];
-			amrex::Real const u = interp.normalized[3];
+			const std::array<std::array<amrex::Real, 2>, 4> w = {{{1.0 - interp.normalized[0], interp.normalized[0]},
+									      {1.0 - interp.normalized[1], interp.normalized[1]},
+									      {1.0 - interp.normalized[2], interp.normalized[2]},
+									      {1.0 - interp.normalized[3], interp.normalized[3]},
+											}};
 
-			amrex::Real const value = (1.0 - u) * ((1.0 - w) * ((1.0 - v) * ((1.0 - h) * z1 + h * z2) + v * ((1.0 - h) * z3 + h * z4)) +
-							       w * ((1.0 - v) * ((1.0 - h) * z5 + h * z6) + v * ((1.0 - h) * z7 + h * z8))) +
-						  u * ((1.0 - w) * ((1.0 - v) * ((1.0 - h) * z9 + h * z10) + v * ((1.0 - h) * z11 + h * z12)) +
-						       w * ((1.0 - v) * ((1.0 - h) * z13 + h * z14) + v * ((1.0 - h) * z15 + h * z16)));
+			const amrex::Real value = (
+				w[3][0] *
+						(w[2][0] *
+								 (w[1][0] *
+											(w[0][0] * dataView_(ix[0], ix[1], ix[2], ix[3]) +
+											 w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2], ix[3])) +
+									w[1][1] *
+											(w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2], ix[3]) +
+											 w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2], ix[3]))) +
+						 w[2][1] *
+								 (w[1][0] *
+											(w[0][0] * dataView_(ix[0], ix[1], ix[2] + 1, ix[3]) +
+											 w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2] + 1, ix[3])) +
+									w[1][1] *
+											(w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2] + 1, ix[3]) +
+											 w[0][1] *
+													 dataView_(ix[0] + 1, ix[1] + 1, ix[2] + 1, ix[3])))) +
+				w[3][1] *
+						(w[2][0] *
+								 (w[1][0] *
+											(w[0][0] * dataView_(ix[0], ix[1], ix[2], ix[3] + 1) +
+											 w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2], ix[3] + 1)) +
+									w[1][1] *
+											(w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2], ix[3] + 1) +
+											 w[0][1] *
+													 dataView_(ix[0] + 1, ix[1] + 1, ix[2], ix[3] + 1))) +
+						 w[2][1] * (w[1][0] * (w[0][0] * dataView_(ix[0], ix[1], ix[2] + 1, ix[3] + 1) +
+																	 w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2] + 1, ix[3] + 1)) +
+												w[1][1] * (w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2] + 1, ix[3] + 1) +
+																	 w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2] + 1, ix[3] + 1))))
+			);
 
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
