@@ -80,7 +80,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		x3Magnetic_index,
 	};
 
-	enum { dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex, x1DustMomentum_index, x2DustMomentum_index, x3DustMomentum_index };
+	enum dustVarIndex { dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex, x1DustMomentum_index, x2DustMomentum_index, x3DustMomentum_index };
 
 	static void ConservedToPrimitive(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
 					 amrex::MultiFab &primVar_mf, int nghost);
