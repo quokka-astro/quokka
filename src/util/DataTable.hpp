@@ -41,25 +41,6 @@ struct DataTableGpuConst {
 
 	std::array<int, Ndim> sizes{};
 
-	// Original interpolation method (for backward compatibility) - works for any dimension
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(const std::array<amrex::Real, Ndim>& point) const -> amrex::Real
-	{
-		static_assert(Ndim == 2, "interpolate0 currently only supports 2D tables");
-		
-		// Clamp coordinates to valid bounds
-		amrex::Real x = amrex::max(coord_min[0], amrex::min(point[0], coord_max[0]));
-		amrex::Real y = amrex::max(coord_min[1], amrex::min(point[1], coord_max[1]));
-
-		return interpolate2d(x, y, coords[0], coords[1], data);
-	}
-
-	// // Backward compatibility wrapper for 2D
-	// [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
-	// {
-	// 	static_assert(Ndim == 2, "This overload only works for 2D tables");
-	// 	return interpolate0(std::array<amrex::Real, 2>{x, y});
-	// }
-
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
 	/// This function locates the hypercube containing the given point and computes normalized
