@@ -2913,7 +2913,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 		return; // Skip if MHD is not enabled
 	}
 
-	BL_PROFILE("AMRSimulation::computeMagneticDivergence()");
+	BL_PROFILE("AMRSimulation::computeMagneticDivergence()"); // NOLINT
 
 	static amrex::Real previous_max_divB = -1.0;		// -1 indicates first call
 	const amrex::Real divergence_growth_threshold = 1000.0; // 3 orders of magnitude
@@ -2954,7 +2954,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 					dx[2];
 #endif
 				// Normalize by cell size (use dx[0] as representative cell size)
-				amrex::Real normalized_abs_divB = dx[0] * std::abs(divB);
+				amrex::Real const normalized_abs_divB = dx[0] * std::abs(divB);
 				amrex::Gpu::Atomic::Max(&max_divB_fab, normalized_abs_divB);
 				amrex::Gpu::Atomic::Add(&sum_divB_fab, normalized_abs_divB);
 				amrex::Gpu::Atomic::Add(&cell_count_fab, static_cast<amrex::Long>(1));
