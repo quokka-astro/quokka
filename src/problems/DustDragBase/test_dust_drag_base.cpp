@@ -103,8 +103,8 @@ auto problem_main() -> int
 		xs.at(i) = x;
 		vx_exact.at(i) = v0; // expected x velocity
 		// compute x velocity from momentum and density
-		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[i];
 		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[i];
+		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[i];
 		vx_sim.at(i) = momentum_x / density;
 	}
 
@@ -137,8 +137,10 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs, vx_exact, vx_exact_args);
 
 	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("gas velocity");
 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::save("./velocity_test.pdf");
+	matplotlibcpp::save("./dust_drag_base_gas_velocity.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
