@@ -2832,10 +2832,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 	}
 
 	BL_PROFILE("AMRSimulation::computeMagneticDivergence()");
-	
-	static amrex::Real previous_max_divB = -1.0; // -1 indicates first call
+
+	static amrex::Real previous_max_divB = -1.0;		// -1 indicates first call
 	const amrex::Real divergence_growth_threshold = 1000.0; // 3 orders of magnitude
-	
+
 	amrex::Real max_divB_global = 0.0;
 	amrex::Real avg_divB_global = 0.0;
 	amrex::Long cell_count_global = 0;
@@ -2843,7 +2843,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 	for (int lev = 0; lev <= finestLevel(); ++lev) {
 		const amrex::Geometry &geom_lev = Geom(lev);
 		const amrex::Real *dx = geom_lev.CellSize();
-		
+
 		amrex::Real max_divB_level = 0.0;
 		amrex::Real sum_divB_level = 0.0;
 		amrex::Long cell_count_level = 0;
@@ -2860,12 +2860,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 			amrex::Real sum_divB_fab = 0.0;
 			amrex::Long cell_count_fab = 0;
 
-			amrex::ParallelFor(box, [=, &max_divB_fab, &sum_divB_fab, &cell_count_fab] AMREX_GPU_DEVICE (int i, int j, int k) {
+			amrex::ParallelFor(box, [=, &max_divB_fab, &sum_divB_fab, &cell_count_fab] AMREX_GPU_DEVICE(int i, int j, int k) {
 				// Compute divergence using finite differences
-				amrex::Real divB = (Bx(i+1, j, k, Physics_Indices<problem_t>::mhdFirstIndex) - Bx(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) / dx[0] +
-						   (By(i, j+1, k, Physics_Indices<problem_t>::mhdFirstIndex) - By(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) / dx[1];
+				amrex::Real divB =
+				    (Bx(i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex) - Bx(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
+					dx[0] +
+				    (By(i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex) - By(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
+					dx[1];
 #if (AMREX_SPACEDIM == 3)
-				divB += (Bz(i, j, k+1, Physics_Indices<problem_t>::mhdFirstIndex) - Bz(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) / dx[2];
+				divB += (Bz(i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex) - Bz(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
+					dx[2];
 #endif
 				// Normalize by cell size (use dx[0] as representative cell size)
 				amrex::Real normalized_abs_divB = dx[0] * std::abs(divB);
@@ -2888,22 +2892,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 		cell_count_global += cell_count_level;
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::Print() << "Level " << lev << ": max dx*|div(B)| = " << max_divB_level 
-			               << ", avg dx*|div(B)| = " << (cell_count_level > 0 ? sum_divB_level / cell_count_level : 0.0) << std::endl;
+			amrex::Print() << "Level " << lev << ": max dx*|div(B)| = " << max_divB_level
+				       << ", avg dx*|div(B)| = " << (cell_count_level > 0 ? sum_divB_level / cell_count_level : 0.0) << std::endl;
 		}
 	}
 
 	if (amrex::ParallelDescriptor::IOProcessor() && cell_count_global > 0) {
 		avg_divB_global /= cell_count_global;
-		amrex::Print() << "MAGNETIC DIVERGENCE: max dx*|div(B)| = " << max_divB_global 
-		               << ", avg dx*|div(B)| = " << avg_divB_global << std::endl;
+		amrex::Print() << "MAGNETIC DIVERGENCE: max dx*|div(B)| = " << max_divB_global << ", avg dx*|div(B)| = " << avg_divB_global << std::endl;
 
 		// Check for large increases in divergence and halt simulation if necessary
 		if (previous_max_divB > 0.0) {
 			const amrex::Real growth_factor = max_divB_global / previous_max_divB;
 			if (growth_factor > divergence_growth_threshold) {
 				amrex::Print() << "\n[ERROR] MAGNETIC DIVERGENCE INSTABILITY DETECTED!\n";
-				amrex::Print() << "Max dx*|div(B)| increased by factor of " << growth_factor << " (threshold = " << divergence_growth_threshold << ")\n";
+				amrex::Print() << "Max dx*|div(B)| increased by factor of " << growth_factor << " (threshold = " << divergence_growth_threshold
+					       << ")\n";
 				amrex::Print() << "Previous max dx*|div(B)| = " << previous_max_divB << "\n";
 				amrex::Print() << "Current max dx*|div(B)| = " << max_divB_global << "\n";
 				amrex::Print() << "This suggests an EdgeFluxRegister bug at AMR boundaries.\n";
