@@ -137,10 +137,6 @@ template <int Ndim> struct DataTableGpuConst {
 
 			const amrex::Real value = w[0] * dataView_(ix) + w[1] * dataView_(ix + 1);
 
-			// amrex::Real const z1 = data(interp.indices[0]);
-			// amrex::Real const z2 = data(interp.upper_indices[0]);
-			// amrex::Real const value = (1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2;
-
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
 		} else if constexpr (Ndim == 2) {
@@ -157,15 +153,6 @@ template <int Ndim> struct DataTableGpuConst {
 			// Need to swap indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
 			const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix1, ix2) + w1[1] * dataView_(ix1 + 1, ix2)) +
 						   w2[1] * (w1[0] * dataView_(ix1, ix2 + 1) + w1[1] * dataView_(ix1 + 1, ix2 + 1)));
-
-			// amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
-			// amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
-			// amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1]);
-			// amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1]);
-
-			// // f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
-			// amrex::Real const value = (1.0 - interp.normalized[1]) * ((1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2) +
-			// 			  interp.normalized[1] * ((1.0 - interp.normalized[0]) * z3 + interp.normalized[0] * z4);
 
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
