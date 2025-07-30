@@ -48,11 +48,11 @@ struct resampledGpuConstTables {
 class resampled_tables
 {
       public:
-	quokka::DataTable cooling_rates;
-	quokka::DataTable temperatures;
-	quokka::DataTable sound_speeds;
-	quokka::DataTable pressures;
-	quokka::DataTable entropies;
+	quokka::DataTable<2> cooling_rates;
+	quokka::DataTable<2> temperatures;
+	quokka::DataTable<2> sound_speeds;
+	quokka::DataTable<2> pressures;
+	quokka::DataTable<2> entropies;
 
 	amrex::Real rho_min;
 	amrex::Real rho_max;

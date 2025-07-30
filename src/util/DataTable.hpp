@@ -1,12 +1,15 @@
 #ifndef DATATABLE_HPP_
 #define DATATABLE_HPP_
 
+#include "AMReX_Arena.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_TableData.H"
 #include "math/Interpolate2D.hpp"
 #include <array>
 #include <memory>
+#include <type_traits>
 
 namespace quokka
 {
@@ -177,16 +180,28 @@ private:
 	}
 };
 
-// Generic 2D data table class
+// Generic n-dimensional data table class
+template <int Ndim>
 class DataTable
 {
       public:
 	// Default constructor
 	DataTable() = default;
 
-	// Constructor with data
+	// Constructor with data - specialized for 2D
+	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
 	DataTable(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-		  const amrex::Vector<amrex::Vector<amrex::Real>> &data);
+		  const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	{
+		initialize(x_coords, y_coords, data);
+	}
+
+	// Constructor with coordinate arrays and data - general n-dimensional interface
+	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
+		  const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	{
+		initialize(coords, data);
+	}
 
 	// Destructor
 	~DataTable() = default;
@@ -199,36 +214,138 @@ class DataTable
 	DataTable(const DataTable &) = delete;
 	auto operator=(const DataTable &) -> DataTable & = delete;
 
-	// Initialize from vectors
+	// Initialize from vectors - specialized for 2D (backward compatibility)
+	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
 	void initialize(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-			const amrex::Vector<amrex::Vector<amrex::Real>> &data);
+			const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	{
+		std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {x_coords, y_coords};
+		initialize(coord_arrays, data);
+	}
+
+	// Initialize from coordinate arrays - general n-dimensional interface
+	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
+			const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	{
+		static_assert(Ndim == 2, "Currently only 2D tables are supported");
+		
+		// Validate inputs
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
+		}
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data.empty(), "Data cannot be empty!");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == coords[0].size(), "Data first dimension must match first coordinate size!");
+
+		// Store sizes
+		for (int dim = 0; dim < Ndim; ++dim) {
+			sizes_[dim] = static_cast<int>(coords[dim].size());
+		}
+
+		// Verify data dimensions
+		for (const auto &row : data) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
+		}
+
+		// Store coordinate bounds (assuming ascending order) and calculate grid spacing
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_min_[dim] = coords[dim].front();
+			coord_max_[dim] = coords[dim].back();
+			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
+		}
+
+		// Create coordinate tables
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coords_[dim] = std::make_unique<amrex::TableData<amrex::Real, 1>>(
+			    amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1}, amrex::The_Pinned_Arena());
+			auto coord_table = coords_[dim]->table();
+			for (int i = 0; i < sizes_[dim]; ++i) {
+				coord_table(i) = coords[dim][i];
+			}
+		}
+
+		// All above is generic to arbitrary Ndim, but this part is only for 2D
+		{
+			// Create 2D data table
+			data_ = std::make_unique<amrex::TableData<amrex::Real, 2>>(amrex::Array<int, 2>{0, 0}, amrex::Array<int, 2>{sizes_[0] - 1, sizes_[1] - 1},
+											amrex::The_Pinned_Arena());
+			auto data_table = data_->table();
+
+			// Copy data (input is data[i][j], table is accessed as table(i,j))
+			for (int i = 0; i < sizes_[0]; ++i) {
+				for (int j = 0; j < sizes_[1]; ++j) {
+					data_table(i, j) = data[i][j];
+				}
+			}
+		}
+	}
 
 	// Get GPU-friendly const tables
-	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<2>;
+	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim>
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
+
+		if constexpr (Ndim == 2) {
+			DataTableGpuConst<Ndim> tables{
+			    {coords_[0]->const_table(), coords_[1]->const_table()}, // coords array
+			    data_->const_table(),                                   // data
+			    coord_min_,                                             // coord_min array
+			    coord_max_,                                             // coord_max array
+			    dcoord_,                                                // dcoord array
+			    sizes_                                                  // sizes array
+			};
+			return tables;
+		} else {
+			static_assert(Ndim == 2, "Only 2D tables are currently supported");
+		}
+	}
 
 	// Check if table is initialized
-	[[nodiscard]] auto is_initialized() const -> bool;
+	[[nodiscard]] auto is_initialized() const -> bool
+	{
+		if constexpr (Ndim == 2) {
+			return (coords_[0] != nullptr && coords_[1] != nullptr && data_ != nullptr);
+		} else {
+			// For general case, check all coordinate arrays
+			for (int dim = 0; dim < Ndim; ++dim) {
+				if (coords_[dim] == nullptr) {
+					return false;
+				}
+			}
+			return (data_ != nullptr);
+		}
+	}
 
-	// Get dimensions
-	[[nodiscard]] auto x_size() const -> int;
-	[[nodiscard]] auto y_size() const -> int;
+	// Get dimension sizes
+	[[nodiscard]] auto sizes() const -> std::array<int, Ndim>
+	{
+		return sizes_;
+	}
+	
+	// Get size for specific dimension
+	[[nodiscard]] auto size(int dim) const -> int
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim, "Dimension index out of bounds!");
+		return sizes_[dim];
+	}
+
+	// Backward compatibility methods for 2D
+	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
+	[[nodiscard]] auto x_size() const -> int { return sizes_[0]; }
+
+	template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
+	[[nodiscard]] auto y_size() const -> int { return sizes_[1]; }
 
       private:
-	std::unique_ptr<amrex::TableData<amrex::Real, 1>> x_coords_;
-	std::unique_ptr<amrex::TableData<amrex::Real, 1>> y_coords_;
-	std::unique_ptr<amrex::TableData<amrex::Real, 2>> data_;
+	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
+	std::unique_ptr<amrex::TableData<amrex::Real, 2>> data_;  // Still 2D for now
 
-	amrex::Real x_min_ = 0.0;
-	amrex::Real x_max_ = 0.0;
-	amrex::Real y_min_ = 0.0;
-	amrex::Real y_max_ = 0.0;
+	std::array<amrex::Real, Ndim> coord_min_{};
+	std::array<amrex::Real, Ndim> coord_max_{};
 
 	// Precomputed grid spacing for optimization
-	amrex::Real dx_ = 0.0;
-	amrex::Real dy_ = 0.0;
+	std::array<amrex::Real, Ndim> dcoord_{};
 
-	int x_size_ = 0;
-	int y_size_ = 0;
+	std::array<int, Ndim> sizes_{};
 };
 
 } // namespace quokka
