@@ -16,11 +16,11 @@ namespace quokka
 
 // Structure to hold interpolation indices and normalized coordinates
 template <int Ndim> struct InterpData {
-	std::array<int, Ndim> indices{};	      // grid indices for each dimension (lower bounds)
-	std::array<int, Ndim> upper_indices{};	      // upper bound indices for each dimension
-	std::array<amrex::Real, Ndim> coords_lower{}; // actual coordinate values at lower grid points
-	std::array<amrex::Real, Ndim> coords_upper{}; // actual coordinate values at upper grid points
-	std::array<amrex::Real, Ndim> normalized{};   // normalized coordinates in [0,1] for each dimension
+	std::array<int, Ndim> indices{}; // grid indices for each dimension (lower bounds)
+	// std::array<int, Ndim> upper_indices{};  // upper bound indices for each dimension
+	// std::array<amrex::Real, Ndim> coords_lower{};  // actual coordinate values at lower grid points
+	// std::array<amrex::Real, Ndim> coords_upper{};  // actual coordinate values at upper grid points
+	std::array<amrex::Real, Ndim> normalized{}; // normalized coordinates in [0,1] for each dimension
 
 	// Default constructor
 	AMREX_GPU_HOST_DEVICE InterpData() = default;
@@ -78,8 +78,8 @@ template <int Ndim> struct DataTableGpuConst {
 
 		for (int dim = 0; dim < Ndim; ++dim) {
 			// Get table bounds for this dimension - assumes uniform grid spacing
-			amrex::Real const coord_start = coords[dim](coords[dim].begin); // First coordinate
-			amrex::Real const coord_end = coords[dim](coords[dim].end - 1); // Last coordinate
+			amrex::Real const coord_start = coords[dim](coords[dim].begin); // First coordinate, begin = 0
+			amrex::Real const coord_end = coords[dim](coords[dim].end - 1); // Last coordinate, end = size
 
 			// Clamp coordinates to valid table bounds (extrapolation not supported)
 			amrex::Real clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
@@ -89,20 +89,13 @@ template <int Ndim> struct DataTableGpuConst {
 			interp.indices[dim] = amrex::max(
 			    coords[dim].begin, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), coords[dim].end - 1));
 
-			// upper_indices are the "upper" indices (handle boundary case)
-			interp.upper_indices[dim] = (interp.indices[dim] == coords[dim].end - 1) ? interp.indices[dim] : interp.indices[dim] + 1;
-
-			// Get actual coordinate values at the grid points
-			interp.coords_lower[dim] = coords[dim](interp.indices[dim]);	   // Lower coordinate
-			interp.coords_upper[dim] = coords[dim](interp.upper_indices[dim]); // Upper coordinate
-
-			// Compute normalized coordinates within the grid cell [0,1]
-			// normalized[dim] = 0 at coords_lower[dim], normalized[dim] = 1 at coords_upper[dim]
-			if (interp.indices[dim] != interp.upper_indices[dim]) {
-				interp.normalized[dim] = (clamped_coord - interp.coords_lower[dim]) / (interp.coords_upper[dim] - interp.coords_lower[dim]);
-			} else {
-				interp.normalized[dim] = 0.0; // No variation in this dimension (boundary case)
+			// if indices is end - 1, then set indices to end - 2 (so that upper_indices is end - 1, the last index)
+			if (interp.indices[dim] == coords[dim].end - 1) {
+				interp.indices[dim] = coords[dim].end - 2;
 			}
+
+			// This can be greater than 1 if the point is outside the grid and not clamped
+			interp.normalized[dim] = (clamped_coord - coords[dim](interp.indices[dim])) / dcoord[dim];
 		}
 
 		return interp;
@@ -134,6 +127,8 @@ template <int Ndim> struct DataTableGpuConst {
 	/// @return Interpolated value
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim> &interp) const -> amrex::Real
 	{
+		auto const dataView_ = data;
+
 		if constexpr (Ndim == 1) {
 			// 1D case (linear interpolation)
 			amrex::Real const z1 = data(interp.indices[0]);
@@ -143,14 +138,27 @@ template <int Ndim> struct DataTableGpuConst {
 			return value;
 		} else if constexpr (Ndim == 2) {
 			// 2D case (bilinear interpolation)
-			amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
-			amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
-			amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1]);
-			amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1]);
+			const int ix1 = interp.indices[0];
+			const int ix2 = interp.indices[1];
 
-			// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
-			amrex::Real const value = (1.0 - interp.normalized[1]) * ((1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2) +
-						  interp.normalized[1] * ((1.0 - interp.normalized[0]) * z3 + interp.normalized[0] * z4);
+			const std::array<amrex::Real, 2> w1 = {1.0 - interp.normalized[0], interp.normalized[0]};
+			const std::array<amrex::Real, 2> w2 = {1.0 - interp.normalized[1], interp.normalized[1]};
+
+			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp):
+			// const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix2, ix1) + w1[1] * dataView_(ix2, ix1 + 1)) +
+			// 			   w2[1] * (w1[0] * dataView_(ix2 + 1, ix1) + w1[1] * dataView_(ix2 + 1, ix1 + 1)));
+			// Need to swap indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
+			const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix1, ix2) + w1[1] * dataView_(ix1 + 1, ix2)) +
+						   w2[1] * (w1[0] * dataView_(ix1, ix2 + 1) + w1[1] * dataView_(ix1 + 1, ix2 + 1)));
+
+			// amrex::Real const z1 = data(interp.indices[0], interp.indices[1]);
+			// amrex::Real const z2 = data(interp.upper_indices[0], interp.indices[1]);
+			// amrex::Real const z3 = data(interp.indices[0], interp.upper_indices[1]);
+			// amrex::Real const z4 = data(interp.upper_indices[0], interp.upper_indices[1]);
+
+			// // f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
+			// amrex::Real const value = (1.0 - interp.normalized[1]) * ((1.0 - interp.normalized[0]) * z1 + interp.normalized[0] * z2) +
+			// 			  interp.normalized[1] * ((1.0 - interp.normalized[0]) * z3 + interp.normalized[0] * z4);
 
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
@@ -167,8 +175,7 @@ template <int Ndim> struct DataTableGpuConst {
 
 			// Trilinear interpolation
 			amrex::Real const h = interp.normalized[0];
-			amrex::Real const v = interp.normalized[1];			auto const dataView_ = data;
-
+			amrex::Real const v = interp.normalized[1];
 			amrex::Real const w = interp.normalized[2];
 
 			amrex::Real const value = (1.0 - w) * ((1.0 - v) * ((1.0 - h) * z1 + h * z2) + v * ((1.0 - h) * z3 + h * z4)) +
