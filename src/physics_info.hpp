@@ -40,7 +40,7 @@ template <typename problem_t> struct Physics_Indices {
 	// number of cc quantities required for rad /+ hydro problem
 	// note that either hydro or radiation must be enabled, so numHydroVars is always counted
 	static constexpr int nvarTotal_cc_radhydro = Physics_Traits<problem_t>::numPassiveScalars +
-			       Physics_NumVars::numHydroVars + Physics_NumVars::numRadVars * Physics_Traits<problem_t>::nGroups * static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled) +
+			       Physics_NumVars::numHydroVars + Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups * static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled) +
 						 Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups * static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled);
 	// cell-centered
 	static const int nvarTotal_cc = nvarTotal_cc_radhydro > 0 ? nvarTotal_cc_radhydro : nvarTotal_cc_adv;
