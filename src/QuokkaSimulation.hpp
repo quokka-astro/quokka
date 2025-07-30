@@ -62,7 +62,6 @@ namespace filesystem = experimental::filesystem;
 #endif
 
 #include "SimulationData.hpp"
-#include "chemistry/Chemistry.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"

@@ -1633,23 +1633,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		}
 
 		// do post-timestep operations
+		
+		// NOTE: with MHD, averaging down MUST be done before the reflux!!
+		AverageDownTo(lev); // average lev+1 down to lev
 
 		if (do_reflux != 0) {
 			// update lev based on coarse-fine flux mismatch
 			flux_reg_[lev + 1]->Reflux(state_new_cc_[lev]);
+
 			// update magnetic field based on coarse-fine EMF mismatch
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				// Compute norminf before reflux (requires MPI reduction)
 				amrex::Real bx_max_before = state_new_fc_[lev][0].norminf();
 				amrex::Real by_max_before = state_new_fc_[lev][1].norminf();
 				amrex::Real bz_max_before = state_new_fc_[lev][2].norminf();
-
-				if (amrex::ParallelDescriptor::IOProcessor()) {
-					amrex::Print() << "[DEBUG EMF] Before EMF reflux on level " << lev << ":\n";
-					amrex::Print() << "  Bx max = " << bx_max_before << '\n';
-					amrex::Print() << "  By max = " << by_max_before << '\n';
-					amrex::Print() << "  Bz max = " << bz_max_before << '\n';
-				}
 
 				emf_reg_[lev + 1]->Reflux({AMREX_D_DECL(&state_new_fc_[lev][0], &state_new_fc_[lev][1], &state_new_fc_[lev][2])});
 
@@ -1659,6 +1656,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				amrex::Real bz_max_after = state_new_fc_[lev][2].norminf();
 
 				if (amrex::ParallelDescriptor::IOProcessor()) {
+					amrex::Print() << "[DEBUG EMF] Before EMF reflux on level " << lev << ":\n";
+					amrex::Print() << "  Bx max = " << bx_max_before << '\n';
+					amrex::Print() << "  By max = " << by_max_before << '\n';
+					amrex::Print() << "  Bz max = " << bz_max_before << '\n';
 					amrex::Print() << "[DEBUG EMF] After EMF reflux on level " << lev << ":\n";
 					amrex::Print() << "  Bx max = " << bx_max_after << '\n';
 					amrex::Print() << "  By max = " << by_max_after << '\n';
@@ -1667,7 +1668,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 			}
 		}
 
-		AverageDownTo(lev); // average lev+1 down to lev
 		FixupState(lev);    // fix any unphysical states created by reflux or averaging
 
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
@@ -1758,22 +1758,18 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 	BL_PROFILE("AMRSimulation::incrementEMFRegisters()"); // NOLINT(misc-const-correctness)
 
 #if (AMREX_SPACEDIM == 3)
-	// Compute norminf on all processors (requires MPI reduction)
-	amrex::Real ex_max = ec_emf_components[0].norminf();
-	amrex::Real ey_max = ec_emf_components[1].norminf();
-	amrex::Real ez_max = ec_emf_components[2].norminf();
-
-	// Debug: Check EMF scaling by computing EMF*dx values
 	const amrex::Real *dx = geom[lev].CellSize();
 
+	// Compute norminf on all processors (requires MPI reduction)
+	amrex::Real const ex_max = ec_emf_components[0].norminf();
+	amrex::Real const ey_max = ec_emf_components[1].norminf();
+	amrex::Real const ez_max = ec_emf_components[2].norminf();
+
+	// Debug: Check EMF values
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "[DEBUG EMF] Level " << lev << " incrementEMFRegisters: dt_lev = " << dt_lev << '\n';
 		amrex::Print() << "[DEBUG EMF] Cell sizes: dx = " << dx[0] << ", dy = " << dx[1] << ", dz = " << dx[2] << '\n';
 		amrex::Print() << "[DEBUG EMF] EMF components max values: Ex = " << ex_max << ", Ey = " << ey_max << ", Ez = " << ez_max << '\n';
-		amrex::Print() << "[DEBUG EMF] EMF*dx values: Ex*dx = " << ex_max * dx[0] << ", Ey*dy = " << ey_max * dx[1] << ", Ez*dz = " << ez_max * dx[2]
-			       << '\n';
-		amrex::Print() << "[DEBUG EMF] EMF/dx values: Ex/dx = " << ex_max / dx[0] << ", Ey/dy = " << ey_max / dx[1] << ", Ez/dz = " << ez_max / dx[2]
-			       << '\n';
 	}
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
@@ -2527,7 +2523,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		// for each face-centering (number of dimensions)
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev), geom[crse_lev]);
+			//amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev), geom[crse_lev]);
 		}
 	}
 }
@@ -2930,13 +2926,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 		amrex::Real sum_divB_level = 0.0;
 		amrex::Long cell_count_level = 0;
 
+		// fill ghost faces
+		// FIXME(bwibking): why does this make a difference??
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		}
+
 		for (amrex::MFIter mfi(state_new_fc_[lev][0]); mfi.isValid(); ++mfi) {
 			const amrex::Box &box = mfi.validbox();
 			const amrex::Array4<amrex::Real const> &Bx = state_new_fc_[lev][0].const_array(mfi);
 			const amrex::Array4<amrex::Real const> &By = state_new_fc_[lev][1].const_array(mfi);
-#if (AMREX_SPACEDIM == 3)
 			const amrex::Array4<amrex::Real const> &Bz = state_new_fc_[lev][2].const_array(mfi);
-#endif
 
 			amrex::Real max_divB_fab = 0.0;
 			amrex::Real sum_divB_fab = 0.0;
@@ -2948,11 +2949,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 				    (Bx(i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex) - Bx(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
 					dx[0] +
 				    (By(i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex) - By(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
-					dx[1];
-#if (AMREX_SPACEDIM == 3)
-				divB += (Bz(i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex) - Bz(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
+					dx[1] +
+					(Bz(i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex) - Bz(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
 					dx[2];
-#endif
+				
 				// Normalize by cell size (use dx[0] as representative cell size)
 				amrex::Real const normalized_abs_divB = dx[0] * std::abs(divB);
 				amrex::Gpu::Atomic::Max(&max_divB_fab, normalized_abs_divB);
@@ -3700,6 +3700,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		if (lev > 0 && (do_reflux != 0)) {
 			flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev), Geom(lev - 1),
 										 refRatio(lev - 1), lev, ncomp_cc);
+			// TODO(bwibking): initialize emf_reg_[lev] here
 		}
 
 		const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
