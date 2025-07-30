@@ -1646,9 +1646,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 				if (amrex::ParallelDescriptor::IOProcessor()) {
 					amrex::Print() << "[DEBUG EMF] Before EMF reflux on level " << lev << ":\n";
-					amrex::Print() << "  Bx max = " << bx_max_before << std::endl;
-					amrex::Print() << "  By max = " << by_max_before << std::endl;
-					amrex::Print() << "  Bz max = " << bz_max_before << std::endl;
+					amrex::Print() << "  Bx max = " << bx_max_before << '\n';
+					amrex::Print() << "  By max = " << by_max_before << '\n';
+					amrex::Print() << "  Bz max = " << bz_max_before << '\n';
 				}
 
 				emf_reg_[lev + 1]->Reflux({AMREX_D_DECL(&state_new_fc_[lev][0], &state_new_fc_[lev][1], &state_new_fc_[lev][2])});
@@ -1660,9 +1660,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 				if (amrex::ParallelDescriptor::IOProcessor()) {
 					amrex::Print() << "[DEBUG EMF] After EMF reflux on level " << lev << ":\n";
-					amrex::Print() << "  Bx max = " << bx_max_after << std::endl;
-					amrex::Print() << "  By max = " << by_max_after << std::endl;
-					amrex::Print() << "  Bz max = " << bz_max_after << std::endl;
+					amrex::Print() << "  Bx max = " << bx_max_after << '\n';
+					amrex::Print() << "  By max = " << by_max_after << '\n';
+					amrex::Print() << "  Bz max = " << bz_max_after << '\n';
 				}
 			}
 		}
@@ -1767,13 +1767,13 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 	const amrex::Real *dx = geom[lev].CellSize();
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::Print() << "[DEBUG EMF] Level " << lev << " incrementEMFRegisters: dt_lev = " << dt_lev << std::endl;
-		amrex::Print() << "[DEBUG EMF] Cell sizes: dx = " << dx[0] << ", dy = " << dx[1] << ", dz = " << dx[2] << std::endl;
-		amrex::Print() << "[DEBUG EMF] EMF components max values: Ex = " << ex_max << ", Ey = " << ey_max << ", Ez = " << ez_max << std::endl;
+		amrex::Print() << "[DEBUG EMF] Level " << lev << " incrementEMFRegisters: dt_lev = " << dt_lev << '\n';
+		amrex::Print() << "[DEBUG EMF] Cell sizes: dx = " << dx[0] << ", dy = " << dx[1] << ", dz = " << dx[2] << '\n';
+		amrex::Print() << "[DEBUG EMF] EMF components max values: Ex = " << ex_max << ", Ey = " << ey_max << ", Ez = " << ez_max << '\n';
 		amrex::Print() << "[DEBUG EMF] EMF*dx values: Ex*dx = " << ex_max * dx[0] << ", Ey*dy = " << ey_max * dx[1] << ", Ez*dz = " << ez_max * dx[2]
-			       << std::endl;
+			       << '\n';
 		amrex::Print() << "[DEBUG EMF] EMF/dx values: Ex/dx = " << ex_max / dx[0] << ", Ey/dy = " << ey_max / dx[1] << ", Ez/dz = " << ez_max / dx[2]
-			       << std::endl;
+			       << '\n';
 	}
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
@@ -1781,12 +1781,12 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 			AMREX_ASSERT(lev < finestLevel());
 			AMREX_ASSERT(emf_as_crse == emf_reg_[lev + 1].get());
 			if (amrex::ParallelDescriptor::IOProcessor() && mfi.index() == 0) {
-				amrex::Print() << "[DEBUG EMF] Level " << lev << " CrseAdd to register for level " << (lev + 1) << std::endl;
+				amrex::Print() << "[DEBUG EMF] Level " << lev << " CrseAdd to register for level " << (lev + 1) << '\n';
 			}
 			// Use unscaled timestep value
 			amrex::Real dt_scaled = dt_lev;
 			if (amrex::ParallelDescriptor::IOProcessor() && mfi.index() == 0) {
-				amrex::Print() << "[DEBUG EMF] Testing dt scaling: dt_lev = " << dt_lev << ", dt_scaled = " << dt_scaled << std::endl;
+				amrex::Print() << "[DEBUG EMF] Testing dt scaling: dt_lev = " << dt_lev << ", dt_scaled = " << dt_scaled << '\n';
 			}
 			emf_as_crse->CrseAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
 					     dt_scaled);
@@ -1796,12 +1796,12 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 			AMREX_ASSERT(lev > 0);
 			AMREX_ASSERT(emf_as_fine == emf_reg_[lev].get());
 			if (amrex::ParallelDescriptor::IOProcessor() && mfi.index() == 0) {
-				amrex::Print() << "[DEBUG EMF] Level " << lev << " FineAdd to register for level " << lev << std::endl;
+				amrex::Print() << "[DEBUG EMF] Level " << lev << " FineAdd to register for level " << lev << '\n';
 			}
 			// Use unscaled timestep value
 			amrex::Real dt_scaled = dt_lev;
 			if (amrex::ParallelDescriptor::IOProcessor() && mfi.index() == 0) {
-				amrex::Print() << "[DEBUG EMF] Testing dt scaling: dt_lev = " << dt_lev << ", dt_scaled = " << dt_scaled << std::endl;
+				amrex::Print() << "[DEBUG EMF] Testing dt scaling: dt_lev = " << dt_lev << ", dt_scaled = " << dt_scaled << '\n';
 			}
 			emf_as_fine->FineAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
 					     dt_scaled);
@@ -1867,12 +1867,12 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1; // EMF has 1 component per dimension
 			if (amrex::ParallelDescriptor::IOProcessor()) {
-				amrex::Print() << "[DEBUG EMF] Creating EdgeFluxRegister for level " << level << std::endl;
+				amrex::Print() << "[DEBUG EMF] Creating EdgeFluxRegister for level " << level << '\n';
 				amrex::Print() << "  Fine level dx = " << Geom(level).CellSize(0) << ", " << Geom(level).CellSize(1) << ", "
 					       << Geom(level).CellSize(2) << std::endl;
 				amrex::Print() << "  Coarse level dx = " << Geom(level - 1).CellSize(0) << ", " << Geom(level - 1).CellSize(1) << ", "
 					       << Geom(level - 1).CellSize(2) << std::endl;
-				amrex::Print() << "  nemf_vars = " << nemf_vars << std::endl;
+				amrex::Print() << "  nemf_vars = " << nemf_vars << '\n';
 			}
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 										    Geom(level - 1), nemf_vars);
@@ -1937,12 +1937,12 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1; // EMF has 1 component per dimension
 			if (amrex::ParallelDescriptor::IOProcessor()) {
-				amrex::Print() << "[DEBUG EMF] Creating EdgeFluxRegister for level " << level << std::endl;
+				amrex::Print() << "[DEBUG EMF] Creating EdgeFluxRegister for level " << level << '\n';
 				amrex::Print() << "  Fine level dx = " << Geom(level).CellSize(0) << ", " << Geom(level).CellSize(1) << ", "
 					       << Geom(level).CellSize(2) << std::endl;
 				amrex::Print() << "  Coarse level dx = " << Geom(level - 1).CellSize(0) << ", " << Geom(level - 1).CellSize(1) << ", "
 					       << Geom(level - 1).CellSize(2) << std::endl;
-				amrex::Print() << "  nemf_vars = " << nemf_vars << std::endl;
+				amrex::Print() << "  nemf_vars = " << nemf_vars << '\n';
 			}
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 										    Geom(level - 1), nemf_vars);
@@ -2156,12 +2156,12 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1; // EMF has 1 component per dimension
 			if (amrex::ParallelDescriptor::IOProcessor()) {
-				amrex::Print() << "[DEBUG EMF] Creating EdgeFluxRegister for level " << level << std::endl;
+				amrex::Print() << "[DEBUG EMF] Creating EdgeFluxRegister for level " << level << '\n';
 				amrex::Print() << "  Fine level dx = " << Geom(level).CellSize(0) << ", " << Geom(level).CellSize(1) << ", "
 					       << Geom(level).CellSize(2) << std::endl;
 				amrex::Print() << "  Coarse level dx = " << Geom(level - 1).CellSize(0) << ", " << Geom(level - 1).CellSize(1) << ", "
 					       << Geom(level - 1).CellSize(2) << std::endl;
-				amrex::Print() << "  nemf_vars = " << nemf_vars << std::endl;
+				amrex::Print() << "  nemf_vars = " << nemf_vars << '\n';
 			}
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 										    Geom(level - 1), nemf_vars);
@@ -2957,7 +2957,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 				amrex::Real normalized_abs_divB = dx[0] * std::abs(divB);
 				amrex::Gpu::Atomic::Max(&max_divB_fab, normalized_abs_divB);
 				amrex::Gpu::Atomic::Add(&sum_divB_fab, normalized_abs_divB);
-				amrex::Gpu::Atomic::Add(&cell_count_fab, amrex::Long(1));
+				amrex::Gpu::Atomic::Add(&cell_count_fab, static_cast<amrex::Long>(1));
 			});
 
 			max_divB_level = std::max(max_divB_level, max_divB_fab);
@@ -2975,13 +2975,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDive
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			amrex::Print() << "Level " << lev << ": max dx*|div(B)| = " << max_divB_level
-				       << ", avg dx*|div(B)| = " << (cell_count_level > 0 ? sum_divB_level / cell_count_level : 0.0) << std::endl;
+				       << ", avg dx*|div(B)| = " << (cell_count_level > 0 ? sum_divB_level / static_cast<amrex::Real>(cell_count_level) : 0.0) << '\n';
 		}
 	}
 
 	if (amrex::ParallelDescriptor::IOProcessor() && cell_count_global > 0) {
-		avg_divB_global /= cell_count_global;
-		amrex::Print() << "MAGNETIC DIVERGENCE: max dx*|div(B)| = " << max_divB_global << ", avg dx*|div(B)| = " << avg_divB_global << std::endl;
+		avg_divB_global /= static_cast<amrex::Real>(cell_count_global);
+		amrex::Print() << "MAGNETIC DIVERGENCE: max dx*|div(B)| = " << max_divB_global << ", avg dx*|div(B)| = " << avg_divB_global << '\n';
 
 		// Check for large increases in divergence and halt simulation if necessary
 		if (previous_max_divB > 0.0) {
