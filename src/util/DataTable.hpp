@@ -16,7 +16,7 @@ namespace quokka
 
 // Structure to hold interpolation indices and normalized coordinates
 template <int Ndim> struct InterpData {
-	std::array<int, Ndim> indices{}; // grid indices for each dimension (lower bounds)
+	std::array<int, Ndim> indices{};	    // grid indices for each dimension (lower bounds)
 	std::array<amrex::Real, Ndim> normalized{}; // normalized coordinates in [0,1] for each dimension
 
 	// Default constructor
@@ -142,7 +142,7 @@ template <int Ndim> struct DataTableGpuConst {
 			const std::array<amrex::Real, 2> w1 = {1.0 - interp.normalized[0], interp.normalized[0]};
 			const std::array<amrex::Real, 2> w2 = {1.0 - interp.normalized[1], interp.normalized[1]};
 
-			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp):
+			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp, line 461):
 			// const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix2, ix1) + w1[1] * dataView_(ix2, ix1 + 1)) +
 			// 			   w2[1] * (w1[0] * dataView_(ix2 + 1, ix1) + w1[1] * dataView_(ix2 + 1, ix1 + 1)));
 			// I swapped the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
