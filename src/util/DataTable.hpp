@@ -65,7 +65,7 @@ struct DataTableGpuConst {
 	/// @param point Physical coordinates to interpolate at (size Ndim)
 	/// @return InterpData structure containing grid indices, coordinates, and normalized params
 	///
-	/// Grid Layout and Coordinate Mapping:
+	/// Grid Layout and Coordinate Mapping, for 2D as an example:
 	/// ```
 	///   y2  z3 -------- z4     (x1,y2) -------- (x2,y2)
 	///       |     *     |         |     *     |
@@ -82,8 +82,6 @@ struct DataTableGpuConst {
 	///   - z3 = f(0,1) -> data(ix, iiy)  = (x1,y2) top-left
 	///   - z4 = f(1,1) -> data(iix, iiy) = (x2,y2) top-right
 	/// ```
-	// template <int N = Ndim, typename std::enable_if<N == 2, int>::type = 0>
-	// [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData<2>
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(const std::array<amrex::Real, Ndim>& point) const -> InterpData<Ndim>
 	{
 		InterpData<Ndim> interp;
@@ -121,13 +119,6 @@ struct DataTableGpuConst {
 		}
 
 		return interp;
-	}
-
-	// Backward compatibility wrapper for 2D  
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData<Ndim>
-	{
-		static_assert(Ndim == 2, "This overload only works for 2D tables");
-		return find_interpolation_data(std::array<amrex::Real, 2>{x, y});
 	}
 
 	/// @brief Perform n-dimensional linear interpolation
