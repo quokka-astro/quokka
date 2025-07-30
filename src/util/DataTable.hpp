@@ -183,11 +183,12 @@ template <int Ndim> struct DataTableGpuConst {
 			// 4D case (quadrilinear interpolation)
 			const auto ix = interp.indices;
 
-			const std::array<std::array<amrex::Real, 2>, 4> w = {{{1.0 - interp.normalized[0], interp.normalized[0]},
-									      {1.0 - interp.normalized[1], interp.normalized[1]},
-									      {1.0 - interp.normalized[2], interp.normalized[2]},
-									      {1.0 - interp.normalized[3], interp.normalized[3]},
-											}};
+			const std::array<std::array<amrex::Real, 2>, 4> w = {{
+			    {1.0 - interp.normalized[0], interp.normalized[0]},
+			    {1.0 - interp.normalized[1], interp.normalized[1]},
+			    {1.0 - interp.normalized[2], interp.normalized[2]},
+			    {1.0 - interp.normalized[3], interp.normalized[3]},
+			}};
 
 			// clang-format off
 			const amrex::Real value = (
