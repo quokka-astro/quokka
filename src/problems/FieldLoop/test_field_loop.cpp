@@ -158,7 +158,7 @@ template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::st
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// Compute divergence using finite differences
-			amrex::Real divB = (Bx_arr[bx](i + 1, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex) -
+			amrex::Real const divB = (Bx_arr[bx](i + 1, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex) -
 					    Bx_arr[bx](i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex)) /
 					       dx[0] +
 					   (By_arr[bx](i, j + 1, k, Physics_Indices<FieldLoop>::mhdFirstIndex) -
