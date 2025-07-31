@@ -281,17 +281,34 @@ template <int Ndim> class DataTable
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data.empty(), "Data cannot be empty!");
 
-		// For 2D case, maintain backward compatibility with existing data format
-		if constexpr (Ndim == 2) {
+		// Validate data dimensions for different cases
+		if constexpr (Ndim == 1) {
+			// For 1D: expect data[0] to contain all the values for the single coordinate
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() >= 1, "1D data must have at least one row!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[0].size() == coords[0].size(), "1D data row must match coordinate size!");
+		} else if constexpr (Ndim == 2) {
+			// For 2D case, maintain backward compatibility with existing data format
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == coords[0].size(), "Data first dimension must match first coordinate size!");
 			// Verify data dimensions
 			for (const auto &row : data) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
 			}
-		} else {
-			// For non-2D cases, you'll need to implement appropriate data format validation
-			// This is a placeholder - extend as needed for your specific use cases
-			static_assert(Ndim == 2, "Non-2D data initialization not yet implemented. Please extend this method for your use case.");
+		} else if constexpr (Ndim == 3) {
+			// For 3D: expect flattened data where data[i*coords[1].size() + j][k] corresponds to (i,j,k)
+			const int expected_rows = coords[0].size() * coords[1].size();
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == expected_rows, 
+				"3D data must have coords[0].size() * coords[1].size() rows for flattened (i,j) indexing!");
+			for (const auto &row : data) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[2].size(), "All 3D data rows must match third coordinate size!");
+			}
+		} else if constexpr (Ndim == 4) {
+			// For 4D: expect flattened data where data[i*coords[1].size()*coords[2].size() + j*coords[2].size() + k][l] corresponds to (i,j,k,l)
+			const int expected_rows = coords[0].size() * coords[1].size() * coords[2].size();
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == expected_rows, 
+				"4D data must have coords[0].size() * coords[1].size() * coords[2].size() rows for flattened (i,j,k) indexing!");
+			for (const auto &row : data) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[3].size(), "All 4D data rows must match fourth coordinate size!");
+			}
 		}
 
 		// Store sizes
@@ -327,18 +344,41 @@ template <int Ndim> class DataTable
 		data_ = std::make_unique<amrex::TableData<amrex::Real, Ndim>>(lo, hi, amrex::The_Pinned_Arena());
 		auto data_table = data_->table();
 
-		// Copy data - for now only handle 2D input format
-		if constexpr (Ndim == 2) {
-			// Copy data (input is data[i][j], table is accessed as table(i,j))
+		// Copy data for different dimensions
+		if constexpr (Ndim == 1) {
+			// Copy 1D data: data[0][i] -> table(i)
+			for (int i = 0; i < sizes_[0]; ++i) {
+				data_table(i) = data[0][i];
+			}
+		} else if constexpr (Ndim == 2) {
+			// Copy 2D data: data[i][j] -> table(i,j)
 			for (int i = 0; i < sizes_[0]; ++i) {
 				for (int j = 0; j < sizes_[1]; ++j) {
 					data_table(i, j) = data[i][j];
 				}
 			}
-		} else {
-			// For other dimensions, you'll need to implement appropriate data copying
-			// This is a placeholder - extend as needed for your specific use cases
-			static_assert(Ndim == 2, "Non-2D data copying not yet implemented. Please extend this method for your use case.");
+		} else if constexpr (Ndim == 3) {
+			// Copy 3D data: data[i*sizes_[1] + j][k] -> table(i,j,k)
+			for (int i = 0; i < sizes_[0]; ++i) {
+				for (int j = 0; j < sizes_[1]; ++j) {
+					const int flat_index = i * sizes_[1] + j;
+					for (int k = 0; k < sizes_[2]; ++k) {
+						data_table(i, j, k) = data[flat_index][k];
+					}
+				}
+			}
+		} else if constexpr (Ndim == 4) {
+			// Copy 4D data: data[i*sizes_[1]*sizes_[2] + j*sizes_[2] + k][l] -> table(i,j,k,l)
+			for (int i = 0; i < sizes_[0]; ++i) {
+				for (int j = 0; j < sizes_[1]; ++j) {
+					for (int k = 0; k < sizes_[2]; ++k) {
+						const int flat_index = i * sizes_[1] * sizes_[2] + j * sizes_[2] + k;
+						for (int l = 0; l < sizes_[3]; ++l) {
+							data_table(i, j, k, l) = data[flat_index][l];
+						}
+					}
+				}
+			}
 		}
 	}
 
