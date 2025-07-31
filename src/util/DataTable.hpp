@@ -32,8 +32,8 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	// Array of data tables for multiple outputs - each has the same coordinate dimensionality
 	using single_data_table_type =
 	    std::conditional_t<Ndim == 1, amrex::Table1D<const amrex::Real>,
-		       std::conditional_t<Ndim == 2, amrex::Table2D<const amrex::Real>,
-				  std::conditional_t<Ndim == 3, amrex::Table3D<const amrex::Real>, amrex::Table4D<const amrex::Real>>>>;
+			       std::conditional_t<Ndim == 2, amrex::Table2D<const amrex::Real>,
+						  std::conditional_t<Ndim == 3, amrex::Table3D<const amrex::Real>, amrex::Table4D<const amrex::Real>>>>;
 	std::array<single_data_table_type, Nout> dataViewArrays;
 
 	std::array<amrex::Real, Ndim> coord_min{};
@@ -107,7 +107,8 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	///
 	/// @param point Physical coordinates to interpolate at (size Ndim)
 	/// @return Array of interpolated values (size Nout)
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const -> std::array<amrex::Real, Nout>
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const
+	    -> std::array<amrex::Real, Nout>
 	{
 		// Part 1: Find interpolation indices and normalized coordinates (shared for all outputs)
 		InterpData<Ndim> const interp = find_interpolation_data(point);
@@ -121,7 +122,8 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	/// @param point Physical coordinates to interpolate at (size Ndim)
 	/// @param output_index Index of the output to interpolate (0 to Nout-1)
 	/// @return Single interpolated value
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const -> amrex::Real
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const
+	    -> amrex::Real
 	{
 		static_assert(Nout >= 1, "Must have at least one output");
 		// Part 1: Find interpolation indices and normalized coordinates
@@ -139,15 +141,16 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	///
 	/// @param interp Interpolation data containing indices and normalized coordinates
 	/// @return Array of interpolated values (size Nout)
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim> &interp) const -> std::array<amrex::Real, Nout>
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim> &interp) const
+	    -> std::array<amrex::Real, Nout>
 	{
 		std::array<amrex::Real, Nout> results{};
-		
+
 		// Interpolate all outputs using the same coordinate weights
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			results[out_idx] = interpolate_single_from_indices(interp, out_idx);
 		}
-		
+
 		return results;
 	}
 
@@ -159,7 +162,8 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	/// @param interp Interpolation data containing indices and normalized coordinates
 	/// @param output_index Index of the output to interpolate (0 to Nout-1)
 	/// @return Single interpolated value
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single_from_indices(const InterpData<Ndim> &interp, int output_index) const -> amrex::Real
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single_from_indices(const InterpData<Ndim> &interp, int output_index) const
+	    -> amrex::Real
 	{
 		auto dataView_ = dataViewArrays[output_index];
 
@@ -298,7 +302,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	}
 
 	// Backward compatibility constructor for single output (Nout = 1)
-	template<int N = Nout, typename = std::enable_if_t<N == 1>>
+	template <int N = Nout, typename = std::enable_if_t<N == 1>>
 	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
 	{
 		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, 1> data_array = {data};
@@ -332,11 +336,11 @@ template <int Ndim, int Nout = 1> class DataTable
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
 		}
-		
+
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), "Data for each output cannot be empty!");
-			
+
 			// Validate data dimensions for different cases
 			if constexpr (Ndim == 1) {
 				// For 1D: expect data[out_idx][0] to contain all the values for the single coordinate
@@ -344,7 +348,8 @@ template <int Ndim, int Nout = 1> class DataTable
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx][0].size() == coords[0].size(), "1D data row must match coordinate size!");
 			} else if constexpr (Ndim == 2) {
 				// For 2D case, maintain backward compatibility with existing data format
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "Data first dimension must match first coordinate size!");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(),
+								 "Data first dimension must match first coordinate size!");
 				// Verify data dimensions
 				for (const auto &row : data[out_idx]) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
@@ -352,16 +357,18 @@ template <int Ndim, int Nout = 1> class DataTable
 			} else if constexpr (Ndim == 3) {
 				// For 3D: expect flattened data where data[out_idx][i*coords[1].size() + j][k] corresponds to (i,j,k)
 				const int expected_rows = coords[0].size() * coords[1].size();
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == expected_rows, 
-					"3D data must have coords[0].size() * coords[1].size() rows for flattened (i,j) indexing!");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == expected_rows,
+								 "3D data must have coords[0].size() * coords[1].size() rows for flattened (i,j) indexing!");
 				for (const auto &row : data[out_idx]) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[2].size(), "All 3D data rows must match third coordinate size!");
 				}
 			} else if constexpr (Ndim == 4) {
-				// For 4D: expect flattened data where data[out_idx][i*coords[1].size()*coords[2].size() + j*coords[2].size() + k][l] corresponds to (i,j,k,l)
+				// For 4D: expect flattened data where data[out_idx][i*coords[1].size()*coords[2].size() + j*coords[2].size() + k][l]
+				// corresponds to (i,j,k,l)
 				const int expected_rows = coords[0].size() * coords[1].size() * coords[2].size();
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == expected_rows, 
-					"4D data must have coords[0].size() * coords[1].size() * coords[2].size() rows for flattened (i,j,k) indexing!");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    data[out_idx].size() == expected_rows,
+				    "4D data must have coords[0].size() * coords[1].size() * coords[2].size() rows for flattened (i,j,k) indexing!");
 				for (const auto &row : data[out_idx]) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[3].size(), "All 4D data rows must match fourth coordinate size!");
 				}
@@ -459,11 +466,11 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
-		    data_tables,		  // array of data tables
-		    coord_min_,		  // coord_min array
-		    coord_max_,		  // coord_max array
-		    dcoord_,		  // dcoord array
-		    sizes_		  // sizes array
+		    data_tables, // array of data tables
+		    coord_min_,	 // coord_min array
+		    coord_max_,	 // coord_max array
+		    dcoord_,	 // dcoord array
+		    sizes_	 // sizes array
 		};
 		return tables;
 	}
