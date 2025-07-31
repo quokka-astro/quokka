@@ -338,7 +338,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_1d_type &data)
 	{
 		static_assert(Ndim == 1, "This initialize overload is for 1D tables only");
-		
+
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
@@ -357,7 +357,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_2d_type &data)
 	{
 		static_assert(Ndim == 2, "This initialize overload is for 2D tables only");
-		
+
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
@@ -366,8 +366,7 @@ template <int Ndim, int Nout = 1> class DataTable
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), "Data for each output cannot be empty!");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(),
-							 "Data first dimension must match first coordinate size!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "Data first dimension must match first coordinate size!");
 			// Verify data dimensions
 			for (const auto &row : data[out_idx]) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
@@ -382,7 +381,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_3d_type &data)
 	{
 		static_assert(Ndim == 3, "This initialize overload is for 3D tables only");
-		
+
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
@@ -391,12 +390,12 @@ template <int Ndim, int Nout = 1> class DataTable
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), "Data for each output cannot be empty!");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(),
-							 "Data first dimension must match first coordinate size!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "Data first dimension must match first coordinate size!");
 			for (const auto &plane : data[out_idx]) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(plane.size() == coords[1].size(), "Data second dimension must match second coordinate size!");
 				for (const auto &row : plane) {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[2].size(), "Data third dimension must match third coordinate size!");
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[2].size(),
+									 "Data third dimension must match third coordinate size!");
 				}
 			}
 		}
@@ -409,7 +408,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_4d_type &data)
 	{
 		static_assert(Ndim == 4, "This initialize overload is for 4D tables only");
-		
+
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
@@ -418,14 +417,15 @@ template <int Ndim, int Nout = 1> class DataTable
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), "Data for each output cannot be empty!");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(),
-							 "Data first dimension must match first coordinate size!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "Data first dimension must match first coordinate size!");
 			for (const auto &volume : data[out_idx]) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(volume.size() == coords[1].size(), "Data second dimension must match second coordinate size!");
 				for (const auto &plane : volume) {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(plane.size() == coords[2].size(), "Data third dimension must match third coordinate size!");
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(plane.size() == coords[2].size(),
+									 "Data third dimension must match third coordinate size!");
 					for (const auto &row : plane) {
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[3].size(), "Data fourth dimension must match fourth coordinate size!");
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[3].size(),
+										 "Data fourth dimension must match fourth coordinate size!");
 					}
 				}
 			}
@@ -493,8 +493,7 @@ template <int Ndim, int Nout = 1> class DataTable
 
       private:
 	// Common initialization logic for different dimensional data types
-	template <typename DataType>
-	void initialize_common(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
+	template <typename DataType> void initialize_common(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
@@ -571,18 +570,15 @@ template <int Ndim, int Nout = 1> class DataTable
 	}
 
       public:
-
 	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
 	// Reads metadata, coordinates, and data all from the HDF5 file
 	// Optionally returns coordinate bounds via coord_bounds parameter
-	static auto H5Reader(hid_t file_id, const std::string &dataset_path, 
-	                     const std::vector<std::string> &coord_names, 
-	                     int is_fast_log = 0,
-	                     std::array<std::pair<amrex::Real, amrex::Real>, Ndim> *coord_bounds = nullptr) -> DataTable
+	static auto H5Reader(hid_t file_id, const std::string &dataset_path, const std::vector<std::string> &coord_names, int is_fast_log = 0,
+			     std::array<std::pair<amrex::Real, amrex::Real>, Ndim> *coord_bounds = nullptr) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_names.size() == Ndim, "H5Reader requires exactly Ndim coordinate names!");
-		
+
 		herr_t status = 0;
 		herr_t const h5_error = -1;
 		hid_t dset_id = 0;
@@ -595,7 +591,7 @@ template <int Ndim, int Nout = 1> class DataTable
 		// Read grid dimensions using generic names
 		std::vector<int> n_coords(Ndim);
 		std::vector<std::string> n_coord_attrs(Ndim);
-		
+
 		for (int dim = 0; dim < Ndim; ++dim) {
 			n_coord_attrs[dim] = "n_" + coord_names[dim];
 			attr_id = H5Aopen(metadata_group, n_coord_attrs[dim].c_str(), H5P_DEFAULT);
@@ -609,7 +605,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			for (int dim = 0; dim < Ndim; ++dim) {
 				const std::string min_attr = coord_names[dim] + "_min";
 				const std::string max_attr = coord_names[dim] + "_max";
-				
+
 				attr_id = H5Aopen(metadata_group, min_attr.c_str(), H5P_DEFAULT);
 				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &(*coord_bounds)[dim].first);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + min_attr + "!").c_str());
@@ -661,10 +657,10 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + dataset_path).c_str());
-		
+
 		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read HDF5 dataset: " + dataset_path).c_str());
-		
+
 		H5Dclose(dset_id);
 
 		// Create coordinate arrays for any dimension
@@ -683,14 +679,14 @@ template <int Ndim, int Nout = 1> class DataTable
 					data_array[out_idx][i] = temp_data[i];
 				}
 			}
-			
+
 			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
 			return table;
-			
+
 		} else if constexpr (Ndim == 2) {
 			// For 2D: data[out_idx][i][j]
 			data_2d_type data_array;
@@ -703,14 +699,14 @@ template <int Ndim, int Nout = 1> class DataTable
 					}
 				}
 			}
-			
+
 			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
 			return table;
-			
+
 		} else if constexpr (Ndim == 3) {
 			// For 3D: data[out_idx][i][j][k]
 			data_3d_type data_array;
@@ -726,14 +722,14 @@ template <int Ndim, int Nout = 1> class DataTable
 					}
 				}
 			}
-			
+
 			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
 			return table;
-			
+
 		} else if constexpr (Ndim == 4) {
 			// For 4D: data[out_idx][i][j][k][l]
 			data_4d_type data_array;
@@ -746,13 +742,15 @@ template <int Ndim, int Nout = 1> class DataTable
 						for (int k = 0; k < n_coords[2]; ++k) {
 							data_array[out_idx][i][j][k].resize(n_coords[3]);
 							for (int l = 0; l < n_coords[3]; ++l) {
-								data_array[out_idx][i][j][k][l] = temp_data[i * n_coords[1] * n_coords[2] * n_coords[3] + j * n_coords[2] * n_coords[3] + k * n_coords[3] + l];
+								data_array[out_idx][i][j][k][l] =
+								    temp_data[i * n_coords[1] * n_coords[2] * n_coords[3] + j * n_coords[2] * n_coords[3] +
+									      k * n_coords[3] + l];
 							}
 						}
 					}
 				}
 			}
-			
+
 			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
