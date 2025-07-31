@@ -25,9 +25,6 @@ template <int Ndim> struct InterpData {
 
 // GPU-friendly struct containing const table references
 template <int Ndim, int Nout = 1> struct DataTableGpuConst {
-	static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D interpolation is supported");
-	static_assert(Nout >= 1, "Number of outputs must be at least 1");
-
 	std::array<amrex::Table1D<const amrex::Real>, Ndim> coords;
 	// Array of data tables for multiple outputs - each has the same coordinate dimensionality
 	using single_data_table_type =
@@ -125,7 +122,6 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const
 	    -> amrex::Real
 	{
-		static_assert(Nout >= 1, "Must have at least one output");
 		// Part 1: Find interpolation indices and normalized coordinates
 		InterpData<Ndim> const interp = find_interpolation_data(point);
 
@@ -268,9 +264,6 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 
 			AMREX_ASSERT(!std::isnan(value));
 			return value;
-		} else {
-			static_assert(false, "Only 1D-4D interpolation is supported");
-			return 0.0; // This line should never be reached
 		}
 	}
 };
@@ -323,6 +316,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	// Initializer for backward compatibility with single output (Nout = 1)
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
 	{
+		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, 1> data_array = {data};
 		initialize(coords, data_array);
 	}
