@@ -113,7 +113,7 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	}
 
 	// Helper function to read 2D dataset and initialize DataTable
-	auto read2DDataset = [&](const std::string &dataset_name, quokka::DataTable<2> &table) {
+	auto read2DDataset = [&](const std::string &dataset_name, quokka::DataTable<2, 1> &table) {
 		const int64_t data_size = static_cast<int64_t>(n_rho) * static_cast<int64_t>(n_eint);
 		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 

@@ -24,16 +24,17 @@ template <int Ndim> struct InterpData {
 };
 
 // GPU-friendly struct containing const table references
-template <int Ndim> struct DataTableGpuConst {
+template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D interpolation is supported");
+	static_assert(Nout >= 1, "Number of outputs must be at least 1");
 
 	std::array<amrex::Table1D<const amrex::Real>, Ndim> coords;
-	// Conditional type for arbitrary dimensions (1-4)
-	using data_table_type =
+	// Array of data tables for multiple outputs - each has the same coordinate dimensionality
+	using single_data_table_type =
 	    std::conditional_t<Ndim == 1, amrex::Table1D<const amrex::Real>,
-			       std::conditional_t<Ndim == 2, amrex::Table2D<const amrex::Real>,
-						  std::conditional_t<Ndim == 3, amrex::Table3D<const amrex::Real>, amrex::Table4D<const amrex::Real>>>>;
-	data_table_type dataView_;
+		       std::conditional_t<Ndim == 2, amrex::Table2D<const amrex::Real>,
+				  std::conditional_t<Ndim == 3, amrex::Table3D<const amrex::Real>, amrex::Table4D<const amrex::Real>>>>;
+	std::array<single_data_table_type, Nout> dataViewArrays;
 
 	std::array<amrex::Real, Ndim> coord_min{};
 	std::array<amrex::Real, Ndim> coord_max{};
@@ -98,32 +99,70 @@ template <int Ndim> struct DataTableGpuConst {
 		return interp;
 	}
 
-	/// @brief Perform n-dimensional linear interpolation
+	/// @brief Perform n-dimensional linear interpolation for multiple outputs
 	///
 	/// This method performs n-linear interpolation by recursively interpolating
 	/// along each dimension. For 2D this becomes bilinear, for 3D trilinear, etc.
+	/// Returns all output values sharing the same coordinate interpolation.
 	///
 	/// @param point Physical coordinates to interpolate at (size Ndim)
-	/// @return Interpolated value
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const -> amrex::Real
+	/// @return Array of interpolated values (size Nout)
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const -> std::array<amrex::Real, Nout>
 	{
-		// Part 1: Find interpolation indices and normalized coordinates
+		// Part 1: Find interpolation indices and normalized coordinates (shared for all outputs)
 		InterpData<Ndim> const interp = find_interpolation_data(point);
 
-		// Part 2: Perform n-dimensional interpolation
+		// Part 2: Perform n-dimensional interpolation for all outputs
 		return interpolate_from_indices(interp);
 	}
 
-      private:
-	/// @brief Helper for n-dimensional interpolation
+	/// @brief Perform n-dimensional linear interpolation for a single output (backward compatibility)
 	///
-	/// This function performs n-linear interpolation for 1D-4D cases.
+	/// @param point Physical coordinates to interpolate at (size Ndim)
+	/// @param output_index Index of the output to interpolate (0 to Nout-1)
+	/// @return Single interpolated value
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const -> amrex::Real
+	{
+		static_assert(Nout >= 1, "Must have at least one output");
+		// Part 1: Find interpolation indices and normalized coordinates
+		InterpData<Ndim> const interp = find_interpolation_data(point);
+
+		// Part 2: Perform n-dimensional interpolation for single output
+		return interpolate_single_from_indices(interp, output_index);
+	}
+
+      private:
+	/// @brief Helper for n-dimensional interpolation (multiple outputs)
+	///
+	/// This function performs n-linear interpolation for 1D-4D cases for all outputs.
 	/// Supports linear, bilinear, trilinear, and quadrilinear interpolation.
 	///
 	/// @param interp Interpolation data containing indices and normalized coordinates
-	/// @return Interpolated value
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim> &interp) const -> amrex::Real
+	/// @return Array of interpolated values (size Nout)
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim> &interp) const -> std::array<amrex::Real, Nout>
 	{
+		std::array<amrex::Real, Nout> results{};
+		
+		// Interpolate all outputs using the same coordinate weights
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			results[out_idx] = interpolate_single_from_indices(interp, out_idx);
+		}
+		
+		return results;
+	}
+
+	/// @brief Helper for n-dimensional interpolation (single output)
+	///
+	/// This function performs n-linear interpolation for 1D-4D cases for a single output.
+	/// Supports linear, bilinear, trilinear, and quadrilinear interpolation.
+	///
+	/// @param interp Interpolation data containing indices and normalized coordinates
+	/// @param output_index Index of the output to interpolate (0 to Nout-1)
+	/// @return Single interpolated value
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single_from_indices(const InterpData<Ndim> &interp, int output_index) const -> amrex::Real
+	{
+		auto dataView_ = dataViewArrays[output_index];
+
 		if constexpr (Ndim == 1) {
 			// 1D case (linear interpolation)
 			const int ix = interp.indices[0];
@@ -232,12 +271,12 @@ template <int Ndim> struct DataTableGpuConst {
 	}
 };
 
-// Generic n-dimensional data table class
-template <int Ndim> class DataTable
+// Generic n-dimensional data table class with multiple outputs
+template <int Ndim, int Nout = 1> class DataTable
 {
       private:
 	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
-	std::unique_ptr<amrex::TableData<amrex::Real, Ndim>> data_; // Now supports arbitrary dimensions
+	std::array<std::unique_ptr<amrex::TableData<amrex::Real, Ndim>>, Nout> data_; // Array of tables for multiple outputs
 
 	std::array<amrex::Real, Ndim> coord_min_{};
 	std::array<amrex::Real, Ndim> coord_max_{};
@@ -252,9 +291,18 @@ template <int Ndim> class DataTable
 	DataTable() = default;
 
 	// Constructor with coordinate arrays and data - general n-dimensional interface
-	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	// For multiple outputs, data is organized as data[output_index][flattened_coords][last_dim]
+	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const std::array<amrex::Vector<amrex::Vector<amrex::Real>>, Nout> &data)
 	{
 		initialize(coords, data);
+	}
+
+	// Backward compatibility constructor for single output (Nout = 1)
+	template<int N = Nout, typename = std::enable_if_t<N == 1>>
+	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	{
+		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, 1> data_array = {data};
+		initialize(coords, data_array);
 	}
 
 	// Destructor
@@ -267,6 +315,13 @@ template <int Ndim> class DataTable
 	// Delete copy constructor and assignment (expensive operations)
 	DataTable(const DataTable &) = delete;
 	auto operator=(const DataTable &) -> DataTable & = delete;
+
+	// Initializer for backward compatibility with single output (Nout = 1)
+	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	{
+		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, 1> data_array = {data};
+		initialize(coords, data_array);
+	}
 
 	// Initialize from coordinate arrays - general n-dimensional interface with multiple outputs
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const std::array<amrex::Vector<amrex::Vector<amrex::Real>>, Nout> &data)
