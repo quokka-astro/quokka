@@ -506,20 +506,69 @@ template <int Ndim, int Nout = 1> class DataTable
 	[[nodiscard]] constexpr auto num_outputs() const -> int { return Nout; }
 
 	// H5Reader: Static method to read 2D data from HDF5 file and create DataTable
-	static auto H5Reader(hid_t file_id, const std::string &dataset_path, 
-	                     const std::array<amrex::Vector<amrex::Real>, 2> &coord_arrays) -> DataTable
+	// Reads metadata, coordinates, and data all from the HDF5 file
+	static auto H5Reader(hid_t file_id, const std::string &dataset_path) -> DataTable
 	{
 		static_assert(Ndim == 2, "H5Reader currently supports only 2D tables");
 		
 		herr_t status = 0;
 		herr_t const h5_error = -1;
 		hid_t dset_id = 0;
+		hid_t attr_id = 0;
 
-		const int n_dim0 = static_cast<int>(coord_arrays[0].size());
-		const int n_dim1 = static_cast<int>(coord_arrays[1].size());
-		
+		// Read metadata group to get grid dimensions
+		hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
+
+		// Read grid dimensions
+		int n_rho = 0;
+		int n_eint = 0;
+		attr_id = H5Aopen(metadata_group, "n_rho", H5P_DEFAULT);
+		status = H5Aread(attr_id, H5T_NATIVE_INT, &n_rho);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read n_rho!");
+		H5Aclose(attr_id);
+
+		attr_id = H5Aopen(metadata_group, "n_eint", H5P_DEFAULT);
+		status = H5Aread(attr_id, H5T_NATIVE_INT, &n_eint);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read n_eint!");
+		H5Aclose(attr_id);
+
+		H5Gclose(metadata_group);
+
+		// Read coordinate grids
+		amrex::Vector<amrex::Real> rho_coords(n_rho);
+		amrex::Vector<amrex::Real> eint_coords(n_eint);
+
+		// Read rho coordinates
+		{
+			auto *temp_data = new double[n_rho]; // NOLINT(cppcoreguidelines-owning-memory)
+			dset_id = H5Dopen2(file_id, "/grids/fast_log_rho", H5P_DEFAULT);
+			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read fast_log_rho dataset!");
+			H5Dclose(dset_id);
+
+			for (int i = 0; i < n_rho; ++i) {
+				rho_coords[i] = temp_data[i];
+			}
+			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+		}
+
+		// Read eint coordinates  
+		{
+			auto *temp_data = new double[n_eint]; // NOLINT(cppcoreguidelines-owning-memory)
+			dset_id = H5Dopen2(file_id, "/grids/fast_log_eint", H5P_DEFAULT);
+			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read fast_log_eint dataset!");
+			H5Dclose(dset_id);
+
+			for (int i = 0; i < n_eint; ++i) {
+				eint_coords[i] = temp_data[i];
+			}
+			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+		}
+
 		// Read 2D dataset from HDF5 file
-		const int64_t data_size = static_cast<int64_t>(n_dim0) * static_cast<int64_t>(n_dim1);
+		const int64_t data_size = static_cast<int64_t>(n_rho) * static_cast<int64_t>(n_eint);
 		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
@@ -534,17 +583,20 @@ template <int Ndim, int Nout = 1> class DataTable
 		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, Nout> data_array;
 		
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			data_array[out_idx].resize(n_dim0);
-			for (int i = 0; i < n_dim0; ++i) {
-				data_array[out_idx][i].resize(n_dim1);
-				for (int j = 0; j < n_dim1; ++j) {
+			data_array[out_idx].resize(n_rho);
+			for (int i = 0; i < n_rho; ++i) {
+				data_array[out_idx][i].resize(n_eint);
+				for (int j = 0; j < n_eint; ++j) {
 					// For single output, all data comes from the same temp_data array
-					data_array[out_idx][i][j] = temp_data[i * n_dim1 + j];
+					data_array[out_idx][i][j] = temp_data[i * n_eint + j];
 				}
 			}
 		}
 
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+
+		// Create coordinate arrays
+		const std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {rho_coords, eint_coords};
 
 		// Create and initialize DataTable
 		DataTable table;

@@ -37,22 +37,9 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	file_id = H5Fopen(hdf5_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, "Failed to open resampled cooling data file!");
 
-	// Read metadata
+	// Read metadata that is still needed (bounds and hydrogen mass fraction)
 	hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
-
-	// Read grid dimensions
-	int n_rho = 0;
-	int n_eint = 0;
-	attr_id = H5Aopen(metadata_group, "n_rho", H5P_DEFAULT);
-	status = H5Aread(attr_id, H5T_NATIVE_INT, &n_rho);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read n_rho!");
-	H5Aclose(attr_id);
-
-	attr_id = H5Aopen(metadata_group, "n_eint", H5P_DEFAULT);
-	status = H5Aread(attr_id, H5T_NATIVE_INT, &n_eint);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read n_eint!");
-	H5Aclose(attr_id);
 
 	// Read bounds
 	attr_id = H5Aopen(metadata_group, "rho_min", H5P_DEFAULT);
@@ -82,47 +69,18 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	H5Gclose(metadata_group);
 
-	// Read coordinate grids
-	amrex::Vector<amrex::Real> rho_coords(n_rho);
-	amrex::Vector<amrex::Real> eint_coords(n_eint);
-
-	{
-		auto *temp_data = new double[n_rho]; // NOLINT(cppcoreguidelines-owning-memory)
-		dset_id = H5Dopen2(file_id, "/grids/fast_log_rho", H5P_DEFAULT);
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read fast_log_rho dataset!");
-		H5Dclose(dset_id);
-
-		for (int i = 0; i < n_rho; ++i) {
-			rho_coords[i] = temp_data[i];
-		}
-		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-	}
-
-	{
-		auto *temp_data = new double[n_eint]; // NOLINT(cppcoreguidelines-owning-memory)
-		dset_id = H5Dopen2(file_id, "/grids/fast_log_eint", H5P_DEFAULT);
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read fast_log_eint dataset!");
-		H5Dclose(dset_id);
-
-		for (int i = 0; i < n_eint; ++i) {
-			eint_coords[i] = temp_data[i];
-		}
-		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-	}
-
-	// Prepare coordinate arrays for DataTable initialization
-	const std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {rho_coords, eint_coords};
-
-	// Read all 2D datasets using DataTable H5Reader
-	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/cooling_rates", coord_arrays);
-	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/temperatures", coord_arrays);
-	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/sound_speeds", coord_arrays);
-	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/pressures", coord_arrays);
-	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/entropies", coord_arrays);
+	// Read all 2D datasets using DataTable H5Reader (coordinates and dimensions are read automatically)
+	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/cooling_rates");
+	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/temperatures");
+	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/sound_speeds");
+	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/pressures");
+	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/entropies");
 
 	H5Fclose(file_id);
+
+	// Get grid dimensions from the DataTable objects for logging
+	const int n_rho = resampledTables.cooling_rates.size(0);
+	const int n_eint = resampledTables.cooling_rates.size(1);
 
 	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
 	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
