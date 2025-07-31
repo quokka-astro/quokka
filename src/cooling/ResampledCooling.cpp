@@ -112,38 +112,15 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 	}
 
-	// Helper function to read 2D dataset and initialize DataTable
-	auto read2DDataset = [&](const std::string &dataset_name, quokka::DataTable<2, 1> &table) {
-		const int64_t data_size = static_cast<int64_t>(n_rho) * static_cast<int64_t>(n_eint);
-		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
+	// Prepare coordinate arrays for DataTable initialization
+	const std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {rho_coords, eint_coords};
 
-		dset_id = H5Dopen2(file_id, dataset_name.c_str(), H5P_DEFAULT);
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + dataset_name + " dataset!").c_str());
-		H5Dclose(dset_id);
-
-		// Convert HDF5 C-order data to vector format expected by DataTable
-		amrex::Vector<amrex::Vector<amrex::Real>> data2d(n_rho);
-		for (int i = 0; i < n_rho; ++i) {
-			data2d[i].resize(n_eint);
-			for (int j = 0; j < n_eint; ++j) {
-				data2d[i][j] = temp_data[i * n_eint + j];
-			}
-		}
-
-		// Initialize DataTable
-		const std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {rho_coords, eint_coords};
-		table.initialize(coord_arrays, data2d);
-
-		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-	};
-
-	// Read all 2D datasets
-	read2DDataset("/data/cooling_rates", resampledTables.cooling_rates);
-	read2DDataset("/data/temperatures", resampledTables.temperatures);
-	read2DDataset("/data/sound_speeds", resampledTables.sound_speeds);
-	read2DDataset("/data/pressures", resampledTables.pressures);
-	read2DDataset("/data/entropies", resampledTables.entropies);
+	// Read all 2D datasets using DataTable H5Reader
+	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/cooling_rates", coord_arrays);
+	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/temperatures", coord_arrays);
+	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/sound_speeds", coord_arrays);
+	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/pressures", coord_arrays);
+	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/entropies", coord_arrays);
 
 	H5Fclose(file_id);
 
