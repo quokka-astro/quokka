@@ -268,10 +268,8 @@ template <int Ndim> class DataTable
 	DataTable(const DataTable &) = delete;
 	auto operator=(const DataTable &) -> DataTable & = delete;
 
-	// Initialize from coordinate arrays - general n-dimensional interface
-	// For now, this implementation still expects 2D input data for backward compatibility
-	// TODO(cche): Extend to support true n-dimensional input data formats
-	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	// Initialize from coordinate arrays - general n-dimensional interface with multiple outputs
+	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const std::array<amrex::Vector<amrex::Vector<amrex::Real>>, Nout> &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
@@ -279,35 +277,39 @@ template <int Ndim> class DataTable
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
 		}
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data.empty(), "Data cannot be empty!");
-
-		// Validate data dimensions for different cases
-		if constexpr (Ndim == 1) {
-			// For 1D: expect data[0] to contain all the values for the single coordinate
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() >= 1, "1D data must have at least one row!");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[0].size() == coords[0].size(), "1D data row must match coordinate size!");
-		} else if constexpr (Ndim == 2) {
-			// For 2D case, maintain backward compatibility with existing data format
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == coords[0].size(), "Data first dimension must match first coordinate size!");
-			// Verify data dimensions
-			for (const auto &row : data) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
-			}
-		} else if constexpr (Ndim == 3) {
-			// For 3D: expect flattened data where data[i*coords[1].size() + j][k] corresponds to (i,j,k)
-			const int expected_rows = coords[0].size() * coords[1].size();
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == expected_rows, 
-				"3D data must have coords[0].size() * coords[1].size() rows for flattened (i,j) indexing!");
-			for (const auto &row : data) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[2].size(), "All 3D data rows must match third coordinate size!");
-			}
-		} else if constexpr (Ndim == 4) {
-			// For 4D: expect flattened data where data[i*coords[1].size()*coords[2].size() + j*coords[2].size() + k][l] corresponds to (i,j,k,l)
-			const int expected_rows = coords[0].size() * coords[1].size() * coords[2].size();
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data.size() == expected_rows, 
-				"4D data must have coords[0].size() * coords[1].size() * coords[2].size() rows for flattened (i,j,k) indexing!");
-			for (const auto &row : data) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[3].size(), "All 4D data rows must match fourth coordinate size!");
+		
+		// Validate data dimensions for each output
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), "Data for each output cannot be empty!");
+			
+			// Validate data dimensions for different cases
+			if constexpr (Ndim == 1) {
+				// For 1D: expect data[out_idx][0] to contain all the values for the single coordinate
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() >= 1, "1D data must have at least one row!");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx][0].size() == coords[0].size(), "1D data row must match coordinate size!");
+			} else if constexpr (Ndim == 2) {
+				// For 2D case, maintain backward compatibility with existing data format
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "Data first dimension must match first coordinate size!");
+				// Verify data dimensions
+				for (const auto &row : data[out_idx]) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
+				}
+			} else if constexpr (Ndim == 3) {
+				// For 3D: expect flattened data where data[out_idx][i*coords[1].size() + j][k] corresponds to (i,j,k)
+				const int expected_rows = coords[0].size() * coords[1].size();
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == expected_rows, 
+					"3D data must have coords[0].size() * coords[1].size() rows for flattened (i,j) indexing!");
+				for (const auto &row : data[out_idx]) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[2].size(), "All 3D data rows must match third coordinate size!");
+				}
+			} else if constexpr (Ndim == 4) {
+				// For 4D: expect flattened data where data[out_idx][i*coords[1].size()*coords[2].size() + j*coords[2].size() + k][l] corresponds to (i,j,k,l)
+				const int expected_rows = coords[0].size() * coords[1].size() * coords[2].size();
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == expected_rows, 
+					"4D data must have coords[0].size() * coords[1].size() * coords[2].size() rows for flattened (i,j,k) indexing!");
+				for (const auto &row : data[out_idx]) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[3].size(), "All 4D data rows must match fourth coordinate size!");
+				}
 			}
 		}
 
@@ -333,7 +335,7 @@ template <int Ndim> class DataTable
 			}
 		}
 
-		// Create n-dimensional data table
+		// Create n-dimensional data tables for each output
 		amrex::Array<int, Ndim> lo{};
 		amrex::Array<int, Ndim> hi{};
 		for (int dim = 0; dim < Ndim; ++dim) {
@@ -341,40 +343,43 @@ template <int Ndim> class DataTable
 			hi[dim] = sizes_[dim] - 1;
 		}
 
-		data_ = std::make_unique<amrex::TableData<amrex::Real, Ndim>>(lo, hi, amrex::The_Pinned_Arena());
-		auto data_table = data_->table();
+		// Create and populate data tables for each output
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			data_[out_idx] = std::make_unique<amrex::TableData<amrex::Real, Ndim>>(lo, hi, amrex::The_Pinned_Arena());
+			auto data_table = data_[out_idx]->table();
 
-		// Copy data for different dimensions
-		if constexpr (Ndim == 1) {
-			// Copy 1D data: data[0][i] -> table(i)
-			for (int i = 0; i < sizes_[0]; ++i) {
-				data_table(i) = data[0][i];
-			}
-		} else if constexpr (Ndim == 2) {
-			// Copy 2D data: data[i][j] -> table(i,j)
-			for (int i = 0; i < sizes_[0]; ++i) {
-				for (int j = 0; j < sizes_[1]; ++j) {
-					data_table(i, j) = data[i][j];
+			// Copy data for different dimensions
+			if constexpr (Ndim == 1) {
+				// Copy 1D data: data[out_idx][0][i] -> table(i)
+				for (int i = 0; i < sizes_[0]; ++i) {
+					data_table(i) = data[out_idx][0][i];
 				}
-			}
-		} else if constexpr (Ndim == 3) {
-			// Copy 3D data: data[i*sizes_[1] + j][k] -> table(i,j,k)
-			for (int i = 0; i < sizes_[0]; ++i) {
-				for (int j = 0; j < sizes_[1]; ++j) {
-					const int flat_index = i * sizes_[1] + j;
-					for (int k = 0; k < sizes_[2]; ++k) {
-						data_table(i, j, k) = data[flat_index][k];
+			} else if constexpr (Ndim == 2) {
+				// Copy 2D data: data[out_idx][i][j] -> table(i,j)
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						data_table(i, j) = data[out_idx][i][j];
 					}
 				}
-			}
-		} else if constexpr (Ndim == 4) {
-			// Copy 4D data: data[i*sizes_[1]*sizes_[2] + j*sizes_[2] + k][l] -> table(i,j,k,l)
-			for (int i = 0; i < sizes_[0]; ++i) {
-				for (int j = 0; j < sizes_[1]; ++j) {
-					for (int k = 0; k < sizes_[2]; ++k) {
-						const int flat_index = i * sizes_[1] * sizes_[2] + j * sizes_[2] + k;
-						for (int l = 0; l < sizes_[3]; ++l) {
-							data_table(i, j, k, l) = data[flat_index][l];
+			} else if constexpr (Ndim == 3) {
+				// Copy 3D data: data[out_idx][i*sizes_[1] + j][k] -> table(i,j,k)
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						const int flat_index = i * sizes_[1] + j;
+						for (int k = 0; k < sizes_[2]; ++k) {
+							data_table(i, j, k) = data[out_idx][flat_index][k];
+						}
+					}
+				}
+			} else if constexpr (Ndim == 4) {
+				// Copy 4D data: data[out_idx][i*sizes_[1]*sizes_[2] + j*sizes_[2] + k][l] -> table(i,j,k,l)
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						for (int k = 0; k < sizes_[2]; ++k) {
+							const int flat_index = i * sizes_[1] * sizes_[2] + j * sizes_[2] + k;
+							for (int l = 0; l < sizes_[3]; ++l) {
+								data_table(i, j, k, l) = data[out_idx][flat_index][l];
+							}
 						}
 					}
 				}
@@ -383,7 +388,7 @@ template <int Ndim> class DataTable
 	}
 
 	// Get GPU-friendly const tables
-	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim>
+	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim, Nout>
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
 
@@ -392,9 +397,14 @@ template <int Ndim> class DataTable
 			coord_tables[i] = coords_[i]->const_table();
 		}
 
-		DataTableGpuConst<Ndim> tables{
+		std::array<typename DataTableGpuConst<Ndim, Nout>::single_data_table_type, Nout> data_tables{};
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			data_tables[out_idx] = data_[out_idx]->const_table();
+		}
+
+		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
-		    data_->const_table(), // data
+		    data_tables,		  // array of data tables
 		    coord_min_,		  // coord_min array
 		    coord_max_,		  // coord_max array
 		    dcoord_,		  // dcoord array
@@ -412,7 +422,13 @@ template <int Ndim> class DataTable
 				return false;
 			}
 		}
-		return (data_ != nullptr);
+		// Check all data tables
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			if (data_[out_idx] == nullptr) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	// Get dimension sizes
@@ -424,6 +440,9 @@ template <int Ndim> class DataTable
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim, "Dimension index out of bounds!");
 		return sizes_[dim];
 	}
+
+	// Get number of outputs
+	[[nodiscard]] constexpr auto num_outputs() const -> int { return Nout; }
 };
 
 } // namespace quokka
