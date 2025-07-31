@@ -525,62 +525,48 @@ template <int Ndim, int Nout = 1> class DataTable
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
 
 		// Read grid dimensions using generic names
-		int n_x1 = 0;
-		int n_x2 = 0;
-		const std::string n_x1_attr = "n_" + coord_names[0];
-		const std::string n_x2_attr = "n_" + coord_names[1];
+		std::vector<int> n_coords(Ndim);
+		std::vector<std::string> n_coord_attrs(Ndim);
 		
-		attr_id = H5Aopen(metadata_group, n_x1_attr.c_str(), H5P_DEFAULT);
-		status = H5Aread(attr_id, H5T_NATIVE_INT, &n_x1);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + n_x1_attr + "!").c_str());
-		H5Aclose(attr_id);
-
-		attr_id = H5Aopen(metadata_group, n_x2_attr.c_str(), H5P_DEFAULT);
-		status = H5Aread(attr_id, H5T_NATIVE_INT, &n_x2);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + n_x2_attr + "!").c_str());
-		H5Aclose(attr_id);
+		for (int dim = 0; dim < Ndim; ++dim) {
+			n_coord_attrs[dim] = "n_" + coord_names[dim];
+			attr_id = H5Aopen(metadata_group, n_coord_attrs[dim].c_str(), H5P_DEFAULT);
+			status = H5Aread(attr_id, H5T_NATIVE_INT, &n_coords[dim]);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + n_coord_attrs[dim] + "!").c_str());
+			H5Aclose(attr_id);
+		}
 
 		H5Gclose(metadata_group);
 
 		// Read coordinate grids
-		amrex::Vector<amrex::Real> x1_coords(n_x1);
-		amrex::Vector<amrex::Real> x2_coords(n_x2);
+		std::vector<amrex::Vector<amrex::Real>> coords(Ndim);
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coords[dim].resize(n_coords[dim]);
+		}
 
 		// Construct coordinate dataset names based on is_fast_log parameter
 		const std::string prefix = (is_fast_log == 1) ? "fast_log_" : "";
-		const std::string x1_dataset = "/grids/" + prefix + coord_names[0];
-		const std::string x2_dataset = "/grids/" + prefix + coord_names[1];
-
-		// Read first coordinate
-		{
-			auto *temp_data = new double[n_x1]; // NOLINT(cppcoreguidelines-owning-memory)
-			dset_id = H5Dopen2(file_id, x1_dataset.c_str(), H5P_DEFAULT);
-			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + x1_dataset + " dataset!").c_str());
-			H5Dclose(dset_id);
-
-			for (int i = 0; i < n_x1; ++i) {
-				x1_coords[i] = temp_data[i];
-			}
-			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+		std::vector<std::string> coord_datasets(Ndim);
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_datasets[dim] = "/grids/" + prefix + coord_names[dim];
 		}
 
-		// Read second coordinate  
-		{
-			auto *temp_data = new double[n_x2]; // NOLINT(cppcoreguidelines-owning-memory)
-			dset_id = H5Dopen2(file_id, x2_dataset.c_str(), H5P_DEFAULT);
+		// Read coordinates using for loop
+		for (int dim = 0; dim < Ndim; ++dim) {
+			auto *temp_data = new double[n_coords[dim]]; // NOLINT(cppcoreguidelines-owning-memory)
+			dset_id = H5Dopen2(file_id, coord_datasets[dim].c_str(), H5P_DEFAULT);
 			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + x2_dataset + " dataset!").c_str());
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + coord_datasets[dim] + " dataset!").c_str());
 			H5Dclose(dset_id);
 
-			for (int i = 0; i < n_x2; ++i) {
-				x2_coords[i] = temp_data[i];
+			for (int i = 0; i < n_coords[dim]; ++i) {
+				coords[dim][i] = temp_data[i];
 			}
 			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 		}
 
 		// Read 2D dataset from HDF5 file
-		const int64_t data_size = static_cast<int64_t>(n_x1) * static_cast<int64_t>(n_x2);
+		const int64_t data_size = static_cast<int64_t>(n_coords[0]) * static_cast<int64_t>(n_coords[1]);
 		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
@@ -595,12 +581,12 @@ template <int Ndim, int Nout = 1> class DataTable
 		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, Nout> data_array;
 		
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			data_array[out_idx].resize(n_x1);
-			for (int i = 0; i < n_x1; ++i) {
-				data_array[out_idx][i].resize(n_x2);
-				for (int j = 0; j < n_x2; ++j) {
+			data_array[out_idx].resize(n_coords[0]);
+			for (int i = 0; i < n_coords[0]; ++i) {
+				data_array[out_idx][i].resize(n_coords[1]);
+				for (int j = 0; j < n_coords[1]; ++j) {
 					// For single output, all data comes from the same temp_data array
-					data_array[out_idx][i][j] = temp_data[i * n_x2 + j];
+					data_array[out_idx][i][j] = temp_data[i * n_coords[1] + j];
 				}
 			}
 		}
@@ -608,7 +594,7 @@ template <int Ndim, int Nout = 1> class DataTable
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 		// Create coordinate arrays
-		const std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {x1_coords, x2_coords};
+		const std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {coords[0], coords[1]};
 
 		// Create and initialize DataTable
 		DataTable table;
