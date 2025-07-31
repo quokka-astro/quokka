@@ -574,9 +574,11 @@ template <int Ndim, int Nout = 1> class DataTable
 
 	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
 	// Reads metadata, coordinates, and data all from the HDF5 file
+	// Optionally returns coordinate bounds via coord_bounds parameter
 	static auto H5Reader(hid_t file_id, const std::string &dataset_path, 
 	                     const std::vector<std::string> &coord_names, 
-	                     int is_fast_log = 0) -> DataTable
+	                     int is_fast_log = 0,
+	                     std::array<std::pair<amrex::Real, amrex::Real>, Ndim> *coord_bounds = nullptr) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_names.size() == Ndim, "H5Reader requires exactly Ndim coordinate names!");
@@ -600,6 +602,24 @@ template <int Ndim, int Nout = 1> class DataTable
 			status = H5Aread(attr_id, H5T_NATIVE_INT, &n_coords[dim]);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + n_coord_attrs[dim] + "!").c_str());
 			H5Aclose(attr_id);
+		}
+
+		// Read coordinate bounds if requested
+		if (coord_bounds != nullptr) {
+			for (int dim = 0; dim < Ndim; ++dim) {
+				const std::string min_attr = coord_names[dim] + "_min";
+				const std::string max_attr = coord_names[dim] + "_max";
+				
+				attr_id = H5Aopen(metadata_group, min_attr.c_str(), H5P_DEFAULT);
+				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &(*coord_bounds)[dim].first);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + min_attr + "!").c_str());
+				H5Aclose(attr_id);
+
+				attr_id = H5Aopen(metadata_group, max_attr.c_str(), H5P_DEFAULT);
+				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &(*coord_bounds)[dim].second);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + max_attr + "!").c_str());
+				H5Aclose(attr_id);
+			}
 		}
 
 		H5Gclose(metadata_group);
