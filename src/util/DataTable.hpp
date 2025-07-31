@@ -506,14 +506,14 @@ template <int Ndim, int Nout = 1> class DataTable
 	// Get number of outputs
 	[[nodiscard]] constexpr auto num_outputs() const -> int { return Nout; }
 
-	// H5Reader: Generic static method to read 2D data from HDF5 file and create DataTable
+	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
 	// Reads metadata, coordinates, and data all from the HDF5 file
 	static auto H5Reader(hid_t file_id, const std::string &dataset_path, 
 	                     const std::vector<std::string> &coord_names, 
 	                     int is_fast_log = 0) -> DataTable
 	{
-		static_assert(Ndim == 2, "H5Reader currently supports only 2D tables");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_names.size() == 2, "H5Reader for 2D tables requires exactly 2 coordinate names!");
+		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_names.size() == Ndim, "H5Reader requires exactly Ndim coordinate names!");
 		
 		herr_t status = 0;
 		herr_t const h5_error = -1;
@@ -565,8 +565,12 @@ template <int Ndim, int Nout = 1> class DataTable
 			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 		}
 
-		// Read 2D dataset from HDF5 file
-		const int64_t data_size = static_cast<int64_t>(n_coords[0]) * static_cast<int64_t>(n_coords[1]);
+		// Read n-dimensional dataset from HDF5 file
+		// Calculate data_size as product of all dimensions
+		int64_t data_size = 1;
+		for (int dim = 0; dim < Ndim; ++dim) {
+			data_size *= static_cast<int64_t>(n_coords[dim]);
+		}
 		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
@@ -578,23 +582,70 @@ template <int Ndim, int Nout = 1> class DataTable
 		H5Dclose(dset_id);
 
 		// Convert HDF5 C-order data to vector format expected by DataTable
+		// Structure: data_array[out_idx][flattened_coords_except_last][last_coord]
 		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, Nout> data_array;
 		
-		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			data_array[out_idx].resize(n_coords[0]);
-			for (int i = 0; i < n_coords[0]; ++i) {
-				data_array[out_idx][i].resize(n_coords[1]);
-				for (int j = 0; j < n_coords[1]; ++j) {
-					// For single output, all data comes from the same temp_data array
-					data_array[out_idx][i][j] = temp_data[i * n_coords[1] + j];
+		if constexpr (Ndim == 1) {
+			// For 1D: data[out_idx][0][i] -> table(i)
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(1);
+				data_array[out_idx][0].resize(n_coords[0]);
+				for (int i = 0; i < n_coords[0]; ++i) {
+					data_array[out_idx][0][i] = temp_data[i];
+				}
+			}
+		} else if constexpr (Ndim == 2) {
+			// For 2D: data[out_idx][i][j] -> table(i,j)
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(n_coords[0]);
+				for (int i = 0; i < n_coords[0]; ++i) {
+					data_array[out_idx][i].resize(n_coords[1]);
+					for (int j = 0; j < n_coords[1]; ++j) {
+						data_array[out_idx][i][j] = temp_data[i * n_coords[1] + j];
+					}
+				}
+			}
+		} else if constexpr (Ndim == 3) {
+			// For 3D: data[out_idx][i*n_coords[1] + j][k] -> table(i,j,k)
+			const int expected_rows = n_coords[0] * n_coords[1];
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(expected_rows);
+				for (int i = 0; i < n_coords[0]; ++i) {
+					for (int j = 0; j < n_coords[1]; ++j) {
+						const int flat_index = i * n_coords[1] + j;
+						data_array[out_idx][flat_index].resize(n_coords[2]);
+						for (int k = 0; k < n_coords[2]; ++k) {
+							data_array[out_idx][flat_index][k] = temp_data[i * n_coords[1] * n_coords[2] + j * n_coords[2] + k];
+						}
+					}
+				}
+			}
+		} else if constexpr (Ndim == 4) {
+			// For 4D: data[out_idx][i*n_coords[1]*n_coords[2] + j*n_coords[2] + k][l] -> table(i,j,k,l)
+			const int expected_rows = n_coords[0] * n_coords[1] * n_coords[2];
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(expected_rows);
+				for (int i = 0; i < n_coords[0]; ++i) {
+					for (int j = 0; j < n_coords[1]; ++j) {
+						for (int k = 0; k < n_coords[2]; ++k) {
+							const int flat_index = i * n_coords[1] * n_coords[2] + j * n_coords[2] + k;
+							data_array[out_idx][flat_index].resize(n_coords[3]);
+							for (int l = 0; l < n_coords[3]; ++l) {
+								data_array[out_idx][flat_index][l] = temp_data[i * n_coords[1] * n_coords[2] * n_coords[3] + j * n_coords[2] * n_coords[3] + k * n_coords[3] + l];
+							}
+						}
+					}
 				}
 			}
 		}
 
 		delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
-		// Create coordinate arrays
-		const std::array<amrex::Vector<amrex::Real>, 2> coord_arrays = {coords[0], coords[1]};
+		// Create coordinate arrays for any dimension
+		std::array<amrex::Vector<amrex::Real>, Ndim> coord_arrays;
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_arrays[dim] = coords[dim];
+		}
 
 		// Create and initialize DataTable
 		DataTable table;
