@@ -190,7 +190,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp, line 461):
 			// const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix2, ix1) + w1[1] * dataView_(ix2, ix1 + 1)) +
 			// 			   w2[1] * (w1[0] * dataView_(ix2 + 1, ix1) + w1[1] * dataView_(ix2 + 1, ix1 + 1)));
-			// I swapped the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
+			// I inverted the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
 			const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix1, ix2) + w1[1] * dataView_(ix1 + 1, ix2)) +
 						   w2[1] * (w1[0] * dataView_(ix1, ix2 + 1) + w1[1] * dataView_(ix1 + 1, ix2 + 1)));
 
@@ -205,7 +205,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 									      {1.0 - interp.normalized[2], interp.normalized[2]}}};
 
 			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp):
-			// I swapped the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
+			// I inverted the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
 			// clang-format off
 			const amrex::Real value = (
 				w[2][0] * (w[1][0] * (w[0][0] * dataView_(ix[0], ix[1], ix[2]) +
@@ -233,7 +233,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 			}};
 
 			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp):
-			// I swapped the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
+			// I inverted the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
 			// clang-format off
 			const amrex::Real value = (
 				w[3][0] *
