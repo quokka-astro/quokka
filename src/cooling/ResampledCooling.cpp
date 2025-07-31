@@ -69,12 +69,16 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	H5Gclose(metadata_group);
 
-	// Read all 2D datasets using DataTable H5Reader (coordinates and dimensions are read automatically)
-	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/cooling_rates");
-	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/temperatures");
-	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/sound_speeds");
-	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/pressures");
-	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/entropies");
+	// Define coordinate names and fast_log setting
+	const std::vector<std::string> coord_names = {"rho", "eint"};
+	const int is_fast_log = 1;
+
+	// Read all 2D datasets using generic DataTable H5Reader
+	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/cooling_rates", coord_names, is_fast_log);
+	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/temperatures", coord_names, is_fast_log);
+	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/sound_speeds", coord_names, is_fast_log);
+	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/pressures", coord_names, is_fast_log);
+	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(file_id, "/data/entropies", coord_names, is_fast_log);
 
 	H5Fclose(file_id);
 
