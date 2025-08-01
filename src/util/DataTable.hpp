@@ -17,6 +17,9 @@
 #include <type_traits>
 #include <vector>
 
+// For descriptive error messages
+#include <fmt/format.h>
+
 namespace quokka
 {
 
@@ -341,12 +344,12 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "1D data must match coordinate size!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), fmt::format("1D data must match coordinate size! (expected: {}, actual: {})", coords[0].size(), data[out_idx].size()));
 		}
 
 		initialize_common(coords, data);
@@ -360,16 +363,20 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), "Data for each output cannot be empty!");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "Data first dimension must match first coordinate size!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), 
+				fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", 
+					out_idx, coords[0].size(), data[out_idx].size()));
 			// Verify data dimensions
 			for (const auto &row : data[out_idx]) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), "All data rows must match second coordinate size!");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[1].size(), 
+					fmt::format("All data rows must match second coordinate size for output {}! (expected: {}, actual: {})", 
+						out_idx, coords[1].size(), row.size()));
 			}
 		}
 
@@ -384,18 +391,23 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), "Data for each output cannot be empty!");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "Data first dimension must match first coordinate size!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), 
+				fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", 
+					out_idx, coords[0].size(), data[out_idx].size()));
 			for (const auto &plane : data[out_idx]) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(plane.size() == coords[1].size(), "Data second dimension must match second coordinate size!");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(plane.size() == coords[1].size(), 
+					fmt::format("Data second dimension must match second coordinate size for output {}! (expected: {}, actual: {})", 
+						out_idx, coords[1].size(), plane.size()));
 				for (const auto &row : plane) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[2].size(),
-									 "Data third dimension must match third coordinate size!");
+						fmt::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
+							out_idx, coords[2].size(), row.size()));
 				}
 			}
 		}
@@ -411,21 +423,27 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), "Coordinates cannot be empty!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), "Data for each output cannot be empty!");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), "Data first dimension must match first coordinate size!");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data[out_idx].size() == coords[0].size(), 
+				fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", 
+					out_idx, coords[0].size(), data[out_idx].size()));
 			for (const auto &volume : data[out_idx]) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(volume.size() == coords[1].size(), "Data second dimension must match second coordinate size!");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(volume.size() == coords[1].size(), 
+					fmt::format("Data second dimension must match second coordinate size for output {}! (expected: {}, actual: {})", 
+						out_idx, coords[1].size(), volume.size()));
 				for (const auto &plane : volume) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(plane.size() == coords[2].size(),
-									 "Data third dimension must match third coordinate size!");
+						fmt::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
+							out_idx, coords[2].size(), plane.size()));
 					for (const auto &row : plane) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(row.size() == coords[3].size(),
-										 "Data fourth dimension must match fourth coordinate size!");
+							fmt::format("Data fourth dimension must match fourth coordinate size for output {}! (expected: {}, actual: {})",
+								out_idx, coords[3].size(), row.size()));
 					}
 				}
 			}
@@ -484,7 +502,8 @@ template <int Ndim, int Nout = 1> class DataTable
 	// Get size for specific dimension
 	[[nodiscard]] auto size(int dim) const -> int
 	{
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim, "Dimension index out of bounds!");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim, 
+			fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
 		return sizes_[dim];
 	}
 
@@ -577,7 +596,8 @@ template <int Ndim, int Nout = 1> class DataTable
 			     std::array<std::pair<amrex::Real, amrex::Real>, Ndim> *coord_bounds = nullptr) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_names.size() == Ndim, "H5Reader requires exactly Ndim coordinate names!");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_names.size() == Ndim, 
+			fmt::format("H5Reader requires exactly Ndim coordinate names! (expected: {}, provided: {})", Ndim, coord_names.size()));
 
 		herr_t status = 0;
 		herr_t const h5_error = -1;
