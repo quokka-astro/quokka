@@ -12,40 +12,17 @@
 
 #include "cooling/ResampledCooling.hpp"
 
-#include <H5Dpublic.h>
-#include <H5Ppublic.h>
-#include <hdf5.h>
-
-#include "AMReX_BLassert.H"
 #include "AMReX_Print.H"
 
 namespace quokka::ResampledCooling
 {
 
+constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
+
 void readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables)
 {
 	amrex::Print() << "Initializing resampled cooling.\n";
 	amrex::Print() << fmt::format("resampled_table_file: {}.\n", hdf5_file);
-
-	// Read remaining metadata (hydrogen mass fraction only) - need direct HDF5 access for this
-	hid_t file_id = 0;
-	hid_t attr_id = 0;
-	herr_t status = 0;
-	herr_t const h5_error = -1;
-
-	file_id = H5Fopen(hdf5_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, "Failed to open resampled cooling data file!");
-
-	hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
-
-	attr_id = H5Aopen(metadata_group, "cloudy_H_mass_fraction", H5P_DEFAULT);
-	status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &resampledTables.cloudy_H_mass_fraction);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read cloudy_H_mass_fraction!");
-	H5Aclose(attr_id);
-
-	H5Gclose(metadata_group);
-	H5Fclose(file_id);
 
 	// Define coordinate names and fast_log setting
 	const std::vector<std::string> coord_names = {"rho", "eint"};
@@ -70,6 +47,8 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	// Get grid dimensions from the DataTable objects for logging
 	const int n_rho = resampledTables.cooling_rates.size(0);
 	const int n_eint = resampledTables.cooling_rates.size(1);
+
+	resampledTables.cloudy_H_mass_fraction = cloudy_H_mass_fraction;
 
 	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
 	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
