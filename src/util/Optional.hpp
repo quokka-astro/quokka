@@ -95,8 +95,7 @@ template <typename T> class optional
 	{
 		return *reinterpret_cast<const T *>(storage_); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 	}
-} // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-};
+}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
 } // namespace quokka
 
