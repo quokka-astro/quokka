@@ -640,16 +640,15 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Read coordinates using for loop
 		for (int dim = 0; dim < Ndim; ++dim) {
-			auto *temp_data = new double[n_coords[dim]]; // NOLINT(cppcoreguidelines-owning-memory)
+			std::vector<double> temp_data(n_coords[dim]);
 			dset_id = H5Dopen2(file_id, coord_datasets[dim].c_str(), H5P_DEFAULT);
-			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
+			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + coord_datasets[dim] + " dataset!").c_str());
 			H5Dclose(dset_id);
 
 			for (int i = 0; i < n_coords[dim]; ++i) {
 				coords[dim][i] = temp_data[i];
 			}
-			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 		}
 
 		// Read n-dimensional dataset from HDF5 file
@@ -658,12 +657,12 @@ template <int Ndim, int Nout = 1> class DataTable
 		for (int dim = 0; dim < Ndim; ++dim) {
 			data_size *= static_cast<int64_t>(n_coords[dim]);
 		}
-		auto *temp_data = new double[data_size]; // NOLINT(cppcoreguidelines-owning-memory)
+		std::vector<double> temp_data(data_size);
 
 		dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + dataset_path).c_str());
 
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
+		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read HDF5 dataset: " + dataset_path).c_str());
 
 		H5Dclose(dset_id);
@@ -685,8 +684,6 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
-
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
@@ -707,8 +704,6 @@ template <int Ndim, int Nout = 1> class DataTable
 					}
 				}
 			}
-
-			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
@@ -734,8 +729,6 @@ template <int Ndim, int Nout = 1> class DataTable
 					}
 				}
 			}
-
-			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
@@ -766,8 +759,6 @@ template <int Ndim, int Nout = 1> class DataTable
 					}
 				}
 			}
-
-			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
