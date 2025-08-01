@@ -29,7 +29,6 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	// Read cooling data from HDF5 file
 	hid_t file_id = 0;
-	hid_t dset_id = 0;
 	hid_t attr_id = 0;
 	herr_t status = 0;
 	herr_t const h5_error = -1;
