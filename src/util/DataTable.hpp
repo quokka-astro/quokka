@@ -690,7 +690,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
-			
+
 			// Close HDF5 file
 			H5Fclose(file_id);
 			return table;
@@ -708,16 +708,16 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-						delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
-			
+
 			// Close HDF5 file
 			H5Fclose(file_id);
 			return table;
-			
+
 		} else if constexpr (Ndim == 3) {
 			// For 3D: data[out_idx][i][j][k]
 			data_3d_type data_array;
@@ -735,16 +735,16 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-						delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
-			
+
 			// Close HDF5 file
 			H5Fclose(file_id);
 			return table;
-			
+
 		} else if constexpr (Ndim == 4) {
 			// For 4D: data[out_idx][i][j][k][l]
 			data_4d_type data_array;
@@ -772,7 +772,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
-			
+
 			// Close HDF5 file
 			H5Fclose(file_id);
 			return table;
