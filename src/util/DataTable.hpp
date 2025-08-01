@@ -649,7 +649,7 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Read n-dimensional dataset from HDF5 file
 		// Calculate data_size as product of all dimensions
-		int64_t data_size = 1;
+		auto data_size = static_cast<int64_t>(Nout);
 		for (int dim = 0; dim < Ndim; ++dim) {
 			data_size *= static_cast<int64_t>(n_coords[dim]);
 		}
@@ -676,7 +676,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 				data_array[out_idx].resize(n_coords[0]);
 				for (int i = 0; i < n_coords[0]; ++i) {
-					data_array[out_idx][i] = temp_data[i];
+					data_array[out_idx][i] = temp_data[out_idx * n_coords[0] + i];
 				}
 			}
 
@@ -695,7 +695,7 @@ template <int Ndim, int Nout = 1> class DataTable
 				for (int i = 0; i < n_coords[0]; ++i) {
 					data_array[out_idx][i].resize(n_coords[1]);
 					for (int j = 0; j < n_coords[1]; ++j) {
-						data_array[out_idx][i][j] = temp_data[i * n_coords[1] + j];
+						data_array[out_idx][i][j] = temp_data[out_idx * n_coords[0] * n_coords[1] + i * n_coords[1] + j];
 					}
 				}
 			}
@@ -717,7 +717,8 @@ template <int Ndim, int Nout = 1> class DataTable
 					for (int j = 0; j < n_coords[1]; ++j) {
 						data_array[out_idx][i][j].resize(n_coords[2]);
 						for (int k = 0; k < n_coords[2]; ++k) {
-							data_array[out_idx][i][j][k] = temp_data[i * n_coords[1] * n_coords[2] + j * n_coords[2] + k];
+							data_array[out_idx][i][j][k] = temp_data[out_idx * n_coords[0] * n_coords[1] * n_coords[2] +
+												 i * n_coords[1] * n_coords[2] + j * n_coords[2] + k];
 						}
 					}
 				}
@@ -743,7 +744,8 @@ template <int Ndim, int Nout = 1> class DataTable
 							data_array[out_idx][i][j][k].resize(n_coords[3]);
 							for (int l = 0; l < n_coords[3]; ++l) {
 								data_array[out_idx][i][j][k][l] =
-								    temp_data[i * n_coords[1] * n_coords[2] * n_coords[3] + j * n_coords[2] * n_coords[3] +
+								    temp_data[out_idx * n_coords[0] * n_coords[1] * n_coords[2] * n_coords[3] +
+									      i * n_coords[1] * n_coords[2] * n_coords[3] + j * n_coords[2] * n_coords[3] +
 									      k * n_coords[3] + l];
 							}
 						}
