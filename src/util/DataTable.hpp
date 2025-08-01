@@ -573,7 +573,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
 	// Reads metadata, coordinates, and data all from the HDF5 file
 	// Optionally returns coordinate bounds via coord_bounds parameter
-	static auto H5Reader(hid_t file_id, const std::string &dataset_path, const std::vector<std::string> &coord_names, int is_fast_log = 0,
+	static auto H5Reader(const std::string &file_path, const std::string &dataset_path, const std::vector<std::string> &coord_names, int is_fast_log = 0,
 			     std::array<std::pair<amrex::Real, amrex::Real>, Ndim> *coord_bounds = nullptr) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
@@ -581,8 +581,13 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		herr_t status = 0;
 		herr_t const h5_error = -1;
+		hid_t file_id = 0;
 		hid_t dset_id = 0;
 		hid_t attr_id = 0;
+
+		// Open HDF5 file
+		file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
 
 		// Read metadata group to get grid dimensions
 		hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
@@ -685,6 +690,9 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
+			
+			// Close HDF5 file
+			H5Fclose(file_id);
 			return table;
 
 		} else if constexpr (Ndim == 2) {
@@ -700,13 +708,16 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+						delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
+			
+			// Close HDF5 file
+			H5Fclose(file_id);
 			return table;
-
+			
 		} else if constexpr (Ndim == 3) {
 			// For 3D: data[out_idx][i][j][k]
 			data_3d_type data_array;
@@ -724,13 +735,16 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
+						delete[] temp_data; // NOLINT(cppcoreguidelines-owning-memory)
 
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
+			
+			// Close HDF5 file
+			H5Fclose(file_id);
 			return table;
-
+			
 		} else if constexpr (Ndim == 4) {
 			// For 4D: data[out_idx][i][j][k][l]
 			data_4d_type data_array;
@@ -758,6 +772,9 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable
 			DataTable table;
 			table.initialize(coord_arrays, data_array);
+			
+			// Close HDF5 file
+			H5Fclose(file_id);
 			return table;
 		}
 	}
