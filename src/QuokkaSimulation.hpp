@@ -1591,7 +1591,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 			// increment EMF registers
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage1, lev, fluxScaleFactor * dt_lev);
+				// E = -v x B, our emf is v x B, so we need to pass -1.0*dt_lev
+				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage1, lev, -1.0 * fluxScaleFactor * dt_lev);
 			}
 		}
 	}
@@ -1721,7 +1722,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 			// increment EMF registers
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage2, lev, fluxScaleFactor * dt_lev);
+				// E = -v x B, our emf is v x B, so we need to pass -1.0*dt_lev
+				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage2, lev, -1.0 * fluxScaleFactor * dt_lev);
 			}
 		}
 	} else { // we are only doing forward Euler
