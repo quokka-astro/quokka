@@ -1634,35 +1634,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		}
 
 		// do post-timestep operations
-
 		if (do_reflux != 0) {
 			// update lev based on coarse-fine flux mismatch
 			flux_reg_[lev + 1]->Reflux(state_new_cc_[lev]);
 
 			// update magnetic field based on coarse-fine EMF mismatch
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				// Compute norminf before reflux (requires MPI reduction)
-				amrex::Real bx_max_before = state_new_fc_[lev][0].norminf();
-				amrex::Real by_max_before = state_new_fc_[lev][1].norminf();
-				amrex::Real bz_max_before = state_new_fc_[lev][2].norminf();
-
 				emf_reg_[lev + 1]->Reflux({AMREX_D_DECL(&state_new_fc_[lev][0], &state_new_fc_[lev][1], &state_new_fc_[lev][2])});
-
-				// Compute norminf after reflux (requires MPI reduction)
-				amrex::Real bx_max_after = state_new_fc_[lev][0].norminf();
-				amrex::Real by_max_after = state_new_fc_[lev][1].norminf();
-				amrex::Real bz_max_after = state_new_fc_[lev][2].norminf();
-
-				if (amrex::ParallelDescriptor::IOProcessor()) {
-					amrex::Print() << "[DEBUG EMF] Before EMF reflux on level " << lev << ":\n";
-					amrex::Print() << "  Bx max = " << bx_max_before << '\n';
-					amrex::Print() << "  By max = " << by_max_before << '\n';
-					amrex::Print() << "  Bz max = " << bz_max_before << '\n';
-					amrex::Print() << "[DEBUG EMF] After EMF reflux on level " << lev << ":\n";
-					amrex::Print() << "  Bx max = " << bx_max_after << '\n';
-					amrex::Print() << "  By max = " << by_max_after << '\n';
-					amrex::Print() << "  Bz max = " << bz_max_after << '\n';
-				}
 			}
 		}
 		AverageDownTo(lev); // average lev+1 down to lev
