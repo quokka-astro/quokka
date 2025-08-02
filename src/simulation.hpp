@@ -2489,8 +2489,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 
 	// face-centred
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		// NOTE: must call VECTOR version of average_down_faces
-		amrex::average_down_faces(state_new_fc_[crse_lev + 1], state_new_fc_[crse_lev], refRatio(crse_lev), Geom(crse_lev));
+		// NOTE: must call the version of average_down_faces that takes periodicity into account
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        	amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev), Geom(crse_lev));
+   		}
 	}
 }
 
