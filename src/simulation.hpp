@@ -1634,7 +1634,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		}
 
 		// do post-timestep operations
-		AverageDownTo(lev); // average lev+1 down to lev
 
 		if (do_reflux != 0) {
 			// update lev based on coarse-fine flux mismatch
@@ -1666,6 +1665,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				}
 			}
 		}
+		AverageDownTo(lev); // average lev+1 down to lev
 		FixupState(lev); // fix any unphysical states created by reflux or averaging
 
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
