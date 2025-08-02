@@ -1583,7 +1583,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if (do_reflux == 1) {
 			// increment flux registers
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
-			// increment EMF registers - removed from first RK stage to avoid double accumulation
+			// increment EMF registers
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage1, lev, fluxScaleFactor * dt_lev);
+			}
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -1707,7 +1710,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 			// increment EMF registers
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_ave, lev, dt_lev);
+				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage2, lev, fluxScaleFactor * dt_lev);
 			}
 		}
 	} else { // we are only doing forward Euler
