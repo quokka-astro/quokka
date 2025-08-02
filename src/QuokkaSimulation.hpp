@@ -9,7 +9,6 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
-#include "AMReX_FabArrayUtility.H"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include <array>
@@ -63,6 +62,7 @@ namespace filesystem = experimental::filesystem;
 #endif
 
 #include "SimulationData.hpp"
+#include "chemistry/Chemistry.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
