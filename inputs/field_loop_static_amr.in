@@ -39,3 +39,4 @@ mhd.emf_reconstruction_order = 5  # xPPM for EMF
 mhd.emf_averaging_method = LD04
 
 derived_vars = magnetic_divergence
+field_loop.refine_based_on = Region
