@@ -24,5 +24,4 @@ do_reflux = 1
 do_subcycle = 1
 do_tracers = 1      # turn on tracer particles
 
-hydro.artificial_viscosity_coefficient = 0.1
 derived_vars = magnetic_divergence
