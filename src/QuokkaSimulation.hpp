@@ -1570,11 +1570,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				auto &emf = ec_emf_components_rk_stage1[idim];
-				auto mask = amrex::OwnerMask(emf, geom[lev].periodicity());
-				emf.OverrideSync(*mask, geom[lev].periodicity());
-			}
 			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateNew_fc, ec_emf_components_rk_stage1, dt_lev, geom[lev].CellSizeArray());
 		}
 
@@ -1701,11 +1696,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				auto &emf = ec_emf_components_rk_ave[idim];
-				auto mask = amrex::OwnerMask(emf, geom[lev].periodicity());
-				emf.OverrideSync(*mask, geom[lev].periodicity());
-			}
 			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components_rk_ave, dt_lev, geom[lev].CellSizeArray());
 		}
 
