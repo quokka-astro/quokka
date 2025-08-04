@@ -25,3 +25,4 @@ do_subcycle = 1
 do_tracers = 1      # turn on tracer particles
 
 derived_vars = magnetic_divergence
+stop_time = 0.1
