@@ -125,7 +125,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGridFaceVars
 template <> void QuokkaSimulation<FieldLoop>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	RefineOn refine_based_on{};
-	amrex::ParmParse pp("field_loop");
+	amrex::ParmParse const pp("field_loop");
 	pp.query("refine_based_on", refine_based_on);
 
 	auto const &dx = geom[lev].CellSizeArray();
