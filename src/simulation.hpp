@@ -341,7 +341,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void createDiagnostics();
 	void updateDiagnostics();
 	void doDiagnostics();
-	void computeMagneticDivergence();
 	void WriteMetadataFile(std::string const &MetadataFileName) const;
 	void ReadMetadataFile(std::string const &chkfilename);
 	void WriteStatisticsFile();
@@ -882,9 +881,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	// output diagnostics
 	doDiagnostics();
 
-	// compute initial magnetic field divergence
-	computeMagneticDivergence();
-
 	// ensure that there are enough boxes per MPI rank
 	PerformanceHints();
 }
@@ -1217,9 +1213,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// write diagnostics
 		doDiagnostics();
-
-		// compute magnetic field divergence for debugging
-		computeMagneticDivergence();
 
 		// Writing Plot files at time intervals
 		if (last_plot_file_step != step + 1 && plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
@@ -2849,105 +2842,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	}
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::computeMagneticDivergence()
-{
-	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
-		return; // Skip if MHD is not enabled
-	}
-
-	BL_PROFILE("AMRSimulation::computeMagneticDivergence()"); // NOLINT
-
-	static amrex::Real previous_max_divB = -1.0;		// -1 indicates first call
-	const amrex::Real divergence_growth_threshold = 1000.0; // 3 orders of magnitude
-
-	amrex::Real max_divB_global = 0.0;
-	amrex::Real avg_divB_global = 0.0;
-	amrex::Long cell_count_global = 0;
-
-	for (int lev = 0; lev <= finestLevel(); ++lev) {
-		const amrex::Geometry &geom_lev = Geom(lev);
-		const amrex::Real *dx = geom_lev.CellSize();
-
-		amrex::Real max_divB_level = 0.0;
-		amrex::Real sum_divB_level = 0.0;
-		amrex::Long cell_count_level = 0;
-
-		// fill ghost faces
-		// FIXME(bwibking): why does this make a difference??
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
-		}
-
-		for (amrex::MFIter mfi(state_new_fc_[lev][0]); mfi.isValid(); ++mfi) {
-			const amrex::Box &box = mfi.validbox();
-			const amrex::Array4<amrex::Real const> &Bx = state_new_fc_[lev][0].const_array(mfi);
-			const amrex::Array4<amrex::Real const> &By = state_new_fc_[lev][1].const_array(mfi);
-			const amrex::Array4<amrex::Real const> &Bz = state_new_fc_[lev][2].const_array(mfi);
-
-			amrex::Real max_divB_fab = 0.0;
-			amrex::Real sum_divB_fab = 0.0;
-			amrex::Long cell_count_fab = 0;
-
-			amrex::ParallelFor(box, [=, &max_divB_fab, &sum_divB_fab, &cell_count_fab] AMREX_GPU_DEVICE(int i, int j, int k) {
-				// Compute divergence using finite differences
-				amrex::Real divB =
-				    (Bx(i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex) - Bx(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
-					dx[0] +
-				    (By(i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex) - By(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
-					dx[1] +
-				    (Bz(i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex) - Bz(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)) /
-					dx[2];
-
-				// Normalize by cell size (use dx[0] as representative cell size)
-				amrex::Real const normalized_abs_divB = dx[0] * std::abs(divB);
-				amrex::Gpu::Atomic::Max(&max_divB_fab, normalized_abs_divB);
-				amrex::Gpu::Atomic::Add(&sum_divB_fab, normalized_abs_divB);
-				amrex::Gpu::Atomic::Add(&cell_count_fab, static_cast<amrex::Long>(1));
-			});
-
-			max_divB_level = std::max(max_divB_level, max_divB_fab);
-			sum_divB_level += sum_divB_fab;
-			cell_count_level += cell_count_fab;
-		}
-
-		amrex::ParallelDescriptor::ReduceRealMax(max_divB_level);
-		amrex::ParallelDescriptor::ReduceRealSum(sum_divB_level);
-		amrex::ParallelDescriptor::ReduceLongSum(cell_count_level);
-
-		max_divB_global = std::max(max_divB_global, max_divB_level);
-		avg_divB_global += sum_divB_level;
-		cell_count_global += cell_count_level;
-
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::Print() << "Level " << lev << ": max dx*|div(B)| = " << max_divB_level
-				       << ", avg dx*|div(B)| = " << (cell_count_level > 0 ? sum_divB_level / static_cast<amrex::Real>(cell_count_level) : 0.0)
-				       << '\n';
-		}
-	}
-
-	if (amrex::ParallelDescriptor::IOProcessor() && cell_count_global > 0) {
-		avg_divB_global /= static_cast<amrex::Real>(cell_count_global);
-		amrex::Print() << "MAGNETIC DIVERGENCE: max dx*|div(B)| = " << max_divB_global << ", avg dx*|div(B)| = " << avg_divB_global << '\n';
-
-		// Check for large increases in divergence and halt simulation if necessary
-		if (previous_max_divB > 0.0) {
-			const amrex::Real growth_factor = max_divB_global / previous_max_divB;
-			if (growth_factor > divergence_growth_threshold) {
-				amrex::Print() << "\n[ERROR] MAGNETIC DIVERGENCE INSTABILITY DETECTED!\n";
-				amrex::Print() << "Max dx*|div(B)| increased by factor of " << growth_factor << " (threshold = " << divergence_growth_threshold
-					       << ")\n";
-				amrex::Print() << "Previous max dx*|div(B)| = " << previous_max_divB << "\n";
-				amrex::Print() << "Current max dx*|div(B)| = " << max_divB_global << "\n";
-				amrex::Print() << "This suggests an EdgeFluxRegister bug at AMR boundaries.\n";
-				amrex::Print() << "Halting simulation to prevent further corruption.\n\n";
-				amrex::Abort("Simulation halted due to magnetic divergence instability");
-			}
-		}
-		previous_max_divB = max_divB_global;
-	}
-}
-
 // do in-situ rendering with Ascent
 #ifdef AMREX_USE_ASCENT
 template <typename problem_t> void AMRSimulation<problem_t>::AscentCustomActions(conduit::Node const &blueprintMesh)
@@ -3646,7 +3540,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		if (lev > 0 && (do_reflux != 0)) {
 			flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev), Geom(lev - 1),
 										 refRatio(lev - 1), lev, ncomp_cc);
-			// TODO(bwibking): initialize emf_reg_[lev] here
+			// FIXME(bwibking): initialize emf_reg_[lev] here
 		}
 
 		const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
