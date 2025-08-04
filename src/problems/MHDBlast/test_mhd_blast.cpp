@@ -57,7 +57,7 @@ template <> void QuokkaSimulation<MHDBlast>::setInitialConditionsOnGrid(quokka::
 		const double R = std::sqrt(x * x + y * y + z * z);
 
 		double P = NAN;
-		double Emag = 50.;
+		double const Emag = 50.;
 		if (R < R_init) {
 			P = 100.;
 		} else {
