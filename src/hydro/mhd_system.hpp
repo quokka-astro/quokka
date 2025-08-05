@@ -336,7 +336,7 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
   const BL_PROFILE("MHDSystem::ComputeEMF_UsingFCVel()");
 	const int nghost_cc = 4;
   
-  // loop over each box-array on the level
+	// loop over each box-array on the level
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 	for (amrex::MFIter mfi(fcx_mf_cVars[0]); mfi.isValid(); ++mfi) {
@@ -347,20 +347,20 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 		// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
 		// significantly reduces the total memory used, which is a much bigger bottleneck.
 
-	  // indexing: field[3: x-component/x-face]
-	  // create a view of all the u-field data (+ghost cells; do not make another copy)
-	  std::array<amrex::FArrayBox, 3> fc_fabs_Ux = {
-	    amrex::FArrayBox(fcx_mf_vel[0][mfi], amrex::make_alias, 0, 1),
-	    amrex::FArrayBox(fcx_mf_vel[1][mfi], amrex::make_alias, 0, 1),
-	    amrex::FArrayBox(fcx_mf_vel[2][mfi], amrex::make_alias, 0, 1),
-	  };
-	  // indexing: field[3: x-component/x-face]
-	  // create a view of all the b-field data (+ghost cells; do not make another copy)
-	  std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
-	      amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-	      amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-	      amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-	  };
+		// indexing: field[3: x-component/x-face]
+		// create a view of all the u-field data (+ghost cells; do not make another copy)
+		std::array<amrex::FArrayBox, 3> fc_fabs_Ux = {
+			amrex::FArrayBox(fcx_mf_vel[0][mfi], amrex::make_alias, 0, 1),
+			amrex::FArrayBox(fcx_mf_vel[1][mfi], amrex::make_alias, 0, 1),
+			amrex::FArrayBox(fcx_mf_vel[2][mfi], amrex::make_alias, 0, 1),
+		};
+		// indexing: field[3: x-component/x-face]
+		// create a view of all the b-field data (+ghost cells; do not make another copy)
+		std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
+			amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+			amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+			amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		};
 		// compute the emf components on the cell-edge to inform how much magnetic flux travels through each cell-face
 		for (int iedge = 0; iedge < 3; ++iedge) {
 
@@ -368,7 +368,7 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 			// we will want to compute E2 = (U0 * B1 - U1 * B0) along the cell-edge
 			std::array<int, 2> field_w_indices = {(iedge + 1) % 3, (iedge + 2) % 3};
 			const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(field_w_indices[0]) + amrex::IntVect::TheDimensionVector(field_w_indices[1]));
-      const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
+			const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
 
 			// FArrayBoxes for storing the edge-centered fields produced by reconstructing from the cell-face to the cell-edge
 			// indexing: field[2: i-component][2: i-side of edge]
@@ -376,42 +376,43 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
 			// define quantities
 			for (int icomp = 0; icomp < 2; ++icomp) {
-	      for (int ieside = 0; ieside < 2; ++ieside) {
-	        ec_fabs_Ui_ieside[icomp][ieside].resize(box_ec_r, 1);
-	        ec_fabs_Bi_ieside[icomp][ieside].resize(box_ec_r, 1);
-	      }
+				for (int ieside = 0; ieside < 2; ++ieside) {
+					ec_fabs_Ui_ieside[icomp][ieside].resize(box_ec_r, 1);
+					ec_fabs_Bi_ieside[icomp][ieside].resize(box_ec_r, 1);
+				}
 			}
 
-	    // extrapolate the face-centered velocity field that is normal to the cell-face to the cell-edge
+			// extrapolate the face-centered fields (normal to the cell-face) to the cell-edge
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const auto dir2edge = static_cast<FluxDir>(field_w_indices[(icomp + 1) % 2]);
 				const int wcomp = field_w_indices[icomp];
 				const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// extrapolate face-centered components to the cell-edge
+				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(), 
+				ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ux[wcomp].array(), ec_fabs_Ui_ieside[icomp][0].array(),
-	ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder); 			MHDSystem<problem_t>::ReconstructTo(dir2edge,
-	fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(), ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+				ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 			}
 
 			// indexing: field[4: quadrant around edge]
 			std::array<amrex::FArrayBox, 4> ec_fabs_E_Q;
-	    // note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-	    // |---------------------------------------------------------------------------------------------|
-	    // |          q_2                                                                                |
-	    // |       u,b_{0,T}                 |                                                           |
-	    // |       \       /       q_1 + q_2 | q_2 + q_3                                                 |
-	    // |        \     /             Q_1  |  Q_2          Q_0 = u_{0,B} * b_{1,L} - u_{1,L} * b_{0,B} |
-	    // |         \   /             (-,+) | (+,+)                                                     |
-	    // |    q_1   \ /   q_3              |               Q_1 = u_{0,T} * b_{1,L} - u_{1,L} * b_{0,T} |
-	    // | u,b_{1,L} . u,b_{1,R} -> --------------- where:                                             |
-	    // |          / \                    |               Q_2 = u_{0,T} * b_{1,R} - u_{1,R} * b_{0,T} |
-	    // |         /   \              Q_0  |  Q_3                                                      |
-	    // |        /     \            (-,-) | (+,-)         Q_3 = u_{0,B} * b_{1,R} - u_{1,R} * b_{0,B} |
-	    // |       /       \       q_1 + q_2 | q_3 + q_0                                                 |
-	    // |       u,b_{0,B}                 |                                                           |
-	    // |          q_0                                                                                |
-	    // |---------------------------------------------------------------------------------------------|
+			// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
+			// |---------------------------------------------------------------------------------------------|
+			// |          q_2                                                                                |
+			// |       u,b_{0,T}                 |                                                           |
+			// |       \       /       q_1 + q_2 | q_2 + q_3                                                 |
+			// |        \     /             Q_1  |  Q_2          Q_0 = u_{0,B} * b_{1,L} - u_{1,L} * b_{0,B} |
+			// |         \   /             (-,+) | (+,+)                                                     |
+			// |    q_1   \ /   q_3              |               Q_1 = u_{0,T} * b_{1,L} - u_{1,L} * b_{0,T} |
+			// | u,b_{1,L} . u,b_{1,R} -> --------------- where:                                             |
+			// |          / \                    |               Q_2 = u_{0,T} * b_{1,R} - u_{1,R} * b_{0,T} |
+			// |         /   \              Q_0  |  Q_3                                                      |
+			// |        /     \            (-,-) | (+,-)         Q_3 = u_{0,B} * b_{1,R} - u_{1,R} * b_{0,B} |
+			// |       /       \       q_1 + q_2 | q_3 + q_0                                                 |
+			// |       u,b_{0,B}                 |                                                           |
+			// |          q_0                                                                                |
+			// |---------------------------------------------------------------------------------------------|
 			// compute the EMF along the cell-edge
 			for (int iQuad = 0; iQuad < 4; ++iQuad) {
 				// extract relevant velocity and magnetic field components
@@ -459,42 +460,40 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 			// only operate on the real cells
 			amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 				const double E2_q0_ = E2_q0(i, j, k);
-        const double E2_q1_ = E2_q1(i, j, k);
-        const double E2_q2_ = E2_q2(i, j, k);
-        const double E2_q3_ = E2_q3(i, j, k);
+				const double E2_q1_ = E2_q1(i, j, k);
+				const double E2_q2_ = E2_q2(i, j, k);
+				const double E2_q3_ = E2_q3(i, j, k);
 
-        const double B0_p_ = B0_p(i, j, k);
-        const double B0_m_ = B0_m(i, j, k);
-        const double B1_p_ = B1_p(i, j, k);
-        const double B1_m_ = B1_m(i, j, k);
+				const double B0_p_ = B0_p(i, j, k);
+				const double B0_m_ = B0_m(i, j, k);
+				const double B1_p_ = B1_p(i, j, k);
+				const double B1_m_ = B1_m(i, j, k);
 
-        // LD04 scheme:
-        const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-        const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-        const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-        const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+				// LD04 scheme:
+				const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
+				const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
+				const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
+				const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
 
-        // note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-        // (-,+) | (+,+)
-        //   1   |   2
-        // ------+------
-        //   0   |   3
-        // (-,-) | (+,-)
+				// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
+				// (-,+) | (+,+)
+				//   1   |   2
+				// ------+------
+				//   0   |   3
+				// (-,-) | (+,-)
 
-        const double num1 =
-            ((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
-        const double num2 =
-            ((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
+				const double num1 =
+					((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
+				const double num2 =
+					((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
 
-        // must be averaged for exact floating-point symmetry
-        const double numerator = 0.5 * (num1 + num2);
-        const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
+				// must be averaged for exact floating-point symmetry
+				const double numerator = 0.5 * (num1 + num2);
+				const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
 
-        // NOTE: there is a sign error in Equation 56 of Felker & Stone
-        const double term2 =
-            ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
-
-        E2_ave(i, j, k) = (numerator / denominator) + term2;
+				// NOTE: there is a sign error in Equation 56 of Felker & Stone
+				const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
+				E2_ave(i, j, k) = (numerator / denominator) + term2;
 			});
 		}
 	}
