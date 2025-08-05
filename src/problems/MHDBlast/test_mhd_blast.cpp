@@ -48,7 +48,6 @@ template <> void QuokkaSimulation<MHDBlast>::setInitialConditionsOnGrid(quokka::
 	// problem parameters
 	constexpr Real rho = 1.0;      // g cm^-3
 	constexpr Real R_init = 0.125; // cm
-	constexpr Real init_vol = (4. / 3.) * M_PI * gcem::pow(R_init, 3);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double x = prob_lo[0] + ((i + 0.5) * dx[0]);
