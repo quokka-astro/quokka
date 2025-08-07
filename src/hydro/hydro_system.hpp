@@ -984,8 +984,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	}
 
 	// Define the common flux computation lambda
-	auto computeFlux = [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, [[maybe_unused]] const auto &x1ConsVar_fc_ref,
-						[[maybe_unused]] const auto &x1FSpds_ref) {
+	auto computeFlux = [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, const auto &x1ConsVar_fc_ref,
+						const auto &x1FSpds_ref) {
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
