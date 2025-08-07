@@ -486,14 +486,15 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						    xx_random * (std::pow(v_max, 1. - beta) - std::pow(v_min, 1. - beta)) + std::pow(v_min, 1. - beta);
 						v_new = std::pow(v_new, 1. / (1. - beta)) * km_per_s; // Convert to km/s
 
+						double const cos_theta_random = (2*amrex::Random(engine) - 1.0); // Sample cos theta from a uniform distribution between -1 to 1.
 						double const theta_random =
-						    (amrex::Random(engine) - 0.5) * M_PI; // Sample theta from a uniform distribution between -pi/2 and pi/2
-						double const phi_random =
+						    std::acos(cos_theta_random); // Sample theta from a uniform distribution between 0 and pi
+ 						double const phi_random =
 						    (1. - amrex::Random(engine)) * 2. * M_PI; // Sample phi from a uniform distribution between 0 and 2*pi
 
 						double const vx_random = v_new * std::sin(theta_random) * std::cos(phi_random);
 						double const vy_random = v_new * std::sin(theta_random) * std::sin(phi_random);
-						double const vz_random = v_new * std::cos(theta_random);
+						double const vz_random = v_new * cos_theta_random;
 
 						p.rdata(mass_idx + 1) = vx + vx_random;
 						p.rdata(mass_idx + 2) = vy + vy_random;
