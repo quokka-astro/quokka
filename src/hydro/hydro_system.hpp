@@ -235,14 +235,12 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 			const amrex::Real b_x2 = 0.5 * (b_x2_m + b_x2_p);
 #endif
 			const amrex::Real magnetic_energy = 0.5 * (AMREX_D_TERM(b_x0 * b_x0, +b_x1 * b_x1, +b_x2 * b_x2));
-			
+
 			computePrimitive(bx, i, j, k, magnetic_energy);
 		});
 	} else {
 		// Non-MHD case: no magnetic energy
-		amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			computePrimitive(bx, i, j, k, 0.0);
-		});
+		amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { computePrimitive(bx, i, j, k, 0.0); });
 	}
 }
 
@@ -986,9 +984,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	}
 
 	// Define the common flux computation lambda
-	auto computeFlux = [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, 
-	                                         [[maybe_unused]] const auto& x1ConsVar_fc_ref,
-	                                         [[maybe_unused]] const auto& x1FSpds_ref) {
+	auto computeFlux = [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, [[maybe_unused]] const auto &x1ConsVar_fc_ref,
+						[[maybe_unused]] const auto &x1FSpds_ref) {
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
@@ -1159,9 +1156,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 #if AMREX_SPACEDIM == 1
 		const double dw = 0.;
 #else
-	  	amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
-	  	amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
-	  	double dw = std::min(dvl, dvr);
+		amrex::Real dvl =
+		    std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
+		amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
+		double dw = std::min(dvl, dvr);
 #endif
 #if AMREX_SPACEDIM == 3
 		amrex::Real dwl =
@@ -1274,7 +1272,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 	// Include ghost cells when computing face velocities
 	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
-	
+
 	// Launch appropriate kernel based on whether MHD is enabled
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
