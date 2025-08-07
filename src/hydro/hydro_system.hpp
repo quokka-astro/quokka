@@ -152,28 +152,12 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 						  amrex::MultiFab &primVar_mf, const int nghost)
 {
 	// convert conserved to primitive variables
-	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
-#endif
 	auto const &cons_cc = cons_cc_mf.const_arrays();
 	auto const &primVar = primVar_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
-	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		// First-capture the magnetic field arrays by accessing them early
-		// This forces NVCC to capture them before the constexpr if block
-		[[maybe_unused]] auto fc_x0_ref = cons_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-		[[maybe_unused]] auto fc_x1_ref = cons_fc_x1[bx];
-#endif
-#if AMREX_SPACEDIM == 3
-		[[maybe_unused]] auto fc_x2_ref = cons_fc_x2[bx];
-#endif
-
+	// Define the lambda function that computes primitive variables
+	auto computePrimitive = [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, amrex::Real magnetic_energy) {
 		const amrex::Real rho = cons_cc[bx](i, j, k, density_index);
 		const amrex::Real px = cons_cc[bx](i, j, k, x1Momentum_index);
 		const amrex::Real py = cons_cc[bx](i, j, k, x2Momentum_index);
@@ -191,28 +175,9 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 		const amrex::Real vy = py / rho;
 		const amrex::Real vz = pz / rho;
 		const amrex::Real kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-		amrex::Real magnetic_energy = 0.;
-
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			// note, bx is the box, and bxi is the magnetic-field component
-			const amrex::Real b_x0_m = fc_x0_ref(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x0_p = fc_x0_ref(i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x0 = 0.5 * (b_x0_m + b_x0_p);
-#if AMREX_SPACEDIM >= 2
-			const amrex::Real b_x1_m = fc_x1_ref(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x1_p = fc_x1_ref(i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x1 = 0.5 * (b_x1_m + b_x1_p);
-#endif
-#if AMREX_SPACEDIM == 3
-			const amrex::Real b_x2_m = fc_x2_ref(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x2_p = fc_x2_ref(i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
-			const amrex::Real b_x2 = 0.5 * (b_x2_m + b_x2_p);
-#endif
-			magnetic_energy = 0.5 * (AMREX_D_TERM(b_x0 * b_x0, +b_x1 * b_x1, +b_x2 * b_x2));
-		}
 		const amrex::Real Eint_cons = E - kinetic_energy - magnetic_energy;
 
-		const amrex::Real Pgas = ComputePressure(cons_cc[bx], i, j, k);
+		const amrex::Real Pgas = HydroSystem<problem_t>::ComputePressure(cons_cc[bx], i, j, k);
 		const amrex::Real eint_cons = Eint_cons / rho;
 		const amrex::Real eint_aux = Eint_aux / rho;
 
@@ -242,7 +207,43 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 		for (int nc = 0; nc < nscalars_; ++nc) {
 			primVar[bx](i, j, k, primScalar0_index + nc) = cons_cc[bx](i, j, k, scalar0_index + nc);
 		}
-	});
+	};
+
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		// MHD case: access face-centered arrays and compute magnetic energy
+		auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+		auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+		auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
+#endif
+
+		amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			// Compute magnetic energy from face-centered fields
+			const amrex::Real b_x0_m = cons_fc_x0[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x0_p = cons_fc_x0[bx](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x0 = 0.5 * (b_x0_m + b_x0_p);
+#if AMREX_SPACEDIM >= 2
+			const amrex::Real b_x1_m = cons_fc_x1[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x1_p = cons_fc_x1[bx](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x1 = 0.5 * (b_x1_m + b_x1_p);
+#endif
+#if AMREX_SPACEDIM == 3
+			const amrex::Real b_x2_m = cons_fc_x2[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x2_p = cons_fc_x2[bx](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
+			const amrex::Real b_x2 = 0.5 * (b_x2_m + b_x2_p);
+#endif
+			const amrex::Real magnetic_energy = 0.5 * (AMREX_D_TERM(b_x0 * b_x0, +b_x1 * b_x1, +b_x2 * b_x2));
+			
+			computePrimitive(bx, i, j, k, magnetic_energy);
+		});
+	} else {
+		// Non-MHD case: no magnetic energy
+		amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			computePrimitive(bx, i, j, k, 0.0);
+		});
+	}
 }
 
 template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf) -> amrex::Real
@@ -984,13 +985,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		x1ConsVar_fc_in = (*x1ConsVar_fc_mf).const_arrays();
 	}
 
-	// Include ghost cells when computing face velocities
-	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
-	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
-		// first capture
-		[[maybe_unused]] const auto x1ConsVar_fc_ref = x1ConsVar_fc_in[bx];
-		[[maybe_unused]] const auto x1FSpds_ref = x1FSpds_in[bx];
-
+	// Define the common flux computation lambda
+	auto computeFlux = [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, 
+	                                         [[maybe_unused]] const auto& x1ConsVar_fc_ref,
+	                                         [[maybe_unused]] const auto& x1FSpds_ref) {
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
@@ -1272,7 +1270,26 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
 			x1Flux(i, j, k, nc) = F[nc];
 		}
-	});
+	};
+
+	// Include ghost cells when computing face velocities
+	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
+	
+	// Launch appropriate kernel based on whether MHD is enabled
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
+			const auto x1ConsVar_fc_ref = x1ConsVar_fc_in[bx];
+			const auto x1FSpds_ref = x1FSpds_in[bx];
+			computeFlux(bx, i_in, j_in, k_in, x1ConsVar_fc_ref, x1FSpds_ref);
+		});
+	} else {
+		amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
+			// Pass dummy values for MHD arrays since they won't be used
+			amrex::Array4<const double> dummy_ConsVar_fc{};
+			amrex::Array4<double> dummy_FSpds{};
+			computeFlux(bx, i_in, j_in, k_in, dummy_ConsVar_fc, dummy_FSpds);
+		});
+	}
 }
 
 #endif // HYDRO_SYSTEM_HPP_
