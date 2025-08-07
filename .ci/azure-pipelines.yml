@@ -16,8 +16,7 @@ pr:
     - src/*
     - inputs/*
     - CMakeLists.txt
-    - .ci/*
-    - extern/amrex/*
+    - extern/amrex
     - extern/Microphysics/*
     - extern/fmt/*
     - extern/yaml-cpp/*
