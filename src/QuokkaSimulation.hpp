@@ -894,7 +894,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		sol_norm = std::sqrt(sol_norm);
 		err_norm = std::sqrt(err_norm);
 
-		const double rel_error = err_norm / sol_norm;
+		const double rel_error = (sol_norm > 0.0) ? (err_norm / sol_norm) : 0.0;
 		errorNorm_ = rel_error;
 		amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -924,7 +924,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 				sol_norm = std::sqrt(sol_norm);
 				err_norm = std::sqrt(err_norm);
 
-				const double rel_error = err_norm / sol_norm;
+				const double rel_error = (sol_norm > 0.0) ? (err_norm / sol_norm) : 0.0;
 				errorNorm_ = rel_error;
 				amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
 					       << " and sol_norm = " << sol_norm << "\n";
