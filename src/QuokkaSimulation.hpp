@@ -164,7 +164,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
+	
+	// nkriel's for testing
 	int nghost_vel_ = 2;			// number of ghost cells for face velocity computation (default == 2)
+	// int nghost_vel_ = 5;
+	
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
@@ -1441,8 +1445,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
-		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_,
-						 emfAveragingType_);
+		// nkriel's for testing
+		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_, emfAveragingType_);
+		// MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_fo, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_);
 	}
 
 	// Stage 1 of RK2-SSP
@@ -1468,9 +1473,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
-			// MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_,
-			// 				 emfAveragingType_);
-      MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage1, faceVel, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_);
+			// nkriel's for testing
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_, emfAveragingType_);
+			// MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage1, faceVel, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1617,9 +1622,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
-			// MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds,
-			// 				 emfReconstructionOrder_, emfAveragingType_);
-      MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage2, faceVel, stateInter_fc, fast_mhd_wavespeeds, emfReconstructionOrder_);
+			// nkriel's for testing
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds, emfReconstructionOrder_, emfAveragingType_);
+			// MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage2, faceVel, stateInter_fc, fast_mhd_wavespeeds, emfReconstructionOrder_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1866,8 +1871,12 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	const auto ba = grids[lev];
 	const auto dm = dmap[lev];
+
+	// nkriel's for testing
 	const int reconstructGhost = 3; // reconstruct *two* additional cells outside valid region
-	// we need two additional ghost cells in order to compute two ghost face velocities
+	// const int reconstructGhost = 6; // solve 5 ghost zones deep
+
+	// // we need two additional ghost cells in order to compute two ghost face velocities
 	const int flatteningGhost = reconstructGhost + 1;
 
 	// allocate temporary MultiFabs
@@ -2033,7 +2042,10 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 
 	const auto ba = grids[lev];
 	const auto dm = dmap[lev];
+
+	// nkriel's for testing
 	const int reconstructRange = 3; // reconstruct *two* additional cells outside valid region
+	// const int reconstructRange = 6;
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
