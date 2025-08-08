@@ -17,6 +17,7 @@
 #include "math/interpolate.hpp"
 #include "util/fextract.hpp"
 #include <gcem.hpp>
+#include <iomanip>
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -45,6 +46,9 @@ AMREX_GPU_MANAGED double M_star_in_Msun = 1.0;	 // NOLINT
 AMREX_GPU_MANAGED double uniform_density = -1.0; // NOLINT. Default is not using uniform density. If set to a positive value, the density will be set to this
 						 // value instead of an exact solution to the Bondi problem.
 bool refine_center = true;			 // NOLINT
+AMREX_GPU_MANAGED double v0_x = 0.0;		 // NOLINT. If uniform_density > 0.0, this is the velocity of the gas.
+AMREX_GPU_MANAGED double v0_y = 0.0;		 // NOLINT
+AMREX_GPU_MANAGED double v0_z = 0.0;		 // NOLINT
 
 // constexpr double r_B = C::Gconst * C::M_solar / (cs0 * cs0);
 
@@ -340,10 +344,10 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 
 		if (uniform_density > 0.0) {
 			rho = uniform_density;
-			v = 0.0;
-			vx = 0.0;
-			vy = 0.0;
-			vz = 0.0;
+			vx = v0_x;
+			vy = v0_y;
+			vz = v0_z;
+			v = std::sqrt(v0_x * v0_x + v0_y * v0_y + v0_z * v0_z);
 		}
 
 		const Real Eint = rho / mu * k_B * T0; // arbitrary choice, since Eint is not used in isothermal gas EOS
@@ -416,6 +420,9 @@ auto problem_main() -> int
 	pp.query("return_1_at_fail", return_1_at_fail);
 	pp.query("t_end_over_t_b", t_end_over_t_b);
 	pp.query("refine_center", refine_center);
+	pp.query("v0_x", v0_x);
+	pp.query("v0_y", v0_y);
+	pp.query("v0_z", v0_z);
 
 	const double M_star_in_g = M_star_in_Msun * C::M_solar;
 	const Real r_BH = C::Gconst * M_star_in_g / (cs0 * cs0);
@@ -562,9 +569,9 @@ auto problem_main() -> int
 		std::vector<Real> &time = sim.userData_.time;
 		std::vector<Real> &Mstar_ = sim.userData_.Mstar;
 
-		// print mass vs time
+		// print mass vs time with 14 digits precision
 		for (int i = 0; i < static_cast<int>(time.size()); ++i) {
-			amrex::Print() << "time = " << time[i] << ", Mstar = " << Mstar_[i] << "\n";
+			amrex::Print() << std::scientific << std::setprecision(14) << "time = " << time[i] << ", Mstar = " << Mstar_[i] << "\n";
 		}
 
 		// compute exact accretion rate
@@ -572,7 +579,7 @@ auto problem_main() -> int
 		const Real lam = std::exp(1.5) / 4.0;
 		const Real rho_bg = uniform_density > 0.0 ? uniform_density : rho0;
 		const Real Mdot_exact = 4.0 * M_PI * rho_bg * r_BH * r_BH * (lam * cs0);
-		amrex::Print() << "Mdot_exact = " << Mdot_exact << "\n";
+		amrex::Print() << std::scientific << std::setprecision(14) << "Mdot_exact = " << Mdot_exact << "\n";
 
 		// Estimate the accretion rate from the particle data
 		const int last_step = static_cast<int>(time.size()) - 1;
@@ -580,11 +587,11 @@ auto problem_main() -> int
 		if (last_step >= 1) {
 			const int first_step = last_step - n_steps_to_average;
 			const Real Mdot_sim = (Mstar_[last_step] - Mstar_[first_step]) / (time[last_step] - time[first_step]);
-			amrex::Print() << "Steady state Mdot_sim = " << Mdot_sim << "\n";
+			amrex::Print() << std::scientific << std::setprecision(14) << "Steady state Mdot_sim = " << Mdot_sim << "\n";
 
 			// compute relative difference
 			const Real rel_diff = std::abs(Mdot_sim - Mdot_exact) / Mdot_exact;
-			amrex::Print() << "rel_diff = " << rel_diff << "\n";
+			amrex::Print() << std::scientific << std::setprecision(14) << "rel_diff = " << rel_diff << "\n";
 
 			// Check if accretion rate is within tolerance when star mass is small (i.e. when the accretion rate is exactly Bondi accretion rate)
 			if (return_1_at_fail) {
