@@ -195,6 +195,7 @@ template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::st
 			output[bx](i, j, k, ncomp) = divB;
 		});
 	}
+	amrex::Gpu::streamSynchronizeAll();
 }
 
 auto problem_main() -> int

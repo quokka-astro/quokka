@@ -8,6 +8,7 @@
 ///
 
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 
@@ -154,6 +155,7 @@ template <> void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::str
 			output[bx](i, j, k, ncomp) = divB;
 		});
 	}
+	amrex::Gpu::streamSynchronizeAll();
 }
 
 auto problem_main() -> int
