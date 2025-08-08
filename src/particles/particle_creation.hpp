@@ -475,8 +475,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double const v_min = 3.0;   // Minimum velocity from the distribution
 						double const v_max = 385.0; // Maximum velocity from the distribution
 						double const beta = 1.8;    // Slope of the velocity distribution
-		
-						//Draw velocity from the power-law distribution
+
+						// Draw velocity from the power-law distribution
 						double const xx_random = amrex::Random(engine);
 						double v_new =
 						    xx_random * (std::pow(v_max, 1. - beta) - std::pow(v_min, 1. - beta)) + std::pow(v_min, 1. - beta);
