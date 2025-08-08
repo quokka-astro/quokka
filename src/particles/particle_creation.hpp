@@ -471,16 +471,12 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(birth_time_index + 1) = std::numeric_limits<amrex::Real>::max();
 					if (p_idx > 0) {
 						// This is the loop that sets the velocity of the high mass stars
-						double km_per_s = 1.e5;
+						double const km_per_s = 1.e5;
 						double const v_min = 3.0;   // Minimum velocity from the distribution
 						double const v_max = 385.0; // Maximum velocity from the distribution
 						double const beta = 1.8;    // Slope of the velocity distribution
-						// double f0 = (beta -1) / (std::pow(v_min, 1. - beta) - std::pow(v_max, 1. - beta)); // Normalization factor
-						// for the velocity distribution Get the average velocity from the velocity dispersion of the surrounding cells
-						// We use the velocity dispersion of the surrounding cells to get the velocity of the high mass star...
-						//... from a log normal distribution
-						// Checkout docs/star_formation for more details
-
+		
+						//Draw velocity from the power-law distribution
 						double const xx_random = amrex::Random(engine);
 						double v_new =
 						    xx_random * (std::pow(v_max, 1. - beta) - std::pow(v_min, 1. - beta)) + std::pow(v_min, 1. - beta);
@@ -488,13 +484,11 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 						double const cos_theta_random =
 						    (2 * amrex::Random(engine) - 1.0); // Sample cos theta from a uniform distribution between -1 to 1.
-						double const theta_random =
-						    std::acos(cos_theta_random); // Sample theta from a uniform distribution between 0 and pi
 						double const phi_random =
 						    (1. - amrex::Random(engine)) * 2. * M_PI; // Sample phi from a uniform distribution between 0 and 2*pi
 
-						double const vx_random = v_new * std::sin(theta_random) * std::cos(phi_random);
-						double const vy_random = v_new * std::sin(theta_random) * std::sin(phi_random);
+						double const vx_random = v_new * std::sqrt(1. - cos_theta_random * cos_theta_random) * std::cos(phi_random);
+						double const vy_random = v_new * std::sqrt(1. - cos_theta_random * cos_theta_random) * std::sin(phi_random);
 						double const vz_random = v_new * cos_theta_random;
 
 						p.rdata(mass_idx + 1) = vx + vx_random;
