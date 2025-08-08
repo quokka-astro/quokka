@@ -169,11 +169,11 @@ template <> void QuokkaSimulation<TubeProblem>::setInitialConditionsOnGrid(quokk
 		auto radEnergyFractions = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, Tgas);
 
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
-			state_cc(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			AMREX_ASSERT(state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) > 0.);
+			state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad * radEnergyFractions[g];
+			state_cc(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			AMREX_ASSERT(state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) > 0.);
 		}
 
 		state_cc(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Pgas / (gamma_gas - 1.0);
@@ -218,11 +218,11 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		// left side boundary -- constant
 		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T_lo, 4);
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
-			const double Frad = consVar(lo[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g);
-			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractionsT0[g];
-			consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad;
-			consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			const double Frad = consVar(lo[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
+			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad * radEnergyFractionsT0[g];
+			consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = Frad;
+			consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
+			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
 		}
 
 		const double Egas = (C::k_B / mu) * rho0 * T_lo / (gamma_gas - 1.0);
@@ -238,11 +238,11 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		// right-side boundary -- constant
 		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T_hi, 4);
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
-			const double Frad = consVar(hi[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g);
-			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractionsT1[g];
-			consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad;
-			consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
-			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0.;
+			const double Frad = consVar(hi[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
+			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad * radEnergyFractionsT1[g];
+			consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = Frad;
+			consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
+			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
 		}
 
 		const double Egas = (C::k_B / mu) * rho1 * T_hi / (gamma_gas - 1.0);
@@ -322,8 +322,8 @@ auto problem_main() -> int
 		double Erad_0 = 0.0;
 		double Erad_t = 0.0;
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
-			Erad_0 += values0.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
-			Erad_arr_at_group[g][i] = values.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+			Erad_0 += values0.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
+			Erad_arr_at_group[g][i] = values.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 			Erad_t += Erad_arr_at_group[g][i];
 		}
 		Erad_exact_arr[i] = Erad_0;

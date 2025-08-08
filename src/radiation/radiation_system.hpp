@@ -162,7 +162,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}
 
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-	static constexpr int numRadVars_ = Physics_NumVars::numRadVars;				 // number of radiation variables for each photon group
+	static constexpr int numRadVars_ = Physics_NumVars::numRadVarsPerGroup;			 // number of radiation variables for each photon group
 	static constexpr int nvarHyperbolic_ = numRadVars_ * Physics_Traits<problem_t>::nGroups; // total number of radiation variables
 	static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
 	static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
