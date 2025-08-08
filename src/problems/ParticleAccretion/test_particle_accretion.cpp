@@ -18,6 +18,7 @@
 #include "util/fextract.hpp"
 #include <gcem.hpp>
 #include <iomanip>
+#include <fstream>
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -29,6 +30,8 @@ bool turnon_fextract = false;		       // NOLINT
 constexpr bool particle_in_cell_center = true; // NOLINT
 bool return_1_at_fail = false;		       // NOLINT
 std::string sink_file = "../inputs/sink.txt";  // NOLINT
+int sink_write_interval = 1;                   // NOLINT
+std::string sink_output_file = "sink_data.txt"; // NOLINT
 
 struct AccretionProblem {
 };
@@ -83,6 +86,7 @@ template <> struct Physics_Traits<AccretionProblem> {
 template <> struct SimulationData<AccretionProblem> {
 	std::vector<Real> time;
 	std::vector<Real> Mstar;
+	int step_counter = 0;  // Counter for tracking timesteps
 };
 
 template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles()
@@ -387,22 +391,35 @@ template <> void QuokkaSimulation<AccretionProblem>::refineGrid(int lev, amrex::
 
 template <> void QuokkaSimulation<AccretionProblem>::computeAfterTimestep()
 {
-	// every step, save particle mass to userData_
-	userData_.time.push_back(tNew_[0]);
-	// userData_.Mstar.push_back(1.0);
+	// Increment step counter
+	userData_.step_counter++;
 
-	// Get particle data using the physics particle descriptor
-	const int finest_level = finestLevel();
-	const auto &real_data = particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(finest_level).first;
+	// Check if we should write data this step
+	if (userData_.step_counter % sink_write_interval == 0) {
+		// Get particle data using the physics particle descriptor
+		const int finest_level = finestLevel();
+		const auto &real_data = particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(finest_level).first;
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		Real Mstar = 0.0;
-		const int mass_index = 3;
-		for (const auto &p : real_data) {
-			Mstar += p[mass_index];
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			Real Mstar = 0.0;
+			const int mass_index = 3;
+			for (const auto &p : real_data) {
+				Mstar += p[mass_index];
+			}
+
+			// Store data in memory
+			userData_.time.push_back(tNew_[0]);
+			userData_.Mstar.push_back(Mstar);
+
+			// Write data to file
+			std::ofstream outfile;
+			outfile.open(sink_output_file, std::ios_base::app); // Append mode
+			if (outfile.is_open()) {
+				outfile << std::scientific << std::setprecision(14) 
+					<< tNew_[0] << "\t" << Mstar << "\n";
+				outfile.close();
+			}
 		}
-
-		userData_.Mstar.push_back(Mstar);
 	}
 }
 
@@ -423,6 +440,8 @@ auto problem_main() -> int
 	pp.query("v0_x", v0_x);
 	pp.query("v0_y", v0_y);
 	pp.query("v0_z", v0_z);
+	pp.query("sink_write_interval", sink_write_interval);
+	pp.query("sink_output_file", sink_output_file);
 
 	const double M_star_in_g = M_star_in_Msun * C::M_solar;
 	const Real r_BH = C::Gconst * M_star_in_g / (cs0 * cs0);
