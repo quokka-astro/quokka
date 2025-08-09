@@ -171,7 +171,7 @@ template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::st
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
 		const amrex::Geometry &geom_lev = geom[lev];
-		const amrex::Real *dx = geom_lev.CellSize();
+		const auto dx = geom_lev.CellSizeArray();
 		auto const &state_fc = state_new_fc_[lev];
 		auto output = mf.arrays();
 
@@ -180,14 +180,19 @@ template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::st
 		auto const &By_arr = state_fc[1].const_arrays();
 		auto const &Bz_arr = state_fc[2].const_arrays();
 
-		amrex::ParallelFor(mf, {0, 0, 0}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::ParallelFor(mf, {0, 0, 0}, [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept {
 			// Compute divergence using finite differences
 			constexpr int idx = Physics_Indices<FieldLoop>::mhdFirstIndex;
-			amrex::Real const divB = (Bx_arr[bx](i + 1, j, k, idx) - Bx_arr[bx](i, j, k, idx)) / dx[0] +
-						 (By_arr[bx](i, j + 1, k, idx) - By_arr[bx](i, j, k, idx)) / dx[1] +
-						 (Bz_arr[bx](i, j, k + 1, idx) - Bz_arr[bx](i, j, k, idx)) / dx[2];
-
-			output[bx](i, j, k, ncomp) = divB;
+			amrex::Real const Bx_p = Bx_arr[box](i + 1, j, k, idx);
+			amrex::Real const Bx_m = Bx_arr[box](i, j, k, idx);
+			amrex::Real const By_p = By_arr[box](i, j + 1, k, idx);
+			amrex::Real const By_m = By_arr[box](i, j, k, idx);
+			amrex::Real const Bz_p = Bz_arr[box](i, j, k + 1, idx);
+			amrex::Real const Bz_m = Bz_arr[box](i, j, k, idx);
+			amrex::Real const divB_x = (Bx_p - Bx_m) / dx[0];
+			amrex::Real const divB_y = (By_p - By_m) / dx[1];
+			amrex::Real const divB_z = (Bz_p - Bz_m) / dx[2];
+			output[box](i, j, k, ncomp) = divB_x + divB_y + divB_z;
 		});
 	}
 	amrex::Gpu::streamSynchronizeAll();
