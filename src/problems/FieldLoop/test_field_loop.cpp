@@ -180,17 +180,12 @@ template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::st
 		auto const &By_arr = state_fc[1].const_arrays();
 		auto const &Bz_arr = state_fc[2].const_arrays();
 
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::ParallelFor(mf, {0, 0, 0}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// Compute divergence using finite differences
-			amrex::Real const divB = (Bx_arr[bx](i + 1, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex) -
-						  Bx_arr[bx](i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex)) /
-						     dx[0] +
-						 (By_arr[bx](i, j + 1, k, Physics_Indices<FieldLoop>::mhdFirstIndex) -
-						  By_arr[bx](i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex)) /
-						     dx[1] +
-						 (Bz_arr[bx](i, j, k + 1, Physics_Indices<FieldLoop>::mhdFirstIndex) -
-						  Bz_arr[bx](i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex)) /
-						     dx[2];
+			constexpr int idx = Physics_Indices<FieldLoop>::mhdFirstIndex;
+			amrex::Real const divB = (Bx_arr[bx](i + 1, j, k, idx) - Bx_arr[bx](i, j, k, idx)) / dx[0] +
+						 (By_arr[bx](i, j + 1, k, idx) - By_arr[bx](i, j, k, idx)) / dx[1] +
+						 (Bz_arr[bx](i, j, k + 1, idx) - Bz_arr[bx](i, j, k, idx)) / dx[2];
 
 			output[bx](i, j, k, ncomp) = divB;
 		});
