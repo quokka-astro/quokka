@@ -131,7 +131,7 @@ template <> void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::str
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
 		const amrex::Geometry &geom_lev = geom[lev];
-		const amrex::Real *dx = geom_lev.CellSize();
+		const auto dx = geom_lev.CellSizeArray();
 		auto const &state_fc = state_new_fc_[lev];
 		auto output = mf.arrays();
 
@@ -149,8 +149,10 @@ template <> void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::str
 			amrex::Real const By_m = By_arr[box](i, j, k, idx);
 			amrex::Real const Bz_p = Bz_arr[box](i, j, k + 1, idx);
 			amrex::Real const Bz_m = Bz_arr[box](i, j, k, idx);
-			amrex::Real const divB = (Bx_p - Bx_m) / dx[0] + (By_p - By_m) / dx[1] + (Bz_p - Bz_m) / dx[2];
-			output[box](i, j, k, ncomp) = divB;
+			amrex::Real const divB_x = (Bx_p - Bx_m) / dx[0];
+			amrex::Real const divB_y = (By_p - By_m) / dx[1];
+			amrex::Real const divB_z = (Bz_p - Bz_m) / dx[2];
+			output[box](i, j, k, ncomp) = divB_x + divB_y + divB_z;
 		});
 	}
 	amrex::Gpu::streamSynchronizeAll();
