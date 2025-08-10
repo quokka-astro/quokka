@@ -127,11 +127,11 @@ CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.in \
     projection_interval=-1 \
     statistics_interval=-1 \
     slice_interval=-1 \
-    amr.plot_file=plt_blocking
+    plotfile_prefix=plt_blocking
 echo "Blocking run completed, checking for plotfiles..."
 
-# Check if run completed successfully - look for the final plotfile
-PLOTFILE_BLOCKING=$(find . -maxdepth 1 -name "plt*" -type d | sort | tail -1)
+# Check if run completed successfully
+PLOTFILE_BLOCKING=$(find . -maxdepth 1 -name "plt_blocking*" -type d | head -1)
 if [ -z "${PLOTFILE_BLOCKING}" ]; then
     echo "Error: No plotfile generated for blocking run"
     echo "Contents of run directory:"
@@ -141,7 +141,6 @@ fi
 
 # Get just the directory name (remove ./ prefix)
 PLOTFILE_BLOCKING=$(basename "${PLOTFILE_BLOCKING}")
-echo "Found blocking plotfile: ${PLOTFILE_BLOCKING}"
 
 # Run with CUDA_LAUNCH_BLOCKING=0
 echo ""
@@ -160,11 +159,11 @@ CUDA_LAUNCH_BLOCKING=0 "${BINARY}" ../input.in \
     projection_interval=-1 \
     statistics_interval=-1 \
     slice_interval=-1 \
-    amr.plot_file=plt_nonblocking
+    plotfile_prefix=plt_nonblocking
 echo "Non-blocking run completed, checking for plotfiles..."
 
-# Check if run completed successfully - look for the final plotfile
-PLOTFILE_NONBLOCKING=$(find . -maxdepth 1 -name "plt*" -type d | sort | tail -1)
+# Check if run completed successfully
+PLOTFILE_NONBLOCKING=$(find . -maxdepth 1 -name "plt_nonblocking*" -type d | head -1)
 if [ -z "${PLOTFILE_NONBLOCKING}" ]; then
     echo "Error: No plotfile generated for non-blocking run"
     echo "Contents of run directory:"
@@ -174,7 +173,6 @@ fi
 
 # Get just the directory name (remove ./ prefix)
 PLOTFILE_NONBLOCKING=$(basename "${PLOTFILE_NONBLOCKING}")
-echo "Found non-blocking plotfile: ${PLOTFILE_NONBLOCKING}"
 
 # Compare the plotfiles
 echo ""
