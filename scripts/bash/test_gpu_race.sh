@@ -51,6 +51,18 @@ if [ -z "${BINARY}" ] || [ -z "${INPUT_FILE}" ] || [ -z "${MAX_TIMESTEPS}" ]; th
     usage
 fi
 
+# Store the original working directory
+ORIG_DIR=$(pwd)
+
+# Convert relative paths to absolute paths based on current working directory
+if [[ "${BINARY}" != /* ]]; then
+    BINARY="${ORIG_DIR}/${BINARY}"
+fi
+
+if [[ "${INPUT_FILE}" != /* ]]; then
+    INPUT_FILE="${ORIG_DIR}/${INPUT_FILE}"
+fi
+
 # Check if binary exists
 if [ ! -f "${BINARY}" ]; then
     echo "Error: Binary '${BINARY}' not found"
@@ -64,15 +76,15 @@ if [ ! -f "${INPUT_FILE}" ]; then
 fi
 
 # Check if fcompare exists, build if necessary
-FCOMPARE_DIR="extern/amrex/Tools/Plotfile"
+# Look for fcompare relative to original working directory
+FCOMPARE_DIR="${ORIG_DIR}/extern/amrex/Tools/Plotfile"
 FCOMPARE=$(find "${FCOMPARE_DIR}" -name "fcompare.*.ex" 2>/dev/null | head -1)
 
 if [ -z "${FCOMPARE}" ] || [ ! -f "${FCOMPARE}" ]; then
     echo "fcompare tool not found, building it..."
-    CURRENT_DIR=$(pwd)
     cd "${FCOMPARE_DIR}"
     make -j$(nproc) programs=fcompare
-    cd "${CURRENT_DIR}"
+    cd "${ORIG_DIR}"
     
     # Find the built binary
     FCOMPARE=$(find "${FCOMPARE_DIR}" -name "fcompare.*.ex" 2>/dev/null | head -1)
