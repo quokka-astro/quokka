@@ -1488,6 +1488,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, 0);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], 0.5, ec_emf_components_rk_stage1[idim], 0, 0, 1, 0);
+			    amrex::Gpu::streamSynchronizeAll(); // Ensure EMF Saxpy completes before other kernels launch
 			}
 		}
 
@@ -1644,6 +1645,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, 0);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], 0.5, ec_emf_components_rk_stage2[idim], 0, 0, 1, 0);
+			    amrex::Gpu::streamSynchronizeAll(); // Ensure EMF Saxpy completes before other kernels launch
 			}
 		}
 
