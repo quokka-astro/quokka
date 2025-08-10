@@ -233,18 +233,27 @@ if [ ! -d "${PLOT_NONBLOCKING}" ]; then
 fi
 
 echo "Running fcompare..."
-"${FCOMPARE}" --abs_tol 0.0 --rel_tol 0.0 "${PLOT_BLOCKING}" "${PLOT_NONBLOCKING}" > "${FCOMPARE_OUTPUT}" 2>&1
-FCOMPARE_EXIT_CODE=$?
+set +e  # Don't exit on error so we can capture crashed output
+"${FCOMPARE}" --abs_tol 0.0 --rel_tol 0.0 "${PLOT_BLOCKING}" "${PLOT_NONBLOCKING}" 2>&1 | tee "${FCOMPARE_OUTPUT}"
+FCOMPARE_EXIT_CODE=${PIPESTATUS[0]}
+set -e
 
+echo ""
 echo "fcompare completed with exit code: ${FCOMPARE_EXIT_CODE}"
 
-# Always show fcompare output, especially important if it crashed
-echo ""
-echo "fcompare output:"
-echo "----------------"
-cat "${FCOMPARE_OUTPUT}"
-echo "----------------"
-echo ""
+# Show captured output if there was any
+if [ -s "${FCOMPARE_OUTPUT}" ]; then
+    echo ""
+    echo "fcompare output:"
+    echo "----------------"
+    cat "${FCOMPARE_OUTPUT}"
+    echo "----------------"
+    echo ""
+else
+    echo ""
+    echo "No output captured from fcompare (process may have been killed by signal)"
+    echo ""
+fi
 
 # Check fcompare exit code
 if [ ${FCOMPARE_EXIT_CODE} -eq 0 ]; then
