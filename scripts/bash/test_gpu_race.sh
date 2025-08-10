@@ -6,21 +6,26 @@ set -e
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 -b <binary> -i <input_file> -n <max_timesteps> [-h]"
+    echo "Usage: $0 -b <binary> -i <input_file> -n <max_timesteps> [-s] [-h]"
     echo ""
     echo "Options:"
     echo "  -b <binary>         Path to the test binary"
     echo "  -i <input_file>     Path to the input file"
     echo "  -n <max_timesteps>  Maximum number of timesteps to run"
+    echo "  -s                  Use single GPU stream (amrex.max_gpu_streams=1)"
     echo "  -h                  Display this help message"
     echo ""
     echo "Example:"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10"
+    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -s"
     exit 1
 }
 
+# Initialize variables
+SINGLE_STREAM=false
+
 # Parse command line arguments
-while getopts "b:i:n:h" opt; do
+while getopts "b:i:n:sh" opt; do
     case ${opt} in
         b)
             BINARY="${OPTARG}"
@@ -30,6 +35,9 @@ while getopts "b:i:n:h" opt; do
             ;;
         n)
             MAX_TIMESTEPS="${OPTARG}"
+            ;;
+        s)
+            SINGLE_STREAM=true
             ;;
         h)
             usage
@@ -110,15 +118,24 @@ trap cleanup EXIT
 # Copy input file to temp directory
 cp "${INPUT_FILE}" "${TEMP_DIR}/input.in"
 
+# Prepare additional arguments
+ADDITIONAL_ARGS=""
+if [ "${SINGLE_STREAM}" = true ]; then
+    ADDITIONAL_ARGS="amrex.max_gpu_streams=1"
+fi
+
 # Run with CUDA_LAUNCH_BLOCKING=1
 echo ""
 echo "=========================================="
 echo "Running with CUDA_LAUNCH_BLOCKING=1..."
+if [ "${SINGLE_STREAM}" = true ]; then
+    echo "(with amrex.max_gpu_streams=1)"
+fi
 echo "=========================================="
 cd "${TEMP_DIR}"
 mkdir run_blocking
 cd run_blocking
-echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ..."
+echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
 CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.in \
     max_timesteps=${MAX_TIMESTEPS} \
     plotfile_interval=${MAX_TIMESTEPS} \
@@ -127,7 +144,8 @@ CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.in \
     projection_interval=-1 \
     statistics_interval=-1 \
     slice_interval=-1 \
-    plotfile_prefix=plt_blocking
+    plotfile_prefix=plt_blocking \
+    ${ADDITIONAL_ARGS}
 echo "Blocking run completed, checking for plotfiles..."
 
 # Check if run completed successfully - find the FINAL (highest numbered) plotfile
@@ -147,11 +165,14 @@ echo "Found blocking plotfile: ${PLOTFILE_BLOCKING}"
 echo ""
 echo "=========================================="
 echo "Running with CUDA_LAUNCH_BLOCKING=0..."
+if [ "${SINGLE_STREAM}" = true ]; then
+    echo "(with amrex.max_gpu_streams=1)"
+fi
 echo "=========================================="
 cd "${TEMP_DIR}"
 mkdir run_nonblocking
 cd run_nonblocking
-echo "Running: CUDA_LAUNCH_BLOCKING=0 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ..."
+echo "Running: CUDA_LAUNCH_BLOCKING=0 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
 CUDA_LAUNCH_BLOCKING=0 "${BINARY}" ../input.in \
     max_timesteps=${MAX_TIMESTEPS} \
     plotfile_interval=${MAX_TIMESTEPS} \
@@ -160,7 +181,8 @@ CUDA_LAUNCH_BLOCKING=0 "${BINARY}" ../input.in \
     projection_interval=-1 \
     statistics_interval=-1 \
     slice_interval=-1 \
-    plotfile_prefix=plt_nonblocking
+    plotfile_prefix=plt_nonblocking \
+    ${ADDITIONAL_ARGS}
 NONBLOCKING_EXIT_CODE=$?
 
 if [ ${NONBLOCKING_EXIT_CODE} -ne 0 ]; then
