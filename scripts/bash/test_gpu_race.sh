@@ -238,32 +238,27 @@ FCOMPARE_EXIT_CODE=$?
 
 echo "fcompare completed with exit code: ${FCOMPARE_EXIT_CODE}"
 
+# Always show fcompare output, especially important if it crashed
+echo ""
+echo "fcompare output:"
+echo "----------------"
+cat "${FCOMPARE_OUTPUT}"
+echo "----------------"
+echo ""
+
 # Check fcompare exit code
 if [ ${FCOMPARE_EXIT_CODE} -eq 0 ]; then
-    echo ""
     echo "✓ SUCCESS: Plotfiles are identical - No race condition detected"
-    echo ""
-    cat "${FCOMPARE_OUTPUT}"
     exit 0
 else
-    echo ""
     echo "✗ FAILURE: Plotfiles differ - RACE CONDITION DETECTED!"
-    echo ""
-    echo "fcompare output:"
-    echo "----------------"
-    cat "${FCOMPARE_OUTPUT}"
     echo ""
     echo "This indicates a GPU race condition in the code."
     echo "The results depend on kernel execution order."
     echo ""
-    echo "Plotfiles saved in:"
-    echo "  Blocking:     ${PLOT_BLOCKING}"
-    echo "  Non-blocking: ${PLOT_NONBLOCKING}"
+    echo "Temporary directory preserved for analysis: ${TEMP_DIR}"
+    echo "- Blocking run results:     ${TEMP_DIR}/run_blocking/"
+    echo "- Non-blocking run results: ${TEMP_DIR}/run_nonblocking/"
     echo ""
-    echo "To preserve these files, copy them before this script exits:"
-    echo "  cp -r ${TEMP_DIR} ./gpu_race_results"
-    echo ""
-    echo "Press Enter to clean up and exit, or Ctrl+C to keep files..."
-    read -r
     exit 1
 fi
