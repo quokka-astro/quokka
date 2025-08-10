@@ -1841,6 +1841,7 @@ void QuokkaSimulation<problem_t>::replaceEMFs(std::array<amrex::MultiFab, AMREX_
 			}
 		});
 	}
+	amrex::Gpu::streamSynchronizeAll();
 }
 
 template <typename problem_t>
