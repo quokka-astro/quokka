@@ -100,10 +100,10 @@ fi
 TEMP_DIR=$(mktemp -d -t gpu_race_test.XXXXXX)
 echo "Using temporary directory: ${TEMP_DIR}"
 
-# Function to clean up on exit
+# Function to clean up on exit (disabled - leaving files for analysis)
 cleanup() {
-    echo "Cleaning up temporary directory..."
-    rm -rf "${TEMP_DIR}"
+    echo "Temporary directory preserved at: ${TEMP_DIR}"
+    echo "Use 'rm -rf ${TEMP_DIR}' to clean up when done analyzing."
 }
 trap cleanup EXIT
 
@@ -161,6 +161,28 @@ CUDA_LAUNCH_BLOCKING=0 "${BINARY}" ../input.in \
     statistics_interval=-1 \
     slice_interval=-1 \
     plotfile_prefix=plt_nonblocking
+NONBLOCKING_EXIT_CODE=$?
+
+if [ ${NONBLOCKING_EXIT_CODE} -ne 0 ]; then
+    echo ""
+    echo "✗ RACE CONDITION DETECTED!"
+    echo ""
+    echo "The non-blocking run crashed (exit code: ${NONBLOCKING_EXIT_CODE})"
+    echo "while the blocking run completed successfully."
+    echo ""
+    echo "This indicates a GPU race condition causing non-deterministic behavior."
+    echo "The race condition causes instabilities that crash the simulation"
+    echo "when kernels execute in different orders."
+    echo ""
+    echo "Contents of non-blocking run directory:"
+    ls -la
+    echo ""
+    echo "Temporary directory preserved for analysis: ${TEMP_DIR}"
+    echo "- Blocking run results:     ${TEMP_DIR}/run_blocking/"
+    echo "- Non-blocking run results: ${TEMP_DIR}/run_nonblocking/"
+    exit 1
+fi
+
 echo "Non-blocking run completed, checking for plotfiles..."
 
 # Check if run completed successfully - find the FINAL (highest numbered) plotfile  
@@ -189,10 +211,35 @@ PLOT_NONBLOCKING="${TEMP_DIR}/run_nonblocking/${PLOTFILE_NONBLOCKING}"
 
 # Run fcompare and capture output
 FCOMPARE_OUTPUT=$(mktemp)
+echo "Running fcompare command:"
+echo "${FCOMPARE}" --abs_tol 0.0 --rel_tol 0.0 "${PLOT_BLOCKING}" "${PLOT_NONBLOCKING}"
+echo ""
+
+# Check if fcompare binary exists
+if [ ! -f "${FCOMPARE}" ]; then
+    echo "Error: fcompare binary not found at ${FCOMPARE}"
+    exit 1
+fi
+
+# Check if plotfile directories exist
+if [ ! -d "${PLOT_BLOCKING}" ]; then
+    echo "Error: Blocking plotfile directory not found: ${PLOT_BLOCKING}"
+    exit 1
+fi
+
+if [ ! -d "${PLOT_NONBLOCKING}" ]; then
+    echo "Error: Non-blocking plotfile directory not found: ${PLOT_NONBLOCKING}"
+    exit 1
+fi
+
+echo "Running fcompare..."
 "${FCOMPARE}" --abs_tol 0.0 --rel_tol 0.0 "${PLOT_BLOCKING}" "${PLOT_NONBLOCKING}" > "${FCOMPARE_OUTPUT}" 2>&1
+FCOMPARE_EXIT_CODE=$?
+
+echo "fcompare completed with exit code: ${FCOMPARE_EXIT_CODE}"
 
 # Check fcompare exit code
-if [ $? -eq 0 ]; then
+if [ ${FCOMPARE_EXIT_CODE} -eq 0 ]; then
     echo ""
     echo "✓ SUCCESS: Plotfiles are identical - No race condition detected"
     echo ""
