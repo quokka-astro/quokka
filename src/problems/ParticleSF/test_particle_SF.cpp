@@ -18,7 +18,6 @@
 struct ParticleSFProblem {
 };
 
-constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double year = 3.15576e+07; // in seconds
