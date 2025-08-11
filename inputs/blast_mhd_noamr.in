@@ -29,5 +29,3 @@ hydro.use_dual_energy = 0
 #derived_vars = magnetic_divergence
 stop_time = 0.05
 
-# workaround for buggy MHD
-amrex.max_gpu_streams=1
