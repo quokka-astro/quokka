@@ -61,7 +61,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// significantly reduces the total memory used, which is a much bigger bottleneck.
 
 	// loop over each box-array on this level
-	for (amrex::MFIter mfi(cc_mf_cVars); mfi.isValid(); ++mfi) {
+	constexpr int nstreams = 1; // only run on 1 GPU stream to avoid race conditions
+	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) {
 		const amrex::Box &box_cc = mfi.validbox();
 
 		// extract cell-centered velocity fields
