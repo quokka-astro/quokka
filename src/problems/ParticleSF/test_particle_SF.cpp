@@ -213,14 +213,11 @@ auto problem_main() -> int
 			}
 		}
 
-		double const slope_predicted = (std::log(hist[n_bins]) - std::log(hist[0])) / (log_v_max - log_v_min);
+		double const slope_predicted = 1. - ((std::log(hist[n_bins-1]) - std::log(hist[0])) / (log_v_max - log_v_min));
 		amrex::Print() << "Slope of velocity distribution = " << slope_predicted << "\n";
 		amrex::Print() << "Minimum velocity = " << vmin << " km/s\n";
 		amrex::Print() << "Maximum velocity = " << vmax << " km/s\n";
 
-		for (int i = 0; i < n_bins; ++i) {
-			amrex::Print() << "Bin " << i << ": " << hist[i] << "\n";
-		}
 		// get total mass in gas
 		const double m_gas_change = m_gas_init - m_gas_final;
 
