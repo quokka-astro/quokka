@@ -444,7 +444,6 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 			    fc_consVarOld[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + dt * db_dt;
 		});
 	}
-	amrex::Gpu::streamSynchronizeAll();
 }
 
 #endif // HYDRO_SYSTEM_HPP_
