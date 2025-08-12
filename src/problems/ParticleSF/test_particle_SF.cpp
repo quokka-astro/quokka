@@ -213,7 +213,7 @@ auto problem_main() -> int
 			}
 		}
 
-		double const slope_predicted = 1. - ((std::log(hist[n_bins-1]) - std::log(hist[0])) / (log_v_max - log_v_min));
+		double const slope_predicted = 1. - ((std::log(hist[n_bins - 1]) - std::log(hist[0])) / (log_v_max - log_v_min));
 		amrex::Print() << "Slope of velocity distribution = " << slope_predicted << "\n";
 		amrex::Print() << "Minimum velocity = " << vmin << " km/s\n";
 		amrex::Print() << "Maximum velocity = " << vmax << " km/s\n";
