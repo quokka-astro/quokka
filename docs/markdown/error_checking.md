@@ -4,8 +4,10 @@
 
 AMReX provides several assertion macros:
 
--   `AMREX_ASSERT`: Works when ``CMAKE_BUILD_TYPE=Debug``.
--   `AMREX_ALWAYS_ASSERT`: Always works on CPU. **Works on GPU only if "-DNDEBUG" is NOT added to the compiler flags. Note that CMake adds "-DNDEBUG" by default when "CMAKE_BUILD_TYPE=Release".** (See this [GitHub discussion](https://github.com/AMReX-Codes/amrex/discussions/2648) for details.)
+-   `AMREX_ASSERT`: Enabled when either `-DAMREX_DEBUG` or `-DAMREX_USE_ASSERTION` is defined. When enabled, it calls `amrex::Assert()` which will abort unless both `-DNDEBUG` is defined AND `-DAMREX_USE_ASSERTION` is NOT defined. This means:
+    - The macro itself is a no-op when neither `AMREX_DEBUG` nor `AMREX_USE_ASSERTION` is defined
+    - When the macro is enabled and assertion fails, it will abort unless `NDEBUG` is defined without `AMREX_USE_ASSERTION`
+-   `AMREX_ALWAYS_ASSERT`: Always calls `amrex::Assert()` regardless of build configuration. The actual abort behavior follows the same rules as `AMREX_ASSERT` - it will abort unless both `-DNDEBUG` is defined AND `-DAMREX_USE_ASSERTION` is NOT defined. **Note that CMake adds "-DNDEBUG" by default when "CMAKE_BUILD_TYPE=Release".** (See this [GitHub discussion](https://github.com/AMReX-Codes/amrex/discussions/2648) for details.)
 
 ## Abort
 
