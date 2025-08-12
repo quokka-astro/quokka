@@ -180,8 +180,6 @@ auto problem_main() -> int
 		const double mean_mass_high_mass_stars = m_star_high_tot / n_star_high;
 		const int n_star_low = n_star_tot - n_star_high;
 
-		// //get velocity distribution of high-mass stars
-		// std::vector<double> log_vel_array(n_star_high);
 		double log_vel = NAN;
 		double vx = NAN;
 		double vy = NAN;
