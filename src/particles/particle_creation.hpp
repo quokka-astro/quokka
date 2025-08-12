@@ -471,10 +471,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(birth_time_index + 1) = std::numeric_limits<amrex::Real>::max();
 					if (p_idx > 0) {
 						// This is the loop that sets the velocity of the high mass stars
-						double const km_per_s = 1.e5; //convert km/s to cm/s
-						double const v_min = 3.0;   // Minimum velocity from the distribution
-						double const v_max = 385.0; // Maximum velocity from the distribution
-						double const beta = 1.8;    // Slope of the velocity distribution
+						double const km_per_s = 1.e5; // convert km/s to cm/s
+						double const v_min = 3.0;     // Minimum velocity from the distribution
+						double const v_max = 385.0;   // Maximum velocity from the distribution
+						double const beta = 1.8;      // Slope of the velocity distribution
 
 						// Draw velocity from the power-law distribution
 						double const xx_random = amrex::Random(engine);
