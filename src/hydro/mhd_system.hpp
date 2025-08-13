@@ -432,21 +432,21 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 				// define EMF FArrayBox
 				ec_fabs_E_Q[iQuad].resize(box_ec, 1);
 				const auto &E2_Qi = ec_fabs_E_Q[iQuad].array();
-				int w0_index = field_w_indices[0];
-				int w1_index = field_w_indices[1];
+				const int w0_index = field_w_indices[0];
+				const int w1_index = field_w_indices[1];
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const double u0 = U0_Qi(i, j, k);
 					const double u1 = U1_Qi(i, j, k);
 					const double b0 = B0_Qi(i, j, k);
 					const double b1 = B1_Qi(i, j, k);
-					double uxb = u0 * b1 - u1 * b0;
+					const double uxb = u0 * b1 - u1 * b0;
 					E2_Qi(i, j, k) = uxb;
 				});
 			}
 
 			// extract wavespeeds
-			int w0_index = field_w_indices[0];
-			int w1_index = field_w_indices[1];
+			const int w0_index = field_w_indices[0];
+			const int w1_index = field_w_indices[1];
 			std::array<int, 3> delta_w0 = {0, 0, 0};
 			std::array<int, 3> delta_w1 = {0, 0, 0};
 			delta_w0[w0_index] = 1;
