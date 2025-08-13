@@ -37,8 +37,11 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds,
 			       int reconstructionOrder, EMFAvgType emf_avg_type);
-  
-  static void ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder);
+
+	static void ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
+					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -332,10 +335,14 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 }
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder) {
-  const BL_PROFILE("MHDSystem::ComputeEMF_UsingFCVel()");
+void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
+						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder)
+{
+	const BL_PROFILE("MHDSystem::ComputeEMF_UsingFCVel()");
 	const int nghost_cc = 4;
-  
+
 	// loop over each box-array on the level
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
@@ -350,16 +357,16 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 		// indexing: field[3: x-component/x-face]
 		// create a view of all the u-field data (+ghost cells; do not make another copy)
 		std::array<amrex::FArrayBox, 3> fc_fabs_Ux = {
-			amrex::FArrayBox(fcx_mf_vel[0][mfi], amrex::make_alias, 0, 1),
-			amrex::FArrayBox(fcx_mf_vel[1][mfi], amrex::make_alias, 0, 1),
-			amrex::FArrayBox(fcx_mf_vel[2][mfi], amrex::make_alias, 0, 1),
+		    amrex::FArrayBox(fcx_mf_vel[0][mfi], amrex::make_alias, 0, 1),
+		    amrex::FArrayBox(fcx_mf_vel[1][mfi], amrex::make_alias, 0, 1),
+		    amrex::FArrayBox(fcx_mf_vel[2][mfi], amrex::make_alias, 0, 1),
 		};
 		// indexing: field[3: x-component/x-face]
 		// create a view of all the b-field data (+ghost cells; do not make another copy)
 		std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
-			amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-			amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-			amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		    amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		    amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		    amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
 		};
 		// compute the emf components on the cell-edge to inform how much magnetic flux travels through each cell-face
 		for (int iedge = 0; iedge < 3; ++iedge) {
@@ -367,7 +374,8 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 			// define the two face-centered velocity/magnetic field components we need at the cell-edge
 			// we will want to compute E2 = (U0 * B1 - U1 * B0) along the cell-edge
 			std::array<int, 2> field_w_indices = {(iedge + 1) % 3, (iedge + 2) % 3};
-			const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(field_w_indices[0]) + amrex::IntVect::TheDimensionVector(field_w_indices[1]));
+			const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(field_w_indices[0]) +
+									     amrex::IntVect::TheDimensionVector(field_w_indices[1]));
 			const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
 
 			// FArrayBoxes for storing the edge-centered fields produced by reconstructing from the cell-face to the cell-edge
@@ -389,10 +397,10 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 				const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// extrapolate face-centered components to the cell-edge
-				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(), 
-				ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
+								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ux[wcomp].array(), ec_fabs_Ui_ieside[icomp][0].array(),
-				ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+								    ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 			}
 
 			// indexing: field[4: quadrant around edge]
@@ -418,8 +426,8 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 				// extract relevant velocity and magnetic field components
 				const auto &U0_Qi = ec_fabs_Ui_ieside[0][(iQuad == 0 || iQuad == 3) ? 0 : 1].const_array(); // B/T
 				const auto &B0_Qi = ec_fabs_Bi_ieside[0][(iQuad == 0 || iQuad == 3) ? 0 : 1].const_array(); // B/T
-				const auto &U1_Qi = ec_fabs_Ui_ieside[1][(iQuad < 2) ? 0 : 1].const_array(); // L/R
-				const auto &B1_Qi = ec_fabs_Bi_ieside[1][(iQuad < 2) ? 0 : 1].const_array(); // L/R
+				const auto &U1_Qi = ec_fabs_Ui_ieside[1][(iQuad < 2) ? 0 : 1].const_array();		    // L/R
+				const auto &B1_Qi = ec_fabs_Bi_ieside[1][(iQuad < 2) ? 0 : 1].const_array();		    // L/R
 				// compute electric field in the quadrant about the cell-edge: cross product between velocity and magnetic field in that
 				// define EMF FArrayBox
 				ec_fabs_E_Q[iQuad].resize(box_ec, 1);
@@ -482,10 +490,8 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 				//   0   |   3
 				// (-,-) | (+,-)
 
-				const double num1 =
-					((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
-				const double num2 =
-					((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
+				const double num1 = ((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
+				const double num2 = ((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
 
 				// must be averaged for exact floating-point symmetry
 				const double numerator = 0.5 * (num1 + num2);
