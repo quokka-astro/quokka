@@ -411,11 +411,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Nghost = number of ghost cells for each array
-	// nkriel's for testing
-	int nghost_cc_ = 6; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
-	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 2; // 6 needed for MHD, otherwise only 2 for tracer particles
-	// int nghost_cc_ = 9;
-	// int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 9 : 2;
+	// int nghost_cc_ = 6; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
+	// int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 2; // 6 needed for MHD, otherwise only 2 for tracer particles
+	
+	// For our new scheme MHD-scheme, we +3 ghosts to achieve higher order interpolation in computeEMF
+	int nghost_cc_ = 9;
+	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 9 : 2;
 
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
