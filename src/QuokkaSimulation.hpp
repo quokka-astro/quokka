@@ -1874,7 +1874,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	const auto dm = dmap[lev];
 
 	// const int reconstructGhost = 3; // reconstruct *two* additional cells outside valid region
-	// default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction) +3 ghosts to accomodate the higher order
+	// default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction) +3 ghosts to accommodate the higher order
 	// reconstruction we need to do in computeEMF
 	const int reconstructGhost = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 3;
 
@@ -2046,7 +2046,7 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 	const auto dm = dmap[lev];
 
 	// const int reconstructRange = 3; // reconstruct *two* additional cells outside valid region
-	// same as above: default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction) +3 ghosts to accomodate the
+	// same as above: default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction) +3 ghosts to accommodate the
 	// higher order reconstruction we need to do in computeEMF
 	const int reconstructRange = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 3;
 
