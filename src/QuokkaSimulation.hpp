@@ -166,7 +166,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	// number of ghost cells for face velocity computation (default == 2)
 	// we now need +3 to accommodate the higher-order reconstruction in computeEMF
-	int nghost_vel_ = 5;
+	int nghost_vel_ = 2 + (Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 0);
 
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
 
@@ -1876,7 +1876,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	// const int reconstructGhost = 3; // reconstruct *two* additional cells outside valid region
 	// default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction) +3 ghosts to accomodate the higher order
 	// reconstruction we need to do in computeEMF
-	const int reconstructGhost = 6;
+	const int reconstructGhost = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 3;
 
 	// // we need two additional ghost cells in order to compute two ghost face velocities
 	const int flatteningGhost = reconstructGhost + 1;
@@ -2048,7 +2048,7 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 	// const int reconstructRange = 3; // reconstruct *two* additional cells outside valid region
 	// same as above: default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction) +3 ghosts to accomodate the
 	// higher order reconstruction we need to do in computeEMF
-	const int reconstructRange = 6;
+	const int reconstructRange = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 3;
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
