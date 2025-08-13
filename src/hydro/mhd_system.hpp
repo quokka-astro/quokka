@@ -341,7 +341,6 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_UsingFCVel()");
-	const int nghost_cc = 4;
 
 	// loop over each box-array on the level
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
