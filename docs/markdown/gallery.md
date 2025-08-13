@@ -45,7 +45,7 @@ The sub-Solar metallicity case:
 
 ### Outer Galaxy
 
-The intial gas surface density for these runs is $2.5 M_{\odot}$ pc$^{-2}$ for the Outer galaxy cases. Because the inital gas surface density is lower, the gas scale height of the warm phase is much larger. To accommodate the larger gas scale height the box size is increased to $16$ kpc in the vertical direction. The SNe go off in a relatively high density surrounding medium arresting development of large scale outflows. The mass loading factor is small.
+The intial gas surface density for these runs is $2.5 M_{\odot}$ pc$^{-2}$ for the Outer galaxy cases. Because the inital gas surface density is lower, the gas scale height of the warm phase is much larger. To accomodate the larger gas scale height the box size is increased to $16$ kpc in the vertical direction. The SNe go off in a relatively high density surrounding medium arresting development of large scale outflows. The mass loading factor is small.
 
 The Solar-metallicity case looks like this:
 

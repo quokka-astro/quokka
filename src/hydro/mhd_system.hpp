@@ -250,20 +250,20 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 					const double u1 = U1_qi(i, j, k);
 					const double b0 = B0_qi(i, j, k);
 					const double b1 = B1_qi(i, j, k);
-					double const uxb = u0 * b1 - u1 * b0;
+					const double uxb = u0 * b1 - u1 * b0;
 					E2_qi(i, j, k) = uxb;
 				});
 			}
 
 			// extract wavespeeds
-			int const w0_comp = extrap_dirs[0];
-			int const w1_comp = extrap_dirs[1];
+			int const w0_index = extrap_dirs[0];
+			int const w1_index = extrap_dirs[1];
 			std::array<int, 3> delta_w0 = {0, 0, 0};
 			std::array<int, 3> delta_w1 = {0, 0, 0};
-			delta_w0[w0_comp] = 1;
-			delta_w1[w1_comp] = 1;
-			const auto &fspd_x0 = fcx_mf_fspds[w0_comp][mfi].const_array();
-			const auto &fspd_x1 = fcx_mf_fspds[w1_comp][mfi].const_array();
+			delta_w0[w0_index] = 1;
+			delta_w1[w1_index] = 1;
+			const auto &fspd_x0 = fcx_mf_fspds[w0_index][mfi].const_array();
+			const auto &fspd_x1 = fcx_mf_fspds[w1_index][mfi].const_array();
 
 			// extract both components of magnetic field either side of the cell-edge
 			const auto &B0_m = ec_fabs_Bi_ieside[0][0].const_array();
@@ -436,14 +436,14 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 					const double u1 = U1_Qi(i, j, k);
 					const double b0 = B0_Qi(i, j, k);
 					const double b1 = B1_Qi(i, j, k);
-					const double uxb = u0 * b1 - u1 * b0;
+					double const uxb = u0 * b1 - u1 * b0;
 					E2_Qi(i, j, k) = uxb;
 				});
 			}
 
 			// extract wavespeeds
-			const int w0_index = field_w_indices[0];
-			const int w1_index = field_w_indices[1];
+			int const w0_index = field_w_indices[0];
+			int const w1_index = field_w_indices[1];
 			std::array<int, 3> delta_w0 = {0, 0, 0};
 			std::array<int, 3> delta_w1 = {0, 0, 0};
 			delta_w0[w0_index] = 1;

@@ -414,9 +414,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// int nghost_cc_ = 6; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
 	// int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 2; // 6 needed for MHD, otherwise only 2 for tracer particles
 
-	// For our new scheme MHD-scheme, we +3 ghosts to achieve higher order interpolation in computeEMF
-	int nghost_cc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 9 : 6;
-	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 9 : 2;
+	// For our new scheme MHD-scheme, we need 7 ghosts for MHD (4 base + 3 for EMF) or 6 otherwise
+	int nghost_cc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 7 : 6;
+	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
 
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;

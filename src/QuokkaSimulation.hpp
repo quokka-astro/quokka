@@ -165,10 +165,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	// number of ghost cells for face velocity computation (default == 2)
-	// we now need +3 to accommodate the higher-order reconstruction in computeEMF
-	int nghost_vel_ = 2 + (Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 0);
+	// we now need 3 total to accommodate the higher-order reconstruction in computeEMF
+	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
 
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
+	int use_fc_velocity_for_emf_ = 1; // 0 == use reconstructed velocity from CC state; 1 == use FC velocity from Riemann solver (default)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -486,6 +487,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const hpp("mhd");
 		hpp.query("emf_averaging_method", emfAveragingType_);
 		hpp.query("emf_reconstruction_order", emfReconstructionOrder_);
+		hpp.query("use_fc_velocity_for_emf", use_fc_velocity_for_emf_);
 	}
 
 	// set cooling runtime parameters
@@ -1444,9 +1446,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
-		// MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_,
-		// emfAveragingType_);
-		MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_fo, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_);
+		if (use_fc_velocity_for_emf_ == 1) {
+			MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_fo, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_);
+		} else {
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_,
+							 emfAveragingType_);
+		}
 	}
 
 	// Stage 1 of RK2-SSP
@@ -1472,10 +1477,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
-			// MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_,
-			// emfAveragingType_);
-			MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage1, faceVel, stateOld_fc, fast_mhd_wavespeeds,
-								    emfReconstructionOrder_);
+			if (use_fc_velocity_for_emf_ == 1) {
+				MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage1, faceVel, stateOld_fc, fast_mhd_wavespeeds,
+									    emfReconstructionOrder_);
+			} else {
+				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_,
+								  emfAveragingType_);
+			}
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1622,10 +1630,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
-			// MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds,
-			// emfReconstructionOrder_, emfAveragingType_);
-			MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage2, faceVel, stateInter_fc, fast_mhd_wavespeeds,
-								    emfReconstructionOrder_);
+			if (use_fc_velocity_for_emf_ == 1) {
+				MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage2, faceVel, stateInter_fc, fast_mhd_wavespeeds,
+									    emfReconstructionOrder_);
+			} else {
+				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds,
+								  emfReconstructionOrder_, emfAveragingType_);
+			}
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1874,9 +1885,9 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	const auto dm = dmap[lev];
 
 	// const int reconstructGhost = 3; // reconstruct *two* additional cells outside valid region
-	// default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction) +3 ghosts to accommodate the higher order
-	// reconstruction we need to do in computeEMF
-	const int reconstructGhost = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 3;
+	// default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction)
+	// for MHD we need to accommodate the higher order reconstruction we need to do in computeEMF
+	const int reconstructGhost = nghost_vel_ + 1;
 
 	// // we need two additional ghost cells in order to compute two ghost face velocities
 	const int flatteningGhost = reconstructGhost + 1;
@@ -2046,9 +2057,9 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 	const auto dm = dmap[lev];
 
 	// const int reconstructRange = 3; // reconstruct *two* additional cells outside valid region
-	// same as above: default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction) +3 ghosts to accommodate the
-	// higher order reconstruction we need to do in computeEMF
-	const int reconstructRange = Physics_Traits<problem_t>::is_mhd_enabled ? 6 : 3;
+	// same as above: default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction)
+	// for MHD we need to accommodate the higher order reconstruction we need to do in computeEMF
+	const int reconstructRange = nghost_vel_ + 1;
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
