@@ -18,7 +18,6 @@
 struct ParticleSFProblem {
 };
 
-constexpr double M_sol = C::M_solar;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double year = 3.15576e+07; // in seconds
@@ -180,6 +179,42 @@ auto problem_main() -> int
 		}
 		const double mean_mass_high_mass_stars = m_star_high_tot / n_star_high;
 		const int n_star_low = n_star_tot - n_star_high;
+
+		double log_vel = NAN;
+		double vx = NAN;
+		double vy = NAN;
+		double vz = NAN;
+		double vtot = NAN;
+		double vmin = 3.e5;  // minimum velocity in km/s
+		double vmax = -3.e5; // maximum velocity in km/s
+		const int n_bins = 20;
+		const double log_v_min = std::log(3.0);	  // minimum velocity of the input distribution
+		const double log_v_max = std::log(385.0); // maximum velocity of the input distributions
+		const double bin_width = (log_v_max - log_v_min) / n_bins;
+		std::vector<int> hist(n_bins, 0);
+		for (int i = 0; i < n_star_tot; ++i) {
+			if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
+				vx = real_data_final[i][mass_idx + 1] / 1.e5;
+				vy = real_data_final[i][mass_idx + 2] / 1.e5;
+				vz = real_data_final[i][mass_idx + 3] / 1.e5;
+				vtot = std::sqrt(vx * vx + vy * vy + vz * vz);
+				if (vtot < vmin) {
+					vmin = vtot; // update minimum velocity
+				} else if (vtot > vmax) {
+					vmax = vtot; // update maximum velocity
+				}
+				log_vel = std::log(vtot); // store log of velocity in km/s
+				int const bin_index = static_cast<int>((log_vel - log_v_min) / bin_width);
+				if (bin_index >= 0 && bin_index < n_bins) {
+					hist[bin_index]++;
+				}
+			}
+		}
+
+		double const slope_predicted = 1. - ((std::log(hist[n_bins - 1]) - std::log(hist[0])) / (log_v_max - log_v_min));
+		amrex::Print() << "Slope of velocity distribution = " << slope_predicted << "\n";
+		amrex::Print() << "Minimum velocity = " << vmin << " km/s\n";
+		amrex::Print() << "Maximum velocity = " << vmax << " km/s\n";
 
 		// get total mass in gas
 		const double m_gas_change = m_gas_init - m_gas_final;
