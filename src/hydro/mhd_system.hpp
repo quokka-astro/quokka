@@ -432,8 +432,6 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 				// define EMF FArrayBox
 				ec_fabs_E_Q[iQuad].resize(box_ec, 1);
 				const auto &E2_Qi = ec_fabs_E_Q[iQuad].array();
-				const int w0_index = field_w_indices[0];
-				const int w1_index = field_w_indices[1];
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const double u0 = U0_Qi(i, j, k);
 					const double u1 = U1_Qi(i, j, k);
