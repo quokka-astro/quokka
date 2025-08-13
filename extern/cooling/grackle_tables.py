@@ -140,7 +140,7 @@ def cooling_rate(nH, T, zmet, redshift=0., tables=None):
       3.7e-2 * (T / 1.0e4)**(0.7) / \
           (1. + 2.0e-4 * (G_0 * Tsqrt / (n_e * phi)))
     Gamma_pe = 1.3e-24 * nH * epsilon * G_0
-    Edot += zmet * Gamma_pe
+    Edot += (zmet * Gamma_pe)
 
     # Compton term (CMB photons)
     # [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]
