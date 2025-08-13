@@ -85,7 +85,7 @@ def interpolate_mu(nH, T, tables=None):
     return interp_mmw(log_nH, log_T)[0][0]
 
 
-def cooling_rate(nH, T, Z, redshift=0., tables=None):
+def cooling_rate(nH, T, zmet, redshift=0., tables=None):
     """compute the cooling rate at a given density, redshift, and temperature.
     Note that the rate tables are C-ordered (as specified by the HDF5 standard.)"""
     log_nH = np.log10(nH)
@@ -112,8 +112,8 @@ def cooling_rate(nH, T, Z, redshift=0., tables=None):
                                              kx=1,
                                              ky=1)
 
-    metalCool = Z * (10**interp_metalCooling(log_nH, log_T)[0, 0])
-    metalHeat = Z * (10**interp_metalHeating(log_nH, log_T)[0, 0])
+    metalCool = zmet * (10**interp_metalCooling(log_nH, log_T)[0, 0])
+    metalHeat = zmet * (10**interp_metalHeating(log_nH, log_T)[0, 0])
     primCool = 10**interp_primCooling(log_nH, log_T)[0, 0]
     primHeat = 10**interp_primHeating(log_nH, log_T)[0, 0]
 
@@ -140,7 +140,7 @@ def cooling_rate(nH, T, Z, redshift=0., tables=None):
       3.7e-2 * (T / 1.0e4)**(0.7) / \
           (1. + 2.0e-4 * (G_0 * Tsqrt / (n_e * phi)))
     Gamma_pe = 1.3e-24 * nH * epsilon * G_0
-    Edot += Z * Gamma_pe
+    Edot += zmet * Gamma_pe
 
     # Compton term (CMB photons)
     # [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]

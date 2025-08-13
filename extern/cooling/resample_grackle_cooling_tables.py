@@ -178,7 +178,7 @@ def find_eint_range(tables):
     return eint_min, eint_max
 
 
-def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, Z=1.0,
+def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
                             output_file='resampled_cooling_tables.h5'):
     """Resample cooling tables on a not-quite-logarithmic grid of density and specific internal energy.    
     Uses the fast logarithm approximation from https://arxiv.org/pdf/2206.08957 for grid spacing.
@@ -261,7 +261,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, Z=1.0,
         for j, e_int in enumerate(eint_grid):
             try:
                 T = compute_temperature_from_nH_e(nH, e_int, tables=tables)
-                Edot = cooling_rate(nH, T, Z, redshift=0., tables=tables)
+                Edot = cooling_rate(nH, T, zmet, redshift=0., tables=tables)
                 mu = interpolate_mu(nH, T, tables=tables)
                 cs = compute_sound_speed(rho, T, mu)
                 P = compute_pressure(rho, T, mu)
@@ -410,7 +410,7 @@ def main():
     parser.add_argument('--output', type=str, default='resampled_cooling_tables.h5',
                         help='Output HDF5 file name (default: resampled_cooling_tables.h5)')
 
-    parser.add_argument('--Z', type=float, default=1.0,
+    parser.add_argument('--zmet', type=float, default=1.0,
                         help='Gas Metallicity scaled to Solar (default: 1.0)')
     
     args = parser.parse_args()
@@ -430,7 +430,7 @@ def main():
             args.grackle_file,
             n_rho=args.n_rho,
             n_eint=args.n_eint,
-            Z = args.Z,
+            zmet = args.zmet,
             output_file=args.output
         )
 
