@@ -169,7 +169,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
 
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
-	int use_fc_velocity_for_emf_ = 1; // 0 == use reconstructed velocity from CC state; 1 == use FC velocity from Riemann solver (default)
+	int use_fc_velocity_for_emf_ = 1;		 // 0 == use reconstructed velocity from CC state; 1 == use FC velocity from Riemann solver (default)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -1447,10 +1447,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
 		if (use_fc_velocity_for_emf_ == 1) {
-			MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_fo, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_);
+			MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_fo, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds,
+								    emfReconstructionOrder_);
 		} else {
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_,
-							 emfAveragingType_);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds,
+							 emfReconstructionOrder_, emfAveragingType_);
 		}
 	}
 
@@ -1481,8 +1482,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				MHDSystem<problem_t>::ComputeEMF_UsingFCVel(ec_emf_components_rk_stage1, faceVel, stateOld_fc, fast_mhd_wavespeeds,
 									    emfReconstructionOrder_);
 			} else {
-				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_,
-								  emfAveragingType_);
+				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds,
+								 emfReconstructionOrder_, emfAveragingType_);
 			}
 		}
 
@@ -1635,7 +1636,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 									    emfReconstructionOrder_);
 			} else {
 				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds,
-								  emfReconstructionOrder_, emfAveragingType_);
+								 emfReconstructionOrder_, emfAveragingType_);
 			}
 		}
 
