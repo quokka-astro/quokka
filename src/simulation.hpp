@@ -416,7 +416,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// For our new scheme MHD-scheme, we need 7 ghosts for MHD (4 base + 3 for EMF) or 6 otherwise
 	int nghost_cc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 7 : 6;
-	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
+        int nghost_fc_ = nghost_cc_;
 
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
