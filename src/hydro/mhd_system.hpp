@@ -60,7 +60,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
-	// In this function we distinguish between world (w:3), array (i:2), quandrant (q:4), and component (x:3) index-ing by using prefixes. We will
+	// In this function we distinguish between world (w:3), array (i:2), quandrant (qi:4), and component (x:3) index-ing by using prefixes. We will
 	// use the prefix x- when the w- and i- indexes are the same. We also choose to minimise the storage footprint by only computing and holding
 	// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
 	// significantly reduces the total memory used, which is a much bigger bottleneck.
@@ -350,7 +350,7 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 	for (amrex::MFIter mfi(fcx_mf_cVars[0], amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) {
 		const amrex::Box &box_cc = mfi.validbox();
 
-		// In this function we distinguish between world (w:3), array (i:2), quandrant (q:4), and component (x:3) index-ing by using prefixes. We will
+		// In this function we distinguish between world (w:3), array (i:2), quandrant (qi:4), and component (x:3) index-ing by using prefixes. We will
 		// use the prefix x- when the w- and i- indexes are the same. We also choose to minimise the storage footprint by only computing and holding
 		// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
 		// significantly reduces the total memory used, which is a much bigger bottleneck.
@@ -416,30 +416,45 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 			// |    q_1   \ /   q_3              |               Q_1 = u_{0,T} * b_{1,L} - u_{1,L} * b_{0,T} |
 			// | u,b_{1,L} . u,b_{1,R} -> --------------- where:                                             |
 			// |          / \                    |               Q_2 = u_{0,T} * b_{1,R} - u_{1,R} * b_{0,T} |
-			// |         /   \              Q_0  |  Q_3                                                      |
-			// |        /     \            (-,-) | (+,-)         Q_3 = u_{0,B} * b_{1,R} - u_{1,R} * b_{0,B} |
+			// |         /   \             (-,-) | (+,-)                                                     |
+			// |        /     \             Q_0  |  Q_3          Q_3 = u_{0,B} * b_{1,R} - u_{1,R} * b_{0,B} |
 			// |       /       \       q_1 + q_2 | q_3 + q_0                                                 |
 			// |       u,b_{0,B}                 |                                                           |
 			// |          q_0                                                                                |
 			// |---------------------------------------------------------------------------------------------|
-			// compute the EMF along the cell-edge
-			for (int iQuad = 0; iQuad < 4; ++iQuad) {
-				// extract relevant velocity and magnetic field components
-				const auto &U0_Qi = ec_fabs_Ui_ieside[0][(iQuad == 0 || iQuad == 3) ? 0 : 1].const_array(); // B/T
-				const auto &B0_Qi = ec_fabs_Bi_ieside[0][(iQuad == 0 || iQuad == 3) ? 0 : 1].const_array(); // B/T
-				const auto &U1_Qi = ec_fabs_Ui_ieside[1][(iQuad < 2) ? 0 : 1].const_array();		    // L/R
-				const auto &B1_Qi = ec_fabs_Bi_ieside[1][(iQuad < 2) ? 0 : 1].const_array();		    // L/R
-				// compute electric field in the quadrant about the cell-edge: cross product between velocity and magnetic field in that
-				// define EMF FArrayBox
-				ec_fabs_E_Q[iQuad].resize(box_ec, 1);
-				const auto &E2_Qi = ec_fabs_E_Q[iQuad].array();
-				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double u0 = U0_Qi(i, j, k);
-					const double u1 = U1_Qi(i, j, k);
-					const double b0 = B0_Qi(i, j, k);
-					const double b1 = B1_Qi(i, j, k);
-					double const uxb = u0 * b1 - u1 * b0;
-					E2_Qi(i, j, k) = uxb;
+			// compute the EMF along the cell-edge using a single kernal (all quadrants inside)
+			{
+				// bind read/write Array4 views on the host (required for GPU lambda capture)
+				amrex::Array4<const double> U0s[4];
+				amrex::Array4<const double> U1s[4];
+				amrex::Array4<const double> B0s[4];
+				amrex::Array4<const double> B1s[4];
+				amrex::Array4<double>       E2s[4];
+
+				for (int qi = 0; qi < 4; ++qi) {
+					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1; // B/T selector for dir-0
+					const int idx1 = (qi <  2)           ? 0 : 1; // L/R selector for dir-1
+
+					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
+					ec_fabs_E_Q[qi].resize(box_ec, 1);
+
+					// extract relevant velocity and magnetic field components (host: get Array4 views)
+					U0s[qi] = ec_fabs_Ui_ieside[0][idx0].const_array(); // B/T
+					B0s[qi] = ec_fabs_Bi_ieside[0][idx0].const_array(); // B/T
+					U1s[qi] = ec_fabs_Ui_ieside[1][idx1].const_array(); // L/R
+					B1s[qi] = ec_fabs_Bi_ieside[1][idx1].const_array(); // L/R
+					E2s[qi] = ec_fabs_E_Q[qi].array(); // output EMF view
+				}
+
+				// single kernel over the edge-centered box; compute E in all four quadrants
+				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+					for (int qi = 0; qi < 4; ++qi) {
+						const double u0 = U0s[qi](i, j, k);
+						const double u1 = U1s[qi](i, j, k);
+						const double b0 = B0s[qi](i, j, k);
+						const double b1 = B1s[qi](i, j, k);
+						E2s[qi](i, j, k) = u0 * b1 - u1 * b0; // cross product at the edge
+					}
 				});
 			}
 
