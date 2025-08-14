@@ -1642,7 +1642,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		amrex::Gpu::streamSynchronizeAll();
 		AverageDownTo(lev); // average lev+1 down to lev
 		amrex::Gpu::streamSynchronizeAll();
-		FixupState(lev);    // fix any unphysical states created by reflux or averaging
+		FixupState(lev); // fix any unphysical states created by reflux or averaging
 
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
 	}
