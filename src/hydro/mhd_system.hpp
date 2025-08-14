@@ -429,11 +429,11 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 				amrex::Array4<const double> U1s[4];
 				amrex::Array4<const double> B0s[4];
 				amrex::Array4<const double> B1s[4];
-				amrex::Array4<double>       E2s[4];
+				amrex::Array4<double> E2s[4];
 
 				for (int qi = 0; qi < 4; ++qi) {
 					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1; // B/T selector for dir-0
-					const int idx1 = (qi <  2)           ? 0 : 1; // L/R selector for dir-1
+					const int idx1 = (qi < 2) ? 0 : 1;	       // L/R selector for dir-1
 
 					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
 					ec_fabs_E_Q[qi].resize(box_ec, 1);
@@ -443,7 +443,7 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 					B0s[qi] = ec_fabs_Bi_ieside[0][idx0].const_array(); // B/T
 					U1s[qi] = ec_fabs_Ui_ieside[1][idx1].const_array(); // L/R
 					B1s[qi] = ec_fabs_Bi_ieside[1][idx1].const_array(); // L/R
-					E2s[qi] = ec_fabs_E_Q[qi].array(); // output EMF view
+					E2s[qi] = ec_fabs_E_Q[qi].array();		    // output EMF view
 				}
 
 				// single kernel over the edge-centered box; compute E in all four quadrants
