@@ -1633,15 +1633,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 			// update magnetic field based on coarse-fine EMF mismatch
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				amrex::Gpu::streamSynchronizeAll();
 				// NOLINTNEXTLINE(readability-container-data-pointer)
 				emf_reg_[lev + 1]->Reflux({AMREX_D_DECL(&state_new_fc_[lev][0], &state_new_fc_[lev][1], &state_new_fc_[lev][2])});
-				amrex::Gpu::streamSynchronizeAll();
 			}
 		}
-		amrex::Gpu::streamSynchronizeAll();
 		AverageDownTo(lev); // average lev+1 down to lev
-		amrex::Gpu::streamSynchronizeAll();
 		FixupState(lev); // fix any unphysical states created by reflux or averaging
 
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
