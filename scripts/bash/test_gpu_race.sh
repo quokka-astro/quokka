@@ -6,26 +6,29 @@ set -e
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 -b <binary> -i <input_file> -n <max_timesteps> [-s] [-h]"
+    echo "Usage: $0 -b <binary> -i <input_file> -n <max_timesteps> [-s] [-r] [-h]"
     echo ""
     echo "Options:"
     echo "  -b <binary>         Path to the test binary"
     echo "  -i <input_file>     Path to the input file"
     echo "  -n <max_timesteps>  Maximum number of timesteps to run"
     echo "  -s                  Use single GPU stream (amrex.max_gpu_streams=1)"
+    echo "  -r                  Test reproducibility (run twice with CUDA_LAUNCH_BLOCKING=1)"
     echo "  -h                  Display this help message"
     echo ""
     echo "Example:"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -s"
+    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -r"
     exit 1
 }
 
 # Initialize variables
 SINGLE_STREAM=false
+REPRODUCIBILITY_TEST=false
 
 # Parse command line arguments
-while getopts "b:i:n:sh" opt; do
+while getopts "b:i:n:srh" opt; do
     case ${opt} in
         b)
             BINARY="${OPTARG}"
@@ -38,6 +41,9 @@ while getopts "b:i:n:sh" opt; do
             ;;
         s)
             SINGLE_STREAM=true
+            ;;
+        r)
+            REPRODUCIBILITY_TEST=true
             ;;
         h)
             usage
@@ -122,6 +128,194 @@ cp "${INPUT_FILE}" "${TEMP_DIR}/input.in"
 ADDITIONAL_ARGS=""
 if [ "${SINGLE_STREAM}" = true ]; then
     ADDITIONAL_ARGS="amrex.max_gpu_streams=1"
+fi
+
+# Check if running reproducibility test mode
+if [ "${REPRODUCIBILITY_TEST}" = true ]; then
+    # Run reproducibility test (two runs with CUDA_LAUNCH_BLOCKING=1)
+    echo ""
+    echo "=========================================="
+    echo "REPRODUCIBILITY TEST MODE"
+    echo "Running twice with CUDA_LAUNCH_BLOCKING=1"
+    echo "=========================================="
+    
+    # First run with CUDA_LAUNCH_BLOCKING=1
+    echo ""
+    echo "=========================================="
+    echo "First run with CUDA_LAUNCH_BLOCKING=1..."
+    if [ "${SINGLE_STREAM}" = true ]; then
+        echo "(with amrex.max_gpu_streams=1)"
+    fi
+    echo "=========================================="
+    cd "${TEMP_DIR}"
+    mkdir run1
+    cd run1
+    echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
+    CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.in \
+        max_timesteps=${MAX_TIMESTEPS} \
+        plotfile_interval=${MAX_TIMESTEPS} \
+        checkpoint_interval=-1 \
+        ascent_interval=-1 \
+        projection_interval=-1 \
+        statistics_interval=-1 \
+        slice_interval=-1 \
+        plotfile_prefix=plt_run1 \
+        ${ADDITIONAL_ARGS}
+    echo "First run completed, checking for plotfiles..."
+    
+    # Check if run completed successfully - find the FINAL (highest numbered) plotfile
+    PLOTFILE_RUN1=$(find . -maxdepth 1 -name "plt_run1*" -type d | sort | tail -1)
+    if [ -z "${PLOTFILE_RUN1}" ]; then
+        echo "Error: No plotfile generated for first run"
+        echo "Contents of run directory:"
+        ls -la
+        exit 1
+    fi
+    
+    # Get just the directory name (remove ./ prefix)
+    PLOTFILE_RUN1=$(basename "${PLOTFILE_RUN1}")
+    echo "Found first run plotfile: ${PLOTFILE_RUN1}"
+    
+    # Second run with CUDA_LAUNCH_BLOCKING=1
+    echo ""
+    echo "=========================================="
+    echo "Second run with CUDA_LAUNCH_BLOCKING=1..."
+    if [ "${SINGLE_STREAM}" = true ]; then
+        echo "(with amrex.max_gpu_streams=1)"
+    fi
+    echo "=========================================="
+    cd "${TEMP_DIR}"
+    mkdir run2
+    cd run2
+    echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
+    CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.in \
+        max_timesteps=${MAX_TIMESTEPS} \
+        plotfile_interval=${MAX_TIMESTEPS} \
+        checkpoint_interval=-1 \
+        ascent_interval=-1 \
+        projection_interval=-1 \
+        statistics_interval=-1 \
+        slice_interval=-1 \
+        plotfile_prefix=plt_run2 \
+        ${ADDITIONAL_ARGS}
+    RUN2_EXIT_CODE=$?
+    
+    if [ ${RUN2_EXIT_CODE} -ne 0 ]; then
+        echo ""
+        echo "✗ REPRODUCIBILITY FAILURE!"
+        echo ""
+        echo "The second run crashed (exit code: ${RUN2_EXIT_CODE})"
+        echo "while the first run completed successfully."
+        echo ""
+        echo "This indicates non-deterministic behavior even with CUDA_LAUNCH_BLOCKING=1."
+        echo ""
+        echo "Contents of second run directory:"
+        ls -la
+        echo ""
+        echo "Temporary directory preserved for analysis: ${TEMP_DIR}"
+        echo "- First run results:  ${TEMP_DIR}/run1/"
+        echo "- Second run results: ${TEMP_DIR}/run2/"
+        exit 1
+    fi
+    
+    echo "Second run completed, checking for plotfiles..."
+    
+    # Check if run completed successfully - find the FINAL (highest numbered) plotfile  
+    PLOTFILE_RUN2=$(find . -maxdepth 1 -name "plt_run2*" -type d | sort | tail -1)
+    if [ -z "${PLOTFILE_RUN2}" ]; then
+        echo "Error: No plotfile generated for second run"
+        echo "Contents of run directory:"
+        ls -la
+        exit 1
+    fi
+    
+    # Get just the directory name (remove ./ prefix)
+    PLOTFILE_RUN2=$(basename "${PLOTFILE_RUN2}")
+    echo "Found second run plotfile: ${PLOTFILE_RUN2}"
+    
+    # Compare the plotfiles
+    echo ""
+    echo "=========================================="
+    echo "Comparing plotfiles with fcompare..."
+    echo "=========================================="
+    cd "${TEMP_DIR}"
+    
+    # Get absolute paths
+    PLOT_RUN1="${TEMP_DIR}/run1/${PLOTFILE_RUN1}"
+    PLOT_RUN2="${TEMP_DIR}/run2/${PLOTFILE_RUN2}"
+    
+    # Run fcompare and capture output
+    FCOMPARE_OUTPUT=$(mktemp)
+    echo "Running fcompare command:"
+    echo "${FCOMPARE}" --abs_tol 0.0 --rel_tol 0.0 "${PLOT_RUN1}" "${PLOT_RUN2}"
+    echo ""
+    
+    # Check if fcompare binary exists
+    if [ ! -f "${FCOMPARE}" ]; then
+        echo "Error: fcompare binary not found at ${FCOMPARE}"
+        exit 1
+    fi
+    
+    # Check if plotfile directories exist
+    if [ ! -d "${PLOT_RUN1}" ]; then
+        echo "Error: First run plotfile directory not found: ${PLOT_RUN1}"
+        exit 1
+    fi
+    
+    if [ ! -d "${PLOT_RUN2}" ]; then
+        echo "Error: Second run plotfile directory not found: ${PLOT_RUN2}"
+        exit 1
+    fi
+    
+    echo "Running fcompare..."
+    set +e  # Don't exit on error so we can capture crashed output
+    "${FCOMPARE}" --abs_tol 0.0 --rel_tol 0.0 "${PLOT_RUN1}" "${PLOT_RUN2}" 2>&1 | tee "${FCOMPARE_OUTPUT}"
+    FCOMPARE_EXIT_CODE=${PIPESTATUS[0]}
+    set -e
+    
+    echo ""
+    echo "fcompare completed with exit code: ${FCOMPARE_EXIT_CODE}"
+    
+    # Show captured output if there was any
+    if [ -s "${FCOMPARE_OUTPUT}" ]; then
+        echo ""
+        echo "fcompare output:"
+        echo "----------------"
+        cat "${FCOMPARE_OUTPUT}"
+        echo "----------------"
+        echo ""
+    else
+        echo ""
+        echo "No output captured from fcompare (process may have been killed by signal)"
+        echo ""
+    fi
+    
+    # Check fcompare exit code
+    if [ ${FCOMPARE_EXIT_CODE} -eq 0 ]; then
+        echo "✓ SUCCESS: Runs are bitwise identical - Code is reproducible with CUDA_LAUNCH_BLOCKING=1"
+        exit 0
+    else
+        echo "✗ FAILURE: Runs differ - NON-REPRODUCIBLE BEHAVIOR DETECTED!"
+        echo ""
+        echo "The two runs with CUDA_LAUNCH_BLOCKING=1 produced different results."
+        echo "This indicates non-deterministic behavior that persists even when"
+        echo "kernels are forced to execute synchronously."
+        echo ""
+        echo "Possible causes:"
+        echo "- Use of uninitialized memory"
+        echo "- Non-associative floating-point operations with varying order"
+        echo "- Random number generation without fixed seed"
+        echo "- Time-dependent operations"
+        echo ""
+        echo "Temporary directory preserved for analysis: ${TEMP_DIR}"
+        echo "- First run results:  ${TEMP_DIR}/run1/"
+        echo "- Second run results: ${TEMP_DIR}/run2/"
+        echo ""
+        exit 1
+    fi
+    
+    # Exit after reproducibility test - don't run the race condition test
+    exit 0
 fi
 
 # Run with CUDA_LAUNCH_BLOCKING=1
