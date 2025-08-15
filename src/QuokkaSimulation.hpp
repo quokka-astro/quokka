@@ -1592,6 +1592,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage1, lev, -1.0 * fluxScaleFactor * dt_lev);
 			}
 		}
+		// prevent fluxArrays from going out of scope
+		amrex::Gpu::streamSynchronizeAll();
 	}
 
 	// Stage 2 of RK2-SSP
@@ -1719,6 +1721,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage2, lev, -1.0 * fluxScaleFactor * dt_lev);
 			}
 		}
+		// prevent fluxArrays from going out of scope
+		amrex::Gpu::streamSynchronizeAll();
 	} else { // we are only doing forward Euler
 		amrex::Copy(state_new_cc_[lev], state_inter_cc_, 0, 0, ncompHydro_, 0);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
