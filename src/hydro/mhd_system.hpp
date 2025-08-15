@@ -383,11 +383,11 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 			// indexing: field[2: i-component][2: i-side of edge]
 			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Ui_ieside;
 			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
-			// define quantities
+			// define quantities - allocate with async arena
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				for (int ieside = 0; ieside < 2; ++ieside) {
-					ec_fabs_Ui_ieside[icomp][ieside].resize(box_ec_r, 1);
-					ec_fabs_Bi_ieside[icomp][ieside].resize(box_ec_r, 1);
+					ec_fabs_Ui_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+					ec_fabs_Bi_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 				}
 			}
 
@@ -436,7 +436,7 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 					const int idx1 = (qi < 2) ? 0 : 1;	       // L/R selector for dir-1
 
 					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
-					ec_fabs_E_Q[qi].resize(box_ec, 1);
+					ec_fabs_E_Q[qi] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
 
 					// extract relevant velocity and magnetic field components (host: get Array4 views)
 					U0s[qi] = ec_fabs_Ui_ieside[0][idx0].const_array(); // B/T
