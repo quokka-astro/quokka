@@ -1737,7 +1737,8 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_
 		}
 	}();
 
-	for (amrex::MFIter mfi(state_new_cc_[lev], amrex::MFItInfo().SetNumStreams(1)); mfi.isValid(); ++mfi) {
+	amrex::Gpu::streamSynchronizeAll();
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (fr_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
 			AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
@@ -1756,6 +1757,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_
 					    geom[lev].CellSize(), dt_lev, srccomp, destcomp, numcomp, amrex::RunOn::Gpu);
 		}
 	}
+	amrex::Gpu::streamSynchronizeAll();
 }
 
 template <typename problem_t>
@@ -1765,7 +1767,8 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 	BL_PROFILE("AMRSimulation::incrementEMFRegisters()"); // NOLINT(misc-const-correctness)
 
 #if (AMREX_SPACEDIM == 3)
-	for (amrex::MFIter mfi(state_new_cc_[lev], amrex::MFItInfo().SetNumStreams(1)); mfi.isValid(); ++mfi) {
+	amrex::Gpu::streamSynchronizeAll();
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (emf_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
 			AMREX_ASSERT(emf_as_crse == emf_reg_[lev + 1].get());
@@ -1780,6 +1783,7 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 					     dt_lev);
 		}
 	}
+	amrex::Gpu::streamSynchronizeAll();
 #endif
 }
 
