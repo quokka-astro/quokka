@@ -429,7 +429,7 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 				std::array<amrex::Array4<const double>, 4> U1s;
 				std::array<amrex::Array4<const double>, 4> B0s;
 				std::array<amrex::Array4<const double>, 4> B1s;
-				std::array<amrex::Array4<double>,       4> E2s;
+				std::array<amrex::Array4<double>, 4> E2s;
 
 				for (int qi = 0; qi < 4; ++qi) {
 					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1; // B/T selector for dir-0
