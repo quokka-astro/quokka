@@ -953,7 +953,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	amrex::YAFluxRegister *fr_as_fine = nullptr;
 	amrex::EdgeFluxRegister *emf_as_crse = nullptr;
 	amrex::EdgeFluxRegister *emf_as_fine = nullptr;
-	if (do_flux_register_reset != 0) {
+	if (this->do_flux_register_reset != 0) {
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
 			fr_as_crse->reset();
@@ -1581,11 +1581,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			HydroSystem<problem_t>::SyncDualEnergy(stateNew_cc, stateNew_fc);
 		}
 
-		if (do_flux_register_increment == 1) {
+		if (this->do_flux_register_increment == 1) {
 			// increment flux registers
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
-		if (do_emf_register_increment == 1) {
+		if (this->do_emf_register_increment == 1) {
 			// increment EMF registers
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				// E = -v x B, our emf is v x B, so we need to pass -1.0*dt_lev
@@ -1708,11 +1708,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			HydroSystem<problem_t>::SyncDualEnergy(stateFinal_cc, stateFinal_fc);
 		}
 
-		if (do_flux_register_increment == 1) {
+		if (this->do_flux_register_increment == 1) {
 			// increment flux registers
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
-		if (do_emf_register_increment == 1) {
+		if (this->do_emf_register_increment == 1) {
 			// increment EMF registers
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				// E = -v x B, our emf is v x B, so we need to pass -1.0*dt_lev
