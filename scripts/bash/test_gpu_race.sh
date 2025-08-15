@@ -388,15 +388,30 @@ if [ "${COMPUTE_SANITIZER}" = true ]; then
     echo "COMPUTE-SANITIZER RESULTS"
     echo "=========================================="
     
-    # Check for race conditions
-    if grep -q "RACECHECK" racecheck_output.txt || grep -q "race" racecheck_output.txt; then
-        echo "✗ RACE CONDITIONS DETECTED!"
-        echo ""
-        echo "Race condition details saved in: ${TEMP_DIR}/run_sanitizer/racecheck_output.txt"
-        RACE_FOUND=true
+    # Check for race conditions by looking for actual hazards in the summary
+    if grep -q "RACECHECK SUMMARY:" racecheck_output.txt; then
+        # Extract the number of hazards from the summary line
+        HAZARD_COUNT=$(grep "RACECHECK SUMMARY:" racecheck_output.txt | grep -oE "[0-9]+ hazards" | grep -oE "[0-9]+" || echo "0")
+        if [ "${HAZARD_COUNT}" -gt 0 ]; then
+            echo "✗ RACE CONDITIONS DETECTED: ${HAZARD_COUNT} hazards found"
+            echo ""
+            echo "Race condition details saved in: ${TEMP_DIR}/run_sanitizer/racecheck_output.txt"
+            RACE_FOUND=true
+        else
+            echo "✓ No race conditions detected by racecheck"
+            RACE_FOUND=false
+        fi
     else
-        echo "✓ No race conditions detected by racecheck"
-        RACE_FOUND=false
+        # If no summary line found, check for any error indicators
+        if grep -qE "ERROR|hazard|Hazard" racecheck_output.txt; then
+            echo "✗ RACE CONDITIONS DETECTED!"
+            echo ""
+            echo "Race condition details saved in: ${TEMP_DIR}/run_sanitizer/racecheck_output.txt"
+            RACE_FOUND=true
+        else
+            echo "✓ No race conditions detected by racecheck"
+            RACE_FOUND=false
+        fi
     fi
     
     # Check for memory errors
