@@ -1726,35 +1726,20 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()"); // NOLINT(misc-const-correctness)
 
-	// Determine the number of components based on the problem type
-	const int numcomp = [&]() {
-		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-			// For hydro/radiation problems, use HydroSystem::nvar_
-			return HydroSystem<problem_t>::nvar_;
-		} else {
-			// For advection-only problems, use the total number of components
-			return Physics_Indices<problem_t>::nvarTotal_cc;
-		}
-	}();
-
 	amrex::Gpu::streamSynchronizeAll();
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (fr_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
 			AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-			const int srccomp = 0;
-			const int destcomp = 0;
 			fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi), fluxArrays[1].fabPtr(mfi), fluxArrays[2].fabPtr(mfi))},
-					    geom[lev].CellSize(), dt_lev, srccomp, destcomp, numcomp, amrex::RunOn::Gpu);
+					    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 		}
 
 		if (fr_as_fine != nullptr) {
 			AMREX_ASSERT(lev > 0);
 			AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
-			const int srccomp = 0;
-			const int destcomp = 0;
 			fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi), fluxArrays[1].fabPtr(mfi), fluxArrays[2].fabPtr(mfi))},
-					    geom[lev].CellSize(), dt_lev, srccomp, destcomp, numcomp, amrex::RunOn::Gpu);
+					    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
