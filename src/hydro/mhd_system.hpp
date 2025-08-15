@@ -425,11 +425,11 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 			// compute the EMF along the cell-edge using a single kernel (all quadrants inside)
 			{
 				// bind read/write Array4 views on the host (required for GPU lambda capture)
-				amrex::Array4<const double> U0s[4];
-				amrex::Array4<const double> U1s[4];
-				amrex::Array4<const double> B0s[4];
-				amrex::Array4<const double> B1s[4];
-				amrex::Array4<double> E2s[4];
+				std::array<amrex::Array4<const double>, 4> U0s;
+				std::array<amrex::Array4<const double>, 4> U1s;
+				std::array<amrex::Array4<const double>, 4> B0s;
+				std::array<amrex::Array4<const double>, 4> B1s;
+				std::array<amrex::Array4<double>,       4> E2s;
 
 				for (int qi = 0; qi < 4; ++qi) {
 					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1; // B/T selector for dir-0
