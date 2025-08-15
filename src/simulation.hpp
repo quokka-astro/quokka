@@ -454,14 +454,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int do_reflux = 1;	 // 1 == reflux, 0 == no reflux (DEPRECATED: use individual reflux controls below)
 	int do_subcycle = 1;	 // 1 == subcycle, 0 == no subcyle
 	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
-	
+
 	// Fine-grained reflux control parameters
-	int do_flux_register_init = 1;     // 1 == initialize flux registers, 0 == skip initialization
-	int do_flux_register_reset = 1;    // 1 == reset flux registers each timestep, 0 == skip reset
+	int do_flux_register_init = 1;	    // 1 == initialize flux registers, 0 == skip initialization
+	int do_flux_register_reset = 1;	    // 1 == reset flux registers each timestep, 0 == skip reset
 	int do_flux_register_increment = 1; // 1 == increment flux registers during updates, 0 == skip increment
 	int do_emf_register_increment = 1;  // 1 == increment EMF registers for MHD, 0 == skip EMF increment
-	int do_reflux_apply_cc = 1;        // 1 == apply reflux correction for cell-centered vars, 0 == skip
-	int do_reflux_apply_fc = 1;        // 1 == apply reflux correction for face-centered vars (MHD), 0 == skip
+	int do_reflux_apply_cc = 1;	    // 1 == apply reflux correction for cell-centered vars, 0 == skip
+	int do_reflux_apply_fc = 1;	    // 1 == apply reflux correction for face-centered vars (MHD), 0 == skip
 
 	// performance metrics
 	amrex::Long cellUpdates_ = 0;
@@ -768,7 +768,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default do_reflux = 1 (DEPRECATED - for backward compatibility)
 	pp.query("do_reflux", do_reflux);
-	
+
 	// Fine-grained reflux control parameters
 	// If do_reflux is set to 0, override all individual controls
 	if (do_reflux == 0) {
