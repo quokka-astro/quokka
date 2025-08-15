@@ -1656,7 +1656,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// do post-timestep operations
 		if (do_reflux_apply_cc != 0) {
 			// update lev based on coarse-fine flux mismatch
-			amrex::Gpu::streamSynchronize();
+			amrex::Gpu::streamSynchronizeAll();
 			flux_reg_[lev + 1]->Reflux(state_new_cc_[lev]);
 		}
 
