@@ -25,9 +25,9 @@ amr.blocking_factor = 16    # grid size must be divisible by this
 # Each parameter can be set independently to 0 (disable) or 1 (enable)
 do_flux_register_init = 1      # Initialize flux registers (default: 1)
 do_flux_register_reset = 1     # Reset flux registers each timestep (default: 1)
-do_flux_register_increment = 1 # Increment flux registers during updates (default: 1)
+do_flux_register_increment = 0 # Increment flux registers during updates (default: 1)
 do_emf_register_increment = 1  # Increment EMF registers for MHD (default: 1)
-do_reflux_apply_cc = 0         # Apply reflux correction for cell-centered variables (default: 1)
+do_reflux_apply_cc = 1         # Apply reflux correction for cell-centered variables (default: 1)
 do_reflux_apply_fc = 1         # Apply reflux correction for face-centered variables/MHD (default: 1)
 
 do_subcycle = 1
