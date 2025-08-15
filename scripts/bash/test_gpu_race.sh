@@ -6,7 +6,7 @@ set -e
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 -b <binary> -i <input_file> -n <max_timesteps> [-s] [-r] [-h]"
+    echo "Usage: $0 -b <binary> -i <input_file> -n <max_timesteps> [-s] [-r] [-c] [-h]"
     echo ""
     echo "Options:"
     echo "  -b <binary>         Path to the test binary"
@@ -14,21 +14,24 @@ usage() {
     echo "  -n <max_timesteps>  Maximum number of timesteps to run"
     echo "  -s                  Use single GPU stream (amrex.max_gpu_streams=1)"
     echo "  -r                  Test reproducibility (run twice with CUDA_LAUNCH_BLOCKING=1)"
+    echo "  -c                  Run under compute-sanitizer to detect memory errors and race conditions"
     echo "  -h                  Display this help message"
     echo ""
     echo "Example:"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -s"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -r"
+    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -c"
     exit 1
 }
 
 # Initialize variables
 SINGLE_STREAM=false
 REPRODUCIBILITY_TEST=false
+COMPUTE_SANITIZER=false
 
 # Parse command line arguments
-while getopts "b:i:n:srh" opt; do
+while getopts "b:i:n:srch" opt; do
     case ${opt} in
         b)
             BINARY="${OPTARG}"
@@ -44,6 +47,9 @@ while getopts "b:i:n:srh" opt; do
             ;;
         r)
             REPRODUCIBILITY_TEST=true
+            ;;
+        c)
+            COMPUTE_SANITIZER=true
             ;;
         h)
             usage
@@ -316,6 +322,114 @@ if [ "${REPRODUCIBILITY_TEST}" = true ]; then
     
     # Exit after reproducibility test - don't run the race condition test
     exit 0
+fi
+
+# Check if running compute-sanitizer mode
+if [ "${COMPUTE_SANITIZER}" = true ]; then
+    # Run with compute-sanitizer for race condition and memory error detection
+    echo ""
+    echo "=========================================="
+    echo "COMPUTE-SANITIZER MODE"
+    echo "Running with compute-sanitizer --tool racecheck"
+    echo "=========================================="
+    
+    # Check if compute-sanitizer is available
+    if ! command -v compute-sanitizer &> /dev/null; then
+        echo "Error: compute-sanitizer not found in PATH"
+        echo "Please ensure CUDA toolkit is installed and compute-sanitizer is in your PATH"
+        exit 1
+    fi
+    
+    cd "${TEMP_DIR}"
+    mkdir run_sanitizer
+    cd run_sanitizer
+    
+    echo ""
+    echo "Running race condition check..."
+    echo "Command: compute-sanitizer --tool racecheck ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}"
+    echo ""
+    
+    # Run with racecheck tool
+    set +e  # Don't exit on error so we can capture output
+    compute-sanitizer --tool racecheck "${BINARY}" ../input.in \
+        max_timesteps=${MAX_TIMESTEPS} \
+        plotfile_interval=-1 \
+        checkpoint_interval=-1 \
+        ascent_interval=-1 \
+        projection_interval=-1 \
+        statistics_interval=-1 \
+        slice_interval=-1 \
+        ${ADDITIONAL_ARGS} 2>&1 | tee racecheck_output.txt
+    RACECHECK_EXIT_CODE=${PIPESTATUS[0]}
+    set -e
+    
+    echo ""
+    echo "=========================================="
+    echo "Running memory error check..."
+    echo "Command: compute-sanitizer --tool memcheck ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}"
+    echo ""
+    
+    # Run with memcheck tool
+    set +e  # Don't exit on error so we can capture output
+    compute-sanitizer --tool memcheck "${BINARY}" ../input.in \
+        max_timesteps=${MAX_TIMESTEPS} \
+        plotfile_interval=-1 \
+        checkpoint_interval=-1 \
+        ascent_interval=-1 \
+        projection_interval=-1 \
+        statistics_interval=-1 \
+        slice_interval=-1 \
+        ${ADDITIONAL_ARGS} 2>&1 | tee memcheck_output.txt
+    MEMCHECK_EXIT_CODE=${PIPESTATUS[0]}
+    set -e
+    
+    echo ""
+    echo "=========================================="
+    echo "COMPUTE-SANITIZER RESULTS"
+    echo "=========================================="
+    
+    # Check for race conditions
+    if grep -q "RACECHECK" racecheck_output.txt || grep -q "race" racecheck_output.txt; then
+        echo "✗ RACE CONDITIONS DETECTED!"
+        echo ""
+        echo "Race condition details saved in: ${TEMP_DIR}/run_sanitizer/racecheck_output.txt"
+        RACE_FOUND=true
+    else
+        echo "✓ No race conditions detected by racecheck"
+        RACE_FOUND=false
+    fi
+    
+    # Check for memory errors
+    if grep -q "ERROR SUMMARY" memcheck_output.txt; then
+        ERROR_COUNT=$(grep "ERROR SUMMARY" memcheck_output.txt | grep -oE "[0-9]+ errors" | grep -oE "[0-9]+")
+        if [ "${ERROR_COUNT}" -gt 0 ]; then
+            echo "✗ MEMORY ERRORS DETECTED: ${ERROR_COUNT} errors found"
+            echo ""
+            echo "Memory error details saved in: ${TEMP_DIR}/run_sanitizer/memcheck_output.txt"
+            MEM_ERROR_FOUND=true
+        else
+            echo "✓ No memory errors detected by memcheck"
+            MEM_ERROR_FOUND=false
+        fi
+    else
+        echo "✓ No memory errors detected by memcheck"
+        MEM_ERROR_FOUND=false
+    fi
+    
+    echo ""
+    echo "Compute-sanitizer output saved in:"
+    echo "- Race check: ${TEMP_DIR}/run_sanitizer/racecheck_output.txt"
+    echo "- Memory check: ${TEMP_DIR}/run_sanitizer/memcheck_output.txt"
+    echo ""
+    
+    # Exit with error if any issues found
+    if [ "${RACE_FOUND}" = true ] || [ "${MEM_ERROR_FOUND}" = true ]; then
+        echo "Issues detected by compute-sanitizer. Please review the output files for details."
+        exit 1
+    else
+        echo "No issues detected by compute-sanitizer."
+        exit 0
+    fi
 fi
 
 # Run with CUDA_LAUNCH_BLOCKING=1
