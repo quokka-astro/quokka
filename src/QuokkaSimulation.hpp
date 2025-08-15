@@ -579,7 +579,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			// radiation hydro/mhd, or radiation only
 			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, maxSignal, indexRange);
 			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
-				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
+				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange, 1, amrex::The_Async_Arena());
 				auto const &maxSignalHydro = maxSignalHydroFAB.array();
 				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, stateNew_fc, maxSignalHydro, indexRange);
 				const int maxSubsteps = maxSubsteps_;
