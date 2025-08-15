@@ -1,3 +1,4 @@
+# Example input file demonstrating fine-grained reflux control
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
@@ -6,23 +7,50 @@ geometry.prob_hi     =   0.5  0.5  0.5
 geometry.is_periodic =   1    1    1
 
 # *****************************************************************
-# VERBOSITY
-# *****************************************************************
-amr.v              = 1       # verbosity in Amr
-
-# *****************************************************************
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 64 64 64
 amr.max_level       = 1     # number of levels = max_level + 1
 amr.max_grid_size   = 32    # at least 128 for GPUs
 amr.blocking_factor = 16    # grid size must be divisible by this
-amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
-amr.grid_eff        = 0.9
 
-do_reflux = 0
+# *****************************************************************
+# Fine-grained reflux control (NEW)
+# *****************************************************************
+# Option 1: Use legacy do_reflux to control all reflux operations at once
+# do_reflux = 0  # disables all reflux operations (backward compatible)
+# do_reflux = 1  # enables all reflux operations (default, backward compatible)
+
+# Option 2: Fine-grained control of individual reflux operations
+# Each parameter can be set independently to 0 (disable) or 1 (enable)
+do_flux_register_init = 1      # Initialize flux registers (default: 1)
+do_flux_register_reset = 1     # Reset flux registers each timestep (default: 1)
+do_flux_register_increment = 1 # Increment flux registers during updates (default: 1)
+do_emf_register_increment = 1  # Increment EMF registers for MHD (default: 1)
+do_reflux_apply_cc = 1         # Apply reflux correction for cell-centered variables (default: 1)
+do_reflux_apply_fc = 1         # Apply reflux correction for face-centered variables/MHD (default: 1)
+
+# Example use cases:
+# 1. Debug flux register increments without applying reflux:
+#    do_flux_register_increment = 1
+#    do_reflux_apply_cc = 0
+#    do_reflux_apply_fc = 0
+#
+# 2. Test MHD without EMF reflux application:
+#    do_reflux_apply_fc = 0
+#    (other parameters remain at default)
+#
+# 3. Apply reflux only for cell-centered variables (not MHD):
+#    do_reflux_apply_cc = 1
+#    do_reflux_apply_fc = 0
+#
+# 4. Completely disable reflux (equivalent to do_reflux = 0):
+#    do_flux_register_init = 0
+#    do_flux_register_reset = 0
+#    do_flux_register_increment = 0
+#    do_emf_register_increment = 0
+#    do_reflux_apply_cc = 0
+#    do_reflux_apply_fc = 0
+
 do_subcycle = 1
-do_tracers = 1      # turn on tracer particles
-
-derived_vars = magnetic_divergence
 stop_time = 0.05
