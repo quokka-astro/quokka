@@ -1,6 +1,7 @@
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
+add_subdirectory(TypedMultifabExample)
 
 add_subdirectory(ParticleAccretion)
 add_subdirectory(ParticleSink)
