@@ -1355,13 +1355,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 {
 	const BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
 
-	amrex::Real fluxScaleFactor = NAN;
-	if (integratorOrder_ == 2) {
-		fluxScaleFactor = 0.5;
-	} else if (integratorOrder_ == 1) {
-		fluxScaleFactor = 1.0;
-	}
-
 	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
@@ -1581,17 +1574,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			HydroSystem<problem_t>::SyncDualEnergy(stateNew_cc, stateNew_fc);
 		}
 
-		if (this->do_flux_register_increment == 1) {
-			// increment flux registers
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
-		}
-		if (this->do_emf_register_increment == 1) {
-			// increment EMF registers
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				// E = -v x B, our emf is v x B, so we need to pass -1.0*dt_lev
-				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage1, lev, -1.0 * fluxScaleFactor * dt_lev);
-			}
-		}
 		// prevent fluxArrays from going out of scope
 		amrex::Gpu::streamSynchronizeAll();
 	}
@@ -1710,17 +1692,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			HydroSystem<problem_t>::SyncDualEnergy(stateFinal_cc, stateFinal_fc);
 		}
 
-		if (this->do_flux_register_increment == 1) {
-			// increment flux registers
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
-		}
-		if (this->do_emf_register_increment == 1) {
-			// increment EMF registers
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				// E = -v x B, our emf is v x B, so we need to pass -1.0*dt_lev
-				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_stage2, lev, -1.0 * fluxScaleFactor * dt_lev);
-			}
-		}
 		// prevent fluxArrays from going out of scope
 		amrex::Gpu::streamSynchronizeAll();
 	} else { // we are only doing forward Euler
@@ -1730,13 +1701,27 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				amrex::Copy(state_new_fc_[lev][idim], state_inter_fc_[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, 0);
 			}
 		}
+		amrex::Gpu::streamSynchronizeAll();
 	}
-	amrex::Gpu::streamSynchronizeAll();
+
+	if (this->do_flux_register_increment == 1) {
+		// increment flux registers
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
+	}
+	if (this->do_emf_register_increment == 1) {
+		// increment EMF registers
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			// E = -v x B, our emf is v x B, so we need to pass -1.0*dt_lev
+			incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_ave, lev, -1.0 * dt_lev);
+		}
+	}
 
 	// advect tracer particles using avgFaceVel
 	if (do_tracers != 0) {
 		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
+	// prevent avgFaceVel from going out of scope
+	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
 	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
