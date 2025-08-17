@@ -263,9 +263,6 @@ TypedMultifab supports gradual migration from the traditional index-based MultiF
 template <> 
 void QuokkaSimulation<MyProblem>::setInitialConditions() 
 {
-    // Enable typed multifab mode
-    enableTypedMultifab(true);
-    
     // Continue using existing index-based code
     state_new_cc_[lev][mfi](i, j, k, HydroSystem<MyProblem>::density_index) = 1.0;
     
@@ -285,10 +282,9 @@ void QuokkaSimulation<MyProblem>::setInitialConditions()
 ### Migration Steps
 
 1. **Define Your Type Lists**: Create type lists matching your existing component layout
-2. **Enable Typed Mode**: Call `enableTypedMultifab(true)` in your simulation
-3. **Sync When Needed**: Call `syncTypedMultiFabs<TypeList>(lev)` after modifying MultiFabs
-4. **Gradual Conversion**: Convert kernels one at a time from index-based to type-based access
-5. **Remove Old Code**: Once fully migrated, remove index-based access patterns
+2. **Sync When Needed**: Call `syncTypedMultiFabs<TypeList>(lev)` after modifying MultiFabs
+3. **Gradual Conversion**: Convert kernels one at a time from index-based to type-based access
+4. **Remove Old Code**: Once fully migrated, remove index-based access patterns
 
 ## Best Practices
 

@@ -245,49 +245,45 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Migration support: Create typed views of existing MultiFabs
 	template <typename ConservedTypeList>
 	void syncTypedMultiFabs(int lev) {
-		if (use_typed_multifab_) {
-			// Initialize typed state vectors if not already done
-			if (!typed_state_new_cc_.has_value()) {
-				auto* vec_new = new TypedStateVector<ConservedTypeList>();
-				auto* vec_old = new TypedStateVector<ConservedTypeList>();
-				vec_new->resize(max_level + 1);
-				vec_old->resize(max_level + 1);
-				typed_state_new_cc_ = vec_new;
-				typed_state_old_cc_ = vec_old;
-			}
-			
-			// Get typed vectors
-			auto& typed_new = *static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_new_cc_);
-			auto& typed_old = *static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_old_cc_);
-			
-			// Create zero-copy typed views of the existing MultiFabs
-			if (state_new_cc_[lev].ok()) {
-				typed_new[lev] = quokka::TypedMultifab<ConservedTypeList>(
-					state_new_cc_[lev].boxArray(),
-					state_new_cc_[lev].DistributionMap(),
-					state_new_cc_[lev].nGrow(),
-					state_new_cc_[lev]  // Wrap existing MultiFab
-				);
-			}
-			
-			if (state_old_cc_[lev].ok()) {
-				typed_old[lev] = quokka::TypedMultifab<ConservedTypeList>(
-					state_old_cc_[lev].boxArray(),
-					state_old_cc_[lev].DistributionMap(),
-					state_old_cc_[lev].nGrow(),
-					state_old_cc_[lev]  // Wrap existing MultiFab
-				);
-			}
+		// Initialize typed state vectors if not already done
+		if (!typed_state_new_cc_.has_value()) {
+			auto* vec_new = new TypedStateVector<ConservedTypeList>();
+			auto* vec_old = new TypedStateVector<ConservedTypeList>();
+			vec_new->resize(max_level + 1);
+			vec_old->resize(max_level + 1);
+			typed_state_new_cc_ = vec_new;
+			typed_state_old_cc_ = vec_old;
+		}
+		
+		// Get typed vectors
+		auto& typed_new = *static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_new_cc_);
+		auto& typed_old = *static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_old_cc_);
+		
+		// Create zero-copy typed views of the existing MultiFabs
+		if (state_new_cc_[lev].ok()) {
+			typed_new[lev] = quokka::TypedMultifab<ConservedTypeList>(
+				state_new_cc_[lev].boxArray(),
+				state_new_cc_[lev].DistributionMap(),
+				state_new_cc_[lev].nGrow(),
+				state_new_cc_[lev]  // Wrap existing MultiFab
+			);
+		}
+		
+		if (state_old_cc_[lev].ok()) {
+			typed_old[lev] = quokka::TypedMultifab<ConservedTypeList>(
+				state_old_cc_[lev].boxArray(),
+				state_old_cc_[lev].DistributionMap(),
+				state_old_cc_[lev].nGrow(),
+				state_old_cc_[lev]  // Wrap existing MultiFab
+			);
 		}
 	}
 	
-	// Enable/disable typed multifab mode
-	void enableTypedMultifab(bool enable = true) { use_typed_multifab_ = enable; }
 	
-	// Get typed state (returns nullptr if not enabled)
+	// Get typed state
 	template <typename ConservedTypeList>
 	TypedStateVector<ConservedTypeList>* getTypedStateNew() {
-		if (use_typed_multifab_ && typed_state_new_cc_.has_value()) {
+		if (typed_state_new_cc_.has_value()) {
 			return static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_new_cc_);
 		}
 		return nullptr;
@@ -295,7 +291,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	
 	template <typename ConservedTypeList>
 	TypedStateVector<ConservedTypeList>* getTypedStateOld() {
-		if (use_typed_multifab_ && typed_state_old_cc_.has_value()) {
+		if (typed_state_old_cc_.has_value()) {
 			return static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_old_cc_);
 		}
 		return nullptr;
@@ -467,10 +463,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Typed state vectors - initially empty until migration is enabled
 	// The TypeList template parameter should be defined by the problem
 	std::optional<void*> typed_state_old_cc_; // Will hold TypedStateVector when enabled
-	std::optional<void*> typed_state_new_cc_; // Will hold TypedStateVector when enabled
-	
-	// Flag to enable gradual migration to typed multifabs
-	bool use_typed_multifab_ = false;
+	std::optional<void*> typed_state_new_cc_; // Will hold TypedStateVector
 
 	// flux registers: store fluxes at coarse-fine interface for synchronization
 	// this will be sized "nlevs_max+1"

@@ -196,9 +196,6 @@ template <> void QuokkaSimulation<TypedMultifabExample>::computeAfterTimestep()
 			quokka::TypedMultifab<ConservedTypeList> typed_state(ba, dm, nghost, state_new_cc_[level]);
 
 			// Option 2: Using migration infrastructure
-			// Enable typed multifab mode
-			enableTypedMultifab(true);
-			
 			// Sync typed views with existing MultiFabs
 			syncTypedMultiFabs<ConservedTypeList>(level);
 			
