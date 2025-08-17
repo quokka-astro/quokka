@@ -256,7 +256,7 @@ TypedMultifab has zero runtime overhead compared to manual MultiFab access:
 
 ## Migration from Index-Based Access
 
-TypedMultifab supports gradual migration from the traditional index-based MultiFab access pattern. The AMRSimulation class provides infrastructure for maintaining both interfaces simultaneously:
+TypedMultifab provides a seamless migration path from traditional index-based MultiFab access. The AMRSimulation class automatically provides typed views alongside the existing interface:
 
 ```cpp
 // In your simulation class
@@ -266,23 +266,20 @@ void QuokkaSimulation<MyProblem>::setInitialConditions()
     // Continue using existing index-based code
     state_new_cc_[lev][mfi](i, j, k, HydroSystem<MyProblem>::density_index) = 1.0;
     
-    // Sync typed views (zero-copy operation)
+    // Create typed views (zero-copy operation)
     syncTypedMultiFabs<ConservedTypeList>(lev);
     
-    // Now you can also use typed access
-    auto* typed_states = getTypedStateNew<ConservedTypeList>();
-    if (typed_states) {
-        auto& typed_state = (*typed_states)[lev];
-        auto density_arr = typed_state.array<Conserved::density>(mfi);
-        // Use typed arrays...
-    }
+    // Access typed state vectors
+    auto& typed_state = (*getTypedStateNew<ConservedTypeList>())[lev];
+    auto density_arr = typed_state.array<Conserved::density>(mfi);
+    // Use typed arrays...
 }
 ```
 
 ### Migration Steps
 
 1. **Define Your Type Lists**: Create type lists matching your existing component layout
-2. **Sync When Needed**: Call `syncTypedMultiFabs<TypeList>(lev)` after modifying MultiFabs
+2. **Create Typed Views**: Call `syncTypedMultiFabs<TypeList>(lev)` to create zero-copy typed views
 3. **Gradual Conversion**: Convert kernels one at a time from index-based to type-based access
 4. **Remove Old Code**: Once fully migrated, remove index-based access patterns
 
