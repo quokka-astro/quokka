@@ -182,6 +182,54 @@ amrex::MultiFab &density_mf = typed_mf.getMultiFab<Conserved::density>();
 int density_idx = typed_mf.getComponentIndex<Conserved::density>();
 ```
 
+### Generic Component Processing
+
+For operations that need to process all components identically (e.g., reconstruction, interpolation), use the contiguous component iterator:
+
+```cpp
+// Get groups of contiguous components
+auto component_groups = typed_mf.getContiguousComponentGroups();
+
+// Process each group of contiguous components
+for (const auto &group : component_groups) {
+    // Create an alias MultiFab for this group (zero-copy)
+    amrex::MultiFab alias_mf = TypedMultifab<ConservedTypeList>::makeAliasMultiFab(group);
+    
+    // Information about the group
+    std::cout << "Processing " << group.num_comp << " contiguous components:\n";
+    for (const auto &name : group.component_names) {
+        std::cout << "  - " << name << "\n";
+    }
+    
+    // Apply generic operation to all components in the group
+    for (amrex::MFIter mfi(alias_mf); mfi.isValid(); ++mfi) {
+        const amrex::Box &bx = mfi.validbox();
+        auto const &arr = alias_mf.array(mfi);
+        
+        // Example: Apply reconstruction to all components
+        amrex::ParallelFor(bx, group.num_comp,
+        [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+            // 'n' iterates from 0 to group.num_comp-1
+            // Access component as arr(i,j,k,n)
+            
+            // Example: Simple linear reconstruction
+            Real left = 0.5 * (arr(i-1,j,k,n) + arr(i,j,k,n));
+            Real right = 0.5 * (arr(i,j,k,n) + arr(i+1,j,k,n));
+            // Store results somewhere...
+        });
+    }
+}
+```
+
+This approach is particularly useful for:
+- **Reconstruction algorithms**: Apply the same reconstruction to all conserved variables
+- **Limiters**: Apply slope limiters uniformly across components
+- **Boundary conditions**: Apply the same BC logic to multiple components
+- **Copy operations**: Copy all components between different MultiFabs
+- **Interpolation**: Interpolate all components during AMR operations
+
+The iterator automatically identifies which components are stored contiguously in memory, enabling efficient vectorized operations while maintaining the type-safe interface.
+
 ## Advanced Features
 
 ### Type List Operations

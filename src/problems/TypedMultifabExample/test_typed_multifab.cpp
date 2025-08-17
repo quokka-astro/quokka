@@ -253,6 +253,51 @@ template <> void QuokkaSimulation<TypedMultifabExample>::computeAfterTimestep()
 				// Use metal_arr...
 				amrex::ignore_unused(metal_arr);
 			}
+
+			// Test AMReX interoperability
+			amrex::Print() << "\n=== Testing AMReX interoperability ===\n";
+			amrex::MultiFab &density_mf = typed_state.getMultiFab<Conserved::density>();
+			const int density_comp = typed_state.getComponentIndex<Conserved::density>();
+			amrex::Print() << "Density component index within its MultiFab: " << density_comp << "\n";
+
+			// Test contiguous component iterator
+			amrex::Print() << "\n=== Testing contiguous component iterator ===\n";
+			const auto component_groups = typed_state.getContiguousComponentGroups();
+			amrex::Print() << "Number of contiguous component groups: " << component_groups.size() << "\n";
+			
+			for (size_t g = 0; g < component_groups.size(); ++g) {
+				const auto &group = component_groups[g];
+				amrex::Print() << "\nGroup " << g << ": " << group.num_comp << " contiguous components starting at index " 
+				               << group.start_comp << "\n";
+				amrex::Print() << "Components in this group:\n";
+				for (const auto &name : group.component_names) {
+					amrex::Print() << "  - " << name << "\n";
+				}
+				
+				// Create alias MultiFab for this group
+				amrex::MultiFab alias_mf = quokka::TypedMultifab<ConservedTypeList>::makeAliasMultiFab(group);
+				
+				// Apply a generic operation to all components in the group
+				for (amrex::MFIter mfi(alias_mf); mfi.isValid(); ++mfi) {
+					const amrex::Box &bx = mfi.validbox();
+					auto const &arr = alias_mf.array(mfi);
+					
+					// Example: Apply simple reconstruction-like operation
+					// In real code, this would be reconstruction, limiting, etc.
+					amrex::ParallelFor(bx, group.num_comp,
+					[=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+						// Simple example: compute average with neighbors
+						if (i > 0 && i < bx.hiVect()[0]) {
+							const amrex::Real left = arr(i-1, j, k, n);
+							const amrex::Real center = arr(i, j, k, n);
+							const amrex::Real right = arr(i+1, j, k, n);
+							// In real reconstruction, we'd store this somewhere
+							const amrex::Real avg = (left + center + right) / 3.0;
+							amrex::ignore_unused(avg);
+						}
+					});
+				}
+			}
 		}
 
 		amrex::Print() << "TypedMultifab with gradual migration demonstration complete.\n";

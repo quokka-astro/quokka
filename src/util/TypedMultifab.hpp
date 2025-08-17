@@ -3,6 +3,7 @@
 
 #include <AMReX_Array4.H>
 #include <AMReX_MultiFab.H>
+#include <algorithm>
 #include <memory>
 #include <type_traits>
 #include <typeindex>
@@ -180,6 +181,81 @@ template <class TL> class TypedMultifab
 	{
 		const auto &info = getComponentInfo<VarType>();
 		return info.component_index;
+	}
+
+	// Iterator support for contiguous component groups
+	struct ComponentGroup {
+		amrex::MultiFab *mf = nullptr;
+		int start_comp = 0;
+		int num_comp = 0;
+		std::vector<std::string> component_names;
+	};
+
+	// Get iterator over contiguous component groups
+	// This allows kernels to process all components without knowing their meaning
+	auto getContiguousComponentGroups() const -> std::vector<ComponentGroup>
+	{
+		std::vector<ComponentGroup> groups;
+		
+		// Create a sorted list of components by their MultiFab and component index
+		struct ComponentEntry {
+			amrex::MultiFab *mf;
+			int comp_idx;
+			std::string name;
+		};
+		std::vector<ComponentEntry> sorted_components;
+		
+		TL::IterateTypes([&](auto t) {
+			using VarType = decltype(t);
+			const auto &info = getComponentInfo<VarType>();
+			sorted_components.push_back({info.mf, info.component_index, VarType::name()});
+		});
+		
+		// Sort by MultiFab pointer and then by component index
+		std::sort(sorted_components.begin(), sorted_components.end(), 
+			[](const ComponentEntry &a, const ComponentEntry &b) {
+				if (a.mf != b.mf) return a.mf < b.mf;
+				return a.comp_idx < b.comp_idx;
+			});
+		
+		// Group contiguous components
+		if (!sorted_components.empty()) {
+			ComponentGroup current_group;
+			current_group.mf = sorted_components[0].mf;
+			current_group.start_comp = sorted_components[0].comp_idx;
+			current_group.num_comp = 1;
+			current_group.component_names.push_back(sorted_components[0].name);
+			
+			for (size_t i = 1; i < sorted_components.size(); ++i) {
+				const auto &comp = sorted_components[i];
+				
+				// Check if this component is contiguous with the current group
+				if (comp.mf == current_group.mf && 
+				    comp.comp_idx == current_group.start_comp + current_group.num_comp) {
+					// Extend current group
+					current_group.num_comp++;
+					current_group.component_names.push_back(comp.name);
+				} else {
+					// Start new group
+					groups.push_back(current_group);
+					current_group.mf = comp.mf;
+					current_group.start_comp = comp.comp_idx;
+					current_group.num_comp = 1;
+					current_group.component_names.clear();
+					current_group.component_names.push_back(comp.name);
+				}
+			}
+			// Don't forget the last group
+			groups.push_back(current_group);
+		}
+		
+		return groups;
+	}
+
+	// Helper to create an alias MultiFab for a contiguous component group
+	static auto makeAliasMultiFab(const ComponentGroup &group) -> amrex::MultiFab
+	{
+		return amrex::MultiFab(*group.mf, amrex::make_alias, group.start_comp, group.num_comp);
 	}
 
       private:
