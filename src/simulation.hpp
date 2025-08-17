@@ -153,6 +153,10 @@ template <> struct as_if<std::string, std::optional<std::string>> {
 
 enum class FillPatchType { fillpatch_class, fillpatch_function };
 
+// TypedStateVector definition for typed multifab support
+template <typename TypeList>
+using TypedStateVector = amrex::Vector<quokka::TypedMultifab<TypeList>>;
+
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
@@ -456,9 +460,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
 
 	// Migration support: Typed versions of state MultiFabs
-	// These provide zero-copy typed views of the existing MultiFabs when enabled
-	template <typename TypeList>
-	using TypedStateVector = amrex::Vector<quokka::TypedMultifab<TypeList>>;
+	// These provide zero-copy typed views of the existing MultiFabs
 	
 	// Typed state vectors - initially empty until migration is enabled
 	// The TypeList template parameter should be defined by the problem

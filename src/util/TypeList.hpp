@@ -79,13 +79,13 @@ template <class Head, class... Tail, class TL2> struct TypeListIntersection<Type
 template <class TL1, class TL2> using TypeListIntersection_t = typename TypeListIntersection<TL1, TL2>::type;
 
 // Helper to expand multi-component variables in a TypeList
-template <class MultiVar> struct ExpandMultiVariable {
+template <template<int> class MultiVar> struct ExpandMultiVariable {
 	template <int... Is> static auto expand_impl(std::integer_sequence<int, Is...> /*unused*/) { return TypeList<MultiVar<Is>...>{}; }
 
-	using type = decltype(expand_impl(std::make_integer_sequence<int, MultiVar::num_components>{}));
+	using type = decltype(expand_impl(std::make_integer_sequence<int, MultiVar<>::num_components>{}));
 };
 
-template <class MultiVar> using ExpandMultiVariable_t = typename ExpandMultiVariable<MultiVar>::type;
+template <template<int> class MultiVar> using ExpandMultiVariable_t = typename ExpandMultiVariable<MultiVar>::type;
 
 // Helper to check if a type is a multi-component variable
 template <class T, class = void> struct IsMultiComponent : std::false_type {

@@ -67,7 +67,7 @@ VARIABLE(hydro, scalar_2);
 // Define TypeLists for different variable groups
 // Use TypeListCat to combine hydro variables with expanded scalar components
 using ConservedHydroOnly = quokka::TypeList<Conserved::density, Conserved::momentum_x, Conserved::momentum_y, Conserved::momentum_z, Conserved::energy>;
-using ConservedScalarsExpanded = quokka::ExpandMultiVariable_t<Conserved::scalar_all>;
+using ConservedScalarsExpanded = quokka::ExpandMultiVariable_t<Conserved::scalar>;
 using ConservedTypeList = quokka::TypeListCat_t<ConservedHydroOnly, ConservedScalarsExpanded>;
 
 using PrimitiveTypeList = quokka::TypeList<Primitive::density, Primitive::velocity_x, Primitive::velocity_y, Primitive::velocity_z, Primitive::pressure,
