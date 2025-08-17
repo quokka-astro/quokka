@@ -182,20 +182,51 @@ template <> void QuokkaSimulation<TypedMultifabExample>::setInitialConditionsOnG
 
 template <> void QuokkaSimulation<TypedMultifabExample>::computeAfterTimestep()
 {
-	// Example of using TypedMultifab with MFIter
+	// Demonstrate gradual migration approach
 	if (amrex::ParallelDescriptor::IOProcessor() && timestep_ == 1) {
-		amrex::Print() << "\nDemonstrating TypedMultifab access with MFIter:\n";
+		amrex::Print() << "\nDemonstrating TypedMultifab with gradual migration:\n";
 
 		for (int level = 0; level <= finest_level; ++level) {
 			const auto &ba = grids[level];
 			const auto &dm = dmap[level];
-			const int nghost = 0;
+			const int nghost = nghost_cc_;
 
-			// Create a TypedMultifab wrapping the state
-			quokka::TypedMultifab<ConservedTypeList> typed_state(ba, dm, nghost);
+			// Option 1: Direct usage (without migration infrastructure)
+			// Create typed view of our current state
+			quokka::TypedMultifab<ConservedTypeList> typed_state(ba, dm, nghost, state_new_cc_[level]);
+
+			// Option 2: Using migration infrastructure
+			// Enable typed multifab mode
+			enableTypedMultifab(true);
+			
+			// Sync typed views with existing MultiFabs
+			syncTypedMultiFabs<ConservedTypeList>(level);
+			
+			// Get typed state through migration interface
+			auto* typed_states = getTypedStateNew<ConservedTypeList>();
+			if (typed_states != nullptr && typed_states->size() > level) {
+				auto& typed_state_migration = (*typed_states)[level];
+				
+				// Both approaches provide the same functionality
+				for (amrex::MFIter mfi(state_new_cc_[level]); mfi.isValid(); ++mfi) {
+					const auto &bx = mfi.validbox();
+					
+					// Access through direct typed view
+					auto density_arr1 = typed_state.array<Conserved::density>(mfi);
+					
+					// Access through migration interface
+					auto density_arr2 = typed_state_migration.array<Conserved::density>(mfi);
+					
+					// Both arrays point to the same data (zero-copy)
+					amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						// Verify they're the same
+						AMREX_ALWAYS_ASSERT(density_arr1(i, j, k) == density_arr2(i, j, k));
+					});
+				}
+			}
 
 			// Access components in a type-safe way
-			for (amrex::MFIter mfi(typed_state.getMultiFab<Conserved::density>()); mfi.isValid(); ++mfi) {
+			for (amrex::MFIter mfi(state_new_cc_[level]); mfi.isValid(); ++mfi) {
 				const amrex::Box &bx = mfi.validbox();
 
 				// Get typed arrays for hydro variables
@@ -215,9 +246,19 @@ template <> void QuokkaSimulation<TypedMultifabExample>::computeAfterTimestep()
 				// Example: could perform operations with type safety
 				// No manual indexing needed!
 			}
+			
+			// Demonstrate creating subsets
+			quokka::TypedMultifab<ScalarsOnly> scalars_only(ba, dm, nghost, typed_state);
+			
+			// Access just the scalars
+			for (amrex::MFIter mfi(state_new_cc_[level]); mfi.isValid(); ++mfi) {
+				auto metal_arr = scalars_only.array<ProblemSpecific::metallicity>(mfi);
+				// Use metal_arr...
+				amrex::ignore_unused(metal_arr);
+			}
 		}
 
-		amrex::Print() << "TypedMultifab demonstration complete.\n";
+		amrex::Print() << "TypedMultifab with gradual migration demonstration complete.\n";
 	}
 }
 

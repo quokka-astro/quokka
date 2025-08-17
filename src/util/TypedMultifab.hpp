@@ -80,6 +80,23 @@ template <class TL> class TypedMultifab
 		(extractComponents(std::forward<TypedMFs>(typed_mfs)), ...);
 	}
 
+	// Constructor that wraps a single existing MultiFab (for migration support)
+	TypedMultifab(const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, int nghost, amrex::MultiFab &existing_mf) : ba_(ba), dm_(dm), nghost_(nghost)
+	{
+		// Verify the MultiFab has the right number of components
+		if (existing_mf.nComp() != static_cast<int>(TL::n_types)) {
+			amrex::Abort("TypedMultifab: Existing MultiFab has wrong number of components");
+		}
+		
+		// Map each type to its component index in the existing MultiFab
+		std::size_t idx = 0;
+		TL::IterateTypes([&](auto t) {
+			using VarType = decltype(t);
+			component_map_[std::type_index(typeid(VarType))] = {&existing_mf, static_cast<int>(idx), false};
+			idx++;
+		});
+	}
+
 	// Default constructor
 	TypedMultifab() = default;
 

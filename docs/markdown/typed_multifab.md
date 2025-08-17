@@ -254,6 +254,42 @@ TypedMultifab has zero runtime overhead compared to manual MultiFab access:
 - Array access compiles to direct memory access
 - No virtual functions or runtime polymorphism
 
+## Migration from Index-Based Access
+
+TypedMultifab supports gradual migration from the traditional index-based MultiFab access pattern. The AMRSimulation class provides infrastructure for maintaining both interfaces simultaneously:
+
+```cpp
+// In your simulation class
+template <> 
+void QuokkaSimulation<MyProblem>::setInitialConditions() 
+{
+    // Enable typed multifab mode
+    enableTypedMultifab(true);
+    
+    // Continue using existing index-based code
+    state_new_cc_[lev][mfi](i, j, k, HydroSystem<MyProblem>::density_index) = 1.0;
+    
+    // Sync typed views (zero-copy operation)
+    syncTypedMultiFabs<ConservedTypeList>(lev);
+    
+    // Now you can also use typed access
+    auto* typed_states = getTypedStateNew<ConservedTypeList>();
+    if (typed_states) {
+        auto& typed_state = (*typed_states)[lev];
+        auto density_arr = typed_state.array<Conserved::density>(mfi);
+        // Use typed arrays...
+    }
+}
+```
+
+### Migration Steps
+
+1. **Define Your Type Lists**: Create type lists matching your existing component layout
+2. **Enable Typed Mode**: Call `enableTypedMultifab(true)` in your simulation
+3. **Sync When Needed**: Call `syncTypedMultiFabs<TypeList>(lev)` after modifying MultiFabs
+4. **Gradual Conversion**: Convert kernels one at a time from index-based to type-based access
+5. **Remove Old Code**: Once fully migrated, remove index-based access patterns
+
 ## Best Practices
 
 1. **Define Variables in Headers**: Place variable definitions in header files accessible to all code that needs them
@@ -265,6 +301,8 @@ TypedMultifab has zero runtime overhead compared to manual MultiFab access:
 4. **Leverage Zero-Copy**: Create views and subsets instead of copying data when possible
 
 5. **Document Component Meanings**: Add comments explaining what each component represents, especially for multi-component variables
+
+6. **Gradual Migration**: Use the migration infrastructure to transition incrementally from index-based to type-based access
 
 ## Example: Complete Workflow
 
