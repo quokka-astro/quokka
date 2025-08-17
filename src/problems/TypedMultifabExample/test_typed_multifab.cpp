@@ -34,9 +34,23 @@ VARIABLE(hydro, momentum_x);
 VARIABLE(hydro, momentum_y);
 VARIABLE(hydro, momentum_z);
 VARIABLE(hydro, energy);
-VARIABLE(hydro, scalar_1);
-VARIABLE(hydro, scalar_2);
+
+// Define multi-component scalar variable with 10 components
+constexpr int NumScalars = 10;
+MULTI_VARIABLE(hydro, scalar, NumScalars);
 } // namespace Conserved
+
+// Define problem-specific strong type aliases for scalar components
+namespace ProblemSpecific
+{
+// Create strong type aliases for specific scalar components
+COMPONENT_ALIAS(Conserved::scalar, 0, temperature);
+COMPONENT_ALIAS(Conserved::scalar, 1, metallicity);
+COMPONENT_ALIAS(Conserved::scalar, 2, electron_fraction);
+COMPONENT_ALIAS(Conserved::scalar, 3, tracer_A);
+COMPONENT_ALIAS(Conserved::scalar, 4, tracer_B);
+// Components 5-9 remain unnamed but accessible as scalar<5>, scalar<6>, etc.
+} // namespace ProblemSpecific
 
 // Define primitive variable types
 namespace Primitive
@@ -51,16 +65,16 @@ VARIABLE(hydro, scalar_2);
 } // namespace Primitive
 
 // Define TypeLists for different variable groups
-using ConservedTypeList = quokka::TypeList<Conserved::density, Conserved::momentum_x, Conserved::momentum_y, Conserved::momentum_z, Conserved::energy,
-					   Conserved::scalar_1, Conserved::scalar_2>;
+// Use TypeListCat to combine hydro variables with expanded scalar components
+using ConservedHydroOnly = quokka::TypeList<Conserved::density, Conserved::momentum_x, Conserved::momentum_y, Conserved::momentum_z, Conserved::energy>;
+using ConservedScalarsExpanded = quokka::ExpandMultiVariable_t<Conserved::scalar>;
+using ConservedTypeList = quokka::TypeListCat_t<ConservedHydroOnly, ConservedScalarsExpanded>;
 
 using PrimitiveTypeList = quokka::TypeList<Primitive::density, Primitive::velocity_x, Primitive::velocity_y, Primitive::velocity_z, Primitive::pressure,
 					   Primitive::scalar_1, Primitive::scalar_2>;
 
-// Subset type lists
-using ConservedHydroOnly = quokka::TypeList<Conserved::density, Conserved::momentum_x, Conserved::momentum_y, Conserved::momentum_z, Conserved::energy>;
-
-using ScalarsOnly = quokka::TypeList<Conserved::scalar_1, Conserved::scalar_2>;
+// Subset type lists - demonstrate selecting specific scalar components
+using ScalarsOnly = quokka::TypeList<Conserved::scalar<0>, Conserved::scalar<1>, Conserved::scalar<2>>;
 
 template <> struct HydroSystem_Traits<TypedMultifabExample> {
 	static constexpr bool reconstruct_eint = false;
@@ -69,7 +83,7 @@ template <> struct HydroSystem_Traits<TypedMultifabExample> {
 template <> struct Physics_Traits<TypedMultifabExample> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
-	static constexpr int numMassScalars = 2;
+	static constexpr int numMassScalars = Conserved::NumScalars;
 	static constexpr int numPassiveScalars = numMassScalars;
 	static constexpr int nGroups = 1;
 };
@@ -105,7 +119,7 @@ template <> void QuokkaSimulation<TypedMultifabExample>::setInitialConditionsOnG
 		amrex::Print() << "TypedMultifab Example:\n";
 		amrex::Print() << "======================\n";
 
-		amrex::Print() << "\nConserved variables:\n";
+		amrex::Print() << "\nConserved variables (including " << Conserved::NumScalars << " scalar components):\n";
 		for (const auto &name : conserved_mf.component_names()) {
 			amrex::Print() << "  - " << name << "\n";
 		}
@@ -115,7 +129,7 @@ template <> void QuokkaSimulation<TypedMultifabExample>::setInitialConditionsOnG
 			amrex::Print() << "  - " << name << "\n";
 		}
 
-		amrex::Print() << "\nScalars-only subset:\n";
+		amrex::Print() << "\nScalars-only subset (first 3 scalar components):\n";
 		for (const auto &name : scalar_mf.component_names()) {
 			amrex::Print() << "  - " << name << "\n";
 		}
@@ -124,6 +138,11 @@ template <> void QuokkaSimulation<TypedMultifabExample>::setInitialConditionsOnG
 		for (const auto &name : combined_mf.component_names()) {
 			amrex::Print() << "  - " << name << "\n";
 		}
+
+		amrex::Print() << "\nDemonstrating strong type access:\n";
+		amrex::Print() << "  - Temperature component name: " << ProblemSpecific::temperature::name() << "\n";
+		amrex::Print() << "  - Metallicity component name: " << ProblemSpecific::metallicity::name() << "\n";
+		amrex::Print() << "  - Electron fraction component name: " << ProblemSpecific::electron_fraction::name() << "\n";
 
 		amrex::Print() << "\nVerifying no deep copies occurred:\n";
 		amrex::Print() << "  Hydro density MultiFab ptr: " << &hydro_mf.getMultiFab<Conserved::density>() << "\n";
@@ -153,8 +172,11 @@ template <> void QuokkaSimulation<TypedMultifabExample>::setInitialConditionsOnG
 		state(i, j, k, HydroSystem<TypedMultifabExample>::x2Momentum_index) = rho * vy;
 		state(i, j, k, HydroSystem<TypedMultifabExample>::x3Momentum_index) = rho * vz;
 		state(i, j, k, HydroSystem<TypedMultifabExample>::energy_index) = E_gas;
-		state(i, j, k, HydroSystem<TypedMultifabExample>::scalar0_index) = 0.5;
-		state(i, j, k, HydroSystem<TypedMultifabExample>::scalar0_index + 1) = 0.3;
+		
+		// Initialize all scalar components
+		for (int n = 0; n < Conserved::NumScalars; ++n) {
+			state(i, j, k, HydroSystem<TypedMultifabExample>::scalar0_index + n) = 0.1 * (n + 1);
+		}
 	});
 }
 
@@ -176,10 +198,19 @@ template <> void QuokkaSimulation<TypedMultifabExample>::computeAfterTimestep()
 			for (amrex::MFIter mfi(typed_state.getMultiFab<Conserved::density>()); mfi.isValid(); ++mfi) {
 				const amrex::Box &bx = mfi.validbox();
 
-				// Get typed arrays
+				// Get typed arrays for hydro variables
 				auto density_arr = typed_state.array<Conserved::density>(mfi);
 				auto momx_arr = typed_state.array<Conserved::momentum_x>(mfi);
 				auto energy_arr = typed_state.array<Conserved::energy>(mfi);
+
+				// Access multi-component scalars using strong types
+				auto temp_arr = typed_state.array<ProblemSpecific::temperature>(mfi);
+				auto metal_arr = typed_state.array<ProblemSpecific::metallicity>(mfi);
+				auto efrac_arr = typed_state.array<ProblemSpecific::electron_fraction>(mfi);
+
+				// Access unnamed scalar components directly
+				auto scalar5_arr = typed_state.array<Conserved::scalar<5>>(mfi);
+				auto scalar9_arr = typed_state.array<Conserved::scalar<9>>(mfi);
 
 				// Example: could perform operations with type safety
 				// No manual indexing needed!
