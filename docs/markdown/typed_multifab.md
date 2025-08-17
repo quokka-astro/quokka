@@ -91,28 +91,30 @@ quokka::TypedMultifab<ConservedTypeList> conserved_mf(ba, dm, nghost);
 
 ### Zero-Copy Subset Construction
 
-Create a TypedMultifab that references components from an existing TypedMultifab:
+Create a TypedMultifab that references components from an existing TypedMultifab. The BoxArray and DistributionMapping are automatically inherited from the source:
 
 ```cpp
 // Original TypedMultifab with all conserved variables
 quokka::TypedMultifab<ConservedTypeList> conserved_mf(ba, dm, nghost);
 
 // Create subset with only hydro variables (no copy)
-quokka::TypedMultifab<ConservedHydroOnly> hydro_mf(ba, dm, nghost, conserved_mf);
+// BA/DM are automatically extracted from conserved_mf
+quokka::TypedMultifab<ConservedHydroOnly> hydro_mf(conserved_mf);
 
 // Create subset with only first 3 scalar components (no copy)
 using ScalarsSubset = quokka::TypeList<Conserved::scalar<0>, Conserved::scalar<1>, Conserved::scalar<2>>;
-quokka::TypedMultifab<ScalarsSubset> scalar_mf(ba, dm, nghost, conserved_mf);
+quokka::TypedMultifab<ScalarsSubset> scalar_mf(conserved_mf);
 ```
 
 ### Combining Multiple TypedMultifabs
 
-Combine components from multiple TypedMultifabs without copying:
+Combine components from multiple TypedMultifabs without copying. All source TypedMultifabs must have the same BoxArray and DistributionMapping:
 
 ```cpp
 // Create combined TypedMultifab from multiple sources
+// BA/DM are automatically extracted from the first source (hydro_mf)
 using CombinedList = quokka::TypeListCat_t<ConservedHydroOnly, ScalarsSubset>;
-auto combined_mf = quokka::makeTypedMultifab<CombinedList>(ba, dm, nghost, hydro_mf, scalar_mf);
+auto combined_mf = quokka::makeTypedMultifab<CombinedList>(hydro_mf, scalar_mf);
 ```
 
 ## Accessing Components

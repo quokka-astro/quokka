@@ -74,11 +74,14 @@ template <class TL> class TypedMultifab
 	}
 
 	// Constructor that wraps existing MultiFabs without copying
-	template <class... TypedMFs>
-	TypedMultifab(const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, int nghost, TypedMFs &&...typed_mfs) : ba_(ba), dm_(dm), nghost_(nghost)
+	// Extracts BA/DM from the first input TypedMultifab
+	template <class FirstTM, class... RestTMs>
+	TypedMultifab(FirstTM &&first_tm, RestTMs &&...rest_tms)
+	    : ba_(first_tm.boxArray()), dm_(first_tm.DistributionMap()), nghost_(first_tm.nGrow())
 	{
 		// Process each input TypedMultifab and extract components we need
-		(extractComponents(std::forward<TypedMFs>(typed_mfs)), ...);
+		extractComponents(std::forward<FirstTM>(first_tm));
+		(extractComponents(std::forward<RestTMs>(rest_tms)), ...);
 	}
 
 	// Constructor that wraps a single existing MultiFab (for migration support)
@@ -257,6 +260,11 @@ template <class TL> class TypedMultifab
 	{
 		return amrex::MultiFab(*group.mf, amrex::make_alias, group.start_comp, group.num_comp);
 	}
+	
+	// Getters for BoxArray, DistributionMapping, and nghost
+	const amrex::BoxArray& boxArray() const { return ba_; }
+	const amrex::DistributionMapping& DistributionMap() const { return dm_; }
+	int nGrow() const { return nghost_; }
 
       private:
 	// Helper to extract components from another TypedMultifab
@@ -298,10 +306,11 @@ template <class TL> class TypedMultifab
 };
 
 // Helper function to create a TypedMultifab from multiple sources
+// BA/DM are extracted from the first source
 template <class TargetTL, class... SourceTMs>
-auto makeTypedMultifab(const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, int nghost, SourceTMs &&...sources)
+auto makeTypedMultifab(SourceTMs &&...sources)
 {
-	return TypedMultifab<TargetTL>(ba, dm, nghost, std::forward<SourceTMs>(sources)...);
+	return TypedMultifab<TargetTL>(std::forward<SourceTMs>(sources)...);
 }
 
 } // namespace quokka

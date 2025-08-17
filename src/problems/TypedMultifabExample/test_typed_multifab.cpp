@@ -105,14 +105,16 @@ template <> void QuokkaSimulation<TypedMultifabExample>::setInitialConditionsOnG
 	quokka::TypedMultifab<ConservedTypeList> conserved_mf(ba, dm, nghost);
 
 	// Create a TypedMultifab with only hydro variables (subset)
-	quokka::TypedMultifab<ConservedHydroOnly> hydro_mf(ba, dm, nghost, conserved_mf);
+	// BA/DM are automatically extracted from conserved_mf
+	quokka::TypedMultifab<ConservedHydroOnly> hydro_mf(conserved_mf);
 
 	// Create a TypedMultifab with only scalars (another subset)
-	quokka::TypedMultifab<ScalarsOnly> scalar_mf(ba, dm, nghost, conserved_mf);
+	quokka::TypedMultifab<ScalarsOnly> scalar_mf(conserved_mf);
 
 	// Create a combined TypedMultifab from multiple sources without deep copy
+	// BA/DM are automatically extracted from the first source
 	using CombinedList = quokka::TypeListCat_t<ConservedHydroOnly, ScalarsOnly>;
-	auto combined_mf = quokka::makeTypedMultifab<CombinedList>(ba, dm, nghost, hydro_mf, scalar_mf);
+	auto combined_mf = quokka::makeTypedMultifab<CombinedList>(hydro_mf, scalar_mf);
 
 	// Print component names to demonstrate functionality
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -245,7 +247,8 @@ template <> void QuokkaSimulation<TypedMultifabExample>::computeAfterTimestep()
 			}
 			
 			// Demonstrate creating subsets
-			quokka::TypedMultifab<ScalarsOnly> scalars_only(ba, dm, nghost, typed_state);
+			// BA/DM are automatically extracted from typed_state
+			quokka::TypedMultifab<ScalarsOnly> scalars_only(typed_state);
 			
 			// Access just the scalars
 			for (amrex::MFIter mfi(state_new_cc_[level]); mfi.isValid(); ++mfi) {
