@@ -3,18 +3,15 @@
 
 #include <string>
 
-namespace quokka
-{
-namespace variable_names
+namespace quokka::variable_names
 {
 
 template <bool dummy> struct base_t {
 	// Empty base class for variable types
-	template <class... Ts> explicit base_t(Ts &&...) {}
+	template <class... Ts> explicit base_t(Ts &&... /*unused*/) {}
 };
 
-} // namespace variable_names
-} // namespace quokka
+} // namespace quokka::variable_names
 
 // Macro to define strongly-typed variable names
 #define VARIABLE(ns, varname)                                                                                                                                  \

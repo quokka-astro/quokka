@@ -23,7 +23,7 @@ template <class... Args> struct TypeList {
 
 	template <std::size_t... Idxs> using sublist = TypeList<type<Idxs>...>;
 
-	template <class T, std::size_t I = 0> static constexpr std::size_t GetIdx()
+	template <class T, std::size_t I = 0> static constexpr auto GetIdx() -> std::size_t
 	{
 		static_assert(I < n_types, "Type is not present in TypeList.");
 		if constexpr (std::is_same_v<T, type<I>>) {
@@ -40,7 +40,7 @@ template <class... Args> struct TypeList {
 	{
 		return ContinuousSublistImpl<Start>(std::make_index_sequence<End - Start + 1>());
 	}
-	template <std::size_t Start, std::size_t... Is> static auto ContinuousSublistImpl(std::index_sequence<Is...>) { return sublist<(Start + Is)...>(); }
+	template <std::size_t Start, std::size_t... Is> static auto ContinuousSublistImpl(std::index_sequence<Is...> /*unused*/) { return sublist<(Start + Is)...>(); }
 
       public:
 	template <std::size_t Start, std::size_t End> using continuous_sublist = decltype(ContinuousSublist<Start, End>());
@@ -80,7 +80,7 @@ template <class TL1, class TL2> using TypeListIntersection_t = typename TypeList
 
 // Helper to expand multi-component variables in a TypeList
 template <class MultiVar> struct ExpandMultiVariable {
-	template <int... Is> static auto expand_impl(std::integer_sequence<int, Is...>) { return TypeList<MultiVar<Is>...>{}; }
+	template <int... Is> static auto expand_impl(std::integer_sequence<int, Is...> /*unused*/) { return TypeList<MultiVar<Is>...>{}; }
 
 	using type = decltype(expand_impl(std::make_integer_sequence<int, MultiVar::num_components>{}));
 };

@@ -247,12 +247,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void syncTypedMultiFabs(int lev) {
 		// Initialize typed state vectors if not already done
 		if (!typed_state_new_cc_.has_value()) {
-			auto* vec_new = new TypedStateVector<ConservedTypeList>();
-			auto* vec_old = new TypedStateVector<ConservedTypeList>();
+			auto vec_new = std::make_unique<TypedStateVector<ConservedTypeList>>();
+			auto vec_old = std::make_unique<TypedStateVector<ConservedTypeList>>();
 			vec_new->resize(max_level + 1);
 			vec_old->resize(max_level + 1);
-			typed_state_new_cc_ = vec_new;
-			typed_state_old_cc_ = vec_old;
+			typed_state_new_cc_ = vec_new.release();
+			typed_state_old_cc_ = vec_old.release();
 		}
 		
 		// Get typed vectors

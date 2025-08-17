@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <typeindex>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "util/TypeList.hpp"
@@ -20,9 +21,9 @@ template <class TL> class TypedMultifab
 {
       private:
 	struct ComponentInfo {
-		amrex::MultiFab *mf = nullptr; // Non-owning pointer
-		int component_index = 0;       // Component index within the MultiFab
-		bool owned = false;	       // Whether we own this MultiFab
+		amrex::MultiFab *mf{}; // Non-owning pointer
+		int component_index{};  // Component index within the MultiFab
+		bool owned{};          // Whether we own this MultiFab
 	};
 
 	// Map from type_index to component info
@@ -37,7 +38,7 @@ template <class TL> class TypedMultifab
 	int nghost_ = 0;
 
 	// Helper to get component info for a type
-	template <class VarType> ComponentInfo &getComponentInfo()
+	template <class VarType> auto getComponentInfo() -> ComponentInfo &
 	{
 		auto it = component_map_.find(std::type_index(typeid(VarType)));
 		if (it == component_map_.end()) {
@@ -46,7 +47,7 @@ template <class TL> class TypedMultifab
 		return it->second;
 	}
 
-	template <class VarType> const ComponentInfo &getComponentInfo() const
+	template <class VarType> auto getComponentInfo() const -> const ComponentInfo &
 	{
 		auto it = component_map_.find(std::type_index(typeid(VarType)));
 		if (it == component_map_.end()) {
@@ -57,7 +58,7 @@ template <class TL> class TypedMultifab
 
       public:
 	// Constructor that creates a new MultiFab with all components
-	TypedMultifab(const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, int nghost) : ba_(ba), dm_(dm), nghost_(nghost)
+	TypedMultifab(amrex::BoxArray ba, amrex::DistributionMapping dm, int nghost) : ba_(std::move(ba)), dm_(std::move(dm)), nghost_(nghost)
 	{
 		// Create a single MultiFab to hold all components
 		auto mf = std::make_unique<amrex::MultiFab>(ba, dm, TL::n_types, nghost);
@@ -85,7 +86,7 @@ template <class TL> class TypedMultifab
 	}
 
 	// Constructor that wraps a single existing MultiFab (for migration support)
-	TypedMultifab(const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, int nghost, amrex::MultiFab &existing_mf) : ba_(ba), dm_(dm), nghost_(nghost)
+	TypedMultifab(amrex::BoxArray ba, amrex::DistributionMapping dm, int nghost, amrex::MultiFab &existing_mf) : ba_(std::move(ba)), dm_(std::move(dm)), nghost_(nghost)
 	{
 		// Verify the MultiFab has the right number of components
 		if (existing_mf.nComp() != static_cast<int>(TL::n_types)) {
@@ -108,11 +109,14 @@ template <class TL> class TypedMultifab
 	TypedMultifab(TypedMultifab &&other) = default;
 
 	// Move assignment
-	TypedMultifab &operator=(TypedMultifab &&other) = default;
+	auto operator=(TypedMultifab &&other) -> TypedMultifab & = default;
 
 	// Delete copy operations
 	TypedMultifab(const TypedMultifab &) = delete;
-	TypedMultifab &operator=(const TypedMultifab &) = delete;
+	auto operator=(const TypedMultifab &) -> TypedMultifab & = delete;
+
+	// Destructor
+	~TypedMultifab() = default;
 
 	// Get Array4 for a specific variable type and MFIter
 	template <class VarType> auto array(const amrex::MFIter &mfi) const
@@ -147,10 +151,10 @@ template <class TL> class TypedMultifab
 	}
 
 	// Get component name
-	template <class VarType> static std::string component_name() { return VarType::name(); }
+	template <class VarType> static auto component_name() -> std::string { return VarType::name(); }
 
 	// Get all component names
-	std::vector<std::string> component_names() const
+	auto component_names() const -> std::vector<std::string>
 	{
 		std::vector<std::string> names;
 		TL::IterateTypes([&](auto t) {
@@ -161,26 +165,26 @@ template <class TL> class TypedMultifab
 	}
 
 	// Get number of components
-	static constexpr std::size_t num_components() { return TL::n_types; }
+	static constexpr auto num_components() -> std::size_t { return TL::n_types; }
 
 	// Check if we have a specific component
-	template <class VarType> bool hasComponent() const { return component_map_.find(std::type_index(typeid(VarType))) != component_map_.end(); }
+	template <class VarType> auto hasComponent() const -> bool { return component_map_.find(std::type_index(typeid(VarType))) != component_map_.end(); }
 
 	// Get the underlying MultiFab for a component (for AMReX interop)
-	template <class VarType> amrex::MultiFab &getMultiFab()
+	template <class VarType> auto getMultiFab() -> amrex::MultiFab &
 	{
 		auto &info = getComponentInfo<VarType>();
 		return *info.mf;
 	}
 
-	template <class VarType> const amrex::MultiFab &getMultiFab() const
+	template <class VarType> auto getMultiFab() const -> const amrex::MultiFab &
 	{
 		const auto &info = getComponentInfo<VarType>();
 		return *info.mf;
 	}
 
 	// Get component index within its MultiFab
-	template <class VarType> int getComponentIndex() const
+	template <class VarType> auto getComponentIndex() const -> int
 	{
 		const auto &info = getComponentInfo<VarType>();
 		return info.component_index;
@@ -217,7 +221,7 @@ template <class TL> class TypedMultifab
 		// Sort by MultiFab pointer and then by component index
 		std::sort(sorted_components.begin(), sorted_components.end(), 
 			[](const ComponentEntry &a, const ComponentEntry &b) {
-				if (a.mf != b.mf) return a.mf < b.mf;
+				if (a.mf != b.mf) { return a.mf < b.mf; }
 				return a.comp_idx < b.comp_idx;
 			});
 		

@@ -67,7 +67,7 @@ VARIABLE(hydro, scalar_2);
 // Define TypeLists for different variable groups
 // Use TypeListCat to combine hydro variables with expanded scalar components
 using ConservedHydroOnly = quokka::TypeList<Conserved::density, Conserved::momentum_x, Conserved::momentum_y, Conserved::momentum_z, Conserved::energy>;
-using ConservedScalarsExpanded = quokka::ExpandMultiVariable_t<Conserved::scalar>;
+using ConservedScalarsExpanded = quokka::ExpandMultiVariable_t<Conserved::scalar_all>;
 using ConservedTypeList = quokka::TypeListCat_t<ConservedHydroOnly, ConservedScalarsExpanded>;
 
 using PrimitiveTypeList = quokka::TypeList<Primitive::density, Primitive::velocity_x, Primitive::velocity_y, Primitive::velocity_z, Primitive::pressure,
@@ -75,6 +75,9 @@ using PrimitiveTypeList = quokka::TypeList<Primitive::density, Primitive::veloci
 
 // Subset type lists - demonstrate selecting specific scalar components
 using ScalarsOnly = quokka::TypeList<Conserved::scalar<0>, Conserved::scalar<1>, Conserved::scalar<2>>;
+
+struct TypedMultifabExample {
+}; // dummy problem tag
 
 template <> struct HydroSystem_Traits<TypedMultifabExample> {
 	static constexpr bool reconstruct_eint = false;
@@ -307,9 +310,9 @@ template <> void QuokkaSimulation<TypedMultifabExample>::computeAfterTimestep()
 	}
 }
 
-auto problem_main() -> int
+auto problem_main(int argc, char** argv) -> int
 {
-	amrex::Initialize();
+	amrex::Initialize(argc, argv);
 
 	{
 		const int ncomp_cc = Physics_Indices<TypedMultifabExample>::nvarTotal_cc;
