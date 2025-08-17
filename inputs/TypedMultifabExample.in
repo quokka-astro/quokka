@@ -1,0 +1,45 @@
+# *****************************************************************
+# Test for TypedMultifab functionality
+# *****************************************************************
+
+# Domain size
+geometry.prob_lo = 0.0 0.0 0.0
+geometry.prob_hi = 1.0 1.0 1.0
+
+# Grid resolution
+amr.n_cell = 32 32 32
+
+# Maximum level
+amr.max_level = 0
+
+# Simulation time
+max_timesteps = 2
+stop_time = 0.1
+
+# Hydro parameters
+hydro.reconstruction = plm
+hydro.riemann = HLLC
+hydro.low_level_debugging_output = 0
+hydro.artificial_viscosity = 0.0
+
+# CFL number
+cfl = 0.3
+
+# BC types
+boundary.condition = periodic periodic periodic
+
+# Diagnostics
+amr.plot_files_output = 0
+amr.checkpoint_files_output = 0
+amr.plot_file = typed_multifab_example_plt
+amr.checkpoint_file = typed_multifab_example_chk
+amr.plot_int = 10
+amr.checkpoint_int = -1
+
+# Verbosity
+amr.v = 0
+amr.grid_log = 0
+amr.max_grid_size = 32
+
+# Derive variables
+derived_vars = pressure x_velocity y_velocity z_velocity
