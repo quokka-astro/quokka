@@ -43,7 +43,7 @@ template <typename problem_t> struct Physics_Indices {
 			return Physics_Traits<problem_t>::numPassiveScalars +
 			       Physics_NumVars::numHydroVars *
 				   static_cast<int>(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) +
-			       Physics_NumVars::numRadVars * Physics_Traits<problem_t>::nGroups;
+			       Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups;
 		} else {
 			return Physics_Traits<problem_t>::numPassiveScalars +
 			       Physics_NumVars::numHydroVars *

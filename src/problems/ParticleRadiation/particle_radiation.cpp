@@ -159,10 +159,10 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 
 		// Set radiation variables
 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
-			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::gasEnergy_index) = rho_e;
 		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::gasDensity_index) = rho;
@@ -187,13 +187,13 @@ auto problem_main() -> int
 		}
 		// Check radiation flux components
 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			if ((n == RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 0)) {
+			if ((n == RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 0)) {
 				return true;
 			}
-			if ((n == RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 1)) {
+			if ((n == RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 1)) {
 				return true;
 			}
-			if ((n == RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 2)) {
+			if ((n == RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 2)) {
 				return true;
 			}
 		}
@@ -231,7 +231,8 @@ auto problem_main() -> int
 	// Total radiation energy in the field
 	amrex::Real total_Erad_init = 0.0;
 	for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+		total_Erad_init +=
+		    sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
 	}
 
 	// total gas energy
@@ -248,7 +249,7 @@ auto problem_main() -> int
 	// Total radiation energy in the field
 	amrex::Real total_Erad = 0.0;
 	for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-		total_Erad += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+		total_Erad += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
 	}
 
 	// total gas energy

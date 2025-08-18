@@ -39,3 +39,5 @@ stop_time = 1.0e17
 # *****************************************************************
 cooling_test.reference_solution_file = ../extern/cooling/grackle_reference_solution.csv
 cooling_test.output_csv_file = simulation_output.csv
+
+tiny_profiler.enabled = 1
