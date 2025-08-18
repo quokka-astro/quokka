@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "util/TypeList.hpp"
-#include "util/VariableTypes.hpp"
 
 namespace quokka
 {

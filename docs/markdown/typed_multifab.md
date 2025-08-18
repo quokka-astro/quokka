@@ -16,28 +16,37 @@ TypedMultifab is a type-safe wrapper around AMReX MultiFabs that provides compil
 
 ### Defining Variables
 
-Single-component variables are defined using the `VARIABLE` macro:
+TypedMultifab uses strongly-typed variable definitions. Each variable type must provide a static `name()` method:
 
 ```cpp
-namespace Conserved
-{
-VARIABLE(hydro, density);
-VARIABLE(hydro, momentum_x);
-VARIABLE(hydro, momentum_y);
-VARIABLE(hydro, momentum_z);
-VARIABLE(hydro, energy);
-} // namespace Conserved
-```
+// Single-component variables
+namespace Conserved {
+    struct density {
+        static auto name() -> std::string { return "hydro.density"; }
+    };
+    struct momentum_x {
+        static auto name() -> std::string { return "hydro.momentum_x"; }
+    };
+    // ... and so on
+}
 
-Multi-component variables use the `MULTI_VARIABLE` macro:
-
-```cpp
-namespace Conserved
-{
-// Define a scalar variable with 10 components
-constexpr int NumScalars = 10;
-MULTI_VARIABLE(hydro, scalar, NumScalars);
-} // namespace Conserved
+// Multi-component variables
+namespace Conserved {
+    constexpr int NumScalars = 10;
+    template <int Component = -1>
+    struct scalar {
+        static constexpr int num_components = NumScalars;
+        static constexpr int component_index = Component;
+        static constexpr bool is_multi_component = true;
+        static auto name() -> std::string {
+            if constexpr (Component >= 0) {
+                return "hydro.scalar[" + std::to_string(Component) + "]";
+            } else {
+                return "hydro.scalar";
+            }
+        }
+    };
+}
 ```
 
 ### Creating Strong Type Aliases
@@ -45,13 +54,12 @@ MULTI_VARIABLE(hydro, scalar, NumScalars);
 For multi-component variables, you can create strongly-typed aliases for individual components:
 
 ```cpp
-namespace ProblemSpecific
-{
-// Create meaningful names for specific scalar components
-COMPONENT_ALIAS(Conserved::scalar, 0, temperature);
-COMPONENT_ALIAS(Conserved::scalar, 1, metallicity);
-COMPONENT_ALIAS(Conserved::scalar, 2, electron_fraction);
-} // namespace ProblemSpecific
+namespace ProblemSpecific {
+    // Create meaningful names for specific scalar components
+    using temperature = Conserved::scalar<0>;
+    using metallicity = Conserved::scalar<1>;
+    using electron_fraction = Conserved::scalar<2>;
+}
 ```
 
 ### Defining Type Lists
@@ -351,22 +359,42 @@ void QuokkaSimulation<MyProblem>::setInitialConditions()
 
 ```cpp
 // 1. Define variables
-namespace State
-{
-VARIABLE(hydro, density);
-VARIABLE(hydro, momentum_x);
-VARIABLE(hydro, momentum_y);
-VARIABLE(hydro, momentum_z);
-VARIABLE(hydro, energy);
+namespace State {
+    struct density {
+        static auto name() -> std::string { return "hydro.density"; }
+    };
+    struct momentum_x {
+        static auto name() -> std::string { return "hydro.momentum_x"; }
+    };
+    struct momentum_y {
+        static auto name() -> std::string { return "hydro.momentum_y"; }
+    };
+    struct momentum_z {
+        static auto name() -> std::string { return "hydro.momentum_z"; }
+    };
+    struct energy {
+        static auto name() -> std::string { return "hydro.energy"; }
+    };
 
-constexpr int NumTracers = 5;
-MULTI_VARIABLE(hydro, tracer, NumTracers);
+    constexpr int NumTracers = 5;
+    template <int Component = -1>
+    struct tracer {
+        static constexpr int num_components = NumTracers;
+        static constexpr int component_index = Component;
+        static constexpr bool is_multi_component = true;
+        static auto name() -> std::string {
+            if constexpr (Component >= 0) {
+                return "hydro.tracer[" + std::to_string(Component) + "]";
+            } else {
+                return "hydro.tracer";
+            }
+        }
+    };
 }
 
-namespace MyProblem
-{
-COMPONENT_ALIAS(State::tracer, 0, dye_concentration);
-COMPONENT_ALIAS(State::tracer, 1, metal_fraction);
+namespace MyProblem {
+    using dye_concentration = State::tracer<0>;
+    using metal_fraction = State::tracer<1>;
 }
 
 // 2. Create type lists

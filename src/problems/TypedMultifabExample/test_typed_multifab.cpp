@@ -24,44 +24,78 @@
 #include "main.hpp"
 #include "util/TypeList.hpp"
 #include "util/TypedMultifab.hpp"
-#include "util/VariableTypes.hpp"
 
-// Define conserved variable types
+// Manual type definitions for conserved variables
+// Each type must provide a static name() method
 namespace Conserved
 {
-VARIABLE(hydro, density);
-VARIABLE(hydro, momentum_x);
-VARIABLE(hydro, momentum_y);
-VARIABLE(hydro, momentum_z);
-VARIABLE(hydro, energy);
+struct density {
+    static auto name() -> std::string { return "hydro.density"; }
+};
+struct momentum_x {
+    static auto name() -> std::string { return "hydro.momentum_x"; }
+};
+struct momentum_y {
+    static auto name() -> std::string { return "hydro.momentum_y"; }
+};
+struct momentum_z {
+    static auto name() -> std::string { return "hydro.momentum_z"; }
+};
+struct energy {
+    static auto name() -> std::string { return "hydro.energy"; }
+};
 
-// Define multi-component scalar variable with 10 components
+// Manual multi-component variable definition
 constexpr int NumScalars = 10;
-MULTI_VARIABLE(hydro, scalar, NumScalars);
+template <int Component = -1>
+struct scalar {
+    static constexpr int num_components = NumScalars;
+    static constexpr int component_index = Component;
+    static constexpr bool is_multi_component = true;
+    static auto name() -> std::string {
+        if constexpr (Component >= 0) {
+            return "hydro.scalar[" + std::to_string(Component) + "]";
+        } else {
+            return "hydro.scalar";
+        }
+    }
+};
 } // namespace Conserved
 
-// Define problem-specific strong type aliases for scalar components
+// Manual type aliases for scalar components
 namespace ProblemSpecific
 {
-// Create strong type aliases for specific scalar components
-COMPONENT_ALIAS(Conserved::scalar, 0, temperature);
-COMPONENT_ALIAS(Conserved::scalar, 1, metallicity);
-COMPONENT_ALIAS(Conserved::scalar, 2, electron_fraction);
-COMPONENT_ALIAS(Conserved::scalar, 3, tracer_A);
-COMPONENT_ALIAS(Conserved::scalar, 4, tracer_B);
-// Components 5-9 remain unnamed but accessible as scalar<5>, scalar<6>, etc.
+using temperature = Conserved::scalar<0>;
+using metallicity = Conserved::scalar<1>;
+using electron_fraction = Conserved::scalar<2>;
+using tracer_A = Conserved::scalar<3>;
+using tracer_B = Conserved::scalar<4>;
 } // namespace ProblemSpecific
 
-// Define primitive variable types
+// Manual type definitions for primitive variables
 namespace Primitive
 {
-VARIABLE(hydro, density);
-VARIABLE(hydro, velocity_x);
-VARIABLE(hydro, velocity_y);
-VARIABLE(hydro, velocity_z);
-VARIABLE(hydro, pressure);
-VARIABLE(hydro, scalar_1);
-VARIABLE(hydro, scalar_2);
+struct density {
+    static auto name() -> std::string { return "hydro.density"; }
+};
+struct velocity_x {
+    static auto name() -> std::string { return "hydro.velocity_x"; }
+};
+struct velocity_y {
+    static auto name() -> std::string { return "hydro.velocity_y"; }
+};
+struct velocity_z {
+    static auto name() -> std::string { return "hydro.velocity_z"; }
+};
+struct pressure {
+    static auto name() -> std::string { return "hydro.pressure"; }
+};
+struct scalar_1 {
+    static auto name() -> std::string { return "hydro.scalar_1"; }
+};
+struct scalar_2 {
+    static auto name() -> std::string { return "hydro.scalar_2"; }
+};
 } // namespace Primitive
 
 // Define TypeLists for different variable groups
