@@ -433,7 +433,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
 				// indexing: field[4: quadrant around edge]
 				const auto &E2_array = ec_mf_emf_components[iedge][mfi].array();
-	
+				const auto cc_E2_array = cc_a4_EMF_array[iedge];
+		
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					ec_fabs_Bi_ieside[icomp][0].resize(box_ec_r, 1);
 					ec_fabs_Bi_ieside[icomp][1].resize(box_ec_r, 1);
@@ -474,13 +475,15 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 
 				//LLF variant
-				amrex::ParallelFor(box_ec,[=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::ParallelFor(box_ec,[=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const double S0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
 					const double S0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
 					const double S1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
 					const double S1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
 
-
+					if (i == 0 && j > 7 && k ==0) {
+						amrex::Print() << "S0_m: " << S0_m << ", S0_p: " << S0_p << ", S1_m: " << S1_m << ", S1_p: " << S1_p << "\n";
+					}
 
 					const double S = std::max({std::abs(S0_p),std::abs(S0_m),std::abs(S1_p), std::abs(S1_m)}); //maximum wavespeed
 					// 		 | 
@@ -488,11 +491,11 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					// ------+------
 					//   LD  |  RD
 					// 		 | 
-
-					const auto E2_LD = E2_array(i, j, k);
-					const auto E2_LU = E2_array(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2]);
-					const auto E2_RD = E2_array(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
-					const auto E2_RU = E2_array(i + delta_w_both[0], j + delta_w_both[1], k + delta_w_both[2]);
+					
+					const auto E2_LD = cc_E2_array(i, j, k);
+					const auto E2_LU = cc_E2_array(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2]); 
+					const auto E2_RD = cc_E2_array(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
+					const auto E2_RU = cc_E2_array(i + delta_w_both[0], j + delta_w_both[1], k + delta_w_both[2]);
 
 					const auto B0_U = B0_p(i,j,k);
 					const auto B0_D = B0_m(i,j,k);
@@ -541,20 +544,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					}
 				
 				});
-			
-		//wavespeeds from Riemanns solver needed for S (SL, SR, SU, and SD) with fcx_mf_fspds
-		//create FArrayBox for storing the edge-centered electric field, need to reconstruct to edges
-		//make BxR, B0_D, ByU, ByD, E2_LU, E2_LD, E2_RU, E2_RD
-		//and Ez_star_D, Ez_star_U, Ez_star_L, Ez_star_R
-		//and Ez_dstar
-		// SL =
-		// auto S = std::max(std::abs(SR), std::abs(SL),std::abs(SU), std::abs(SD)); //wavespeeds for the four directions
-		// //permute over each direction (up, down, right, left)::
-		// //then if - else statements for sorting based on wavespeeds
-		// // indexing: field[3: x-component]
-			
-			
-			
 			}//end of iedge loop	
 		}
 	}	
