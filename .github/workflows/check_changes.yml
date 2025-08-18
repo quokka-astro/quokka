@@ -35,7 +35,7 @@ jobs:
       has_workflow_changes: ${{ steps.set-output.outputs.has_workflow_changes }}
       has_specific_workflow_changes: ${{ steps.set-output.outputs.has_specific_workflow_changes }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v3
         id: changes
         with:
