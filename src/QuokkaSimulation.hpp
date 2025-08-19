@@ -161,7 +161,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
 	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
 	int emfReconstructionOrder_ = 5;	// 1 == donor cell; 2 == PLM; 3 == PPM; 5 == xPPM (extrema-preserving, default)
-	bool emfBalsara_ = false;	// use Balsara switch to compute EMF (default == false)
+	bool emfBalsara_ = false;		// use Balsara switch to compute EMF (default == false)
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
@@ -484,7 +484,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const hpp("mhd");
 		hpp.query("emf_averaging_method", emfAveragingType_);
 		hpp.query("emf_reconstruction_order", emfReconstructionOrder_);
-		hpp.query("use_Balsara_compute_emf",emfBalsara_);
+		hpp.query("use_Balsara_compute_emf", emfBalsara_);
 	}
 
 	// set cooling runtime parameters
@@ -1446,13 +1446,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if (emfBalsara_) {
 			// compute EMF components using Balsara's method
 			MHDSystem<problem_t>::ComputeEMF_Balsara(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds,
-								emfReconstructionOrder_);
+								 emfReconstructionOrder_);
 		} else {
 			// compute EMF components using standard method
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_,
-						 emfAveragingType_);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds,
+							 emfReconstructionOrder_, emfAveragingType_);
 		}
-		
 	}
 
 	// Stage 1 of RK2-SSP
@@ -1481,11 +1480,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			if (emfBalsara_) {
 				// compute EMF components using Balsara's method
 				MHDSystem<problem_t>::ComputeEMF_Balsara(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds,
-									emfReconstructionOrder_);
+									 emfReconstructionOrder_);
 			} else {
 				// compute EMF components using standard method
-				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_,
-							emfAveragingType_);
+				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds,
+								 emfReconstructionOrder_, emfAveragingType_);
 			}
 		}
 
@@ -1636,11 +1635,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			if (emfBalsara_) {
 				// compute EMF components using Balsara's method
 				MHDSystem<problem_t>::ComputeEMF_Balsara(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds,
-									emfReconstructionOrder_);
+									 emfReconstructionOrder_);
 			} else {
 				// compute EMF components using standard method
-				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_,
-							emfAveragingType_);
+				MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds,
+								 emfReconstructionOrder_, emfAveragingType_);
 			}
 		}
 
