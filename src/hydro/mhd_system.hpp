@@ -498,7 +498,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 					// extrapolate cell-centered velocity components to the cell-face
 					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_EMF[iedge].array(), fc_fabs_EMF_ifside[0].array(),
-										fc_fabs_EMF_ifside[1].array(), box_cc_EMF, reconstructionOrder);
+									    fc_fabs_EMF_ifside[1].array(), box_cc_EMF, reconstructionOrder);
 
 					// extrapolate face-centered velocity components to the cell-edge
 					for (int iface = 0; iface < 2; ++iface) {
