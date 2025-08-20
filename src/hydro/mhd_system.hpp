@@ -425,7 +425,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const auto cc_E2_array = cc_a4_EMF_array[iedge];
 				std::array<amrex::FArrayBox, 2> ec_fabs_EMF_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
 										      amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
-				std::array<amrex::FArrayBox, 4> ec_fabs_EMFi_q;
+				std::array<amrex::FArrayBox, 4> ec_fabs_EMF_q;
 
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
@@ -433,8 +433,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				}
 
 				for (int iquad = 0; iquad < 4; ++iquad) {
-					ec_fabs_EMFi_q[iquad] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-					ec_fabs_EMFi_q[iquad].setVal<amrex::RunOn::Device>(0.0);
+					ec_fabs_EMF_q[iquad] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+					ec_fabs_EMF_q[iquad].setVal<amrex::RunOn::Device>(0.0);
 				}
 
 				// extrapolate the two required face-centered magnetic field components to the cell-edge
@@ -493,7 +493,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 					// create temporary FArrayBox for storing the face-centered EMF reconstructed from the cell-center
 					// indexing: field[2: i-side of face]
-					const int wcomp = extrap_dirs[icomp];
 					std::array<amrex::FArrayBox, 2> fc_fabs_EMF_ifside = {amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena()),
 											      amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
 
@@ -529,17 +528,20 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 							iquad1 = (iface == 0) ? 3 : 2;
 						}
 
-						ec_fabs_EMFi_q[iquad0].plus<amrex::RunOn::Device>(ec_fabs_EMF_ieside[0], 0, 0, 1);
-						ec_fabs_EMFi_q[iquad1].plus<amrex::RunOn::Device>(ec_fabs_EMF_ieside[1], 0, 0, 1);
+						ec_fabs_EMF_q[iquad0].plus<amrex::RunOn::Device>(ec_fabs_EMF_ieside[0], 0, 0, 1);
+						ec_fabs_EMF_q[iquad1].plus<amrex::RunOn::Device>(ec_fabs_EMF_ieside[1], 0, 0, 1);
 					}
 				}
 
 				// finish averaging the two different ways for extrapolating velocity fields: cc->fc->ec
 
 				for (int iquad = 0; iquad < 4; ++iquad) {
-					ec_fabs_EMFi_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
+					ec_fabs_EMF_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 				}
-
+				const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
+				const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
+				const auto &E2_q2 = ec_fabs_EMF_q[2].const_array();
+				const auto &E2_q3 = ec_fabs_EMF_q[3].const_array();
 				// use the new ec-EMF for the next part of the calculation
 
 				// LLF variant
@@ -556,10 +558,19 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					//   LD  |  RD
 					// 		 |
 
-					const auto E2_LD = cc_E2_array(i - delta_w_both[0], j - delta_w_both[1], k - delta_w_both[2]);
-					const auto E2_LU = cc_E2_array(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
-					const auto E2_RD = cc_E2_array(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
-					const auto E2_RU = cc_E2_array(i, j, k);
+					// const auto E2_LD = cc_E2_array(i - delta_w_both[0], j - delta_w_both[1], k - delta_w_both[2]);
+					// const auto E2_LU = cc_E2_array(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+					// const auto E2_RD = cc_E2_array(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
+					// const auto E2_RU = cc_E2_array(i, j, k);
+
+					const auto E2_LD = E2_q0(i, j, k);
+					const auto E2_LU = E2_q1(i, j, k);
+					const auto E2_RD = E2_q2(i, j, k);
+					const auto E2_RU = E2_q3(i, j, k);
+
+
+
+
 
 					const auto B0_U = B0_m(i, j, k);
 					const auto B0_D = B0_p(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
