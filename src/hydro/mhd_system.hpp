@@ -540,9 +540,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					}
 				}
 
-
-
-
+				//use the new ec-EMF for the next part of the calculation
 
 				// LLF variant
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
