@@ -568,10 +568,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					const auto E2_RD = E2_q2(i, j, k);
 					const auto E2_RU = E2_q3(i, j, k);
 
-
-
-
-
 					const auto B0_U = B0_m(i, j, k);
 					const auto B0_D = B0_p(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
 					const auto B1_R = B1_m(i, j, k);
