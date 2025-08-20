@@ -424,7 +424,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const auto &E2_array = ec_mf_emf_components[iedge][mfi].array();
 				const auto cc_E2_array = cc_a4_EMF_array[iedge];
 				std::array<amrex::FArrayBox, 2> ec_fabs_EMF_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
-									    amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
+										      amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
 				std::array<std::array<amrex::FArrayBox, 4>, 2> ec_fabs_EMFi_q;
 
 				for (int icomp = 0; icomp < 2; ++icomp) {
@@ -481,10 +481,10 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(extrap_dir2face);
 					const amrex::IntVect vec_fc2ec = amrex::IntVect::TheDimensionVector(extrap_dir2edge);
 					const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
-					// we expand the domain of cc-data, so that when we reconstruct cc->fc (we include enough ghost cells in the fc->ec dimension),
-					// we get as an output (from reconstructing fc->ec) data only in the valid domain
-					const amrex::Box box_cc_EMF =
-						amrex::grow(box_cc, (nghost_cc - 1) * vec_fc2ec); // note, the reconstruct function will uniformly grow the bounds by 1
+					// we expand the domain of cc-data, so that when we reconstruct cc->fc (we include enough ghost cells in the fc->ec
+					// dimension), we get as an output (from reconstructing fc->ec) data only in the valid domain
+					const amrex::Box box_cc_EMF = amrex::grow(
+					    box_cc, (nghost_cc - 1) * vec_fc2ec); // note, the reconstruct function will uniformly grow the bounds by 1
 					const amrex::Box box_fc_EMF = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + 1);
 
 					// extrapolate both required cell-centered EMF to the cell-edge
@@ -492,12 +492,13 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 						// create temporary FArrayBox for storing the face-centered EMF reconstructed from the cell-center
 						// indexing: field[2: i-side of face]
 						const int wcomp = extrap_dirs[icomp];
-						std::array<amrex::FArrayBox, 2> fc_fabs_EMF_ifside = {amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena()),
-													amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
+						std::array<amrex::FArrayBox, 2> fc_fabs_EMF_ifside = {
+						    amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena()),
+						    amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
 
 						// extrapolate cell-centered velocity components to the cell-face
 						MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_EMF[wcomp].array(), fc_fabs_EMF_ifside[0].array(),
-											fc_fabs_EMF_ifside[1].array(), box_cc_EMF, reconstructionOrder);
+										    fc_fabs_EMF_ifside[1].array(), box_cc_EMF, reconstructionOrder);
 
 						// extrapolate face-centered velocity components to the cell-edge
 						for (int iface = 0; iface < 2; ++iface) {
@@ -506,8 +507,9 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 							ec_fabs_EMF_ieside[1].setVal<amrex::RunOn::Device>(0.0);
 
 							// extrapolate face-centered velocity component to the cell-edge
-							MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_EMF_ifside[iface].array(), ec_fabs_EMF_ieside[0].array(),
-												ec_fabs_EMF_ieside[1].array(), box_fc, reconstructionOrder);
+							MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_EMF_ifside[iface].array(),
+											    ec_fabs_EMF_ieside[0].array(), ec_fabs_EMF_ieside[1].array(),
+											    box_fc, reconstructionOrder);
 
 							// figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
 							int iquad0 = -1;
@@ -540,7 +542,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					}
 				}
 
-				//use the new ec-EMF for the next part of the calculation
+				// use the new ec-EMF for the next part of the calculation
 
 				// LLF variant
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
