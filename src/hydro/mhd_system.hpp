@@ -425,16 +425,19 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const auto cc_E2_array = cc_a4_EMF_array[iedge];
 				std::array<amrex::FArrayBox, 2> ec_fabs_EMF_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
 									    amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
-				std::array<std::array<amrex::FArrayBox, 4>, 2> ec_fabs_EMFi_q;
+				std::array<amrex::FArrayBox, 4> ec_fabs_EMFi_q;
 
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 					ec_fabs_Bi_ieside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-					for (int iquad = 0; iquad < 4; ++iquad) {
-						ec_fabs_EMFi_q[icomp][iquad] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-						ec_fabs_EMFi_q[icomp][iquad].setVal<amrex::RunOn::Device>(0.0);
-					}
+
 				}
+
+				for (int iquad = 0; iquad < 4; ++iquad) {
+					ec_fabs_EMFi_q[iquad] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+					ec_fabs_EMFi_q[iquad].setVal<amrex::RunOn::Device>(0.0);
+				}
+
 				// extrapolate the two required face-centered magnetic field components to the cell-edge
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					const int extrap_dir2edge = extrap_dirs[(icomp + 1) % 2];
@@ -488,57 +491,57 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					const amrex::Box box_fc_EMF = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + 1);
 
 					// extrapolate both required cell-centered EMF to the cell-edge
-					for (int icomp = 0; icomp < 2; ++icomp) {
+					
 						// create temporary FArrayBox for storing the face-centered EMF reconstructed from the cell-center
 						// indexing: field[2: i-side of face]
-						const int wcomp = extrap_dirs[icomp];
-						std::array<amrex::FArrayBox, 2> fc_fabs_EMF_ifside = {amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena()),
-													amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
+					
+					std::array<amrex::FArrayBox, 2> fc_fabs_EMF_ifside = {amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena()),
+												amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
 
-						// extrapolate cell-centered velocity components to the cell-face
-						MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_EMF[wcomp].array(), fc_fabs_EMF_ifside[0].array(),
-											fc_fabs_EMF_ifside[1].array(), box_cc_EMF, reconstructionOrder);
+					// extrapolate cell-centered velocity components to the cell-face
+					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_EMF[iedge].array(), fc_fabs_EMF_ifside[0].array(),
+										fc_fabs_EMF_ifside[1].array(), box_cc_EMF, reconstructionOrder);
 
-						// extrapolate face-centered velocity components to the cell-edge
-						for (int iface = 0; iface < 2; ++iface) {
-							// reset values in temporary FArrayBox
-							ec_fabs_EMF_ieside[0].setVal<amrex::RunOn::Device>(0.0);
-							ec_fabs_EMF_ieside[1].setVal<amrex::RunOn::Device>(0.0);
+					// extrapolate face-centered velocity components to the cell-edge
+					for (int iface = 0; iface < 2; ++iface) {
+						// reset values in temporary FArrayBox
+						ec_fabs_EMF_ieside[0].setVal<amrex::RunOn::Device>(0.0);
+						ec_fabs_EMF_ieside[1].setVal<amrex::RunOn::Device>(0.0);
 
-							// extrapolate face-centered velocity component to the cell-edge
-							MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_EMF_ifside[iface].array(), ec_fabs_EMF_ieside[0].array(),
-												ec_fabs_EMF_ieside[1].array(), box_fc, reconstructionOrder);
+						// extrapolate face-centered velocity component to the cell-edge
+						MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_EMF_ifside[iface].array(), ec_fabs_EMF_ieside[0].array(),
+											ec_fabs_EMF_ieside[1].array(), box_fc, reconstructionOrder);
 
-							// figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
-							int iquad0 = -1;
-							int iquad1 = -1;
+						// figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
+						int iquad0 = -1;
+						int iquad1 = -1;
 
-							// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-							// (-,+) | (+,+)
-							//   1   |   2
-							// ------+------
-							//   0   |   3
-							// (-,-) | (+,-)
-							if (iperm == 0) {
-								iquad0 = (iface == 0) ? 0 : 3;
-								iquad1 = (iface == 0) ? 1 : 2;
-							} else {
-								iquad0 = (iface == 0) ? 0 : 1;
-								iquad1 = (iface == 0) ? 3 : 2;
-							}
-
-							ec_fabs_EMFi_q[icomp][iquad0].plus<amrex::RunOn::Device>(ec_fabs_EMF_ieside[0], 0, 0, 1);
-							ec_fabs_EMFi_q[icomp][iquad1].plus<amrex::RunOn::Device>(ec_fabs_EMF_ieside[1], 0, 0, 1);
+						// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
+						// (-,+) | (+,+)
+						//   1   |   2
+						// ------+------
+						//   0   |   3
+						// (-,-) | (+,-)
+						if (iperm == 0) {
+							iquad0 = (iface == 0) ? 0 : 3;
+							iquad1 = (iface == 0) ? 1 : 2;
+						} else {
+							iquad0 = (iface == 0) ? 0 : 1;
+							iquad1 = (iface == 0) ? 3 : 2;
 						}
+
+						ec_fabs_EMFi_q[iquad0].plus<amrex::RunOn::Device>(ec_fabs_EMF_ieside[0], 0, 0, 1);
+						ec_fabs_EMFi_q[iquad1].plus<amrex::RunOn::Device>(ec_fabs_EMF_ieside[1], 0, 0, 1);
 					}
+					
 				}
 
 				// finish averaging the two different ways for extrapolating velocity fields: cc->fc->ec
-				for (int icomp = 0; icomp < 2; ++icomp) {
-					for (int iquad = 0; iquad < 4; ++iquad) {
-						ec_fabs_EMFi_q[icomp][iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
-					}
+
+				for (int iquad = 0; iquad < 4; ++iquad) {
+					ec_fabs_EMFi_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 				}
+
 
 				//use the new ec-EMF for the next part of the calculation
 
