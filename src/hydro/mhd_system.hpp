@@ -425,7 +425,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const auto cc_E2_array = cc_a4_EMF_array[iedge];
 				std::array<amrex::FArrayBox, 2> ec_fabs_EMF_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
 										      amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
-				std::array<std::array<amrex::FArrayBox, 4>, 2> ec_fabs_EMFi_q;
+				std::array<amrex::FArrayBox, 4> ec_fabs_EMFi_q;
 
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
@@ -494,14 +494,14 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					
 						// create temporary FArrayBox for storing the face-centered EMF reconstructed from the cell-center
 						// indexing: field[2: i-side of face]
-						const int wcomp = extrap_dirs[icomp];
-						std::array<amrex::FArrayBox, 2> fc_fabs_EMF_ifside = {
-						    amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena()),
-						    amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
+	
+					std::array<amrex::FArrayBox, 2> fc_fabs_EMF_ifside = {
+						amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena()),
+						amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
 
-						// extrapolate cell-centered velocity components to the cell-face
-						MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_EMF[wcomp].array(), fc_fabs_EMF_ifside[0].array(),
-										    fc_fabs_EMF_ifside[1].array(), box_cc_EMF, reconstructionOrder);
+					// extrapolate cell-centered velocity components to the cell-face
+					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_EMF[iedge].array(), fc_fabs_EMF_ifside[0].array(),
+										fc_fabs_EMF_ifside[1].array(), box_cc_EMF, reconstructionOrder);
 
 					// extrapolate face-centered velocity components to the cell-edge
 					for (int iface = 0; iface < 2; ++iface) {
