@@ -412,6 +412,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 			// Balsara method first reconstruct B within the cell face, e.g., Bx in x-face to get y, z directions, same as F&S for B to edge
 
 			for (int iedge = 0; iedge < 3; ++iedge) {
+
 				std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
 				std::array<int, 2> extrap_dirs = {(iedge + 1) % 3, (iedge + 2) % 3};
 				std::array<amrex::IntVect, 2> vecs_cc2ec = {amrex::IntVect::TheDimensionVector(extrap_dirs[0]),
@@ -461,10 +462,10 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 				// LLF variant
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double S0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-					const double S0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-					const double S1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-					const double S1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+					const double S0_m = fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0);
+					const double S0_p = fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1);
+					const double S1_m = fspd_x1(i, j, k, 0);
+					const double S1_p = fspd_x1(i, j, k, 1);
 
 					const double S = std::max({std::abs(S0_p), std::abs(S0_m), std::abs(S1_p), std::abs(S1_m)}); // maximum wavespeed
 					// 		 |
@@ -473,15 +474,15 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					//   LD  |  RD
 					// 		 |
 
-					const auto E2_LD = cc_E2_array(i, j, k);
-					const auto E2_LU = cc_E2_array(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2]);
-					const auto E2_RD = cc_E2_array(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
-					const auto E2_RU = cc_E2_array(i + delta_w_both[0], j + delta_w_both[1], k + delta_w_both[2]);
+					const auto E2_LD = cc_E2_array(i - delta_w_both[0], j-delta_w_both[1], k-delta_w_both[2]);
+					const auto E2_LU = cc_E2_array(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+					const auto E2_RD = cc_E2_array(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
+					const auto E2_RU = cc_E2_array(i , j , k );
 
-					const auto B0_U = B0_p(i, j, k);
-					const auto B0_D = B0_m(i, j, k);
-					const auto B1_R = B1_p(i, j, k);
-					const auto B1_L = B1_m(i, j, k);
+					const auto B0_U = B0_m(i, j, k);
+					const auto B0_D = B0_p(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]);
+					const auto B1_R = B1_m(i, j, k);
+					const auto B1_L = B1_p(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
 
 					const auto B0_dstar = (B0_U + B0_D) / 2.0 + (E2_LD - E2_LU + E2_RD - E2_RU) / (4.0 * S);
 					const auto B1_dstar = (B1_R + B1_L) / 2.0 + (E2_RD - E2_LU + E2_RU - E2_LU) / (4.0 * S);
