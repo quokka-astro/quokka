@@ -157,7 +157,7 @@ def cooling_ode_system_original(t, y, tables=None, rho=None):
         # Interpolate cooling rate
         nH = cloudy_H_mass_fraction * (rho / m_H)
         T = compute_temperature_from_nH_e(nH, eint, tables=tables)
-        Edot = cooling_rate(nH, T, redshift=0., tables=tables)
+        Edot = cooling_rate(nH, T, zmet=1.0, redshift=0., tables=tables)
         deint_dt = Edot / rho # convert to specific rate
     else:
         return np.nan
