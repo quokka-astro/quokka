@@ -573,10 +573,15 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					const auto E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) - (SU * SD) * (B0_U - B0_D) / (SU - SD);
 					const auto B0_dstar = (SU * B0_U - SD * B0_D) / (SU - SD) + (E2_LD - E2_LU + E2_RD - E2_RU) / (2.0 * (SU - SD));
 					const auto B1_dstar = (SR * B1_R - SL * B1_L) / (SU - SD) + (-1.0 * E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SU - SD));
-					const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + (SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) 
-					                                       - SU * SD * (B0_D - B0_U) / (SU - SD) + (SR * B1_R + SL * B1_L) / 2.0;
-					const auto E2_dstar_2 = -(SR + SL) * B0_dstar / 2.0 + (SU * (E2_RU + E2_LU) - SD * (E2_RD + E2_LD)) / (2.0 * (SU - SD)) 
-                         					               - SU * SD * (B1_L - B1_R) / (SU - SD) + (SR * B0_U + SL * B0_D) / 2.0;
+
+					const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 +
+								(SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) -
+								SU * SD * (B0_D - B0_U) / (SU - SD) + (SR * B1_R + SL * B1_L) / 2.0;
+
+					const auto E2_dstar_2 = -(SR + SL) * B0_dstar / 2.0 +
+								(SU * (E2_RU + E2_LU) - SD * (E2_RD + E2_LD)) / (2.0 * (SU - SD)) -
+								SU * SD * (B1_L - B1_R) / (SU - SD) + (SR * B0_U + SL * B0_D) / 2.0;
+
 					const auto E2_dstar = 0.5 * (E2_dstar_1 + E2_dstar_2);
 
 					if (SL >= 0. && SD >= 0.) {
@@ -598,7 +603,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					} else {
 						E2_array(i, j, k) = E2_dstar;
 					}
-
 				});
 			} // end of iedge loop
 		}
