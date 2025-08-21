@@ -533,7 +533,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					}
 				}
 
-				// finish averaging the two different ways for extrapolating velocity fields: cc->fc->ec
+				// finish averaging the two different ways for extrapolating emf: cc->fc->ec
 
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					ec_fabs_EMF_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
@@ -546,76 +546,77 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 				// LLF variant
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double S0_m = fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0);
-					const double S0_p = fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1);
-					const double S1_m = fspd_x1(i, j, k, 0);
-					const double S1_p = fspd_x1(i, j, k, 1);
+					const double SL = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0),fspd_x0(i, j, k , 0)); //SL
+					const double SR = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1), fspd_x0(i, j, k, 1)); //SR
+					const double SD = std::max(fspd_x1(i-delta_w0[0],j-delta_w0[1],k-delta_w0[2],0), fspd_x1(i, j, k, 0));	       //SD
+					const double SU = std::max(fspd_x1(i-delta_w0[0],j-delta_w0[1],k-delta_w0[2],1), fspd_x1(i, j, k, 1));          //SU
 
-					const double S = std::max({std::abs(S0_p), std::abs(S0_m), std::abs(S1_p), std::abs(S1_m)}); // maximum wavespeed
+					const double S = std::max({std::abs(SR), std::abs(SL), std::abs(SU), std::abs(SD)}); // maximum wavespeed
 					// 		 |
 					//   LU  |  RU
 					// ------+------
 					//   LD  |  RD
 					// 		 |
 
-					// const auto E2_LD = cc_E2_array(i - delta_w_both[0], j - delta_w_both[1], k - delta_w_both[2]);
-					// const auto E2_LU = cc_E2_array(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
-					// const auto E2_RD = cc_E2_array(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
-					// const auto E2_RU = cc_E2_array(i, j, k);
-
 					const auto E2_LD = E2_q0(i, j, k);
 					const auto E2_LU = E2_q1(i, j, k);
 					const auto E2_RD = E2_q2(i, j, k);
 					const auto E2_RU = E2_q3(i, j, k);
-
-
-
-
 
 					const auto B0_U = B0_m(i, j, k);
 					const auto B0_D = B0_p(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
 					const auto B1_R = B1_m(i, j, k);
 					const auto B1_L = B1_p(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
 
-					const auto B0_dstar = (B0_U + B0_D) / 2.0 + (E2_LD - E2_LU + E2_RD - E2_RU) / (4.0 * S);
-					const auto B1_dstar = (B1_R + B1_L) / 2.0 + (E2_RD - E2_LU + E2_RU - E2_LU) / (4.0 * S);
-					const auto E2_dstar = (E2_LD + E2_LU + E2_RD + E2_RU) / 4.0 + S * (B0_D - B0_U + B1_R - B1_L) / 2.0;
+					// const auto B0_U_star = B0_U;
+					// const auto B1_U_star = (SR * B1_R - SL * B1_L) / (SR - SL) + (E2_RU - E2_LU) / (SR - SL);
+					const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
 
-					const auto B0_U_star = B0_U;
-					const auto B1_U_star = (B1_R + B1_L) / 2.0 + (E2_RU - E2_LU) / (2.0 * S);
-					const auto E2_U_star = (E2_LU + E2_RU) / 2.0 + S * (B1_R - B1_L) / 2.0;
+					// const auto B0_D_star = B0_D;
+					// const auto B1_D_star = (SR * B1_R - SL * B1_L) / (SR - SL) + (E2_RD - E2_LD) / (SR - SL);
+					const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
 
-					const auto B0_D_star = B0_D;
-					const auto B1_D_star = (B1_R + B1_L) / 2.0 + (E2_RD - E2_LD) / (2.0 * S);
-					const auto E2_D_star = (E2_LD + E2_RD) / 2.0 + S * (B1_R - B1_L) / 2.0;
+					// const auto B0_R_star = (SU * B0_U - SD * B0_D) / (SU - SD) - (E2_RU - E2_RD) / (SU - SD);
+					// const auto B1_R_star = B1_R;
+					const auto E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) - (SU * SD) * (B0_U - B0_D) / (SU - SD);
 
-					const auto B0_R_star = (B0_U + B0_D) / 2.0 - (E2_RU - E2_RD) / (2.0 * S);
-					const auto B1_R_star = B1_R;
-					const auto E2_R_star = (E2_RD + E2_RU) / 2.0 - S * (B0_U - B0_D) / 2.0;
+					// const auto B0_L_star = (SU * B0_U - SD * B0_D) / (SU - SD) - (E2_LU - E2_LD) / (SU - SD);
+					// const auto B1_L_star = B1_L;
+					const auto E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) - (SU * SD) * (B0_U - B0_D) / (SU - SD);
 
-					const auto B0_L_star = (B0_U + B0_D) / 2.0 + (E2_LU - E2_LD) / (2.0 * S);
-					const auto B1_L_star = B1_L;
-					const auto E2_L_star = (E2_LD + E2_LU) / 2.0 + S * (B0_U - B0_D) / 2.0;
+					const auto B0_dstar = (SU * B0_U - SD * B0_D) / (SU - SD) + (E2_LD - E2_LU + E2_RD - E2_RU) / (2.0 * (SU - SD));
+					const auto B1_dstar = (SR * B1_R - SL * B1_L) / (SU - SD) + (-1.0 * E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SU - SD));
 
-					if (S0_m >= 0. && S1_m >= 0.) {
+
+					const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + (SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) 
+					                                       - SU * SD * (B0_D - B0_U) / (SU - SD) + (SR * B1_R + SL * B1_L) / 2.0;
+
+					const auto E2_dstar_2 = -(SR + SL) * B0_dstar / 2.0 + (SU * (E2_RU + E2_LU) - SD * (E2_RD + E2_LD)) / (2.0 * (SU - SD)) 
+                         					               - SU * SD * (B1_L - B1_R) / (SU - SD) + (SR * B0_U + SL * B0_D) / 2.0;
+
+
+					const auto E2_dstar = 0.5 * (E2_dstar_1 + E2_dstar_2);
+
+					if (SL >= 0. && SD >= 0.) {
 						E2_array(i, j, k) = E2_LD;
-					} else if (S0_p <= 0. && S1_m >= 0.) {
+					} else if (SR <= 0. && SD >= 0.) {
 						E2_array(i, j, k) = E2_RD;
-					} else if (S0_p <= 0. && S1_p <= 0.) {
+					} else if (SR <= 0. && SU <= 0.) {
 						E2_array(i, j, k) = E2_RU;
-					} else if (S0_m >= 0. && S1_p <= 0.) {
+					} else if (SL >= 0. && SU <= 0.) {
 						E2_array(i, j, k) = E2_LU;
-					} else if (S0_m >= 0. && S1_m < 0.) {
+					} else if (SL >= 0. && SD < 0.) {
 						E2_array(i, j, k) = E2_L_star;
-					} else if (S0_p <= 0. && S1_m < 0.) {
+					} else if (SR <= 0. && SD < 0.) {
 						E2_array(i, j, k) = E2_R_star;
-					} else if (S0_p <= 0. && S1_p > 0.) {
+					} else if (SR <= 0. && SU > 0.) {
 						E2_array(i, j, k) = E2_U_star;
-					} else if (S1_p <= 0.) {
+					} else if (SU <= 0.) {
 						E2_array(i, j, k) = E2_D_star;
 					} else {
 						E2_array(i, j, k) = E2_dstar;
 					}
+
 				});
 			} // end of iedge loop
 		}
