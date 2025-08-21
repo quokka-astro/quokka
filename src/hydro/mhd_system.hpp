@@ -546,10 +546,10 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 				// LLF variant
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double SL = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0), fspd_x0(i, j, k, 0)); 
-					const double SR = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1), fspd_x0(i, j, k, 1)); 
-					const double SD = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0), fspd_x1(i, j, k, 0));	       
-					const double SU = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1), fspd_x1(i, j, k, 1));         
+					const double SL = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0), fspd_x0(i, j, k, 0));
+					const double SR = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1), fspd_x0(i, j, k, 1));
+					const double SD = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0), fspd_x1(i, j, k, 0));
+					const double SU = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1), fspd_x1(i, j, k, 1));
 
 					// 		 |
 					//   LU  |  RU
