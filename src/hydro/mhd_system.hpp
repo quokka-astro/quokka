@@ -467,7 +467,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				delta_w_both[w1_comp] = 1;
 				const auto &fspd_x0 = fcx_mf_fspds[w0_comp][mfi].const_array();
 				const auto &fspd_x1 = fcx_mf_fspds[w1_comp][mfi].const_array();
-				const auto &emf_cc = fcx_mf_fspds[w1_comp][mfi].const_array();
 
 				// interpolate the cell-centered EMF to the cell-edge
 				// there are two possible permutations for doing this: getting cell-centered quanties to a cell-edge
