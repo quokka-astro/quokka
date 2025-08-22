@@ -484,7 +484,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 					// we expand the domain of cc-data, so that when we reconstruct cc->fc (we include enough ghost cells in the fc->ec
 					// dimension), we get as an output (from reconstructing fc->ec) data only in the valid domain
-					const amrex::Box box_cc_EMF_1D = amrex::grow(
+					const amrex::Box box_cc_EMF_edge = amrex::grow(
 					    box_cc, (nghost_cc - 1) * vec_fc2ec); // note, the reconstruct function will uniformly grow the bounds by 1
 					const amrex::Box box_fc_EMF = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + 1);
 
@@ -497,7 +497,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 					// extrapolate cell-centered velocity components to the cell-face
 					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_EMF[iedge].array(), fc_fabs_EMF_ifside[0].array(),
-									    fc_fabs_EMF_ifside[1].array(), box_cc_EMF_1D, reconstructionOrder);
+									    fc_fabs_EMF_ifside[1].array(), box_cc_EMF_edge, reconstructionOrder);
 
 					// extrapolate face-centered velocity components to the cell-edge
 					for (int iface = 0; iface < 2; ++iface) {
