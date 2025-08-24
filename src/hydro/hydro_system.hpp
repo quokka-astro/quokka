@@ -74,7 +74,6 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		pressure_index,
 		primEint_index,	   // auxiliary internal energy (rho * e)
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
-				   // TODO(benwibking): = check what is enabled
 	};
 
 	static void ConservedToPrimitive(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
