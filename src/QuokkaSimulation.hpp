@@ -315,6 +315,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
+	void computePerpBfieldCC(amrex::MultiFab &bfield_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiArray4<const amrex::Real> &x2State_fc_bfield_in, amrex::MultiArray4<const amrex::Real> &x3State_fc_bfield_in) const;
+
+	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState, amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
 			  const amrex::Box &indexRange, int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
@@ -1947,6 +1950,48 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 template <typename problem_t>
 template <FluxDir DIR>
+AMREX_FORCE_INLINE void
+QuokkaSimulation<problem_t>::computePerpBfieldCC(amrex::MultiFab &bfield_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiArray4<const amrex::Real> &x2State_fc_bfield_in, amrex::MultiArray4<const amrex::Real> &x3State_fc_bfield_in) const
+{
+   // per-direction neighbor offsets for those two components
+  std::array<int,3> delta_x2{0,0,0};
+  std::array<int,3> delta_x3{0,0,0};
+
+  if constexpr (DIR == FluxDir::X1) {
+    x2State_fc_bfield_in = consVar_fc[1].const_arrays(); // +y faces
+    x3State_fc_bfield_in = consVar_fc[2].const_arrays(); // +z faces
+    delta_x2[1] = 1;
+    delta_x3[2] = 1;
+  } else if constexpr (DIR == FluxDir::X2) {
+    x2State_fc_bfield_in = consVar_fc[2].const_arrays(); // +z faces
+    x3State_fc_bfield_in = consVar_fc[0].const_arrays(); // +x faces
+    delta_x2[2] = 1;
+    delta_x3[0] = 1;
+  } else if constexpr (DIR == FluxDir::X3) {
+    x2State_fc_bfield_in = consVar_fc[0].const_arrays(); // +x faces
+    x3State_fc_bfield_in = consVar_fc[1].const_arrays(); // +y faces
+    delta_x2[0] = 1;
+    delta_x3[1] = 1;
+  }
+
+  auto bfield_cc_out = bfield_cc_mf.arrays();
+  constexpr int bcomp0 = Physics_Indices<problem_t>::mhdFirstIndex;
+
+  amrex::IntVect ng{AMREX_D_DECL(nghost_fc_, nghost_fc_, nghost_fc_)};
+  amrex::ParallelFor(bfield_cc_mf, ng,
+    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+      const amrex::Real bx2_m = x2State_fc_bfield_in[bx](i, j, k, bcomp0);
+      const amrex::Real bx2_p = x2State_fc_bfield_in[bx](i + delta_x2[0], j + delta_x2[1], k + delta_x2[2], bcomp0);
+      bfield_cc_out[bx](i, j, k, 0) = 0.5 * (bx2_m + bx2_p);
+
+      const amrex::Real bx3_m = x3State_fc_bfield_in[bx](i, j, k, bcomp0);
+      const amrex::Real bx3_p = x3State_fc_bfield_in[bx](i + delta_x3[0], j + delta_x3[1], k + delta_x3[2], bcomp0);
+      bfield_cc_out[bx](i, j, k, 1) = 0.5 * (bx3_m + bx3_p);
+    });
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
 void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &bfield_cc_mf, amrex::MultiFab &leftState,
 						    amrex::MultiFab &rightState, amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield,
 						    amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds,
@@ -1956,37 +2001,7 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	amrex::MultiArray4<const amrex::Real> x2State_fc_bfield_in;
 	amrex::MultiArray4<const amrex::Real> x3State_fc_bfield_in;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		std::array<int, 3> delta_x2 = {0, 0, 0};
-		std::array<int, 3> delta_x3 = {0, 0, 0};
-		if constexpr (DIR == FluxDir::X1) {
-			delta_x2[1] = 1;
-			delta_x3[2] = 1;
-			x2State_fc_bfield_in = consVar_fc[1].const_arrays();
-			x3State_fc_bfield_in = consVar_fc[2].const_arrays();
-		} else if constexpr (DIR == FluxDir::X2) {
-			delta_x2[2] = 1;
-			delta_x3[0] = 1;
-			x2State_fc_bfield_in = consVar_fc[2].const_arrays();
-			x3State_fc_bfield_in = consVar_fc[0].const_arrays();
-		} else if constexpr (DIR == FluxDir::X3) {
-			delta_x2[0] = 1;
-			delta_x3[1] = 1;
-			x2State_fc_bfield_in = consVar_fc[0].const_arrays();
-			x3State_fc_bfield_in = consVar_fc[1].const_arrays();
-		}
-		auto bfield_cc_in = bfield_cc_mf.arrays();
-		amrex::IntVect ng{AMREX_D_DECL(nghost_fc_, nghost_fc_, nghost_fc_)};
-		amrex::ParallelFor(bfield_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			const double bx2_m = x2State_fc_bfield_in[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const double bx2_p =
-			    x2State_fc_bfield_in[bx](i + delta_x2[0], j + delta_x2[1], k + delta_x2[2], Physics_Indices<problem_t>::mhdFirstIndex);
-			bfield_cc_in[bx](i, j, k, 0) = 0.5 * (bx2_m + bx2_p);
-
-			const double bx3_m = x3State_fc_bfield_in[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const double bx3_p =
-			    x3State_fc_bfield_in[bx](i + delta_x3[0], j + delta_x3[1], k + delta_x3[2], Physics_Indices<problem_t>::mhdFirstIndex);
-			bfield_cc_in[bx](i, j, k, 1) = 0.5 * (bx3_m + bx3_p);
-		});
+		QuokkaSimulation<problem_t>::template computePerpBfieldCC<DIR>(bfield_cc_mf, consVar_fc, x2State_fc_bfield_in, x3State_fc_bfield_in);
 	}
 
 	if (reconstructionOrder_ == 5) {
@@ -2095,39 +2110,7 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	amrex::MultiArray4<const amrex::Real> x2State_fc_bfield_in;
 	amrex::MultiArray4<const amrex::Real> x3State_fc_bfield_in;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		std::array<int, 3> delta_x2 = {0, 0, 0};
-		std::array<int, 3> delta_x3 = {0, 0, 0};
-
-		if constexpr (DIR == FluxDir::X1) {
-			delta_x2[1] = 1;
-			delta_x3[2] = 1;
-			x2State_fc_bfield_in = x1ConsVar_fc_mf[1].const_arrays();
-			x3State_fc_bfield_in = x1ConsVar_fc_mf[2].const_arrays();
-		} else if constexpr (DIR == FluxDir::X2) {
-			delta_x2[2] = 1;
-			delta_x3[0] = 1;
-			x2State_fc_bfield_in = x1ConsVar_fc_mf[2].const_arrays();
-			x3State_fc_bfield_in = x1ConsVar_fc_mf[0].const_arrays();
-		} else if constexpr (DIR == FluxDir::X3) {
-			delta_x2[0] = 1;
-			delta_x3[1] = 1;
-			x2State_fc_bfield_in = x1ConsVar_fc_mf[0].const_arrays();
-			x3State_fc_bfield_in = x1ConsVar_fc_mf[1].const_arrays();
-		}
-
-		auto bfield_cc_in = bfield_cc_mf.arrays();
-		amrex::IntVect ng{AMREX_D_DECL(nghost_fc_, nghost_fc_, nghost_fc_)};
-		amrex::ParallelFor(bfield_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			const double bx2_m = x2State_fc_bfield_in[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const double bx2_p =
-			    x2State_fc_bfield_in[bx](i + delta_x2[0], j + delta_x2[1], k + delta_x2[2], Physics_Indices<problem_t>::mhdFirstIndex);
-			bfield_cc_in[bx](i, j, k, 0) = 0.5 * (bx2_m + bx2_p);
-
-			const double bx3_m = x3State_fc_bfield_in[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const double bx3_p =
-			    x3State_fc_bfield_in[bx](i + delta_x3[0], j + delta_x3[1], k + delta_x3[2], Physics_Indices<problem_t>::mhdFirstIndex);
-			bfield_cc_in[bx](i, j, k, 1) = 0.5 * (bx3_m + bx3_p);
-		});
+		QuokkaSimulation<problem_t>::template computePerpBfieldCC<DIR>(bfield_cc_mf, x1ConsVar_fc_mf, x2State_fc_bfield_in, x3State_fc_bfield_in);
 	}
 
 	// donor-cell reconstruction
