@@ -1953,25 +1953,25 @@ template <FluxDir DIR>
 AMREX_FORCE_INLINE void
 QuokkaSimulation<problem_t>::computePerpBfieldCC(amrex::MultiFab &perp_bfield_cc_comps_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc) const
 {
-   // per-direction neighbor offsets for those two components
-  std::array<int,3> delta_x2{0,0,0};
-  std::array<int,3> delta_x3{0,0,0};
+	// per-direction neighbor offsets for those two components
+	std::array<int, 3> delta_x2{0, 0, 0};
+	std::array<int, 3> delta_x3{0, 0, 0};
 
 	amrex::MultiArray4<const amrex::Real> x2State_fc_bfield_in;
 	amrex::MultiArray4<const amrex::Real> x3State_fc_bfield_in;
   if constexpr (DIR == FluxDir::X1) {
-    x2State_fc_bfield_in = consVar_fc[1].const_arrays(); // +y faces
-    x3State_fc_bfield_in = consVar_fc[2].const_arrays(); // +z faces
+    x2State_fc_bfield_in = consVar_fc[1].const_arrays();
+    x3State_fc_bfield_in = consVar_fc[2].const_arrays();
     delta_x2[1] = 1;
     delta_x3[2] = 1;
   } else if constexpr (DIR == FluxDir::X2) {
-    x2State_fc_bfield_in = consVar_fc[2].const_arrays(); // +z faces
-    x3State_fc_bfield_in = consVar_fc[0].const_arrays(); // +x faces
+    x2State_fc_bfield_in = consVar_fc[2].const_arrays();
+    x3State_fc_bfield_in = consVar_fc[0].const_arrays();
     delta_x2[2] = 1;
     delta_x3[0] = 1;
   } else if constexpr (DIR == FluxDir::X3) {
-    x2State_fc_bfield_in = consVar_fc[0].const_arrays(); // +x faces
-    x3State_fc_bfield_in = consVar_fc[1].const_arrays(); // +y faces
+    x2State_fc_bfield_in = consVar_fc[0].const_arrays();
+    x3State_fc_bfield_in = consVar_fc[1].const_arrays();
     delta_x2[0] = 1;
     delta_x3[1] = 1;
   }
