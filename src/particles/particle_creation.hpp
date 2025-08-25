@@ -431,7 +431,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 				const amrex::Real cell_mass = cell_volume * cell_density;
-				const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
@@ -472,89 +471,29 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(birth_time_index + 1) = std::numeric_limits<amrex::Real>::max();
 					if (p_idx > 0) {
 						// This is the loop that sets the velocity of the high mass stars
-						double numx = 0.0;
-						double numy = 0.0;
-						double numz = 0.0;
-						double denominator = 0.0;
-						double vx_adj = NAN;
-						double vy_adj = NAN;
-						double vz_adj = NAN;
-						double rho_adj = NAN;
-						double v_cm_x = NAN;
-						double v_cm_y = NAN;
-						double v_cm_z = NAN;
+						double const km_per_s = 1.e5; // convert km/s to cm/s
+						double const v_min = 3.0;     // Minimum velocity from the distribution
+						double const v_max = 385.0;   // Maximum velocity from the distribution
+						double const beta = 1.8;      // Slope of the velocity distribution
 
-						// Get the average velocity from the velocity dispersion of the surrounding cells
-						// We use the velocity dispersion of the surrounding cells to get the velocity of the high mass star...
-						//... from a log normal distribution
-						// Checkout docs/star_formation for more details
+						// Draw velocity from the power-law distribution
+						double const xx_random = amrex::Random(engine);
+						double v_mag =
+						    xx_random * (std::pow(v_max, 1. - beta) - std::pow(v_min, 1. - beta)) + std::pow(v_min, 1. - beta);
+						v_mag = std::pow(v_mag, 1. / (1. - beta)) * km_per_s; // Convert to km/s
 
-						for (int ii = i - 1; ii <= i + 1; ++ii) {
-							for (int jj = j - 1; jj <= j + 1; ++jj) {
-								for (int kk = k - 1; kk <= k + 1; ++kk) {
-									numx += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index));
-									numy += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index));
-									numz += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index));
-									denominator += state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-								}
-							}
-						}
+						double const cos_theta_random =
+						    (2 * amrex::Random(engine) - 1.0); // Sample cos theta from a uniform distribution between -1 to 1.
+						double const phi_random =
+						    (1. - amrex::Random(engine)) * 2. * M_PI; // Sample phi from a uniform distribution between 0 and 2*pi
 
-						// Compute the centre of mass velocity
-						v_cm_x = numx / denominator;
-						v_cm_y = numy / denominator;
-						v_cm_z = numz / denominator;
+						double const vx_random = v_mag * std::sqrt(1. - cos_theta_random * cos_theta_random) * std::cos(phi_random);
+						double const vy_random = v_mag * std::sqrt(1. - cos_theta_random * cos_theta_random) * std::sin(phi_random);
+						double const vz_random = v_mag * cos_theta_random;
 
-						numx = 0.0;
-						numy = 0.0;
-						numz = 0.0;
-						// Use the centre of mass velocity to get the velocity dispersion
-						for (int ii = i - 1; ii <= i + 1; ++ii) {
-							for (int jj = j - 1; jj <= j + 1; ++jj) {
-								for (int kk = k - 1; kk <= k + 1; ++kk) {
-									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									AMREX_ASSERT(rho_adj > 0.0);
-									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) / rho_adj;
-									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) / rho_adj;
-									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) / rho_adj;
-
-									numx += rho_adj * (vx_adj - v_cm_x) * (vx_adj - v_cm_x);
-									numy += rho_adj * (vy_adj - v_cm_y) * (vy_adj - v_cm_y);
-									numz += rho_adj * (vz_adj - v_cm_z) * (vz_adj - v_cm_z);
-									denominator += rho_adj;
-								}
-							}
-						}
-						// numx could be zero if the cells are static or have uniform velocity.
-						// Set a minimum velocity dispersion equal to the sound speed squared (cs^2).
-						// This prevents sigma=0 and reflects that star-forming regions typically have
-						// turbulent and thermal energies in equipartition.
-						const double sigma_sq_x = std::max(numx / denominator, cs * cs / 3.0);
-						const double sigma_sq_y = std::max(numy / denominator, cs * cs / 3.0);
-						const double sigma_sq_z = std::max(numz / denominator, cs * cs / 3.0);
-
-						const double signx = v_cm_x == 0.0 ? 1.0 : (std::abs(v_cm_x) / v_cm_x);
-						const double signy = v_cm_y == 0.0 ? 1.0 : (std::abs(v_cm_y) / v_cm_y);
-						const double signz = v_cm_z == 0.0 ? 1.0 : (std::abs(v_cm_z) / v_cm_z);
-
-						double vx_new = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
-						double vy_new = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
-						double vz_new = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
-
-						// Enforce maximum speed limit for stellar particles
-						{
-							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
-							const double max_speed = stellar_velocity_limit_; // cm s^{-1}
-							if (speed > max_speed) {
-								double const scale = max_speed / speed;
-								vx_new *= scale;
-								vy_new *= scale;
-								vz_new *= scale;
-								p.rdata(mass_idx + 1) = vx_new;
-								p.rdata(mass_idx + 2) = vy_new;
-								p.rdata(mass_idx + 3) = vz_new;
-							}
-						}
+						p.rdata(mass_idx + 1) = vx + vx_random;
+						p.rdata(mass_idx + 2) = vy + vy_random;
+						p.rdata(mass_idx + 3) = vz + vz_random;
 
 						// Sample mass randomly from the IMF between m_star_high, which is the min mass and max mass in the Sukhbold
 						// table
