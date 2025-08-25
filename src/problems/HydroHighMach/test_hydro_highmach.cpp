@@ -144,9 +144,9 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 	amrex::Gpu::HostVector<double> P_interp(x.size());
 	interpolate_arrays(x.data(), P_interp.data(), static_cast<int>(x.size()), x_exact.data(), P_exact.data(), static_cast<int>(x_exact.size()));
 
-	amrex::Gpu::DeviceVector<double> rho_g(d_interp.size());
-	amrex::Gpu::DeviceVector<double> vx_g(vx_interp.size());
-	amrex::Gpu::DeviceVector<double> P_g(P_interp.size());
+	amrex::Gpu::AsyncVector<double> rho_g(d_interp.size());
+	amrex::Gpu::AsyncVector<double> vx_g(vx_interp.size());
+	amrex::Gpu::AsyncVector<double> P_g(P_interp.size());
 
 	// copy exact solution to device
 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, d_interp.begin(), d_interp.end(), rho_g.begin());

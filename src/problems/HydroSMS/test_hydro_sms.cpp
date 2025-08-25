@@ -174,9 +174,9 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 		velocity_exact.push_back(vx);
 	}
 
-	amrex::Gpu::DeviceVector<double> rho_g(density_exact.size());
-	amrex::Gpu::DeviceVector<double> vx_g(velocity_exact.size());
-	amrex::Gpu::DeviceVector<double> P_g(pressure_exact.size());
+	amrex::Gpu::AsyncVector<double> rho_g(density_exact.size());
+	amrex::Gpu::AsyncVector<double> vx_g(velocity_exact.size());
+	amrex::Gpu::AsyncVector<double> P_g(pressure_exact.size());
 
 	// copy exact solution to device
 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, density_exact.begin(), density_exact.end(), rho_g.begin());
