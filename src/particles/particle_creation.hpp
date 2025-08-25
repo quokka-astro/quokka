@@ -41,8 +41,8 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				const auto plo = geom.ProbLoArray();
 
 				// Count particles to be created in this box
-				amrex::Gpu::DeviceVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
-				amrex::Gpu::DeviceVector<unsigned int> offset(box.numPts()); // Will store starting index for each cell's particle
+				amrex::Gpu::AsyncVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
+				amrex::Gpu::AsyncVector<unsigned int> offset(box.numPts()); // Will store starting index for each cell's particle
 				auto *pcounts = counts.data();
 
 				// Count potential particles per cell
