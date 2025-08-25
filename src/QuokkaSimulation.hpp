@@ -1952,7 +1952,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_FORCE_INLINE void QuokkaSimulation<problem_t>::computeCCPerpBfieldComps(amrex::MultiFab &cc_bfield_perp_comps_mf,
-									 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc) const
+									      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc) const
 {
 	// per-direction neighbor offsets for those two components
 	std::array<int, 3> delta_x2{0, 0, 0};
