@@ -422,7 +422,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
 				// indexing: field[4: quadrant around edge]
 				const auto &E2_array = ec_mf_emf_components[iedge][mfi].array();
-				const auto cc_E2_array = cc_a4_EMF_array[iedge];
 				std::array<amrex::FArrayBox, 2> ec_fabs_EMF_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
 										      amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
 				std::array<amrex::FArrayBox, 4> ec_fabs_EMF_q;
@@ -457,7 +456,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				// extract wavespeeds
 				int const w0_comp = extrap_dirs[0];
 				int const w1_comp = extrap_dirs[1];
-				int const w2_comp = iedge;
 				std::array<int, 3> delta_w0 = {0, 0, 0};
 				std::array<int, 3> delta_w1 = {0, 0, 0};
 				std::array<int, 3> delta_w_both = {0, 0, 0};
