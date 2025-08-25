@@ -12,6 +12,7 @@
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <set>
 #if __has_include(<filesystem>)
@@ -323,7 +324,19 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			       amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
 			       amrex::MultiFab const &x1Flat, amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, int ng_reconstruct_total,
 			       int nvars);
-
+			       
+	template <FluxDir DIR>
+	void hydroFluxFunctionFArrayBox(amrex::FArrayBox &primVar_fab, amrex::FArrayBox &leftState_fab, amrex::FArrayBox &rightState_fab,
+					amrex::FArrayBox &flux_fab, amrex::FArrayBox &faceVel_fab, amrex::FArrayBox *x1FSpds_fab,
+					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, 
+					amrex::FArrayBox const &x1Flat_fab, amrex::FArrayBox const &x2Flat_fab, amrex::FArrayBox const &x3Flat_fab,
+					amrex::MFIter const &mfi, int ng_reconstruct, int nvars);
+					
+	template <FluxDir DIR>
+	void computeFlatteningCoefficientsArray(amrex::Array4<const amrex::Real> const &primVar_arr, 
+						amrex::Array4<amrex::Real> const &flatCoef, 
+						amrex::Box const &box);
+	
 	template <FluxDir DIR>
 	void hydroFOFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &leftState, amrex::MultiFab &rightState, amrex::MultiFab &x1Flux,
 				 amrex::MultiFab &x1FaceVel, amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf,
@@ -1868,18 +1881,12 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	// we need two additional ghost cells in order to compute two ghost face velocities
 	const int flatteningGhost = reconstructGhost + 1;
 
-	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
-	std::array<amrex::MultiFab, 3> flatCoefs;
+	// allocate output MultiFabs that we need to return
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fast_mhd_wavespeeds;
-
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		flatCoefs[idim] = amrex::MultiFab(ba, dm, 1, flatteningGhost);
-	}
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
@@ -1892,23 +1899,99 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		}
 	}
 
-	// conserved to primitive variables
-	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
+	// Process each box using MFIter
+	for (amrex::MFIter mfi(consVar_cc); mfi.isValid(); ++mfi) {
+		const amrex::Box &bx = mfi.tilebox();
+		
+		// Get FArrayBox views for this box
+		const auto &cons_fab = consVar_cc[mfi];
+		
+		// Grow box for ghost cells  
+		const amrex::Box bxg_cc = amrex::grow(bx, nghost_cc_);
+		const amrex::Box bxg_flat = amrex::grow(bx, flatteningGhost);
+		
+		// Allocate temporary FArrayBoxes for this box only
+		amrex::FArrayBox primVar_fab(bxg_cc, nvars);
+		std::array<amrex::FArrayBox, 3> flatCoefs_fab;
+		
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			flatCoefs_fab[idim].resize(bxg_flat, 1);
+		}
+		
+		// Convert conserved to primitive variables for this box
+		auto const &consVar = cons_fab.const_array();
+		auto primVar = primVar_fab.array();
+		
+		// Get face-centered data for this box
+		auto const &cons_fc_x0 = consVar_fc[0].const_array(mfi);
+#if AMREX_SPACEDIM >= 2
+		auto const &cons_fc_x1 = consVar_fc[1].const_array(mfi);
+#endif
+#if AMREX_SPACEDIM == 3
+		auto const &cons_fc_x2 = consVar_fc[2].const_array(mfi);
+#endif
+		
+		amrex::ParallelFor(bxg_cc, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> primvec{};
+			if constexpr (HydroSystem<problem_t>::use_dual_energy == 1) {
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					primvec = HydroSystem<problem_t>::ComputePrimVars(consVar, cons_fc_x0, cons_fc_x1, cons_fc_x2, i, j, k);
+				} else {
+					primvec = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, k);
+				}
+			} else {
+				primvec = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, k);
+			}
+			for (int n = 0; n < HydroSystem<problem_t>::nvar_; ++n) {
+				primVar(i, j, k, n) = primvec[n];
+			}
+			// Copy passive scalars
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				primVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) = consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n);
+			}
+		});
+		
+		// Compute flattening coefficients for this box
+		// Since ComputeFlatteningCoefficients expects MultiFabs, we need to compute manually
+		AMREX_D_TERM(
+			{
+				auto const &primVar_arr = primVar_fab.const_array();
+				auto flatCoef = flatCoefs_fab[0].array();
+				computeFlatteningCoefficientsArray<FluxDir::X1>(primVar_arr, flatCoef, bxg_flat);
+			},
+			{
+				auto const &primVar_arr = primVar_fab.const_array();
+				auto flatCoef = flatCoefs_fab[1].array();
+				computeFlatteningCoefficientsArray<FluxDir::X2>(primVar_arr, flatCoef, bxg_flat);
+			},
+			{
+				auto const &primVar_arr = primVar_fab.const_array();
+				auto flatCoef = flatCoefs_fab[2].array();
+				computeFlatteningCoefficientsArray<FluxDir::X3>(primVar_arr, flatCoef, bxg_flat);
+			}
+		)
+		
+		// Compute fluxes for this box
+		AMREX_D_TERM(
+			hydroFluxFunctionFArrayBox<FluxDir::X1>(
+				primVar_fab, leftState[0][mfi], rightState[0][mfi], flux[0][mfi],
+				facevel[0][mfi], (Physics_Traits<problem_t>::is_mhd_enabled) ? &fast_mhd_wavespeeds[0][mfi] : nullptr,
+				consVar_fc, flatCoefs_fab[0], flatCoefs_fab[1], flatCoefs_fab[2], 
+				mfi, reconstructGhost, nvars);,
+			hydroFluxFunctionFArrayBox<FluxDir::X2>(
+				primVar_fab, leftState[1][mfi], rightState[1][mfi], flux[1][mfi],
+				facevel[1][mfi], (Physics_Traits<problem_t>::is_mhd_enabled) ? &fast_mhd_wavespeeds[1][mfi] : nullptr,
+				consVar_fc, flatCoefs_fab[0], flatCoefs_fab[1], flatCoefs_fab[2], 
+				mfi, reconstructGhost, nvars);,
+			hydroFluxFunctionFArrayBox<FluxDir::X3>(
+				primVar_fab, leftState[2][mfi], rightState[2][mfi], flux[2][mfi],
+				facevel[2][mfi], (Physics_Traits<problem_t>::is_mhd_enabled) ? &fast_mhd_wavespeeds[2][mfi] : nullptr,
+				consVar_fc, flatCoefs_fab[0], flatCoefs_fab[1], flatCoefs_fab[2], 
+				mfi, reconstructGhost, nvars);
+		)
+	}
 
-	// compute flattening coefficients
-	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], flatteningGhost);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], flatteningGhost);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
-
-	// compute flux functions
-	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, flatCoefs[0],
-						    flatCoefs[1], flatCoefs[2], reconstructGhost, nvars);
-		     , hydroFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc,
-						      flatCoefs[0], flatCoefs[1], flatCoefs[2], reconstructGhost, nvars);
-		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc,
-						      flatCoefs[0], flatCoefs[1], flatCoefs[2], reconstructGhost, nvars);)
-
-	// synchronization point to prevent MultiFabs from going out of scope
+	// synchronization point to ensure all MFIter work is done
 	amrex::Gpu::streamSynchronizeAll();
 
 	// write reconstructed states to disk for analysis (includes ghost zones)
@@ -1919,21 +2002,12 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	// LOW LEVEL DEBUGGING: output all of the temporary MultiFabs
 	if (lowLevelDebuggingOutput_ == 1) {
-		// write primitive cell-centered state
-		std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev] + 1);
-		WriteSingleLevelPlotfile(plotfile_name, primVar, componentNames_cc_, geom[lev], 0.0, istep[lev] + 1);
-
-		// write flattening coefficients
-		std::string flatx_filename = CustomPlotFileName("debug_flattening_x", istep[lev] + 1);
-		std::string flaty_filename = CustomPlotFileName("debug_flattening_y", istep[lev] + 1);
-		std::string flatz_filename = CustomPlotFileName("debug_flattening_z", istep[lev] + 1);
-		amrex::Vector<std::string> flatCompNames{"chi"};
-		WriteSingleLevelPlotfile(flatx_filename, flatCoefs[0], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
-		WriteSingleLevelPlotfile(flaty_filename, flatCoefs[1], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
-		WriteSingleLevelPlotfile(flatz_filename, flatCoefs[2], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
+		// write primitive cell-centered state - Note: primVar is not available here
+		amrex::Print() << "WARNING: Low-level debugging output for primVar not supported with MFIter implementation\n";
 
 		// write L interface states
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev] + 1);
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 			}
@@ -1943,6 +2017,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		}
 		// write R interface states
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev] + 1);
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 			}
@@ -2020,6 +2095,175 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar_mf,
 											 artificialViscosityK_, nullptr, nullptr, nghost_vel_);
 	}
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void QuokkaSimulation<problem_t>::hydroFluxFunctionFArrayBox(amrex::FArrayBox &primVar_fab, amrex::FArrayBox &leftState_fab, amrex::FArrayBox &rightState_fab,
+							     amrex::FArrayBox &flux_fab, amrex::FArrayBox &faceVel_fab, amrex::FArrayBox *x1FSpds_fab,
+							     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, 
+							     amrex::FArrayBox const &x1Flat_fab, amrex::FArrayBox const &x2Flat_fab, amrex::FArrayBox const &x3Flat_fab,
+							     amrex::MFIter const &mfi, const int ng_reconstruct, const int nvars)
+{
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		// Handle MHD magnetic field averaging
+		std::array<int, 3> delta_x2 = {0, 0, 0};
+		std::array<int, 3> delta_x3 = {0, 0, 0};
+		const amrex::Array4<const amrex::Real> *x2State_fc_arr = nullptr;
+		const amrex::Array4<const amrex::Real> *x3State_fc_arr = nullptr;
+		
+		if constexpr (DIR == FluxDir::X1) {
+			delta_x2[1] = 1;
+			delta_x3[2] = 1;
+			x2State_fc_arr = &consVar_fc[1].const_array(mfi);
+			x3State_fc_arr = &consVar_fc[2].const_array(mfi);
+		} else if constexpr (DIR == FluxDir::X2) {
+			delta_x2[2] = 1;
+			delta_x3[0] = 1;
+			x2State_fc_arr = &consVar_fc[2].const_array(mfi);
+			x3State_fc_arr = &consVar_fc[0].const_array(mfi);
+		} else if constexpr (DIR == FluxDir::X3) {
+			delta_x2[0] = 1;
+			delta_x3[1] = 1;
+			x2State_fc_arr = &consVar_fc[0].const_array(mfi);
+			x3State_fc_arr = &consVar_fc[1].const_array(mfi);
+		}
+		
+		auto primVar_arr = primVar_fab.array();
+		const amrex::Box &primBox = primVar_fab.box();
+		const auto &x2State_fc = *x2State_fc_arr;
+		const auto &x3State_fc = *x3State_fc_arr;
+		
+		amrex::ParallelFor(primBox, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			const double bx2_m = x2State_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const double bx2_p = x2State_fc(i + delta_x2[0], j + delta_x2[1], k + delta_x2[2], Physics_Indices<problem_t>::mhdFirstIndex);
+			primVar_arr(i, j, k, HydroSystem<problem_t>::x2Magnetic_index) = 0.5 * (bx2_m + bx2_p);
+
+			const double bx3_m = x3State_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const double bx3_p = x3State_fc(i + delta_x3[0], j + delta_x3[1], k + delta_x3[2], Physics_Indices<problem_t>::mhdFirstIndex);
+			primVar_arr(i, j, k, HydroSystem<problem_t>::x3Magnetic_index) = 0.5 * (bx3_m + bx3_p);
+		});
+	}
+
+	// Get Array4 views from FArrayBoxes
+	auto const &primVar_arr = primVar_fab.const_array();
+	auto leftState_arr = leftState_fab.array();
+	auto rightState_arr = rightState_fab.array();
+	auto const &x1Flat_arr = x1Flat_fab.const_array();
+	auto const &x2Flat_arr = x2Flat_fab.const_array();
+	auto const &x3Flat_arr = x3Flat_fab.const_array();
+	
+	// Define boxes for reconstruction
+	const amrex::Box cellBox = primVar_fab.box();
+	const amrex::Box interfaceBox = leftState_fab.box();
+	
+	// Reconstruct states using Array4 implementations
+	if (reconstructionOrder_ == 5) {
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(
+			primVar_arr, leftState_arr, rightState_arr, cellBox, interfaceBox, nvars);
+	} else if (reconstructionOrder_ == 3) {
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+			primVar_arr, leftState_arr, rightState_arr, cellBox, interfaceBox, nvars);
+	} else if (reconstructionOrder_ == 2) {
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(
+			primVar_arr, leftState_arr, rightState_arr, cellBox, interfaceBox, nvars);
+	} else if (reconstructionOrder_ == 1) {
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+			primVar_arr, leftState_arr, rightState_arr, cellBox, interfaceBox, nvars);
+	} else {
+		amrex::Abort("Invalid reconstruction order specified!");
+	}
+
+	// Flatten shocks using arrays
+	HydroSystem<problem_t>::template FlattenShocks<DIR>(
+		primVar_arr, x1Flat_arr, x2Flat_arr, x3Flat_arr, 
+		leftState_arr, rightState_arr, interfaceBox, nvars);
+
+	// Get flux arrays
+	auto flux_arr = flux_fab.array();
+	auto faceVel_arr = faceVel_fab.array();
+	auto x1FSpds_arr = (x1FSpds_fab != nullptr) ? x1FSpds_fab->array() : amrex::Array4<amrex::Real>{};
+	
+	// Compute fluxes using arrays
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		auto const &fc_arr = consVar_fc[static_cast<int>(DIR)].const_array(mfi);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(
+			flux_arr, faceVel_arr, leftState_arr, rightState_arr, primVar_arr,
+			artificialViscosityK_, x1FSpds_arr, fc_arr, interfaceBox, nghost_vel_);
+	} else {
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(
+			flux_arr, faceVel_arr, leftState_arr, rightState_arr, primVar_arr,
+			artificialViscosityK_, amrex::Array4<amrex::Real>{}, amrex::Array4<const amrex::Real>{}, interfaceBox, nghost_vel_);
+	}
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void QuokkaSimulation<problem_t>::computeFlatteningCoefficientsArray(amrex::Array4<const amrex::Real> const &primVar_arr, 
+								     amrex::Array4<amrex::Real> const &flatCoef, 
+								     amrex::Box const &box)
+{
+	// Compute the PPM shock flattening coefficient
+	constexpr double beta_max = 0.85;
+	constexpr double beta_min = 0.75;
+	constexpr double Zmax = 0.75;
+	constexpr double Zmin = 0.25;
+
+	// cell-centered kernel
+	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
+		quokka::Array4View<const amrex::Real, DIR> primVar(primVar_arr);
+		quokka::Array4View<amrex::Real, DIR> x1Chi(flatCoef);
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+		amrex::Real Pplus2 = primVar(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
+		amrex::Real Pplus1 = primVar(i + 1, j, k, HydroSystem<problem_t>::pressure_index);
+		amrex::Real P = primVar(i, j, k, HydroSystem<problem_t>::pressure_index);
+		amrex::Real Pminus1 = primVar(i - 1, j, k, HydroSystem<problem_t>::pressure_index);
+		amrex::Real Pminus2 = primVar(i - 2, j, k, HydroSystem<problem_t>::pressure_index);
+
+		// Compute shock detection parameter (see Eq. B3 of Mignone+ 2005)
+		const amrex::Real d2P_dx2 = Pplus1 - 2.0 * P + Pminus1;
+		const amrex::Real dP_dx_plus = Pplus1 - P;
+		const amrex::Real dP_dx_minus = P - Pminus1;
+		const amrex::Real dP_dx_centered = 0.5 * (Pplus1 - Pminus1);
+		const amrex::Real denom = std::abs(dP_dx_plus) + std::abs(dP_dx_minus) + 1.0e-100 * std::abs(dP_dx_centered);
+		const amrex::Real beta = std::abs(d2P_dx2) / denom;
+
+		// smooth transition function (see footnote of Eq. B2 of Mignone+ 2005)
+		amrex::Real omega = 0.;
+		if (beta > beta_min) {
+			omega = expm1(1. - beta_max / beta) / (M_E - 1.); // == [exp(1 - beta_max/beta) - 1] / (e - 1)
+		}
+
+		// compute undivided pressure differences (Eq. B1 of Mignone+ 2005)
+		const amrex::Real dP_dx_minus2 = Pminus1 - Pminus2;
+		const amrex::Real dP_dx_plus2 = Pplus2 - Pplus1;
+
+		// compute steepness parameters (Eq. B4 of Mignone+ 2005)
+		amrex::Real S_plus = 0.;
+		amrex::Real S_minus = 0.;
+		if (dP_dx_plus > 0.) {
+			S_plus = dP_dx_minus / dP_dx_plus;
+		}
+		if (dP_dx_minus < 0.) {
+			S_minus = dP_dx_plus / dP_dx_minus;
+		}
+
+		// compute shock parameters
+		amrex::Real Z_plus = 0.;
+		amrex::Real Z_minus = 0.;
+		if (dP_dx_plus2 < 0.) { // right cell exhibits compression
+			Z_plus = S_plus * omega;
+		}
+		if (dP_dx_minus2 > 0.) { // left cell exhibits compression
+			Z_minus = S_minus * omega;
+		}
+
+		// compute final PPM flattening coefficient (Eq. B2 of Mignone+ 2005)
+		const amrex::Real Z = std::max(Z_plus, Z_minus);
+		const amrex::Real eps = 1.0 - Zmax + (Zmax - Zmin) * Z;
+		x1Chi(i_in, j_in, k_in, 0) = std::min(1.0, eps);
+	});
 }
 
 template <typename problem_t>
