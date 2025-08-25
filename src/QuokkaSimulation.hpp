@@ -1960,18 +1960,18 @@ QuokkaSimulation<problem_t>::computePerpBfieldCC(amrex::MultiFab &perp_bfield_cc
 	amrex::MultiArray4<const amrex::Real> x2State_fc_bfield_in;
 	amrex::MultiArray4<const amrex::Real> x3State_fc_bfield_in;
   if constexpr (DIR == FluxDir::X1) {
-    x2State_fc_bfield_in = consVar_fc[1].const_arrays();
-    x3State_fc_bfield_in = consVar_fc[2].const_arrays();
+    x2State_fc_bfield_in = consVar_fc[1].const_arrays(); // +y faces
+    x3State_fc_bfield_in = consVar_fc[2].const_arrays(); // +z faces
     delta_x2[1] = 1;
     delta_x3[2] = 1;
   } else if constexpr (DIR == FluxDir::X2) {
-    x2State_fc_bfield_in = consVar_fc[2].const_arrays();
-    x3State_fc_bfield_in = consVar_fc[0].const_arrays();
+    x2State_fc_bfield_in = consVar_fc[2].const_arrays(); // +z faces
+    x3State_fc_bfield_in = consVar_fc[0].const_arrays(); // +x faces
     delta_x2[2] = 1;
     delta_x3[0] = 1;
   } else if constexpr (DIR == FluxDir::X3) {
-    x2State_fc_bfield_in = consVar_fc[0].const_arrays();
-    x3State_fc_bfield_in = consVar_fc[1].const_arrays();
+    x2State_fc_bfield_in = consVar_fc[0].const_arrays(); // +x faces
+    x3State_fc_bfield_in = consVar_fc[1].const_arrays(); // +y faces
     delta_x2[0] = 1;
     delta_x3[1] = 1;
   }
