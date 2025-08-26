@@ -1,8 +1,12 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     = -8e16 -8e16 -8e16
-geometry.prob_hi     = 8e16 8e16 8e16
+#geometry.prob_lo     = -2e16 -2e16 -2e16
+#geometry.prob_hi     = 2e16 2e16 2e16
+geometry.prob_lo     = -4e16 -4e16 -4e16
+geometry.prob_hi     = 4e16 4e16 4e16
+#geometry.prob_lo     = -8e16 -8e16 -8e16
+#geometry.prob_hi     = 8e16 8e16 8e16
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -13,9 +17,9 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 128 128
-amr.max_level       = 2     # number of levels = max_level + 1
-amr.blocking_factor = 64    # grid size must be divisible by this
+amr.n_cell          = 256 256 256
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 128    # grid size must be divisible by this
 amr.max_grid_size   = 128    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.0   # default
@@ -27,7 +31,7 @@ plotfile_interval = -1
 checkpoint_interval = -1
 
 problem.t_end = 1.2e12
-max_timesteps = 4
+max_timesteps = 0
 
 tiny_profiler.enabled = 0
 

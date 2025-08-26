@@ -32,6 +32,7 @@ struct AccretionProblem {
 constexpr bool par_in_cell_center = true;
 const int sink_write_interval = 1;
 const double sphere_radius = 2.0e16; // cm
+const double dx_fixed = sphere_radius / 64.0;
 
 // from dimentionless units to cgs units
 constexpr double cs0 = 0.2 * 1.0e5; // 0.2 km/s to cm/s
@@ -130,7 +131,7 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	// For the test problem in the Sink Particle paper, we want to set max_lev to 2.
 	// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_lev == 2, "amx_lev is not 2");
 
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[max_lev].CellSizeArray();
+	// const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[max_lev].CellSizeArray();
 
 	// manually set particle mass to M_star_in_Msun * C::M_solar
 	for (auto &kv : SinkParticles->GetParticles()) {
@@ -149,9 +150,9 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 				auto &p = pdata[i]; // NOLINT
 				p.rdata(0) = mass_star;
 				if (par_in_cell_center) {
-					p.pos(0) = 0.5 * dx[0];
-					p.pos(1) = 0.5 * dx[1];
-					p.pos(2) = 0.5 * dx[2];
+					p.pos(0) = 0.5 * dx_fixed;
+					p.pos(1) = 0.5 * dx_fixed;
+					p.pos(2) = 0.5 * dx_fixed;
 				} else {
 					p.pos(0) = 0.0;
 					p.pos(1) = 0.0;
@@ -205,8 +206,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	// 		0.981, 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
 	// };
 
-	const Real dx_scaler = grid_elem.dx_[0];
-	const double par_center = par_in_cell_center ? 0.5 * dx_scaler : 0.0;
+	const double par_center = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
 
 	// set initial conditions
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -247,7 +247,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 		Real vx = 0.0;
 		Real vy = 0.0;
 		Real vz = 0.0;
-		if (r / dx_scaler  > 1.0e-10) {
+		if (r / dx_fixed  > 1.0e-10) {
 			vx = u * x / r;
 			vy = u * y / r;
 			vz = u * z / r;
@@ -369,14 +369,14 @@ auto problem_main() -> int
 	std::vector<double> alpha_ref(nx);
 	std::vector<double> v_ref(nx);
 
-	const Real par_x = par_in_cell_center ? 0.5 * dx0[0] : 0.0;
-	const Real par_y = par_in_cell_center ? 0.5 * dx0[1] : 0.0;
-	const Real par_z = par_in_cell_center ? 0.5 * dx0[2] : 0.0;
+	const Real par_x = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
+	const Real par_y = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
+	const Real par_z = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
 
 	for (int i = 0; i < nx; ++i) {
 		const double x_coor = position[i] - par_x;
-		const double y_coor = 0.5 * dx0[1] - par_y;
-		const double z_coor = 0.5 * dx0[2] - par_z;
+		const double y_coor = 0.5 * dx_fixed - par_y;
+		const double z_coor = 0.5 * dx_fixed - par_z;
 		const double r = std::sqrt(x_coor * x_coor + y_coor * y_coor + z_coor * z_coor);
 		physical_x[i] = x_coor;
 		x[i] = r / unit_l_1;
@@ -422,6 +422,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("alpha");
 	// title: t = t_end - t0
 	matplotlibcpp::title("t = " + std::to_string(sim.tNew_[0]));
+	matplotlibcpp::xlim(-1.0 * sphere_radius, 1.0 * sphere_radius);
 	matplotlibcpp::legend();
 	matplotlibcpp::save("particle_isothermal_alpha_profile.png");
 	// plot velocity profile at end
@@ -437,6 +438,7 @@ auto problem_main() -> int
 	matplotlibcpp::plot(physical_x, v_ref, neg_v_ref_args);
 	matplotlibcpp::xlabel("x");
 	matplotlibcpp::ylabel("neg_v");
+	matplotlibcpp::xlim(-1.0 * sphere_radius, 1.0 * sphere_radius);
 	matplotlibcpp::title("t = " + std::to_string(sim.tNew_[0]));
 	matplotlibcpp::legend();
 	matplotlibcpp::save("particle_isothermal_neg_v_profile.png");
