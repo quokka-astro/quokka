@@ -139,7 +139,7 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 	}
 
 	// Data holders
-	amrex::Gpu::DeviceVector<amrex::Real> pdf_d(getTotalBinCount(), 0.0);
+	amrex::Gpu::AsyncVector<amrex::Real> pdf_d(getTotalBinCount(), 0.0);
 	amrex::Vector<amrex::Real> pdf(getTotalBinCount(), 0.0);
 
 	// Populate the data from each level on each proc
