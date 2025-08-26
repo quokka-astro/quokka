@@ -30,6 +30,7 @@ struct AccretionProblem {
 };
 
 constexpr bool par_in_cell_center = true;
+const int sink_write_interval = 1;
 
 // from dimentionless units to cgs units
 constexpr double cs0 = 0.2 * 1.0e5; // 0.2 km/s to cm/s
@@ -75,6 +76,46 @@ template <> struct Physics_Traits<AccretionProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
+
+template <> struct SimulationData<AccretionProblem> {
+	std::vector<Real> time;
+	std::vector<Real> Mstar;
+	int step_counter = 0;  // Counter for tracking timesteps
+};
+
+template <> void QuokkaSimulation<AccretionProblem>::computeAfterTimestep()
+{
+	// Increment step counter
+	userData_.step_counter++;
+
+	// Check if we should write data this step
+	if (userData_.step_counter % sink_write_interval == 0) {
+		// Get particle data using the physics particle descriptor
+		const int finest_level = finestLevel();
+		const auto &real_data = particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(finest_level).first;
+
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			Real Mstar = 0.0;
+			const int mass_index = 3;
+			for (const auto &p : real_data) {
+				Mstar += p[mass_index];
+			}
+
+			// Store data in memory
+			userData_.time.push_back(tNew_[0]);
+			userData_.Mstar.push_back(Mstar);
+
+			// // Write data to file
+			// std::ofstream outfile;
+			// outfile.open(sink_output_file, std::ios_base::app); // Append mode
+			// if (outfile.is_open()) {
+			// 	outfile << std::scientific << std::setprecision(14) 
+			// 		<< tNew_[0] << "\t" << Mstar << "\n";
+			// 	outfile.close();
+			// }
+		}
+	}
+}
 
 template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles()
 {
@@ -240,8 +281,16 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.time.push_back(0.0);
+		sim.userData_.Mstar.push_back(mass_star);
+	}
+
 	// evolve
 	sim.evolve();
+
+	amrex::Print() << "Initial particle mass = " << mass_star << "\n";
+	amrex::Print() << "Final particle mass = " << sim.userData_.Mstar.back() << "\n";
 
 	const double t_end_real = sim.tNew_[0] + t0;
 	const double unit_rho_1 = 1.0 / (4 * M_PI * G * t_end_real * t_end_real);

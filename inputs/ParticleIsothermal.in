@@ -26,8 +26,7 @@ do_subcycle = 0
 plotfile_interval = -1
 checkpoint_interval = -1
 
-problem.M_star_in_g = 1.0e-3 * C::M_solar
-problem.t_end = 1.01e12
+problem.t_end = 1.2e12
 max_timesteps = 100000
 
 tiny_profiler.enabled = 0
