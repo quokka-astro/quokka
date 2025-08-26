@@ -13,10 +13,10 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 16 16 16
+amr.n_cell          = 64 64 64
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 16    # grid size must be divisible by this
-amr.max_grid_size   = 16    # at least 128 for GPUs
+amr.blocking_factor = 64    # grid size must be divisible by this
+amr.max_grid_size   = 64    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.99   # default
 
@@ -27,8 +27,8 @@ plotfile_interval = -1
 checkpoint_interval = -1
 
 problem.M_star_in_g = 1.0e-3 * C::M_solar
-problem.t_end = 1.0e12
-max_timesteps = 0
+problem.t_end = 1.01e12
+max_timesteps = 100000
 
 tiny_profiler.enabled = 0
 

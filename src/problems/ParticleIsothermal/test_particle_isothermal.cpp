@@ -29,6 +29,8 @@ using amrex::Real;
 struct AccretionProblem {
 };
 
+constexpr bool par_in_cell_center = true;
+
 // from dimentionless units to cgs units
 constexpr double cs0 = 0.2 * 1.0e5; // 0.2 km/s to cm/s
 constexpr double temp0 = 10.0; // K, used for estimating internal energy
@@ -104,6 +106,15 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
 				p.rdata(0) = mass_star;
+				if (par_in_cell_center) {
+					p.pos(0) = 0.5 * dx[0];
+					p.pos(1) = 0.5 * dx[1];
+					p.pos(2) = 0.5 * dx[2];
+				} else {
+					p.pos(0) = 0.0;
+					p.pos(1) = 0.0;
+					p.pos(2) = 0.0;
+				}
 			});
 		}
 	}
@@ -134,7 +145,8 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	// 		0.981, 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
 	// };
 
-	const double par_center = 0.0;
+	const Real dx_scaler = grid_elem.dx_[0];
+	const double par_center = par_in_cell_center ? 0.5 * dx_scaler : 0.0;
 
 	// set initial conditions
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -168,7 +180,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 		Real vx = 0.0;
 		Real vy = 0.0;
 		Real vz = 0.0;
-		if (r > 0.0) {
+		if (r / dx_scaler  > 1.0e-10) {
 			vx = u * x / r;
 			vy = u * y / r;
 			vz = u * z / r;
@@ -217,11 +229,6 @@ auto problem_main() -> int
 	amrex::ParmParse pp("problem");
 	pp.get("t_end", t_end);
 
-	const double unit_rho_1 = 1.0 / (4 * M_PI * G * t_end * t_end);
-	const double unit_m_1 = cs0 * cs0 * cs0 * t_end / G;
-	const double unit_v_1 = cs0;
-	const double unit_l_1 = cs0 * t_end;
-
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
@@ -234,7 +241,13 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 
 	// evolve
-	// sim.evolve();
+	sim.evolve();
+
+	const double t_end_real = sim.tNew_[0] + t0;
+	const double unit_rho_1 = 1.0 / (4 * M_PI * G * t_end_real * t_end_real);
+	const double unit_m_1 = cs0 * cs0 * cs0 * t_end_real / G;
+	const double unit_v_1 = cs0;
+	const double unit_l_1 = cs0 * t_end_real;
 
 	// compute reference solution
 	//
@@ -281,26 +294,30 @@ auto problem_main() -> int
 	std::vector<double> alpha_ref(nx);
 	std::vector<double> v_ref(nx);
 
+	const Real par_x = par_in_cell_center ? 0.5 * dx0[0] : 0.0;
+	const Real par_y = par_in_cell_center ? 0.5 * dx0[1] : 0.0;
+	const Real par_z = par_in_cell_center ? 0.5 * dx0[2] : 0.0;
+
 	for (int i = 0; i < nx; ++i) {
-		const double x_coor = position[i];
-		const double y_coor = 0.5 * dx0[1];
-		const double z_coor = 0.5 * dx0[2];
+		const double x_coor = position[i] - par_x;
+		const double y_coor = 0.5 * dx0[1] - par_y;
+		const double z_coor = 0.5 * dx0[2] - par_z;
 		const double r = std::sqrt(x_coor * x_coor + y_coor * y_coor + z_coor * z_coor);
 		physical_x[i] = x_coor;
 		x[i] = r / unit_l_1;
 		const Real rho_i = values.at(HydroSystem<AccretionProblem>::density_index)[i];
 		const Real u_i = values.at(HydroSystem<AccretionProblem>::x1Momentum_index)[i] / rho_i;
 		const Real alpha_i = rho_i / unit_rho_1;
-		const Real v_i = - u_i / unit_v_1;
+		const Real v_i = u_i / unit_v_1;
 
 		rho[i] = rho_i;
 		u[i] = u_i;
 		alpha[i] = alpha_i;
-		v_abs[i] = physical_x[i] > 0.0 ? v_i : -v_i;
+		v_abs[i] = physical_x[i] < 0.0 ? v_i : -v_i;
 
 		// interpolate alpha_isothermal, neg_v_isothermal and m_isothermal at xx
-		alpha_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(std::abs(x[i]), x_isothermal_ptr, alpha_isothermal_ptr, array_size);
-		v_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(std::abs(x[i]), x_isothermal_ptr, neg_v_isothermal_ptr, array_size);
+		alpha_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(x[i], x_isothermal_ptr, alpha_isothermal_ptr, array_size);
+		v_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(x[i], x_isothermal_ptr, neg_v_isothermal_ptr, array_size);
 	}
 
 	// Mass will not be conserved because of the open boundary conditions
