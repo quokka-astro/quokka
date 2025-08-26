@@ -31,6 +31,7 @@ struct AccretionProblem {
 
 constexpr bool par_in_cell_center = true;
 const int sink_write_interval = 1;
+const double sphere_radius = 2.0e16; // cm
 
 // from dimentionless units to cgs units
 constexpr double cs0 = 0.2 * 1.0e5; // 0.2 km/s to cm/s
@@ -164,6 +165,24 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	amrex::Gpu::streamSynchronize();
 }
 
+template <> void QuokkaSimulation<AccretionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	const amrex::Real dx = geom[lev].CellSizeArray()[0];
+
+	const auto &prob_lo = geom[lev].ProbLoArray();
+	auto tag = tags.arrays();
+
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		const Real x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx;
+		const Real y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx;
+		const Real z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx;
+		const Real r = std::sqrt(x * x + y * y + z * z);
+		if (r < 0.5 * sphere_radius) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
+		}
+	});
+}
+
 template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// x values (dimensionless radius)
@@ -212,8 +231,15 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 		const Real xx = r / unit_l;
 
 		// interpolate alpha_isothermal, neg_v_isothermal and m_isothermal at xx
-		const Real alpha = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, alpha_isothermal_ptr, array_size);
-		const Real neg_v = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, neg_v_isothermal_ptr, array_size);
+		Real alpha = 0.0;
+		Real neg_v = 0.0; 
+		if (xx >= 1.0) {
+			alpha = 2.0 / (xx * xx);
+			neg_v = 0.0;
+		} else {
+			alpha = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, alpha_isothermal_ptr, array_size);
+			neg_v = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, neg_v_isothermal_ptr, array_size);
+		}
 		// const Real m = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, m_isothermal_ptr, array_size);
 
 		const Real rho = std::max(alpha * unit_rho, rho_floor);
@@ -365,8 +391,13 @@ auto problem_main() -> int
 		v_abs[i] = physical_x[i] < 0.0 ? v_i : -v_i;
 
 		// interpolate alpha_isothermal, neg_v_isothermal and m_isothermal at xx
-		alpha_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(x[i], x_isothermal_ptr, alpha_isothermal_ptr, array_size);
-		v_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(x[i], x_isothermal_ptr, neg_v_isothermal_ptr, array_size);
+		if (x[i] >= 1.0) {
+			alpha_ref[i] = 2.0 / (x[i] * x[i]);
+			v_ref[i] = 0.0;
+		} else {
+			alpha_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(x[i], x_isothermal_ptr, alpha_isothermal_ptr, array_size);
+			v_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(x[i], x_isothermal_ptr, neg_v_isothermal_ptr, array_size);
+		}
 	}
 
 	// Mass will not be conserved because of the open boundary conditions
