@@ -30,17 +30,21 @@ struct AccretionProblem {
 };
 
 // from dimentionless units to cgs units
-constexpr double t0 = 1.0e12;
-constexpr double t_end = 5.0e12;
 constexpr double cs0 = 0.2 * 1.0e5; // 0.2 km/s to cm/s
 constexpr double temp0 = 10.0; // K, used for estimating internal energy
 constexpr double mu = 2.33 * C::m_p;
 constexpr double e0 = 1.0 / mu * C::k_B * temp0; // thermal energy per unit mass
 constexpr double G = C::Gconst;
+constexpr double t0 = 1.0e12;
+double t_end = t0;
 constexpr double unit_rho = 1.0 / (4 * M_PI * G * t0 * t0);
 constexpr double unit_m = cs0 * cs0 * cs0 * t0 / G;
 constexpr double unit_v = cs0;
 constexpr double unit_l = cs0 * t0;
+constexpr double mass_star = 0.975 * unit_m;
+std::string sink_file = "../inputs/sink.txt";  // NOLINT
+
+constexpr double rho_floor = 1.0e-10 * unit_rho;
 
 template <> struct Particle_Traits<AccretionProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -70,6 +74,44 @@ template <> struct Physics_Traits<AccretionProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
+template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles()
+{
+	// read particles from ASCII file
+	const int nreal_extra = 4; // mass vx vy vz
+	SinkParticles->SetVerbose(1);
+	SinkParticles->InitFromAsciiFile(sink_file, nreal_extra, nullptr);
+
+	const int max_lev = max_level;
+
+	// For the test problem in the Sink Particle paper, we want to set max_lev to 2.
+	// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_lev == 2, "amx_lev is not 2");
+
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[max_lev].CellSizeArray();
+
+	// manually set particle mass to M_star_in_Msun * C::M_solar
+	for (auto &kv : SinkParticles->GetParticles()) {
+		for (auto &ikv : kv) {
+			auto &particle_array = ikv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+
+			if (np == 0) {
+				continue;
+			}
+
+			auto *pdata = particle_array().data();
+
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.rdata(0) = mass_star;
+			});
+		}
+	}
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
+}
+
 template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// x values (dimensionless radius)
@@ -88,9 +130,9 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	};
 
 	// m values (mass parameter)
-	const amrex::Gpu::DeviceVector<double> m_isothermal = {
-			0.981, 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
-	};
+	// const amrex::Gpu::DeviceVector<double> m_isothermal = {
+	// 		0.981, 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
+	// };
 
 	const double par_center = 0.0;
 
@@ -104,7 +146,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	auto const &x_isothermal_ptr = x_isothermal.dataPtr();
 	auto const &alpha_isothermal_ptr = alpha_isothermal.dataPtr();
 	auto const &neg_v_isothermal_ptr = neg_v_isothermal.dataPtr();
-	auto const &m_isothermal_ptr = m_isothermal.dataPtr();
+	// auto const &m_isothermal_ptr = m_isothermal.dataPtr();
 	const int array_size = static_cast<int>(x_isothermal.size());
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -119,21 +161,21 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 		// interpolate alpha_isothermal, neg_v_isothermal and m_isothermal at xx
 		const Real alpha = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, alpha_isothermal_ptr, array_size);
 		const Real neg_v = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, neg_v_isothermal_ptr, array_size);
-		const Real m = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, m_isothermal_ptr, array_size);
+		// const Real m = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, m_isothermal_ptr, array_size);
 
-		const Real rho = alpha * unit_rho;
-		const Real v = - neg_v * unit_v;
+		const Real rho = std::max(alpha * unit_rho, rho_floor);
+		const Real u = - neg_v * unit_v;
 		Real vx = 0.0;
 		Real vy = 0.0;
 		Real vz = 0.0;
 		if (r > 0.0) {
-			vx = v * x / r;
-			vy = v * y / r;
-			vz = v * z / r;
+			vx = u * x / r;
+			vy = u * y / r;
+			vz = u * z / r;
 		}
 
 		const Real Eint = rho * e0;
-		const Real Ekin = 0.5 * rho * v * v;
+		const Real Ekin = 0.5 * rho * u * u;
 		const Real Etot = Eint + Ekin;
 
 		state_cc(i, j, k, HydroSystem<AccretionProblem>::density_index) = rho;
@@ -171,24 +213,55 @@ auto problem_main() -> int
 		}
 	}
 
+	// read t_end from parameter file
+	amrex::ParmParse pp("problem");
+	pp.get("t_end", t_end);
+
+	const double unit_rho_1 = 1.0 / (4 * M_PI * G * t_end * t_end);
+	const double unit_m_1 = cs0 * cs0 * cs0 * t_end / G;
+	const double unit_v_1 = cs0;
+	const double unit_l_1 = cs0 * t_end;
+
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	// sim.initDt_ = 3.0e10;	      // ~1 kyr
 	sim.tempFloor_ = 10.0; // K
-	sim.stopTime_ = t_end;
+	sim.stopTime_ = t_end - t0;
 
 	// initialize
 	sim.setInitialConditions();
 
-	auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-
 	// evolve
-	sim.evolve();
+	// sim.evolve();
+
+	// compute reference solution
+	//
+	// x values (dimensionless radius)
+	const amrex::Gpu::DeviceVector<double> x_isothermal = {
+			0.050, 0.100, 0.150, 0.200, 0.250, 0.300, 0.350, 0.400, 0.450, 0.500, 0.550, 0.600, 0.650, 0.700, 0.750, 0.800, 0.850, 0.900, 0.950, 1.000
+	};
+	// alpha values (density parameter)
+	const amrex::Gpu::DeviceVector<double> alpha_isothermal = {
+			71.500, 27.800, 16.400, 11.500, 8.760, 7.090, 5.950, 5.140, 4.520, 4.040, 3.660, 3.350, 3.080, 2.860, 2.670, 2.500, 2.350, 2.220, 2.100, 2.000
+	};
+	// neg_v values (negative velocity)
+	const amrex::Gpu::DeviceVector<double> neg_v_isothermal = {
+			5.440, 3.470, 2.580, 2.050, 1.680, 1.400, 1.180, 1.010, 0.861, 0.735, 0.625, 0.528, 0.442, 0.363, 0.291, 0.225, 0.163, 0.106, 0.051, 0.000
+	};
+	// m values (mass parameter)
+	// const amrex::Gpu::DeviceVector<double> m_isothermal = {
+	// 		0.981, 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
+	// };
+	const int array_size = static_cast<int>(x_isothermal.size());
+	auto const &x_isothermal_ptr = x_isothermal.dataPtr();
+	auto const &alpha_isothermal_ptr = alpha_isothermal.dataPtr();
+	auto const &neg_v_isothermal_ptr = neg_v_isothermal.dataPtr();
 
 	// get cell density as a function of x
-	auto [position, values1] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	const int nx = static_cast<int>(position.size());
 
 	// get total gas mass of the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
@@ -199,15 +272,35 @@ auto problem_main() -> int
 	// const double m_tot_init = m_gas_init + m_stars_init;
 	// const double m_tot_final = m_gas_final + m_stars_final;
 
-	const int nx = static_cast<int>(position.size());
-	std::vector<double> x(nx);
 	std::vector<double> rho(nx);
-	std::vector<double> rho1(nx);
+	std::vector<double> u(nx);
+	std::vector<double> x(nx);
+	std::vector<double> physical_x(nx);
+	std::vector<double> alpha(nx);
+	std::vector<double> v_abs(nx);
+	std::vector<double> alpha_ref(nx);
+	std::vector<double> v_ref(nx);
 
 	for (int i = 0; i < nx; ++i) {
-		x[i] = position[i] / unit_l;
-		rho[i] = values0.at(HydroSystem<AccretionProblem>::density_index)[i] / unit_rho;
-		rho1[i] = values1.at(HydroSystem<AccretionProblem>::density_index)[i] / unit_rho;
+		const double x_coor = position[i];
+		const double y_coor = 0.5 * dx0[1];
+		const double z_coor = 0.5 * dx0[2];
+		const double r = std::sqrt(x_coor * x_coor + y_coor * y_coor + z_coor * z_coor);
+		physical_x[i] = x_coor;
+		x[i] = r / unit_l_1;
+		const Real rho_i = values.at(HydroSystem<AccretionProblem>::density_index)[i];
+		const Real u_i = values.at(HydroSystem<AccretionProblem>::x1Momentum_index)[i] / rho_i;
+		const Real alpha_i = rho_i / unit_rho_1;
+		const Real v_i = - u_i / unit_v_1;
+
+		rho[i] = rho_i;
+		u[i] = u_i;
+		alpha[i] = alpha_i;
+		v_abs[i] = physical_x[i] > 0.0 ? v_i : -v_i;
+
+		// interpolate alpha_isothermal, neg_v_isothermal and m_isothermal at xx
+		alpha_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(std::abs(x[i]), x_isothermal_ptr, alpha_isothermal_ptr, array_size);
+		v_ref[i] = interpolate_value<BoundaryPolicy::Clamp>(std::abs(x[i]), x_isothermal_ptr, neg_v_isothermal_ptr, array_size);
 	}
 
 	// Mass will not be conserved because of the open boundary conditions
@@ -216,20 +309,41 @@ auto problem_main() -> int
 	// amrex::Print() << "rel_error_total_mass = " << rel_error_total_mass << "\n";
 
 #ifdef HAVE_PYTHON
-	// plot density profile at beginning and end
+	// plot density profile at end
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> rho_args;
-	rho_args["label"] = "Initial";
 	rho_args["color"] = "red";
-	matplotlibcpp::plot(x, rho, rho_args);
-	std::map<std::string, std::string> rho1_args;
-	rho1_args["label"] = "Final";
-	rho1_args["color"] = "blue";
-	matplotlibcpp::plot(x, rho1, rho1_args);
+	rho_args["linestyle"] = "solid";
+	rho_args["label"] = "simulation";
+	matplotlibcpp::plot(physical_x, alpha, rho_args);
+	std::map<std::string, std::string> alpha_ref_args;
+	alpha_ref_args["color"] = "blue";
+	alpha_ref_args["linestyle"] = "dashed";
+	alpha_ref_args["label"] = "reference";
+	matplotlibcpp::plot(physical_x, alpha_ref, alpha_ref_args);
 	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("Density / rho0");
+	matplotlibcpp::ylabel("alpha");
+	// title: t = t_end - t0
+	matplotlibcpp::title("t = " + std::to_string(sim.tNew_[0]));
 	matplotlibcpp::legend();
-	matplotlibcpp::save("particle_isothermal_density_profile.png");
+	matplotlibcpp::save("particle_isothermal_alpha_profile.png");
+	// plot velocity profile at end
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> neg_v_args;
+	neg_v_args["color"] = "red";
+	neg_v_args["label"] = "simulation";
+	matplotlibcpp::plot(physical_x, v_abs, neg_v_args);
+	std::map<std::string, std::string> neg_v_ref_args;
+	neg_v_ref_args["color"] = "blue";
+	neg_v_ref_args["linestyle"] = "dashed";
+	neg_v_ref_args["label"] = "reference";
+	matplotlibcpp::plot(physical_x, v_ref, neg_v_ref_args);
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("neg_v");
+	matplotlibcpp::title("t = " + std::to_string(sim.tNew_[0]));
+	matplotlibcpp::legend();
+	matplotlibcpp::save("particle_isothermal_neg_v_profile.png");
 #endif
 
+	return 0;
 }
