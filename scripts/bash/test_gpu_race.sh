@@ -136,7 +136,6 @@ if [ "${SINGLE_STREAM}" = true ]; then
     ADDITIONAL_ARGS="amrex.max_gpu_streams=1"
 fi
 
-<<<<<<< HEAD
 # Check if running reproducibility test mode
 if [ "${REPRODUCIBILITY_TEST}" = true ]; then
     # Run reproducibility test (two runs with CUDA_LAUNCH_BLOCKING=1)
