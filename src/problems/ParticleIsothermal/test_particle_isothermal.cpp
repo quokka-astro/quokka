@@ -312,6 +312,52 @@ auto problem_main() -> int
 		sim.userData_.Mstar.push_back(mass_star);
 	}
 
+	// get cell density as a function of x
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	const int nx = static_cast<int>(position.size());
+
+	const Real par_x = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
+	const Real par_y = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
+	const Real par_z = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
+
+	std::vector<double> x(nx);
+	std::vector<double> alpha(nx);
+	std::vector<double> v_abs(nx);
+	std::vector<double> rho(nx);
+	std::vector<double> u(nx);
+	std::vector<double> physical_x(nx);
+
+	for (int i = 0; i < nx; ++i) {
+		const double x_coor = position[i] - par_x;
+		const double y_coor = 0.5 * dx_fixed - par_y;
+		const double z_coor = 0.5 * dx_fixed - par_z;
+		const double r = std::sqrt(x_coor * x_coor + y_coor * y_coor + z_coor * z_coor);
+		physical_x[i] = x_coor;
+		const Real rho_i = values.at(HydroSystem<AccretionProblem>::density_index)[i];
+		const Real u_i = values.at(HydroSystem<AccretionProblem>::x1Momentum_index)[i] / rho_i;
+		const Real alpha_i = rho_i / unit_rho;
+		const Real v_i = u_i / unit_v;
+
+		x[i] = r / unit_l;
+
+		rho[i] = rho_i;
+		u[i] = u_i;
+		alpha[i] = alpha_i;
+		v_abs[i] = physical_x[i] < 0.0 ? v_i : -v_i;
+	}
+
+	// save initial data to file
+	std::ofstream fstream;
+	fstream.open("particle_isothermal_data_initial.csv");
+	fstream << "# t0 = " << t0 << "\n";
+	fstream << "# t = " << 0.0 << "\n";
+	fstream << "# x, alpha, v_abs, pos, rho, u";
+	for (int i = 0; i < nx; ++i) {
+		fstream << '\n';
+		fstream << std::scientific << std::setprecision(14) << x[i] << ", " << alpha[i] << ", " << v_abs[i] << ", " << physical_x[i] << ", " << rho[i] << ", " << u[i];
+	}
+	fstream.close();
+
 	// evolve
 	sim.evolve();
 
@@ -348,8 +394,7 @@ auto problem_main() -> int
 	auto const &neg_v_isothermal_ptr = neg_v_isothermal.dataPtr();
 
 	// get cell density as a function of x
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-	const int nx = static_cast<int>(position.size());
+	auto [position1, values1] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
 
 	// get total gas mass of the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
@@ -360,28 +405,18 @@ auto problem_main() -> int
 	// const double m_tot_init = m_gas_init + m_stars_init;
 	// const double m_tot_final = m_gas_final + m_stars_final;
 
-	std::vector<double> rho(nx);
-	std::vector<double> u(nx);
-	std::vector<double> x(nx);
-	std::vector<double> physical_x(nx);
-	std::vector<double> alpha(nx);
-	std::vector<double> v_abs(nx);
 	std::vector<double> alpha_ref(nx);
 	std::vector<double> v_ref(nx);
 
-	const Real par_x = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
-	const Real par_y = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
-	const Real par_z = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
-
 	for (int i = 0; i < nx; ++i) {
-		const double x_coor = position[i] - par_x;
+		const double x_coor = position1[i] - par_x;
 		const double y_coor = 0.5 * dx_fixed - par_y;
 		const double z_coor = 0.5 * dx_fixed - par_z;
 		const double r = std::sqrt(x_coor * x_coor + y_coor * y_coor + z_coor * z_coor);
 		physical_x[i] = x_coor;
 		x[i] = r / unit_l_1;
-		const Real rho_i = values.at(HydroSystem<AccretionProblem>::density_index)[i];
-		const Real u_i = values.at(HydroSystem<AccretionProblem>::x1Momentum_index)[i] / rho_i;
+		const Real rho_i = values1.at(HydroSystem<AccretionProblem>::density_index)[i];
+		const Real u_i = values1.at(HydroSystem<AccretionProblem>::x1Momentum_index)[i] / rho_i;
 		const Real alpha_i = rho_i / unit_rho_1;
 		const Real v_i = u_i / unit_v_1;
 
@@ -404,6 +439,29 @@ auto problem_main() -> int
 	// // check mass conservation
 	// const double rel_error_total_mass = std::abs(m_tot_final - m_tot_init) / m_tot_init;
 	// amrex::Print() << "rel_error_total_mass = " << rel_error_total_mass << "\n";
+
+	// save positional data to file
+	std::ofstream fstream_final;
+	fstream_final.open("particle_isothermal_data_final.csv");
+	fstream_final << "# t0 = " << t0 << "\n";
+	fstream_final << "# t = " << sim.tNew_[0] << "\n";
+	fstream_final << "# x, alpha, v_abs, alpha_ref, v_ref, pos, rho, u";
+	for (int i = 0; i < nx; ++i) {
+		fstream_final << '\n';
+		fstream_final << std::scientific << std::setprecision(14) << x[i] << ", " << alpha[i] << ", " << v_abs[i] << ", " << alpha_ref[i] << ", " << v_ref[i] << ", " << physical_x[i] << ", " << rho[i] << ", " << u[i];
+	}
+	fstream_final.close();
+
+	// save temporal data to file
+	std::ofstream fstream_temporal;
+	fstream_temporal.open("particle_isothermal_data_temporal.csv");
+	fstream_temporal << "# t0 = " << t0 << "\n";
+	fstream_temporal << "# t, Mstar";
+	for (int i = 0; i < sim.userData_.time.size(); ++i) {
+		fstream_temporal << '\n';
+		fstream_temporal << std::scientific << std::setprecision(14) << sim.userData_.time[i] << ", " << sim.userData_.Mstar[i];
+	}
+	fstream_temporal.close();
 
 #ifdef HAVE_PYTHON
 	// plot density profile at end
