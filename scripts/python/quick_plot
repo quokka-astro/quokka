@@ -95,6 +95,15 @@ from multiprocessing import Pool, cpu_count
 import pprint
 import yt
 import unyt
+import matplotlib.pyplot as plt
+
+import scienceplots
+plt.style.use(['science', 'nature', 'no-latex'])
+# try:
+#     import scienceplots
+#     plt.style.use(['science', 'nature'])
+# except:
+#     print("scienceplots not installed or poster style does not exist; skipping")
 
 # check yt version
 assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
@@ -104,7 +113,7 @@ yt.set_log_level(40)
 m_u = 1.660539e-24 * unyt.g
 
 
-def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, view_dir="z", center=None, top_left_text=None, mean_molecular_weight=1.0, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, skip_existing=False):
+def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, view_dir="z", center=None, top_left_text=None, top_right_text=None, mean_molecular_weight=1.0, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, skip_existing=False, hide_axes=False, hide_all=False):
 
     print(f"processing {pltdir}")
 
@@ -240,11 +249,26 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
         # Add text annotation at the top-left corner with LaTeX support
         slc.annotate_text((0.02, 0.98), top_left_text, coord_system='axis', text_args={
                           'color': 'white', 'usetex': True, 'verticalalignment': 'top', 'horizontalalignment': 'left'})
+    if top_right_text is not None:
+        # Add text annotation at the top-left corner with LaTeX support
+        text = top_right_text.replace("{linebreak}", "\n").replace("{slash}", "\\")
+        slc.annotate_text((0.98, 0.02), text, coord_system='axis', text_args={
+                          'color': 'white', 'usetex': True, 'verticalalignment': 'bottom', 'horizontalalignment': 'right'})
     # get cwd
     cwd = os.getcwd()
     # change to outdir
     os.chdir(outdir)
     slc.set_figure_size(figsize)  # slightly smaller figure size
+
+    if hide_all:
+        slc.hide_axes(draw_frame=True)
+        slc.set_colorbar_label(field, "")
+        slc.hide_colorbar()
+    else:
+        # slc.set_colorbar_location("bottom")
+        if hide_axes:
+            slc.hide_axes(draw_frame=True)
+
     fn = slc.save(
         mpl_kwargs={"dpi": 300, "bbox_inches": "tight", "pad_inches": 0.1})
     print(f"{fn} saved")
@@ -316,7 +340,7 @@ def test_filter_snapshots_by_time_interval():
     print(filtered_times)
 
 
-def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, skip_existing=False, view_dir="z", center=None, n_processes=1, print_field_list=False, first_only=False, top_left_text=None, use_ISM_mean_molecular_weight=False, time_interval=None, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None):
+def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, skip_existing=False, view_dir="z", center=None, n_processes=1, print_field_list=False, first_only=False, top_left_text=None, top_right_text=None, use_ISM_mean_molecular_weight=False, time_interval=None, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, hide_axes=False, hide_all=False):
 
     if print_field_list:
         ds = yt.load(pltdirs[0])
@@ -379,12 +403,12 @@ def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle
             valid_pltdirs = [valid_pltdirs[0]]
         for pltdir in valid_pltdirs:
             plot_one(pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center,
-                     top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing)
+                     top_left_text, top_right_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing, hide_axes, hide_all)
     else:
         # Create arguments for parallel processing
         plot_args = [
             (pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center,
-             top_left_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing)
+             top_left_text, top_right_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing, hide_axes, hide_all)
             for pltdir in valid_pltdirs
         ]
 
@@ -452,6 +476,9 @@ def parse_args():
     # text to annotate at top-left corner
     parser.add_argument("--top_left_text", type=str, default=None,
                         help="Text to annotate at the top-left corner in white")
+    # text to annotate at top-left corner
+    parser.add_argument("--top_right_text", type=str, default=None,
+                        help="Text to annotate at the top-left corner in white")
     # use ISM mean molecular weight
     parser.add_argument("--mean_molecular_weight", type=float, default=1.0,
                         help="Mean molecular weight in atomic mass units. Default: 1.0")
@@ -473,6 +500,9 @@ def parse_args():
     # particle color
     parser.add_argument("--p_color", type=str, default=None,
                         help="Color for particles. Default: None (use default colors)")
+    parser.add_argument("--hide_cb_labels", type=str, default=None, help="Hide both cb and cb labels")
+    parser.add_argument("--hide_axes", action="store_true", help="Hide hide axes")
+    parser.add_argument("--hide_all", action="store_true", help="Hide both cb and cb labels")
 
     return parser.parse_args()
 
@@ -480,7 +510,7 @@ def parse_args():
 def main(args):
 
     plot_slice_or_projection(args.pltdirs, args.outdir, args.field, args.kind, args.width, args.zlim, args.particles, args.grids, args.cell_edges, args.timeoff, args.skip_existing, args.dir, args.center,
-                             args.n_processes, args.print_field_list, args.first_only, args.top_left_text, args.mean_molecular_weight, args.time_interval, args.figsize, args.cmap, args.p_size, args.p_marker, args.p_color)
+                             args.n_processes, args.print_field_list, args.first_only, args.top_left_text, args.top_right_text, args.mean_molecular_weight, args.time_interval, args.figsize, args.cmap, args.p_size, args.p_marker, args.p_color, args.hide_axes, args.hide_all)
 
 
 if __name__ == "__main__":
