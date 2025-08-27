@@ -29,7 +29,7 @@ using amrex::Real;
 struct AccretionProblem {
 };
 
-constexpr bool par_in_cell_center = true;
+static constexpr bool par_in_cell_center = true;
 const int sink_write_interval = 1;
 const double sphere_radius = 2.0e16; // cm
 const double dx_fixed = sphere_radius / 64.0;
@@ -221,6 +221,8 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	// auto const &m_isothermal_ptr = m_isothermal.dataPtr();
 	const int array_size = static_cast<int>(x_isothermal.size());
 
+	const auto rho_floor_ = rho_floor;
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// compute x,y,z relative to the particle position
 		const Real x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0] - par_center;
@@ -242,7 +244,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 		}
 		// const Real m = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, m_isothermal_ptr, array_size);
 
-		const Real rho = std::max(alpha * unit_rho, rho_floor);
+		const Real rho = std::max(alpha * unit_rho, rho_floor_);
 		const Real u = - neg_v * unit_v;
 		Real vx = 0.0;
 		Real vy = 0.0;
@@ -295,6 +297,7 @@ auto problem_main() -> int
 	// read t_end from parameter file
 	amrex::ParmParse pp("problem");
 	pp.get("t_end", t_end);
+	pp.get("sink_file", sink_file);
 
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
@@ -373,15 +376,15 @@ auto problem_main() -> int
 	// compute reference solution
 	//
 	// x values (dimensionless radius)
-	const amrex::Gpu::DeviceVector<double> x_isothermal = {
+	const std::vector<double> x_isothermal = {
 			0.050, 0.100, 0.150, 0.200, 0.250, 0.300, 0.350, 0.400, 0.450, 0.500, 0.550, 0.600, 0.650, 0.700, 0.750, 0.800, 0.850, 0.900, 0.950, 1.000
 	};
 	// alpha values (density parameter)
-	const amrex::Gpu::DeviceVector<double> alpha_isothermal = {
+	const std::vector<double> alpha_isothermal = {
 			71.500, 27.800, 16.400, 11.500, 8.760, 7.090, 5.950, 5.140, 4.520, 4.040, 3.660, 3.350, 3.080, 2.860, 2.670, 2.500, 2.350, 2.220, 2.100, 2.000
 	};
 	// neg_v values (negative velocity)
-	const amrex::Gpu::DeviceVector<double> neg_v_isothermal = {
+	const std::vector<double> neg_v_isothermal = {
 			5.440, 3.470, 2.580, 2.050, 1.680, 1.400, 1.180, 1.010, 0.861, 0.735, 0.625, 0.528, 0.442, 0.363, 0.291, 0.225, 0.163, 0.106, 0.051, 0.000
 	};
 	// m values (mass parameter)
@@ -389,9 +392,9 @@ auto problem_main() -> int
 	// 		0.981, 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
 	// };
 	const int array_size = static_cast<int>(x_isothermal.size());
-	auto const &x_isothermal_ptr = x_isothermal.dataPtr();
-	auto const &alpha_isothermal_ptr = alpha_isothermal.dataPtr();
-	auto const &neg_v_isothermal_ptr = neg_v_isothermal.dataPtr();
+	auto const &x_isothermal_ptr = x_isothermal.data();
+	auto const &alpha_isothermal_ptr = alpha_isothermal.data();
+	auto const &neg_v_isothermal_ptr = neg_v_isothermal.data();
 
 	// get cell density as a function of x
 	auto [position1, values1] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
