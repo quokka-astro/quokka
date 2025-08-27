@@ -93,12 +93,11 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 
 		// extract cell-centered velocity fields
 		// indexing: field[3: x-component]
-		std::array<amrex::FArrayBox, 3> cc_fabs_Ux;
+		const amrex::Box &box_cc_U = amrex::grow(box_cc, nghost_cc);
+		std::array<amrex::FArrayBox, 3> cc_fabs_Ux = {amrex::FArrayBox(box_cc_U, 1, amrex::The_Async_Arena()),
+							      amrex::FArrayBox(box_cc_U, 1, amrex::The_Async_Arena()),
+							      amrex::FArrayBox(box_cc_U, 1, amrex::The_Async_Arena())};
 		{
-			const amrex::Box &box_cc_U = amrex::grow(box_cc, nghost_cc);
-			cc_fabs_Ux[0].resize(box_cc_U, 1);
-			cc_fabs_Ux[1].resize(box_cc_U, 1);
-			cc_fabs_Ux[2].resize(box_cc_U, 1);
 			const auto &cc_a4_Ux0 = cc_fabs_Ux[0].array();
 			const auto &cc_a4_Ux1 = cc_fabs_Ux[1].array();
 			const auto &cc_a4_Ux2 = cc_fabs_Ux[2].array();
@@ -139,12 +138,8 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 
 			// initialise FArrayBox for storing the temporary edge-centered velocity fields created in each permutation of reconstructing from the
 			// cell-face indexing: field[2: i-side of edge]
-			std::array<amrex::FArrayBox, 2> ec_fabs_U_ieside;
-
-			// define the four possible velocity field quantities that could be reconstructed at the cell-edge
-			// also define the temporary velocity field quantities that will be used for computing the extrapolation
-			ec_fabs_U_ieside[0].resize(box_ec_r, 1);
-			ec_fabs_U_ieside[1].resize(box_ec_r, 1);
+			std::array<amrex::FArrayBox, 2> ec_fabs_U_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
+									    amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
 
 			// indexing: field[2: i-compnent][2: i-side of edge]
 			// note: magnetic field components cannot be discontinuous along themselves (i.e., either side of the face where they are
@@ -157,10 +152,10 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 
 			// define quantities
 			for (int icomp = 0; icomp < 2; ++icomp) {
-				ec_fabs_Bi_ieside[icomp][0].resize(box_ec_r, 1);
-				ec_fabs_Bi_ieside[icomp][1].resize(box_ec_r, 1);
+				ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+				ec_fabs_Bi_ieside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 				for (int iquad = 0; iquad < 4; ++iquad) {
-					ec_fabs_Ui_q[icomp][iquad].resize(box_ec_r, 1);
+					ec_fabs_Ui_q[icomp][iquad] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 					ec_fabs_Ui_q[icomp][iquad].setVal<amrex::RunOn::Device>(0.0);
 				}
 			}
@@ -189,10 +184,9 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					// create temporary FArrayBox for storing the face-centered velocity field reconstructed from the cell-center
 					// indexing: field[2: i-side of face]
-					std::array<amrex::FArrayBox, 2> fc_fabs_U_ifside;
 					const int wcomp = extrap_dirs[icomp];
-					fc_fabs_U_ifside[0].resize(box_fc_U, 1);
-					fc_fabs_U_ifside[1].resize(box_fc_U, 1);
+					std::array<amrex::FArrayBox, 2> fc_fabs_U_ifside = {amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena()),
+											    amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena())};
 
 					// extrapolate cell-centered velocity components to the cell-face
 					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[wcomp].array(), fc_fabs_U_ifside[0].array(),
@@ -264,7 +258,7 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 
 				// compute electric field in the quadrant about the cell-edge: cross product between velocity and magnetic field in that
 				// define EMF FArrayBox
-				ec_fabs_E_q[iquad].resize(box_ec, 1);
+				ec_fabs_E_q[iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
 				const auto &E2_qi = ec_fabs_E_q[iquad].array();
 
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
