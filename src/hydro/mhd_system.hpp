@@ -25,7 +25,6 @@
 
 AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04); // NOLINT
 
-
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_t>
 {
@@ -352,7 +351,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	constexpr int nstreams = 1; // only run on 1 GPU stream to avoid race conditions
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) { // keep
 		const amrex::Box &box_cc = mfi.validbox();
-		const amrex::Box &box_cc_EMF = amrex::grow(box_cc, nghost_cc); 
+		const amrex::Box &box_cc_EMF = amrex::grow(box_cc, nghost_cc);
 		std::array<amrex::FArrayBox, 3> cc_fabs_EMF = {amrex::FArrayBox(box_cc_EMF, 1, amrex::The_Async_Arena()),
 							       amrex::FArrayBox(box_cc_EMF, 1, amrex::The_Async_Arena()),
 							       amrex::FArrayBox(box_cc_EMF, 1, amrex::The_Async_Arena())};
@@ -542,7 +541,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const auto &E2_q3 = ec_fabs_EMF_q[3].const_array();
 				// use the new ec-EMF for the next part of the calculation
 
-				// Balsara 2025 HLL Riemann solver to determine EMF 
+				// Balsara 2025 HLL Riemann solver to determine EMF
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const double SL = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0), fspd_x0(i, j, k, 0));
 					const double SR = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1), fspd_x0(i, j, k, 1));
@@ -604,7 +603,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				});
 			}
 		}
-	} 
+	}
 }
 
 template <typename problem_t>

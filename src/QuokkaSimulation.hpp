@@ -166,10 +166,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	int nghost_vel_ = 2;			// number of ghost cells for face velocity computation (default == 2)
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
-	int compute_emf_method_ = 1;   		 // 0 == use cc velocity to compute emf at edges (default for non-MHD); 
-	   									 // 1 == use fc velocity to compute emf at edges (default for MHD)
-										 // 2 == use Balsara 2025 method to compute emf at cell-center and extrapolate to edges
-	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
+	int compute_emf_method_ = 1;			 // 0 == use cc velocity to compute emf at edges (default for non-MHD);
+							 // 1 == use fc velocity to compute emf at edges (default for MHD)
+							 // 2 == use Balsara 2025 method to compute emf at cell-center and extrapolate to edges
+	amrex::Long radiationCellUpdates_ = 0;		 // total number of radiation cell-updates
 
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
