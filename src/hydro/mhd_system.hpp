@@ -35,16 +35,18 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	};
 
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
-							std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-							std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type, int emf_scheme);
+			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type,
+			       int emf_scheme);
 
 	static void ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
-			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds,
-			       int reconstructionOrder, EMFAvgType emf_avg_type);
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type);
 
 	static void ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type);
+					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
+					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -55,9 +57,10 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
-							std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-							std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds,
-			       int reconstructionOrder, EMFAvgType emf_avg_type, int emf_scheme)
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type,
+				      int emf_scheme)
 {
 	if (emf_scheme == 0) {
 		MHDSystem<problem_t>::ComputeEMF_FS(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_type);
@@ -70,8 +73,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
+					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FS()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
@@ -355,8 +358,10 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
-						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
+					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
+					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
+					       EMFAvgType emf_avg_type)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FS_FCVel()");
 

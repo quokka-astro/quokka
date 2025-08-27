@@ -1444,7 +1444,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
-		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
+		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds,
+						 emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
 	}
 
 	// Stage 1 of RK2-SSP
@@ -1464,7 +1465,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, faceVel, stateOld_fc, fast_mhd_wavespeeds, emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, faceVel, stateOld_fc, fast_mhd_wavespeeds,
+							 emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1605,7 +1607,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
-			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, faceVel, stateInter_fc, fast_mhd_wavespeeds, emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
+			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, faceVel, stateInter_fc, fast_mhd_wavespeeds,
+							 emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
