@@ -35,13 +35,16 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	};
 
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+							std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+							std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type, int emf_scheme);
+
+	static void ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds,
 			       int reconstructionOrder, EMFAvgType emf_avg_type);
 
-	static void ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder);
+	static void ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -52,10 +55,25 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+							std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+							std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds,
+			       int reconstructionOrder, EMFAvgType emf_avg_type, int emf_scheme)
+{
+	if (emf_scheme == 0) {
+		MHDSystem<problem_t>::ComputeEMF_FS(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_type);
+	} else if (emf_scheme == 1) {
+		MHDSystem<problem_t>::ComputeEMF_FS_FCVel(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_type);
+	} else {
+		throw std::runtime_error("Unsupported EMF-scheme: " + std::to_string(emf_scheme) + ". Expected either 0 (FS) or 1 (FS_FCVel).");
+	}
+}
+
+template <typename problem_t>
+void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
 {
-	const BL_PROFILE("MHDSystem::ComputeEMF()");
+	const BL_PROFILE("MHDSystem::ComputeEMF_FS()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
@@ -336,12 +354,11 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 }
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
-						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
-						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder)
+void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
 {
-	const BL_PROFILE("MHDSystem::ComputeEMF_UsingFCVel()");
+	const BL_PROFILE("MHDSystem::ComputeEMF_FS_FCVel()");
 
 	// loop over each box-array on the level
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
@@ -480,41 +497,56 @@ void MHDSystem<problem_t>::ComputeEMF_UsingFCVel(std::array<amrex::MultiFab, AMR
 			// compute electric field on the cell-edge
 			const auto &E2_ave = ec_mf_emf_components[iedge][mfi].array();
 			// only operate on the real cells
-			amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-				const double E2_q0_ = E2_q0(i, j, k);
-				const double E2_q1_ = E2_q1(i, j, k);
-				const double E2_q2_ = E2_q2(i, j, k);
-				const double E2_q3_ = E2_q3(i, j, k);
+			if (emf_avg_type == EMFAvgType::BalsaraSpicer) {
+				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+					const double E2_q0_ = E2_q0(i, j, k);
+					const double E2_q1_ = E2_q1(i, j, k);
+					const double E2_q2_ = E2_q2(i, j, k);
+					const double E2_q3_ = E2_q3(i, j, k);
+					// Balsara & Spicer averaging scheme:
+					E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
+				});
+			} else if (emf_avg_type == EMFAvgType::LD04) {
+				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+					const double E2_q0_ = E2_q0(i, j, k);
+					const double E2_q1_ = E2_q1(i, j, k);
+					const double E2_q2_ = E2_q2(i, j, k);
+					const double E2_q3_ = E2_q3(i, j, k);
 
-				const double B0_p_ = B0_p(i, j, k);
-				const double B0_m_ = B0_m(i, j, k);
-				const double B1_p_ = B1_p(i, j, k);
-				const double B1_m_ = B1_m(i, j, k);
+					const double B0_p_ = B0_p(i, j, k);
+					const double B0_m_ = B0_m(i, j, k);
+					const double B1_p_ = B1_p(i, j, k);
+					const double B1_m_ = B1_m(i, j, k);
 
-				// LD04 scheme:
-				const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-				const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-				const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-				const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+					// LD04 scheme:
+					const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
+					const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
+					const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
+					const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
 
-				// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-				// (-,+) | (+,+)
-				//   1   |   2
-				// ------+------
-				//   0   |   3
-				// (-,-) | (+,-)
+					// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
+					// (-,+) | (+,+)
+					//   1   |   2
+					// ------+------
+					//   0   |   3
+					// (-,-) | (+,-)
 
-				const double num1 = ((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
-				const double num2 = ((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
+					const double num1 =
+					    ((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
+					const double num2 =
+					    ((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
 
-				// must be averaged for exact floating-point symmetry
-				const double numerator = 0.5 * (num1 + num2);
-				const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
+					// must be averaged for exact floating-point symmetry
+					const double numerator = 0.5 * (num1 + num2);
+					const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
 
-				// NOTE: there is a sign error in Equation 56 of Felker & Stone
-				const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
-				E2_ave(i, j, k) = (numerator / denominator) + term2;
-			});
+					// NOTE: there is a sign error in Equation 56 of Felker & Stone
+					const double term2 =
+					    ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
+
+					E2_ave(i, j, k) = (numerator / denominator) + term2;
+				});
+			}
 		}
 	}
 }
