@@ -25,6 +25,7 @@
 
 AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04); // NOLINT
 
+
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_t>
 {
@@ -57,7 +58,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF()");
-	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
+	const int nghost_cc = 2; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
@@ -351,7 +352,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	constexpr int nstreams = 1; // only run on 1 GPU stream to avoid race conditions
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) { // keep
 		const amrex::Box &box_cc = mfi.validbox();
-		const amrex::Box &box_cc_EMF = amrex::grow(box_cc, nghost_cc); // only need cc ghost zones for Balsara method
+		const amrex::Box &box_cc_EMF = amrex::grow(box_cc, nghost_cc); 
 		std::array<amrex::FArrayBox, 3> cc_fabs_EMF = {amrex::FArrayBox(box_cc_EMF, 1, amrex::The_Async_Arena()),
 							       amrex::FArrayBox(box_cc_EMF, 1, amrex::The_Async_Arena()),
 							       amrex::FArrayBox(box_cc_EMF, 1, amrex::The_Async_Arena())};
@@ -406,10 +407,10 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					amrex::Real const bx3_p = bx3_arr(i + delta_x3[0], j + delta_x3[1], k + delta_x3[2]);
 					cc_a4_EMFx(i, j, k) = p[x2ind] / rho * (bx3_m + bx3_p) / 2. - p[x3ind] / rho * (bx2_m + bx2_p) / 2.;
 				});
-			} // end of for loop over idim
+			} // end of idim loop
 
-			// now we have v x B at the cell center (e.g., for E2_LU, E2_RU, E2_LD, and E2_RD) with cc_fabs_EMF, we need to reconstruct to edges via
-			// Balsara method first reconstruct B within the cell face, e.g., Bx in x-face to get y, z directions, same as F&S for B to edge
+			// now we have v x B at the cell center (e.g., for E2_LU, E2_RU, E2_LD, and E2_RD) with cc_fabs_EMF, we need to reconstruct to edges
+			// first reconstruct B within the cell face, e.g., Bx in x-face to get y, z directions, same as F&S for B to edge
 
 			for (int iedge = 0; iedge < 3; ++iedge) {
 
@@ -541,7 +542,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const auto &E2_q3 = ec_fabs_EMF_q[3].const_array();
 				// use the new ec-EMF for the next part of the calculation
 
-				// LLF variant
+				// Balsara 2025 HLL Riemann solver to determine EMF 
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const double SL = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0), fspd_x0(i, j, k, 0));
 					const double SR = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1), fspd_x0(i, j, k, 1));
@@ -601,9 +602,9 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 						E2_array(i, j, k) = E2_dstar;
 					}
 				});
-			} // end of iedge loop
+			}
 		}
-	} // end MFITER
+	} 
 }
 
 template <typename problem_t>

@@ -166,8 +166,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	int nghost_vel_ = 2;			// number of ghost cells for face velocity computation (default == 2)
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
-	bool emfBalsara_ = false;			 // use Balsara method to average EMF at edges (default == false)
-
+	int compute_emf_method_ = 1;   		 // 0 == use cc velocity to compute emf at edges (default for non-MHD); 
+	   									 // 1 == use fc velocity to compute emf at edges (default for MHD)
+										 // 2 == use Balsara 2025 method to compute emf at cell-center and extrapolate to edges
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
@@ -488,7 +489,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const hpp("mhd");
 		hpp.query("emf_averaging_method", emfAveragingType_);
 		hpp.query("emf_reconstruction_order", emfReconstructionOrder_);
-		hpp.query("use_balsara_compute_emf", emfBalsara_);
+		hpp.query("compute_emf_method", compute_emf_method_);
 	}
 
 	// set cooling runtime parameters
@@ -1441,7 +1442,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
-		if (emfBalsara_) {
+		if (compute_emf_method_ == 2) {
 			MHDSystem<problem_t>::ComputeEMF_Balsara(ec_emf_components_fo, state_old_cc_tmp, state_old_fc_tmp, FOfast_mhd_wavespeeds,
 								 emfReconstructionOrder_);
 		} else {
@@ -1467,7 +1468,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
-			if (emfBalsara_) {
+			if (compute_emf_method_ == 2) {
 				MHDSystem<problem_t>::ComputeEMF_Balsara(ec_emf_components_rk_stage1, stateOld_cc, stateOld_fc, fast_mhd_wavespeeds,
 									 emfReconstructionOrder_);
 			} else {
@@ -1614,7 +1615,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
-			if (emfBalsara_) {
+			if (compute_emf_method_ == 2) {
 				MHDSystem<problem_t>::ComputeEMF_Balsara(ec_emf_components_rk_stage2, stateInter_cc, stateInter_fc, fast_mhd_wavespeeds,
 									 emfReconstructionOrder_);
 			} else {
