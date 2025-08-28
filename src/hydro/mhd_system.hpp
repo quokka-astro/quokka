@@ -75,7 +75,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	} else if (emf_scheme == 2) {
 		MHDSystem<problem_t>::ComputeEMF_Balsara(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_type);
 	} else {
-		throw std::runtime_error("Unsupported EMF-scheme: " + std::to_string(emf_scheme) + ". Expected either 0 (FS), 1 (FS_FCVel), or 2 (Balsara2025).");
+		throw std::runtime_error("Unsupported EMF-scheme: " + std::to_string(emf_scheme) +
+					 ". Expected either 0 (FS), 1 (FS_FCVel), or 2 (Balsara2025).");
 	}
 }
 
@@ -552,7 +553,6 @@ void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX
 					    ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
 
 					E2_ave(i, j, k) = (numerator / denominator) + term2;
-          
 				});
 			}
 		}
