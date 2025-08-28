@@ -57,7 +57,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF()");
-	const int nghost_cc = 2; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
+	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
@@ -338,7 +338,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	// calculating v x B at cell center, v already at cell center, B at face center
 
 	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara()");
-	const int nghost_cc = 4; // leaving for now because unsure if needed in the future
+	const int nghost_cc = 3; // leaving for now because unsure if needed in the future
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
