@@ -30,6 +30,7 @@ do_subcycle = 0
 plotfile_interval = -1
 checkpoint_interval = -1
 
+problem.sink_file = "sink.txt"
 problem.t_end = 1.2e12
 max_timesteps = 0
 
