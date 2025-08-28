@@ -494,7 +494,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("alpha");
 	// title: t = t_end - t0
 	matplotlibcpp::title("t = " + std::to_string(sim.tNew_[0]));
-	matplotlibcpp::xlim(-1.0 * sphere_radius, 1.0 * sphere_radius);
+	matplotlibcpp::xlim(-2.0 * sphere_radius, 2.0 * sphere_radius);
 	matplotlibcpp::legend();
 	matplotlibcpp::save("particle_isothermal_alpha_profile.png");
 	// plot velocity profile at end
@@ -510,7 +510,7 @@ auto problem_main() -> int
 	matplotlibcpp::plot(physical_x, v_ref, neg_v_ref_args);
 	matplotlibcpp::xlabel("x");
 	matplotlibcpp::ylabel("neg_v");
-	matplotlibcpp::xlim(-1.0 * sphere_radius, 1.0 * sphere_radius);
+	matplotlibcpp::xlim(-2.0 * sphere_radius, 2.0 * sphere_radius);
 	matplotlibcpp::title("t = " + std::to_string(sim.tNew_[0]));
 	matplotlibcpp::legend();
 	matplotlibcpp::save("particle_isothermal_neg_v_profile.png");

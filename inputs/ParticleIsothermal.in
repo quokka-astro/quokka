@@ -3,10 +3,12 @@
 # *****************************************************************
 #geometry.prob_lo     = -2e16 -2e16 -2e16
 #geometry.prob_hi     = 2e16 2e16 2e16
-geometry.prob_lo     = -4e16 -4e16 -4e16
-geometry.prob_hi     = 4e16 4e16 4e16
+#geometry.prob_lo     = -4e16 -4e16 -4e16
+#geometry.prob_hi     = 4e16 4e16 4e16
 #geometry.prob_lo     = -8e16 -8e16 -8e16
 #geometry.prob_hi     = 8e16 8e16 8e16
+geometry.prob_lo     = -5e16 -5e16 -5e16
+geometry.prob_hi     = 5e16 5e16 5e16
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -17,11 +19,11 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 256 256 256
+amr.n_cell          = 320 320 320
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 128    # grid size must be divisible by this
+amr.blocking_factor = 64    # grid size must be divisible by this
 amr.max_grid_size   = 128    # at least 128 for GPUs
-amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.n_error_buf     = 0     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.0   # default
 
 do_reflux = 1
