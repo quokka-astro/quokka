@@ -16,9 +16,9 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "util/fextract.hpp"
+#include <fstream>
 #include <gcem.hpp>
 #include <iomanip>
-#include <fstream>
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -36,7 +36,7 @@ const double dx_fixed = sphere_radius / 64.0;
 
 // from dimentionless units to cgs units
 constexpr double cs0 = 0.2 * 1.0e5; // 0.2 km/s to cm/s
-constexpr double temp0 = 10.0; // K, used for estimating internal energy
+constexpr double temp0 = 10.0;	    // K, used for estimating internal energy
 constexpr double mu = 2.33 * C::m_p;
 constexpr double e0 = 1.0 / mu * C::k_B * temp0; // thermal energy per unit mass
 constexpr double G = C::Gconst;
@@ -47,9 +47,19 @@ constexpr double unit_m = cs0 * cs0 * cs0 * t0 / G;
 constexpr double unit_v = cs0;
 constexpr double unit_l = cs0 * t0;
 constexpr double mass_star = 0.975 * unit_m;
-std::string sink_file = "../inputs/sink.txt";  // NOLINT
+std::string sink_file = "../inputs/sink.txt"; // NOLINT
 
 constexpr double rho_floor = 1.0e-10 * unit_rho;
+
+// Isothermal accretion reference data (moved to global scope to avoid duplication)
+const std::vector<double> x_isothermal = {0.050, 0.100, 0.150, 0.200, 0.250, 0.300, 0.350, 0.400, 0.450, 0.500,
+					  0.550, 0.600, 0.650, 0.700, 0.750, 0.800, 0.850, 0.900, 0.950, 1.000};
+
+const std::vector<double> alpha_isothermal = {71.500, 27.800, 16.400, 11.500, 8.760, 7.090, 5.950, 5.140, 4.520, 4.040,
+					      3.660,  3.350,  3.080,  2.860,  2.670, 2.500, 2.350, 2.220, 2.100, 2.000};
+
+const std::vector<double> neg_v_isothermal = {5.440, 3.470, 2.580, 2.050, 1.680, 1.400, 1.180, 1.010, 0.861, 0.735,
+					      0.625, 0.528, 0.442, 0.363, 0.291, 0.225, 0.163, 0.106, 0.051, 0.000};
 
 template <> struct Particle_Traits<AccretionProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -82,7 +92,7 @@ template <> struct Physics_Traits<AccretionProblem> {
 template <> struct SimulationData<AccretionProblem> {
 	std::vector<Real> time;
 	std::vector<Real> Mstar;
-	int step_counter = 0;  // Counter for tracking timesteps
+	int step_counter = 0; // Counter for tracking timesteps
 };
 
 template <> void QuokkaSimulation<AccretionProblem>::computeAfterTimestep()
@@ -111,7 +121,7 @@ template <> void QuokkaSimulation<AccretionProblem>::computeAfterTimestep()
 			// std::ofstream outfile;
 			// outfile.open(sink_output_file, std::ios_base::app); // Append mode
 			// if (outfile.is_open()) {
-			// 	outfile << std::scientific << std::setprecision(14) 
+			// 	outfile << std::scientific << std::setprecision(14)
 			// 		<< tNew_[0] << "\t" << Mstar << "\n";
 			// 	outfile.close();
 			// }
@@ -186,24 +196,23 @@ template <> void QuokkaSimulation<AccretionProblem>::refineGrid(int lev, amrex::
 
 template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	// x values (dimensionless radius)
-	const amrex::Gpu::DeviceVector<double> x_isothermal = {
-			0.050, 0.100, 0.150, 0.200, 0.250, 0.300, 0.350, 0.400, 0.450, 0.500, 0.550, 0.600, 0.650, 0.700, 0.750, 0.800, 0.850, 0.900, 0.950, 1.000
-	};
+	// Convert std::vector to GPU-accessible data for device code
+	amrex::Gpu::DeviceVector<double> x_isothermal_gpu;
+	amrex::Gpu::DeviceVector<double> alpha_isothermal_gpu;
+	amrex::Gpu::DeviceVector<double> neg_v_isothermal_gpu;
 
-	// alpha values (density parameter)
-	const amrex::Gpu::DeviceVector<double> alpha_isothermal = {
-			71.500, 27.800, 16.400, 11.500, 8.760, 7.090, 5.950, 5.140, 4.520, 4.040, 3.660, 3.350, 3.080, 2.860, 2.670, 2.500, 2.350, 2.220, 2.100, 2.000
-	};
+	x_isothermal_gpu.resize(x_isothermal.size());
+	alpha_isothermal_gpu.resize(alpha_isothermal.size());
+	neg_v_isothermal_gpu.resize(neg_v_isothermal.size());
 
-	// neg_v values (negative velocity)
-	const amrex::Gpu::DeviceVector<double> neg_v_isothermal = {
-			5.440, 3.470, 2.580, 2.050, 1.680, 1.400, 1.180, 1.010, 0.861, 0.735, 0.625, 0.528, 0.442, 0.363, 0.291, 0.225, 0.163, 0.106, 0.051, 0.000
-	};
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, x_isothermal.begin(), x_isothermal.end(), x_isothermal_gpu.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, alpha_isothermal.begin(), alpha_isothermal.end(), alpha_isothermal_gpu.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, neg_v_isothermal.begin(), neg_v_isothermal.end(), neg_v_isothermal_gpu.begin());
 
 	// m values (mass parameter)
 	// const amrex::Gpu::DeviceVector<double> m_isothermal = {
-	// 		0.981, 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
+	// 		0.981,
+	// 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
 	// };
 
 	const double par_center = par_in_cell_center ? 0.5 * dx_fixed : 0.0;
@@ -215,11 +224,11 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	auto const &x_isothermal_ptr = x_isothermal.dataPtr();
-	auto const &alpha_isothermal_ptr = alpha_isothermal.dataPtr();
-	auto const &neg_v_isothermal_ptr = neg_v_isothermal.dataPtr();
+	auto const &x_isothermal_ptr = x_isothermal_gpu.dataPtr();
+	auto const &alpha_isothermal_ptr = alpha_isothermal_gpu.dataPtr();
+	auto const &neg_v_isothermal_ptr = neg_v_isothermal_gpu.dataPtr();
 	// auto const &m_isothermal_ptr = m_isothermal.dataPtr();
-	const int array_size = static_cast<int>(x_isothermal.size());
+	const int array_size = static_cast<int>(x_isothermal_gpu.size());
 
 	const auto rho_floor_ = rho_floor;
 
@@ -234,7 +243,7 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 
 		// interpolate alpha_isothermal, neg_v_isothermal and m_isothermal at xx
 		Real alpha = 0.0;
-		Real neg_v = 0.0; 
+		Real neg_v = 0.0;
 		if (xx >= 1.0) {
 			alpha = 2.0 / (xx * xx);
 			neg_v = 0.0;
@@ -245,11 +254,11 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 		// const Real m = interpolate_value<BoundaryPolicy::Clamp>(xx, x_isothermal_ptr, m_isothermal_ptr, array_size);
 
 		const Real rho = std::max(alpha * unit_rho, rho_floor_);
-		const Real u = - neg_v * unit_v;
+		const Real u = -neg_v * unit_v;
 		Real vx = 0.0;
 		Real vy = 0.0;
 		Real vz = 0.0;
-		if (r / dx_fixed  > 1.0e-10) {
+		if (r / dx_fixed > 1.0e-10) {
 			vx = u * x / r;
 			vy = u * y / r;
 			vz = u * z / r;
@@ -357,7 +366,8 @@ auto problem_main() -> int
 	fstream << "# x, alpha, v_abs, pos, rho, u";
 	for (int i = 0; i < nx; ++i) {
 		fstream << '\n';
-		fstream << std::scientific << std::setprecision(14) << x[i] << ", " << alpha[i] << ", " << v_abs[i] << ", " << physical_x[i] << ", " << rho[i] << ", " << u[i];
+		fstream << std::scientific << std::setprecision(14) << x[i] << ", " << alpha[i] << ", " << v_abs[i] << ", " << physical_x[i] << ", " << rho[i]
+			<< ", " << u[i];
 	}
 	fstream.close();
 
@@ -374,23 +384,6 @@ auto problem_main() -> int
 	const double unit_l_1 = cs0 * t_end_real;
 
 	// compute reference solution
-	//
-	// x values (dimensionless radius)
-	const std::vector<double> x_isothermal = {
-			0.050, 0.100, 0.150, 0.200, 0.250, 0.300, 0.350, 0.400, 0.450, 0.500, 0.550, 0.600, 0.650, 0.700, 0.750, 0.800, 0.850, 0.900, 0.950, 1.000
-	};
-	// alpha values (density parameter)
-	const std::vector<double> alpha_isothermal = {
-			71.500, 27.800, 16.400, 11.500, 8.760, 7.090, 5.950, 5.140, 4.520, 4.040, 3.660, 3.350, 3.080, 2.860, 2.670, 2.500, 2.350, 2.220, 2.100, 2.000
-	};
-	// neg_v values (negative velocity)
-	const std::vector<double> neg_v_isothermal = {
-			5.440, 3.470, 2.580, 2.050, 1.680, 1.400, 1.180, 1.010, 0.861, 0.735, 0.625, 0.528, 0.442, 0.363, 0.291, 0.225, 0.163, 0.106, 0.051, 0.000
-	};
-	// m values (mass parameter)
-	// const amrex::Gpu::DeviceVector<double> m_isothermal = {
-	// 		0.981, 0.993, 1.010, 1.030, 1.050, 1.080, 1.120, 1.160, 1.200, 1.250, 1.300, 1.360, 1.420, 1.490, 1.560, 1.640, 1.720, 1.810, 1.900, 2.000
-	// };
 	const int array_size = static_cast<int>(x_isothermal.size());
 	auto const &x_isothermal_ptr = x_isothermal.data();
 	auto const &alpha_isothermal_ptr = alpha_isothermal.data();
@@ -451,7 +444,8 @@ auto problem_main() -> int
 	fstream_final << "# x, alpha, v_abs, alpha_ref, v_ref, pos, rho, u";
 	for (int i = 0; i < nx; ++i) {
 		fstream_final << '\n';
-		fstream_final << std::scientific << std::setprecision(14) << x[i] << ", " << alpha[i] << ", " << v_abs[i] << ", " << alpha_ref[i] << ", " << v_ref[i] << ", " << physical_x[i] << ", " << rho[i] << ", " << u[i];
+		fstream_final << std::scientific << std::setprecision(14) << x[i] << ", " << alpha[i] << ", " << v_abs[i] << ", " << alpha_ref[i] << ", "
+			      << v_ref[i] << ", " << physical_x[i] << ", " << rho[i] << ", " << u[i];
 	}
 	fstream_final.close();
 
