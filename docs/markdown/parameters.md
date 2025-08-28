@@ -71,7 +71,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 |----|----|----|
 | mhd.emf_averaging_method | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer` or `LD04`. Default: `LD04`. |
 | mhd.emf_reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |
-| mhd.emf_scheme | Integer | Determines the EMF computation scheme. Can be set to 0 (original Felker and Stone scheme), 1 (modified Felker and Stone scheme using face-centered velocity from Riemann solver), or 2 (Balsara 2025 EMF at cell center). Default: 2. |
+| mhd.emf_scheme | String | Determines the EMF computation scheme. Can be set to `FelkerStone` (original Felker and Stone scheme), `FelkerStoneFaceVel` (modified Felker and Stone scheme using face-centered velocity from Riemann solver), or `Balsara2025` (Balsara 2025 EMF at cell center). Default: `Balsara2025`. |
 
 ## Optically-thin radiative cooling
 

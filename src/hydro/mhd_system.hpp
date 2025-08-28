@@ -24,6 +24,7 @@
 #include "physics_numVars.hpp"
 
 AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04); // NOLINT
+AMREX_ENUM(EMFScheme, FelkerStone, FelkerStoneFaceVel, Balsara2025); // NOLINT
 
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_t>
@@ -39,7 +40,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type,
-			       int emf_scheme);
+			       EMFScheme emf_scheme);
 
 	static void ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
@@ -66,17 +67,16 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type,
-				      int emf_scheme)
+				      EMFScheme emf_scheme)
 {
-	if (emf_scheme == 0) {
+	if (emf_scheme == EMFScheme::FelkerStone) {
 		MHDSystem<problem_t>::ComputeEMF_FS(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_type);
-	} else if (emf_scheme == 1) {
+	} else if (emf_scheme == EMFScheme::FelkerStoneFaceVel) {
 		MHDSystem<problem_t>::ComputeEMF_FS_FCVel(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_type);
-	} else if (emf_scheme == 2) {
+	} else if (emf_scheme == EMFScheme::Balsara2025) {
 		MHDSystem<problem_t>::ComputeEMF_Balsara(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder);
 	} else {
-		throw std::runtime_error("Unsupported EMF-scheme: " + std::to_string(emf_scheme) +
-					 ". Expected either 0 (FS), 1 (FS_FCVel), or 2 (Balsara2025).");
+		throw std::runtime_error("Unsupported EMF-scheme: " + std::to_string(static_cast<int>(emf_scheme)));
 	}
 }
 
