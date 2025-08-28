@@ -338,7 +338,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	// calculating v x B at cell center, v already at cell center, B at face center
 
 	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara()");
-	const int nghost_cc = 3; // leaving for now because unsure if needed in the future
+	const int nghost_cc = 3; // only 3 ghost zones needed here
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
