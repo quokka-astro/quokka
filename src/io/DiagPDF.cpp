@@ -139,7 +139,7 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 	}
 
 	// Data holders
-	amrex::Gpu::DeviceVector<amrex::Real> pdf_d(getTotalBinCount(), 0.0);
+	amrex::Gpu::AsyncVector<amrex::Real> pdf_d(getTotalBinCount(), 0.0);
 	amrex::Vector<amrex::Real> pdf(getTotalBinCount(), 0.0);
 
 	// Populate the data from each level on each proc
@@ -189,11 +189,11 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 			multiply_by_gasDensity = true;
 		}
 
-		amrex::Gpu::DeviceVector<int> idx_d(nvars);
-		amrex::Gpu::DeviceVector<int> nbins_d(nvars);
-		amrex::Gpu::DeviceVector<int> doLog_d(nvars);
-		amrex::Gpu::DeviceVector<amrex::Real> lowBnd_d(nvars);
-		amrex::Gpu::DeviceVector<amrex::Real> binWidth_d(nvars);
+		amrex::Gpu::AsyncVector<int> idx_d(nvars);
+		amrex::Gpu::AsyncVector<int> nbins_d(nvars);
+		amrex::Gpu::AsyncVector<int> doLog_d(nvars);
+		amrex::Gpu::AsyncVector<amrex::Real> lowBnd_d(nvars);
+		amrex::Gpu::AsyncVector<amrex::Real> binWidth_d(nvars);
 
 		// copy arrays to device
 		amrex::Gpu::copy(amrex::Gpu::hostToDevice, fieldIdx.begin(), fieldIdx.end(), idx_d.begin());
