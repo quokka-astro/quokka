@@ -1224,8 +1224,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			break;
 		}
 
-		if (maxWalltime_ > 0 && getWalltime() > 0.9 * maxWalltime_) {
-			// we have exceeded 90% of maxWalltime_
+		if (maxWalltime_ > 0 && getWalltime() > std::max(0.9 * maxWalltime_, static_cast<double>(maxWalltime_ - 300))) {
+			// we have exceeded the walltime limit
 			break;
 		}
 	}
