@@ -57,11 +57,11 @@ A comprehensive example:
 
 KEY FUNCTIONS:
 ==============
-- plot_one(): Creates a single plot for one snapshot directory
+- plot_one(pltdir, args): Creates a single plot for one snapshot directory, takes args namespace directly
 - filter_snapshots_by_time_interval(): Filters snapshots to create evenly spaced time sequences
-- plot_slice_or_projection(): Main orchestration function for batch processing
+- main(args): Main orchestration function for batch processing, takes args namespace directly
 - parse_args(): Command-line argument parsing with extensive options
-- main(): Entry point that coordinates the plotting workflow
+- main(args): Entry point that coordinates the plotting workflow
 
 TECHNICAL DETAILS:
 ==================
@@ -97,13 +97,14 @@ import yt
 import unyt
 import matplotlib.pyplot as plt
 
-import scienceplots
-plt.style.use(['science', 'nature', 'no-latex'])
-# try:
-#     import scienceplots
-#     plt.style.use(['science', 'nature'])
-# except:
-#     print("scienceplots not installed or poster style does not exist; skipping")
+try:
+    import scienceplots
+    plt.style.use(['science', 'nature', 'no-latex'])
+    print("scienceplots loaded successfully")
+except ImportError:
+    print("scienceplots not installed; using default matplotlib style")
+except Exception as e:
+    print(f"scienceplots installed but failed to load style: {e}; using default matplotlib style")
 
 # check yt version
 assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
@@ -113,7 +114,7 @@ yt.set_log_level(40)
 m_u = 1.660539e-24 * unyt.g
 
 
-def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, view_dir="z", center=None, top_left_text=None, top_right_text=None, mean_molecular_weight=1.0, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, skip_existing=False, hide_axes=False, hide_all=False):
+def plot_one(pltdir, args):
 
     print(f"processing {pltdir}")
 
@@ -124,6 +125,31 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
     ad = ds.all_data()
     # print(ds.derived_field_list)
     # return
+
+    # Extract parameters from args
+    field = args.field
+    kind = args.kind
+    width = args.width
+    zlim = args.zlim
+    particle = args.particles
+    grids = args.grids
+    cell_edges = args.cell_edges
+    time_off = args.timeoff
+    view_dir = args.dir
+    center = args.center
+    top_left_text = args.top_left_text
+    mean_molecular_weight = args.mean_molecular_weight
+    figsize = args.figsize
+    cmap = args.cmap
+    p_size = args.p_size
+    p_marker = args.p_marker
+    p_color = args.p_color
+    skip_existing = args.skip_existing
+    annotate_center = args.annotate_center
+    axis_unit = args.axis_unit
+    outdir = args.outdir
+    hide_all = args.hide_all
+    hide_axes = args.hide_axes
 
     mean_molecular_weight_per_H_atom = mean_molecular_weight * m_u
 
@@ -185,6 +211,9 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
         else:
             w = float(width)
         slc.set_width(w)
+    if axis_unit is not None:
+        slc.set_axes_unit(axis_unit)
+        print(f"set axes unit to {axis_unit}")
     if zlim is not None:
         zlim0 = 'min' if zlim[0].lower() == "min" else float(zlim[0])
         zlim1 = 'max' if zlim[1].lower() == "max" else float(zlim[1])
@@ -247,13 +276,10 @@ def plot_one(pltdir, outdir, field, kind, width, zlim, particle=[], grids=False,
         slc.annotate_timestamp()
     if top_left_text is not None:
         # Add text annotation at the top-left corner with LaTeX support
-        slc.annotate_text((0.02, 0.98), top_left_text, coord_system='axis', text_args={
-                          'color': 'white', 'usetex': True, 'verticalalignment': 'top', 'horizontalalignment': 'left'})
-    if top_right_text is not None:
-        # Add text annotation at the top-left corner with LaTeX support
-        text = top_right_text.replace("{linebreak}", "\n").replace("{slash}", "\\")
-        slc.annotate_text((0.98, 0.02), text, coord_system='axis', text_args={
-                          'color': 'white', 'usetex': True, 'verticalalignment': 'bottom', 'horizontalalignment': 'right'})
+        slc.annotate_text((0.02, 0.98), top_left_text, coord_system='axis', text_args={'color': 'white', 'usetex': True, 'verticalalignment': 'top', 'horizontalalignment': 'left'})
+    if annotate_center is not None:
+        # Add text annotation at the center of the domain
+        slc.annotate_text((0.5, 0.5), annotate_center, coord_system='axis', text_args={'color': 'red', 'usetex': True, 'verticalalignment': 'center', 'horizontalalignment': 'center'})
     # get cwd
     cwd = os.getcwd()
     # change to outdir
@@ -340,83 +366,79 @@ def test_filter_snapshots_by_time_interval():
     print(filtered_times)
 
 
-def plot_slice_or_projection(pltdirs, outdir, field, kind, width, zlim, particle=[], grids=False, cell_edges=False, time_off=False, skip_existing=False, view_dir="z", center=None, n_processes=1, print_field_list=False, first_only=False, top_left_text=None, top_right_text=None, use_ISM_mean_molecular_weight=False, time_interval=None, figsize=6, cmap='default', p_size=160., p_marker='.', p_color=None, hide_axes=False, hide_all=False):
+def main(args):
 
-    if print_field_list:
-        ds = yt.load(pltdirs[0])
+    if args.print_field_list:
+        ds = yt.load(args.pltdirs[0])
         print("ds.derived_field_list:")
         pprint.pprint(ds.derived_field_list)
         return
 
-    assert view_dir in ["x", "y", "z"]
+    assert args.dir in ["x", "y", "z"]
 
-    if outdir != ".":
-        os.makedirs(outdir, exist_ok=True)
+    if args.outdir != ".":
+        os.makedirs(args.outdir, exist_ok=True)
 
-    if field is None or field in ["density", "rho", "den"]:
-        field = ("gas", "density")
-    elif field in ["n", "nH", "n_H", "num_density"]:
-        field = ("gas", "number_density")
-    elif field in ["temperature", "T", "temp"]:
-        field = ("gas", "temperature")
-    elif field in ['vx', 'velocity-x', 'velocity_x']:
-        field = ("gas", "velocity_x")
-    elif field in ['vy', 'velocity-y', 'velocity_y']:
-        field = ("gas", "velocity_y")
-    elif field in ['vz', 'velocity-z', 'velocity_z']:
-        field = ("gas", "velocity_z")
-    elif field in ['v', 'velocity']:
-        field = ("gas", "velocity")
-    elif field in ['p', 'momentum']:
-        field = ("gas", "momentum_density")
+    # Map field names to yt field tuples
+    if args.field is None or args.field in ["density", "rho", "den"]:
+        args.field = ("gas", "density")
+    elif args.field in ["n", "nH", "n_H", "num_density"]:
+        args.field = ("gas", "number_density")
+    elif args.field in ["temperature", "T", "temp"]:
+        args.field = ("gas", "temperature")
+    elif args.field in ['vx', 'velocity-x', 'velocity_x']:
+        args.field = ("gas", "velocity_x")
+    elif args.field in ['vy', 'velocity-y', 'velocity_y']:
+        args.field = ("gas", "velocity_y")
+    elif args.field in ['vz', 'velocity-z', 'velocity_z']:
+        args.field = ("gas", "velocity_z")
+    elif args.field in ['v', 'velocity']:
+        args.field = ("gas", "velocity")
+    elif args.field in ['p', 'momentum']:
+        args.field = ("gas", "momentum_density")
     else:
-        field = ("boxlib", field)
+        args.field = ("boxlib", args.field)
 
     # Filter out invalid directories and old directories
     valid_pltdirs = [
-        pltdir for pltdir in pltdirs if os.path.isdir(pltdir) and ".old." not in os.path.basename(pltdir)
+        pltdir for pltdir in args.pltdirs if os.path.isdir(pltdir) and ".old." not in os.path.basename(pltdir)
     ]
 
     # Filter snapshots by time interval if specified
-    if time_interval is not None:
-        print(f"Filtering snapshots by time interval of {time_interval} ...")
+    if args.time_interval is not None:
+        print(f"Filtering snapshots by time interval of {args.time_interval} ...")
         valid_pltdirs, filtered_times, time_unit = filter_snapshots_by_time_interval(
-            valid_pltdirs, time_interval)
+            valid_pltdirs, args.time_interval)
         print(f"Filtered times: {filtered_times} {time_unit}")
         print(
-            f"Selected {len(valid_pltdirs)} snapshots based on time interval of {time_interval}")
+            f"Selected {len(valid_pltdirs)} snapshots based on time interval of {args.time_interval}")
     print(f"Valid pltdirs: {valid_pltdirs}")
 
     # parse center
-    if center is not None:
-        if ',' in center:
-            center = tuple(float(x) for x in center.split(','))
-        elif '_' in center:
-            center = tuple(float(x) for x in center.split('_'))
+    if args.center is not None:
+        if ',' in args.center:
+            args.center = tuple(float(x) for x in args.center.split(','))
+        elif '_' in args.center:
+            args.center = tuple(float(x) for x in args.center.split('_'))
         else:
-            center = float(center)
+            args.center = float(args.center)
     else:
-        center = 'c'
+        args.center = 'c'
 
-    if n_processes == 1 or first_only:
-        if first_only:
+    if args.n_processes == 1 or args.first_only:
+        if args.first_only:
             valid_pltdirs = [valid_pltdirs[0]]
         for pltdir in valid_pltdirs:
-            plot_one(pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center,
-                     top_left_text, top_right_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing, hide_axes, hide_all)
+            plot_one(pltdir, args)
     else:
         # Create arguments for parallel processing
-        plot_args = [
-            (pltdir, outdir, field, kind, width, zlim, particle, grids, cell_edges, time_off, view_dir, center,
-             top_left_text, top_right_text, use_ISM_mean_molecular_weight, figsize, cmap, p_size, p_marker, p_color, skip_existing, hide_axes, hide_all)
-            for pltdir in valid_pltdirs
-        ]
+        plot_args = [(pltdir, args) for pltdir in valid_pltdirs]
 
         print(
-            f"Processing {len(valid_pltdirs)} directories using {n_processes} processes")
+            f"Processing {len(valid_pltdirs)} directories using {args.n_processes} processes")
 
         # Process directories in parallel
-        with Pool(processes=n_processes) as pool:
+        with Pool(processes=args.n_processes) as pool:
             pool.starmap(plot_one, plot_args)
 
 
@@ -478,7 +500,7 @@ def parse_args():
                         help="Text to annotate at the top-left corner in white")
     # text to annotate at top-left corner
     parser.add_argument("--top_right_text", type=str, default=None,
-                        help="Text to annotate at the top-left corner in white")
+                        help="Text to annotate at the top-right corner in white")
     # use ISM mean molecular weight
     parser.add_argument("--mean_molecular_weight", type=float, default=1.0,
                         help="Mean molecular weight in atomic mass units. Default: 1.0")
@@ -498,19 +520,16 @@ def parse_args():
     parser.add_argument("--p_marker", type=str, default='.',
                         help="Marker style for particles. Common options: '.', '*', 'o', '+', 'x'. Default: '.'")
     # particle color
-    parser.add_argument("--p_color", type=str, default=None,
+    parser.add_argument("--p_color", type=str, default=None, 
                         help="Color for particles. Default: None (use default colors)")
-    parser.add_argument("--hide_cb_labels", type=str, default=None, help="Hide both cb and cb labels")
+    # annotate center
+    parser.add_argument("--annotate_center", type=str, default=None, help="Text to annotate at the center of the domain")
+    # axis units
+    parser.add_argument("--axis_unit", type=str, default=None, help="Units for x and y axis, e.g. 'kpc', 'cm', 'pc'. Default: None (use dataset units)")
     parser.add_argument("--hide_axes", action="store_true", help="Hide hide axes")
     parser.add_argument("--hide_all", action="store_true", help="Hide both cb and cb labels")
 
     return parser.parse_args()
-
-
-def main(args):
-
-    plot_slice_or_projection(args.pltdirs, args.outdir, args.field, args.kind, args.width, args.zlim, args.particles, args.grids, args.cell_edges, args.timeoff, args.skip_existing, args.dir, args.center,
-                             args.n_processes, args.print_field_list, args.first_only, args.top_left_text, args.top_right_text, args.mean_molecular_weight, args.time_interval, args.figsize, args.cmap, args.p_size, args.p_marker, args.p_color, args.hide_axes, args.hide_all)
 
 
 if __name__ == "__main__":
