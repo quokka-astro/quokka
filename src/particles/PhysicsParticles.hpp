@@ -104,6 +104,9 @@ class PhysicsParticleDescriptorBase
 	// Print statistics of particles
 	virtual void printParticleStatistics() const = 0;
 
+	// Save particle data to file
+	virtual void saveParticleDataToFile(const std::string &plotfilename, const std::string &name) = 0;
+
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
@@ -450,6 +453,11 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void printParticleStatistics() const override
 	{
 		particle_io::printParticleStatistics<ContainerType, problem_t, particleType_>(container_, getMassIndex(), getEvolutionStageIndex());
+	}
+
+	void saveParticleDataToFile(const std::string &filename, const std::string &name) override
+	{
+		particle_io::saveParticleDataToFile<ContainerType>(container_, filename, name);
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -898,6 +906,15 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->printParticleStatistics();
+		}
+	}
+
+	// Save particle data to file
+	void saveParticleDataToFile(const std::string &plotfilename)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToFile()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->saveParticleDataToFile(plotfilename, getParticleTypeName(type));
 		}
 	}
 

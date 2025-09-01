@@ -342,14 +342,14 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
 // @param filename: Name of the CSV file to write
 // @return: true if file was written successfully, false otherwise
 template <typename ContainerType>
-auto saveParticleDataToFile(ContainerType *container, const std::string &filename) -> bool
+auto saveParticleDataToFile(ContainerType *container, const std::string &filename, const std::string &name) -> bool
 {
     // Get all particle data
     const auto [particle_ids, real_data, int_data] = getAllParticleData(container);
 
     // Only rank 0 writes the file
     if (amrex::ParallelDescriptor::IOProcessor()) {
-        std::ofstream outFile(filename);
+        std::ofstream outFile(filename + "/" + name + ".csv");
         if (!outFile) {
             return false;
         }

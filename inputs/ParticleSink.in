@@ -30,6 +30,6 @@ particles.verbose = 1
 particles.sink_particle_use_uniform_kernel = true
 
 max_timesteps = 1
-plotfile_interval = -1
+plotfile_interval = 1
 
 tiny_profiler.enabled = 0
