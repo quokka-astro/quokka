@@ -2837,7 +2837,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteParticleFile()
 	amrex::UtilCreateCleanDirectory(partfilename, true);
 
 	// Save particle data to CSV files inside the created directory
-	particleRegister_.saveParticleDataToFile(partfilename);
+	// Only save if particle count <= 1000 for each type
+	particleRegister_.saveParticleDataToFileConditional(partfilename, 1000);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &MetadataFileName) const

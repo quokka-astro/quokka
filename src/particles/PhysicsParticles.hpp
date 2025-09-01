@@ -917,12 +917,21 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Save particle data to file
-	void saveParticleDataToFile(const std::string &plotfilename)
+	// Save particle data to file only if particle count <= max_particles
+	void saveParticleDataToFileConditional(const std::string &plotfilename, int max_particles)
 	{
-		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToFile()");
+		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToFileConditional()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->saveParticleDataToFile(plotfilename, getParticleTypeName(type));
+			const int num_particles = descriptor->getNumParticles();
+			const std::string particle_type_name = getParticleTypeName(type);
+			
+			if (num_particles <= max_particles) {
+				amrex::Print() << "Saving " << num_particles << " " << particle_type_name << " to CSV file\n";
+				descriptor->saveParticleDataToFile(plotfilename, particle_type_name);
+			} else {
+				amrex::Print() << "Skipping " << particle_type_name << " CSV output: " << num_particles 
+				              << " particles exceeds limit of " << max_particles << "\n";
+			}
 		}
 	}
 
