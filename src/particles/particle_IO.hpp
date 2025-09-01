@@ -20,18 +20,21 @@ template <typename problem_t> class PhysicsParticleRegister;
 namespace particle_io
 {
 
-// Get positions and fields data from all particles at level 0 from all ranks and gather them on rank 0.
-// This method creates a temporary particle container on rank 0 and copies all particles to it.
+// Get positions and fields data from all particles across all levels and gather them on rank 0.
+// This method creates a temporary particle container on all ranks (though only rank 0 will contain
+// particles after redistribution) and copies all particles from all levels into it.
+//
 // The returned data for each particle contains:
 // - first:
 //   - First AMREX_SPACEDIM elements are positions [x,y,z]
 //   - Remaining elements are particle data (e.g., mass, velocities, etc.)
 // - second:
 //   - Integer data (e.g., id, type, etc.)
-// Only rank 0 will return the actual particle data, other ranks return an empty vector.
-// @return: tuple of vectors of particle data on rank 0, empty vectors on other ranks
+//
+// Only rank 0 will return the actual particle data, other ranks return empty vectors.
+// @return: pair of vectors containing particle data on rank 0, empty vectors on other ranks
 template <typename ContainerType>
-[[nodiscard]] auto getParticleDataAtLevelZero(ContainerType *container) -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>>
+[[nodiscard]] auto getAllParticleData(ContainerType *container) -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>>
 {
     std::vector<std::vector<double>> real_data;
     std::vector<std::vector<int>> int_data;

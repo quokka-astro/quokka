@@ -186,7 +186,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// @return: tuple of vectors of particle data on rank 0, empty vectors on other ranks
 	[[nodiscard]] auto getParticleDataAtLevelZero() const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
-		return particle_io::getParticleDataAtLevelZero(container_);
+		return particle_io::getAllParticleData(container_);
 	}
 
 	[[nodiscard]] auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
