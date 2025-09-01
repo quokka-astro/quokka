@@ -725,7 +725,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("projection_interval", projectionInterval_);
 
 	// Default output interval
-	pp.query("particle_interval", particleInterval_);
+	pp.query("particle_csv_interval", particleInterval_);
 
 	// Default statistics interval
 	pp.query("statistics_interval", statisticsInterval_);
