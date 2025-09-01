@@ -2821,9 +2821,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 
 	// write all particles in particleRegister_ to plotfile
 	particleRegister_.writePlotFile(plotfilename);
-
-	// write particles to CSV file
-	particleRegister_.saveParticleDataToFile(plotfilename);
 #endif
 }
 
