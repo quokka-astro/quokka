@@ -1043,6 +1043,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	int last_ascent_step = 0;
 #endif
 	int last_projection_step = 0;
+	int last_particle_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
 	int last_chk_file_step = 0;
@@ -1198,6 +1199,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			WriteProjectionPlotfile();
 		}
 
+		if (particleInterval_ > 0 && (step + 1) % particleInterval_ == 0) {
+			last_particle_step = step + 1;
+			WriteParticleFile();
+		}
+
 		// print particle statistics
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
 			if (quokka::particle_verbose > 0) {
@@ -1285,6 +1291,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	// write final projection
 	if (projectionInterval_ > 0 && istep[0] > last_projection_step) {
 		WriteProjectionPlotfile();
+	}
+
+	// write final particle file
+	if (particleInterval_ > 0 && istep[0] > last_particle_step) {
+		WriteParticleFile();
 	}
 
 	// write final statistics
