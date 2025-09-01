@@ -449,17 +449,23 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Implementation of particle data output to units file
 	void writeUnitsFile(const std::string &snapshot_name, const std::string &name) override
 	{
-		particle_io::writeUnitsFile<ContainerType, problem_t, particleType_>(container_, snapshot_name, name);
+		if (container_ != nullptr) {
+			particle_io::writeUnitsFile<ContainerType, problem_t, particleType_>(container_, snapshot_name, name);
+		}
 	}
 
 	void printParticleStatistics() const override
 	{
-		particle_io::printParticleStatistics<ContainerType, problem_t, particleType_>(container_, getMassIndex(), getEvolutionStageIndex());
+		if (container_ != nullptr) {
+			particle_io::printParticleStatistics<ContainerType, problem_t, particleType_>(container_, getMassIndex(), getEvolutionStageIndex());
+		}
 	}
 
 	void saveParticleDataToFile(const std::string &filename, const std::string &name) override
 	{
-		particle_io::saveParticleDataToFile<ContainerType>(container_, filename, name);
+		if (container_ != nullptr) {
+			particle_io::saveParticleDataToFile<ContainerType>(container_, filename, name);
+		}
 	}
 
 #if AMREX_SPACEDIM == 3

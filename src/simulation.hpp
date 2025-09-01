@@ -2830,7 +2830,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteParticleFile()
 
 	// Create particle file name using the same pattern as PlotFileName
 	const std::string partfilename = amrex::Concatenate("part", istep[0], 5);
-	
+
 	amrex::Print() << "Writing particle file " << partfilename << "\n";
 
 	// Create directory, renaming existing one if it exists (following AMReX pattern)
