@@ -2,6 +2,7 @@
 #define PARTICLE_IO_HPP_
 
 #include <fstream>
+#include <iomanip>
 #include <string>
 #include <vector>
 
@@ -25,17 +26,19 @@ namespace particle_io
 // particles after redistribution) and copies all particles from all levels into it.
 //
 // The returned data for each particle contains:
-// - first:
+// - first: vector of particle IDs
+// - second:
 //   - First AMREX_SPACEDIM elements are positions [x,y,z]
 //   - Remaining elements are particle data (e.g., mass, velocities, etc.)
-// - second:
-//   - Integer data (e.g., id, type, etc.)
+// - third:
+//   - Integer data (e.g., type, etc.)
 //
 // Only rank 0 will return the actual particle data, other ranks return empty vectors.
-// @return: pair of vectors containing particle data on rank 0, empty vectors on other ranks
+// @return: tuple of vectors containing particle data on rank 0, empty vectors on other ranks
 template <typename ContainerType>
-[[nodiscard]] auto getAllParticleData(ContainerType *container) -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>>
+[[nodiscard]] auto getAllParticleData(ContainerType *container) -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>>
 {
+    std::vector<int64_t> particle_ids;
     std::vector<std::vector<double>> real_data;
     std::vector<std::vector<int>> int_data;
 
@@ -72,6 +75,7 @@ template <typename ContainerType>
                 constexpr bool has_int_components = (ContainerType::ParticleType::NInt > 0);
 
                 // Pre-size vectors to avoid reallocations
+                particle_ids.reserve(np);
                 real_data.reserve(np);
                 if constexpr (has_int_components) {
                     int_data.reserve(np);
@@ -80,6 +84,9 @@ template <typename ContainerType>
                 // Extract positions, real components, and integer components from host data
                 for (int i = 0; i < np; ++i) {
                     const auto &p = pData_h[i];
+                    
+                    // Get particle ID
+                    particle_ids.push_back(p.id());
 
                     // Process real data (positions and rdata)
                     std::vector<double> r_data;
@@ -116,7 +123,7 @@ template <typename ContainerType>
         }
     }
 
-    return {real_data, int_data}; // Empty vectors on non-root ranks
+    return {particle_ids, real_data, int_data}; // Empty vectors on non-root ranks
 }
 
 // Get particle data at a specific level
@@ -320,6 +327,75 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
             }
         }
     }
+}
+
+// Save particle data to a CSV file
+// This function gathers all particle data from all ranks and saves it to a CSV file on rank 0.
+// The CSV file will contain the following columns:
+// - ID: Particle ID
+// - x, y, z: Particle positions
+// - real_0, real_1, ...: Real components (e.g., mass, velocities, etc.)
+// - int_0, int_1, ...: Integer components (if any)
+//
+// Note: Only rank 0 will write the file, but all ranks must participate in the data gathering.
+// @param container: Particle container
+// @param filename: Name of the CSV file to write
+// @return: true if file was written successfully, false otherwise
+template <typename ContainerType>
+auto saveParticleDataToFile(ContainerType *container, const std::string &filename) -> bool
+{
+    // Get all particle data
+    const auto [particle_ids, real_data, int_data] = getAllParticleData(container);
+
+    // Only rank 0 writes the file
+    if (amrex::ParallelDescriptor::IOProcessor()) {
+        std::ofstream outFile(filename);
+        if (!outFile) {
+            return false;
+        }
+
+        // Write header
+        outFile << "ID";
+        // Position columns
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            outFile << ",pos_" << d;
+        }
+        // Real component columns
+        for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
+            outFile << ",real_" << d;
+        }
+        // Integer component columns
+        if constexpr (ContainerType::ParticleType::NInt > 0) {
+            for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
+                outFile << ",int_" << d;
+            }
+        }
+        outFile << "\n";
+
+        // Write data
+        for (size_t i = 0; i < real_data.size(); ++i) {
+            // Write particle ID
+            outFile << particle_ids[i];
+
+            // Write position and real components
+            for (const auto &val : real_data[i]) {
+                outFile << "," << std::scientific << std::setprecision(15) << val;
+            }
+
+            // Write remaining integer components (skip ID which was written first)
+            if constexpr (ContainerType::ParticleType::NInt > 1) {
+                for (size_t j = 1; j < int_data[i].size(); ++j) {
+                    outFile << "," << int_data[i][j];
+                }
+            }
+            outFile << "\n";
+        }
+
+        outFile.close();
+        return true;
+    }
+
+    return true; // Non-root ranks always succeed
 }
 
 } // namespace particle_io
