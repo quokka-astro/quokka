@@ -162,7 +162,8 @@ auto problem_main() -> int
 
 	// get total particle mass of the initial state
 	const int mass_index = 3;
-	[[maybe_unused]] const auto [ids_init, real_data_init, int_data_init] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getAllParticleData();
+	[[maybe_unused]] const auto [ids_init, real_data_init, int_data_init] =
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getAllParticleData();
 	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
 							 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_init = m_gas_init + m_stars_init;
@@ -177,7 +178,8 @@ auto problem_main() -> int
 	amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
 	// get total particle mass after step 1
-	[[maybe_unused]] const auto [ids_step1, real_data_step1, int_data_step1] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getAllParticleData();
+	[[maybe_unused]] const auto [ids_step1, real_data_step1, int_data_step1] =
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getAllParticleData();
 	const int n_stars_step1 = static_cast<int>(real_data_step1.size());
 
 	if (n_stars_step1 != 1) {
@@ -214,7 +216,8 @@ auto problem_main() -> int
 	amrex::Real const m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
 
 	// get total particle mass after the end
-	[[maybe_unused]] const auto [ids_final, real_data_final, int_data_final] = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getAllParticleData();
+	[[maybe_unused]] const auto [ids_final, real_data_final, int_data_final] =
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getAllParticleData();
 	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
 							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
 	const double m_tot_final = m_gas_final + m_stars_final;

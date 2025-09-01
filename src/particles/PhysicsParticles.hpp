@@ -77,7 +77,8 @@ class PhysicsParticleDescriptorBase
 	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
 
 	// New method to get particle positions and data
-	[[nodiscard]] virtual auto getAllParticleData() const -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
+	[[nodiscard]] virtual auto getAllParticleData() const
+	    -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
 	// Get particle data at level lev
 	[[nodiscard]] virtual auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
@@ -187,7 +188,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	//   - Integer data (e.g., id, type, etc.)
 	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
 	// @return: tuple of vectors of particle data on rank 0, empty vectors on other ranks
-	[[nodiscard]] auto getAllParticleData() const -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
+	[[nodiscard]] auto getAllParticleData() const
+	    -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
 		return particle_io::getAllParticleData(container_);
 	}
@@ -359,7 +361,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Compute maximum particle speed at a given level
 	[[nodiscard]] auto computeMaxParticleSpeed(int lev) const -> amrex::ValLocPair<amrex::Real, amrex::RealVect> override
 	{
-		amrex::ValLocPair<amrex::Real, amrex::RealVect> max_speed{.value = 0, .index = amrex::RealVect { AMREX_D_DECL(NAN, NAN, NAN) }};
+		amrex::ValLocPair<amrex::Real, amrex::RealVect> max_speed{.value = 0, .index = amrex::RealVect{AMREX_D_DECL(NAN, NAN, NAN)}};
 
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			// Only compute for particles that have velocity components
