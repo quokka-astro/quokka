@@ -512,6 +512,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						    interpolate_fate(p.rdata(mass_idx)) == 1 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : 0;
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
 					}
+
+					p.rdata(StochasticStellarPopParticleLumIdx) = 0.0;
 				}
 
 				if (num_particles > 1) { // Update momentum of the low mass star if there is(are) high mass star(s) in the cell
