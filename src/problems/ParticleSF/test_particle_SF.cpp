@@ -251,6 +251,10 @@ auto problem_main() -> int
 		}
 	}
 
+	if (max_timesteps <= 1) {
+		return status;
+	}
+
 	sim.maxTimesteps_ = max_timesteps;
 	sim.evolve();
 
