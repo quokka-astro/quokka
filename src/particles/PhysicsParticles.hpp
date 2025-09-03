@@ -918,18 +918,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// test: save csv
-	void testcsv() const 
-	{
-		amrex::Print() << ">>> saving csv\n";
-
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			const auto [ids1, positions_cicrad, int1] = descriptor->getParticleDataAtAllLevels();
-			// descriptor->getParticleDataAtLevel(0);
-			// descriptor->getParticleDataAtAllLevels();
-		}
-	}
-
 	// Save particle data to file only if particle count <= max_particles
 	void saveParticleDataToFileConditional(const std::string &plotfilename, int max_particles)
 	{
