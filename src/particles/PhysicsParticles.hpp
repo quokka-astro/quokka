@@ -12,6 +12,7 @@
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
@@ -77,7 +78,7 @@ class PhysicsParticleDescriptorBase
 	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
 
 	// New method to get particle positions and data
-	[[nodiscard]] virtual auto getAllParticleData() const
+	[[nodiscard]] virtual auto getParticleDataAtAllLevels() const
 	    -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
 	// Get particle data at level lev
@@ -188,10 +189,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	//   - Integer data (e.g., id, type, etc.)
 	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
 	// @return: tuple of vectors of particle data on rank 0, empty vectors on other ranks
-	[[nodiscard]] auto getAllParticleData() const
+	[[nodiscard]] auto getParticleDataAtAllLevels() const
 	    -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
-		return particle_io::getAllParticleData(container_);
+		return particle_io::getParticleDataAtAllLevels(container_);
 	}
 
 	[[nodiscard]] auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
@@ -917,22 +918,34 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
+	// test: save csv
+	void testcsv() const 
+	{
+		amrex::Print() << ">>> saving csv\n";
+
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			const auto [ids1, positions_cicrad, int1] = descriptor->getParticleDataAtAllLevels();
+			// descriptor->getParticleDataAtLevel(0);
+			// descriptor->getParticleDataAtAllLevels();
+		}
+	}
+
 	// Save particle data to file only if particle count <= max_particles
 	void saveParticleDataToFileConditional(const std::string &plotfilename, int max_particles)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToFileConditional()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			const int num_particles = descriptor->getNumParticles();
-			const std::string particle_type_name = getParticleTypeName(type);
+			for (const auto &[type, descriptor] : particleRegistry_) {
+				const int num_particles = descriptor->getNumParticles();
+				const std::string particle_type_name = getParticleTypeName(type);
 
-			if (num_particles <= max_particles) {
-				amrex::Print() << "Saving " << num_particles << " " << particle_type_name << " to CSV file\n";
-				descriptor->saveParticleDataToFile(plotfilename, particle_type_name);
-			} else {
-				amrex::Print() << "Skipping " << particle_type_name << " CSV output: " << num_particles << " particles exceeds limit of "
-					       << max_particles << "\n";
+				if (num_particles <= max_particles) {
+					amrex::Print() << "Saving " << num_particles << " " << particle_type_name << " to CSV file\n";
+					descriptor->saveParticleDataToFile(plotfilename, particle_type_name);
+				} else {
+					amrex::Print() << "Skipping " << particle_type_name << " CSV output: " << num_particles << " particles exceeds limit of "
+									<< max_particles << "\n";
+				}
 			}
-		}
 	}
 
 	// Prevent copying or moving of the registry to ensure single ownership

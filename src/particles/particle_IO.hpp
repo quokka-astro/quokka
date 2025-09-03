@@ -36,7 +36,7 @@ namespace particle_io
 // Only rank 0 will return the actual particle data, other ranks return empty vectors.
 // @return: tuple of vectors containing particle data on rank 0, empty vectors on other ranks
 template <typename ContainerType>
-[[nodiscard]] auto getAllParticleData(ContainerType *container)
+[[nodiscard]] auto getParticleDataAtAllLevels(ContainerType *container)
     -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>>
 {
 	std::vector<int64_t> particle_ids;
@@ -344,7 +344,7 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
 template <typename ContainerType> auto saveParticleDataToFile(ContainerType *container, const std::string &filename, const std::string &name) -> bool
 {
 	// Get all particle data
-	const auto [particle_ids, real_data, int_data] = getAllParticleData(container);
+	const auto [particle_ids, real_data, int_data] = getParticleDataAtLevel(container, 0);
 
 	// Only rank 0 writes the file
 	if (amrex::ParallelDescriptor::IOProcessor()) {
