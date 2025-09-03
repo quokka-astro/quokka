@@ -76,7 +76,7 @@ template <typename ContainerType>
 		int particle_offset = 0;
 		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
 			const auto &particles = container->GetParticles(lev);
-			
+
 			for (const auto &kv : particles) {
 				const auto &src_tile = kv.second;
 				const int np = src_tile.numParticles();

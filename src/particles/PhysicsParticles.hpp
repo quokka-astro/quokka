@@ -922,18 +922,18 @@ template <typename problem_t> class PhysicsParticleRegister
 	void saveParticleDataToFileConditional(const std::string &plotfilename, int max_particles)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToFileConditional()");
-			for (const auto &[type, descriptor] : particleRegistry_) {
-				const int num_particles = descriptor->getNumParticles();
-				const std::string particle_type_name = getParticleTypeName(type);
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			const int num_particles = descriptor->getNumParticles();
+			const std::string particle_type_name = getParticleTypeName(type);
 
-				if (num_particles <= max_particles) {
-					amrex::Print() << "Saving " << num_particles << " " << particle_type_name << " to CSV file\n";
-					descriptor->saveParticleDataToFile(plotfilename, particle_type_name);
-				} else {
-					amrex::Print() << "Skipping " << particle_type_name << " CSV output: " << num_particles << " particles exceeds limit of "
-									<< max_particles << "\n";
-				}
+			if (num_particles <= max_particles) {
+				amrex::Print() << "Saving " << num_particles << " " << particle_type_name << " to CSV file\n";
+				descriptor->saveParticleDataToFile(plotfilename, particle_type_name);
+			} else {
+				amrex::Print() << "Skipping " << particle_type_name << " CSV output: " << num_particles << " particles exceeds limit of "
+					       << max_particles << "\n";
 			}
+		}
 	}
 
 	// Prevent copying or moving of the registry to ensure single ownership
