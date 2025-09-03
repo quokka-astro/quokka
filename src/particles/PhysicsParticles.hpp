@@ -234,7 +234,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						amrex::Box tile_box = mfi.tilebox();
 						tile_box.grow(rhs[lev]->nGrowVect());
 						amrex::FArrayBox local_rho(tile_box, 1);
-						local_rho.setVal(0.0);
+						local_rho.template setVal<amrex::RunOn::Device>(0.0);
 						
 						auto ptd = ptile.getConstParticleTileData();
 						auto local_arr = local_rho.array();
@@ -248,7 +248,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						});
 						
 						// Add local buffer to global array atomically (single operation per cell)
-						(*rhs[lev])[mfi].atomicAdd(local_rho, tile_box, tile_box, 0, 0, 1);
+						(*rhs[lev])[mfi].template atomicAdd<amrex::RunOn::Device>(local_rho, tile_box, tile_box, 0, 0, 1);
 					}
 				}
 			}
