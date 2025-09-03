@@ -218,35 +218,35 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 #ifdef QUOKKA_DETERMINISTIC_DEPOSITION
 			// Deterministic version: Sort particles and use local buffers for reproducible ordering
 			container_->SortParticlesByCell();
-			
+
 			// Use the same approach as AMReX CPU version: local buffer + atomic add
 			for (int lev = 0; lev <= finest_lev; ++lev) {
-				const auto& geom = container_->Geom(lev);
+				const auto &geom = container_->Geom(lev);
 				const auto plo = geom.ProbLoArray();
 				const auto dxi = geom.InvCellSizeArray();
-				
+
 				for (amrex::MFIter mfi(*rhs[lev]); mfi.isValid(); ++mfi) {
-					const auto& ptile = container_->ParticlesAt(lev, mfi);
+					const auto &ptile = container_->ParticlesAt(lev, mfi);
 					const auto np = ptile.numParticles();
-					
+
 					if (np > 0) {
 						// Create local buffer for this tile
 						amrex::Box tile_box = mfi.tilebox();
 						tile_box.grow(rhs[lev]->nGrowVect());
 						amrex::FArrayBox local_rho(tile_box, 1);
 						local_rho.template setVal<amrex::RunOn::Device>(0.0);
-						
+
 						auto ptd = ptile.getConstParticleTileData();
 						auto local_arr = local_rho.array();
-						
+
 						// Capture mass index to avoid this pointer in device lambda
 						const int mass_idx = this->getMassIndex();
-						
+
 						// Process particles sequentially into local buffer (no race conditions)
-						amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int) {
+						amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) {
 							quokka::depositMassDeterministic(ptd, np, local_arr, plo, dxi, Gconst, mass_idx);
 						});
-						
+
 						// Add local buffer to global array atomically (single operation per cell)
 						(*rhs[lev])[mfi].template atomicAdd<amrex::RunOn::Device>(local_rho, tile_box, tile_box, 0, 0, 1);
 					}
