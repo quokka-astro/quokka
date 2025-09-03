@@ -27,18 +27,19 @@ do_tracers = 1
 poisson_supercycle_interval = 5
 
 cfl = 0.3
-max_timesteps = 2000
+max_timesteps = 2
 stop_time = 6.3e15         # 200 Myr
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
-cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 100
 density_floor = 1e-30
 
-checkpoint_interval = 100
-plotfile_interval = 10
+checkpoint_interval = -1
+plotfile_interval = 100
+particle_csv_interval = 100
 derived_vars = temperature gpot
 
 # max_level = 7 implies a maximum resolution of dx =  73.2 pc (LOW res).
@@ -47,8 +48,8 @@ derived_vars = temperature gpot
 #
 amr.max_level              = 5
 
-agora_galaxy.vcirc_file    = "./vcirc.dat"
-agora_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
+agora_galaxy.vcirc_file    = "../extern/agora_data/vcirc.dat"
+agora_galaxy.particle_file = "../extern/agora_data/AgoraGalaxy_particles_LOW.txt"
 agora_galaxy.refine_Rmax_kpc = 16.0         # kpc
 agora_galaxy.refine_zmax_kpc = 4.0          # kpc
 

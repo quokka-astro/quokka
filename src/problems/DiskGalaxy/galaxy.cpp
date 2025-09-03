@@ -54,7 +54,7 @@ template <> struct Physics_Traits<AgoraGalaxy> {
 };
 
 template <> struct Particle_Traits<AgoraGalaxy> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::StochasticStellarPop;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
 template <> struct SimulationData<AgoraGalaxy> {
