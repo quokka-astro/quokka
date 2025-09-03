@@ -216,13 +216,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 #ifdef QUOKKA_DETERMINISTIC_DEPOSITION
-			// Deterministic version: Sort particles by cell for reproducible ordering
+			// Deterministic version: Sort particles and use local buffers for reproducible ordering
 			container_->SortParticlesByCell();
 			
-			// Capture mass index to avoid this pointer in device lambda
-			const int mass_idx = this->getMassIndex();
-			
-			// Perform deterministic deposition level by level
+			// Use the same approach as AMReX CPU version: local buffer + atomic add
 			for (int lev = 0; lev <= finest_lev; ++lev) {
 				const auto& geom = container_->Geom(lev);
 				const auto plo = geom.ProbLoArray();
@@ -233,14 +230,25 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const auto np = ptile.numParticles();
 					
 					if (np > 0) {
-						auto ptd = ptile.getConstParticleTileData();
-						auto rhs_arr = (*rhs[lev])[mfi].array();
+						// Create local buffer for this tile
+						amrex::Box tile_box = mfi.tilebox();
+						tile_box.grow(rhs[lev]->nGrowVect());
+						amrex::FArrayBox local_rho(tile_box, 1);
+						local_rho.setVal(0.0);
 						
-						// Process particles cell-by-cell deterministically
-						// Note: This runs on a single thread per tile to ensure deterministic order
+						auto ptd = ptile.getConstParticleTileData();
+						auto local_arr = local_rho.array();
+						
+						// Capture mass index to avoid this pointer in device lambda
+						const int mass_idx = this->getMassIndex();
+						
+						// Process particles sequentially into local buffer (no race conditions)
 						amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int) {
-							depositMassByCellDeterministic(ptd, np, rhs_arr, plo, dxi, Gconst, mass_idx);
+							quokka::depositMassDeterministic(ptd, np, local_arr, plo, dxi, Gconst, mass_idx);
 						});
+						
+						// Add local buffer to global array atomically (single operation per cell)
+						(*rhs[lev])[mfi].atomicAdd(local_rho, tile_box, tile_box, 0, 0, 1);
 					}
 				}
 			}
