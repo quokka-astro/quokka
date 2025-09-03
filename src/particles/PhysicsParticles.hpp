@@ -215,9 +215,41 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
+#ifdef QUOKKA_DETERMINISTIC_DEPOSITION
+			// Deterministic version: Sort particles by cell for reproducible ordering
+			container_->SortParticlesByCell();
+			
+			// Capture mass index to avoid this pointer in device lambda
+			const int mass_idx = this->getMassIndex();
+			
+			// Perform deterministic deposition level by level
+			for (int lev = 0; lev <= finest_lev; ++lev) {
+				const auto& geom = container_->Geom(lev);
+				const auto plo = geom.ProbLoArray();
+				const auto dxi = geom.InvCellSizeArray();
+				
+				for (amrex::MFIter mfi(*rhs[lev]); mfi.isValid(); ++mfi) {
+					const auto& ptile = container_->ParticlesAt(lev, mfi);
+					const auto np = ptile.numParticles();
+					
+					if (np > 0) {
+						auto ptd = ptile.getConstParticleTileData();
+						auto rhs_arr = (*rhs[lev])[mfi].array();
+						
+						// Process particles cell-by-cell deterministically
+						// Note: This runs on a single thread per tile to ensure deterministic order
+						amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int) {
+							depositMassByCellDeterministic(ptd, np, rhs_arr, plo, dxi, Gconst, mass_idx);
+						});
+					}
+				}
+			}
+#else
+			// Original fast version: Uses atomic operations (non-deterministic on GPU)
 			// zero_out_input is false because we want to accumulate mass
 			// vol_weight is false because MassDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
+#endif
 		}
 	}
 

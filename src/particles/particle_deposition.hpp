@@ -1,15 +1,23 @@
 #ifndef PARTICLE_DEPOSITION_HPP_
 #define PARTICLE_DEPOSITION_HPP_
+//
+// Particle deposition functions for transferring particle quantities to the mesh.
+//
+// To enable deterministic (reproducible) mass deposition on GPUs, compile with:
+//   -DQUOKKA_DETERMINISTIC_DEPOSITION
+// This sorts particles by cell before deposition to ensure consistent floating-point
+// summation order, eliminating GPU race conditions at the cost of some performance.
+//
 
 #include <algorithm>
 
-#include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
+#include "AMReX_ParticleUtil.H"
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
@@ -55,7 +63,7 @@ struct RadDeposition {
 
 //-------------------- Mass depositions --------------------
 
-// Functor for depositing particle mass onto the grid
+// Functor for depositing particle mass onto the grid (original non-deterministic version)
 struct MassDeposition {
 	amrex::Real Gconst{};  // Gravitational constant
 	int start_part_comp{}; // Starting component in particle data
@@ -65,8 +73,8 @@ struct MassDeposition {
 	// Operator to perform mass deposition using linear interpolation
 	template <typename ContainerType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &rho,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		// Deposit mass weighted by 4 pi G
@@ -75,6 +83,75 @@ struct MassDeposition {
 		});
 	}
 };
+
+// Helper function to accumulate particle contribution to a cell without atomics
+template<typename PTD>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void accumulateParticleToCell(
+	const PTD& ptd,
+	amrex::Long particle_idx,
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dxi,
+	amrex::Real Gconst,
+	int mass_comp,
+	amrex::Real& cell_mass_accumulator) noexcept
+{
+	auto p = amrex::make_particle<typename PTD::ParticleType::ConstType>{}(ptd, particle_idx);
+	
+	// Calculate mass contribution using same formula as original MassDeposition
+	const amrex::Real mass_contrib = 4.0 * M_PI * Gconst * p.rdata(mass_comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+	
+	// Accumulate without atomics (deterministic within cell)
+	cell_mass_accumulator += mass_contrib;
+}
+
+// Deterministic mass deposition function that processes particles cell-by-cell
+template<typename PTD>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositMassByCellDeterministic(
+	const PTD& ptd,
+	amrex::Long np,
+	amrex::Array4<amrex::Real> const& rho,
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& plo,
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dxi,
+	amrex::Real Gconst,
+	int mass_comp) noexcept
+{
+	// Process particles in sorted order (cell-by-cell)
+	amrex::Long i = 0;
+	while (i < np) {
+		// Get the cell of the current particle
+		auto p_current = amrex::make_particle<typename PTD::ParticleType::ConstType>{}(ptd, i);
+		amrex::IntVect current_cell = amrex::getParticleCell(p_current, plo, dxi);
+		
+		// Find all particles in this cell (they're consecutive due to sorting)
+		amrex::Long j = i;
+		amrex::Real cell_mass_total = 0.0;
+		
+		// Accumulate all contributions to this cell deterministically
+		while (j < np) {
+			auto p_j = amrex::make_particle<typename PTD::ParticleType::ConstType>{}(ptd, j);
+			amrex::IntVect cell_j = amrex::getParticleCell(p_j, plo, dxi);
+			
+			if (cell_j != current_cell) {
+				break; // moved to next cell
+			}
+			
+			// Accumulate mass from this particle (deterministic order within cell)
+			accumulateParticleToCell(ptd, j, dxi, Gconst, mass_comp, cell_mass_total);
+			++j;
+		}
+		
+		// Deposit the accumulated cell total using linear interpolation
+		// Since all particles in the group are in the same cell, we can use any particle for interpolation weights
+		amrex::ParticleInterpolator::Linear interp(p_current, plo, dxi);
+		
+		// Deposit the total mass for this cell using standard interpolation
+		interp.ParticleToMesh(p_current, rho, 0, 0, 1, [=] AMREX_GPU_DEVICE(const auto &part, int comp) {
+			amrex::ignore_unused(part, comp);
+			return cell_mass_total;
+		});
+		
+		i = j; // Move to next group of particles
+	}
+}
 
 //-------------------- Supernova depositions --------------------
 
