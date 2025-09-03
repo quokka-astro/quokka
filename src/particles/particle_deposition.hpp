@@ -85,46 +85,6 @@ struct MassDeposition {
 	}
 };
 
-// Custom deterministic deposition that avoids atomic race conditions
-// Key insight: Use standard ParticleToMesh but with a local buffer, then copy deterministically
-template<typename ContainerType>
-struct DeterministicMassDeposition {
-	amrex::Real Gconst{};  // Gravitational constant
-	int start_part_comp{}; // Starting component in particle data
-	int start_mesh_comp{}; // Starting component in mesh data
-	int num_comp{};	       // Number of components to deposit
-
-	// Operator to perform mass deposition using linear interpolation without atomics
-	template <typename ParticleType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ParticleType &p, amrex::Array4<amrex::Real> const &rho,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
-	{
-		// Calculate mass contribution using same formula as original MassDeposition
-		const amrex::Real mass_contrib = 4.0 * M_PI * Gconst * p.rdata(start_part_comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-		
-		// Perform linear interpolation to deposit to 8 neighboring cells
-		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-		
-		// Manually perform the interpolation without atomic operations
-		// This replicates the logic from ParticleInterpolator::Linear::ParticleToMesh
-		static constexpr int stencil_width = 2;
-		for (int kk = 0; kk <= 1; ++kk) {
-			for (int jj = 0; jj <= 1; ++jj) {
-				for (int ii = 0; ii <= 1; ++ii) {
-					const amrex::Real weight = interp.w[0*stencil_width+ii] *
-					                          interp.w[1*stencil_width+jj] *
-					                          interp.w[2*stencil_width+kk];
-					const amrex::Real val = weight * mass_contrib;
-					
-					// Direct assignment without atomics (safe because single-threaded per tile)
-					rho(interp.index[0]+ii, interp.index[1]+jj, interp.index[2]+kk, start_mesh_comp) += val;
-				}
-			}
-		}
-	}
-};
-
 // Function interface for deterministic mass deposition
 template<typename PTD>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositMassDeterministic(
