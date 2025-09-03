@@ -36,14 +36,13 @@ namespace particle_io
 // Only rank 0 will return the actual particle data, other ranks return empty vectors.
 // @return: tuple of vectors containing particle data on rank 0, empty vectors on other ranks
 template <typename ContainerType>
-[[nodiscard]] auto getAllParticleData(ContainerType *container)
+[[nodiscard]] auto getParticleDataAtAllLevels(ContainerType *container)
     -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>>
 {
 	std::vector<int64_t> particle_ids;
 	std::vector<std::vector<double>> real_data;
 	std::vector<std::vector<int>> int_data;
 
-	// All ranks must participate in copyParticles
 	if (container != nullptr) {
 		// Create single-box particle container for analysis on all ranks
 		ContainerType analysisPC{};
@@ -55,9 +54,43 @@ template <typename ContainerType>
 		amrex::Vector<int> const ranks({0});
 		amrex::DistributionMapping const dmap(ranks);
 
-		// Initialize the analysis container and gather all particles to rank 0
+		// Initialize the analysis container
 		analysisPC.Define(geom, dmap, boxArray);
-		analysisPC.copyParticles(*container); // MPI communication happens here
+
+		// Create a single destination tile on rank 0
+		auto &dst_tile = analysisPC.DefineAndReturnParticleTile(0, 0, 0);
+
+		// Count total particles across all levels
+		int total_np = 0;
+		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
+			const auto &particles = container->GetParticles(lev);
+			for (const auto &kv : particles) {
+				total_np += kv.second.numParticles();
+			}
+		}
+
+		// Pre-size the destination tile
+		dst_tile.resize(total_np);
+
+		// Copy particles from all levels to the destination tile
+		int particle_offset = 0;
+		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
+			const auto &particles = container->GetParticles(lev);
+
+			for (const auto &kv : particles) {
+				const auto &src_tile = kv.second;
+				const int np = src_tile.numParticles();
+				if (np > 0) {
+					const auto &src_aos = src_tile.GetArrayOfStructs();
+					auto &dst_aos = dst_tile.GetArrayOfStructs();
+					amrex::Gpu::copy(amrex::Gpu::deviceToDevice, src_aos.data(), src_aos.data() + np, dst_aos.data() + particle_offset);
+					particle_offset += np;
+				}
+			}
+		}
+
+		// Now use MPI to gather all particles to rank 0
+		analysisPC.Redistribute(); // This handles the MPI communication
 
 		// Only rank 0 processes the particles since they're all gathered there
 		if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -82,7 +115,7 @@ template <typename ContainerType>
 					int_data.reserve(np);
 				}
 
-				// Extract positions, real components, and integer components from host data
+				// Process each particle
 				for (int i = 0; i < np; ++i) {
 					const auto &p = pData_h[i];
 
@@ -94,25 +127,24 @@ template <typename ContainerType>
 					// Pre-allocate to avoid reallocations
 					r_data.reserve(AMREX_SPACEDIM + ContainerType::ParticleType::NReal);
 
-					// First add position components
+					// Add position components
 					for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 						r_data.push_back(p.pos(d));
 					}
 
-					// Then add all real components (mass, velocities, etc)
+					// Add all real components
 					for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
 						r_data.push_back(p.rdata(d));
 					}
 
 					real_data.push_back(std::move(r_data));
 
-					// Process integer data (idata) only if particles have integer components
+					// Process integer data if particles have integer components
 					if constexpr (has_int_components) {
 						std::vector<int> i_data;
 						// Pre-allocate to avoid reallocations
 						i_data.reserve(ContainerType::ParticleType::NInt);
 
-						// Add all integer components
 						for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
 							i_data.push_back(p.idata(d));
 						}
@@ -344,7 +376,7 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
 template <typename ContainerType> auto saveParticleDataToFile(ContainerType *container, const std::string &filename, const std::string &name) -> bool
 {
 	// Get all particle data
-	const auto [particle_ids, real_data, int_data] = getAllParticleData(container);
+	const auto [particle_ids, real_data, int_data] = getParticleDataAtAllLevels(container);
 
 	// Only rank 0 writes the file
 	if (amrex::ParallelDescriptor::IOProcessor()) {
