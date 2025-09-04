@@ -227,7 +227,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Loop over all levels
 			for (int lev = 0; lev <= finest_lev; ++lev) {
 				// Create a buffer multifab with ghost zones for this level
-				amrex::MultiFab buffer_rhs(rhs[lev]->boxArray(), rhs[lev]->DistributionMap(), 1, rhs[lev]->nGrowVect());
+				const int nGrow = 1; // need 1 ghost cell for CIC deposition
+				amrex::MultiFab buffer_rhs(rhs[lev]->boxArray(), rhs[lev]->DistributionMap(), 1, nGrow);
 				buffer_rhs.setVal(0.0);
 
 				const auto &geom = container_->Geom(lev);
@@ -248,7 +249,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						auto buffer_arr = buffer_rhs.array(mfi);
 
 						// Get the grown box (including ghost cells)
-						amrex::Box grown_box = mfi.growntilebox();
+						amrex::Box grown_box = mfi.growntilebox(nGrow);
 
 						// Capture mass index to avoid this pointer in device lambda
 						const int mass_idx = this->getMassIndex();
@@ -308,7 +309,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
 
 				// Add buffer_rhs to rhs
-				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, rhs[lev]->nGrowVect());
+				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
 			}
 #else
 			// Original fast version: Uses atomic operations (non-deterministic on GPU)
