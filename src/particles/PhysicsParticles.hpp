@@ -8,7 +8,6 @@
 
 #include <fmt/format.h>
 
-#include "math/float.hpp"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
@@ -18,6 +17,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "math/float.hpp"
 
 #include "particle_IO.hpp"
 #include "particle_accretion.hpp"
