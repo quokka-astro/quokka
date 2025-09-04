@@ -239,7 +239,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const auto np = ptile.numParticles();
 
 					if (np > 0) {
-						auto ptd = ptile.getConstParticleTileData();
+						auto p_tile_data = ptile.getConstParticleTileData();
 						auto buffer_arr = buffer_rhs.array(mfi);
 						
 						// Get the grown box (including ghost cells)
@@ -257,7 +257,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							
 							// Use plain for loop to loop over all particles in this tile
 							for (amrex::Long pidx = 0; pidx < np; ++pidx) {
-								auto p = amrex::make_particle<typename decltype(ptd)::ParticleType::ConstType>{}(ptd, pidx);
+								auto p = amrex::make_particle<typename decltype(p_tile_data)::ParticleType::ConstType>{}(p_tile_data, pidx);
 								
 								const amrex::Real pos_x = p.pos(0);
 								const amrex::Real pos_y = p.pos(1);

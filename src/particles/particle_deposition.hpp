@@ -5,8 +5,8 @@
 //
 // To enable deterministic (reproducible) mass deposition on GPUs, compile with:
 //   -DQUOKKA_DETERMINISTIC_DEPOSITION
-// This sorts particles by cell before deposition to ensure consistent floating-point
-// summation order, eliminating GPU race conditions at the cost of some performance.
+// This does mass deposition cell by cell instead of particle by particle, and do kahan summation on 
+// all the particles that deposits into a cell. 
 //
 
 #include <algorithm>
@@ -15,8 +15,6 @@
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_Extension.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_MakeParticle.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
@@ -84,40 +82,6 @@ struct MassDeposition {
 		});
 	}
 };
-
-// Function interface for deterministic mass deposition
-template <typename PTD>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-depositMassDeterministic(const PTD &ptd, amrex::Long np, amrex::Array4<amrex::Real> const &rho, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi, amrex::Real Gconst, int mass_comp) noexcept
-{
-	// Process particles sequentially to ensure deterministic order
-	for (amrex::Long i = 0; i < np; ++i) {
-		auto p = amrex::make_particle<typename PTD::ParticleType::ConstType>{}(ptd, i);
-
-		// Calculate mass contribution using same formula as original MassDeposition
-		const amrex::Real mass_contrib = 4.0 * M_PI * Gconst * p.rdata(mass_comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-
-		// Perform linear interpolation to deposit to 8 neighboring cells
-		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-
-		// Manually perform the interpolation without atomic operations
-		// This replicates the logic from ParticleInterpolator::Linear::ParticleToMesh
-		static constexpr int stencil_width = 2;
-		for (int kk = 0; kk <= 1; ++kk) {
-			for (int jj = 0; jj <= 1; ++jj) {
-				for (int ii = 0; ii <= 1; ++ii) {
-					const amrex::Real weight =
-					    interp.w[0 * stencil_width + ii] * interp.w[1 * stencil_width + jj] * interp.w[2 * stencil_width + kk];
-					const amrex::Real val = weight * mass_contrib;
-
-					// Direct assignment without atomics (safe because single-threaded per tile)
-					rho(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, 0) += val;
-				}
-			}
-		}
-	}
-}
 
 //-------------------- Supernova depositions --------------------
 
