@@ -5,8 +5,8 @@
 //
 // To enable deterministic (reproducible) mass deposition on GPUs, compile with:
 //   -DQUOKKA_DETERMINISTIC_DEPOSITION
-// This does mass deposition cell by cell instead of particle by particle, and do kahan summation on 
-// all the particles that deposits into a cell. 
+// This does mass deposition cell by cell instead of particle by particle, and do kahan summation on
+// all the particles that deposits into a cell.
 //
 
 #include <algorithm>
