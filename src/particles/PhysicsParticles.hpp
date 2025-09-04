@@ -305,7 +305,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							// For double precision (52-bit significand), to keep 11 decimal digits (~37 bits),
 							// we need to remove ~15 bits from the significand
 							const int digit_to_remove = 15;
-							constexpr amrex::Real factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^digit_to_remove + 1
+							constexpr amrex::Real factor =
+							    static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^digit_to_remove + 1
 							const amrex::Real c = factor * sum;
 							buffer_arr(i, j, k, 0) = c - (c - sum);
 						});
