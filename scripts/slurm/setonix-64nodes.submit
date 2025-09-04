@@ -12,7 +12,7 @@
 #SBATCH -N 64
 
 # *MUST* load environment modules setup script inside the SLURM script, otherwise job will fail
-. scripts/setonix-gpu.profile
+. scripts/hpc_profiles/setonix-gpu.profile
 
 # always run with GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
