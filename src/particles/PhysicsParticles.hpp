@@ -250,25 +250,32 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 						// Loop over cells using amrex::ParallelFor, including ghost cells
 						amrex::ParallelFor(grown_box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+							// Calculate cell center coordinates
+							const amrex::Real cell_x = plo[0] + (i + 0.5) * dx[0];
+							const amrex::Real cell_y = plo[1] + (j + 0.5) * dx[1];
+							const amrex::Real cell_z = plo[2] + (k + 0.5) * dx[2];
+							
 							// Use plain for loop to loop over all particles in this tile
 							for (amrex::Long pidx = 0; pidx < np; ++pidx) {
 								auto p = amrex::make_particle<typename decltype(ptd)::ParticleType::ConstType>{}(ptd, pidx);
 								
-								// Check if this particle is located in this cell
 								const amrex::Real pos_x = p.pos(0);
 								const amrex::Real pos_y = p.pos(1);
 								const amrex::Real pos_z = p.pos(2);
 								
-								// Find the cell containing the particle
-								const int part_i = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
-								const int part_j = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
-								const int part_k = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
-								
-								// If particle is located in this cell, deposit its mass
-								if (part_i == i && part_j == j && part_k == k) {
+								// Calculate normalized distances from particle to cell center
+								const amrex::Real rel_x = std::abs(pos_x - cell_x) / dx[0];
+								const amrex::Real rel_y = std::abs(pos_y - cell_y) / dx[1];
+								const amrex::Real rel_z = std::abs(pos_z - cell_z) / dx[2];
+							
+								// Check if particle is within 1 dx distance from cell center
+								if (rel_x < 1.0 && rel_y < 1.0 && rel_z < 1.0) {
+									// Calculate CIC weight: (1-|x|)(1-|y|)(1-|z|)
+									const amrex::Real weight = (1.0 - rel_x) * (1.0 - rel_y) * (1.0 - rel_z);
+									
+									// Deposit weighted mass
 									const amrex::Real particle_mass = p.rdata(mass_idx);
-									// Deposit mass: rhs += particle_mass / cell_volume, weighted by 4πG
-									const amrex::Real mass_contribution = 4.0 * M_PI * Gconst * particle_mass / cell_volume;
+									const amrex::Real mass_contribution = 4.0 * M_PI * Gconst * particle_mass * weight / cell_volume;
 									buffer_arr(i, j, k, 0) += mass_contribution;
 								}
 							}
@@ -276,8 +283,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					}
 				}
 
-				// Fill boundaries
-				buffer_rhs.FillBoundary(geom.periodicity());
+				// Sum boundary cell values to real cells
+				buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
 
 				// Add buffer_rhs to rhs
 				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, rhs[lev]->nGrowVect());
