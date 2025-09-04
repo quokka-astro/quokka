@@ -12,7 +12,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto round_to_sigfigs_stable(amrex::Rea
 	if (std::isnan(x) || std::isinf(x) || x == 0.0) {
 		return x;
 	}
-	
+
 	AMREX_ASSERT(N > 0);
 
 	const amrex::Real ax = std::fabs(x);
@@ -28,11 +28,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto round_to_sigfigs_stable(amrex::Rea
 	// It’s possible e_est is off by 1 due to rounding; correct it
 	amrex::Real pow10_e = std::pow(10.0, e_est);
 	if (ax / pow10_e >= 10.0) {
-			e_est += 1.0;
-			pow10_e *= 10.0;
+		e_est += 1.0;
+		pow10_e *= 10.0;
 	} else if (ax / pow10_e < 1.0) {
-			e_est -= 1.0;
-			pow10_e /= 10.0;
+		e_est -= 1.0;
+		pow10_e /= 10.0;
 	}
 
 	const amrex::Real s = std::pow(10.0, N - 1 - e_est);
