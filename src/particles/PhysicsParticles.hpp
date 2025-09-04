@@ -219,7 +219,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Deterministic cell-centric version with Kahan summation for GPU reproducibility
 			// Algorithm:
 			// 1. Loop over cells in deterministic order (ParallelFor over grid cells)
-			// 2. For each cell, loop over all particles sequentially 
+			// 2. For each cell, loop over all particles sequentially
 			// 3. Use Kahan summation to compensate for floating-point rounding errors
 			// 4. This ensures identical results regardless of GPU thread scheduling
 			// Note: This is slower than atomic operations but guarantees reproducibility
