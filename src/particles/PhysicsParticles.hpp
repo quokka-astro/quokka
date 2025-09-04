@@ -216,41 +216,71 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 #ifdef QUOKKA_DETERMINISTIC_DEPOSITION
-			// Deterministic version: Sort particles and use local buffers for reproducible ordering
-			container_->SortParticlesByCell();
-
-			// Use the same approach as AMReX CPU version: local buffer + atomic add
+			// Deterministic cell-centric version: Loop over cells first, then particles
+			// This ensures deterministic ordering by processing cells in a predictable sequence
+			
+			// Loop over all levels
 			for (int lev = 0; lev <= finest_lev; ++lev) {
+				// Create a buffer multifab with ghost zones for this level
+				amrex::MultiFab buffer_rhs(rhs[lev]->boxArray(), rhs[lev]->DistributionMap(), 1, rhs[lev]->nGrowVect());
+				buffer_rhs.setVal(0.0);
+
 				const auto &geom = container_->Geom(lev);
 				const auto plo = geom.ProbLoArray();
 				const auto dxi = geom.InvCellSizeArray();
+				const auto dx = geom.CellSizeArray();
+				
+				// Calculate cell volume
+				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-				for (amrex::MFIter mfi(*rhs[lev]); mfi.isValid(); ++mfi) {
+				// Loop over multifabs using ParIterType
+				for (amrex::MFIter mfi(buffer_rhs); mfi.isValid(); ++mfi) {
 					const auto &ptile = container_->ParticlesAt(lev, mfi);
 					const auto np = ptile.numParticles();
 
 					if (np > 0) {
-						// Create local buffer for this tile
-						amrex::Box tile_box = mfi.tilebox();
-						tile_box.grow(rhs[lev]->nGrowVect());
-						amrex::FArrayBox local_rho(tile_box, 1);
-						local_rho.template setVal<amrex::RunOn::Device>(0.0);
-
 						auto ptd = ptile.getConstParticleTileData();
-						auto local_arr = local_rho.array();
-
+						auto buffer_arr = buffer_rhs.array(mfi);
+						
+						// Get the grown box (including ghost cells)
+						amrex::Box grown_box = mfi.growntilebox();
+						
 						// Capture mass index to avoid this pointer in device lambda
 						const int mass_idx = this->getMassIndex();
 
-						// Process particles sequentially into local buffer (no race conditions)
-						amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) {
-							quokka::depositMassDeterministic(ptd, np, local_arr, plo, dxi, Gconst, mass_idx);
+						// Loop over cells using amrex::ParallelFor, including ghost cells
+						amrex::ParallelFor(grown_box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+							// Use plain for loop to loop over all particles in this tile
+							for (amrex::Long pidx = 0; pidx < np; ++pidx) {
+								auto p = amrex::make_particle<typename decltype(ptd)::ParticleType::ConstType>{}(ptd, pidx);
+								
+								// Check if this particle is located in this cell
+								const amrex::Real pos_x = p.pos(0);
+								const amrex::Real pos_y = p.pos(1);
+								const amrex::Real pos_z = p.pos(2);
+								
+								// Find the cell containing the particle
+								const int part_i = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
+								const int part_j = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
+								const int part_k = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
+								
+								// If particle is located in this cell, deposit its mass
+								if (part_i == i && part_j == j && part_k == k) {
+									const amrex::Real particle_mass = p.rdata(mass_idx);
+									// Deposit mass: rhs += particle_mass / cell_volume, weighted by 4πG
+									const amrex::Real mass_contribution = 4.0 * M_PI * Gconst * particle_mass / cell_volume;
+									buffer_arr(i, j, k, 0) += mass_contribution;
+								}
+							}
 						});
-
-						// Add local buffer to global array atomically (single operation per cell)
-						(*rhs[lev])[mfi].template atomicAdd<amrex::RunOn::Device>(local_rho, tile_box, tile_box, 0, 0, 1);
 					}
 				}
+
+				// Fill boundaries
+				buffer_rhs.FillBoundary(geom.periodicity());
+
+				// Add buffer_rhs to rhs
+				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, rhs[lev]->nGrowVect());
 			}
 #else
 			// Original fast version: Uses atomic operations (non-deterministic on GPU)
