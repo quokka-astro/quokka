@@ -216,8 +216,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 #ifdef QUOKKA_DETERMINISTIC_DEPOSITION
-			// Deterministic cell-centric version: Loop over cells first, then particles
-			// This ensures deterministic ordering by processing cells in a predictable sequence
+			// Deterministic cell-centric version with Kahan summation for GPU reproducibility
+			// Algorithm:
+			// 1. Loop over cells in deterministic order (ParallelFor over grid cells)
+			// 2. For each cell, loop over all particles sequentially 
+			// 3. Use Kahan summation to compensate for floating-point rounding errors
+			// 4. This ensures identical results regardless of GPU thread scheduling
+			// Note: This is slower than atomic operations but guarantees reproducibility
 
 			// Loop over all levels
 			for (int lev = 0; lev <= finest_lev; ++lev) {
@@ -255,6 +260,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							const amrex::Real cell_y = plo[1] + (j + 0.5) * dx[1];
 							const amrex::Real cell_z = plo[2] + (k + 0.5) * dx[2];
 
+							// Initialize Kahan summation variables for this cell
+							// Kahan summation compensates for floating-point rounding errors
+							// ensuring reproducible results regardless of summation order
+							amrex::Real sum = 0.0;
+							amrex::Real compensation = 0.0; // compensation for lost low-order bits
+
 							// Use plain for loop to loop over all particles in this tile
 							for (amrex::Long pidx = 0; pidx < np; ++pidx) {
 								auto p = amrex::make_particle<typename decltype(p_tile_data)::ParticleType::ConstType>{}(
@@ -274,13 +285,21 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 									// Calculate CIC weight: (1-|x|)(1-|y|)(1-|z|)
 									const amrex::Real weight = (1.0 - rel_x) * (1.0 - rel_y) * (1.0 - rel_z);
 
-									// Deposit weighted mass
+									// Calculate weighted mass contribution
 									const amrex::Real particle_mass = p.rdata(mass_idx);
 									const amrex::Real mass_contribution =
 									    4.0 * M_PI * Gconst * particle_mass * weight / cell_volume;
-									buffer_arr(i, j, k, 0) += mass_contribution;
+
+									// Kahan summation algorithm for compensated addition
+									const amrex::Real y = mass_contribution - compensation;
+									const amrex::Real t = sum + y;
+									compensation = (t - sum) - y;
+									sum = t;
 								}
 							}
+
+							// Store the final compensated sum in the buffer
+							buffer_arr(i, j, k, 0) = sum;
 						});
 					}
 				}
