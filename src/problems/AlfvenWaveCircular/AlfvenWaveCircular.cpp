@@ -268,12 +268,12 @@ auto problem_main() -> int
 using amrex::Real;
 
 struct ProblemData {
-	static constexpr Real B_x = 1.0e-6; // [G]
+	static constexpr Real B_x = 1.0e-6;    // [G]
 	static constexpr Real density = 1e-16; // [g cm^-3]
-	static constexpr Real k_perp = 10.0; // [cm^-1]
+	static constexpr Real k_perp = 10.0;   // [cm^-1]
 
 	static constexpr Real c_s = C::c_light;
-	static constexpr Real v_A = B_x / std::sqrt(4.0 * M_PI * density); // [cm s^-1]
+	static constexpr Real v_A = B_x / std::sqrt(4.0 * M_PI * density);			  // [cm s^-1]
 	static constexpr Real omega = k_perp * std::sqrt(c_s * c_s + v_A * v_A) / std::sqrt(2.0); // [s^-1]
 };
 
@@ -298,8 +298,7 @@ template <> struct Physics_Traits<AlfvenWaveTest> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <>
-void QuokkaSimulation<AlfvenWaveTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<AlfvenWaveTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
@@ -350,8 +349,8 @@ template <> void QuokkaSimulation<AlfvenWaveTest>::computeAfterTimestep()
 
 template <>
 void QuokkaSimulation<AlfvenWaveTest>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-									        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+								amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+								amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
 	// copy exact solution to ref MultiFab
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
