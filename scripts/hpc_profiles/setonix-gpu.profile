@@ -14,7 +14,7 @@ module load cray-mpich
 module load cce/19.0.0
 
 # hdf5
-module load cray-hdf5
+module load hdf5/1.14.5-parallel-api-v112
 
 # adios2 (optional)
 #module load adios2/2.10.2-hdf5
