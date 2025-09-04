@@ -8,6 +8,7 @@
 
 #include <fmt/format.h>
 
+#include "math/float.hpp"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
@@ -299,8 +300,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 								}
 							}
 
-							// Store the final compensated sum in the buffer
-							buffer_arr(i, j, k, 0) = sum;
+							// Store the rounded sum in the buffer
+							buffer_arr(i, j, k, 0) = round_to_sigfigs_stable(sum, 14);
 						});
 					}
 				}
