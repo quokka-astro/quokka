@@ -218,7 +218,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 #ifdef QUOKKA_DETERMINISTIC_DEPOSITION
 			// Deterministic cell-centric version: Loop over cells first, then particles
 			// This ensures deterministic ordering by processing cells in a predictable sequence
-			
+
 			// Loop over all levels
 			for (int lev = 0; lev <= finest_lev; ++lev) {
 				// Create a buffer multifab with ghost zones for this level
@@ -229,7 +229,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const auto plo = geom.ProbLoArray();
 				const auto dxi = geom.InvCellSizeArray();
 				const auto dx = geom.CellSizeArray();
-				
+
 				// Calculate cell volume
 				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
@@ -241,10 +241,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					if (np > 0) {
 						auto ptd = ptile.getConstParticleTileData();
 						auto buffer_arr = buffer_rhs.array(mfi);
-						
+
 						// Get the grown box (including ghost cells)
 						amrex::Box grown_box = mfi.growntilebox();
-						
+
 						// Capture mass index to avoid this pointer in device lambda
 						const int mass_idx = this->getMassIndex();
 
@@ -254,28 +254,29 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							const amrex::Real cell_x = plo[0] + (i + 0.5) * dx[0];
 							const amrex::Real cell_y = plo[1] + (j + 0.5) * dx[1];
 							const amrex::Real cell_z = plo[2] + (k + 0.5) * dx[2];
-							
+
 							// Use plain for loop to loop over all particles in this tile
 							for (amrex::Long pidx = 0; pidx < np; ++pidx) {
 								auto p = amrex::make_particle<typename decltype(ptd)::ParticleType::ConstType>{}(ptd, pidx);
-								
+
 								const amrex::Real pos_x = p.pos(0);
 								const amrex::Real pos_y = p.pos(1);
 								const amrex::Real pos_z = p.pos(2);
-								
+
 								// Calculate normalized distances from particle to cell center
 								const amrex::Real rel_x = std::abs(pos_x - cell_x) / dx[0];
 								const amrex::Real rel_y = std::abs(pos_y - cell_y) / dx[1];
 								const amrex::Real rel_z = std::abs(pos_z - cell_z) / dx[2];
-							
+
 								// Check if particle is within 1 dx distance from cell center
 								if (rel_x < 1.0 && rel_y < 1.0 && rel_z < 1.0) {
 									// Calculate CIC weight: (1-|x|)(1-|y|)(1-|z|)
 									const amrex::Real weight = (1.0 - rel_x) * (1.0 - rel_y) * (1.0 - rel_z);
-									
+
 									// Deposit weighted mass
 									const amrex::Real particle_mass = p.rdata(mass_idx);
-									const amrex::Real mass_contribution = 4.0 * M_PI * Gconst * particle_mass * weight / cell_volume;
+									const amrex::Real mass_contribution =
+									    4.0 * M_PI * Gconst * particle_mass * weight / cell_volume;
 									buffer_arr(i, j, k, 0) += mass_contribution;
 								}
 							}
