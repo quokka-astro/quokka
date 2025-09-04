@@ -250,3 +250,181 @@ auto problem_main() -> int
 
 	return status;
 }
+/// \brief Defines a test problem to make sure face-centred quantities are created correctly.
+///
+
+#include <cassert>
+#include <cmath>
+#include <gcem.hpp>
+
+#include "AMReX_Array.H"
+#include "AMReX_Array4.H"
+#include "AMReX_REAL.H"
+
+#include "QuokkaSimulation.hpp"
+#include "grid.hpp"
+#include "physics_info.hpp"
+
+using amrex::Real;
+
+struct ProblemData {
+	static constexpr Real B_x = 1.0e-6; // [G]
+	static constexpr Real density = 1e-16; // [g cm^-3]
+	static constexpr Real k_perp = 10.0; // [cm^-1]
+
+	static constexpr Real c_s = C::c_light;
+	static constexpr Real v_A = B_x / std::sqrt(4.0 * M_PI * density); // [cm s^-1]
+	static constexpr Real omega = k_perp * std::sqrt(c_s * c_s + v_A * v_A) / std::sqrt(2.0); // [s^-1]
+};
+
+struct AlfvenWaveTest {
+};
+
+template <> struct quokka::EOS_Traits<AlfvenWaveTest> {
+	static constexpr double gamma = 5. / 3.;
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
+};
+
+template <> struct Physics_Traits<AlfvenWaveTest> {
+	static constexpr bool is_self_gravity_enabled = false;
+	// cell-centred
+	static constexpr bool is_hydro_enabled = true;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = false;
+	// face-centred
+	static constexpr bool is_mhd_enabled = true;
+	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+};
+
+template <>
+void QuokkaSimulation<AlfvenWaveTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	// extract variables required from the geom object
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const amrex::Array4<double> &Bx = grid_elem.x_centred_Bx_;
+	const amrex::Array4<double> &By = grid_elem.y_centred_By_;
+	const amrex::Array4<double> &Bz = grid_elem.z_centred_Bz_;
+
+	const auto gasInternalEnergy = quokka::EOS<AlfvenWaveTest>::ComputeEintFromTgas(ProblemData::density, 1e6);
+	const auto gasPressure = quokka::EOS<AlfvenWaveTest>::ComputePressure(ProblemData::density, gasInternalEnergy);
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
+
+		Real const rho = ProblemData::density;
+		Real const v_x = 0.;
+		Real const v_y = 0.;
+		Real const v_z = 0.;
+
+		Real const Egas = gasPressure / (quokka::EOS_Traits<AlfvenWaveTest>::gamma - 1.);
+		Real const Ekin = 0.5 * rho * (v_x * v_x + v_y * v_y + v_z * v_z);
+
+		state_cc(i, j, k, HydroSystem<AlfvenWaveTest>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<AlfvenWaveTest>::x1Momentum_index) = rho * v_x;
+		state_cc(i, j, k, HydroSystem<AlfvenWaveTest>::x2Momentum_index) = rho * v_y;
+		state_cc(i, j, k, HydroSystem<AlfvenWaveTest>::x3Momentum_index) = rho * v_z;
+		state_cc(i, j, k, HydroSystem<AlfvenWaveTest>::energy_index) = Egas + Ekin;
+		state_cc(i, j, k, HydroSystem<AlfvenWaveTest>::internalEnergy_index) = Egas;
+	});
+
+	// B field
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		Bx(i, j, k) = ProblemData::B_x;
+		By(i, j, k) = 0.0;
+		Bz(i, j, k) = 0.0;
+	});
+}
+
+template <> void QuokkaSimulation<AlfvenWaveTest>::computeAfterTimestep()
+{
+	// compute L2 error norm
+	ComputeErrorNorms();
+}
+
+template <>
+void QuokkaSimulation<AlfvenWaveTest>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+									        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+									        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+{
+	// copy exact solution to ref MultiFab
+	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateExact = ref.array(iter);
+
+		const auto gasInternalEnergy = quokka::EOS<AlfvenWaveTest>::ComputeEintFromTgas(ProblemData::density, 1e6);
+		const auto gasPressure = quokka::EOS<AlfvenWaveTest>::ComputePressure(ProblemData::density, gasInternalEnergy);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			Real const rho = ProblemData::density;
+			Real const v_x = 0.;
+			Real const v_y = 0.;
+			Real const v_z = 0.;
+
+			Real const Egas = gasPressure / (quokka::EOS_Traits<AlfvenWaveTest>::gamma - 1.);
+			Real const Ekin = 0.5 * rho * (v_x * v_x + v_y * v_y + v_z * v_z);
+
+			stateExact(i, j, k, HydroSystem<AlfvenWaveTest>::density_index) = rho;
+			stateExact(i, j, k, HydroSystem<AlfvenWaveTest>::x1Momentum_index) = rho * v_x;
+			stateExact(i, j, k, HydroSystem<AlfvenWaveTest>::x2Momentum_index) = rho * v_y;
+			stateExact(i, j, k, HydroSystem<AlfvenWaveTest>::x3Momentum_index) = rho * v_z;
+			stateExact(i, j, k, HydroSystem<AlfvenWaveTest>::energy_index) = Egas + Ekin;
+			stateExact(i, j, k, HydroSystem<AlfvenWaveTest>::internalEnergy_index) = Egas;
+		});
+	}
+}
+
+auto problem_main() -> int
+{
+	// set up grid
+	const int max_timesteps = 10;
+	const double max_time = 1e-5; // [s]
+	const int nx = 64;
+
+	const double cfl_number = 0.9;
+	const int nvars = HydroSystem<AlfvenWaveTest>::nvar_;
+	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
+	amrex::Vector<amrex::BCRec> BCs_fc(3); // 3 face-centred variables (B)
+
+	for (int n = 0; n < nvars; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			// periodic boundary conditions
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
+
+	for (int n = 0; n < 3; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			// periodic boundary conditions
+			BCs_fc[n].setLo(i, amrex::BCType::int_dir);
+			BCs_fc[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
+
+	// initialize problem
+	QuokkaSimulation<AlfvenWaveTest> sim(BCs_cc, BCs_fc);
+
+	sim.reconstructionOrder_ = 3;
+	sim.stopTime_ = max_time;
+	sim.maxTimesteps_ = max_timesteps;
+	sim.cflNumber_ = cfl_number;
+	sim.plotfileInterval_ = -1;
+	sim.checkpointInterval_ = -1;
+
+	// initialize initial conditions
+	sim.setInitialConditions();
+
+	// evolve system
+	sim.evolve();
+
+	// read final data from solution
+	const int status = 0;
+	return status;
+}
