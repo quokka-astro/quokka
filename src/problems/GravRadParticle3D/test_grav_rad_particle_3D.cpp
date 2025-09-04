@@ -216,22 +216,25 @@ auto problem_main() -> int
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Test CICRad particles
-		auto positions_cicrad = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CICRad)->getParticleDataAtLevelZero();
+		[[maybe_unused]] const auto [ids1, positions_cicrad, int1] =
+		    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CICRad)->getParticleDataAtAllLevels();
 		double position_error_cicrad = 0.0;
 		double position_norm_cicrad = 0.0;
 
 		// Test CIC particles
-		auto positions_cic = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevelZero();
+		[[maybe_unused]] const auto [ids2, positions_cic, int2] =
+		    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtAllLevels();
 		double position_error_cic = 0.0;
 		const double position_norm_cic = 1.0; // set to 1.0 since the particles are exactly at the origin
 
 		// Test Rad particles
-		auto positions_rad = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Rad)->getParticleDataAtLevelZero();
+		[[maybe_unused]] const auto [ids3, positions_rad, int3] =
+		    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Rad)->getParticleDataAtAllLevels();
 		double position_error_rad = 0.0;
 		double position_norm_rad = 0.0;
 
 		// Test both particle types against exact solution
-		for (auto &position : positions_cicrad.first) {
+		for (const auto &position : positions_cicrad) {
 			if (position[0] * exact_x > 0.0) {
 				position_error_cicrad += std::abs(position[0] - exact_x);
 				position_error_cicrad += std::abs(position[1] - exact_y);
@@ -246,7 +249,7 @@ auto problem_main() -> int
 			position_norm_cicrad += std::abs(exact_z);
 		}
 
-		for (auto &position : positions_cic.first) {
+		for (const auto &position : positions_cic) {
 			if (position[0] * exact_x > 0.0) {
 				position_error_cic += std::abs(position[0] - exact_x_cic);
 				position_error_cic += std::abs(position[1] - exact_y_cic);
@@ -258,7 +261,7 @@ auto problem_main() -> int
 			}
 		}
 
-		for (auto &position : positions_rad.first) {
+		for (const auto &position : positions_rad) {
 			if (position[0] * exact_x_rad > 0.0) {
 				position_error_rad += std::abs(position[0] - exact_x_rad);
 				position_error_rad += std::abs(position[1] - exact_y_rad);
@@ -288,17 +291,17 @@ auto problem_main() -> int
 
 		amrex::Print() << "Exact positions of the CICRad particles should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
 		amrex::Print() << "Real positions are: \n";
-		for (auto &position : positions_cicrad.first) {
+		for (const auto &position : positions_cicrad) {
 			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 		}
 		amrex::Print() << "Exact positions of the CIC particles should be: " << exact_x_cic << ", " << exact_y_cic << ", " << exact_z_cic << "\n";
 		amrex::Print() << "Real positions are: \n";
-		for (auto &position : positions_cic.first) {
+		for (const auto &position : positions_cic) {
 			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 		}
 		amrex::Print() << "Exact positions of the Rad particles should be: " << exact_x_rad << ", " << exact_y_rad << ", " << exact_z_rad << "\n";
 		amrex::Print() << "Real positions are: \n";
-		for (auto &position : positions_rad.first) {
+		for (const auto &position : positions_rad) {
 			amrex::Print() << position[0] << ", " << position[1] << ", " << position[2] << "\n";
 		}
 		amrex::Print() << "Relative L1 norm on radiation energy = " << rel_err << "\n";
