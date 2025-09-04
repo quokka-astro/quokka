@@ -2,11 +2,10 @@
 #define FLOAT_HPP_
 
 #include <cmath>
-#include <stdexcept>
-#include <exception>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_REAL.H"
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto round_to_sigfigs_stable(amrex::Real x, int N) -> amrex::Real
 {
@@ -20,14 +19,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto round_to_sigfigs_stable(amrex::Rea
 
 	// Approximate base-10 exponent from binary exponent
 	// ax = m * 2^b, where m in [0.5, 1)
-	const int b;
+	int b = 0;
 	const amrex::Real m = std::frexp(ax, &b); // ax = m * 2^(b)
 	// log10(ax) = log10(m) + b * log10(2)
 	static const amrex::Real LOG10_2 = 0.30102999566398119521;
-	const amrex::Real e_est = std::floor(std::log10(m) + b * LOG10_2);
+	amrex::Real e_est = std::floor(std::log10(m) + b * LOG10_2);
 
 	// It’s possible e_est is off by 1 due to rounding; correct it
-	const amrex::Real pow10_e = std::pow(10.0, e_est);
+	amrex::Real pow10_e = std::pow(10.0, e_est);
 	if (ax / pow10_e >= 10.0) {
 			e_est += 1.0;
 			pow10_e *= 10.0;
