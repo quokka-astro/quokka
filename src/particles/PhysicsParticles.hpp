@@ -17,7 +17,6 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
-#include "math/float.hpp"
 
 #include "particle_IO.hpp"
 #include "particle_accretion.hpp"
@@ -300,8 +299,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 								}
 							}
 
+							// buffer_arr(i, j, k, 0) = round_to_sigfigs_stable(sum, 11);
+
 							// Store the rounded sum in the buffer
-							buffer_arr(i, j, k, 0) = round_to_sigfigs_stable(sum, 14);
+							// For double precision (52-bit significand), to keep 11 decimal digits (~37 bits),
+							// we need to remove ~15 bits from the significand
+							const int digit_to_remove = 15;
+							constexpr amrex::Real factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^digit_to_remove + 1
+							const amrex::Real c = factor * sum;
+							buffer_arr(i, j, k, 0) = c - (c - sum);
 						});
 					}
 				}
