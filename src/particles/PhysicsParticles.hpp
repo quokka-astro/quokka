@@ -304,7 +304,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							// Store the rounded sum in the buffer
 							// For double precision (52-bit significand), to keep 11 decimal digits (~37 bits),
 							// we need to remove ~15 bits from the significand
-							const int digit_to_remove = 15;
+							constexpr int digit_to_remove = 25;
 							constexpr amrex::Real factor =
 							    static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^digit_to_remove + 1
 							const amrex::Real c = factor * sum;
@@ -314,7 +314,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 
 				// Sum boundary cell values to real cells
-				buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
+				// buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
 
 				// Add buffer_rhs to rhs
 				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
