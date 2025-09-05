@@ -14,17 +14,15 @@ A host file is provided [here](https://gist.github.com/BenWibking/5fa4d6d419dd0a
 
 ## Setonix (Pawsey)
 
-The recommended build procedure on Setonix is: :
+The recommended build procedure on Setonix is:
 
-    source scripts/setonix.profile
-    mkdir build; cd build
-    cmake .. -C ../cmake/setonix.cmake
-    make -j16
+    source scripts/hpc_profiles/setonix-gpu.profile
+    cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=HIP -DHDF5_ROOT="$PAWSEY_HDF5_HOME"
+    cmake --build build -j
 
-Then a single-node test job can be run with: :
+Then a single-node test job can be run with:
 
-    cd ..
-    sbatch scripts/setonix-1node.submit
+    sbatch scripts/slurm/setonix-1node.submit
 
 ### Workaround for interconnect issues
 
