@@ -25,6 +25,9 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 
+static int num_particles_ = 1000;
+static int seed_ = 42;
+
 struct CollapseProblem {
 };
 
@@ -98,8 +101,8 @@ template <> void QuokkaSimulation<CollapseProblem>::createInitialCICParticles()
 {
 	// add particles at random positions in the box
 	const bool generate_on_root_rank = true;
-	const int iseed = 42;
-	const int num_particles = 1000;
+	const int iseed = seed_;
+	const int num_particles = num_particles_;
 	const double total_particle_mass = 0.5; // about 0.1 of the total fluid mass
 	const double particle_mass = total_particle_mass / static_cast<double>(num_particles);
 
@@ -166,6 +169,10 @@ auto problem_main() -> int
 			}
 		}
 	}
+
+	amrex::ParmParse const pp("problem");
+	pp.query("num_particles", num_particles_);
+	pp.query("seed", seed_);
 
 	// Problem initialization
 	QuokkaSimulation<CollapseProblem> sim(BCs_cc);

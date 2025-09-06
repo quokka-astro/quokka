@@ -132,6 +132,8 @@ message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
 if(QUOKKA_DETERMINISTIC_DEPOSITION)
   add_definitions(-DQUOKKA_DETERMINISTIC_DEPOSITION)
   message(STATUS "Deterministic particle deposition enabled (GPU reproducible)")
+else()
+  message(STATUS "Deterministic particle deposition disabled (GPU non-reproducible)")
 endif()
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
