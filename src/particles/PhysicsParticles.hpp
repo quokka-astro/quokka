@@ -227,7 +227,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Loop over all levels
 			for (int lev = 0; lev <= finest_lev; ++lev) {
 				// Create a buffer multifab with ghost zones for this level
-				const int nGrow = 0; // need 1 ghost cell for CIC deposition
+				const int nGrow = 1; // need 1 ghost cell for CIC deposition
 				amrex::MultiFab buffer_rhs(rhs[lev]->boxArray(), rhs[lev]->DistributionMap(), 1, nGrow);
 				buffer_rhs.setVal(0.0);
 
@@ -314,7 +314,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 
 				// Sum boundary cell values to real cells
-				buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
+				// buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
 
 				// Add buffer_rhs to rhs
 				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
