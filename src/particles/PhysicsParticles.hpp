@@ -314,7 +314,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 
 				// Sum boundary cell values to real cells
-				// buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
+				buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
 
 				// Add buffer_rhs to rhs
 				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
