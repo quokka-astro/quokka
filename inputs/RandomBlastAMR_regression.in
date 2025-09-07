@@ -3,8 +3,8 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  3.086e20  3.086e20  3.086e20  # 100 x 100 x 100 pc
-geometry.is_periodic =  1   1   1
-use_periodic_bc = 1
+geometry.is_periodic =  0   0   0
+use_periodic_bc = 0
 
 # *****************************************************************
 # VERBOSITY
@@ -15,14 +15,14 @@ amr.v               = 1     # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 128 128 128
-amr.max_level       = 0     # number of levels = max_level + 1
+amr.max_level       = 1     # number of levels = max_level + 1
 amr.blocking_factor = 32    # grid size must be divisible by this
 amr.max_grid_size   = 64
 
 regrid_interval = 2
 refine_threshold = 0.1
 do_reflux = 1
-do_subcycle = 1
+do_subcycle = 0
 
 cfl = 0.2
 hydro.reconstruction_order = 3
@@ -30,7 +30,7 @@ derived_vars = temperature
 
 plotfile_interval = 10000
 checkpoint_interval = -1
-max_timesteps = 10000
+max_timesteps = 1000
 stop_time = 3.154e12       # 1e5 yr
 
 SN_rate_per_volume = 0.03  # yr^-1 kpc^-1
@@ -38,4 +38,4 @@ SN_rate_per_volume = 0.03  # yr^-1 kpc^-1
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = grackle
-cooling.hdf5_data_file = "./CloudyData_UVB=HM2012.h5"
+cooling.hdf5_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
