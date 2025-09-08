@@ -28,9 +28,9 @@ cfl = 0.2
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
-plotfile_interval = 5000
+plotfile_interval = 2000
 checkpoint_interval = -1
-max_timesteps = 5000
+max_timesteps = 2000
 stop_time = 3.154e12       # 1e5 yr
 
 SN_rate_per_volume = 0.03  # yr^-1 kpc^-1
