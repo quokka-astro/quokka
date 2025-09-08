@@ -85,7 +85,6 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
 	// Pure virtual methods that must be implemented by derived classes
-	[[nodiscard]] virtual auto isStarParticle() -> bool = 0;
 	virtual void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) = 0;
 
 	// Redistribute particles at level lev and above
@@ -167,16 +166,16 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	ContainerType *container_{}; // Pointer to the actual particle container - moved to protected
 
       public:
-	[[nodiscard]] auto isStarParticle() -> bool override { return false; }
-
 	// Get the particle type
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation,
-				  bool allows_destruction = false)
+				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction), container_(container)
 	{
+		setEvolutionStageIndex(evolution_stage_idx);
+		setAllowsAccretion(allows_accretion);
 	}
 
 	// Get positions and fields data from all particles at level 0 from all ranks and gather them on rank 0.
@@ -500,27 +499,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			});
 		}
 	}
-#endif
-};
 
-// New class for star particles that adds stellar evolution capabilities
-template <typename ContainerType, typename problem_t, ParticleType particleType>
-class StarParticleDescriptor : public PhysicsParticleDescriptor<ContainerType, problem_t, particleType>
-{
-      public:
-	[[nodiscard]] auto isStarParticle() -> bool override { return true; }
-
-	// Constructor - forwards all arguments to the base class
-	StarParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
-			       int evolution_stage_idx = -1, bool allows_accretion = false)
-	    : PhysicsParticleDescriptor<ContainerType, problem_t, particleType>(container, mass_idx, lum_idx, birth_time_idx, allows_creation,
-										allows_destruction)
-	{
-		this->setEvolutionStageIndex(evolution_stage_idx);
-		this->setAllowsAccretion(allows_accretion);
-	}
-
-#if AMREX_SPACEDIM == 3
 	// Override updateParticleProperties for star particles
 	void updateParticleProperties(amrex::Real current_time) override
 	{
@@ -616,17 +595,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		return false;
 	}
 
-	// Check if registry contains any star particles
-	[[nodiscard]] auto HasStarParticles() const -> bool
-	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
-			if (descriptor->isStarParticle()) {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	// Utility method to convert particle type to string name (for writing plotfiles/checkpoints)
 	[[nodiscard]] static auto getParticleTypeName(ParticleType type) -> std::string
 	{
@@ -655,7 +623,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
-		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction
+		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion
 		if (type == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
 			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, false, false);
@@ -663,10 +631,20 @@ template <typename problem_t> class PhysicsParticleRegister
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
-															      -1, false, false);
+														      -1, false, false);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, false, false);
+		} else if (type == ParticleType::StochasticStellarPop) {
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
+			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
+			    false, StochasticStellarPopParticleStageIdx, false);
+		} else if (type == ParticleType::Sink) {
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx, -1,
+													    -1, true, false, -1, true);
+		} else if (type == ParticleType::Test) {
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
+			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
@@ -675,34 +653,6 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		particleRegistry_[type] = std::move(descriptor);
 	}
-
-#if AMREX_SPACEDIM == 3
-	// Register a new star particle type with specified properties
-	// Star particles have additional stellar evolution capabilities including supernova feedback
-	template <typename ContainerType> void registerStarParticleType(ContainerType *container, ParticleType type)
-	{
-		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
-
-		// Create the appropriate star particle descriptor based on the particle type
-		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
-		// allows_accretion
-		if (type == ParticleType::StochasticStellarPop) {
-			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
-			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
-			    false, StochasticStellarPopParticleStageIdx, false);
-		} else if (type == ParticleType::Sink) {
-			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx, -1,
-															    -1, true, false, -1, true);
-		} else if (type == ParticleType::Test) {
-			descriptor = std::make_unique<StarParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
-		} else {
-			amrex::Abort("Unknown particle type for star particles");
-		}
-
-		particleRegistry_[type] = std::move(descriptor);
-	}
-#endif // AMREX_SPACEDIM == 3
 
 	// Retrieve a particle descriptor by type
 	[[nodiscard]] auto getParticleDescriptor(ParticleType type) -> PhysicsParticleDescriptorBase *
@@ -746,10 +696,8 @@ template <typename problem_t> class PhysicsParticleRegister
 		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp(), state.nGrow());
 		// this function is only implemented for some particle types, so we specify the particle type manually here
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			if (descriptor->isStarParticle()) {
-				const amrex::Real max_velocity_ = descriptor->depositSN(state, state_buffer, lev, time, dt);
-				max_velocity = std::max(max_velocity, max_velocity_);
-			}
+			const amrex::Real max_velocity_ = descriptor->depositSN(state, state_buffer, lev, time, dt);
+			max_velocity = std::max(max_velocity, max_velocity_);
 		}
 		return max_velocity;
 	}
