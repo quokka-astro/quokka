@@ -370,7 +370,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	template <typename ContainerType>
 	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-						       amrex::Vector<amrex::BoxArray> const &header_box_arrays, bool use_star_registration = false);
+						       amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
@@ -1153,13 +1153,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			}
 
 			// Stellar evolution and SN deposition; only apply to star particles
-			if (particleRegister_.HasStarParticles()) {
-				// Update particle properties (e.g., luminosity) before particle-mesh interaction
-				particleRegister_.updateParticleProperties(cur_time);
+			// Update particle properties (e.g., luminosity) before particle-mesh interaction
+			particleRegister_.updateParticleProperties(cur_time);
 
-				// TODO(cch): Need to take care of AMR subcycling
-				particleMeshInteraction(cur_time, dt_[0]);
-			}
+			// TODO(cch): Need to take care of AMR subcycling
+			particleMeshInteraction(cur_time, dt_[0]);
 
 			// Use the new type-aware particle destruction method
 			// TODO(cch): Need to take care of AMR subcycling
@@ -2394,7 +2392,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		StochasticStellarPopParticles->SetVerbose(0);
 
 		// Register with particle register - StochasticStellarPop particles allow creation
-		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
+		particleRegister_.registerParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
 
 		// Initialize particles through user-defined function
 		createInitialStochasticStellarPopParticles();
@@ -2408,7 +2406,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		SinkParticles->SetVerbose(0);
 
 		// Register with particle register - Sink particles allow creation
-		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
+		particleRegister_.registerParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
 
 		// Initialize particles through user-defined function
 		createInitialSinkParticles();
@@ -2421,7 +2419,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		TestParticles->SetVerbose(0);
 
 		// Register with particle register - Test particles have all features enabled
-		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test);
+		particleRegister_.registerParticleType(TestParticles.get(), quokka::ParticleType::Test);
 
 		// Initialize particles through user-defined function
 		createInitialTestParticles();
@@ -3379,15 +3377,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, header_box_arrays, true);
+		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, header_box_arrays, true);
+		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays, true);
+		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays);
 	}
 #endif // AMREX_SPACEDIM == 3
 
@@ -3492,21 +3490,13 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 template <typename problem_t>
 template <typename ContainerType>
 void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-									 amrex::Vector<amrex::BoxArray> const &header_box_arrays, bool use_star_registration)
+									 amrex::Vector<amrex::BoxArray> const &header_box_arrays)
 {
 	AMREX_ASSERT(container == nullptr);
 	container = std::make_unique<ContainerType>(this);
 
 	// Register container
-	if (use_star_registration) {
-#if AMREX_SPACEDIM == 3
-		particleRegister_.registerStarParticleType(container.get(), particle_type);
-#else
-		amrex::Abort("Star particles are only available in 3D builds");
-#endif
-	} else {
-		particleRegister_.registerParticleType(container.get(), particle_type);
-	}
+	particleRegister_.registerParticleType(container.get(), particle_type);
 
 	// Read particles
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
