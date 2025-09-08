@@ -20,10 +20,11 @@ amr.blocking_factor = 64   # grid size must be divisible by this
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
-do_reflux = 0
+do_reflux = 1
 do_subcycle = 0
 do_tracers = 1      # turn on tracer particles
 
 hydro.artificial_viscosity_coefficient = 0.1
 
 plotfile_interval  = 20000
+max_timesteps = 100
