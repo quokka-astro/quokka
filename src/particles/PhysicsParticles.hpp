@@ -48,7 +48,8 @@ class PhysicsParticleDescriptorBase
 	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
+				      int evolution_stage_idx = -1, bool allows_accretion = false)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), allowsCreation_(allows_creation),
 	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), allowsAccretion_(allows_accretion)
 	{
@@ -172,7 +173,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation,
 				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion), container_(container)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion),
+	      container_(container)
 	{
 	}
 
@@ -621,7 +623,8 @@ template <typename problem_t> class PhysicsParticleRegister
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
-		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion
+		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
+		// allows_accretion
 		if (type == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
 			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, false, false);
@@ -629,7 +632,7 @@ template <typename problem_t> class PhysicsParticleRegister
 #if AMREX_SPACEDIM == 3
 		else if (type == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
-														      -1, false, false);
+															      -1, false, false);
 		} else if (type == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, false, false);
@@ -638,8 +641,8 @@ template <typename problem_t> class PhysicsParticleRegister
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
 			    false, StochasticStellarPopParticleStageIdx, false);
 		} else if (type == ParticleType::Sink) {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx, -1,
-													    -1, true, false, -1, true);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx,
+															       -1, -1, true, false, -1, true);
 		} else if (type == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
