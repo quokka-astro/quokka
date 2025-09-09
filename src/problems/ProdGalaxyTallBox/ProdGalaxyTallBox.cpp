@@ -1,11 +1,5 @@
-
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
-/// \file test_sne.cpp
-/// \brief Defines a problem for disk galaxy ISM.
+/// \file ProdGalaxyTallBox.cpp
+/// \brief Defines a problem for a tall box in a Milky way-mass galaxy.
 ///
 
 #include <cmath>
@@ -81,6 +75,10 @@ static constexpr amrex::Real rho02 = 2.7855600000000006e-29;
 struct MetalProblem {
 };
 
+template <> struct Particle_Traits<MetalProblem> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
+};
+
 template <> struct HydroSystem_Traits<MetalProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr bool reconstruct_eint = true; // Set to true - temperature
@@ -93,7 +91,7 @@ template <> struct quokka::EOS_Traits<MetalProblem> {
 };
 
 template <> struct Physics_Traits<MetalProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
@@ -169,116 +167,6 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<MetalProblem>::energy_index) = P / (gamma - 1.);
 		state_cc(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex) = 1.e-5 / vol; // Injected tracer
 	});
-}
-
-template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
-{
-	// compute how many (and where) SNe will go off on the this coarse timestep
-	// sample from Poisson distribution
-
-	const Real dt_coarse = dt_[0];
-	const Real domain_area = geom[0].ProbLength(0) * geom[0].ProbLength(1);
-	const Real mean = 0.0;
-	const Real stddev = hscale / geom[0].ProbLength(2) / 2.;
-
-	const Real expectation_value = ks_sigma_sfr * domain_area * dt_coarse;
-
-	const int count = static_cast<int>(amrex::RandomPoisson(expectation_value));
-
-	// resize particle arrays
-	amrex::Array<int, 1> const lo{0};
-	amrex::Array<int, 1> const hi{count};
-	userData_.blast_x = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_y = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_z = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.nblast = count;
-	userData_.SN_counter_cumulative += count;
-
-	// for each, sample location at random
-	auto const &px = userData_.blast_x->table();
-	auto const &py = userData_.blast_y->table();
-	auto const &pz = userData_.blast_z->table();
-	for (int i = 0; i < count; ++i) {
-		px(i) = geom[0].ProbLength(0) * amrex::Random();
-		py(i) = geom[0].ProbLength(1) * amrex::Random();
-		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
-	}
-
-	std::ostringstream oss;
-	amrex::SaveRandomState(oss);
-	simulationMetadata_["random_number_generator_state"] = oss.str();
-}
-
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
-    -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
-{
-
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential; // NOLINT
-	grad_potential[0] = 0.0;
-	grad_potential[1] = 0.0;
-
-	double const z = posvec[2];
-
-	// Interpolate to find the accurate g-value from array
-	auto const &x_arr = z_data;
-	auto const &y_arr = logg_data;
-	const amrex::Real ginterp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
-	AMREX_ASSERT(!std::isnan(ginterp));
-
-	grad_potential[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
-	grad_potential[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + (z * z / (z_star * z_star)), -0.5));
-	grad_potential[2] += (z / std::abs(z)) * std::pow(10., ginterp);
-	AMREX_ASSERT(!std::isnan(grad_potential[2]));
-
-	return grad_potential;
-}
-
-// Add Strang Split Source Term for External Fixed Potential Here
-template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
-{
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
-	const Real dt = dt_lev;
-
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &state = mf.array(iter);
-
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec;  // NOLINT
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> GradPhi; // NOLINT
-			double x1mom_new = NAN;
-			double x2mom_new = NAN;
-			double x3mom_new = NAN;
-
-			const Real rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-			const Real x1mom = state(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index);
-			const Real x2mom = state(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index);
-			const Real x3mom = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index);
-			const Real Egas = state(i, j, k, HydroSystem<MetalProblem>::energy_index);
-
-			const Real Eint = RadSystem<MetalProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
-
-			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
-			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
-			posvec[2] = prob_lo[2] + (k + 0.5) * dx[2];
-
-			GradPhi = HydroSystem<MetalProblem>::GetGradFixedPotential(posvec);
-
-			x1mom_new = x1mom + dt * (-rho * GradPhi[0]);
-			x2mom_new = x2mom + dt * (-rho * GradPhi[1]);
-			x3mom_new = x3mom + dt * (-rho * GradPhi[2]);
-
-			// State momentum values need to be updated this way.
-			state(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = x1mom_new;
-			state(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = x2mom_new;
-			state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = x3mom_new;
-
-			state(i, j, k, HydroSystem<MetalProblem>::energy_index) =
-			    RadSystem<MetalProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
-		});
-	}
 }
 
 // Code for producing in-situ Projection plots
@@ -383,69 +271,105 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 	return proj;
 }
 
-// Implement User-defined diode BC
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MetalProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-							 int /*orig_comp*/)
-{
-	auto [i, j, k] = iv.dim3();
-	amrex::Box const &box = geom.Domain();
-	const auto &domain_lo = box.loVect3d();
-	const auto &domain_hi = box.hiVect3d();
-	const int klo = domain_lo[2];
-	const int khi = domain_hi[2];
-	int kedge = 0;
-	int normal = 0;
+// // Implement User-defined diode BC
+// template <>
+// AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+// AMRSimulation<MetalProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+// 							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+// 							 int /*orig_comp*/)
+// {
+// 	auto [i, j, k] = iv.dim3();
+// 	amrex::Box const &box = geom.Domain();
+// 	const auto &domain_lo = box.loVect3d();
+// 	const auto &domain_hi = box.hiVect3d();
+// 	const int klo = domain_lo[2];
+// 	const int khi = domain_hi[2];
+// 	int kedge = 0;
+// 	int normal = 0;
 
-	if (k < klo) {
-		kedge = klo;
-		normal = -1;
-	} else if (k > khi) {
-		kedge = khi;
-		normal = 1.0;
-	}
+// 	if (k < klo) {
+// 		kedge = klo;
+// 		normal = -1;
+// 	} else if (k > khi) {
+// 		kedge = khi;
+// 		normal = 1.0;
+// 	}
 
-	const double rho_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::density_index);
-	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x1Momentum_index);
-	const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x2Momentum_index);
-	double x3Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
-	const double etot_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::energy_index);
-	const double eint_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::internalEnergy_index);
-	const double pscalar_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::scalar0_index);
+// 	const double rho_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::density_index);
+// 	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x1Momentum_index);
+// 	const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x2Momentum_index);
+// 	double x3Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
+// 	const double etot_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::energy_index);
+// 	const double eint_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::internalEnergy_index);
+// 	const double pscalar_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::scalar0_index);
 
-	if ((x3Mom_edge * normal) < 0) { // gas is inflowing
-		x3Mom_edge = -1. * consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
-	}
+// 	if ((x3Mom_edge * normal) < 0) { // gas is inflowing
+// 		x3Mom_edge = -1. * consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
+// 	}
 
-	consVar(i, j, k, HydroSystem<MetalProblem>::density_index) = rho_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = x1Mom_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = x2Mom_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = x3Mom_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::energy_index) = etot_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index) = eint_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::scalar0_index) = pscalar_edge;
-}
+// 	consVar(i, j, k, HydroSystem<MetalProblem>::density_index) = rho_edge;
+// 	consVar(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = x1Mom_edge;
+// 	consVar(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = x2Mom_edge;
+// 	consVar(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = x3Mom_edge;
+// 	consVar(i, j, k, HydroSystem<MetalProblem>::energy_index) = etot_edge;
+// 	consVar(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index) = eint_edge;
+// 	consVar(i, j, k, HydroSystem<MetalProblem>::scalar0_index) = pscalar_edge;
+// }
 
 auto problem_main() -> int
 {
 
+	// const int ncomp_cc = Physics_Indices<MetalProblem>::nvarTotal_cc;
+	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	// for (int n = 0; n < ncomp_cc; ++n) {
+	// 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+	// 		// diode boundary conditions
+	// 		if (i == 2) {
+	// 			BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
+	// 			BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
+	// 		} else {
+	// 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+	// 			BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
+	// 		}
+	// 	}
+	// }
+
 	const int ncomp_cc = Physics_Indices<MetalProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// diode boundary conditions
-			if (i == 2) {
-				BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
-				BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-				BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
-			}
+			BCs_cc[n].setLo(i, amrex::BCType::foextrap);
+			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
 		}
 	}
+
+	// auto isNormalComp = [=](int n, int dim) {
+	// 	if ((n == HydroSystem<MetalProblem>::x1Momentum_index) && (dim == 0)) {
+	// 		return true;
+	// 	}
+	// 	if ((n == HydroSystem<MetalProblem>::x2Momentum_index) && (dim == 1)) {
+	// 		return true;
+	// 	}
+	// 	if ((n == HydroSystem<MetalProblem>::x3Momentum_index) && (dim == 2)) {
+	// 		return true;
+	// 	}
+	// 	return false;
+	// };
+
+	// const int ncomp_cc = Physics_Indices<MetalProblem>::nvarTotal_cc;
+	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	// for (int n = 0; n < ncomp_cc; ++n) {
+	// 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+	// 		if (isNormalComp(n, i)) {
+	// 			BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+	// 			BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+	// 		} else {
+	// 			BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+	// 			BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+	// 		}
+	// 	}
+	// }
+
 
 	// set random state
 	const int seed = 42;

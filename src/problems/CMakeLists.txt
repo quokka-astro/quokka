@@ -1,3 +1,5 @@
+add_subdirectory(ProdGalaxyTallBox)
+
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
@@ -77,5 +79,3 @@ add_subdirectory(PopIII)
 add_subdirectory(ShockCloud)
 add_subdirectory(StarCluster)
 add_subdirectory(SphericalCollapse)
-
-add_subdirectory(MetalAdvectionProblem)
