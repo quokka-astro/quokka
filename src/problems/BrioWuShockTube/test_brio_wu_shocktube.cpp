@@ -22,7 +22,6 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
@@ -213,7 +212,7 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::Int
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
-								       int numcomp, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								       int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 								       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/, quokka::direction dir)
 {
 #if (AMREX_SPACEDIM == 1)
