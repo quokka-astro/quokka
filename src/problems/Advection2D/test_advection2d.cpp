@@ -137,7 +137,6 @@ auto problem_main() -> int
 	const double CFL_number = 0.4;
 	const double max_time = 1.0;
 	const int max_timesteps = 1e4;
-	const int nvars = 1;
 
 	auto BCs_cc = quokka::BC<SquareProblem>(amrex::BCType::int_dir); // periodic
 

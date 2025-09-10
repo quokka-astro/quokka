@@ -131,7 +131,6 @@ auto problem_main() -> int
 	const double max_time = 1.0;
 	const double max_dt = 1.0e-4;
 	const int max_timesteps = 1e4;
-	const int nvars = 1; // only density
 
 	auto BCs_cc = quokka::BC<SawtoothProblem>(amrex::BCType::int_dir); // periodic
 
