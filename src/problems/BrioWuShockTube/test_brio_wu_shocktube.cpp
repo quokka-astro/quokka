@@ -181,13 +181,16 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::Int
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 	const auto gamma = quokka::EOS_Traits<MHDShocktubeProblem>::gamma;
 
+	const double Emag_L = 0.5 * (Bx * Bx + By_L * By_L + Bz * Bz);
+	const double Emag_R = 0.5 * (Bx * Bx + By_R * By_R + Bz * Bz);
+
 	if (i < lo[0]) {
 		// x1 left side boundary -- constant
 		for (int n = 0; n < numcomp; ++n) {
 			consVar(i, j, k, n) = 0;
 		}
 
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasEnergy_index) = P_L / (gamma - 1.);
+		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasEnergy_index) = P_L / (gamma - 1.) + Emag_L;
 		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index) = P_L / (gamma - 1.);
 		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasDensity_index) = rho_L;
 		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x1GasMomentum_index) = 0.;
@@ -200,7 +203,7 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::Int
 			consVar(i, j, k, n) = 0;
 		}
 
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasEnergy_index) = P_R / (gamma - 1.);
+		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasEnergy_index) = P_R / (gamma - 1.) + Emag_R;
 		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index) = P_R / (gamma - 1.);
 		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasDensity_index) = rho_R;
 		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x1GasMomentum_index) = 0.;
