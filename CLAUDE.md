@@ -12,7 +12,7 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 - **Run specific test**: `ctest -R TestName`
 - **Exclude tests**: `ctest -E "Pattern*"`
 - **List test targets**: `cmake --build . --target help`
-- **Test inputs**: Located in `tests/` directory (`.in` files)
+- **Test inputs**: Located in `inputs/` directory (`.in` files)
 - **Code formatting**: `clang-format -i file.cpp` (run from `src/` directory)
 - **Static analysis**: Use `scripts/tidy.sh build changed` to run clang-tidy on modified files
 - **Lint options**: `scripts/tidy.sh build [changed|previous|origin|dev] [--fix]`
@@ -33,7 +33,7 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
   - `test_*.hpp`: Header with template specializations (removed in recent commits)
   - `CMakeLists.txt`: Defines executable target
 - Problems use template specialization pattern for `QuokkaSimulation<ProblemName>`
-- Input files (`.in`) in `tests/` configure geometry, AMR, physics parameters
+- Input files (`.in`) in `inputs/` configure geometry, AMR, physics parameters
 - Problems should ONLY contain `.cpp` files (no `.hpp` files per recent policy)
 
 ## Key Dependencies
