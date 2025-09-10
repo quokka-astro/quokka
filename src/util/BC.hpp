@@ -5,6 +5,7 @@
 #include "AMReX_BCRec.H"
 #include "AMReX_Vector.H"
 #include "hydro/hydro_system.hpp"
+#include "physics_numVars.hpp"
 #include "radiation/radiation_system.hpp"
 #include <array>
 
@@ -34,15 +35,17 @@ namespace detail {
                 return true;
             }
             
-            // Check radiation flux components
-            if ((n == RadSystem<problem_t>::x1RadFlux_index) && (dim == 0)) {
-                return true;
-            }
-            if ((n == RadSystem<problem_t>::x2RadFlux_index) && (dim == 1)) {
-                return true;
-            }
-            if ((n == RadSystem<problem_t>::x3RadFlux_index) && (dim == 2)) {
-                return true;
+            // Check radiation flux components for all groups
+            for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+                if ((n == RadSystem<problem_t>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 0)) {
+                    return true;
+                }
+                if ((n == RadSystem<problem_t>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 1)) {
+                    return true;
+                }
+                if ((n == RadSystem<problem_t>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 2)) {
+                    return true;
+                }
             }
         } else {
         		// Check hydro momentum components
