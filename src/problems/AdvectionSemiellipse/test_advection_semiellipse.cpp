@@ -26,6 +26,7 @@
 #include "linear_advection/AdvectionSimulation.hpp"
 #include "linear_advection/linear_advection.hpp"
 #include "util/fextract.hpp"
+#include "util/BC.hpp"
 
 struct SemiellipseProblem {
 };
@@ -132,14 +133,8 @@ auto problem_main() -> int
 	const double max_dt = 1e-4;
 	const int max_timesteps = 1e4;
 
-	const int nvars = 1; // only density
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	// Set boundary conditions - periodic
+	auto BCs_cc = quokka::BC<SemiellipseProblem>(amrex::BCType::int_dir);
 
 	// Problem initialization
 	AdvectionSimulation<SemiellipseProblem> sim(BCs_cc);

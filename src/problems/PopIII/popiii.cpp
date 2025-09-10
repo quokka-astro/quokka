@@ -8,6 +8,7 @@
 /// Author: Piyush Sharda (Leiden University, 2023)
 ///
 #include "hydro/hydro_system.hpp"
+#include "util/BC.hpp"
 #include "math/interpolate.hpp"
 #include <array>
 #include <fstream>
@@ -439,15 +440,8 @@ auto problem_main() -> int
 	Real omega_sphere{};
 	pp.query("cloud_omega", omega_sphere);
 
-	// boundary conditions
-	const int ncomp_cc = Physics_Indices<PopIII>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		}
-	}
+	// Set boundary conditions - extrapolate
+	auto BCs_cc = quokka::BC<PopIII>(amrex::BCType::foextrap);
 
 	// Problem initialization
 	QuokkaSimulation<PopIII> sim(BCs_cc);

@@ -12,7 +12,6 @@
 #endif
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -27,6 +26,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "util/BC.hpp"
 
 struct BlastProblem {
 };
@@ -137,38 +137,9 @@ auto problem_main() -> int
 	// Problem parameters
 	constexpr bool reflecting_boundary = true;
 
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<BlastProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<BlastProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<BlastProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int ncomp_cc = QuokkaSimulation<BlastProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (reflecting_boundary) {
-				if (isNormalComp(n, i)) {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-				} else {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-				}
-			} else {
-				// periodic
-				BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-				BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			}
-		}
-	}
+	auto BCs_cc = reflecting_boundary ? 
+			quokka::BC<BlastProblem>(quokka::BoundaryCondition::reflecting) :
+			quokka::BC<BlastProblem>(amrex::BCType::int_dir); // periodic
 
 	// Problem initialization
 	QuokkaSimulation<BlastProblem> sim(BCs_cc);

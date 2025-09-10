@@ -10,7 +10,6 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
@@ -23,6 +22,7 @@
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
+#include "util/BC.hpp"
 
 using amrex::Real;
 
@@ -247,16 +247,7 @@ template <> void QuokkaSimulation<ScalarProblem>::refineGrid(int lev, amrex::Tag
 auto problem_main() -> int
 {
 	// Problem parameters
-	const int ncomp_cc = Physics_Indices<ScalarProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[0].setLo(0, amrex::BCType::int_dir); // periodic
-		BCs_cc[0].setHi(0, amrex::BCType::int_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<ScalarProblem>(amrex::BCType::int_dir); // periodic
 
 	// Problem initialization
 	QuokkaSimulation<ScalarProblem> sim(BCs_cc);

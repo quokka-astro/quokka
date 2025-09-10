@@ -15,7 +15,6 @@
 
 #include "AMReX.H"
 #include "AMReX_Arena.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_FabArrayUtility.H"
@@ -27,6 +26,7 @@
 #include "AMReX_TableData.H"
 
 #include "QuokkaSimulation.hpp"
+#include "util/BC.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
@@ -224,14 +224,7 @@ auto problem_main() -> int
 	pp.query("virial_parameter", alpha_vir);
 
 	// boundary conditions
-	const int ncomp_cc = Physics_Indices<StarCluster>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		}
-	}
+	auto BCs_cc = quokka::BC<StarCluster>(amrex::BCType::foextrap);
 
 	// Problem initialization
 	QuokkaSimulation<StarCluster> sim(BCs_cc);

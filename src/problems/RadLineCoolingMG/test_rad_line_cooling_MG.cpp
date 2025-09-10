@@ -9,6 +9,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_dust_system.hpp"
+#include "util/BC.hpp"
 #include <cmath>
 #include <fmt/format.h>
 #include <fstream>
@@ -200,14 +201,7 @@ auto problem_main() -> int
 	const double the_dt = 1.0e-2;
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<CoolingProblemMG>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<CoolingProblemMG>(amrex::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<CoolingProblemMG> sim(BCs_cc);

@@ -7,6 +7,7 @@
 #endif
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <fmt/format.h>
 
 struct ParticleProblem {
@@ -106,14 +107,7 @@ auto problem_main() -> int
 	const double dt_max = 1e-2;
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<ParticleProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
-		}
-	}
+	auto BCs_cc = quokka::BC<ParticleProblem>(amrex::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);

@@ -9,6 +9,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <cmath>
 #include <fmt/format.h>
 #include <fstream>
@@ -205,14 +206,7 @@ auto problem_main() -> int
 	const double max_dt = 1.0;
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<PulseProblem>(amrex::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<PulseProblem> sim(BCs_cc);

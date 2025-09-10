@@ -12,6 +12,7 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
+#include "util/BC.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
@@ -172,15 +173,8 @@ auto problem_main() -> int
 	std::string output_csv_file;
 	pp.query("output_csv_file", output_csv_file);
 
-	// Problem initialization
-	constexpr int ncomp_cc = Physics_Indices<ResampledCoolingTest>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap); // extrapolate
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		}
-	}
+	// Set boundary conditions - extrapolate
+	auto BCs_cc = quokka::BC<ResampledCoolingTest>(amrex::BCType::foextrap);
 
 	QuokkaSimulation<ResampledCoolingTest> sim(BCs_cc);
 

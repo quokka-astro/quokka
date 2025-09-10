@@ -435,28 +435,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	const int ncomp_cc = Physics_Indices<AccretionProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// // periodic boundaries
-			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			// octant symmetry
-			// // FOextrap
-			// for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// 	BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-			// 	BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-			// }
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
