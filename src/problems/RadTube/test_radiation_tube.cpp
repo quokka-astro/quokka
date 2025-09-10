@@ -28,6 +28,7 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
+#include "util/BC.hpp"
 
 struct TubeProblem {
 };
@@ -266,17 +267,7 @@ auto problem_main() -> int
 	constexpr double tmax = Lx / a0;
 	constexpr int max_timesteps = 2000;
 
-	// Boundary conditions
-	constexpr int nvars = RadSystem<TubeProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet x1
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // Dirichlet x1
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<TubeProblem>(amrex::BCType::ext_dir, amrex::BCType::int_dir, amrex::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<TubeProblem> sim(BCs_cc);

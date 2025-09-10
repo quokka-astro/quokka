@@ -6,9 +6,7 @@
 /// \file test_hydro3d_blast.cpp
 /// \brief Defines a test problem for a 3D explosion.
 ///
-
 #include "AMReX.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
@@ -18,8 +16,10 @@
 #include "math/interpolate.hpp"
 #include <fstream>
 
+
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 
 struct SedovProblem {
 };
@@ -218,37 +218,7 @@ template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vecto
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<SedovProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<SedovProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<SedovProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int ncomp_cc = Physics_Indices<SedovProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if constexpr (simulate_full_box) { // periodic boundaries
-				BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-				BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			} else { // octant symmetry
-				if (isNormalComp(n, i)) {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-				} else {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-				}
-			}
-		}
-	}
+	auto BCs_cc = simulate_full_box ? quokka::BC<SedovProblem>(amrex::BCType::int_dir) : quokka::BC<SedovProblem>(quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<SedovProblem> sim(BCs_cc);

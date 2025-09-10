@@ -15,6 +15,7 @@
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #include <fstream>
+#include "util/BC.hpp"
 
 // Single-group problem
 struct SGProblem {
@@ -247,18 +248,7 @@ auto problem_main() -> int
 
 	// Problem 1: pulse with grey radiation
 
-	// Boundary conditions
-	constexpr int nvars = RadSystem<SGProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		// periodic boundary condition in the x-direction will not work
-		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<SGProblem>(amrex::BCType::foextrap, amrex::BCType::int_dir, amrex::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<SGProblem> sim(BCs_cc);
@@ -308,18 +298,7 @@ auto problem_main() -> int
 
 	// Problem 2: advecting pulse
 
-	// Boundary conditions
-	constexpr int nvars2 = RadSystem<MGproblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc2(nvars2);
-	for (int n = 0; n < nvars2; ++n) {
-		// periodic boundary condition in the x-direction will not work
-		BCs_cc2[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-		BCs_cc2[n].setHi(0, amrex::BCType::foextrap);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc2[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc2[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc2 = quokka::BC<MGproblem>(amrex::BCType::foextrap, amrex::BCType::int_dir, amrex::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<MGproblem> sim2(BCs_cc2);
