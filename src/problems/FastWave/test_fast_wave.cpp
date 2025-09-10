@@ -18,6 +18,7 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
+#include "util/BC.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "test_fast_wave.hpp"
@@ -230,14 +231,7 @@ void QuokkaSimulation<FastWave>::computeReferenceSolution_fc(amrex::MultiFab &re
 
 auto problem_main() -> int
 {
-	const int nvars_cc = Physics_Indices<FastWave>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
-	for (int icomp = 0; icomp < nvars_cc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_cc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_cc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<FastWave>(amrex::BCType::int_dir); // periodic
 
 	const int nvars_fc = Physics_Indices<FastWave>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
