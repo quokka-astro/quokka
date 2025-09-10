@@ -60,9 +60,7 @@ constexpr amrex::Real P_R = 0.1;
 constexpr amrex::Real Bx = 0.75; // constant
 constexpr amrex::Real By_L = 1.0;
 constexpr amrex::Real By_R = -1.0;
-constexpr amrex::Real Bz = 0.0; //constant 
-
-
+constexpr amrex::Real Bz = 0.0; // constant
 
 // AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double /*x1*/, double /*x2*/, double /*x3*/)
 // {
@@ -72,13 +70,12 @@ constexpr amrex::Real Bz = 0.0; //constant
 // {
 // 	return 0.0;
 // }
-// AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double x1, double x2, double /*x3*/) -> double 
+// AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double x1, double x2, double /*x3*/) -> double
 // {
 // 	double sign = 1.0;
-// 	if (x1 <= 0.5) { sign = -1.0; }; 
-// 	return 0.75*x2 - sign * x1; 
+// 	if (x1 <= 0.5) { sign = -1.0; };
+// 	return 0.75*x2 - sign * x1;
 // }
-
 
 template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -89,7 +86,7 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 
 	const int ncomp_cc = Physics_Indices<MHDShocktubeProblem>::nvarTotal_cc;
 
-	//magnetic field at center of cell
+	// magnetic field at center of cell
 	const double x1mag = 0.75; // constant
 	const double x3mag = 0.0;
 
@@ -109,8 +106,6 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 			P = P_R;
 			x2mag = By_R;
 		}
-
-
 
 		const double vx = 0.0;
 		const double vy = 0.0;
@@ -148,11 +143,11 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 		const double x3mag = 0.0;
 		double x2mag = NAN;
 		if (x1_L < 0.5) {
-			 x2mag = By_L;
+			x2mag = By_L;
 		} else {
-			 x2mag = By_R;
+			x2mag = By_R;
 		}
-		
+
 		if (dir == quokka::direction::x) {
 			state_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = x1mag;
 		} else if (dir == quokka::direction::y) {
@@ -166,8 +161,8 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
-							     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							     int /*bcomp*/, int /*orig_comp*/)
+								amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+								int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 1)
 	auto i = iv.toArray()[0];
@@ -215,59 +210,56 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::Int
 	}
 }
 
-template<>
+template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, 
-								 int /*dcomp*/, int numcomp, amrex::GeometryData const &geom, const amrex::Real /*time*/,  const amrex::BCRec * /*bcr*/,
-							     int /*bcomp*/, int /*orig_comp*/, quokka::direction dir)
+AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
+								       int numcomp, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/, quokka::direction dir)
 {
-	#if (AMREX_SPACEDIM == 1)
-		auto i = iv.toArray()[0];
-		int const j = 0;
-		int const k = 0;
-	#endif
-	#if (AMREX_SPACEDIM == 2)
-		auto [i, j] = iv.toArray();
-		int const k = 0;
-	#endif
-	#if (AMREX_SPACEDIM == 3)
-		auto [i, j, k] = iv.toArray();
-	#endif
+#if (AMREX_SPACEDIM == 1)
+	auto i = iv.toArray()[0];
+	int const j = 0;
+	int const k = 0;
+#endif
+#if (AMREX_SPACEDIM == 2)
+	auto [i, j] = iv.toArray();
+	int const k = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+	auto [i, j, k] = iv.toArray();
+#endif
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-	
+
 	// Use direction to determine which boundaries to check
-	switch(dir) {
+	switch (dir) {
 		case quokka::direction::x:
-			if (i <= lo[0]) {		
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bx;	
-			} 
-			else if (i > hi[0]) {
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bx;	
+			if (i <= lo[0]) {
+				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bx;
+			} else if (i > hi[0]) {
+				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bx;
 			}
 			break;
 		case quokka::direction::y:
-			if (i < lo[0]) {		
+			if (i < lo[0]) {
 				// Set y-direction left boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = By_L;	
-			} 
-			else if (i > hi[0]) {
+				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = By_L;
+			} else if (i > hi[0]) {
 				// Set y-direction right boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = By_R;	
+				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = By_R;
 			}
 			break;
 		case quokka::direction::z:
-			if (i < lo[0]) {		
+			if (i < lo[0]) {
 				// Set z-direction left boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;	
-			} 
-			else if (i >= hi[0]) {
+				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;
+			} else if (i >= hi[0]) {
 				// Set z-direction right boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;	
+				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;
 			}
 			break;
-		case quokka::direction::na: 
+		case quokka::direction::na:
 			break; // do nothing
 	}
 }
@@ -298,17 +290,15 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::refineGrid(int lev, amre
 	}
 }
 
-
-
 auto problem_main() -> int
 {
 	const double max_time = 1.0;
-	const int max_timesteps = 80000; 
+	const int max_timesteps = 80000;
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<MHDShocktubeProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet 
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet
 		BCs_cc[n].setHi(0, amrex::BCType::ext_dir);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
@@ -318,8 +308,8 @@ auto problem_main() -> int
 
 	const int nvars_fc = Physics_Indices<MHDShocktubeProblem>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {		
-		BCs_fc[icomp].setLo(0, amrex::BCType::ext_dir); // Dirichlet 
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		BCs_fc[icomp].setLo(0, amrex::BCType::ext_dir); // Dirichlet
 		BCs_fc[icomp].setHi(0, amrex::BCType::ext_dir);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_fc[icomp].setLo(i, amrex::BCType::int_dir); // periodic
@@ -327,11 +317,10 @@ auto problem_main() -> int
 		}
 	}
 
-
 	QuokkaSimulation<MHDShocktubeProblem> sim(BCs_cc, BCs_fc);
 
-// 	sim.stopTime_ = max_time;
-// 	sim.maxTimesteps_ = max_timesteps;
+	// 	sim.stopTime_ = max_time;
+	// 	sim.maxTimesteps_ = max_timesteps;
 
 	// Main time loop
 	sim.setInitialConditions();
