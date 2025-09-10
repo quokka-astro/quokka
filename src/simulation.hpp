@@ -3270,7 +3270,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				amrex::MultiFab tmp_fc;
 				amrex::VisMF::Read(
 				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-				constexpr std::array<quokka::direction, AMREX_SPACEDIM> directions = {quokka::direction::x, quokka::direction::y, quokka::direction::z};
+				#if AMREX_SPACEDIM == 1
+					constexpr std::array<quokka::direction, 1> directions = {quokka::direction::x};
+				#elif AMREX_SPACEDIM == 2  
+					constexpr std::array<quokka::direction, 2> directions = {quokka::direction::x, quokka::direction::y};
+				#elif AMREX_SPACEDIM == 3
+					constexpr std::array<quokka::direction, 3> directions = {quokka::direction::x, quokka::direction::y, quokka::direction::z};
+				#endif
 				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev], directions[idim]);
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 			}
