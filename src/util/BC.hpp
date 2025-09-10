@@ -5,6 +5,7 @@
 #include "AMReX_BCRec.H"
 #include "AMReX_Vector.H"
 #include "hydro/hydro_system.hpp"
+#include "radiation/radiation_system.hpp"
 #include <array>
 
 namespace quokka {
@@ -17,18 +18,47 @@ namespace BoundaryCondition {
 
 namespace detail {
 
-    // Check if a component is a normal momentum component in a given dimension
+    // Check if a component is a normal component (momentum or radiation flux) in a given dimension
     template <typename problem_t>
-    constexpr bool isNormalMomentumComponent(int n, int dim) {
-        if ((n == HydroSystem<problem_t>::x1Momentum_index) && (dim == 0)) {
-            return true;
+    constexpr bool isNormalComponent(int n, int dim) {
+        // Check hydro momentum components
+        if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+            if ((n == HydroSystem<problem_t>::x1Momentum_index) && (dim == 0)) {
+                return true;
+            }
+            if ((n == HydroSystem<problem_t>::x2Momentum_index) && (dim == 1)) {
+                return true;
+            }
+            if ((n == HydroSystem<problem_t>::x3Momentum_index) && (dim == 2)) {
+                return true;
+            }
         }
-        if ((n == HydroSystem<problem_t>::x2Momentum_index) && (dim == 1)) {
-            return true;
+        
+        // Check radiation flux components if radiation is enabled
+        if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+            // Check gas momentum components in RadSystem
+            if ((n == RadSystem<problem_t>::x1GasMomentum_index) && (dim == 0)) {
+                return true;
+            }
+            if ((n == RadSystem<problem_t>::x2GasMomentum_index) && (dim == 1)) {
+                return true;
+            }
+            if ((n == RadSystem<problem_t>::x3GasMomentum_index) && (dim == 2)) {
+                return true;
+            }
+            
+            // Check radiation flux components
+            if ((n == RadSystem<problem_t>::x1RadFlux_index) && (dim == 0)) {
+                return true;
+            }
+            if ((n == RadSystem<problem_t>::x2RadFlux_index) && (dim == 1)) {
+                return true;
+            }
+            if ((n == RadSystem<problem_t>::x3RadFlux_index) && (dim == 2)) {
+                return true;
+            }
         }
-        if ((n == HydroSystem<problem_t>::x3Momentum_index) && (dim == 2)) {
-            return true;
-        }
+        
         return false;
     }
 } // namespace detail
@@ -46,7 +76,7 @@ amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y, int bc_z) {
             if (bcs[i] == BoundaryCondition::reflecting) {
                 // For reflecting boundaries, use reflect_odd for normal momentum components
                 // and reflect_even for all other components (including tangential momentum)
-                if (detail::isNormalMomentumComponent<problem_t>(n, i)) {
+                if (detail::isNormalComponent<problem_t>(n, i)) {
                     BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
                     BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
                 } else {
