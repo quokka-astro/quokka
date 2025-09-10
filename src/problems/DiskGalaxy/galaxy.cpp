@@ -11,7 +11,6 @@
 #include <cmath>
 
 #include "AMReX_Array.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
 #include "AMReX_GpuContainers.H"
@@ -28,6 +27,7 @@
 #include "math/quadrature.hpp"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
+#include "util/BC.hpp"
 
 struct AgoraGalaxy {
 };
@@ -363,20 +363,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<AgoraGalaxy>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<AgoraGalaxy>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<AgoraGalaxy>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	auto BCs_cc = quokka::BC<AgoraGalaxy>(quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<AgoraGalaxy>(quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<AgoraGalaxy> sim(BCs_cc);

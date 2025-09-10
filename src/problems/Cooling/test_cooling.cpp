@@ -9,13 +9,13 @@
 #include <fmt/format.h>
 #include <random>
 
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_TableData.H"
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/BC.hpp"
 
 using amrex::Real;
 

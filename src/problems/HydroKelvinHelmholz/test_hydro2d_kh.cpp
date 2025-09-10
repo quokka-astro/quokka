@@ -20,6 +20,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"

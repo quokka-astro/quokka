@@ -10,7 +10,6 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
@@ -18,6 +17,7 @@
 #include "math/interpolate.hpp"
 #include <fmt/format.h>
 #include <fstream>
+#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
@@ -165,7 +165,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	auto BCs_cc = quokka::BC<RichtmeyerMeshkovProblem>(quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<RichtmeyerMeshkovProblem>(quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<RichtmeyerMeshkovProblem> sim(BCs_cc);

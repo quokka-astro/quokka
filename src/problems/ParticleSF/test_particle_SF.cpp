@@ -9,6 +9,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
+#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"

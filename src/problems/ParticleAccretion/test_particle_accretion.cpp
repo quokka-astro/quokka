@@ -3,7 +3,6 @@
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuQualifiers.H"
@@ -17,6 +16,7 @@
 #include "math/interpolate.hpp"
 #include "util/fextract.hpp"
 #include <gcem.hpp>
+#include "util/BC.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -435,7 +435,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);

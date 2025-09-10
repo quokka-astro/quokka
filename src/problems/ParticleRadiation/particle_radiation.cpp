@@ -11,6 +11,7 @@
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/valarray.hpp"
+#include "util/BC.hpp"
 
 struct ParticleRadiationProblem {
 };
@@ -200,7 +201,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	auto BCs_cc = quokka::BC<ParticleRadiationProblem>(quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting, quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<ParticleRadiationProblem>(quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleRadiationProblem> sim(BCs_cc);
