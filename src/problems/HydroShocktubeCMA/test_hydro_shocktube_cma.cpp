@@ -25,8 +25,8 @@
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
-#include "util/fextract.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
 
 struct ShocktubeProblem {
 };

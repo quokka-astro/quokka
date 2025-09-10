@@ -7,7 +7,6 @@
 #include <cstdlib>
 #include <fmt/format.h>
 
-#include "util/BC.hpp"
 #include "AMReX.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
@@ -17,6 +16,7 @@
 #include "hydro/EOS.hpp"
 #include "particles/PhysicsParticles.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 
 struct ParticleProblem {
 };

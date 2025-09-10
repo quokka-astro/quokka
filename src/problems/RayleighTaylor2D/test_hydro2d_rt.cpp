@@ -19,8 +19,8 @@
 #include "AMReX_ParmParse.H"
 
 #include "QuokkaSimulation.hpp"
-#include "util/BC.hpp"
 #include "hydro/hydro_system.hpp"
+#include "util/BC.hpp"
 
 struct RTProblem {
 };
@@ -168,9 +168,9 @@ template <> void QuokkaSimulation<RTProblem>::refineGrid(int lev, amrex::TagBoxA
 auto problem_main() -> int
 {
 	// Set boundary conditions: periodic in x, reflecting in y and z
-	auto BCs_cc = quokka::BC<RTProblem>(amrex::BCType::int_dir,                        // x: periodic
-	                                     quokka::BoundaryCondition::reflecting,        // y: reflecting
-	                                     quokka::BoundaryCondition::reflecting);       // z: reflecting
+	auto BCs_cc = quokka::BC<RTProblem>(amrex::BCType::int_dir,		    // x: periodic
+					    quokka::BoundaryCondition::reflecting,  // y: reflecting
+					    quokka::BoundaryCondition::reflecting); // z: reflecting
 
 	// Problem initialization
 	QuokkaSimulation<RTProblem> sim(BCs_cc);

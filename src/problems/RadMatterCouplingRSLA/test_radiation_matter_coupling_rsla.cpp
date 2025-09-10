@@ -10,10 +10,10 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "util/BC.hpp"
 #include "QuokkaSimulation.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #ifdef HAVE_PYTHON

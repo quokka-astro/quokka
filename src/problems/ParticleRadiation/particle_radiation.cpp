@@ -10,8 +10,8 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/valarray.hpp"
 #include "util/BC.hpp"
+#include "util/valarray.hpp"
 
 struct ParticleRadiationProblem {
 };

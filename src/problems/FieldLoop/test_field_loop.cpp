@@ -15,11 +15,11 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "util/BC.hpp"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
+#include "util/BC.hpp"
 
 struct FieldLoop {
 };

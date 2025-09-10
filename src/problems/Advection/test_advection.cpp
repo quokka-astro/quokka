@@ -24,8 +24,8 @@
 #include <fmt/format.h>
 
 #include "linear_advection/AdvectionSimulation.hpp"
-#include "util/fextract.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
 
 struct SawtoothProblem {
 };

@@ -39,14 +39,15 @@ template <typename problem_t> struct Physics_Indices {
 	static constexpr int nvarTotal_cc_adv = 1;
 	// number of cc quantities required for rad /+ hydro problem
 	static constexpr int nvarTotal_cc = []() constexpr {
-			if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
-				return nvarTotal_cc_adv;
-			} 
-			if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-				return Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars + Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups;
-			} 
-			return Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars;
-		}();
+		if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
+			return nvarTotal_cc_adv;
+		}
+		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+			return Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars +
+			       Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups;
+		}
+		return Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars;
+	}();
 	// cell-centered
 	static constexpr int hydroFirstIndex = 0;
 	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;

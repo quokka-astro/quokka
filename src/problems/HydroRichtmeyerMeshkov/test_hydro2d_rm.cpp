@@ -15,9 +15,9 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "math/interpolate.hpp"
+#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <fstream>
-#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"

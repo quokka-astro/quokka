@@ -25,8 +25,8 @@
 #include "hyperbolic_system.hpp"
 #include "linear_advection/AdvectionSimulation.hpp"
 #include "linear_advection/linear_advection.hpp"
-#include "util/fextract.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
 
 struct SemiellipseProblem {
 };

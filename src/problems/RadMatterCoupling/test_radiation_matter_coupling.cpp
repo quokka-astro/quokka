@@ -17,8 +17,8 @@
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/fextract.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
 
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

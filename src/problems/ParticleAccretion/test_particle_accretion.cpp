@@ -14,9 +14,9 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <gcem.hpp>
-#include "util/BC.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"

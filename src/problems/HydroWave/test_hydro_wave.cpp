@@ -20,8 +20,8 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "util/fextract.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
 
 struct WaveProblem {
 };

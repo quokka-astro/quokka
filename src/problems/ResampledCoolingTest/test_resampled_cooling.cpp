@@ -12,11 +12,11 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "util/BC.hpp"
 #include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
 #include "math/interpolate.hpp"
+#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <fstream>
 #include <iomanip>

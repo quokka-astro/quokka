@@ -25,9 +25,9 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <fstream>
 #include <unistd.h>
-#include "util/BC.hpp"
 
 using amrex::Real;
 

@@ -18,10 +18,10 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "util/BC.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "test_fast_wave.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 
 struct FastWave {

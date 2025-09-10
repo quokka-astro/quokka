@@ -21,8 +21,8 @@
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
-#include "util/fextract.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

@@ -15,10 +15,10 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "util/BC.hpp"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include "physics_info.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"

@@ -22,8 +22,8 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "util/ArrayUtil.hpp"
-#include "util/fextract.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
 
 struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

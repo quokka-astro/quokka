@@ -24,7 +24,6 @@
 #include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
-#include "util/BC.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "cooling/TabulatedCooling.hpp"
 #include "fundamental_constants.H"
@@ -35,6 +34,7 @@
 #include "io/projection.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 
 using amrex::Real;
 
@@ -900,8 +900,8 @@ auto problem_main() -> int
 	// Problem initialization
 	// Set boundary conditions: ext_dir in x, periodic in y and z
 	auto boundaryConditions = quokka::BC<ShockCloud>(amrex::BCType::ext_dir,  // x: Dirichlet/NSCBC
-	                                                  amrex::BCType::int_dir,  // y: periodic
-	                                                  amrex::BCType::int_dir); // z: periodic
+							 amrex::BCType::int_dir,  // y: periodic
+							 amrex::BCType::int_dir); // z: periodic
 	QuokkaSimulation<ShockCloud> sim(boundaryConditions);
 
 	// Read problem parameters

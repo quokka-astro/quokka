@@ -11,10 +11,10 @@
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #include <fstream>
-#include "util/BC.hpp"
 
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

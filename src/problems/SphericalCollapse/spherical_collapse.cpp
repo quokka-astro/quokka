@@ -22,8 +22,8 @@
 
 #include "AMReX_SPACE.H"
 #include "QuokkaSimulation.hpp"
-#include "util/BC.hpp"
 #include "hydro/hydro_system.hpp"
+#include "util/BC.hpp"
 
 struct CollapseProblem {
 };
