@@ -176,31 +176,6 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<ParticleRadiationProblem>::x1GasMomentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleRadiationProblem>::x2GasMomentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleRadiationProblem>::x3GasMomentum_index) && (dim == 2)) {
-			return true;
-		}
-		// Check radiation flux components
-		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			if ((n == RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 0)) {
-				return true;
-			}
-			if ((n == RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 1)) {
-				return true;
-			}
-			if ((n == RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 2)) {
-				return true;
-			}
-		}
-		return false;
-	};
-
 	auto BCs_cc = quokka::BC<ParticleRadiationProblem>(quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
