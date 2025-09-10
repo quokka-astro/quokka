@@ -313,8 +313,20 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					}
 				}
 
+				// write buffer_rhs
+				const int plt_interval = 1;
+				const int lev_i = 0;
+				std::string debug_phi_lev = "debug_buffer_rhs_before_sum_lev" + std::to_string(lev_i) + "_";
+				std::string plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
+				WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
+
 				// Sum boundary cell values to real cells
 				buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
+
+				// write buffer_rhs_after_sum
+				debug_phi_lev = "debug_buffer_rhs_after_sum_lev" + std::to_string(lev_i) + "_";
+				plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
+				WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
 
 				// Add buffer_rhs to rhs
 				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
