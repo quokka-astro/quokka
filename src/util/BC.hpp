@@ -21,19 +21,6 @@ namespace detail {
     // Check if a component is a normal component (momentum or radiation flux) in a given dimension
     template <typename problem_t>
     constexpr bool isNormalComponent(int n, int dim) {
-        // Check hydro momentum components
-        if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
-            if ((n == HydroSystem<problem_t>::x1Momentum_index) && (dim == 0)) {
-                return true;
-            }
-            if ((n == HydroSystem<problem_t>::x2Momentum_index) && (dim == 1)) {
-                return true;
-            }
-            if ((n == HydroSystem<problem_t>::x3Momentum_index) && (dim == 2)) {
-                return true;
-            }
-        }
-        
         // Check radiation flux components if radiation is enabled
         if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
             // Check gas momentum components in RadSystem
@@ -57,7 +44,18 @@ namespace detail {
             if ((n == RadSystem<problem_t>::x3RadFlux_index) && (dim == 2)) {
                 return true;
             }
-        }
+        } else {
+        		// Check hydro momentum components
+            if ((n == HydroSystem<problem_t>::x1Momentum_index) && (dim == 0)) {
+                return true;
+            }
+            if ((n == HydroSystem<problem_t>::x2Momentum_index) && (dim == 1)) {
+                return true;
+            }
+            if ((n == HydroSystem<problem_t>::x3Momentum_index) && (dim == 2)) {
+                return true;
+            }
+				}
         
         return false;
     }

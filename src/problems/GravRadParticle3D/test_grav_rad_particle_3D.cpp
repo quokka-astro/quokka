@@ -128,28 +128,6 @@ auto problem_main() -> int
 	// const int nx = 1000;
 	// const double Lx = 1.0;
 
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<ParticleProblem>::x1GasMomentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x2GasMomentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x3GasMomentum_index) && (dim == 2)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x1RadFlux_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x2RadFlux_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x3RadFlux_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
 	// Boundary conditions
 	auto BCs_cc = quokka::BC<ParticleProblem>(quokka::BoundaryCondition::reflecting);
 
