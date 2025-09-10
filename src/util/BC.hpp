@@ -6,6 +6,7 @@
 #include "AMReX_Vector.H"
 #include "hydro/hydro_system.hpp"
 #include <array>
+#include <radiation/radiation_system.hpp>
 
 namespace quokka {
 
@@ -36,7 +37,7 @@ namespace detail {
 // Three parameter version - sets each dimension separately
 template <typename problem_t>
 amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y, int bc_z) {
-    const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
+    const int ncomp_cc = Physics_Indices<problem_t>::nvar_;
     amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
     
     std::array<int, 3> bcs = {bc_x, bc_y, bc_z};
