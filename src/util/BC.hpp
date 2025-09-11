@@ -12,38 +12,34 @@
 namespace quokka
 {
 
-enum class BoundaryCondition : int
-{
+enum class BoundaryCondition : int {
 	// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
-	bogus               = amrex::BCType::bogus,
-	reflect_odd         = amrex::BCType::reflect_odd,
-	int_dir             = amrex::BCType::int_dir,             // interior/periodic
-	reflect_even        = amrex::BCType::reflect_even,
-	foextrap            = amrex::BCType::foextrap,            // first order extrapolation
-	ext_dir             = amrex::BCType::ext_dir,             // external Dirichlet
-	hoextrap            = amrex::BCType::hoextrap,            // higher order extrapolation
-	hoextrapcc          = amrex::BCType::hoextrapcc,          // higher order extrapolation to cell center
-	ext_dir_cc          = amrex::BCType::ext_dir_cc,          // external Dirichlet at cell center
+	bogus = amrex::BCType::bogus,
+	reflect_odd = amrex::BCType::reflect_odd,
+	int_dir = amrex::BCType::int_dir, // interior/periodic
+	reflect_even = amrex::BCType::reflect_even,
+	foextrap = amrex::BCType::foextrap,	// first order extrapolation
+	ext_dir = amrex::BCType::ext_dir,	// external Dirichlet
+	hoextrap = amrex::BCType::hoextrap,	// higher order extrapolation
+	hoextrapcc = amrex::BCType::hoextrapcc, // higher order extrapolation to cell center
+	ext_dir_cc = amrex::BCType::ext_dir_cc, // external Dirichlet at cell center
 	direction_dependent = amrex::BCType::direction_dependent,
-	user_1              = amrex::BCType::user_1,
-	user_2              = amrex::BCType::user_2,
-	user_3              = amrex::BCType::user_3,
-	
+	user_1 = amrex::BCType::user_1,
+	user_2 = amrex::BCType::user_2,
+	user_3 = amrex::BCType::user_3,
+
 	// Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
-	reflecting          = 8881, // Special: uses reflect_odd/reflect_even based on component
-	// outflow_nscbc       = 8882, // Future: NSCBC outflow
-	// inflow_nscbc        = 8883, // Future: NSCBC inflow
-	// custom_wall         = 8884  // Future: custom wall treatment
+	reflecting = 8881, // Special: uses reflect_odd/reflect_even based on component
+			   // outflow_nscbc       = 8882, // Future: NSCBC outflow
+			   // inflow_nscbc        = 8883, // Future: NSCBC inflow
+			   // custom_wall         = 8884  // Future: custom wall treatment
 };
 
 namespace detail
 {
 
 // Implicit conversion function for clean syntax
-constexpr int toInt(BoundaryCondition bc) noexcept
-{
-	return static_cast<int>(bc);
-}
+constexpr int toInt(BoundaryCondition bc) noexcept { return static_cast<int>(bc); }
 
 // Check if a component is a normal component (momentum or radiation flux) in a given dimension
 template <typename problem_t> constexpr bool isNormalComponent(int n, int dim)
@@ -123,14 +119,14 @@ template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y,
 }
 
 // Overloads for BoundaryCondition enum class - provides clean, type-safe syntax
-template <typename problem_t> 
-amrex::Vector<amrex::BCRec> BC(BoundaryCondition bc) { 
-	return BC<problem_t>(detail::toInt(bc), detail::toInt(bc), detail::toInt(bc)); 
+template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BoundaryCondition bc)
+{
+	return BC<problem_t>(detail::toInt(bc), detail::toInt(bc), detail::toInt(bc));
 }
 
-template <typename problem_t> 
-amrex::Vector<amrex::BCRec> BC(BoundaryCondition bc_x, BoundaryCondition bc_y, BoundaryCondition bc_z) { 
-	return BC<problem_t>(detail::toInt(bc_x), detail::toInt(bc_y), detail::toInt(bc_z)); 
+template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BoundaryCondition bc_x, BoundaryCondition bc_y, BoundaryCondition bc_z)
+{
+	return BC<problem_t>(detail::toInt(bc_x), detail::toInt(bc_y), detail::toInt(bc_z));
 }
 
 } // namespace quokka
