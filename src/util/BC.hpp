@@ -12,7 +12,7 @@
 namespace quokka
 {
 
-enum class BoundaryCondition : int {
+enum class BCType : int {
 	// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
 	bogus = amrex::BCType::bogus,
 	reflect_odd = amrex::BCType::reflect_odd,
@@ -39,7 +39,7 @@ namespace detail
 {
 
 // Implicit conversion function for clean syntax
-constexpr int toInt(BoundaryCondition bc) noexcept { return static_cast<int>(bc); }
+constexpr int toInt(BCType bc) noexcept { return static_cast<int>(bc); }
 
 // Check if a component is a normal component (momentum or radiation flux) in a given dimension
 template <typename problem_t> constexpr bool isNormalComponent(int n, int dim)
@@ -96,7 +96,7 @@ template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y,
 
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (bcs[i] == static_cast<int>(BoundaryCondition::reflecting)) {
+			if (bcs[i] == static_cast<int>(BCType::reflecting)) {
 				// For reflecting boundaries, use reflect_odd for normal momentum components
 				// and reflect_even for all other components (including tangential momentum)
 				if (detail::isNormalComponent<problem_t>(n, i)) {
@@ -108,7 +108,7 @@ template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y,
 				}
 			} else {
 				// For standard AMReX boundaries, use the BC type directly
-				// (quokka::BoundaryCondition values map directly to amrex::BCType values)
+				// (quokka::BCType values map directly to amrex::BCType values)
 				BCs_cc[n].setLo(i, bcs[i]);
 				BCs_cc[n].setHi(i, bcs[i]);
 			}
@@ -118,13 +118,13 @@ template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y,
 	return BCs_cc;
 }
 
-// Overloads for BoundaryCondition enum class - provides clean, type-safe syntax
-template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BoundaryCondition bc)
+// Overloads for BCType enum class - provides clean, type-safe syntax
+template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BCType bc)
 {
 	return BC<problem_t>(detail::toInt(bc), detail::toInt(bc), detail::toInt(bc));
 }
 
-template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BoundaryCondition bc_x, BoundaryCondition bc_y, BoundaryCondition bc_z)
+template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BCType bc_x, BCType bc_y, BCType bc_z)
 {
 	return BC<problem_t>(detail::toInt(bc_x), detail::toInt(bc_y), detail::toInt(bc_z));
 }
