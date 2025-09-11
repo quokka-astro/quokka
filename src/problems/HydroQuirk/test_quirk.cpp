@@ -254,8 +254,8 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 auto problem_main() -> int
 {
 	// Boundary conditions: ext_dir in x, periodic in y and z
-	auto BCs_cc = quokka::BC<QuirkProblem>(quokka::BCType::ext_dir,	// x: outflow
-					       quokka::BCType::int_dir,	// y: periodic
+	auto BCs_cc = quokka::BC<QuirkProblem>(quokka::BCType::ext_dir,	 // x: outflow
+					       quokka::BCType::int_dir,	 // y: periodic
 					       quokka::BCType::int_dir); // z: periodic
 
 	// Problem initialization
