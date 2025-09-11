@@ -119,10 +119,7 @@ template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y,
 }
 
 // Overloads for BCType enum class - provides clean, type-safe syntax
-template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BCType bc)
-{
-	return BC<problem_t>(detail::toInt(bc), detail::toInt(bc), detail::toInt(bc));
-}
+template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BCType bc) { return BC<problem_t>(detail::toInt(bc), detail::toInt(bc), detail::toInt(bc)); }
 
 template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BCType bc_x, BCType bc_y, BCType bc_z)
 {

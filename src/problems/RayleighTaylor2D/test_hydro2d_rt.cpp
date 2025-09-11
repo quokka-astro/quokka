@@ -168,8 +168,8 @@ template <> void QuokkaSimulation<RTProblem>::refineGrid(int lev, amrex::TagBoxA
 auto problem_main() -> int
 {
 	// Set boundary conditions: periodic in x, reflecting in y and z
-	auto BCs_cc = quokka::BC<RTProblem>(quokka::BCType::int_dir,		    // x: periodic
-					    quokka::BCType::reflecting,  // y: reflecting
+	auto BCs_cc = quokka::BC<RTProblem>(quokka::BCType::int_dir,	 // x: periodic
+					    quokka::BCType::reflecting,	 // y: reflecting
 					    quokka::BCType::reflecting); // z: reflecting
 
 	// Problem initialization
