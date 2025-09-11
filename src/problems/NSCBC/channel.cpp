@@ -126,8 +126,8 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<Channel>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // NSCBC inflow
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // NSCBC outflow
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir_cc); // NSCBC inflow
+		BCs_cc[n].setHi(0, amrex::BCType::ext_dir_cc); // NSCBC outflow
 
 #if (AMREX_SPACEDIM >= 2)
 		BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic

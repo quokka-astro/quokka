@@ -266,8 +266,8 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<TophatProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- Marshak
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir_cc); // left x1 -- Marshak
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap);   // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) { // reflect lower
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);

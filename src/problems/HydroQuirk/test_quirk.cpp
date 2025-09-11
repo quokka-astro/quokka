@@ -257,8 +257,8 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		// outflow
-		BCs_cc[0].setLo(0, amrex::BCType::ext_dir);
-		BCs_cc[0].setHi(0, amrex::BCType::ext_dir);
+		BCs_cc[0].setLo(0, amrex::BCType::ext_dir_cc);
+		BCs_cc[0].setHi(0, amrex::BCType::ext_dir_cc);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			// periodic
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir);

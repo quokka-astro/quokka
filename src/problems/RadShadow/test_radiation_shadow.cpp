@@ -218,8 +218,8 @@ auto problem_main() -> int
 
 	amrex::Vector<amrex::BCRec> BCs_cc(Physics_Indices<ShadowProblem>::nvarTotal_cc);
 	for (int n = 0; n < Physics_Indices<ShadowProblem>::nvarTotal_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- streaming
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir_cc); // left x1 -- streaming
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap);   // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) { // reflect lower
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);

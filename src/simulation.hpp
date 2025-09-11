@@ -1879,7 +1879,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoun
 											       int orig_comp)
 {
 	// user should implement if needed using template specialization
-	// (This is only called when amrex::BCType::ext_dir is set for a given
+	// (This is only called when amrex::BCType::ext_dir_cc is set for a given
 	// boundary.)
 
 	// set boundary condition for cell 'iv'
@@ -1892,7 +1892,7 @@ AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVec
 							     int orig_comp)
 {
 	// user should implement if needed using template specialization
-	// (This is only called when amrex::BCType::ext_dir is set for a given
+	// (This is only called when amrex::BCType::ext_dir_cc is set for a given
 	// boundary.)
 
 	// set boundary condition for cell 'iv'
