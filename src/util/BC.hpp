@@ -12,7 +12,8 @@
 namespace quokka
 {
 
-enum class BCType : int {
+namespace BCType {
+enum mathematicalBndryTypes : int {
 	// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
 	bogus = amrex::BCType::bogus,
 	reflect_odd = amrex::BCType::reflect_odd,
@@ -30,16 +31,14 @@ enum class BCType : int {
 
 	// Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
 	reflecting = 8881, // Special: uses reflect_odd/reflect_even based on component
-			   // outflow_nscbc       = 8882, // Future: NSCBC outflow
-			   // inflow_nscbc        = 8883, // Future: NSCBC inflow
-			   // custom_wall         = 8884  // Future: custom wall treatment
+	// outflow_nscbc = 8882, // Future: NSCBC outflow
+	// inflow_nscbc = 8883, // Future: NSCBC inflow
+	// custom_wall = 8884  // Future: custom wall treatment
 };
+}
 
 namespace detail
 {
-
-// Implicit conversion function for clean syntax
-constexpr int toInt(BCType bc) noexcept { return static_cast<int>(bc); }
 
 // Check if a component is a normal component (momentum or radiation flux) in a given dimension
 template <typename problem_t> constexpr bool isNormalComponent(int n, int dim)
@@ -96,7 +95,7 @@ template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y,
 
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (bcs[i] == static_cast<int>(BCType::reflecting)) {
+			if (bcs[i] == BCType::reflecting) {
 				// For reflecting boundaries, use reflect_odd for normal momentum components
 				// and reflect_even for all other components (including tangential momentum)
 				if (detail::isNormalComponent<problem_t>(n, i)) {
@@ -118,13 +117,11 @@ template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y,
 	return BCs_cc;
 }
 
-// Overloads for BCType enum class - provides clean, type-safe syntax
-template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BCType bc) { return BC<problem_t>(detail::toInt(bc), detail::toInt(bc), detail::toInt(bc)); }
+// Overloads for BCType enum - provides clean, type-safe syntax
+template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc) { return BC<problem_t>(bc, bc, bc); }
 
-template <typename problem_t> amrex::Vector<amrex::BCRec> BC(BCType bc_x, BCType bc_y, BCType bc_z)
-{
-	return BC<problem_t>(detail::toInt(bc_x), detail::toInt(bc_y), detail::toInt(bc_z));
-}
+// Note: BCType values implicitly convert to int, so we can use them directly with the int version
+// Usage: BC<Problem>(BCType::reflecting) or BC<Problem>(BCType::ext_dir, BCType::int_dir, BCType::reflecting)
 
 } // namespace quokka
 
