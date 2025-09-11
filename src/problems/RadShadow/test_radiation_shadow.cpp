@@ -16,9 +16,9 @@
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <fstream>
-#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "physics_info.hpp"

@@ -155,8 +155,8 @@ auto problem_main() -> int
 	// Examples of the new unified BC interface (traditional enum, implicit int conversion):
 	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::int_dir);     // periodic
 	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::ext_dir);     // Dirichlet
-	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::ext_dir, 
-	//                                       quokka::BCType::int_dir, 
+	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::ext_dir,
+	//                                       quokka::BCType::int_dir,
 	//                                       quokka::BCType::reflecting); // mixed BCs
 	auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::reflecting);
 

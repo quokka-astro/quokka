@@ -12,7 +12,8 @@
 namespace quokka
 {
 
-namespace BCType {
+namespace BCType
+{
 enum mathematicalBndryTypes : int {
 	// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
 	bogus = amrex::BCType::bogus,
@@ -31,9 +32,9 @@ enum mathematicalBndryTypes : int {
 
 	// Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
 	reflecting = 8881, // Special: uses reflect_odd/reflect_even based on component
-	// outflow_nscbc = 8882, // Future: NSCBC outflow
-	// inflow_nscbc = 8883, // Future: NSCBC inflow
-	// custom_wall = 8884  // Future: custom wall treatment
+			   // outflow_nscbc = 8882, // Future: NSCBC outflow
+			   // inflow_nscbc = 8883, // Future: NSCBC inflow
+			   // custom_wall = 8884  // Future: custom wall treatment
 };
 }
 

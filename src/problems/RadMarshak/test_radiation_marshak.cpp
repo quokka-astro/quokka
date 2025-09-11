@@ -12,10 +12,10 @@
 #endif
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <cmath>
 #include <fmt/format.h>
 #include <fstream>
-#include "util/BC.hpp"
 
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
