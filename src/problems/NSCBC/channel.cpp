@@ -7,11 +7,11 @@
 /// \brief Implements a subsonic channel flow problem with Navier-Stokes
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
+#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <random>
 #include <tuple>
 #include <vector>
-#include "util/BC.hpp"
 
 #include "AMReX.H"
 #include "AMReX_Array.H"

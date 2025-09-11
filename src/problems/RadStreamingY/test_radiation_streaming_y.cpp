@@ -14,10 +14,10 @@
 #include "AMReX_BLassert.H"
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
 #include <fmt/format.h>
-#include "util/BC.hpp"
 
 struct StreamingProblem {
 };
