@@ -36,13 +36,13 @@ enum mathematicalBndryTypes : int {
 			   // inflow_nscbc = 8883, // Future: NSCBC inflow
 			   // custom_wall = 8884  // Future: custom wall treatment
 };
-}
+} // namespace BCType
 
 namespace detail
 {
 
 // Check if a component is a normal component (momentum or radiation flux) in a given dimension
-template <typename problem_t> constexpr bool isNormalComponent(int n, int dim)
+template <typename problem_t> constexpr auto isNormalComponent(int n, int dim) -> bool
 {
 	// Check radiation flux components if radiation is enabled
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -87,7 +87,7 @@ template <typename problem_t> constexpr bool isNormalComponent(int n, int dim)
 } // namespace detail
 
 // Three parameter version - sets each dimension separately
-template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y, int bc_z)
+template <typename problem_t> auto BC(int bc_x, int bc_y, int bc_z) -> amrex::Vector<amrex::BCRec>
 {
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -119,7 +119,7 @@ template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc_x, int bc_y,
 }
 
 // Overloads for BCType enum - provides clean, type-safe syntax
-template <typename problem_t> amrex::Vector<amrex::BCRec> BC(int bc) { return BC<problem_t>(bc, bc, bc); }
+template <typename problem_t> auto BC(int bc) -> amrex::Vector<amrex::BCRec> { return BC<problem_t>(bc, bc, bc); }
 
 // Note: BCType values implicitly convert to int, so we can use them directly with the int version
 // Usage: BC<Problem>(BCType::reflecting) or BC<Problem>(BCType::ext_dir, BCType::int_dir, BCType::reflecting)
