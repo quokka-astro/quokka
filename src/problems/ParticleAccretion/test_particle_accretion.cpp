@@ -435,7 +435,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);

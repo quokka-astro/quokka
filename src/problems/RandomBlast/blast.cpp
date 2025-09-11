@@ -309,7 +309,7 @@ auto problem_main() -> int
 	pp.query("use_periodic_bc", use_periodic_bc);
 
 	// Problem initialization
-	auto BCs_cc = (use_periodic_bc == 1) ? quokka::BC<RandomBlast>(quokka::BCType::int_dir) : quokka::BC<RandomBlast>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = (use_periodic_bc == 1) ? quokka::BC<RandomBlast>(quokka::BCType::int_dir) : quokka::BC<RandomBlast>(quokka::BCType::reflecting);
 
 	QuokkaSimulation<RandomBlast> sim(BCs_cc);
 	sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)

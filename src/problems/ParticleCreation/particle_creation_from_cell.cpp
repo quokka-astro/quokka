@@ -254,7 +254,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	auto BCs_cc = quokka::BC<TestParticle>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<TestParticle>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim(BCs_cc);

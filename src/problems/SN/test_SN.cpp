@@ -155,7 +155,7 @@ template <> void QuokkaSimulation<SNProblem>::computeAfterTimestep()
 auto problem_main() -> int
 {
 	// Set boundary conditions - octant symmetry (reflecting)
-	auto BCs_cc = quokka::BC<SNProblem>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<SNProblem>(quokka::BCType::reflecting);
 
 	// get n_amb from the input file
 	amrex::ParmParse const pp("problem");

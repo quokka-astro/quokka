@@ -141,7 +141,7 @@ template <> void QuokkaSimulation<CollapseProblem>::ComputeDerivedVar(int lev, s
 auto problem_main() -> int
 {
 	// boundary conditions
-	auto BCs_cc = quokka::BC<CollapseProblem>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<CollapseProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<CollapseProblem> sim(BCs_cc);

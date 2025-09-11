@@ -114,7 +114,7 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BCType::reflecting);
 
 	amrex::ParmParse const pp("problem");
 	pp.query("particles_file", particles_file);

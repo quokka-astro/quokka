@@ -165,7 +165,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	auto BCs_cc = quokka::BC<RichtmeyerMeshkovProblem>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<RichtmeyerMeshkovProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<RichtmeyerMeshkovProblem> sim(BCs_cc);

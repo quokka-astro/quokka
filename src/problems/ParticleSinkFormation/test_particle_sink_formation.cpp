@@ -111,7 +111,7 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim(BCs_cc);

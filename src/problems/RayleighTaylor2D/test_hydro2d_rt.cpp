@@ -169,8 +169,8 @@ auto problem_main() -> int
 {
 	// Set boundary conditions: periodic in x, reflecting in y and z
 	auto BCs_cc = quokka::BC<RTProblem>(quokka::BCType::int_dir,		    // x: periodic
-					    quokka::BoundaryCondition::reflecting,  // y: reflecting
-					    quokka::BoundaryCondition::reflecting); // z: reflecting
+					    quokka::BCType::reflecting,  // y: reflecting
+					    quokka::BCType::reflecting); // z: reflecting
 
 	// Problem initialization
 	QuokkaSimulation<RTProblem> sim(BCs_cc);

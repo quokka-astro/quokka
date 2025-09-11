@@ -137,7 +137,7 @@ auto problem_main() -> int
 	// Problem parameters
 	constexpr bool reflecting_boundary = true;
 
-	auto BCs_cc = reflecting_boundary ? quokka::BC<BlastProblem>(quokka::BoundaryCondition::reflecting)
+	auto BCs_cc = reflecting_boundary ? quokka::BC<BlastProblem>(quokka::BCType::reflecting)
 					  : quokka::BC<BlastProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
