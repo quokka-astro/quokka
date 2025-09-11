@@ -11,6 +11,7 @@
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -202,18 +203,7 @@ auto problem_main() -> int
 
 	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
 
-	// Boundary conditions
-	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		// periodic boundary condition in the x-direction will not work
-		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<PulseProblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem 1: non-advecting pulse
 

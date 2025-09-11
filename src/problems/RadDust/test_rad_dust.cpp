@@ -5,13 +5,13 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -151,14 +151,7 @@ auto problem_main() -> int
 	const double CFL_number_gas = 0.8;
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<DustProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<DustProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
 	QuokkaSimulation<DustProblem> sim(BCs_cc);

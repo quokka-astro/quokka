@@ -7,7 +7,6 @@
 /// \brief Implements the random blast problem with radiative cooling.
 ///
 #include "AMReX.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
@@ -29,6 +28,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/quadrature.hpp"
 #include "physics_info.hpp"
+#include "util/BC.hpp"
 
 using amrex::Real;
 
@@ -309,37 +309,7 @@ auto problem_main() -> int
 	pp.query("use_periodic_bc", use_periodic_bc);
 
 	// Problem initialization
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<RandomBlast>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<RandomBlast>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<RandomBlast>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int nvars = HydroSystem<RandomBlast>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			if (use_periodic_bc == 1) { // periodic boundaries
-				BCs_cc[n].setLo(idim, amrex::BCType::int_dir);
-				BCs_cc[n].setHi(idim, amrex::BCType::int_dir);
-			} else { // reflecting boundaries
-				if (isNormalComp(n, idim)) {
-					BCs_cc[n].setLo(idim, amrex::BCType::reflect_odd);
-					BCs_cc[n].setHi(idim, amrex::BCType::reflect_odd);
-				} else {
-					BCs_cc[n].setLo(idim, amrex::BCType::reflect_even);
-					BCs_cc[n].setHi(idim, amrex::BCType::reflect_even);
-				}
-			}
-		}
-	}
+	auto BCs_cc = (use_periodic_bc == 1) ? quokka::BC<RandomBlast>(quokka::BCType::int_dir) : quokka::BC<RandomBlast>(quokka::BCType::reflecting);
 
 	QuokkaSimulation<RandomBlast> sim(BCs_cc);
 	sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)

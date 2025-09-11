@@ -14,6 +14,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "util/BC.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -110,36 +111,7 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<SinkProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<SinkProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<SinkProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int ncomp_cc = Physics_Indices<SinkProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// periodic boundaries
-			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			// octant symmetry
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim(BCs_cc);
