@@ -146,8 +146,8 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int n = 0; n < nvars_fc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_fc[n].setLo(i, quokka::BCType::int_dir); // periodic
-			BCs_fc[n].setHi(i, quokka::BCType::int_dir);
+			BCs_fc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_fc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 

@@ -16,7 +16,6 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <vector>
-#include "util/BC.hpp"
 
 #include "AMReX_BC_TYPES.H"
 #include "QuokkaSimulation.hpp"
@@ -294,11 +293,11 @@ auto problem_main() -> int
 	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[0].setLo(0, quokka::BCType::foextrap); // Dirichlet
-		BCs_cc[0].setHi(0, quokka::BCType::ext_dir);
+		BCs_cc[0].setLo(0, amrex::BCType::foextrap); // Dirichlet
+		BCs_cc[0].setHi(0, amrex::BCType::ext_dir);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, quokka::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, quokka::BCType::int_dir);
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 

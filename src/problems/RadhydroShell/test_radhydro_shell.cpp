@@ -322,19 +322,19 @@ auto problem_main() -> int
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			if constexpr (simulate_full_box) {
 				// periodic boundaries (not recommended for this problem)
-				// BCs_cc[n].setLo(i, quokka::BCType::int_dir);
-				// BCs_cc[n].setHi(i, quokka::BCType::int_dir);
+				// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+				// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 				// outflow boundaries
-				BCs_cc[n].setLo(i, quokka::BCType::foextrap);
-				BCs_cc[n].setHi(i, quokka::BCType::foextrap);
+				BCs_cc[n].setLo(i, amrex::BCType::foextrap);
+				BCs_cc[n].setHi(i, amrex::BCType::foextrap);
 			} else {
 				// reflecting boundaries, outflow boundaries
 				if (isNormalComp(n, i)) {
-					BCs_cc[n].setLo(i, quokka::BCType::reflect_odd);
-					BCs_cc[n].setHi(i, quokka::BCType::foextrap); // outflow
+					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+					BCs_cc[n].setHi(i, amrex::BCType::foextrap); // outflow
 				} else {
-					BCs_cc[n].setLo(i, quokka::BCType::reflect_even);
-					BCs_cc[n].setHi(i, quokka::BCType::foextrap); // outflow
+					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+					BCs_cc[n].setHi(i, amrex::BCType::foextrap); // outflow
 				}
 			}
 		}

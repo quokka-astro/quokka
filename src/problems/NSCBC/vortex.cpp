@@ -157,19 +157,19 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		if constexpr (outflow_boundary_along_x_axis) {
-			BCs_cc[n].setLo(0, quokka::BCType::ext_dir); // x- NSCBC outflow
-			BCs_cc[n].setHi(0, quokka::BCType::ext_dir);
-			BCs_cc[n].setLo(1, quokka::BCType::int_dir); // y- periodic
-			BCs_cc[n].setHi(1, quokka::BCType::int_dir);
+			BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // x- NSCBC outflow
+			BCs_cc[n].setHi(0, amrex::BCType::ext_dir);
+			BCs_cc[n].setLo(1, amrex::BCType::int_dir); // y- periodic
+			BCs_cc[n].setHi(1, amrex::BCType::int_dir);
 		} else {
-			BCs_cc[n].setLo(0, quokka::BCType::int_dir); // x- periodic
-			BCs_cc[n].setHi(0, quokka::BCType::int_dir);
-			BCs_cc[n].setLo(1, quokka::BCType::ext_dir); // y- NSCBC outflow
-			BCs_cc[n].setHi(1, quokka::BCType::ext_dir);
+			BCs_cc[n].setLo(0, amrex::BCType::int_dir); // x- periodic
+			BCs_cc[n].setHi(0, amrex::BCType::int_dir);
+			BCs_cc[n].setLo(1, amrex::BCType::ext_dir); // y- NSCBC outflow
+			BCs_cc[n].setHi(1, amrex::BCType::ext_dir);
 		}
 #if (AMREX_SPACEDIM == 3)
-		BCs_cc[n].setLo(2, quokka::BCType::int_dir); // z- periodic
-		BCs_cc[n].setHi(2, quokka::BCType::int_dir);
+		BCs_cc[n].setLo(2, amrex::BCType::int_dir); // z- periodic
+		BCs_cc[n].setHi(2, amrex::BCType::int_dir);
 #endif
 	}
 

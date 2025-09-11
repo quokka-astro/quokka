@@ -176,11 +176,11 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, quokka::BCType::ext_dir);  // Dirichlet x1
-		BCs_cc[n].setHi(0, quokka::BCType::foextrap); // extrapolate x1
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, quokka::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, quokka::BCType::int_dir);
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
