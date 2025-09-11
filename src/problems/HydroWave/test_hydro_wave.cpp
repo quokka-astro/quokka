@@ -103,7 +103,6 @@ auto problem_main() -> int
 	const int max_timesteps = 2e4;
 
 	// Problem initialization
-	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
 	auto BCs_cc = quokka::BC<WaveProblem>(quokka::BCType::int_dir); // periodic
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
