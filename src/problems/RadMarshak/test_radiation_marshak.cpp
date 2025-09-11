@@ -15,6 +15,7 @@
 #include <cmath>
 #include <fmt/format.h>
 #include <fstream>
+#include "util/BC.hpp"
 
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"

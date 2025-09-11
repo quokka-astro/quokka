@@ -11,6 +11,7 @@
 #include <random>
 #include <tuple>
 #include <vector>
+#include "util/BC.hpp"
 
 #include "AMReX.H"
 #include "AMReX_Array.H"

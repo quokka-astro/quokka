@@ -20,6 +20,7 @@
 #include "radiation/radiation_system.hpp"
 #include <fmt/format.h>
 #include <fstream>
+#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"

@@ -16,6 +16,7 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <vector>
+#include "util/BC.hpp"
 
 #include "AMReX_BC_TYPES.H"
 #include "QuokkaSimulation.hpp"

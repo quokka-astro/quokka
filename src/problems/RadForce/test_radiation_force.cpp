@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <fmt/format.h>
 #include <string>
+#include "util/BC.hpp"
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"

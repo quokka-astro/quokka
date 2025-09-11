@@ -13,6 +13,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_TableData.H"
+#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
