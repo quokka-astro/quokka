@@ -152,19 +152,6 @@ template <> void QuokkaSimulation<RichtmeyerMeshkovProblem>::setInitialCondition
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
 	auto BCs_cc = quokka::BC<RichtmeyerMeshkovProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization

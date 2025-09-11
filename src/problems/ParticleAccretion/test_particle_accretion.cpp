@@ -422,19 +422,6 @@ auto problem_main() -> int
 	const Real t_BH = r_BH / cs0;
 	const Real t_end = t_end_over_t_b * t_BH;
 
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<AccretionProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<AccretionProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<AccretionProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
 	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization

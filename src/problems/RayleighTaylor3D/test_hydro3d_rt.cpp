@@ -198,19 +198,6 @@ template <> void QuokkaSimulation<RTProblem>::computeAfterTimestep()
 auto problem_main() -> int
 {
 	// Set boundary conditions
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<RTProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<RTProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<RTProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
 	auto BCs_cc = quokka::BC<RTProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::reflecting);
 
 	// Problem initialization

@@ -241,19 +241,6 @@ template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vecto
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<TestParticle>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<TestParticle>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<TestParticle>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
 	auto BCs_cc = quokka::BC<TestParticle>(quokka::BCType::reflecting);
 
 	// Problem initialization
