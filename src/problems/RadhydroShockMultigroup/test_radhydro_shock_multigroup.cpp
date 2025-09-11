@@ -106,7 +106,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == static_cast<int>(quokka::BCType::ext_dir)) || (bcr->hi(0) == static_cast<int>(quokka::BCType::ext_dir)))) { // NOLINT
+	if (!((bcr->lo(0) == quokka::BCType::ext_dir) || (bcr->hi(0) == quokka::BCType::ext_dir))) { // NOLINT
 		return;
 	}
 
