@@ -161,7 +161,7 @@ auto problem_main() -> int
 	const double constant_dt = 1.0e-8; // s
 
 	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<CouplingProblem>(amrex::BCType::foextrap);
+	auto BCs_cc = quokka::BC<CouplingProblem>(quokka::BCType::foextrap);
 
 	QuokkaSimulation<CouplingProblem> sim(BCs_cc);
 

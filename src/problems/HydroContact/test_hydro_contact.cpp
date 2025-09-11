@@ -190,7 +190,7 @@ void QuokkaSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFab 
 auto problem_main() -> int
 {
 	// Problem parameters
-	auto BCs_cc = quokka::BC<ContactProblem>(amrex::BCType::int_dir); // periodic
+	auto BCs_cc = quokka::BC<ContactProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
 	QuokkaSimulation<ContactProblem> sim(BCs_cc);

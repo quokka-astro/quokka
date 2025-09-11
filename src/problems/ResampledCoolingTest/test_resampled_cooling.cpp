@@ -174,7 +174,7 @@ auto problem_main() -> int
 	pp.query("output_csv_file", output_csv_file);
 
 	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<ResampledCoolingTest>(amrex::BCType::foextrap);
+	auto BCs_cc = quokka::BC<ResampledCoolingTest>(quokka::BCType::foextrap);
 
 	QuokkaSimulation<ResampledCoolingTest> sim(BCs_cc);
 

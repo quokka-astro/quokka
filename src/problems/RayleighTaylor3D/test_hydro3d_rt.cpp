@@ -211,7 +211,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	auto BCs_cc = quokka::BC<RTProblem>(amrex::BCType::int_dir, amrex::BCType::int_dir, quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = quokka::BC<RTProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<RTProblem> sim(BCs_cc);

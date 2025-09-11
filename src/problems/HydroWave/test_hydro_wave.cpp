@@ -104,7 +104,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
-	auto BCs_cc = quokka::BC<WaveProblem>(amrex::BCType::int_dir); // periodic
+	auto BCs_cc = quokka::BC<WaveProblem>(quokka::BCType::int_dir); // periodic
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 

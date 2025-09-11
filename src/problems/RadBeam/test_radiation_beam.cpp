@@ -278,13 +278,13 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<BeamProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- inflow
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
-		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // left x2 -- inflow
-		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
+		BCs_cc[n].setLo(0, quokka::BCType::ext_dir);  // left x1 -- inflow
+		BCs_cc[n].setHi(0, quokka::BCType::foextrap); // right x1 -- extrapolate
+		BCs_cc[n].setLo(1, quokka::BCType::ext_dir);  // left x2 -- inflow
+		BCs_cc[n].setHi(1, quokka::BCType::foextrap); // right x2 -- extrapolate
 #if (AMREX_SPACEDIM == 3)
-		BCs_cc[n].setLo(2, amrex::BCType::int_dir); // periodic
-		BCs_cc[n].setHi(2, amrex::BCType::int_dir);
+		BCs_cc[n].setLo(2, quokka::BCType::int_dir); // periodic
+		BCs_cc[n].setHi(2, quokka::BCType::int_dir);
 #endif
 	}
 

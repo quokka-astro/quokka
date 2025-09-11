@@ -138,7 +138,7 @@ auto problem_main() -> int
 	const double max_time = 1.0;
 	const int max_timesteps = 1e4;
 
-	auto BCs_cc = quokka::BC<SquareProblem>(amrex::BCType::int_dir); // periodic
+	auto BCs_cc = quokka::BC<SquareProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
 	AdvectionSimulation<SquareProblem> sim(BCs_cc);

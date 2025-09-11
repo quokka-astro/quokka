@@ -140,14 +140,14 @@ void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const
 auto problem_main() -> int
 {
 	// Set boundary conditions - periodic
-	auto BCs_cc = quokka::BC<FCQuantities>(amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<FCQuantities>(quokka::BCType::int_dir);
 
 	const int nvars_fc = Physics_Indices<FCQuantities>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int n = 0; n < nvars_fc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_fc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_fc[n].setHi(i, amrex::BCType::int_dir);
+			BCs_fc[n].setLo(i, quokka::BCType::int_dir); // periodic
+			BCs_fc[n].setHi(i, quokka::BCType::int_dir);
 		}
 	}
 

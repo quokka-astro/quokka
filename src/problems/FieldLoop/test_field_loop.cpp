@@ -122,14 +122,14 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGridFaceVars
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<FieldLoop>(amrex::BCType::int_dir); // periodic
+	auto BCs_cc = quokka::BC<FieldLoop>(quokka::BCType::int_dir); // periodic
 
 	const int nvars_fc = Physics_Indices<FieldLoop>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+			BCs_fc[icomp].setLo(idim, quokka::BCType::int_dir); // periodic
+			BCs_fc[icomp].setHi(idim, quokka::BCType::int_dir);
 		}
 	}
 

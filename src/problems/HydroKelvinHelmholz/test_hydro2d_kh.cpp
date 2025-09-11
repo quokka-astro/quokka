@@ -129,7 +129,7 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::refineGrid(int lev, am
 auto problem_main() -> int
 {
 	// Problem parameters
-	auto BCs_cc = quokka::BC<KelvinHelmholzProblem>(amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<KelvinHelmholzProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<KelvinHelmholzProblem> sim(BCs_cc);

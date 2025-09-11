@@ -224,7 +224,7 @@ auto problem_main() -> int
 	pp.query("virial_parameter", alpha_vir);
 
 	// boundary conditions
-	auto BCs_cc = quokka::BC<StarCluster>(amrex::BCType::foextrap);
+	auto BCs_cc = quokka::BC<StarCluster>(quokka::BCType::foextrap);
 
 	// Problem initialization
 	QuokkaSimulation<StarCluster> sim(BCs_cc);

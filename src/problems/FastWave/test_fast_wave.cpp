@@ -231,14 +231,14 @@ void QuokkaSimulation<FastWave>::computeReferenceSolution_fc(amrex::MultiFab &re
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<FastWave>(amrex::BCType::int_dir); // periodic
+	auto BCs_cc = quokka::BC<FastWave>(quokka::BCType::int_dir); // periodic
 
 	const int nvars_fc = Physics_Indices<FastWave>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+			BCs_fc[icomp].setLo(idim, quokka::BCType::int_dir); // periodic
+			BCs_fc[icomp].setHi(idim, quokka::BCType::int_dir);
 		}
 	}
 

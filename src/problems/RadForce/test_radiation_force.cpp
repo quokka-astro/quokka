@@ -183,13 +183,13 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		// for x-axis:
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
+		BCs_cc[n].setLo(0, quokka::BCType::ext_dir);
+		BCs_cc[n].setHi(0, quokka::BCType::foextrap);
 		// for y-, z- axes:
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			// periodic
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			BCs_cc[n].setLo(i, quokka::BCType::int_dir);
+			BCs_cc[n].setHi(i, quokka::BCType::int_dir);
 		}
 	}
 

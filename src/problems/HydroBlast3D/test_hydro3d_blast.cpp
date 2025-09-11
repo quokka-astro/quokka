@@ -217,7 +217,7 @@ template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vecto
 
 auto problem_main() -> int
 {
-	auto BCs_cc = simulate_full_box ? quokka::BC<SedovProblem>(amrex::BCType::int_dir) : quokka::BC<SedovProblem>(quokka::BoundaryCondition::reflecting);
+	auto BCs_cc = simulate_full_box ? quokka::BC<SedovProblem>(quokka::BCType::int_dir) : quokka::BC<SedovProblem>(quokka::BoundaryCondition::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<SedovProblem> sim(BCs_cc);

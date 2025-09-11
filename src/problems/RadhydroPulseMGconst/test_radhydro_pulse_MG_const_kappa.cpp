@@ -248,7 +248,7 @@ auto problem_main() -> int
 
 	// Problem 1: pulse with grey radiation
 
-	auto BCs_cc = quokka::BC<SGProblem>(amrex::BCType::foextrap, amrex::BCType::int_dir, amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<SGProblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<SGProblem> sim(BCs_cc);
@@ -298,7 +298,7 @@ auto problem_main() -> int
 
 	// Problem 2: advecting pulse
 
-	auto BCs_cc2 = quokka::BC<MGproblem>(amrex::BCType::foextrap, amrex::BCType::int_dir, amrex::BCType::int_dir);
+	auto BCs_cc2 = quokka::BC<MGproblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<MGproblem> sim2(BCs_cc2);

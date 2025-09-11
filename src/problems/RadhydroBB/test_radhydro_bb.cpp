@@ -206,7 +206,7 @@ auto problem_main() -> int
 	const double max_dt = 1.0;
 
 	// Boundary conditions
-	auto BCs_cc = quokka::BC<PulseProblem>(amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<PulseProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<PulseProblem> sim(BCs_cc);

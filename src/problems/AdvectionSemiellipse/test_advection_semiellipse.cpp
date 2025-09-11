@@ -134,7 +134,7 @@ auto problem_main() -> int
 	const int max_timesteps = 1e4;
 
 	// Set boundary conditions - periodic
-	auto BCs_cc = quokka::BC<SemiellipseProblem>(amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<SemiellipseProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	AdvectionSimulation<SemiellipseProblem> sim(BCs_cc);

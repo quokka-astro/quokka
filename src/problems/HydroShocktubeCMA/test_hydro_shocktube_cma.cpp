@@ -249,7 +249,7 @@ auto problem_main() -> int
 	const double max_time = 1.0;
 	const int max_timesteps = 80000;
 
-	auto BCs_cc = quokka::BC<ShocktubeProblem>(amrex::BCType::ext_dir, amrex::BCType::int_dir, amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
 

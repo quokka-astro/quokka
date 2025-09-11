@@ -87,7 +87,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::T
 auto problem_main() -> int
 {
 
-	auto BCs_cc = quokka::BC<ParticleSFProblem>(amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<ParticleSFProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleSFProblem> sim(BCs_cc);

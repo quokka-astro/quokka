@@ -441,7 +441,7 @@ auto problem_main() -> int
 	pp.query("cloud_omega", omega_sphere);
 
 	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<PopIII>(amrex::BCType::foextrap);
+	auto BCs_cc = quokka::BC<PopIII>(quokka::BCType::foextrap);
 
 	// Problem initialization
 	QuokkaSimulation<PopIII> sim(BCs_cc);

@@ -180,15 +180,15 @@ auto problem_main() -> int
 	for (int n = 0; n < nvars; ++n) {
 		// assert at compile time
 		if constexpr (direction == 0) {
-			BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
-			BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
-			BCs_cc[n].setLo(1, amrex::BCType::int_dir);  // periodic
-			BCs_cc[n].setHi(1, amrex::BCType::int_dir);
+			BCs_cc[n].setLo(0, quokka::BCType::ext_dir);  // Dirichlet x1
+			BCs_cc[n].setHi(0, quokka::BCType::foextrap); // extrapolate x1
+			BCs_cc[n].setLo(1, quokka::BCType::int_dir);  // periodic
+			BCs_cc[n].setHi(1, quokka::BCType::int_dir);
 		} else {
-			BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(0, amrex::BCType::int_dir);
-			BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // Dirichlet x1
-			BCs_cc[n].setHi(1, amrex::BCType::foextrap); // extrapolate x1
+			BCs_cc[n].setLo(0, quokka::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(0, quokka::BCType::int_dir);
+			BCs_cc[n].setLo(1, quokka::BCType::ext_dir);  // Dirichlet x1
+			BCs_cc[n].setHi(1, quokka::BCType::foextrap); // extrapolate x1
 		}
 	}
 

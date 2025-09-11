@@ -151,7 +151,7 @@ auto problem_main() -> int
 	const double CFL_number_gas = 0.8;
 
 	// Boundary conditions
-	auto BCs_cc = quokka::BC<DustProblem>(amrex::BCType::int_dir); // periodic
+	auto BCs_cc = quokka::BC<DustProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
 	QuokkaSimulation<DustProblem> sim(BCs_cc);

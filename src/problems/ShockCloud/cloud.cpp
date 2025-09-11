@@ -899,9 +899,9 @@ auto problem_main() -> int
 {
 	// Problem initialization
 	// Set boundary conditions: ext_dir in x, periodic in y and z
-	auto boundaryConditions = quokka::BC<ShockCloud>(amrex::BCType::ext_dir,  // x: Dirichlet/NSCBC
-							 amrex::BCType::int_dir,  // y: periodic
-							 amrex::BCType::int_dir); // z: periodic
+	auto boundaryConditions = quokka::BC<ShockCloud>(quokka::BCType::ext_dir,  // x: Dirichlet/NSCBC
+							 quokka::BCType::int_dir,  // y: periodic
+							 quokka::BCType::int_dir); // z: periodic
 	QuokkaSimulation<ShockCloud> sim(boundaryConditions);
 
 	// Read problem parameters

@@ -132,7 +132,7 @@ auto problem_main() -> int
 	const double max_dt = 1.0e-4;
 	const int max_timesteps = 1e4;
 
-	auto BCs_cc = quokka::BC<SawtoothProblem>(amrex::BCType::int_dir); // periodic
+	auto BCs_cc = quokka::BC<SawtoothProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
 	AdvectionSimulation<SawtoothProblem> sim(BCs_cc);

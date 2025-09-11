@@ -305,7 +305,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("rad");
 
 	// Boundary conditions
-	auto BCs_cc = quokka::BC<MGProblem>(amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<MGProblem>(quokka::BCType::int_dir);
 
 	// Problem 1: advecting pulse with multigroup integration
 

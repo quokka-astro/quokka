@@ -127,7 +127,7 @@ auto problem_main() -> int
 	const int max_timesteps = 5000;
 
 	// Boundary conditions
-	auto BCs_cc = quokka::BC<ParticleProblem>(amrex::BCType::int_dir);
+	auto BCs_cc = quokka::BC<ParticleProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);

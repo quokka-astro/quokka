@@ -252,7 +252,7 @@ auto problem_main() -> int
 	const int max_timesteps = 5;
 
 	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<PrimordialChemTest>(amrex::BCType::foextrap);
+	auto BCs_cc = quokka::BC<PrimordialChemTest>(quokka::BCType::foextrap);
 
 	QuokkaSimulation<PrimordialChemTest> sim(BCs_cc);
 
