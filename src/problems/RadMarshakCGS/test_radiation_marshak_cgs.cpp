@@ -114,7 +114,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 							      int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
 							      const amrex::BCRec *bcr, int /*bcomp*/, int /*orig_comp*/)
 {
-	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
+	if ((bcr->lo(0) != static_cast<int>(quokka::BCType::ext_dir)) && (bcr->hi(0) != static_cast<int>(quokka::BCType::ext_dir))) {
 		return;
 	}
 
