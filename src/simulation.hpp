@@ -76,8 +76,8 @@ namespace filesystem = experimental::filesystem;
 #include "particles/PhysicsParticles.hpp"
 
 #if AMREX_SPACEDIM == 3
-#include "AMReX_MLMG.H"
 #include "AMReX_MLLinOp.H"
+#include "AMReX_MLMG.H"
 #include "AMReX_MLPoisson.H"
 #include "AMReX_OpenBC.H"
 #endif
@@ -1387,17 +1387,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			if (verbose) {
 				amrex::Print() << "Doing Poisson solve with periodic boundaries using MLMG...\n\n";
 			}
-			
+
 			// Create MLPoisson linear operator with proper LPInfo for AMR
 			amrex::LPInfo info;
 			// For AMR problems, we need to ensure proper coarsening
 			if (finest_level > 0) {
-				info.setAgglomeration(false);  // Disable agglomeration for AMR
-				info.setConsolidation(false);  // Disable consolidation for AMR
+				info.setAgglomeration(false); // Disable agglomeration for AMR
+				info.setConsolidation(false); // Disable consolidation for AMR
 			}
-			
+
 			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
-			
+
 			// Set domain boundary conditions
 			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
 			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
@@ -1412,7 +1412,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				}
 			}
 			mlpoisson.setDomainBC(bc_lo, bc_hi);
-			
+
 			// Set level boundary conditions for each AMR level
 			for (int lev = 0; lev <= finest_level; ++lev) {
 				// For periodic boundaries, we don't need to set level BC data
@@ -1426,21 +1426,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				mlmg.setVerbose(1);
 				mlmg.setBottomVerbose(0);
 			}
-			
+
 			// Set solver parameters optimized for gravity problems
 			// mlmg.setMaxIter(200);
 			// mlmg.setBottomMaxIter(200);
-			
+
 			// MLMG automatically handles solvability constraints for singular problems
 			// (periodic boundaries with no Dirichlet conditions). The linear operator
 			// automatically detects singular problems and applies the necessary corrections
 			// through the getSolvabilityOffset() and fixSolvabilityByOffset() methods.
 			// No manual RHS mean subtraction is needed.
-			
+
 			// Solve the system
 			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
 			amrex::Real final_resnorm = mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
-			
+
 			// Check convergence
 			if (verbose) {
 				amrex::Print() << "MLMG converged with final residual norm: " << final_resnorm << "\n";
@@ -1467,10 +1467,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				!phi[lev].contains_nan(),
-				fmt::format("NaN detected in phi at level {} after Poisson solve", lev)
-			); // NOTE: this fails when multiple levels are fully refined
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), fmt::format("NaN detected in phi at level {} after Poisson solve",
+											       lev)); // NOTE: this fails when multiple levels are fully refined
 		}
 	}
 #endif
