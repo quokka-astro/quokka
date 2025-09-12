@@ -1344,7 +1344,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
-		
+
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
@@ -1386,10 +1386,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			if (verbose) {
 				amrex::Print() << "Doing Poisson solve with periodic boundaries using MLMG...\n\n";
 			}
-			
+
 			// Create MLPoisson linear operator
 			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
-			
+
 			// Set domain boundary conditions
 			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
 			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
@@ -1404,7 +1404,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				}
 			}
 			mlpoisson.setDomainBC(bc_lo, bc_hi);
-			
+
 			// Set level boundary conditions (for homogeneous Dirichlet on non-periodic boundaries)
 			for (int lev = 0; lev <= finest_level; ++lev) {
 				mlpoisson.setLevelBC(lev, nullptr); // homogeneous Dirichlet
@@ -1416,7 +1416,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				mlmg.setVerbose(1);
 				mlmg.setBottomVerbose(0);
 			}
-			
+
 			// For problems with periodic boundaries, we need to ensure solvability
 			// by making sure the RHS sums to zero (or handle the constraint)
 			bool has_periodic_only = true;
@@ -1426,31 +1426,31 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 					break;
 				}
 			}
-			
+
 			if (has_periodic_only) {
 				// For fully periodic problems, subtract the mean of RHS to ensure solvability
 			}
-			
+
 			// Solve the system
 			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
 			mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
-			
+
 		} else {
 			// Use OpenBC solver for open boundary conditions
 			if (verbose) {
 				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
 			}
-			
+
 			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
 			if (verbose) {
 				poissonSolver.setVerbose(1);
 				poissonSolver.setBottomVerbose(0);
 			}
-			
+
 			amrex::Real abstol = abstolPoisson_ * rhs_min;
 			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		}
-		
+
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
