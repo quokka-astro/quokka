@@ -1429,18 +1429,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			
 			if (has_periodic_only) {
 				// For fully periodic problems, subtract the mean of RHS to ensure solvability
-				amrex::Real rhs_sum = 0.0;
-				amrex::Real vol_sum = 0.0;
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					rhs_sum += rhs[lev].sum(0);
-					vol_sum += geom[lev].Domain().d_numPts();
-				}
-				if (vol_sum > 0.0) {
-					amrex::Real rhs_mean = rhs_sum / vol_sum;
-					for (int lev = 0; lev <= finest_level; ++lev) {
-						rhs[lev].plus(-rhs_mean, 0, 1);
-					}
-				}
 			}
 			
 			// Solve the system
