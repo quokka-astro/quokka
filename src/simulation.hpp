@@ -190,7 +190,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
-	bool forceOpenBCGravity_ = false;			     // force use of OpenBC solver even with periodic boundaries
 	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -764,11 +763,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default Poisson solver tolerances
 	pp.query("poisson_reltol", reltolPoisson_);
 	pp.query("poisson_abstol", abstolPoisson_);
-
-	// Force use of OpenBC solver even with periodic boundaries
-	int force_openbc = 0;
-	pp.query("force_openbc_gravity", force_openbc);
-	forceOpenBCGravity_ = (force_openbc == 1);
 
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
@@ -1373,12 +1367,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		// Determine if we should use periodic boundary conditions
 		bool use_periodic_gravity = false;
-		if (!forceOpenBCGravity_) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (geom[0].isPeriodic(idim)) {
-					use_periodic_gravity = true;
-					break;
-				}
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (geom[0].isPeriodic(idim)) {
+				use_periodic_gravity = true;
+				break;
 			}
 		}
 
