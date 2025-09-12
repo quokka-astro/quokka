@@ -1345,7 +1345,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
-		
+
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
@@ -1450,17 +1450,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			if (verbose) {
 				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
 			}
-			
+
 			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
 			if (verbose) {
 				poissonSolver.setVerbose(1);
 				poissonSolver.setBottomVerbose(0);
 			}
-			
+
 			amrex::Real abstol = abstolPoisson_ * rhs_min;
 			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		}
-		
+
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
