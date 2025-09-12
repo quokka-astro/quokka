@@ -1370,7 +1370,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
 		int num_periodic_dims = 0;
 		std::string bc_description = "Gravity BCs: ";
-		
+
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			std::string dim_name;
 			if (idim == 0) {
@@ -1380,7 +1380,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			} else {
 				dim_name = "z";
 			}
-			
+
 			if (geom[0].isPeriodic(idim)) {
 				bc_lo[idim] = amrex::LinOpBCType::Periodic;
 				bc_hi[idim] = amrex::LinOpBCType::Periodic;
@@ -1393,17 +1393,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				bc_description += dim_name + ":Dirichlet ";
 			}
 		}
-		
+
 		// Assert valid periodic dimension combinations
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			num_periodic_dims == 0 || num_periodic_dims == 2 || num_periodic_dims == 3,
-			"Invalid periodic boundary configuration. Only 0, 2, or 3 periodic dimensions are allowed, got " 
-			+ std::to_string(num_periodic_dims));
-		
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(num_periodic_dims == 0 || num_periodic_dims == 2 || num_periodic_dims == 3,
+						 "Invalid periodic boundary configuration. Only 0, 2, or 3 periodic dimensions are allowed, got " +
+						     std::to_string(num_periodic_dims));
+
 		if (verbose) {
 			amrex::Print() << bc_description << "\n";
 		}
-		
+
 		// Determine solver type: use MLMG if any dimension is periodic, otherwise OpenBCSolver
 		bool use_mlmg_solver = (num_periodic_dims > 0);
 
