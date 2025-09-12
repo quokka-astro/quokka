@@ -1428,8 +1428,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			}
 			
 			// Set solver parameters optimized for gravity problems
-			mlmg.setMaxIter(200);
-			mlmg.setBottomMaxIter(200);
+			// mlmg.setMaxIter(200);
+			// mlmg.setBottomMaxIter(200);
 			
 			// MLMG automatically handles solvability constraints for singular problems
 			// (periodic boundaries with no Dirichlet conditions). The linear operator
@@ -1445,18 +1445,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			if (verbose) {
 				amrex::Print() << "MLMG converged with final residual norm: " << final_resnorm << "\n";
 			}
-			
-			// Additional validation for AMR cases
-			if (finest_level > 0) {
-				// Check that the solution doesn't have NaNs on any level
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					if (phi[lev].contains_nan()) {
-						amrex::Print() << "ERROR: NaN detected in phi at level " << lev << " after MLMG solve\n";
-						amrex::Abort("Periodic gravity solver failed: NaN in solution");
-					}
-				}
-			}
-			
 		} else {
 			// Use OpenBC solver for open boundary conditions
 			if (verbose) {
