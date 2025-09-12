@@ -1365,19 +1365,56 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 		}
 
-		// Determine if we should use periodic boundary conditions
-		bool use_periodic_gravity = false;
+		// Analyze boundary conditions for each dimension
+		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
+		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
+		int num_periodic_dims = 0;
+		std::string bc_description = "Gravity BCs: ";
+		
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			std::string dim_name;
+			if (idim == 0) {
+				dim_name = "x";
+			} else if (idim == 1) {
+				dim_name = "y";
+			} else {
+				dim_name = "z";
+			}
+			
 			if (geom[0].isPeriodic(idim)) {
-				use_periodic_gravity = true;
-				break;
+				bc_lo[idim] = amrex::LinOpBCType::Periodic;
+				bc_hi[idim] = amrex::LinOpBCType::Periodic;
+				num_periodic_dims++;
+				bc_description += dim_name + ":periodic ";
+			} else {
+				// Use homogeneous Dirichlet (phi = 0) for non-periodic dimensions
+				bc_lo[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_hi[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_description += dim_name + ":Dirichlet ";
 			}
 		}
+		
+		// Assert valid periodic dimension combinations
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			num_periodic_dims == 0 || num_periodic_dims == 2 || num_periodic_dims == 3,
+			"Invalid periodic boundary configuration. Only 0, 2, or 3 periodic dimensions are allowed, got " 
+			+ std::to_string(num_periodic_dims));
+		
+		if (verbose) {
+			amrex::Print() << bc_description << "\n";
+		}
+		
+		// Determine solver type: use MLMG if any dimension is periodic, otherwise OpenBCSolver
+		bool use_mlmg_solver = (num_periodic_dims > 0);
 
-		if (use_periodic_gravity) {
-			// Use MLMG solver with periodic boundary conditions
+		if (use_mlmg_solver) {
+			// Use MLMG solver with mixed/periodic boundary conditions
 			if (verbose) {
-				amrex::Print() << "Doing Poisson solve with periodic boundaries using MLMG...\n\n";
+				if (num_periodic_dims == 3) {
+					amrex::Print() << "Using MLMG solver with fully periodic boundaries...\n\n";
+				} else if (num_periodic_dims == 2) {
+					amrex::Print() << "Using MLMG solver with mixed periodic/Dirichlet boundaries...\n\n";
+				}
 			}
 
 			// Create MLPoisson linear operator with proper LPInfo for AMR
@@ -1390,25 +1427,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
 
-			// Set domain boundary conditions
-			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
-			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (geom[0].isPeriodic(idim)) {
-					bc_lo[idim] = amrex::LinOpBCType::Periodic;
-					bc_hi[idim] = amrex::LinOpBCType::Periodic;
-				} else {
-					// Use Dirichlet (homogeneous) for non-periodic dimensions
-					bc_lo[idim] = amrex::LinOpBCType::Dirichlet;
-					bc_hi[idim] = amrex::LinOpBCType::Dirichlet;
-				}
-			}
+			// Set the mixed boundary conditions (already computed above)
 			mlpoisson.setDomainBC(bc_lo, bc_hi);
 
 			// Set level boundary conditions for each AMR level
 			for (int lev = 0; lev <= finest_level; ++lev) {
-				// For periodic boundaries, we don't need to set level BC data
-				// For non-periodic boundaries, use homogeneous Dirichlet
+				// For gravity problems with mixed BCs, we don't need to specify Dirichlet values
+				// MLMG will automatically handle the gauge freedom and find a solution
+				// The gravitational force F = -∇φ is gauge invariant (independent of φ + constant)
 				mlpoisson.setLevelBC(lev, nullptr);
 			}
 

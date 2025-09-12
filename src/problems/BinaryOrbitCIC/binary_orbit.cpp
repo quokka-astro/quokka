@@ -158,7 +158,8 @@ auto problem_main() -> int
 	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::ext_dir,
 	//                                       quokka::BCType::int_dir,
 	//                                       quokka::BCType::reflecting); // mixed BCs
-	auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::int_dir);
+	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::int_dir);
+	auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::reflecting);
 
 	// read in runtime parameters for this test problem
 	amrex::ParmParse const pp("problem");
