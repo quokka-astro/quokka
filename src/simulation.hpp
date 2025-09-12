@@ -1404,7 +1404,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		}
 
 		// Determine solver type: use MLMG if any dimension is periodic, otherwise OpenBCSolver
-		bool use_mlmg_solver = (num_periodic_dims > 0);
+		const bool use_mlmg_solver = (num_periodic_dims > 0);
 
 		if (use_mlmg_solver) {
 			// Use MLMG solver with mixed/periodic boundary conditions
