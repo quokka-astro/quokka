@@ -77,6 +77,7 @@ namespace filesystem = experimental::filesystem;
 
 #if AMREX_SPACEDIM == 3
 #include "AMReX_MLMG.H"
+#include "AMReX_MLLinOp.H"
 #include "AMReX_MLPoisson.H"
 #include "AMReX_OpenBC.H"
 #endif
@@ -1387,8 +1388,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				amrex::Print() << "Doing Poisson solve with periodic boundaries using MLMG...\n\n";
 			}
 			
-			// Create MLPoisson linear operator
-			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+			// Create MLPoisson linear operator with proper LPInfo for AMR
+			amrex::LPInfo info;
+			// For AMR problems, we need to ensure proper coarsening
+			if (finest_level > 0) {
+				info.setAgglomeration(false);  // Disable agglomeration for AMR
+				info.setConsolidation(false);  // Disable consolidation for AMR
+			}
+			
+			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
 			
 			// Set domain boundary conditions
 			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
@@ -1405,9 +1413,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			}
 			mlpoisson.setDomainBC(bc_lo, bc_hi);
 			
-			// Set level boundary conditions (for homogeneous Dirichlet on non-periodic boundaries)
+			// Set level boundary conditions for each AMR level
 			for (int lev = 0; lev <= finest_level; ++lev) {
-				mlpoisson.setLevelBC(lev, nullptr); // homogeneous Dirichlet
+				// For periodic boundaries, we don't need to set level BC data
+				// For non-periodic boundaries, use homogeneous Dirichlet
+				mlpoisson.setLevelBC(lev, nullptr);
 			}
 
 			// Create MLMG solver
@@ -1417,23 +1427,35 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				mlmg.setBottomVerbose(0);
 			}
 			
-			// For problems with periodic boundaries, we need to ensure solvability
-			// by making sure the RHS sums to zero (or handle the constraint)
-			bool has_periodic_only = true;
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (!geom[0].isPeriodic(idim)) {
-					has_periodic_only = false;
-					break;
-				}
-			}
+			// Set solver parameters optimized for gravity problems
+			mlmg.setMaxIter(200);
+			mlmg.setBottomMaxIter(200);
 			
-			if (has_periodic_only) {
-				// For fully periodic problems, subtract the mean of RHS to ensure solvability
-			}
+			// MLMG automatically handles solvability constraints for singular problems
+			// (periodic boundaries with no Dirichlet conditions). The linear operator
+			// automatically detects singular problems and applies the necessary corrections
+			// through the getSolvabilityOffset() and fixSolvabilityByOffset() methods.
+			// No manual RHS mean subtraction is needed.
 			
 			// Solve the system
 			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
-			mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+			amrex::Real final_resnorm = mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+			
+			// Check convergence
+			if (verbose) {
+				amrex::Print() << "MLMG converged with final residual norm: " << final_resnorm << "\n";
+			}
+			
+			// Additional validation for AMR cases
+			if (finest_level > 0) {
+				// Check that the solution doesn't have NaNs on any level
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					if (phi[lev].contains_nan()) {
+						amrex::Print() << "ERROR: NaN detected in phi at level " << lev << " after MLMG solve\n";
+						amrex::Abort("Periodic gravity solver failed: NaN in solution");
+					}
+				}
+			}
 			
 		} else {
 			// Use OpenBC solver for open boundary conditions
