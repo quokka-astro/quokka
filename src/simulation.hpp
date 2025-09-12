@@ -1397,8 +1397,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// Assert valid periodic dimension combinations
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			num_periodic_dims == 0 || num_periodic_dims == 2 || num_periodic_dims == 3,
-			"Invalid periodic boundary configuration. Only 0, 2, or 3 periodic dimensions are allowed, got " 
-			+ std::to_string(num_periodic_dims));
+			fmt::format("Invalid periodic boundary configuration. Only 0, 2, or 3 periodic dimensions are allowed, got {}", num_periodic_dims));
 		
 		if (verbose) {
 			amrex::Print() << bc_description << "\n";
