@@ -164,7 +164,7 @@ auto problem_main() -> int
 	//                                       quokka::BCType::int_dir,
 	//                                       quokka::BCType::reflecting); // mixed BCs
 
-	// A temperary hack: use geometry.is_periodic to set either int_dir or reflecting. Later, we should remove the redundant geometry::is_periodic runtime
+	// A temporary hack: use geometry.is_periodic to set either int_dir or reflecting. Later, we should remove the redundant geometry::is_periodic runtime
 	// parameter.
 	auto BCs_cc = quokka::BC<BinaryOrbit>(is_periodic[0] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting,
 					      is_periodic[1] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting,
