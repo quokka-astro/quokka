@@ -76,6 +76,8 @@ namespace filesystem = experimental::filesystem;
 #include "particles/PhysicsParticles.hpp"
 
 #if AMREX_SPACEDIM == 3
+#include "AMReX_MLMG.H"
+#include "AMReX_MLPoisson.H"
 #include "AMReX_OpenBC.H"
 #endif
 
@@ -187,6 +189,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
+	bool forceOpenBCGravity_ = false;			     // force use of OpenBC solver even with periodic boundaries
 	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -757,6 +760,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default poisson_supercycle_interval = 1
 	pp.query("poisson_supercycle_interval", poissonSupercycleInterval_);
 
+	// Default Poisson solver tolerances
+	pp.query("poisson_reltol", reltolPoisson_);
+	pp.query("poisson_abstol", abstolPoisson_);
+
+	// Force use of OpenBC solver even with periodic boundaries
+	int force_openbc = 0;
+	pp.query("force_openbc_gravity", force_openbc);
+	forceOpenBCGravity_ = (force_openbc == 1);
+
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
 
@@ -1324,16 +1336,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
 
-		// set up elliptic solve object
-		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
-		if (verbose) {
-			poissonSolver.setVerbose(1);
-			poissonSolver.setBottomVerbose(0);
-			amrex::Print() << "Doing Poisson solve...\n\n";
-		}
-
 		phi.resize(finest_level + 1);
-		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		constexpr int nghost_phi = 1;
 		constexpr int nghost_deposit = 1; // CIC deposition requires 1 ghost cell
@@ -1341,6 +1344,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
+		
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
@@ -1366,8 +1370,99 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 		}
 
-		amrex::Real abstol = abstolPoisson_ * rhs_min;
-		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		// Determine if we should use periodic boundary conditions
+		bool use_periodic_gravity = false;
+		if (!forceOpenBCGravity_) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (geom[0].isPeriodic(idim)) {
+					use_periodic_gravity = true;
+					break;
+				}
+			}
+		}
+
+		if (use_periodic_gravity) {
+			// Use MLMG solver with periodic boundary conditions
+			if (verbose) {
+				amrex::Print() << "Doing Poisson solve with periodic boundaries using MLMG...\n\n";
+			}
+			
+			// Create MLPoisson linear operator
+			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+			
+			// Set domain boundary conditions
+			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
+			amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (geom[0].isPeriodic(idim)) {
+					bc_lo[idim] = amrex::LinOpBCType::Periodic;
+					bc_hi[idim] = amrex::LinOpBCType::Periodic;
+				} else {
+					// Use Dirichlet (homogeneous) for non-periodic dimensions
+					bc_lo[idim] = amrex::LinOpBCType::Dirichlet;
+					bc_hi[idim] = amrex::LinOpBCType::Dirichlet;
+				}
+			}
+			mlpoisson.setDomainBC(bc_lo, bc_hi);
+			
+			// Set level boundary conditions (for homogeneous Dirichlet on non-periodic boundaries)
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				mlpoisson.setLevelBC(lev, nullptr); // homogeneous Dirichlet
+			}
+
+			// Create MLMG solver
+			amrex::MLMG mlmg(mlpoisson);
+			if (verbose) {
+				mlmg.setVerbose(1);
+				mlmg.setBottomVerbose(0);
+			}
+			
+			// For problems with periodic boundaries, we need to ensure solvability
+			// by making sure the RHS sums to zero (or handle the constraint)
+			bool has_periodic_only = true;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (!geom[0].isPeriodic(idim)) {
+					has_periodic_only = false;
+					break;
+				}
+			}
+			
+			if (has_periodic_only) {
+				// For fully periodic problems, subtract the mean of RHS to ensure solvability
+				amrex::Real rhs_sum = 0.0;
+				amrex::Real vol_sum = 0.0;
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					rhs_sum += rhs[lev].sum(0);
+					vol_sum += geom[lev].Domain().d_numPts();
+				}
+				if (vol_sum > 0.0) {
+					amrex::Real rhs_mean = rhs_sum / vol_sum;
+					for (int lev = 0; lev <= finest_level; ++lev) {
+						rhs[lev].plus(-rhs_mean, 0, 1);
+					}
+				}
+			}
+			
+			// Solve the system
+			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
+			mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+			
+		} else {
+			// Use OpenBC solver for open boundary conditions
+			if (verbose) {
+				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
+			}
+			
+			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+			if (verbose) {
+				poissonSolver.setVerbose(1);
+				poissonSolver.setBottomVerbose(0);
+			}
+			
+			amrex::Real abstol = abstolPoisson_ * rhs_min;
+			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		}
+		
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
