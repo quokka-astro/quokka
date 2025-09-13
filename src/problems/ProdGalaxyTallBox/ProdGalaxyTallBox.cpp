@@ -22,6 +22,10 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 
+static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap, 3: symmetry
+static constexpr bool enable_self_gravity = false;
+static std::string stars_file = "../stars.txt";
+
 constexpr double pc = C::parsec;
 
 // global variables needed for Dirichlet boundary condition and initial conditions
@@ -91,7 +95,7 @@ template <> struct quokka::EOS_Traits<MetalProblem> {
 };
 
 template <> struct Physics_Traits<MetalProblem> {
-	static constexpr bool is_self_gravity_enabled = true;
+	static constexpr bool is_self_gravity_enabled = enable_self_gravity;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
@@ -115,6 +119,34 @@ template <> struct SimulationData<MetalProblem> {
 	Real M_ejecta = 5.0 * C::M_solar; // 5.0 * Msun; // g
 	Real refine_threshold = 1.0;	  // gradient refinement threshold
 };
+
+template <> void QuokkaSimulation<MetalProblem>::createInitialStochasticStellarPopParticles()
+{
+	// read particles from ASCII file
+	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
+	StochasticStellarPopParticles->SetVerbose(1);
+	StochasticStellarPopParticles->InitFromAsciiFile(stars_file, nreal_extra, nullptr);
+
+	// Loop over all particle at all levels and set first integer component to SNProgenitor
+	for (int lev = 0; lev <= StochasticStellarPopParticles->finestLevel(); ++lev) {
+		auto &particles = StochasticStellarPopParticles->GetParticles(lev);
+
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
+
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+			});
+		}
+	}
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
+}
 
 template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -271,105 +303,106 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 	return proj;
 }
 
-// // Implement User-defined diode BC
-// template <>
-// AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-// AMRSimulation<MetalProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-// 							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-// 							 int /*orig_comp*/)
-// {
-// 	auto [i, j, k] = iv.dim3();
-// 	amrex::Box const &box = geom.Domain();
-// 	const auto &domain_lo = box.loVect3d();
-// 	const auto &domain_hi = box.hiVect3d();
-// 	const int klo = domain_lo[2];
-// 	const int khi = domain_hi[2];
-// 	int kedge = 0;
-// 	int normal = 0;
+// Implement User-defined diode BC
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<MetalProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+							 int /*orig_comp*/)
+{
+	auto [i, j, k] = iv.dim3();
+	amrex::Box const &box = geom.Domain();
+	const auto &domain_lo = box.loVect3d();
+	const auto &domain_hi = box.hiVect3d();
+	const int klo = domain_lo[2];
+	const int khi = domain_hi[2];
+	int kedge = 0;
+	int normal = 0;
 
-// 	if (k < klo) {
-// 		kedge = klo;
-// 		normal = -1;
-// 	} else if (k > khi) {
-// 		kedge = khi;
-// 		normal = 1.0;
-// 	}
+	if (k < klo) {
+		kedge = klo;
+		normal = -1;
+	} else if (k > khi) {
+		kedge = khi;
+		normal = 1.0;
+	}
 
-// 	const double rho_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::density_index);
-// 	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x1Momentum_index);
-// 	const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x2Momentum_index);
-// 	double x3Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
-// 	const double etot_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::energy_index);
-// 	const double eint_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::internalEnergy_index);
-// 	const double pscalar_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::scalar0_index);
+	const double rho_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::density_index);
+	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x1Momentum_index);
+	const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x2Momentum_index);
+	double x3Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
+	const double etot_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::energy_index);
+	const double eint_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::internalEnergy_index);
+	const double pscalar_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::scalar0_index);
 
-// 	if ((x3Mom_edge * normal) < 0) { // gas is inflowing
-// 		x3Mom_edge = -1. * consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
-// 	}
+	if ((x3Mom_edge * normal) < 0) { // gas is inflowing
+		x3Mom_edge = -1. * consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
+	}
 
-// 	consVar(i, j, k, HydroSystem<MetalProblem>::density_index) = rho_edge;
-// 	consVar(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = x1Mom_edge;
-// 	consVar(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = x2Mom_edge;
-// 	consVar(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = x3Mom_edge;
-// 	consVar(i, j, k, HydroSystem<MetalProblem>::energy_index) = etot_edge;
-// 	consVar(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index) = eint_edge;
-// 	consVar(i, j, k, HydroSystem<MetalProblem>::scalar0_index) = pscalar_edge;
-// }
+	consVar(i, j, k, HydroSystem<MetalProblem>::density_index) = rho_edge;
+	consVar(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = x1Mom_edge;
+	consVar(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = x2Mom_edge;
+	consVar(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = x3Mom_edge;
+	consVar(i, j, k, HydroSystem<MetalProblem>::energy_index) = etot_edge;
+	consVar(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index) = eint_edge;
+	consVar(i, j, k, HydroSystem<MetalProblem>::scalar0_index) = pscalar_edge;
+}
 
 auto problem_main() -> int
 {
 
-	// const int ncomp_cc = Physics_Indices<MetalProblem>::nvarTotal_cc;
-	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	// for (int n = 0; n < ncomp_cc; ++n) {
-	// 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-	// 		// diode boundary conditions
-	// 		if (i == 2) {
-	// 			BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
-	// 			BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
-	// 		} else {
-	// 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-	// 			BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
-	// 		}
-	// 	}
-	// }
-
 	const int ncomp_cc = Physics_Indices<MetalProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+
+	if constexpr (BC_TYPE == 1) {
+		for (int n = 0; n < ncomp_cc; ++n) {
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				// diode boundary conditions
+				if (i == 2) {
+					BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
+					BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
+				} else {
+					BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+					BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
+				}
+			}
+		}
+	} else if constexpr (BC_TYPE == 2) {
+		for (int n = 0; n < ncomp_cc; ++n) {
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				BCs_cc[n].setLo(i, amrex::BCType::foextrap);
+				BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+			}
+		}
+	} else if constexpr (BC_TYPE == 3) {
+		auto isNormalComp = [=](int n, int dim) {
+			if ((n == HydroSystem<MetalProblem>::x1Momentum_index) && (dim == 0)) {
+				return true;
+			}
+			if ((n == HydroSystem<MetalProblem>::x2Momentum_index) && (dim == 1)) {
+				return true;
+			}
+			if ((n == HydroSystem<MetalProblem>::x3Momentum_index) && (dim == 2)) {
+				return true;
+			}
+			return false;
+		};
+
+		for (int n = 0; n < ncomp_cc; ++n) {
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				if (isNormalComp(n, i)) {
+					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+					BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+				} else {
+					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+					BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+				}
+			}
 		}
 	}
 
-	// auto isNormalComp = [=](int n, int dim) {
-	// 	if ((n == HydroSystem<MetalProblem>::x1Momentum_index) && (dim == 0)) {
-	// 		return true;
-	// 	}
-	// 	if ((n == HydroSystem<MetalProblem>::x2Momentum_index) && (dim == 1)) {
-	// 		return true;
-	// 	}
-	// 	if ((n == HydroSystem<MetalProblem>::x3Momentum_index) && (dim == 2)) {
-	// 		return true;
-	// 	}
-	// 	return false;
-	// };
-
-	// const int ncomp_cc = Physics_Indices<MetalProblem>::nvarTotal_cc;
-	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	// for (int n = 0; n < ncomp_cc; ++n) {
-	// 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-	// 		if (isNormalComp(n, i)) {
-	// 			BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-	// 			BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-	// 		} else {
-	// 			BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-	// 			BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-	// 		}
-	// 	}
-	// }
-
+	amrex::ParmParse const pp("problem");
+	pp.query("stars_file", stars_file);
 
 	// set random state
 	const int seed = 42;
