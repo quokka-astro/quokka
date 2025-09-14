@@ -152,13 +152,23 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
+	// read in runtiem parameter geometry.is_periodic
+	amrex::ParmParse const ppg("geometry");
+	std::array<int, AMREX_SPACEDIM> is_periodic{};
+	ppg.query("is_periodic", is_periodic);
+
 	// Examples of the new unified BC interface (traditional enum, implicit int conversion):
 	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::int_dir);     // periodic
 	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::ext_dir);     // Dirichlet
 	// auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::ext_dir,
 	//                                       quokka::BCType::int_dir,
 	//                                       quokka::BCType::reflecting); // mixed BCs
-	auto BCs_cc = quokka::BC<BinaryOrbit>(quokka::BCType::reflecting);
+
+	// A temporary hack: use geometry.is_periodic to set either int_dir or reflecting. Later, we should remove the redundant geometry::is_periodic runtime
+	// parameter.
+	auto BCs_cc = quokka::BC<BinaryOrbit>(is_periodic[0] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting,
+					      is_periodic[1] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting,
+					      is_periodic[2] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting);
 
 	// read in runtime parameters for this test problem
 	amrex::ParmParse const pp("problem");

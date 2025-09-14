@@ -76,6 +76,9 @@ namespace filesystem = experimental::filesystem;
 #include "particles/PhysicsParticles.hpp"
 
 #if AMREX_SPACEDIM == 3
+#include "AMReX_MLLinOp.H"
+#include "AMReX_MLMG.H"
+#include "AMReX_MLPoisson.H"
 #include "AMReX_OpenBC.H"
 #endif
 
@@ -757,6 +760,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default poisson_supercycle_interval = 1
 	pp.query("poisson_supercycle_interval", poissonSupercycleInterval_);
 
+	// Default Poisson solver tolerances
+	pp.query("poisson_reltol", reltolPoisson_);
+	pp.query("poisson_abstol", abstolPoisson_);
+
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
 
@@ -1324,16 +1331,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
 
-		// set up elliptic solve object
-		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
-		if (verbose) {
-			poissonSolver.setVerbose(1);
-			poissonSolver.setBottomVerbose(0);
-			amrex::Print() << "Doing Poisson solve...\n\n";
-		}
-
 		phi.resize(finest_level + 1);
-		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		constexpr int nghost_phi = 1;
 		constexpr int nghost_deposit = 1; // CIC deposition requires 1 ghost cell
@@ -1341,6 +1339,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
+
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
@@ -1366,15 +1365,122 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 		}
 
-		amrex::Real abstol = abstolPoisson_ * rhs_min;
-		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		// Analyze boundary conditions for each dimension
+		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
+		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
+		int num_periodic_dims = 0;
+		std::string bc_description = "Gravity BCs: ";
+
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			std::string dim_name;
+			if (idim == 0) {
+				dim_name = "x";
+			} else if (idim == 1) {
+				dim_name = "y";
+			} else {
+				dim_name = "z";
+			}
+
+			if (geom[0].isPeriodic(idim)) {
+				bc_lo[idim] = amrex::LinOpBCType::Periodic;
+				bc_hi[idim] = amrex::LinOpBCType::Periodic;
+				num_periodic_dims++;
+				bc_description += dim_name + ":periodic ";
+			} else {
+				// Use homogeneous Dirichlet (phi = 0) for non-periodic dimensions
+				bc_lo[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_hi[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_description += dim_name + ":Dirichlet ";
+			}
+		}
+
+		if (verbose) {
+			amrex::Print() << bc_description << "\n";
+		}
+
+		// Determine solver type: use MLMG if any dimension is periodic, otherwise OpenBCSolver
+		const bool use_mlmg_solver = (num_periodic_dims > 0);
+
+		if (use_mlmg_solver) {
+			// Use MLMG solver with mixed/periodic boundary conditions
+			if (verbose) {
+				if (num_periodic_dims == 3) {
+					amrex::Print() << "Using MLMG solver with fully periodic boundaries...\n\n";
+				} else if (num_periodic_dims == 2) {
+					amrex::Print() << "Using MLMG solver with mixed periodic/Dirichlet boundaries...\n\n";
+				}
+			}
+
+			// Create MLPoisson linear operator with proper LPInfo for AMR
+			amrex::LPInfo info;
+			// For AMR problems, we need to ensure proper coarsening
+			if (finest_level > 0) {
+				info.setAgglomeration(false); // Disable agglomeration for AMR
+				info.setConsolidation(false); // Disable consolidation for AMR
+			}
+
+			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
+
+			// Set the mixed boundary conditions (already computed above)
+			mlpoisson.setDomainBC(bc_lo, bc_hi);
+
+			// Set level boundary conditions for each AMR level
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				// For gravity problems with mixed BCs, we don't need to specify Dirichlet values
+				// MLMG will automatically handle the gauge freedom and find a solution
+				// The gravitational force F = -∇φ is gauge invariant (independent of φ + constant)
+				mlpoisson.setLevelBC(lev, nullptr);
+			}
+
+			// Create MLMG solver
+			amrex::MLMG mlmg(mlpoisson);
+			if (verbose) {
+				mlmg.setVerbose(1);
+				mlmg.setBottomVerbose(0);
+			}
+
+			// Set solver parameters optimized for gravity problems
+			// mlmg.setMaxIter(200);
+			// mlmg.setBottomMaxIter(200);
+
+			// MLMG automatically handles solvability constraints for singular problems
+			// (periodic boundaries with no Dirichlet conditions). The linear operator
+			// automatically detects singular problems and applies the necessary corrections
+			// through the getSolvabilityOffset() and fixSolvabilityByOffset() methods.
+			// No manual RHS mean subtraction is needed.
+
+			// Solve the system
+			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
+			amrex::Real final_resnorm = mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+
+			// Check convergence
+			if (verbose) {
+				amrex::Print() << "MLMG converged with final residual norm: " << final_resnorm << "\n";
+			}
+		} else {
+			// Use OpenBC solver for open boundary conditions
+			if (verbose) {
+				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
+			}
+
+			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+			if (verbose) {
+				poissonSolver.setVerbose(1);
+				poissonSolver.setBottomVerbose(0);
+			}
+
+			amrex::Real abstol = abstolPoisson_ * rhs_min;
+			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		}
+
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // NOTE: this fails when multiple levels are fully refined
+			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), fmt::format("NaN detected in phi at level {} after Poisson solve", lev));
 		}
 	}
 #endif
