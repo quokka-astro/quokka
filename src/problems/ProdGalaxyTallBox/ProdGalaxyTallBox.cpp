@@ -14,6 +14,7 @@
 #include "AMReX_Random.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
+#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -23,7 +24,7 @@
 #include "radiation/radiation_system.hpp"
 
 static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap, 3: symmetry
-static constexpr bool enable_self_gravity = false;
+static constexpr bool enable_self_gravity = true;
 static std::string stars_file = "../stars.txt";
 
 constexpr double pc = C::parsec;
@@ -352,53 +353,13 @@ auto problem_main() -> int
 {
 
 	const int ncomp_cc = Physics_Indices<MetalProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	// amrex::Vector<quokka::BCRec> BCs_cc(ncomp_cc);
 
+	auto BCs_cc = quokka::BC<MetalProblem>(quokka::BCType::reflecting);
 	if constexpr (BC_TYPE == 1) {
-		for (int n = 0; n < ncomp_cc; ++n) {
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				// diode boundary conditions
-				if (i == 2) {
-					BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
-					BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
-				} else {
-					BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-					BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
-				}
-			}
-		}
+		BCs_cc = quokka::BC<MetalProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::ext_dir);
 	} else if constexpr (BC_TYPE == 2) {
-		for (int n = 0; n < ncomp_cc; ++n) {
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-				BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-			}
-		}
-	} else if constexpr (BC_TYPE == 3) {
-		auto isNormalComp = [=](int n, int dim) {
-			if ((n == HydroSystem<MetalProblem>::x1Momentum_index) && (dim == 0)) {
-				return true;
-			}
-			if ((n == HydroSystem<MetalProblem>::x2Momentum_index) && (dim == 1)) {
-				return true;
-			}
-			if ((n == HydroSystem<MetalProblem>::x3Momentum_index) && (dim == 2)) {
-				return true;
-			}
-			return false;
-		};
-
-		for (int n = 0; n < ncomp_cc; ++n) {
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				if (isNormalComp(n, i)) {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-				} else {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-				}
-			}
-		}
+		BCs_cc = quokka::BC<MetalProblem>(quokka::BCType::foextrap);
 	}
 
 	amrex::ParmParse const pp("problem");
