@@ -17,11 +17,11 @@ pr:
     - inputs/*
     - CMakeLists.txt
     - .ci/*
-    - extern/amrex/*
-    - extern/Microphysics/*
-    - extern/fmt/*
-    - extern/yaml-cpp/*
-    - extern/openPMD-api/*
+    - extern/amrex
+    - extern/Microphysics
+    - extern/fmt
+    - extern/yaml-cpp
+    - extern/openPMD-api
     exclude:
     - docs/*
     - paper/*

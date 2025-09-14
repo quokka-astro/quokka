@@ -76,6 +76,9 @@ namespace filesystem = experimental::filesystem;
 #include "particles/PhysicsParticles.hpp"
 
 #if AMREX_SPACEDIM == 3
+#include "AMReX_MLLinOp.H"
+#include "AMReX_MLMG.H"
+#include "AMReX_MLPoisson.H"
 #include "AMReX_OpenBC.H"
 #endif
 
@@ -177,6 +180,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int plotfileInterval_ = -1;				     // -1 == no output
 	int projectionInterval_ = -1;				     // -1 == no output
 	int statisticsInterval_ = -1;				     // -1 == no output
+	int particleInterval_ = -1;				     // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;			     // time interval for plt file
 	bool skipInitialPlotfile_ = false;			     // skip writing plotfile at t=0
 	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
@@ -195,7 +199,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc) { initialize(); }
+
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
+
+	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> & /*BCs_cc*/) -> amrex::Vector<amrex::BCRec>
+	{
+		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "You are required to explicitly define the face-centered BCs when MHD is enabled.");
+		amrex::Vector<amrex::BCRec> BCs_fc(0);
+		return BCs_fc;
+	}
 
 	void initialize();
 	void PerformanceHints();
@@ -328,6 +340,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void ReadMetadataFile(std::string const &chkfilename);
 	void WriteStatisticsFile();
 	void WritePlotFile();
+	void WriteParticleFile();
 	void WriteProjectionPlotfile() const;
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
@@ -360,7 +373,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	template <typename ContainerType>
 	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-						       amrex::Vector<amrex::BoxArray> const &header_box_arrays, bool use_star_registration = false);
+						       amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
@@ -403,8 +416,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_cc_ = 6; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, +2 for face velocity ghost cells
-	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
+	// For our new scheme MHD-scheme, we need 7 ghosts for MHD (4 base + 3 for EMF) or 6 otherwise
+	int nghost_cc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 7 : 6;
+	int nghost_fc_ = nghost_cc_;
+
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
 	std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> componentNames_fc_;
@@ -566,10 +581,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	dt_.resize(nlevs_max, 1.e100);
 	state_new_cc_.resize(nlevs_max);
 	state_old_cc_.resize(nlevs_max);
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		state_new_fc_.resize(nlevs_max);
-		state_old_fc_.resize(nlevs_max);
-	}
+	state_new_fc_.resize(nlevs_max);
+	state_old_fc_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
 	flux_reg_.resize(nlevs_max + 1);
 	fillpatcher_.resize(nlevs_max + 1);
@@ -714,6 +727,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default projection interval
 	pp.query("projection_interval", projectionInterval_);
 
+	// Default output interval
+	pp.query("particle_csv_interval", particleInterval_);
+
 	// Default statistics interval
 	pp.query("statistics_interval", statisticsInterval_);
 
@@ -743,6 +759,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default poisson_supercycle_interval = 1
 	pp.query("poisson_supercycle_interval", poissonSupercycleInterval_);
+
+	// Default Poisson solver tolerances
+	pp.query("poisson_reltol", reltolPoisson_);
+	pp.query("poisson_abstol", abstolPoisson_);
 
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
@@ -847,6 +867,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 
 	if (projectionInterval_ > 0) {
 		WriteProjectionPlotfile();
+	}
+
+	if (particleInterval_ > 0) {
+		WriteParticleFile();
 	}
 
 	if (statisticsInterval_ > 0) {
@@ -1026,6 +1050,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	int last_ascent_step = 0;
 #endif
 	int last_projection_step = 0;
+	int last_particle_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
 	int last_chk_file_step = 0;
@@ -1135,13 +1160,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			}
 
 			// Stellar evolution and SN deposition; only apply to star particles
-			if (particleRegister_.HasStarParticles()) {
-				// Update particle properties (e.g., luminosity) before particle-mesh interaction
-				particleRegister_.updateParticleProperties(cur_time);
+			// Update particle properties (e.g., luminosity) before particle-mesh interaction
+			particleRegister_.updateParticleProperties(cur_time);
 
-				// TODO(cch): Need to take care of AMR subcycling
-				particleMeshInteraction(cur_time, dt_[0]);
-			}
+			// TODO(cch): Need to take care of AMR subcycling
+			particleMeshInteraction(cur_time, dt_[0]);
 
 			// Use the new type-aware particle destruction method
 			// TODO(cch): Need to take care of AMR subcycling
@@ -1181,6 +1204,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			WriteProjectionPlotfile();
 		}
 
+		if (particleInterval_ > 0 && (step + 1) % particleInterval_ == 0) {
+			last_particle_step = step + 1;
+			WriteParticleFile();
+		}
+
 		// print particle statistics
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
 			if (quokka::particle_verbose > 0) {
@@ -1216,8 +1244,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			break;
 		}
 
-		if (maxWalltime_ > 0 && getWalltime() > 0.9 * maxWalltime_) {
-			// we have exceeded 90% of maxWalltime_
+		if (maxWalltime_ > 0 && getWalltime() > std::max(0.9 * maxWalltime_, static_cast<double>(maxWalltime_ - 300))) {
+			// we have exceeded the walltime limit
 			break;
 		}
 	}
@@ -1270,6 +1298,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		WriteProjectionPlotfile();
 	}
 
+	// write final particle file
+	if (particleInterval_ > 0 && istep[0] > last_particle_step) {
+		WriteParticleFile();
+	}
+
 	// write final statistics
 	if (statisticsInterval_ > 0 && istep[0] > last_statistics_step) {
 		WriteStatisticsFile();
@@ -1298,16 +1331,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		BL_PROFILE_REGION("GravitySolver"); // NOLINT(misc-const-correctness)
 
-		// set up elliptic solve object
-		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
-		if (verbose) {
-			poissonSolver.setVerbose(1);
-			poissonSolver.setBottomVerbose(0);
-			amrex::Print() << "Doing Poisson solve...\n\n";
-		}
-
 		phi.resize(finest_level + 1);
-		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		constexpr int nghost_phi = 1;
 		constexpr int nghost_deposit = 1; // CIC deposition requires 1 ghost cell
@@ -1315,6 +1339,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
+
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost_phi);
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
@@ -1340,15 +1365,122 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 		}
 
-		amrex::Real abstol = abstolPoisson_ * rhs_min;
-		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		// Analyze boundary conditions for each dimension
+		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
+		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
+		int num_periodic_dims = 0;
+		std::string bc_description = "Gravity BCs: ";
+
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			std::string dim_name;
+			if (idim == 0) {
+				dim_name = "x";
+			} else if (idim == 1) {
+				dim_name = "y";
+			} else {
+				dim_name = "z";
+			}
+
+			if (geom[0].isPeriodic(idim)) {
+				bc_lo[idim] = amrex::LinOpBCType::Periodic;
+				bc_hi[idim] = amrex::LinOpBCType::Periodic;
+				num_periodic_dims++;
+				bc_description += dim_name + ":periodic ";
+			} else {
+				// Use homogeneous Dirichlet (phi = 0) for non-periodic dimensions
+				bc_lo[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_hi[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_description += dim_name + ":Dirichlet ";
+			}
+		}
+
+		if (verbose) {
+			amrex::Print() << bc_description << "\n";
+		}
+
+		// Determine solver type: use MLMG if any dimension is periodic, otherwise OpenBCSolver
+		const bool use_mlmg_solver = (num_periodic_dims > 0);
+
+		if (use_mlmg_solver) {
+			// Use MLMG solver with mixed/periodic boundary conditions
+			if (verbose) {
+				if (num_periodic_dims == 3) {
+					amrex::Print() << "Using MLMG solver with fully periodic boundaries...\n\n";
+				} else if (num_periodic_dims == 2) {
+					amrex::Print() << "Using MLMG solver with mixed periodic/Dirichlet boundaries...\n\n";
+				}
+			}
+
+			// Create MLPoisson linear operator with proper LPInfo for AMR
+			amrex::LPInfo info;
+			// For AMR problems, we need to ensure proper coarsening
+			if (finest_level > 0) {
+				info.setAgglomeration(false); // Disable agglomeration for AMR
+				info.setConsolidation(false); // Disable consolidation for AMR
+			}
+
+			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
+
+			// Set the mixed boundary conditions (already computed above)
+			mlpoisson.setDomainBC(bc_lo, bc_hi);
+
+			// Set level boundary conditions for each AMR level
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				// For gravity problems with mixed BCs, we don't need to specify Dirichlet values
+				// MLMG will automatically handle the gauge freedom and find a solution
+				// The gravitational force F = -∇φ is gauge invariant (independent of φ + constant)
+				mlpoisson.setLevelBC(lev, nullptr);
+			}
+
+			// Create MLMG solver
+			amrex::MLMG mlmg(mlpoisson);
+			if (verbose) {
+				mlmg.setVerbose(1);
+				mlmg.setBottomVerbose(0);
+			}
+
+			// Set solver parameters optimized for gravity problems
+			// mlmg.setMaxIter(200);
+			// mlmg.setBottomMaxIter(200);
+
+			// MLMG automatically handles solvability constraints for singular problems
+			// (periodic boundaries with no Dirichlet conditions). The linear operator
+			// automatically detects singular problems and applies the necessary corrections
+			// through the getSolvabilityOffset() and fixSolvabilityByOffset() methods.
+			// No manual RHS mean subtraction is needed.
+
+			// Solve the system
+			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
+			amrex::Real final_resnorm = mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+
+			// Check convergence
+			if (verbose) {
+				amrex::Print() << "MLMG converged with final residual norm: " << final_resnorm << "\n";
+			}
+		} else {
+			// Use OpenBC solver for open boundary conditions
+			if (verbose) {
+				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
+			}
+
+			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+			if (verbose) {
+				poissonSolver.setVerbose(1);
+				poissonSolver.setBottomVerbose(0);
+			}
+
+			amrex::Real abstol = abstolPoisson_ * rhs_min;
+			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		}
+
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // NOTE: this fails when multiple levels are fully refined
+			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), fmt::format("NaN detected in phi at level {} after Poisson solve", lev));
 		}
 	}
 #endif
@@ -2366,7 +2498,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		StochasticStellarPopParticles->SetVerbose(0);
 
 		// Register with particle register - StochasticStellarPop particles allow creation
-		particleRegister_.registerStarParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
+		particleRegister_.registerParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
 
 		// Initialize particles through user-defined function
 		createInitialStochasticStellarPopParticles();
@@ -2380,7 +2512,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		SinkParticles->SetVerbose(0);
 
 		// Register with particle register - Sink particles allow creation
-		particleRegister_.registerStarParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
+		particleRegister_.registerParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
 
 		// Initialize particles through user-defined function
 		createInitialSinkParticles();
@@ -2393,7 +2525,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		TestParticles->SetVerbose(0);
 
 		// Register with particle register - Test particles have all features enabled
-		particleRegister_.registerStarParticleType(TestParticles.get(), quokka::ParticleType::Test);
+		particleRegister_.registerParticleType(TestParticles.get(), quokka::ParticleType::Test);
 
 		// Initialize particles through user-defined function
 		createInitialTestParticles();
@@ -2451,13 +2583,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 		// Fill ghost zones for state_new_cc_
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
 				       InterpHookNone, FillPatchType::fillpatch_function);
-	}
 
-	// Fill ghost zones for state_new_fc_
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		// Fill ghost zones for state_new_fc_
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+						       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+			}
 		}
 	}
 
@@ -2515,7 +2647,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 	const int ncomp_plotMF_fc = nvar_dim_tot_fc;
 
 	amrex::MultiFab plotMF_fc(amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim)), dmap[lev], ncomp_plotMF_fc, nghost_fc_);
-
 	// Fill ghost zones for state_new_fc_
 	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
 		fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
@@ -2795,6 +2926,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	// write all particles in particleRegister_ to plotfile
 	particleRegister_.writePlotFile(plotfilename);
 #endif
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::WriteParticleFile()
+{
+	const BL_PROFILE("AMRSimulation::WriteParticleFile()");
+
+	// Create particle file name using the same pattern as PlotFileName
+	const std::string partfilename = amrex::Concatenate("part", istep[0], 5);
+
+	amrex::Print() << "Writing particle file " << partfilename << "\n";
+
+	// Create directory, renaming existing one if it exists (following AMReX pattern)
+	amrex::UtilCreateCleanDirectory(partfilename, true);
+
+	// Save particle data to CSV files inside the created directory
+	// Only save if particle count <= 1000 for each type
+	particleRegister_.saveParticleDataToFileConditional(partfilename, 1000);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &MetadataFileName) const
@@ -3339,15 +3487,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, header_box_arrays, true);
+		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, header_box_arrays, true);
+		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays, true);
+		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays);
 	}
 #endif // AMREX_SPACEDIM == 3
 
@@ -3452,21 +3600,13 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 template <typename problem_t>
 template <typename ContainerType>
 void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-									 amrex::Vector<amrex::BoxArray> const &header_box_arrays, bool use_star_registration)
+									 amrex::Vector<amrex::BoxArray> const &header_box_arrays)
 {
 	AMREX_ASSERT(container == nullptr);
 	container = std::make_unique<ContainerType>(this);
 
 	// Register container
-	if (use_star_registration) {
-#if AMREX_SPACEDIM == 3
-		particleRegister_.registerStarParticleType(container.get(), particle_type);
-#else
-		amrex::Abort("Star particles are only available in 3D builds");
-#endif
-	} else {
-		particleRegister_.registerParticleType(container.get(), particle_type);
-	}
+	particleRegister_.registerParticleType(container.get(), particle_type);
 
 	// Read particles
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);

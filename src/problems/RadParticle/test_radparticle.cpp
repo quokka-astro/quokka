@@ -15,6 +15,7 @@
 #include "particles/PhysicsParticles.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 
@@ -102,10 +103,10 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < nGroups_; ++g) {
-			state_cc(i, j, k, RadSystem<ParticleProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
-			state_cc(i, j, k, RadSystem<ParticleProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ParticleProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ParticleProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad0;
+			state_cc(i, j, k, RadSystem<ParticleProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 		state_cc(i, j, k, RadSystem<ParticleProblem>::gasEnergy_index) = Egas0;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::gasDensity_index) = rho0;
@@ -126,14 +127,7 @@ auto problem_main() -> int
 	const int max_timesteps = 5000;
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<ParticleProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
-		}
-	}
+	auto BCs_cc = quokka::BC<ParticleProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);
@@ -169,8 +163,8 @@ auto problem_main() -> int
 		xs.at(i) = x;
 		// erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
 		Erad_group0.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index)[i];
-		Erad_group1.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index + Physics_NumVars::numRadVars)[i];
-		Erad_group2.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index + 2 * Physics_NumVars::numRadVars)[i];
+		Erad_group1.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup)[i];
+		Erad_group2.at(i) = values.at(RadSystem<ParticleProblem>::radEnergy_index + 2 * Physics_NumVars::numRadVarsPerGroup)[i];
 		tot_lum_group0 += Erad_group0.at(i) * dx;
 		tot_lum_group1 += Erad_group1.at(i) * dx;
 		tot_lum_group2 += Erad_group2.at(i) * dx;

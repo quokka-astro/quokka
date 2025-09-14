@@ -20,6 +20,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
@@ -128,14 +129,7 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::refineGrid(int lev, am
 auto problem_main() -> int
 {
 	// Problem parameters
-	const int ncomp_cc = Physics_Indices<KelvinHelmholzProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
-		}
-	}
+	auto BCs_cc = quokka::BC<KelvinHelmholzProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<KelvinHelmholzProblem> sim(BCs_cc);

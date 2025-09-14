@@ -17,6 +17,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "util/BC.hpp"
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"

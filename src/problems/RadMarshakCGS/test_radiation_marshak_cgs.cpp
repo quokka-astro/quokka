@@ -16,6 +16,7 @@
 #include "QuokkaSimulation.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <fstream>
 
@@ -75,17 +76,17 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeFlux
 
 [[maybe_unused]] static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblemCgs>::numMassScalars;
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
-									       std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
+						    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
-									       std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
+						    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
@@ -93,7 +94,7 @@ AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(c
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-							  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+							  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -113,7 +114,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 							      int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
 							      const amrex::BCRec *bcr, int /*bcomp*/, int /*orig_comp*/)
 {
-	if ((bcr->lo(0) != amrex::BCType::ext_dir) && (bcr->hi(0) != amrex::BCType::ext_dir)) {
+	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
 		return;
 	}
 
@@ -264,13 +265,13 @@ auto problem_main() -> int
 			const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 			xs.at(i) = std::sqrt(3.0) * x;
 
-			const double Erad_t = values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index)[i];
+			const double Erad_t = values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 			Erad.at(i) = Erad_t;
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
-			const double Etot_t = values.at(RadSystem<SuOlsonProblemCgs>::gasEnergy_index)[i];
-			const double rho = values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i];
-			const double x1GasMom = values.at(RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index)[i];
+			const double Etot_t = values.at(RadSystem<SuOlsonProblemCgs>::gasEnergy_index)[i];	 // NOLINT(cppcoreguidelines-init-variables)
+			const double rho = values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i];	 // NOLINT(cppcoreguidelines-init-variables)
+			const double x1GasMom = values.at(RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 			const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 
 			const double Egas_t = (Etot_t - Ekin);

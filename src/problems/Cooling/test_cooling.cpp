@@ -184,6 +184,9 @@ auto problem_main() -> int
 	const int max_timesteps = 2e4;
 
 	// Problem initialization
+	// Note: This problem has mixed BCs - periodic in x&z, different in y
+	// Using the new API doesn't support asymmetric lo/hi boundaries
+	// So we keep the manual setup for this special case
 	constexpr int ncomp_cc = Physics_Indices<CoolingTest>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {

@@ -15,6 +15,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "util/BC.hpp"
 
 struct SNProblem {
 };
@@ -153,36 +154,8 @@ template <> void QuokkaSimulation<SNProblem>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<SNProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<SNProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<SNProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int ncomp_cc = Physics_Indices<SNProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// // periodic boundaries
-			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			// octant symmetry
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	// Set boundary conditions - octant symmetry (reflecting)
+	auto BCs_cc = quokka::BC<SNProblem>(quokka::BCType::reflecting);
 
 	// get n_amb from the input file
 	amrex::ParmParse const pp("problem");

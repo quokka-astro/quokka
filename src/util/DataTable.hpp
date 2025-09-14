@@ -1,64 +1,64 @@
 #ifndef DATATABLE_HPP_
 #define DATATABLE_HPP_
 
-#include "AMReX.H"
+#include "AMReX_Arena.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_TableData.H"
-#include "math/Interpolate2D.hpp"
+
+// HDF5 includes for H5Reader functionality
+#include <H5Dpublic.h>
+#include <H5Ppublic.h>
+#include <hdf5.h>
+
+#include <array>
 #include <memory>
+#include <type_traits>
+#include <vector>
+
+// For descriptive error messages
+#include <fmt/format.h>
 
 namespace quokka
 {
 
 // Structure to hold interpolation indices and normalized coordinates
-struct InterpData {
-	int ix{}, iy{}, iix{}, iiy{};	    // grid indices
-	amrex::Real x1{}, x2{}, y1{}, y2{}; // actual coordinate values at grid points
-	amrex::Real h{}, v{};		    // normalized coordinates: h = (x-x1)/(x2-x1), v = (y-y1)/(y2-y1)
+template <int Ndim> struct InterpData {
+	std::array<int, Ndim> indices{};	    // grid indices for each dimension (lower bounds)
+	std::array<amrex::Real, Ndim> normalized{}; // normalized coordinates in [0,1] for each dimension
 
 	// Default constructor
 	AMREX_GPU_HOST_DEVICE InterpData() = default;
 };
 
 // GPU-friendly struct containing const table references
-struct DataTableGpuConst {
-	amrex::Table1D<const amrex::Real> x_coords;
-	amrex::Table1D<const amrex::Real> y_coords;
-	amrex::Table2D<const amrex::Real> data;
+template <int Ndim, int Nout = 1> struct DataTableGpuConst {
+	std::array<amrex::Table1D<const amrex::Real>, Ndim> coords;
+	// Array of data tables for multiple outputs - each has the same coordinate dimensionality
+	using single_data_table_type =
+	    std::conditional_t<Ndim == 1, amrex::Table1D<const amrex::Real>,
+			       std::conditional_t<Ndim == 2, amrex::Table2D<const amrex::Real>,
+						  std::conditional_t<Ndim == 3, amrex::Table3D<const amrex::Real>, amrex::Table4D<const amrex::Real>>>>;
+	std::array<single_data_table_type, Nout> dataViewArrays;
 
-	amrex::Real x_min{};
-	amrex::Real x_max{};
-	amrex::Real y_min{};
-	amrex::Real y_max{};
+	std::array<amrex::Real, Ndim> coord_min{};
+	std::array<amrex::Real, Ndim> coord_max{};
 
 	// Precomputed grid spacing for optimization
-	amrex::Real dx{};
-	amrex::Real dy{};
+	std::array<amrex::Real, Ndim> dcoord{};
 
-	int x_size{};
-	int y_size{};
+	std::array<int, Ndim> sizes{};
 
-	// Original interpolation method (for backward compatibility)
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate0(amrex::Real x, amrex::Real y) const -> amrex::Real
-	{
-		// Clamp x and y to valid bounds
-		x = amrex::max(x_min, amrex::min(x, x_max));
-		y = amrex::max(y_min, amrex::min(y, y_max));
-
-		return interpolate2d(x, y, x_coords, y_coords, data);
-	}
-
-	/// @brief Find interpolation indices and normalized coordinates for bilinear interpolation
+	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
-	/// This function locates the grid cell containing point (x,y) and computes normalized
-	/// coordinates within that cell for efficient bilinear interpolation.
+	/// This function locates the hypercube containing the given point and computes normalized
+	/// coordinates within that hypercube for efficient n-linear interpolation.
 	///
-	/// @param x Physical x-coordinate to interpolate at
-	/// @param y Physical y-coordinate to interpolate at
+	/// @param point Physical coordinates to interpolate at (size Ndim)
 	/// @return InterpData structure containing grid indices, coordinates, and normalized params
 	///
-	/// Grid Layout and Coordinate Mapping:
+	/// Grid Layout and Coordinate Mapping, for 2D as an example:
 	/// ```
 	///   y2  z3 -------- z4     (x1,y2) -------- (x2,y2)
 	///       |     *     |         |     *     |
@@ -75,83 +75,247 @@ struct DataTableGpuConst {
 	///   - z3 = f(0,1) -> data(ix, iiy)  = (x1,y2) top-left
 	///   - z4 = f(1,1) -> data(iix, iiy) = (x2,y2) top-right
 	/// ```
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(amrex::Real x, amrex::Real y) const -> InterpData
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto find_interpolation_data(const std::array<amrex::Real, Ndim> &point) const
+	    -> InterpData<Ndim>
 	{
-		InterpData interp;
+		InterpData<Ndim> interp;
 
-		// Get table bounds - assumes uniform grid spacing
-		amrex::Real const xi = x_coords(x_coords.begin);   // First x coordinate
-		amrex::Real const xf = x_coords(x_coords.end - 1); // Last x coordinate
-		amrex::Real const yi = y_coords(y_coords.begin);   // First y coordinate
-		amrex::Real const yf = y_coords(y_coords.end - 1); // Last y coordinate
+		for (int dim = 0; dim < Ndim; ++dim) {
+			// Get table bounds for this dimension - assumes uniform grid spacing
+			amrex::Real const coord_start = coords[dim](coords[dim].begin); // First coordinate, begin = 0
+			amrex::Real const coord_end = coords[dim](coords[dim].end - 1); // Last coordinate, end = size
 
-		// Clamp coordinates to valid table bounds (extrapolation not supported)
-		x = amrex::max(xi, amrex::min(x, xf));
-		y = amrex::max(yi, amrex::min(y, yf));
+			// Clamp coordinates to valid table bounds (extrapolation not supported)
+			amrex::Real clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
 
-		// Find grid cell indices containing the point (x,y)
-		// ix, iy are the "lower-left" indices of the containing cell
-		interp.ix = amrex::max(x_coords.begin, amrex::min(static_cast<int>(std::floor((x - xi) / dx)), x_coords.end - 1));
-		interp.iy = amrex::max(y_coords.begin, amrex::min(static_cast<int>(std::floor((y - yi) / dy)), y_coords.end - 1));
+			// Find grid cell indices containing the point
+			// indices are the "lower" indices of the containing hypercube
+			interp.indices[dim] = amrex::max(
+			    coords[dim].begin, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), coords[dim].end - 1));
 
-		// iix, iiy are the "upper-right" indices (handle boundary case)
-		interp.iix = (interp.ix == x_coords.end - 1) ? interp.ix : interp.ix + 1;
-		interp.iiy = (interp.iy == y_coords.end - 1) ? interp.iy : interp.iy + 1;
+			// if indices is end - 1, then set indices to end - 2 (so that upper_indices is end - 1, the last index)
+			if (interp.indices[dim] == coords[dim].end - 1) {
+				interp.indices[dim] = coords[dim].end - 2;
+			}
 
-		// Get actual coordinate values at the four grid points
-		interp.x1 = x_coords(interp.ix);  // Left x-coordinate
-		interp.x2 = x_coords(interp.iix); // Right x-coordinate
-		interp.y1 = y_coords(interp.iy);  // Bottom y-coordinate
-		interp.y2 = y_coords(interp.iiy); // Top y-coordinate
-
-		// Compute normalized coordinates within the grid cell [0,1] x [0,1]
-		// h = 0 at x1, h = 1 at x2
-		// v = 0 at y1, v = 1 at y2
-		if (interp.ix != interp.iix) {
-			interp.h = (x - interp.x1) / (interp.x2 - interp.x1);
-		} else {
-			interp.h = 0.0; // No variation in x direction (boundary case)
-		}
-
-		if (interp.iy != interp.iiy) {
-			interp.v = (y - interp.y1) / (interp.y2 - interp.y1);
-		} else {
-			interp.v = 0.0; // No variation in y direction (boundary case)
+			// This can be greater than 1 if the point is outside the grid and not clamped
+			interp.normalized[dim] = (clamped_coord - coords[dim](interp.indices[dim])) / dcoord[dim];
 		}
 
 		return interp;
 	}
 
-	// Convenience method: find interpolation data and compute value in one call
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(amrex::Real x, amrex::Real y) const -> amrex::Real
+	/// @brief Perform n-dimensional linear interpolation for multiple outputs
+	///
+	/// This method performs n-linear interpolation by recursively interpolating
+	/// along each dimension. For 2D this becomes bilinear, for 3D trilinear, etc.
+	/// Returns all output values sharing the same coordinate interpolation.
+	///
+	/// @param point Physical coordinates to interpolate at (size Ndim)
+	/// @return Array of interpolated values (size Nout)
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const
+	    -> std::array<amrex::Real, Nout>
+	{
+		// Part 1: Find interpolation indices and normalized coordinates (shared for all outputs)
+		InterpData<Ndim> const interp = find_interpolation_data(point);
+
+		// Part 2: Perform n-dimensional interpolation for all outputs
+		return interpolate_from_indices(interp);
+	}
+
+	/// @brief Perform n-dimensional linear interpolation for a single output (backward compatibility)
+	///
+	/// @param point Physical coordinates to interpolate at (size Ndim)
+	/// @param output_index Index of the output to interpolate (0 to Nout-1)
+	/// @return Single interpolated value
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const
+	    -> amrex::Real
 	{
 		// Part 1: Find interpolation indices and normalized coordinates
-		InterpData const interp = find_interpolation_data(x, y);
+		InterpData<Ndim> const interp = find_interpolation_data(point);
 
-		// Part 2: Compute interpolated value using precomputed indices and normalized coordinates
-		amrex::Real const z1 = data(interp.ix, interp.iy);
-		amrex::Real const z2 = data(interp.iix, interp.iy);
-		amrex::Real const z3 = data(interp.ix, interp.iiy);
-		amrex::Real const z4 = data(interp.iix, interp.iiy);
+		// Part 2: Perform n-dimensional interpolation for single output
+		return interpolate_single_from_indices(interp, output_index);
+	}
 
-		// f(h, v) = (1 - v)((1 - h) z1 + h z2) + v((1 - h) z3 + h z4)
-		amrex::Real const value = (1.0 - interp.v) * ((1.0 - interp.h) * z1 + interp.h * z2) + interp.v * ((1.0 - interp.h) * z3 + interp.h * z4);
-		AMREX_ASSERT(!std::isnan(value));
+      private:
+	/// @brief Helper for n-dimensional interpolation (multiple outputs)
+	///
+	/// This function performs n-linear interpolation for 1D-4D cases for all outputs.
+	/// Supports linear, bilinear, trilinear, and quadrilinear interpolation.
+	///
+	/// @param interp Interpolation data containing indices and normalized coordinates
+	/// @return Array of interpolated values (size Nout)
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_from_indices(const InterpData<Ndim> &interp) const
+	    -> std::array<amrex::Real, Nout>
+	{
+		std::array<amrex::Real, Nout> results{};
 
-		return value;
+		// Interpolate all outputs using the same coordinate weights
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			results[out_idx] = interpolate_single_from_indices(interp, out_idx);
+		}
+
+		return results;
+	}
+
+	/// @brief Helper for n-dimensional interpolation (single output)
+	///
+	/// This function performs n-linear interpolation for 1D-4D cases for a single output.
+	/// Supports linear, bilinear, trilinear, and quadrilinear interpolation.
+	///
+	/// @param interp Interpolation data containing indices and normalized coordinates
+	/// @param output_index Index of the output to interpolate (0 to Nout-1)
+	/// @return Single interpolated value
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single_from_indices(const InterpData<Ndim> &interp, int output_index) const
+	    -> amrex::Real
+	{
+		auto dataView_ = dataViewArrays[output_index];
+
+		if constexpr (Ndim == 1) {
+			// 1D case (linear interpolation)
+			const int ix = interp.indices[0];
+
+			const std::array<amrex::Real, 2> w = {1.0 - interp.normalized[0], interp.normalized[0]};
+
+			const amrex::Real value = w[0] * dataView_(ix) + w[1] * dataView_(ix + 1);
+
+			AMREX_ASSERT(!std::isnan(value));
+			return value;
+		} else if constexpr (Ndim == 2) {
+			// 2D case (bilinear interpolation)
+			const int ix1 = interp.indices[0];
+			const int ix2 = interp.indices[1];
+
+			const std::array<amrex::Real, 2> w1 = {1.0 - interp.normalized[0], interp.normalized[0]};
+			const std::array<amrex::Real, 2> w2 = {1.0 - interp.normalized[1], interp.normalized[1]};
+
+			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp, line 461):
+			// const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix2, ix1) + w1[1] * dataView_(ix2, ix1 + 1)) +
+			// 			   w2[1] * (w1[0] * dataView_(ix2 + 1, ix1) + w1[1] * dataView_(ix2 + 1, ix1 + 1)));
+			// I inverted the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
+			const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix1, ix2) + w1[1] * dataView_(ix1 + 1, ix2)) +
+						   w2[1] * (w1[0] * dataView_(ix1, ix2 + 1) + w1[1] * dataView_(ix1 + 1, ix2 + 1)));
+
+			AMREX_ASSERT(!std::isnan(value));
+			return value;
+		} else if constexpr (Ndim == 3) {
+			// 3D case (trilinear interpolation)
+			const auto ix = interp.indices;
+
+			const std::array<std::array<amrex::Real, 2>, 3> w = {{{1.0 - interp.normalized[0], interp.normalized[0]},
+									      {1.0 - interp.normalized[1], interp.normalized[1]},
+									      {1.0 - interp.normalized[2], interp.normalized[2]}}};
+
+			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp):
+			// I inverted the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
+			// clang-format off
+			const amrex::Real value = (
+				w[2][0] * (w[1][0] * (w[0][0] * dataView_(ix[0], ix[1], ix[2]) +
+															w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2])) +
+									 w[1][1] * (w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2]) +
+															w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2]))) +
+				w[2][1] *
+						(w[1][0] * (w[0][0] * dataView_(ix[0], ix[1], ix[2] + 1) +
+												w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2] + 1)) +
+						 w[1][1] * (w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2] + 1) +
+												w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2] + 1))));
+			// clang-format on
+
+			AMREX_ASSERT(!std::isnan(value));
+			return value;
+		} else if constexpr (Ndim == 4) {
+			// 4D case (quadrilinear interpolation)
+			const auto ix = interp.indices;
+
+			const std::array<std::array<amrex::Real, 2>, 4> w = {{
+			    {1.0 - interp.normalized[0], interp.normalized[0]},
+			    {1.0 - interp.normalized[1], interp.normalized[1]},
+			    {1.0 - interp.normalized[2], interp.normalized[2]},
+			    {1.0 - interp.normalized[3], interp.normalized[3]},
+			}};
+
+			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp):
+			// I inverted the indices because Spiner uses (ix2, ix1) indexing, but we use (ix1, ix2) indexing
+			// clang-format off
+			const amrex::Real value = (
+				w[3][0] *
+						(w[2][0] *
+								 (w[1][0] *
+											(w[0][0] * dataView_(ix[0], ix[1], ix[2], ix[3]) +
+											 w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2], ix[3])) +
+									w[1][1] *
+											(w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2], ix[3]) +
+											 w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2], ix[3]))) +
+						 w[2][1] *
+								 (w[1][0] *
+											(w[0][0] * dataView_(ix[0], ix[1], ix[2] + 1, ix[3]) +
+											 w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2] + 1, ix[3])) +
+									w[1][1] *
+											(w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2] + 1, ix[3]) +
+											 w[0][1] *
+													 dataView_(ix[0] + 1, ix[1] + 1, ix[2] + 1, ix[3])))) +
+				w[3][1] *
+						(w[2][0] *
+								 (w[1][0] *
+											(w[0][0] * dataView_(ix[0], ix[1], ix[2], ix[3] + 1) +
+											 w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2], ix[3] + 1)) +
+									w[1][1] *
+											(w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2], ix[3] + 1) +
+											 w[0][1] *
+													 dataView_(ix[0] + 1, ix[1] + 1, ix[2], ix[3] + 1))) +
+						 w[2][1] * (w[1][0] * (w[0][0] * dataView_(ix[0], ix[1], ix[2] + 1, ix[3] + 1) +
+																	 w[0][1] * dataView_(ix[0] + 1, ix[1], ix[2] + 1, ix[3] + 1)) +
+												w[1][1] * (w[0][0] * dataView_(ix[0], ix[1] + 1, ix[2] + 1, ix[3] + 1) +
+																	 w[0][1] * dataView_(ix[0] + 1, ix[1] + 1, ix[2] + 1, ix[3] + 1))))
+			);
+			// clang-format on
+
+			AMREX_ASSERT(!std::isnan(value));
+			return value;
+		}
 	}
 };
 
-// Generic 2D data table class
-class DataTable
+// Generic n-dimensional data table class with multiple outputs
+template <int Ndim, int Nout = 1> class DataTable
 {
+      private:
+	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
+	std::array<std::unique_ptr<amrex::TableData<amrex::Real, Ndim>>, Nout> data_; // Array of tables for multiple outputs
+
+	// Type aliases for different dimensional data structures
+	using data_1d_type = std::array<amrex::Vector<amrex::Real>, Nout>;
+	using data_2d_type = std::array<amrex::Vector<amrex::Vector<amrex::Real>>, Nout>;
+	using data_3d_type = std::array<amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>>, Nout>;
+	using data_4d_type = std::array<amrex::Vector<amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>>>, Nout>;
+
+	std::array<amrex::Real, Ndim> coord_min_{};
+	std::array<amrex::Real, Ndim> coord_max_{};
+
+	// Precomputed grid spacing for optimization
+	std::array<amrex::Real, Ndim> dcoord_{};
+
+	std::array<int, Ndim> sizes_{};
+
       public:
 	// Default constructor
 	DataTable() = default;
 
-	// Constructor with data
-	DataTable(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-		  const amrex::Vector<amrex::Vector<amrex::Real>> &data);
+	// Constructor with coordinate arrays and data - general n-dimensional interface
+	// For multiple outputs, data is organized as data[output_index][flattened_coords][last_dim]
+	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const std::array<amrex::Vector<amrex::Vector<amrex::Real>>, Nout> &data)
+	{
+		initialize(coords, data);
+	}
+
+	// Backward compatibility constructor for single output (Nout = 1)
+	template <int N = Nout, typename = std::enable_if_t<N == 1>>
+	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	{
+		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, 1> data_array = {data};
+		initialize(coords, data_array);
+	}
 
 	// Destructor
 	~DataTable() = default;
@@ -164,36 +328,480 @@ class DataTable
 	DataTable(const DataTable &) = delete;
 	auto operator=(const DataTable &) -> DataTable & = delete;
 
-	// Initialize from vectors
-	void initialize(const amrex::Vector<amrex::Real> &x_coords, const amrex::Vector<amrex::Real> &y_coords,
-			const amrex::Vector<amrex::Vector<amrex::Real>> &data);
+	// Initializer for backward compatibility with single output (Nout = 1)
+	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	{
+		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
+		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, 1> data_array = {data};
+		initialize(coords, data_array);
+	}
+
+	// Initialize from coordinate arrays - 1D interface
+	template <int N = Ndim, typename = std::enable_if_t<N == 1>>
+	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_1d_type &data)
+	{
+		static_assert(Ndim == 1, "This initialize overload is for 1D tables only");
+
+		// Validate inputs
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+		}
+
+		// Validate data dimensions for each output
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    data[out_idx].size() == coords[0].size(),
+			    fmt::format("1D data must match coordinate size! (expected: {}, actual: {})", coords[0].size(), data[out_idx].size()));
+		}
+
+		initialize_common(coords, data);
+	}
+
+	// Initialize from coordinate arrays - 2D interface
+	template <int N = Ndim, typename = std::enable_if_t<N == 2>>
+	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_2d_type &data)
+	{
+		static_assert(Ndim == 2, "This initialize overload is for 2D tables only");
+
+		// Validate inputs
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+		}
+
+		// Validate data dimensions for each output
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    data[out_idx].size() == coords[0].size(),
+			    fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+					coords[0].size(), data[out_idx].size()));
+			// Verify data dimensions
+			for (const auto &row : data[out_idx]) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    row.size() == coords[1].size(),
+				    fmt::format("All data rows must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+						coords[1].size(), row.size()));
+			}
+		}
+
+		initialize_common(coords, data);
+	}
+
+	// Initialize from coordinate arrays - 3D interface
+	template <int N = Ndim, typename = std::enable_if_t<N == 3>>
+	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_3d_type &data)
+	{
+		static_assert(Ndim == 3, "This initialize overload is for 3D tables only");
+
+		// Validate inputs
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+		}
+
+		// Validate data dimensions for each output
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    data[out_idx].size() == coords[0].size(),
+			    fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+					coords[0].size(), data[out_idx].size()));
+			for (const auto &plane : data[out_idx]) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    plane.size() == coords[1].size(),
+				    fmt::format("Data second dimension must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+						coords[1].size(), plane.size()));
+				for (const auto &row : plane) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    row.size() == coords[2].size(),
+					    fmt::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
+							out_idx, coords[2].size(), row.size()));
+				}
+			}
+		}
+
+		initialize_common(coords, data);
+	}
+
+	// Initialize from coordinate arrays - 4D interface
+	template <int N = Ndim, typename = std::enable_if_t<N == 4>>
+	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_4d_type &data)
+	{
+		static_assert(Ndim == 4, "This initialize overload is for 4D tables only");
+
+		// Validate inputs
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+		}
+
+		// Validate data dimensions for each output
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    data[out_idx].size() == coords[0].size(),
+			    fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+					coords[0].size(), data[out_idx].size()));
+			for (const auto &volume : data[out_idx]) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    volume.size() == coords[1].size(),
+				    fmt::format("Data second dimension must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+						coords[1].size(), volume.size()));
+				for (const auto &plane : volume) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    plane.size() == coords[2].size(),
+					    fmt::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
+							out_idx, coords[2].size(), plane.size()));
+					for (const auto &row : plane) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    row.size() == coords[3].size(),
+						    fmt::format(
+							"Data fourth dimension must match fourth coordinate size for output {}! (expected: {}, actual: {})",
+							out_idx, coords[3].size(), row.size()));
+					}
+				}
+			}
+		}
+
+		initialize_common(coords, data);
+	}
 
 	// Get GPU-friendly const tables
-	[[nodiscard]] auto const_tables() const -> DataTableGpuConst;
+	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim, Nout>
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
+
+		std::array<amrex::Table1D<const amrex::Real>, Ndim> coord_tables{};
+		for (int i = 0; i < Ndim; ++i) {
+			coord_tables[i] = coords_[i]->const_table();
+		}
+
+		std::array<typename DataTableGpuConst<Ndim, Nout>::single_data_table_type, Nout> data_tables{};
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			data_tables[out_idx] = data_[out_idx]->const_table();
+		}
+
+		DataTableGpuConst<Ndim, Nout> tables{
+		    coord_tables,
+		    data_tables, // array of data tables
+		    coord_min_,	 // coord_min array
+		    coord_max_,	 // coord_max array
+		    dcoord_,	 // dcoord array
+		    sizes_	 // sizes array
+		};
+		return tables;
+	}
 
 	// Check if table is initialized
-	[[nodiscard]] auto is_initialized() const -> bool;
+	[[nodiscard]] auto is_initialized() const -> bool
+	{
+		// Check all coordinate arrays
+		for (int dim = 0; dim < Ndim; ++dim) {
+			if (coords_[dim] == nullptr) {
+				return false;
+			}
+		}
+		// Check all data tables
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			if (data_[out_idx] == nullptr) {
+				return false;
+			}
+		}
+		return true;
+	}
 
-	// Get dimensions
-	[[nodiscard]] auto x_size() const -> int;
-	[[nodiscard]] auto y_size() const -> int;
+	// Get dimension sizes
+	[[nodiscard]] auto sizes() const -> std::array<int, Ndim> { return sizes_; }
+
+	// Get size for specific dimension
+	[[nodiscard]] auto size(int dim) const -> int
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
+						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
+		return sizes_[dim];
+	}
+
+	// Get number of outputs
+	[[nodiscard]] constexpr auto num_outputs() const -> int { return Nout; }
 
       private:
-	std::unique_ptr<amrex::TableData<amrex::Real, 1>> x_coords_;
-	std::unique_ptr<amrex::TableData<amrex::Real, 1>> y_coords_;
-	std::unique_ptr<amrex::TableData<amrex::Real, 2>> data_;
+	// Common initialization logic for different dimensional data types
+	template <typename DataType> void initialize_common(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
+	{
+		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
-	amrex::Real x_min_ = 0.0;
-	amrex::Real x_max_ = 0.0;
-	amrex::Real y_min_ = 0.0;
-	amrex::Real y_max_ = 0.0;
+		// Store sizes
+		for (int dim = 0; dim < Ndim; ++dim) {
+			sizes_[dim] = static_cast<int>(coords[dim].size());
+		}
 
-	// Precomputed grid spacing for optimization
-	amrex::Real dx_ = 0.0;
-	amrex::Real dy_ = 0.0;
+		// Store coordinate bounds (assuming ascending order) and calculate grid spacing
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_min_[dim] = coords[dim].front();
+			coord_max_[dim] = coords[dim].back();
+			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
+		}
 
-	int x_size_ = 0;
-	int y_size_ = 0;
+		// Create coordinate tables
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coords_[dim] = std::make_unique<amrex::TableData<amrex::Real, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1},
+											  amrex::The_Pinned_Arena());
+			auto coord_table = coords_[dim]->table();
+			for (int i = 0; i < sizes_[dim]; ++i) {
+				coord_table(i) = coords[dim][i];
+			}
+		}
+
+		// Create n-dimensional data tables for each output
+		amrex::Array<int, Ndim> lo{};
+		amrex::Array<int, Ndim> hi{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			lo[dim] = 0;
+			hi[dim] = sizes_[dim] - 1;
+		}
+
+		// Create and populate data tables for each output
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			data_[out_idx] = std::make_unique<amrex::TableData<amrex::Real, Ndim>>(lo, hi, amrex::The_Pinned_Arena());
+			auto data_table = data_[out_idx]->table();
+
+			// Copy data for different dimensions
+			if constexpr (Ndim == 1) {
+				// Copy 1D data: data[out_idx][i] -> table(i)
+				for (int i = 0; i < sizes_[0]; ++i) {
+					data_table(i) = data[out_idx][i];
+				}
+			} else if constexpr (Ndim == 2) {
+				// Copy 2D data: data[out_idx][i][j] -> table(i,j)
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						data_table(i, j) = data[out_idx][i][j];
+					}
+				}
+			} else if constexpr (Ndim == 3) {
+				// Copy 3D data: data[out_idx][i][j][k] -> table(i,j,k)
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						for (int k = 0; k < sizes_[2]; ++k) {
+							data_table(i, j, k) = data[out_idx][i][j][k];
+						}
+					}
+				}
+			} else if constexpr (Ndim == 4) {
+				// Copy 4D data: data[out_idx][i][j][k][l] -> table(i,j,k,l)
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						for (int k = 0; k < sizes_[2]; ++k) {
+							for (int l = 0; l < sizes_[3]; ++l) {
+								data_table(i, j, k, l) = data[out_idx][i][j][k][l];
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+      public:
+	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
+	// Reads metadata, coordinates, and data all from the HDF5 file
+	// Optionally returns coordinate bounds via coord_bounds parameter
+	static auto H5Reader(const std::string &file_path, const std::string &dataset_path, const std::vector<std::string> &coord_names, int is_fast_log = 0,
+			     std::array<std::pair<amrex::Real, amrex::Real>, Ndim> *coord_bounds = nullptr) -> DataTable
+	{
+		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+		    coord_names.size() == Ndim,
+		    fmt::format("H5Reader requires exactly Ndim coordinate names! (expected: {}, provided: {})", Ndim, coord_names.size()));
+
+		herr_t status = 0;
+		herr_t const h5_error = -1;
+		hid_t file_id = 0;
+		hid_t dset_id = 0;
+		hid_t attr_id = 0;
+
+		// Open HDF5 file
+		file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
+
+		// Read metadata group to get grid dimensions
+		hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
+
+		// Read grid dimensions using generic names
+		std::vector<int> n_coords(Ndim);
+		std::vector<std::string> n_coord_attrs(Ndim);
+
+		for (int dim = 0; dim < Ndim; ++dim) {
+			n_coord_attrs[dim] = "n_" + coord_names[dim];
+			attr_id = H5Aopen(metadata_group, n_coord_attrs[dim].c_str(), H5P_DEFAULT);
+			status = H5Aread(attr_id, H5T_NATIVE_INT, &n_coords[dim]);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + n_coord_attrs[dim] + "!").c_str());
+			H5Aclose(attr_id);
+		}
+
+		// Read coordinate bounds if requested
+		if (coord_bounds != nullptr) {
+			for (int dim = 0; dim < Ndim; ++dim) {
+				const std::string min_attr = coord_names[dim] + "_min";
+				const std::string max_attr = coord_names[dim] + "_max";
+
+				attr_id = H5Aopen(metadata_group, min_attr.c_str(), H5P_DEFAULT);
+				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &(*coord_bounds)[dim].first);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + min_attr + "!").c_str());
+				H5Aclose(attr_id);
+
+				attr_id = H5Aopen(metadata_group, max_attr.c_str(), H5P_DEFAULT);
+				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &(*coord_bounds)[dim].second);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + max_attr + "!").c_str());
+				H5Aclose(attr_id);
+			}
+		}
+
+		H5Gclose(metadata_group);
+
+		// Read coordinate grids
+		std::vector<amrex::Vector<amrex::Real>> coords(Ndim);
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coords[dim].resize(n_coords[dim]);
+		}
+
+		// Construct coordinate dataset names based on is_fast_log parameter
+		const std::string prefix = (is_fast_log == 1) ? "fast_log_" : "";
+		std::vector<std::string> coord_datasets(Ndim);
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_datasets[dim] = "/grids/" + prefix + coord_names[dim];
+		}
+
+		// Read coordinates using for loop
+		for (int dim = 0; dim < Ndim; ++dim) {
+			std::vector<double> temp_data(n_coords[dim]);
+			dset_id = H5Dopen2(file_id, coord_datasets[dim].c_str(), H5P_DEFAULT);
+			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + coord_datasets[dim] + " dataset!").c_str());
+			H5Dclose(dset_id);
+
+			for (int i = 0; i < n_coords[dim]; ++i) {
+				coords[dim][i] = temp_data[i];
+			}
+		}
+
+		// Read n-dimensional dataset from HDF5 file
+		// Calculate data_size as product of all dimensions
+		auto data_size = static_cast<int64_t>(Nout);
+		for (int dim = 0; dim < Ndim; ++dim) {
+			data_size *= static_cast<int64_t>(n_coords[dim]);
+		}
+		std::vector<double> temp_data(data_size);
+
+		dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + dataset_path).c_str());
+
+		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read HDF5 dataset: " + dataset_path).c_str());
+
+		H5Dclose(dset_id);
+
+		// Create coordinate arrays for any dimension
+		std::array<amrex::Vector<amrex::Real>, Ndim> coord_arrays;
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_arrays[dim] = coords[dim];
+		}
+
+		// Convert HDF5 C-order data to natural dimensional format
+		if constexpr (Ndim == 1) {
+			// For 1D: data[out_idx][i]
+			data_1d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(n_coords[0]);
+				for (int i = 0; i < n_coords[0]; ++i) {
+					data_array[out_idx][i] = temp_data[out_idx * n_coords[0] + i];
+				}
+			}
+
+			// Create and initialize DataTable
+			DataTable table;
+			table.initialize(coord_arrays, data_array);
+
+			// Close HDF5 file
+			H5Fclose(file_id);
+			return table;
+
+		} else if constexpr (Ndim == 2) {
+			// For 2D: data[out_idx][i][j]
+			data_2d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(n_coords[0]);
+				for (int i = 0; i < n_coords[0]; ++i) {
+					data_array[out_idx][i].resize(n_coords[1]);
+					for (int j = 0; j < n_coords[1]; ++j) {
+						data_array[out_idx][i][j] = temp_data[out_idx * n_coords[0] * n_coords[1] + i * n_coords[1] + j];
+					}
+				}
+			}
+
+			// Create and initialize DataTable
+			DataTable table;
+			table.initialize(coord_arrays, data_array);
+
+			// Close HDF5 file
+			H5Fclose(file_id);
+			return table;
+
+		} else if constexpr (Ndim == 3) {
+			// For 3D: data[out_idx][i][j][k]
+			data_3d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(n_coords[0]);
+				for (int i = 0; i < n_coords[0]; ++i) {
+					data_array[out_idx][i].resize(n_coords[1]);
+					for (int j = 0; j < n_coords[1]; ++j) {
+						data_array[out_idx][i][j].resize(n_coords[2]);
+						for (int k = 0; k < n_coords[2]; ++k) {
+							data_array[out_idx][i][j][k] = temp_data[out_idx * n_coords[0] * n_coords[1] * n_coords[2] +
+												 i * n_coords[1] * n_coords[2] + j * n_coords[2] + k];
+						}
+					}
+				}
+			}
+
+			// Create and initialize DataTable
+			DataTable table;
+			table.initialize(coord_arrays, data_array);
+
+			// Close HDF5 file
+			H5Fclose(file_id);
+			return table;
+
+		} else if constexpr (Ndim == 4) {
+			// For 4D: data[out_idx][i][j][k][l]
+			data_4d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(n_coords[0]);
+				for (int i = 0; i < n_coords[0]; ++i) {
+					data_array[out_idx][i].resize(n_coords[1]);
+					for (int j = 0; j < n_coords[1]; ++j) {
+						data_array[out_idx][i][j].resize(n_coords[2]);
+						for (int k = 0; k < n_coords[2]; ++k) {
+							data_array[out_idx][i][j][k].resize(n_coords[3]);
+							for (int l = 0; l < n_coords[3]; ++l) {
+								data_array[out_idx][i][j][k][l] =
+								    temp_data[out_idx * n_coords[0] * n_coords[1] * n_coords[2] * n_coords[3] +
+									      i * n_coords[1] * n_coords[2] * n_coords[3] + j * n_coords[2] * n_coords[3] +
+									      k * n_coords[3] + l];
+							}
+						}
+					}
+				}
+			}
+
+			// Create and initialize DataTable
+			DataTable table;
+			table.initialize(coord_arrays, data_array);
+
+			// Close HDF5 file
+			H5Fclose(file_id);
+			return table;
+		}
+	}
 };
 
 } // namespace quokka
