@@ -1479,7 +1479,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
- 			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
+			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), fmt::format("NaN detected in phi at level {} after Poisson solve", lev));
 		}
 	}
