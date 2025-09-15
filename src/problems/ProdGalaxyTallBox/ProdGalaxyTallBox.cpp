@@ -207,6 +207,116 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
+template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
+{
+	// compute how many (and where) SNe will go off on the this coarse timestep
+	// sample from Poisson distribution
+
+	const Real dt_coarse = dt_[0];
+	const Real domain_area = geom[0].ProbLength(0) * geom[0].ProbLength(1);
+	const Real mean = 0.0;
+	const Real stddev = hscale / geom[0].ProbLength(2) / 2.;
+
+	const Real expectation_value = ks_sigma_sfr * domain_area * dt_coarse;
+
+	const int count = static_cast<int>(amrex::RandomPoisson(expectation_value));
+
+	// resize particle arrays
+	amrex::Array<int, 1> const lo{0};
+	amrex::Array<int, 1> const hi{count};
+	userData_.blast_x = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
+	userData_.blast_y = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
+	userData_.blast_z = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
+	userData_.nblast = count;
+	userData_.SN_counter_cumulative += count;
+
+	// for each, sample location at random
+	auto const &px = userData_.blast_x->table();
+	auto const &py = userData_.blast_y->table();
+	auto const &pz = userData_.blast_z->table();
+	for (int i = 0; i < count; ++i) {
+		px(i) = geom[0].ProbLength(0) * amrex::Random();
+		py(i) = geom[0].ProbLength(1) * amrex::Random();
+		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
+	}
+
+	std::ostringstream oss;
+	amrex::SaveRandomState(oss);
+	simulationMetadata_["random_number_generator_state"] = oss.str();
+}
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
+    -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
+{
+
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential; // NOLINT
+	grad_potential[0] = 0.0;
+	grad_potential[1] = 0.0;
+
+	double const z = posvec[2];
+
+	// Interpolate to find the accurate g-value from array
+	auto const &x_arr = z_data;
+	auto const &y_arr = logg_data;
+	const amrex::Real ginterp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
+	AMREX_ASSERT(!std::isnan(ginterp));
+
+	grad_potential[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
+	grad_potential[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + (z * z / (z_star * z_star)), -0.5));
+	grad_potential[2] += (z / std::abs(z)) * std::pow(10., ginterp);
+	AMREX_ASSERT(!std::isnan(grad_potential[2]));
+
+	return grad_potential;
+}
+
+// Add Strang Split Source Term for External Fixed Potential Here
+template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
+{
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
+	const Real dt = dt_lev;
+
+	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = mf.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec;  // NOLINT
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> GradPhi; // NOLINT
+			double x1mom_new = NAN;
+			double x2mom_new = NAN;
+			double x3mom_new = NAN;
+
+			const Real rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+			const Real x1mom = state(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index);
+			const Real x2mom = state(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index);
+			const Real x3mom = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index);
+			const Real Egas = state(i, j, k, HydroSystem<MetalProblem>::energy_index);
+
+			const Real Eint = RadSystem<MetalProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
+
+			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
+			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
+			posvec[2] = prob_lo[2] + (k + 0.5) * dx[2];
+
+			GradPhi = HydroSystem<MetalProblem>::GetGradFixedPotential(posvec);
+
+			x1mom_new = x1mom + dt * (-rho * GradPhi[0]);
+			x2mom_new = x2mom + dt * (-rho * GradPhi[1]);
+			x3mom_new = x3mom + dt * (-rho * GradPhi[2]);
+
+			// State momentum values need to be updated this way.
+			state(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = x1mom_new;
+			state(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = x2mom_new;
+			state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = x3mom_new;
+
+			state(i, j, k, HydroSystem<MetalProblem>::energy_index) =
+			    RadSystem<MetalProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
+		});
+	}
+}
+
 // Code for producing in-situ Projection plots
 template <>
 auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
