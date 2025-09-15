@@ -47,7 +47,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type);
-					
+
 	static void ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder);
