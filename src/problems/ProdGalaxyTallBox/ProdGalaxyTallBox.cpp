@@ -123,6 +123,11 @@ template <> struct SimulationData<MetalProblem> {
 
 template <> void QuokkaSimulation<MetalProblem>::createInitialStochasticStellarPopParticles()
 {
+	// if stars_file == "none", return 
+	if (stars_file == "none") {
+		return;
+	}
+
 	// read particles from ASCII file
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	StochasticStellarPopParticles->SetVerbose(1);
