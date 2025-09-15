@@ -169,7 +169,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
 
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
-	EMFScheme emf_scheme_ = EMFScheme::Balsara2025;	 // method to compute EMF
+	EMFScheme emf_scheme_ = EMFScheme::Balsara2025;	 // method to compute EMF, FelkerStone, FelkerStoneFaceVel, Balsara2025
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
