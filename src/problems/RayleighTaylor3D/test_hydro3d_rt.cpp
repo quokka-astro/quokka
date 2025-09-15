@@ -21,6 +21,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "util/BC.hpp"
 
 struct RTProblem {
 };
@@ -197,38 +198,7 @@ template <> void QuokkaSimulation<RTProblem>::computeAfterTimestep()
 auto problem_main() -> int
 {
 	// Set boundary conditions
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<RTProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<RTProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<RTProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int ncomp_cc = Physics_Indices<RTProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		// periodic in x- and y-directions
-		for (int i = 0; i < (AMREX_SPACEDIM - 1); ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-
-		// reflecting in z- direction
-		int const i = AMREX_SPACEDIM - 1;
-		if (isNormalComp(n, i)) {
-			BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-			BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-		} else {
-			BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-			BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-		}
-	}
+	auto BCs_cc = quokka::BC<RTProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<RTProblem> sim(BCs_cc);

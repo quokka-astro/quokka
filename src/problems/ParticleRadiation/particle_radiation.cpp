@@ -10,6 +10,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/valarray.hpp"
 
 struct ParticleRadiationProblem {
@@ -175,44 +176,7 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<ParticleRadiationProblem>::x1GasMomentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleRadiationProblem>::x2GasMomentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleRadiationProblem>::x3GasMomentum_index) && (dim == 2)) {
-			return true;
-		}
-		// Check radiation flux components
-		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			if ((n == RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 0)) {
-				return true;
-			}
-			if ((n == RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 1)) {
-				return true;
-			}
-			if ((n == RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) && (dim == 2)) {
-				return true;
-			}
-		}
-		return false;
-	};
-
-	const int ncomp_cc = RadSystem<ParticleRadiationProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<ParticleRadiationProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleRadiationProblem> sim(BCs_cc);

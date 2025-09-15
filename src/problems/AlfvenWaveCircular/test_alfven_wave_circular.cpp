@@ -17,6 +17,7 @@
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
+#include "util/BC.hpp"
 
 struct AlfvenWaveCircular {
 };
@@ -218,21 +219,14 @@ void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution_fc(amrex::Mu
 
 auto problem_main() -> int
 {
-	const int nvars_cc = Physics_Indices<AlfvenWaveCircular>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
-	for (int icomp = 0; icomp < nvars_cc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_cc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_cc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<AlfvenWaveCircular>(quokka::BCType::int_dir); // periodic
 
 	const int nvars_fc = Physics_Indices<AlfvenWaveCircular>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+			BCs_fc[icomp].setLo(idim, quokka::BCType::int_dir); // periodic
+			BCs_fc[icomp].setHi(idim, quokka::BCType::int_dir);
 		}
 	}
 

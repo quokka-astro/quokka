@@ -34,6 +34,8 @@ These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` 
 | checkpoint_prefix | String | The prefix for checkpoint output filenames. Default: "chk". |
 | do_subcycle | Integer | This turns on subcycling at coarse-fine boundaries (1) or turns it off (0). Default: 1 (on). |
 | poisson_supercycle_interval | Integer | The number of coarse timesteps between Poisson supercycle operations. |
+| poisson_reltol | Float | Relative tolerance for the Poisson solver convergence. Default: 1.0e-5. |
+| poisson_abstol | Float | Absolute tolerance for the Poisson solver convergence (scaled by minimum RHS value). Default: 1.0e-5. |
 | print_cycle_timing | Integer | If set to 1, prints per-cycle timing information. Default: 0 (disabled). |
 | restartfile | String | The path to a checkpoint file from which to restart the simulation. |
 | amr.plot_nfiles | Integer | Maximum number of binary files per multifab for plotfiles. Controls parallel I/O chunking. |

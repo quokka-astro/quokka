@@ -18,6 +18,7 @@
 #include "QuokkaSimulation.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <fstream>
 

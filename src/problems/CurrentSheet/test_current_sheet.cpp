@@ -19,6 +19,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
+#include "util/BC.hpp"
 
 struct CurrentSheet {
 };
@@ -105,14 +106,7 @@ template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGridFaceV
 
 auto problem_main() -> int
 {
-	const int nvars_cc = Physics_Indices<CurrentSheet>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
-	for (int icomp = 0; icomp < nvars_cc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_cc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_cc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<CurrentSheet>(quokka::BCType::int_dir); // periodic
 
 	const int nvars_fc = Physics_Indices<CurrentSheet>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);

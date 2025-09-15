@@ -16,6 +16,7 @@
 #include "hydro/EOS.hpp"
 #include "particles/PhysicsParticles.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 
 struct ParticleProblem {
 };
@@ -127,42 +128,8 @@ auto problem_main() -> int
 	// const int nx = 1000;
 	// const double Lx = 1.0;
 
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<ParticleProblem>::x1GasMomentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x2GasMomentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x3GasMomentum_index) && (dim == 2)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x1RadFlux_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x2RadFlux_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleProblem>::x3RadFlux_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
 	// Boundary conditions
-	constexpr int nvars = RadSystem<ParticleProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<ParticleProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleProblem> sim(BCs_cc);
