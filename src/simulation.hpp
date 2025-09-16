@@ -1353,14 +1353,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
-		// write rhs
-		const int plt_interval = 1;
-		const int lev_i = 0;
-		std::string debug_phi_lev = "debug_bf_par_phi_lev" + std::to_string(lev_i) + "_";
-		std::string plotfile_name1 = amrex::Concatenate(debug_phi_lev, istep[0], 5);
-		if (istep[0] % plt_interval == 0) {
-			WriteSingleLevelPlotfile(plotfile_name1, rhs[lev_i], {"rhs"}, geom[lev_i], -1.0, istep[0] + 1);
-		}
+		// // write rhs
+		// const int plt_interval = 1;
+		// const int lev_i = 0;
+		// std::string debug_phi_lev = "debug_bf_par_phi_lev" + std::to_string(lev_i) + "_";
+		// std::string plotfile_name1 = amrex::Concatenate(debug_phi_lev, istep[0], 5);
+		// if (istep[0] % plt_interval == 0) {
+		// 	WriteSingleLevelPlotfile(plotfile_name1, rhs[lev_i], {"rhs"}, geom[lev_i], -1.0, istep[0] + 1);
+		// }
 
 		// deposit particle mass from all particles that have mass into rhs by accumulation
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
@@ -1369,12 +1369,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			}
 		}
 
-		// write rhs
-		debug_phi_lev = "debug_af_par_phi_lev" + std::to_string(lev_i) + "_";
-		plotfile_name1 = amrex::Concatenate(debug_phi_lev, istep[0], 5);
-		if (istep[0] % plt_interval == 0) {
-			WriteSingleLevelPlotfile(plotfile_name1, rhs[lev_i], {"rhs"}, geom[lev_i], -1.0, istep[0] + 1);
-		}
+		// // write rhs
+		// debug_phi_lev = "debug_af_par_phi_lev" + std::to_string(lev_i) + "_";
+		// plotfile_name1 = amrex::Concatenate(debug_phi_lev, istep[0], 5);
+		// if (istep[0] % plt_interval == 0) {
+		// 	WriteSingleLevelPlotfile(plotfile_name1, rhs[lev_i], {"rhs"}, geom[lev_i], -1.0, istep[0] + 1);
+		// }
 
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
