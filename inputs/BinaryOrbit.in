@@ -15,8 +15,8 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 amr.n_cell          = 32 32 32
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 16    # grid size must be divisible by this
-amr.max_grid_size   = 16    # at least 128 for GPUs
+amr.blocking_factor = 32    # grid size must be divisible by this
+amr.max_grid_size   = 32    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 1.0
 
@@ -25,12 +25,10 @@ do_subcycle = 0
 
 ascent_interval = -1
 checkpoint_interval = -1
-plotfile_interval = 10
-
-derived_vars = gpot
+plotfile_interval = -1
 
 tiny_profiler.enabled = 0
 
 cfl = 0.3
-max_timesteps = 10
+max_timesteps = 2000
 stop_time = 5.0e7   # s

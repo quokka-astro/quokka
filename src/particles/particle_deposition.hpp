@@ -1,13 +1,5 @@
 #ifndef PARTICLE_DEPOSITION_HPP_
 #define PARTICLE_DEPOSITION_HPP_
-//
-// Particle deposition functions for transferring particle quantities to the mesh.
-//
-// To enable deterministic (reproducible) mass deposition on GPUs, set the runtime parameter:
-//   particles.deterministics = 1
-// This does mass deposition cell by cell instead of particle by particle, and do kahan summation on
-// all the particles that deposits into a cell.
-//
 
 #include <algorithm>
 
@@ -62,7 +54,7 @@ struct RadDeposition {
 
 //-------------------- Mass depositions --------------------
 
-// Functor for depositing particle mass onto the grid (original non-deterministic version)
+// Functor for depositing particle mass onto the grid (AMReX's non-deterministic version)
 struct MassDeposition {
 	amrex::Real Gconst{};  // Gravitational constant
 	int start_part_comp{}; // Starting component in particle data

@@ -216,6 +216,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 		if (quokka::deterministics) {
 			// Deterministic cell-centric version with Kahan summation for GPU reproducibility
+			// This does mass deposition cell by cell instead of particle by particle, and do kahan summation on all the particles that deposits into a cell.
 			// Algorithm:
 			// 1. Loop over cells (ParallelFor over grid cells)
 			// 2. For each cell, loop over all particles

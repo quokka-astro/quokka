@@ -124,7 +124,6 @@ message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
 message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
 
-
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
