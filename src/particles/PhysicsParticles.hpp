@@ -336,6 +336,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// vol_weight is false because MassDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
 		}
+		}
 	}
 
 	void driftParticles(int lev_min, int lev_max, amrex::Real dt) const override
