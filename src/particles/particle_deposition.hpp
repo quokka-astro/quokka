@@ -3,8 +3,8 @@
 //
 // Particle deposition functions for transferring particle quantities to the mesh.
 //
-// To enable deterministic (reproducible) mass deposition on GPUs, compile with:
-//   -DQUOKKA_DETERMINISTIC_DEPOSITION
+// To enable deterministic (reproducible) mass deposition on GPUs, set the runtime parameter:
+//   particles.deterministics = 1
 // This does mass deposition cell by cell instead of particle by particle, and do kahan summation on
 // all the particles that deposits into a cell.
 //

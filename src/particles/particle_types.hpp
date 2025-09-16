@@ -320,6 +320,9 @@ inline bool disable_particle_drift = false; // NOLINT
 // Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
 inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
+// Deterministic particle deposition flag for GPU reproducibility
+inline bool deterministics = true; // NOLINT
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -347,6 +350,9 @@ inline void particleParmParse()
 
 	// Stellar velocity limit parameter
 	pp.query("stellar_velocity_limit", stellar_velocity_limit);
+
+	// Deterministic particle deposition parameter
+	pp.query("deterministics", deterministics);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);

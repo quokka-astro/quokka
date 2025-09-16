@@ -214,7 +214,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
-#ifdef QUOKKA_DETERMINISTIC_DEPOSITION
+		if (quokka::deterministics) {
 			// Deterministic cell-centric version with Kahan summation for GPU reproducibility
 			// Algorithm:
 			// 1. Loop over cells (ParallelFor over grid cells)
@@ -330,12 +330,11 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				// Add buffer_rhs to rhs
 				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
 			}
-#else
+		} else {
 			// Original fast version: Uses atomic operations (non-deterministic on GPU)
 			// zero_out_input is false because we want to accumulate mass
 			// vol_weight is false because MassDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
-#endif
 		}
 	}
 

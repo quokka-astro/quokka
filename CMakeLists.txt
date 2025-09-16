@@ -33,10 +33,6 @@ option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
-option(QUOKKA_DETERMINISTIC_DEPOSITION "Enable deterministic particle deposition for GPU reproducibility (on/off)" ON)
-# Note: Deterministic deposition sorts particles by cell before mass deposition to ensure
-# reproducible results across GPU runs. This eliminates floating-point race conditions
-# but may reduce performance compared to the default atomic-based approach.
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
@@ -128,13 +124,6 @@ message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
 message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
 
-# add deterministic deposition flag if enabled
-if(QUOKKA_DETERMINISTIC_DEPOSITION)
-  add_definitions(-DQUOKKA_DETERMINISTIC_DEPOSITION)
-  message(STATUS "Deterministic particle deposition enabled (GPU reproducible)")
-else()
-  message(STATUS "Deterministic particle deposition disabled (GPU non-reproducible)")
-endif()
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
