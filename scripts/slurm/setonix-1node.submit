@@ -12,7 +12,7 @@
 #SBATCH -N 1
 
 # *MUST* load environment modules setup script inside the SLURM script, otherwise job will fail
-. scripts/setonix-gpu.profile
+. scripts/hpc_profiles/setonix-gpu.profile
 
 # always run with GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
@@ -22,7 +22,7 @@ export MPICH_OFI_NIC_POLICY=NUMA
 
 ## run
 EXE="build/src/problems/HydroBlast3D/test_hydro3d_blast"
-INPUTS="tests/benchmark_unigrid_512.in"
+INPUTS="inputs/benchmark_unigrid_512.in"
 
 srun bash -c "
     case \$((SLURM_LOCALID)) in

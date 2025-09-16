@@ -74,10 +74,6 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		pressure_index,
 		primEint_index,	   // auxiliary internal energy (rho * e)
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
-		// TODO(benwibking): = check what is enabled
-		x2Magnetic_index, // when magnetic fields exist, then we also store cc-ave of the two orthogonal b-fields, so they can be reconstructed to the
-				  // solving face
-		x3Magnetic_index,
 	};
 
 	enum dustVarIndex { dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex, x1DustMomentum_index, x2DustMomentum_index, x3DustMomentum_index };
@@ -128,7 +124,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <RiemannSolver RIEMANN, FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
-				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc,
+				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &leftState_bfield_mf,
+				  amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc,
 				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
 	template <FluxDir DIR>
@@ -961,7 +958,8 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
-					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
+					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &x1LeftState_bfield_mf,
+					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc,
 					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
 {
 
@@ -973,6 +971,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 	auto const &x1LeftState_in = x1LeftState_mf.const_arrays();
 	auto const &x1RightState_in = x1RightState_mf.const_arrays();
+	auto const &x1LeftState_bfield_in = x1LeftState_bfield_mf.const_arrays();
+	auto const &x1RightState_bfield_in = x1RightState_bfield_mf.const_arrays();
 	auto const &primVar_in = primVar_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
@@ -995,6 +995,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
+		quokka::Array4View<const amrex::Real, DIR> x1LeftState_bfield(x1LeftState_bfield_in[bx]);
+		quokka::Array4View<const amrex::Real, DIR> x1RightState_bfield(x1RightState_bfield_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
@@ -1042,10 +1044,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			quokka::Array4View<const amrex::Real, DIR> x1ConsVar_fc(x1ConsVar_fc_ref);
 			bx1 = x1ConsVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			by_L = x1LeftState(i, j, k, x2Magnetic_index);
-			bz_L = x1LeftState(i, j, k, x3Magnetic_index);
-			by_R = x1RightState(i, j, k, x2Magnetic_index);
-			bz_R = x1RightState(i, j, k, x3Magnetic_index);
+			by_L = x1LeftState_bfield(i, j, k, 0);
+			bz_L = x1LeftState_bfield(i, j, k, 1);
+			by_R = x1RightState_bfield(i, j, k, 0);
+			bz_R = x1RightState_bfield(i, j, k, 1);
 			magnetic_energy_L = 0.5 * (bx1 * bx1 + by_L * by_L + bz_L * bz_L);
 			magnetic_energy_R = 0.5 * (bx1 * bx1 + by_R * by_R + bz_R * bz_R);
 		}

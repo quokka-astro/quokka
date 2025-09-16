@@ -8,6 +8,7 @@
 #include "AMReX_BLassert.H"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <fstream>
 
