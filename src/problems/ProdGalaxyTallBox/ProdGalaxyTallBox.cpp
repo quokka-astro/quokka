@@ -25,7 +25,9 @@
 
 static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap, 3: symmetry
 static constexpr bool enable_self_gravity = true;
+// static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop | ParticleSwitch::CIC;
 static std::string stars_file = "../stars.txt";
+static std::string CIC_file = "../CICs.txt";
 
 constexpr double pc = C::parsec;
 
@@ -81,7 +83,7 @@ struct MetalProblem {
 };
 
 template <> struct Particle_Traits<MetalProblem> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop | ParticleSwitch::CIC;
 };
 
 template <> struct HydroSystem_Traits<MetalProblem> {
@@ -152,6 +154,19 @@ template <> void QuokkaSimulation<MetalProblem>::createInitialStochasticStellarP
 
 	// Ensure GPU operations are complete
 	amrex::Gpu::streamSynchronize();
+}
+
+template <> void QuokkaSimulation<MetalProblem>::createInitialCICParticles()
+{
+	// if CIC_file == "none", return
+	if (CIC_file == "none") {
+		return;
+	}
+
+	// read particles from ASCII file
+	const int nreal_extra = 4; // mass vx vy vz
+	CICParticles->SetVerbose(1);
+	CICParticles->InitFromAsciiFile(CIC_file, nreal_extra, nullptr);
 }
 
 template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -479,6 +494,7 @@ auto problem_main() -> int
 
 	amrex::ParmParse const pp("problem");
 	pp.query("stars_file", stars_file);
+	pp.query("CIC_file", CIC_file);
 
 	// set random state
 	const int seed = 42;
