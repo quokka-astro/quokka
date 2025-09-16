@@ -34,6 +34,8 @@ These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` 
 | checkpoint_prefix | String | The prefix for checkpoint output filenames. Default: "chk". |
 | do_subcycle | Integer | This turns on subcycling at coarse-fine boundaries (1) or turns it off (0). Default: 1 (on). |
 | poisson_supercycle_interval | Integer | The number of coarse timesteps between Poisson supercycle operations. |
+| poisson_reltol | Float | Relative tolerance for the Poisson solver convergence. Default: 1.0e-5. |
+| poisson_abstol | Float | Absolute tolerance for the Poisson solver convergence (scaled by minimum RHS value). Default: 1.0e-5. |
 | print_cycle_timing | Integer | If set to 1, prints per-cycle timing information. Default: 0 (disabled). |
 | restartfile | String | The path to a checkpoint file from which to restart the simulation. |
 | amr.plot_nfiles | Integer | Maximum number of binary files per multifab for plotfiles. Controls parallel I/O chunking. |
@@ -71,7 +73,6 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 |----|----|----|
 | mhd.emf_averaging_method | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer` or `LD04`. Default: `LD04`. |
 | mhd.emf_reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |
-| mhd.emf_scheme | String | Determines the EMF computation scheme. Can be set to `FelkerStone` (original Felker and Stone scheme), `FelkerStoneFaceVel` (modified Felker and Stone scheme using face-centered velocity from Riemann solver), or `Balsara2025` (Balsara 2025 EMF at cell center). Default: `Balsara2025`. |
 
 ## Optically-thin radiative cooling
 

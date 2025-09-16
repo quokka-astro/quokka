@@ -29,6 +29,7 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
+#include "util/BC.hpp"
 
 struct MarshakProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -189,41 +190,7 @@ auto problem_main() -> int
 	const double max_time = 10.0;	// dimensionless time
 	// const double max_time = 3.16228;	  // dimensionless time
 
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<MarshakProblem>::x1RadFlux_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x2RadFlux_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x3RadFlux_index) && (dim == 2)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x1GasMomentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x2GasMomentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x3GasMomentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	constexpr int nvars = RadSystem<MarshakProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<MarshakProblem>(quokka::BCType::reflecting);
 
 	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
 

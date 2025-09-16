@@ -12,6 +12,7 @@
 #endif
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <cmath>
 #include <fmt/format.h>
 #include <fstream>
@@ -115,7 +116,7 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 							   amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/, const amrex::BCRec *bcr,
 							   int /*bcomp*/, int /*orig_comp*/)
 {
-	if ((bcr->lo(0) != amrex::BCType::ext_dir) && (bcr->hi(0) != amrex::BCType::ext_dir)) {
+	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
 		return;
 	}
 

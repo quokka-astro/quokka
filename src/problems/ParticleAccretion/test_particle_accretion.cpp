@@ -3,7 +3,6 @@
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuQualifiers.H"
@@ -15,6 +14,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <gcem.hpp>
 
@@ -422,41 +422,7 @@ auto problem_main() -> int
 	const Real t_BH = r_BH / cs0;
 	const Real t_end = t_end_over_t_b * t_BH;
 
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<AccretionProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<AccretionProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<AccretionProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int ncomp_cc = Physics_Indices<AccretionProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// // periodic boundaries
-			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			// octant symmetry
-			// // FOextrap
-			// for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// 	BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-			// 	BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-			// }
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<AccretionProblem> sim(BCs_cc);

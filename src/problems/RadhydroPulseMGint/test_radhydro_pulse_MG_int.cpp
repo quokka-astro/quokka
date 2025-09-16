@@ -14,6 +14,7 @@
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -304,14 +305,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("rad");
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<MGProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<MGProblem>(quokka::BCType::int_dir);
 
 	// Problem 1: advecting pulse with multigroup integration
 

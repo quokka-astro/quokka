@@ -169,7 +169,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
 
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
-	EMFScheme emf_scheme_ = EMFScheme::Balsara2025;	 // method to compute EMF
+	int emf_scheme_ = 1; // 0 == Felker and Stone scheme state; 1 == Felker and Stone scheme using the FC velocity from Riemann solver (default)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -1444,7 +1444,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
-
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds,
 						 emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
 	}

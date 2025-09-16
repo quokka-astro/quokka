@@ -34,6 +34,7 @@
 #include "io/projection.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 
 using amrex::Real;
 
@@ -897,18 +898,10 @@ template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBox
 auto problem_main() -> int
 {
 	// Problem initialization
-	constexpr int nvars = QuokkaSimulation<ShockCloud>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet
-		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // NSCBC outflow
-
-		boundaryConditions[n].setLo(1, amrex::BCType::int_dir); // periodic
-		boundaryConditions[n].setHi(1, amrex::BCType::int_dir);
-
-		boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
-		boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
-	}
+	// Set boundary conditions: ext_dir in x, periodic in y and z
+	auto boundaryConditions = quokka::BC<ShockCloud>(quokka::BCType::ext_dir,  // x: Dirichlet/NSCBC
+							 quokka::BCType::int_dir,  // y: periodic
+							 quokka::BCType::int_dir); // z: periodic
 	QuokkaSimulation<ShockCloud> sim(boundaryConditions);
 
 	// Read problem parameters

@@ -11,6 +11,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <cstdint>
 #include <fmt/format.h>
 #include <string>

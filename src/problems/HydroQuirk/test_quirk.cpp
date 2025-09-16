@@ -36,6 +36,7 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 
 using Real = amrex::Real;
 
@@ -252,19 +253,10 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 
 auto problem_main() -> int
 {
-	// Boundary conditions
-	const int ncomp_cc = Physics_Indices<QuirkProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		// outflow
-		BCs_cc[0].setLo(0, amrex::BCType::ext_dir);
-		BCs_cc[0].setHi(0, amrex::BCType::ext_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			// periodic
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	// Boundary conditions: ext_dir in x, periodic in y and z
+	auto BCs_cc = quokka::BC<QuirkProblem>(quokka::BCType::ext_dir,	 // x: outflow
+					       quokka::BCType::int_dir,	 // y: periodic
+					       quokka::BCType::int_dir); // z: periodic
 
 	// Problem initialization
 	QuokkaSimulation<QuirkProblem> sim(BCs_cc);
