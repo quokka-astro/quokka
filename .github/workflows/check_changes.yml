@@ -14,6 +14,8 @@ on:
         value: ${{ jobs.check.outputs.has_non_docs_changes }}
       has_scripts_changes:
         value: ${{ jobs.check.outputs.has_scripts_changes }}
+      has_yaml_changes:
+        value: ${{ jobs.check.outputs.has_yaml_changes }}
       has_cpp_changes:
         value: ${{ jobs.check.outputs.has_cpp_changes }}
       has_py_changes:
@@ -30,6 +32,7 @@ jobs:
       has_docs_changes: ${{ steps.set-output.outputs.has_docs_changes }}
       has_non_docs_changes: ${{ steps.set-output.outputs.has_non_docs_changes }}
       has_scripts_changes: ${{ steps.set-output.outputs.has_scripts_changes }}
+      has_yaml_changes: ${{ steps.set-output.outputs.has_yaml_changes }}
       has_cpp_changes: ${{ steps.set-output.outputs.has_cpp_changes }}
       has_py_changes: ${{ steps.set-output.outputs.has_py_changes }}
       has_workflow_changes: ${{ steps.set-output.outputs.has_workflow_changes }}
@@ -58,6 +61,9 @@ jobs:
               - '**/*.c'
               - '**/*.hpp'
               - '**/*.h'
+            yaml:
+              - '**/*.yml'
+              - '**/*.yaml'
             cpp:
               - '**/*.cpp'
               - '**/*.c'
@@ -80,6 +86,7 @@ jobs:
           echo "has_py_changes=${{ steps.changes.outputs.py }}" >> $GITHUB_OUTPUT
           echo "has_workflow_changes=${{ steps.changes.outputs.workflows }}" >> $GITHUB_OUTPUT
           echo "has_specific_workflow_changes=${{ steps.changes.outputs.specific_workflow }}" >> $GITHUB_OUTPUT
+          echo "has_yaml_changes=${{ steps.changes.outputs.yaml }}" >> $GITHUB_OUTPUT
           
           # Calculate has_non_docs_changes based on code changes OR specific workflow changes (if specified)
           if [ "${{ inputs.workflow_file }}" != "" ]; then
@@ -87,4 +94,5 @@ jobs:
           else
             has_non_docs_changes=${{ steps.changes.outputs.code == 'true' || steps.changes.outputs.workflows == 'true' }}
           fi
+
           echo "has_non_docs_changes=$has_non_docs_changes" >> $GITHUB_OUTPUT
