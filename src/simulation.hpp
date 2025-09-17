@@ -1341,13 +1341,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::roundoffMultiFab(am
 	// 1. Multiplying by factor = 2^15 + 1 = 32769 to shift significant bits
 	// 2. The multiplication and subsequent operations naturally truncate lower-order bits
 	// 3. The final subtraction c - (c - sum) recovers the rounded value
-	constexpr unsigned int digit_to_remove = 15;  // Remove 15 bits from mantissa
+	constexpr unsigned int digit_to_remove = 15;					 // Remove 15 bits from mantissa
 	constexpr auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^15 + 1 = 32769
-	
+
 	// Get array accessor for all patches at once
 	auto arr = mf.arrays();
 	const int ncomp = mf.nComp();
-	
+
 	// Apply roundoff algorithm to every grid point and component in parallel
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// Process all components at this grid point
@@ -1402,15 +1402,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 					rhs_buffer[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
 					rhs_buffer[lev].setVal(0);
 				}
-				
+
 				// deposit mass into temporary buffer
 				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_);
-				
+
 				// apply roundoff to buffer before adding to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
 					roundoffMultiFab(rhs_buffer[lev]);
 				}
-				
+
 				// add buffer to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
 					amrex::MultiFab::Add(rhs[lev], rhs_buffer[lev], 0, 0, ncomp, 0);
