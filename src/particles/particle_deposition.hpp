@@ -79,7 +79,7 @@ struct MassDeposition {
 
 // Helper function for deterministic mass deposition on a single level
 template <typename ContainerType>
-void deterministicDepositParticleMassToMeshSingleLevel(const ContainerType* container, amrex::MultiFab &buffer_rhs, int lev, amrex::Real Gconst, int mass_idx)
+void deterministicDepositParticleMassToMeshSingleLevel(const ContainerType *container, amrex::MultiFab &buffer_rhs, int lev, amrex::Real Gconst, int mass_idx)
 {
 	const auto &geom = container->Geom(lev);
 	const auto plo = geom.ProbLoArray();
@@ -151,8 +151,8 @@ void deterministicDepositParticleMassToMeshSingleLevel(const ContainerType* cont
 // Deterministic AMR-aware particle-to-mesh deposition function
 // This function follows the AMReX ParticleToMesh pattern but uses deterministic Kahan summation
 template <typename ContainerType>
-void deterministicParticleMassToMesh(const ContainerType& container, const amrex::Vector<amrex::MultiFab*>& rhs,
-                                int lev_min, int finest_lev, amrex::Real Gconst, int mass_idx)
+void deterministicParticleMassToMesh(const ContainerType &container, const amrex::Vector<amrex::MultiFab *> &rhs, int lev_min, int finest_lev,
+				     amrex::Real Gconst, int mass_idx)
 {
 	BL_PROFILE("quokka::deterministicParticleMassToMesh");
 
@@ -201,17 +201,16 @@ void deterministicParticleMassToMesh(const ContainerType& container, const amrex
 		if (lev < finest_lev) {
 			amrex::PhysBCFunctNoOp cphysbc;
 			amrex::PhysBCFunctNoOp fphysbc;
-			amrex::InterpFromCoarseLevel(mf_tmp[lev + 1], 0.0, mf_part[lev], 0, 0, 1, container.Geom(lev),
-						     container.Geom(lev + 1), cphysbc, 0, fphysbc, 0,
-						     container.GetParGDB()->refRatio(lev), &mapper, bcs, 0);
+			amrex::InterpFromCoarseLevel(mf_tmp[lev + 1], 0.0, mf_part[lev], 0, 0, 1, container.Geom(lev), container.Geom(lev + 1), cphysbc, 0,
+						     fphysbc, 0, container.GetParGDB()->refRatio(lev), &mapper, bcs, 0);
 		}
 
 		// Step 3: Sum fine level contributions to coarse level
 		if (lev > lev_min) {
 			// This will double count mass in regions covered by fine level,
 			// but this is corrected below by average_down
-			amrex::sum_fine_to_coarse(mf_part[lev], mf_part[lev - 1], 0, 1, container.GetParGDB()->refRatio(lev - 1),
-						  container.Geom(lev - 1), container.Geom(lev));
+			amrex::sum_fine_to_coarse(mf_part[lev], mf_part[lev - 1], 0, 1, container.GetParGDB()->refRatio(lev - 1), container.Geom(lev - 1),
+						  container.Geom(lev));
 		}
 
 		// Step 4: Add interpolated values to this level
