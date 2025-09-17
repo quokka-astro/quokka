@@ -216,7 +216,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			if (quokka::deterministic) {
 				// Deterministic AMR-aware mass deposition with proper coarse-fine boundary handling
-				quokka::deterministicParticleToMesh(*container_, rhs, 0, finest_lev, Gconst, this->getMassIndex());
+				quokka::deterministicParticleMassToMesh(*container_, rhs, 0, finest_lev, Gconst, this->getMassIndex());
 			} else {
 				// Original fast version: Uses atomic operations (non-deterministic on GPU)
 				// zero_out_input is false because we want to accumulate mass

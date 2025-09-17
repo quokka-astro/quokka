@@ -79,7 +79,7 @@ struct MassDeposition {
 
 // Helper function for deterministic mass deposition on a single level
 template <typename ContainerType>
-void deterministicDepositSingleLevel(const ContainerType* container, amrex::MultiFab &buffer_rhs, int lev, amrex::Real Gconst, int mass_idx)
+void deterministicDepositParticleMassToMeshSingleLevel(const ContainerType* container, amrex::MultiFab &buffer_rhs, int lev, amrex::Real Gconst, int mass_idx)
 {
 	const auto &geom = container->Geom(lev);
 	const auto plo = geom.ProbLoArray();
@@ -151,10 +151,10 @@ void deterministicDepositSingleLevel(const ContainerType* container, amrex::Mult
 // Deterministic AMR-aware particle-to-mesh deposition function
 // This function follows the AMReX ParticleToMesh pattern but uses deterministic Kahan summation
 template <typename ContainerType>
-void deterministicParticleToMesh(const ContainerType& container, const amrex::Vector<amrex::MultiFab*>& rhs,
+void deterministicParticleMassToMesh(const ContainerType& container, const amrex::Vector<amrex::MultiFab*>& rhs,
                                 int lev_min, int finest_lev, amrex::Real Gconst, int mass_idx)
 {
-	BL_PROFILE("quokka::deterministicParticleToMesh");
+	BL_PROFILE("quokka::deterministicParticleMassToMesh");
 
 	// Handle single level case (no AMR)
 	if (finest_lev == 0) {
@@ -164,7 +164,7 @@ void deterministicParticleToMesh(const ContainerType& container, const amrex::Ve
 		amrex::MultiFab buffer_rhs(rhs[lev]->boxArray(), rhs[lev]->DistributionMap(), 1, nGrow);
 		buffer_rhs.setVal(0.0);
 
-		deterministicDepositSingleLevel(&container, buffer_rhs, lev, Gconst, mass_idx);
+		deterministicDepositParticleMassToMeshSingleLevel(&container, buffer_rhs, lev, Gconst, mass_idx);
 
 		// Sum boundary values and add to target
 		buffer_rhs.SumBoundary(container.Geom(lev).periodicity());
@@ -195,7 +195,7 @@ void deterministicParticleToMesh(const ContainerType& container, const amrex::Ve
 	// Main AMR loop following AMReX ParticleToMesh pattern
 	for (int lev = lev_min; lev <= finest_lev; ++lev) {
 		// Step 1: Deterministic deposition on this level
-		deterministicDepositSingleLevel(&container, mf_part[lev], lev, Gconst, mass_idx);
+		deterministicDepositParticleMassToMeshSingleLevel(&container, mf_part[lev], lev, Gconst, mass_idx);
 
 		// Step 2: Interpolate from coarse to fine level
 		if (lev < finest_lev) {
