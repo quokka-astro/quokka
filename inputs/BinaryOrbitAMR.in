@@ -32,3 +32,7 @@ checkpoint_interval = -1
 #plottime_interval = 2.0e5 # s
 plotfile_interval = -1
 derived_vars = gpot
+
+particles.deterministic = 1
+
+tiny_profiler.enabled = 0
