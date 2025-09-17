@@ -80,19 +80,12 @@ jobs:
 
       - id: set-output
         run: |
-          echo "has_docs_changes=${{ steps.changes.outputs.docs }}" >> $GITHUB_OUTPUT
-          echo "has_scripts_changes=${{ steps.changes.outputs.scripts }}" >> $GITHUB_OUTPUT 
-          echo "has_cpp_changes=${{ steps.changes.outputs.cpp }}" >> $GITHUB_OUTPUT
-          echo "has_py_changes=${{ steps.changes.outputs.py }}" >> $GITHUB_OUTPUT
-          echo "has_workflow_changes=${{ steps.changes.outputs.workflows }}" >> $GITHUB_OUTPUT
-          echo "has_specific_workflow_changes=${{ steps.changes.outputs.specific_workflow }}" >> $GITHUB_OUTPUT
-          echo "has_yaml_changes=${{ steps.changes.outputs.yaml }}" >> $GITHUB_OUTPUT
-          
-          # Calculate has_non_docs_changes based on code changes OR specific workflow changes (if specified)
-          if [ "${{ inputs.workflow_file }}" != "" ]; then
-            has_non_docs_changes=${{ steps.changes.outputs.code == 'true' || steps.changes.outputs.specific_workflow == 'true' }}
-          else
-            has_non_docs_changes=${{ steps.changes.outputs.code == 'true' || steps.changes.outputs.workflows == 'true' }}
-          fi
-
-          echo "has_non_docs_changes=$has_non_docs_changes" >> $GITHUB_OUTPUT
+          # CI skip logic disabled: force all change flags to true
+          echo "has_docs_changes=true" >> $GITHUB_OUTPUT
+          echo "has_scripts_changes=true" >> $GITHUB_OUTPUT 
+          echo "has_cpp_changes=true" >> $GITHUB_OUTPUT
+          echo "has_py_changes=true" >> $GITHUB_OUTPUT
+          echo "has_workflow_changes=true" >> $GITHUB_OUTPUT
+          echo "has_specific_workflow_changes=true" >> $GITHUB_OUTPUT
+          echo "has_yaml_changes=true" >> $GITHUB_OUTPUT
+          echo "has_non_docs_changes=true" >> $GITHUB_OUTPUT
