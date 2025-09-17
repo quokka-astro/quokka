@@ -217,7 +217,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			if (quokka::deterministic) {
 				// Deterministic AMR-aware mass deposition with proper coarse-fine boundary handling
 				// Following the AMReX ParticleToMesh pattern but with deterministic Kahan summation
-				
+
 				// Handle single level case (no AMR)
 				if (finest_lev == 0) {
 					// Single level - use simplified approach
@@ -225,9 +225,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const int nGrow = std::max(rhs[lev]->nGrow(), 1); // need at least 1 ghost cell for CIC
 					amrex::MultiFab buffer_rhs(rhs[lev]->boxArray(), rhs[lev]->DistributionMap(), 1, nGrow);
 					buffer_rhs.setVal(0.0);
-					
+
 					deterministicDepositSingleLevel(buffer_rhs, lev, Gconst);
-					
+
 					// Sum boundary values and add to target
 					buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
 					amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, 0);
@@ -236,70 +236,62 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 				// Multi-level AMR case - need proper coarse-fine handling
 				const int nGrow = std::max(2, rhs[0]->nGrow()); // AMReX uses max(ngrow, 2) for interpolation
-				
-				// Create temporary MultiFabs that match particle distribution 
+
+				// Create temporary MultiFabs that match particle distribution
 				amrex::Vector<amrex::MultiFab> mf_part(finest_lev + 1);
 				amrex::Vector<amrex::MultiFab> mf_tmp(finest_lev + 1);
-				
+
 				for (int lev = 0; lev <= finest_lev; ++lev) {
-					mf_part[lev].define(container_->ParticleBoxArray(lev), 
-							   container_->ParticleDistributionMap(lev),
-							   1, nGrow);
-					mf_tmp[lev].define(container_->ParticleBoxArray(lev),
-							  container_->ParticleDistributionMap(lev), 
-							  1, 0);
+					mf_part[lev].define(container_->ParticleBoxArray(lev), container_->ParticleDistributionMap(lev), 1, nGrow);
+					mf_tmp[lev].define(container_->ParticleBoxArray(lev), container_->ParticleDistributionMap(lev), 1, 0);
 					mf_part[lev].setVal(0.0);
 					mf_tmp[lev].setVal(0.0);
 				}
-				
+
 				// Set up boundary conditions for interpolation (no-op at physical boundaries)
 				std::array<int, 3> lo_bc = {amrex::BCType::int_dir, amrex::BCType::int_dir, amrex::BCType::int_dir};
 				std::array<int, 3> hi_bc = {amrex::BCType::int_dir, amrex::BCType::int_dir, amrex::BCType::int_dir};
 				amrex::Vector<amrex::BCRec> bcs(1, amrex::BCRec(lo_bc.data(), hi_bc.data()));
 				amrex::PCInterp mapper;
-				
+
 				// Main AMR loop following AMReX ParticleToMesh pattern
 				for (int lev = 0; lev <= finest_lev; ++lev) {
 					// Step 1: Deterministic deposition on this level
 					deterministicDepositSingleLevel(mf_part[lev], lev, Gconst);
-					
+
 					// Step 2: Interpolate from coarse to fine level
 					if (lev < finest_lev) {
 						amrex::PhysBCFunctNoOp cphysbc;
 						amrex::PhysBCFunctNoOp fphysbc;
-						amrex::InterpFromCoarseLevel(mf_tmp[lev+1], 0.0, mf_part[lev],
-									    0, 0, 1,
-									    container_->Geom(lev), container_->Geom(lev+1),
-									    cphysbc, 0, fphysbc, 0,
-									    container_->GetParGDB()->refRatio(lev), &mapper,
-									    bcs, 0);
+						amrex::InterpFromCoarseLevel(mf_tmp[lev + 1], 0.0, mf_part[lev], 0, 0, 1, container_->Geom(lev),
+									     container_->Geom(lev + 1), cphysbc, 0, fphysbc, 0,
+									     container_->GetParGDB()->refRatio(lev), &mapper, bcs, 0);
 					}
-					
+
 					// Step 3: Sum fine level contributions to coarse level
 					if (lev > 0) {
 						// This will double count mass in regions covered by fine level,
 						// but this is corrected below by average_down
-						amrex::sum_fine_to_coarse(mf_part[lev], mf_part[lev-1], 0, 1,
-									 container_->GetParGDB()->refRatio(lev-1),
-									 container_->Geom(lev-1), container_->Geom(lev));
+						amrex::sum_fine_to_coarse(mf_part[lev], mf_part[lev - 1], 0, 1, container_->GetParGDB()->refRatio(lev - 1),
+									  container_->Geom(lev - 1), container_->Geom(lev));
 					}
-					
+
 					// Step 4: Add interpolated values to this level
 					mf_part[lev].plus(mf_tmp[lev], 0, 1, 0);
 				}
-				
+
 				// Step 5: Average down from fine to coarse to correct double-counting
 				for (int lev = finest_lev - 1; lev >= 0; --lev) {
-					amrex::average_down(mf_part[lev+1], mf_part[lev], 0, 1, container_->GetParGDB()->refRatio(lev));
+					amrex::average_down(mf_part[lev + 1], mf_part[lev], 0, 1, container_->GetParGDB()->refRatio(lev));
 				}
-				
-				// Step 6: Copy results back to target MultiFabs 
+
+				// Step 6: Copy results back to target MultiFabs
 				for (int lev = 0; lev <= finest_lev; ++lev) {
 					// Check if grids match - if not, need ParallelCopy
 					if (container_->OnSameGrids(lev, *rhs[lev])) {
 						amrex::MultiFab::Add(*rhs[lev], mf_part[lev], 0, 0, 1, 0);
 					} else {
-						// Different grid distributions - use ParallelAdd 
+						// Different grid distributions - use ParallelAdd
 						rhs[lev]->ParallelAdd(mf_part[lev], 0, 0, 1, 0, 0);
 					}
 				}
@@ -312,7 +304,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-private:
+      private:
 	// Helper function for deterministic mass deposition on a single level
 	void deterministicDepositSingleLevel(amrex::MultiFab &buffer_rhs, int lev, amrex::Real Gconst) const
 	{
@@ -346,8 +338,7 @@ private:
 
 					// Loop over all particles in this tile
 					for (amrex::Long pidx = 0; pidx < np; ++pidx) {
-						auto p = amrex::make_particle<typename decltype(p_tile_data)::ParticleType::ConstType>{}(
-						    p_tile_data, pidx);
+						auto p = amrex::make_particle<typename decltype(p_tile_data)::ParticleType::ConstType>{}(p_tile_data, pidx);
 
 						const amrex::Real pos_x = p.pos(0);
 						const amrex::Real pos_y = p.pos(1);
@@ -385,7 +376,7 @@ private:
 		buffer_rhs.SumBoundary(geom.periodicity());
 	}
 
-public:
+      public:
 	void driftParticles(int lev_min, int lev_max, amrex::Real dt) const override
 	{
 		if (container_ != nullptr) {
