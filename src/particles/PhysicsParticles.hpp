@@ -304,7 +304,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 								// Store the rounded sum in the buffer
 								// For double precision (52-bit significand), to keep 11 decimal digits (~37 bits),
 								// we need to remove ~15 bits from the significand
-								constexpr int digit_to_remove = 15;
+								constexpr unsigned int digit_to_remove = 15;
 								constexpr auto factor =
 								    static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^digit_to_remove + 1
 								const auto c = factor * sum;
