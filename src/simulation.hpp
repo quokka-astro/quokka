@@ -1356,7 +1356,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// deposit particle mass from all particles that have mass into rhs by accumulation
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
 			if (particleRegister_.HasMassiveParticles()) {
-				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
+				// create temporary buffer for mass deposition
+				amrex::Vector<amrex::MultiFab> rhs_buffer(finest_level + 1);
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					rhs_buffer[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
+					rhs_buffer[lev].setVal(0);
+				}
+				
+				// deposit mass into temporary buffer
+				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_);
+				
+				// add buffer to rhs
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					amrex::MultiFab::Add(rhs[lev], rhs_buffer[lev], 0, 0, ncomp, 0);
+				}
 			}
 		}
 
