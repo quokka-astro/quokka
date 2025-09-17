@@ -19,14 +19,12 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
-
 #include "AMReX_SPACE.H"
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "util/BC.hpp"
 
-static int num_particles_ = 1000;
-static int seed_ = 42;
+static int num_particles_ = 1000; // NOLINT
+static int seed_ = 42;		  // NOLINT
 
 struct CollapseProblem {
 };
