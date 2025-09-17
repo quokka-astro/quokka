@@ -233,7 +233,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 					const auto &geom = container_->Geom(lev);
 					const auto plo = geom.ProbLoArray();
-					const auto dxi = geom.InvCellSizeArray();
 					const auto dx = geom.CellSizeArray();
 
 					// Calculate cell volume
