@@ -1344,19 +1344,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::roundoffMultiFab(am
 	constexpr unsigned int digit_to_remove = 15;  // Remove 15 bits from mantissa
 	constexpr auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^15 + 1 = 32769
 	
-	for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
-		const amrex::Box &bx = mfi.validbox();  // Get valid (non-ghost) cells for this patch
-		auto const &arr = mf.array(mfi);
-		
-		// Apply roundoff algorithm to every grid point and component in parallel
-		amrex::ParallelFor(bx, mf.nComp(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-			const auto sum = arr(i, j, k, n);
+	// Get array accessor for all patches at once
+	auto arr = mf.arrays();
+	const int ncomp = mf.nComp();
+	
+	// Apply roundoff algorithm to every grid point and component in parallel
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// Process all components at this grid point
+		for (int n = 0; n < ncomp; ++n) {
+			const auto sum = arr[bx](i, j, k, n);
 			const auto c = factor * sum;
 			// The key roundoff step: c - (c - sum) removes the least significant bits
 			// This is mathematically equivalent to sum, but with reduced floating-point precision
-			arr(i, j, k, n) = c - (c - sum);
-		});
-	}
+			arr[bx](i, j, k, n) = c - (c - sum);
+		}
+	});
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
