@@ -22,9 +22,26 @@ sudo mkdir --parents --mode=0755 /etc/apt/keyrings
 wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
     gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
 
+# Detect Ubuntu codename and choose a compatible ROCm suite
+# ROCm 7.0 provides packages for Ubuntu 22.04 (jammy). Some runners
+# (e.g., ubuntu-latest on 24.04 noble) are not yet supported by AMD's repo.
+# In such cases, fall back to jammy which is known to work for ROCm 7.0.
+if [ -r /etc/os-release ]; then
+  . /etc/os-release
+fi
+
+detected_codename="${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"
+rocm_suite="jammy"
+if [ "${detected_codename}" = "jammy" ]; then
+  rocm_suite="jammy"
+else
+  # Map all other codenames (e.g., noble, focal, etc.) to jammy for ROCm 7.0
+  rocm_suite="jammy"
+fi
+
 for ver in 7.0; do
-echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ver focal main" \
-    | sudo tee --append /etc/apt/sources.list.d/rocm.list
+  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ver ${rocm_suite} main" \
+      | sudo tee --append /etc/apt/sources.list.d/rocm.list
 done
 
 echo 'export PATH=/opt/rocm/llvm/bin:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin:$PATH' \
