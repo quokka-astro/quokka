@@ -305,28 +305,28 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							// For double precision (52-bit significand), to keep 11 decimal digits (~37 bits),
 							// we need to remove ~15 bits from the significand
 							constexpr int digit_to_remove = 15;
-							constexpr amrex::Real factor =
+							constexpr auto factor =
 							    static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^digit_to_remove + 1
-							const amrex::Real c = factor * sum;
+							const auto c = factor * sum;
 							buffer_arr(i, j, k, 0) = c - (c - sum);
 						});
 					}
 				}
 
-				// write buffer_rhs
-				const int plt_interval = 1;
-				const int lev_i = 0;
-				std::string debug_phi_lev = "debug_buffer_rhs_before_sum_lev" + std::to_string(lev_i) + "_";
-				std::string plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
-				WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
+				// // For debugging, keep this commented-out code momentarily
+				// const int plt_interval = 1;
+				// const int lev_i = 0;
+				// std::string debug_phi_lev = "debug_buffer_rhs_before_sum_lev" + std::to_string(lev_i) + "_";
+				// std::string plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
+				// WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
 
 				// Sum boundary cell values to real cells
 				buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
 
-				// write buffer_rhs_after_sum
-				debug_phi_lev = "debug_buffer_rhs_after_sum_lev" + std::to_string(lev_i) + "_";
-				plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
-				WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
+				// // For debugging, keep this commented-out code momentarily
+				// debug_phi_lev = "debug_buffer_rhs_after_sum_lev" + std::to_string(lev_i) + "_";
+				// plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
+				// WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
 
 				// Add buffer_rhs to rhs
 				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
