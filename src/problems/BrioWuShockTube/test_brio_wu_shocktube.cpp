@@ -61,21 +61,6 @@ constexpr amrex::Real By_L = 1.0;
 constexpr amrex::Real By_R = -1.0;
 constexpr amrex::Real Bz = 0.0; // constant
 
-// AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double /*x1*/, double /*x2*/, double /*x3*/)
-// {
-// 	return 0.0;
-// }
-// AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double /*x1*/, double /*x2*/, double /*x3*/) -> double
-// {
-// 	return 0.0;
-// }
-// AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double x1, double x2, double /*x3*/) -> double
-// {
-// 	double sign = 1.0;
-// 	if (x1 <= 0.5) { sign = -1.0; };
-// 	return 0.75*x2 - sign * x1;
-// }
-
 template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -135,8 +120,6 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x1_L = prob_lo[0] + i * dx[0];
-		const amrex::Real x2_L = prob_lo[1] + j * dx[1];
-		const amrex::Real x3_L = prob_lo[2] + k * dx[2];
 
 		const double x1mag = 0.75; // constant
 		const double x3mag = 0.0;
@@ -294,9 +277,6 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::refineGrid(int lev, amre
 
 auto problem_main() -> int
 {
-	const double max_time = 1.0;
-	const int max_timesteps = 80000;
-	// Problem initialization
 	const int ncomp_cc = Physics_Indices<MHDShocktubeProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
