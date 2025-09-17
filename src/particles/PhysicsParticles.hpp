@@ -214,129 +214,130 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
-		if (quokka::deterministic) {
-			// Deterministic cell-centric version with Kahan summation for GPU reproducibility
-			// This does mass deposition cell by cell instead of particle by particle, and do kahan summation on all the particles that deposits into a cell.
-			// Algorithm:
-			// 1. Loop over cells (ParallelFor over grid cells)
-			// 2. For each cell, loop over all particles
-			// 3. Use Kahan summation to compensate for floating-point rounding errors
-			// 4. This ensures identical results regardless of GPU thread scheduling
-			// Note: This is slower than atomic operations but guarantees reproducibility
+			if (quokka::deterministic) {
+				// Deterministic cell-centric version with Kahan summation for GPU reproducibility
+				// This does mass deposition cell by cell instead of particle by particle, and do kahan summation on all the particles that
+				// deposits into a cell. Algorithm:
+				// 1. Loop over cells (ParallelFor over grid cells)
+				// 2. For each cell, loop over all particles
+				// 3. Use Kahan summation to compensate for floating-point rounding errors
+				// 4. This ensures identical results regardless of GPU thread scheduling
+				// Note: This is slower than atomic operations but guarantees reproducibility
 
-			// Loop over all levels
-			for (int lev = 0; lev <= finest_lev; ++lev) {
-				// Create a buffer multifab with ghost zones for this level
-				const int nGrow = 1; // need 1 ghost cell for CIC deposition
-				amrex::MultiFab buffer_rhs(rhs[lev]->boxArray(), rhs[lev]->DistributionMap(), 1, nGrow);
-				buffer_rhs.setVal(0.0);
+				// Loop over all levels
+				for (int lev = 0; lev <= finest_lev; ++lev) {
+					// Create a buffer multifab with ghost zones for this level
+					const int nGrow = 1; // need 1 ghost cell for CIC deposition
+					amrex::MultiFab buffer_rhs(rhs[lev]->boxArray(), rhs[lev]->DistributionMap(), 1, nGrow);
+					buffer_rhs.setVal(0.0);
 
-				const auto &geom = container_->Geom(lev);
-				const auto plo = geom.ProbLoArray();
-				const auto dxi = geom.InvCellSizeArray();
-				const auto dx = geom.CellSizeArray();
+					const auto &geom = container_->Geom(lev);
+					const auto plo = geom.ProbLoArray();
+					const auto dxi = geom.InvCellSizeArray();
+					const auto dx = geom.CellSizeArray();
 
-				// Calculate cell volume
-				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+					// Calculate cell volume
+					const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-				// Loop over multifabs using ParIterType
-				for (amrex::MFIter mfi(buffer_rhs); mfi.isValid(); ++mfi) {
-					const auto &ptile = container_->ParticlesAt(lev, mfi);
-					const auto np = ptile.numParticles();
+					// Loop over multifabs using ParIterType
+					for (amrex::MFIter mfi(buffer_rhs); mfi.isValid(); ++mfi) {
+						const auto &ptile = container_->ParticlesAt(lev, mfi);
+						const auto np = ptile.numParticles();
 
-					if (np > 0) {
-						auto p_tile_data = ptile.getConstParticleTileData();
-						auto buffer_arr = buffer_rhs.array(mfi);
+						if (np > 0) {
+							auto p_tile_data = ptile.getConstParticleTileData();
+							auto buffer_arr = buffer_rhs.array(mfi);
 
-						// Get the grown box (including ghost cells)
-						amrex::Box grown_box = mfi.growntilebox(nGrow);
+							// Get the grown box (including ghost cells)
+							amrex::Box grown_box = mfi.growntilebox(nGrow);
 
-						// Capture mass index to avoid this pointer in device lambda
-						const int mass_idx = this->getMassIndex();
+							// Capture mass index to avoid this pointer in device lambda
+							const int mass_idx = this->getMassIndex();
 
-						// Loop over cells using amrex::ParallelFor, including ghost cells
-						amrex::ParallelFor(grown_box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-							// Calculate cell center coordinates
-							const amrex::Real cell_x = plo[0] + (i + 0.5) * dx[0];
-							const amrex::Real cell_y = plo[1] + (j + 0.5) * dx[1];
-							const amrex::Real cell_z = plo[2] + (k + 0.5) * dx[2];
+							// Loop over cells using amrex::ParallelFor, including ghost cells
+							amrex::ParallelFor(grown_box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+								// Calculate cell center coordinates
+								const amrex::Real cell_x = plo[0] + (i + 0.5) * dx[0];
+								const amrex::Real cell_y = plo[1] + (j + 0.5) * dx[1];
+								const amrex::Real cell_z = plo[2] + (k + 0.5) * dx[2];
 
-							// Initialize Kahan summation variables for this cell
-							// Kahan summation compensates for floating-point rounding errors
-							// ensuring reproducible results regardless of summation order
-							amrex::Real sum = 0.0;
-							amrex::Real compensation = 0.0; // compensation for lost low-order bits
+								// Initialize Kahan summation variables for this cell
+								// Kahan summation compensates for floating-point rounding errors
+								// ensuring reproducible results regardless of summation order
+								amrex::Real sum = 0.0;
+								amrex::Real compensation = 0.0; // compensation for lost low-order bits
 
-							// Use plain for loop to loop over all particles in this tile
-							for (amrex::Long pidx = 0; pidx < np; ++pidx) {
-								auto p = amrex::make_particle<typename decltype(p_tile_data)::ParticleType::ConstType>{}(
-								    p_tile_data, pidx);
+								// Use plain for loop to loop over all particles in this tile
+								for (amrex::Long pidx = 0; pidx < np; ++pidx) {
+									auto p =
+									    amrex::make_particle<typename decltype(p_tile_data)::ParticleType::ConstType>{}(
+										p_tile_data, pidx);
 
-								const amrex::Real pos_x = p.pos(0);
-								const amrex::Real pos_y = p.pos(1);
-								const amrex::Real pos_z = p.pos(2);
+									const amrex::Real pos_x = p.pos(0);
+									const amrex::Real pos_y = p.pos(1);
+									const amrex::Real pos_z = p.pos(2);
 
-								// Calculate normalized distances from particle to cell center
-								const amrex::Real rel_x = std::abs(pos_x - cell_x) / dx[0];
-								const amrex::Real rel_y = std::abs(pos_y - cell_y) / dx[1];
-								const amrex::Real rel_z = std::abs(pos_z - cell_z) / dx[2];
+									// Calculate normalized distances from particle to cell center
+									const amrex::Real rel_x = std::abs(pos_x - cell_x) / dx[0];
+									const amrex::Real rel_y = std::abs(pos_y - cell_y) / dx[1];
+									const amrex::Real rel_z = std::abs(pos_z - cell_z) / dx[2];
 
-								// Check if particle is within 1 dx distance from cell center
-								if (rel_x < 1.0 && rel_y < 1.0 && rel_z < 1.0) {
-									// Calculate CIC weight: (1-|x|)(1-|y|)(1-|z|)
-									const amrex::Real weight = (1.0 - rel_x) * (1.0 - rel_y) * (1.0 - rel_z);
+									// Check if particle is within 1 dx distance from cell center
+									if (rel_x < 1.0 && rel_y < 1.0 && rel_z < 1.0) {
+										// Calculate CIC weight: (1-|x|)(1-|y|)(1-|z|)
+										const amrex::Real weight = (1.0 - rel_x) * (1.0 - rel_y) * (1.0 - rel_z);
 
-									// Calculate weighted mass contribution
-									const amrex::Real particle_mass = p.rdata(mass_idx);
-									const amrex::Real mass_contribution =
-									    4.0 * M_PI * Gconst * particle_mass * weight / cell_volume;
+										// Calculate weighted mass contribution
+										const amrex::Real particle_mass = p.rdata(mass_idx);
+										const amrex::Real mass_contribution =
+										    4.0 * M_PI * Gconst * particle_mass * weight / cell_volume;
 
-									// Kahan summation algorithm for compensated addition
-									const amrex::Real y = mass_contribution - compensation;
-									const amrex::Real t = sum + y;
-									compensation = (t - sum) - y;
-									sum = t;
+										// Kahan summation algorithm for compensated addition
+										const amrex::Real y = mass_contribution - compensation;
+										const amrex::Real t = sum + y;
+										compensation = (t - sum) - y;
+										sum = t;
+									}
 								}
-							}
 
-							// buffer_arr(i, j, k, 0) = sum;
+								// buffer_arr(i, j, k, 0) = sum;
 
-							// Store the rounded sum in the buffer
-							// For double precision (52-bit significand), to keep 11 decimal digits (~37 bits),
-							// we need to remove ~15 bits from the significand
-							constexpr int digit_to_remove = 15;
-							constexpr auto factor =
-							    static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^digit_to_remove + 1
-							const auto c = factor * sum;
-							buffer_arr(i, j, k, 0) = c - (c - sum);
-						});
+								// Store the rounded sum in the buffer
+								// For double precision (52-bit significand), to keep 11 decimal digits (~37 bits),
+								// we need to remove ~15 bits from the significand
+								constexpr int digit_to_remove = 15;
+								constexpr auto factor =
+								    static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^digit_to_remove + 1
+								const auto c = factor * sum;
+								buffer_arr(i, j, k, 0) = c - (c - sum);
+							});
+						}
 					}
+
+					// // For debugging, keep this commented-out code momentarily
+					// const int plt_interval = 1;
+					// const int lev_i = 0;
+					// std::string debug_phi_lev = "debug_buffer_rhs_before_sum_lev" + std::to_string(lev_i) + "_";
+					// std::string plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
+					// WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
+
+					// Sum boundary cell values to real cells
+					buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
+
+					// // For debugging, keep this commented-out code momentarily
+					// debug_phi_lev = "debug_buffer_rhs_after_sum_lev" + std::to_string(lev_i) + "_";
+					// plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
+					// WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
+
+					// Add buffer_rhs to rhs
+					amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
 				}
-
-				// // For debugging, keep this commented-out code momentarily
-				// const int plt_interval = 1;
-				// const int lev_i = 0;
-				// std::string debug_phi_lev = "debug_buffer_rhs_before_sum_lev" + std::to_string(lev_i) + "_";
-				// std::string plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
-				// WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
-
-				// Sum boundary cell values to real cells
-				buffer_rhs.SumBoundary(container_->Geom(lev).periodicity());
-
-				// // For debugging, keep this commented-out code momentarily
-				// debug_phi_lev = "debug_buffer_rhs_after_sum_lev" + std::to_string(lev_i) + "_";
-				// plotfile_name1 = amrex::Concatenate(debug_phi_lev, 0, 5);
-				// WriteSingleLevelPlotfile(plotfile_name1, buffer_rhs, {"buffer_rhs"}, container_->Geom(lev_i), -1.0, 0 + 1);
-
-				// Add buffer_rhs to rhs
-				amrex::MultiFab::Add(*rhs[lev], buffer_rhs, 0, 0, 1, nGrow);
+			} else {
+				// Original fast version: Uses atomic operations (non-deterministic on GPU)
+				// zero_out_input is false because we want to accumulate mass
+				// vol_weight is false because MassDeposition does the volume weighting
+				amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
 			}
-		} else {
-			// Original fast version: Uses atomic operations (non-deterministic on GPU)
-			// zero_out_input is false because we want to accumulate mass
-			// vol_weight is false because MassDeposition does the volume weighting
-			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
-		}
 		}
 	}
 
