@@ -304,7 +304,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-      private:
 	// Helper function for deterministic mass deposition on a single level
 	void deterministicDepositSingleLevel(amrex::MultiFab &buffer_rhs, int lev, amrex::Real Gconst) const
 	{
@@ -376,7 +375,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		buffer_rhs.SumBoundary(geom.periodicity());
 	}
 
-      public:
 	void driftParticles(int lev_min, int lev_max, amrex::Real dt) const override
 	{
 		if (container_ != nullptr) {
