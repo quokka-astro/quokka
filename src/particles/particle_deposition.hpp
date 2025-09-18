@@ -3,7 +3,6 @@
 
 #include <algorithm>
 
-#include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
@@ -13,6 +12,7 @@
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "particles/particle_utils.hpp"
 
 namespace quokka
 {
@@ -567,6 +567,9 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 
 	// Step 2: Sum boundary values
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
+
+	// Apply roundoff to state_buffer
+	ParticleUtils::roundoffMultiFab(state_buffer);
 
 	// Step 3: Add the buffer to the state
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d, p_max_velocity);
