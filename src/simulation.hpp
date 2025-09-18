@@ -298,6 +298,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
+	void roundoffMultiFab(amrex::MultiFab &mf);
 	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
@@ -1321,6 +1322,45 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::roundoffMultiFab(amrex::MultiFab &mf)
+{
+	// Apply roundoff algorithm to reduce floating-point precision errors by removing
+	// the least significant bits from IEEE 754 double precision numbers.
+	//
+	// IEEE 754 double precision format:
+	// - 1 sign bit + 11 exponent bits + 52 mantissa bits = 64 total bits
+	// - The mantissa has an implicit leading 1, giving 53 bits of precision
+	//
+	// By removing 15 bits from the significand (mantissa), we effectively:
+	// - Reduce precision from 53 bits to 38 bits
+	// - In base 10: log10(2^53) ≈ 15.95 decimal digits → log10(2^38) ≈ 11.44 decimal digits
+	// - This removes approximately 4.5 decimal digits of precision
+	// - Equivalent to rounding to ~11-12 significant decimal digits instead of ~16
+	//
+	// The algorithm works by:
+	// 1. Multiplying by factor = 2^15 + 1 = 32769 to shift significant bits
+	// 2. The multiplication and subsequent operations naturally truncate lower-order bits
+	// 3. The final subtraction c - (c - sum) recovers the rounded value
+	constexpr unsigned int digit_to_remove = 15;					 // Remove 15 bits from mantissa
+	constexpr auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^15 + 1 = 32769
+
+	// Get array accessor for all patches at once
+	auto arr = mf.arrays();
+	const int ncomp = mf.nComp();
+
+	// Apply roundoff algorithm to every grid point and component in parallel
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// Process all components at this grid point
+		for (int n = 0; n < ncomp; ++n) {
+			const auto sum = arr[bx](i, j, k, n);
+			const auto c = factor * sum;
+			// The key roundoff step: c - (c - sum) removes the least significant bits
+			// This is mathematically equivalent to sum, but with reduced floating-point precision
+			arr[bx](i, j, k, n) = c - (c - sum);
+		}
+	});
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
@@ -1356,7 +1396,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// deposit particle mass from all particles that have mass into rhs by accumulation
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
 			if (particleRegister_.HasMassiveParticles()) {
-				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs), finest_level, Gconst_);
+				// create temporary buffer for mass deposition
+				amrex::Vector<amrex::MultiFab> rhs_buffer(finest_level + 1);
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					rhs_buffer[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
+					rhs_buffer[lev].setVal(0);
+				}
+
+				// deposit mass into temporary buffer
+				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_);
+
+				// apply roundoff to buffer before adding to rhs
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					roundoffMultiFab(rhs_buffer[lev]);
+				}
+
+				// add buffer to rhs
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					amrex::MultiFab::Add(rhs[lev], rhs_buffer[lev], 0, 0, ncomp, 0);
+				}
 			}
 		}
 
