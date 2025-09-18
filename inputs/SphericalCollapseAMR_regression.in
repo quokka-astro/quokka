@@ -22,7 +22,7 @@ amr.grid_eff        = 1.0
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.25
-max_timesteps = 1
+max_timesteps = 1000
 stop_time = 0.05
 
 derived_vars = gpot
