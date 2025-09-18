@@ -50,11 +50,10 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgType emf_avg_type);
 
 	static void ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder);
-	
-	static void EMFSolver_BalsaraSpicer(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-                    amrex::Box const& box_ec);
+				       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+				       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder);
+
+	static void EMFSolver_BalsaraSpicer(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec);
 
 	static void EMFSolver_Balsara(amrex::MultiFab &ec_mf_emf, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::MultiFab const &mf_B0_m,
 				      amrex::MultiFab const &mf_B0_p, amrex::MultiFab const &mf_B1_m, amrex::MultiFab const &mf_B1_p,
@@ -589,8 +588,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	const auto &dm = cc_mf_cVars.DistributionMap();
 	constexpr int nstreams = 1; // only run on 1 GPU stream to avoid race conditions
 	amrex::MultiFab cc_mf_EMF(ba, dm, 3, nghost_cc);
-	cc_mf_EMF.setVal(0.0, 0, 3, nghost_cc); //initialize to zero everywhere including ghost zones
-
+	cc_mf_EMF.setVal(0.0, 0, 3, nghost_cc); // initialize to zero everywhere including ghost zones
 
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) {
 		const amrex::Box &box_cc = mfi.validbox();
@@ -649,7 +647,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	// we also need to get the magnetic field from the face to cell edge to use the Balsara method
 	// otherwise, if other methods are desired, LD04 or BalsaraSpicer just need the reconstructed emf
 
-	//focus first on taking EMF to cell edge:
+	// focus first on taking EMF to cell edge:
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) { // keep
 		const amrex::Box &box_cc = mfi.validbox();
 
@@ -664,8 +662,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 			// indexing: field[4: quadrant around edge]
 			const auto &E2_array = ec_mf_emf_components[iedge][mfi].array();
 			std::array<amrex::FArrayBox, 2> ec_fabs_EMF_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
-											amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
-			
+									      amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
+
 			ec_fabs_EMF_ieside[0].setVal<amrex::RunOn::Device>(0.0);
 			ec_fabs_EMF_ieside[1].setVal<amrex::RunOn::Device>(0.0);
 			std::array<amrex::FArrayBox, 4> ec_fabs_EMF_q;
@@ -674,7 +672,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				ec_fabs_EMF_q[iquad] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 				ec_fabs_EMF_q[iquad].setVal<amrex::RunOn::Device>(0.0);
 			}
-
 
 			// magnetic field components at the cell-edge
 			// extract wavespeeds
@@ -704,8 +701,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// we expand the domain of cc-data, so that when we reconstruct cc->fc (we include enough ghost cells in the fc->ec
 				// dimension), we get as an output (from reconstructing fc->ec) data only in the valid domain
-				const amrex::Box box_cc_EMF_edge = amrex::grow(
-					box_cc, (nghost_cc - 1) * vec_fc2ec); // note, the reconstruct function will uniformly grow the bounds by 1
+				const amrex::Box box_cc_EMF_edge =
+				    amrex::grow(box_cc, (nghost_cc - 1) * vec_fc2ec); // note, the reconstruct function will uniformly grow the bounds by 1
 				const amrex::Box box_fc_EMF = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + 1);
 
 				// extrapolate both required cell-centered EMF to the cell-edge
@@ -713,14 +710,14 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				// create temporary FArrayBox for storing the face-centered EMF reconstructed from the cell-center
 				// indexing: field[2: i-side of face]
 				std::array<amrex::FArrayBox, 2> fc_fabs_EMF_ifside = {amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena()),
-												amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
+										      amrex::FArrayBox(box_fc_EMF, 1, amrex::The_Async_Arena())};
 				// reset values in temporary FArrayBox
 				fc_fabs_EMF_ifside[0].setVal<amrex::RunOn::Device>(0.0);
 				fc_fabs_EMF_ifside[1].setVal<amrex::RunOn::Device>(0.0);
 
 				// extrapolate cell-centered velocity components to the cell-face
 				MHDSystem<problem_t>::ReconstructTo(dir2face, cc_mf_EMF[mfi].array(iedge), fc_fabs_EMF_ifside[0].array(),
-									fc_fabs_EMF_ifside[1].array(), box_cc_EMF_edge, reconstructionOrder);
+								    fc_fabs_EMF_ifside[1].array(), box_cc_EMF_edge, reconstructionOrder);
 
 				// extrapolate face-centered velocity components to the cell-edge
 				for (int iface = 0; iface < 2; ++iface) {
@@ -759,34 +756,33 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 			for (int iquad = 0; iquad < 4; ++iquad) {
 				ec_fabs_EMF_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
-			}		
+			}
 			MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_array, ec_fabs_EMF_q, box_ec);
-		}		
-	}	
+		}
+	}
 }
 
 // simplest emf solver: just average the quadrants
 template <typename problem_t>
-void MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(amrex::Array4<amrex::Real> E2_ave,
-                                                   std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-                                                   amrex::Box const& box_ec)
+void MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
+						   amrex::Box const &box_ec)
 {
-    const BL_PROFILE("MHDSystem::ApplyLDEMFsolver()");
-    
-    // Get const array views from each FArrayBox
-    const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
-    const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
-    const auto &E2_q2 = ec_fabs_EMF_q[2].const_array();
-    const auto &E2_q3 = ec_fabs_EMF_q[3].const_array();
-    
-    amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        const double E2_q0_ = E2_q0(i, j, k);
-        const double E2_q1_ = E2_q1(i, j, k);
-        const double E2_q2_ = E2_q2(i, j, k);
-        const double E2_q3_ = E2_q3(i, j, k);
-        // Balsara & Spicer averaging scheme:
-        E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
-    });
+	const BL_PROFILE("MHDSystem::ApplyLDEMFsolver()");
+
+	// Get const array views from each FArrayBox
+	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
+	const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
+	const auto &E2_q2 = ec_fabs_EMF_q[2].const_array();
+	const auto &E2_q3 = ec_fabs_EMF_q[3].const_array();
+
+	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		const double E2_q0_ = E2_q0(i, j, k);
+		const double E2_q1_ = E2_q1(i, j, k);
+		const double E2_q2_ = E2_q2(i, j, k);
+		const double E2_q3_ = E2_q3(i, j, k);
+		// Balsara & Spicer averaging scheme:
+		E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
+	});
 }
 
 // to pass into EMF solvers: need emf quadrants, and fspds, and if Balsara2025, need B on either side of edge
