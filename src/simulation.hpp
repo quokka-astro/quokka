@@ -282,7 +282,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 			       amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData, amrex::Vector<amrex::Real> &fineTime,
-			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, FillPatchType fptype,
+			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, quokka::direction dir, FillPatchType fptype,
 			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
 
 	static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
@@ -319,8 +319,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// boundary condition
 	AMREX_GPU_DEVICE static void setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
 									int numcomp, amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr,
-									int bcomp,
-									int orig_comp); // template specialized by problem generator
+									int bcomp, int orig_comp,
+									quokka::direction dir); // template specialized by problem generator
 
 	// compute volume integrals
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
@@ -364,7 +364,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
 	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
-							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom);
+							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, quokka::direction dir);
 	void loadMultiFabData(const RefinementContext &context);
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
@@ -2028,11 +2028,20 @@ template <typename problem_t> struct setBoundaryFunctor {
 };
 
 template <typename problem_t> struct setBoundaryFunctorFaceVar {
+	quokka::direction dir_;
+
+	// Constructor to store the direction
+	AMREX_GPU_HOST_DEVICE explicit setBoundaryFunctorFaceVar(quokka::direction dir) : dir_(dir) {}
+
+	// Default constructor (if needed for compatibility)
+	AMREX_GPU_HOST_DEVICE setBoundaryFunctorFaceVar() : dir_(quokka::direction::x) {}
+
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
 					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
 					 const int &orig_comp) const
 	{
-		AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+		// Now pass the stored direction to the function
+		AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp, dir_);
 	}
 };
 
@@ -2053,7 +2062,7 @@ template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
 							     amrex::GeometryData const &geom, const amrex::Real time, const amrex::BCRec *bcr, int bcomp,
-							     int orig_comp)
+							     int orig_comp, quokka::direction dir)
 {
 	// user should implement if needed using template specialization
 	// (This is only called when amrex::BCType::ext_dir is set for a given
@@ -2088,9 +2097,9 @@ void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Multi
 	}
 
 	if (cen == quokka::centering::cc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, fptype, InterpHookNone, InterpHookNone);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, dir, fptype, InterpHookNone, InterpHookNone);
 	} else if (cen == quokka::centering::fc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, fptype, InterpHookNone, InterpHookNone);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, dir, fptype, InterpHookNone, InterpHookNone);
 	}
 }
 
@@ -2236,7 +2245,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 			amrex::ignore_unused(i);
 		}
 
-		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, fptype, pre_interp,
+		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, dir, fptype, pre_interp,
 				  post_interp);
 	} else { // level 0
 		// fill internal and periodic boundaries, ignoring corners (cross=true)
@@ -2254,9 +2263,9 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 				// fill physical boundaries
 				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
 			} else if (cen == quokka::centering::fc) {
-				// create face-centered boundary functor
+				// create face-centered boundary functor using the passed direction
 				amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor =
-				    amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>{setBoundaryFunctorFaceVar<problem_t>{}};
+				    amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>{setBoundaryFunctorFaceVar<problem_t>{dir}};
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
 																	 boundaryFunctor);
 				// fill physical boundaries
@@ -2281,7 +2290,7 @@ template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 						 amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData,
 						 amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
-						 quokka::centering &cen, FillPatchType fptype, PreInterpHook const &pre_interp,
+						 quokka::centering &cen, quokka::direction dir, FillPatchType fptype, PreInterpHook const &pre_interp,
 						 PostInterpHook const &post_interp)
 {
 	BL_PROFILE("AMRSimulation::FillPatchWithData()"); // NOLINT(misc-const-correctness)
@@ -2300,7 +2309,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor_cc(setBoundaryFunctor<problem_t>{});
 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor_cc(geom[lev], BCs, boundaryFunctor_cc);
 
-	amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor_fc(setBoundaryFunctorFaceVar<problem_t>{});
+	amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor_fc(setBoundaryFunctorFaceVar<problem_t>{dir});
 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> finePhysicalBoundaryFunctor_fc(geom[lev], BCs, boundaryFunctor_fc);
 
 	if (lev == 0) { // NOTE: used by RemakeLevel
@@ -3385,7 +3394,7 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 template <typename problem_t>
 void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source,
 									  const RefinementContext &context, const amrex::Geometry &coarse_geom,
-									  const amrex::Geometry &fine_geom)
+									  const amrex::Geometry &fine_geom, quokka::direction dir)
 {
 	if (!context.needs_refinement()) {
 		// if not refining, ParallelCopy
@@ -3394,7 +3403,7 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 		// if refining, InterpFromCoarseLevel
 		amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
 		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
-		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{});
+		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
 		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, BCs_fc_, boundaryFunctor);
 		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_fc_, boundaryFunctor);
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
@@ -3424,7 +3433,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				amrex::MultiFab tmp_fc;
 				amrex::VisMF::Read(
 				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev]);
+#if AMREX_SPACEDIM == 1
+				constexpr std::array<quokka::direction, 1> directions = {quokka::direction::x};
+#elif AMREX_SPACEDIM == 2
+				constexpr std::array<quokka::direction, 2> directions = {quokka::direction::x, quokka::direction::y};
+#elif AMREX_SPACEDIM == 3
+				constexpr std::array<quokka::direction, 3> directions = {quokka::direction::x, quokka::direction::y, quokka::direction::z};
+#endif
+				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev], directions[idim]);
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 			}
 		}
