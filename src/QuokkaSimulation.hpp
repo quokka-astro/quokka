@@ -328,8 +328,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	template <FluxDir DIR>
 	void hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &x1Flux_mf,
 			       amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab &x1FSpds_mf,
-			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat,
-			       amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, int ng_reconstruct, int nvars);
+			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int ng_reconstruct, int nvars);
 
 	template <FluxDir DIR>
 	void hydroFOFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
@@ -1860,20 +1859,12 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	// for MHD we need to accommodate the higher order reconstruction we need to do in computeEMF
 	const int reconstructGhost = nghost_vel_ + 1;
 
-	// // we need two additional ghost cells in order to compute two ghost face velocities
-	const int flatteningGhost = reconstructGhost + 1;
-
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
 	amrex::MultiFab cc_bfield_perp_comps(ba, dm, 2, nghost_cc_);
-	std::array<amrex::MultiFab, 3> flatCoefs;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fast_mhd_wavespeeds;
-
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		flatCoefs[idim] = amrex::MultiFab(ba, dm, 1, flatteningGhost);
-	}
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
@@ -1887,20 +1878,12 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	// conserved to primitive variables
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
 
-	// compute flattening coefficients
-	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], flatteningGhost);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], flatteningGhost);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
-
 	// compute flux functions
 	AMREX_D_TERM(
-	    hydroFluxFunction<FluxDir::X1>(primVar, cc_bfield_perp_comps, flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, flatCoefs[0], flatCoefs[1],
-					   flatCoefs[2], reconstructGhost, nvars);
-	    , hydroFluxFunction<FluxDir::X2>(primVar, cc_bfield_perp_comps, flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, flatCoefs[0], flatCoefs[1],
-					     flatCoefs[2], reconstructGhost, nvars);
+	    hydroFluxFunction<FluxDir::X1>(primVar, cc_bfield_perp_comps, flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, reconstructGhost, nvars);
+	    , hydroFluxFunction<FluxDir::X2>(primVar, cc_bfield_perp_comps, flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, reconstructGhost, nvars);
 	    ,
-	    hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1],
-					   flatCoefs[2], reconstructGhost, nvars);)
+	    hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructGhost, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -1917,14 +1900,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev] + 1);
 		WriteSingleLevelPlotfile(plotfile_name, primVar, componentNames_cc_, geom[lev], 0.0, istep[lev] + 1);
 
-		// write flattening coefficients
-		std::string flatx_filename = CustomPlotFileName("debug_flattening_x", istep[lev] + 1);
-		std::string flaty_filename = CustomPlotFileName("debug_flattening_y", istep[lev] + 1);
-		std::string flatz_filename = CustomPlotFileName("debug_flattening_z", istep[lev] + 1);
-		amrex::Vector<std::string> flatCompNames{"chi"};
-		WriteSingleLevelPlotfile(flatx_filename, flatCoefs[0], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
-		WriteSingleLevelPlotfile(flaty_filename, flatCoefs[1], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
-		WriteSingleLevelPlotfile(flatz_filename, flatCoefs[2], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
+		// (flattening coefficients are now temporary FABs computed per-tile)
 
 		// Note: interface states are no longer stored as MultiFabs per-face.
 	}
@@ -1980,8 +1956,7 @@ template <typename problem_t>
 template <FluxDir DIR>
 void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &x1Flux_mf,
 						    amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab &x1FSpds_mf,
-						    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat,
-						    amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
+						    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, const int ng_reconstruct, const int nvars)
 {
 	// Precompute perpendicular components of B at cell centers when MHD enabled
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2002,9 +1977,219 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 		const amrex::Box ifaceRecon = amrex::surroundingNodes(cellRecon, dir);
 
 		auto const q = primVar_mf.const_array(mfi);
-		auto const chi1 = x1Flat.const_array(mfi);
-		auto const chi2 = x2Flat.const_array(mfi);
-		auto const chi3 = x3Flat.const_array(mfi);
+
+		// Compute flattening coefficients into temporary FABs for this tile
+		const int flatteningGhost = ng_reconstruct + 1;
+		const amrex::Box chiBox = amrex::grow(cellValid, flatteningGhost);
+		amrex::FArrayBox chi1Fab(chiBox, 1, amrex::The_Async_Arena());
+#if (AMREX_SPACEDIM >= 2)
+		amrex::FArrayBox chi2Fab(chiBox, 1, amrex::The_Async_Arena());
+#endif
+#if (AMREX_SPACEDIM == 3)
+		amrex::FArrayBox chi3Fab(chiBox, 1, amrex::The_Async_Arena());
+#endif
+
+		// X1 dir
+		{
+			auto chi = chi1Fab.array();
+			amrex::ParallelFor(chiBox, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept {
+				quokka::Array4View<const amrex::Real, FluxDir::X1> prim(q);
+				quokka::Array4View<amrex::Real, FluxDir::X1> xchi(chi);
+				auto [i, j, k] = quokka::reorderMultiIndex<FluxDir::X1>(i_in, j_in, k_in);
+
+				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real P      = prim(i    , j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::pressure_index);
+
+				if constexpr (HydroSystem<problem_t>::reconstruct_eint) {
+					auto ms_p2 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 2, j, k);
+					Pplus2 = quokka::EOS<problem_t>::ComputePressure(prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2, ms_p2);
+					auto ms_p1 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 1, j, k);
+					Pplus1 = quokka::EOS<problem_t>::ComputePressure(prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1, ms_p1);
+					auto ms    = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+					P      = quokka::EOS<problem_t>::ComputePressure(prim(i    , j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * P     , ms);
+					auto ms_m1 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 1, j, k);
+					Pminus1 = quokka::EOS<problem_t>::ComputePressure(prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
+					auto ms_m2 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 2, j, k);
+					Pminus2 = quokka::EOS<problem_t>::ComputePressure(prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
+				}
+
+				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+					const amrex::Real cs_sq = HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+					Pplus2  = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus1  = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					P       = prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+				}
+
+				const double beta_denom = std::abs(Pplus2 - Pminus2);
+				const double beta = (beta_denom != 0) ? (std::abs(Pplus1 - Pminus1) / beta_denom) : 0.0;
+				constexpr double beta_max = 0.85;
+				constexpr double beta_min = 0.75;
+				constexpr double Zmax = 0.75;
+				constexpr double Zmin = 0.25;
+				const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
+
+				auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+				double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
+					     prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
+				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+				}
+				const double Z = std::abs(Pplus1 - Pminus1) / K_S;
+
+				int velocity_index = HydroSystem<problem_t>::x1Velocity_index;
+				double chi_val = 1.0;
+				if (prim(i + 1, j, k, velocity_index) < prim(i - 1, j, k, velocity_index)) {
+					chi_val = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
+				}
+				xchi(i, j, k) = chi_val;
+			});
+		}
+
+#if (AMREX_SPACEDIM >= 2)
+		// X2 dir
+		{
+			auto chi = chi2Fab.array();
+			amrex::ParallelFor(chiBox, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept {
+				quokka::Array4View<const amrex::Real, FluxDir::X2> prim(q);
+				quokka::Array4View<amrex::Real, FluxDir::X2> xchi(chi);
+				auto [i, j, k] = quokka::reorderMultiIndex<FluxDir::X2>(i_in, j_in, k_in);
+
+				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real P      = prim(i    , j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::pressure_index);
+
+				if constexpr (HydroSystem<problem_t>::reconstruct_eint) {
+					auto ms_p2 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 2, j, k);
+					Pplus2 = quokka::EOS<problem_t>::ComputePressure(prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2, ms_p2);
+					auto ms_p1 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 1, j, k);
+					Pplus1 = quokka::EOS<problem_t>::ComputePressure(prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1, ms_p1);
+					auto ms    = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+					P      = quokka::EOS<problem_t>::ComputePressure(prim(i    , j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * P     , ms);
+					auto ms_m1 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 1, j, k);
+					Pminus1 = quokka::EOS<problem_t>::ComputePressure(prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
+					auto ms_m2 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 2, j, k);
+					Pminus2 = quokka::EOS<problem_t>::ComputePressure(prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
+				}
+
+				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+					const amrex::Real cs_sq = HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+					Pplus2  = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus1  = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					P       = prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+				}
+
+				const double beta_denom = std::abs(Pplus2 - Pminus2);
+				const double beta = (beta_denom != 0) ? (std::abs(Pplus1 - Pminus1) / beta_denom) : 0.0;
+				constexpr double beta_max = 0.85;
+				constexpr double beta_min = 0.75;
+				constexpr double Zmax = 0.75;
+				constexpr double Zmin = 0.25;
+				const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
+
+				auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+				double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
+					     prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
+				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+				}
+				const double Z = std::abs(Pplus1 - Pminus1) / K_S;
+
+				int velocity_index = HydroSystem<problem_t>::x2Velocity_index;
+				double chi_val = 1.0;
+				if (prim(i + 1, j, k, velocity_index) < prim(i - 1, j, k, velocity_index)) {
+					chi_val = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
+				}
+				xchi(i, j, k) = chi_val;
+			});
+		}
+#endif
+
+#if (AMREX_SPACEDIM == 3)
+		// X3 dir
+		{
+			auto chi = chi3Fab.array();
+			amrex::ParallelFor(chiBox, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept {
+				quokka::Array4View<const amrex::Real, FluxDir::X3> prim(q);
+				quokka::Array4View<amrex::Real, FluxDir::X3> xchi(chi);
+				auto [i, j, k] = quokka::reorderMultiIndex<FluxDir::X3>(i_in, j_in, k_in);
+
+				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real P      = prim(i    , j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::pressure_index);
+
+				if constexpr (HydroSystem<problem_t>::reconstruct_eint) {
+					auto ms_p2 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 2, j, k);
+					Pplus2 = quokka::EOS<problem_t>::ComputePressure(prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2, ms_p2);
+					auto ms_p1 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 1, j, k);
+					Pplus1 = quokka::EOS<problem_t>::ComputePressure(prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1, ms_p1);
+					auto ms    = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+					P      = quokka::EOS<problem_t>::ComputePressure(prim(i    , j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * P     , ms);
+					auto ms_m1 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 1, j, k);
+					Pminus1 = quokka::EOS<problem_t>::ComputePressure(prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
+					auto ms_m2 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 2, j, k);
+					Pminus2 = quokka::EOS<problem_t>::ComputePressure(prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
+									 prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
+				}
+
+				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+					const amrex::Real cs_sq = HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+					Pplus2  = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus1  = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					P       = prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+				}
+
+				const double beta_denom = std::abs(Pplus2 - Pminus2);
+				const double beta = (beta_denom != 0) ? (std::abs(Pplus1 - Pminus1) / beta_denom) : 0.0;
+				constexpr double beta_max = 0.85;
+				constexpr double beta_min = 0.75;
+				constexpr double Zmax = 0.75;
+				constexpr double Zmin = 0.25;
+				const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
+
+				auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+				double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
+					     prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
+				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+				}
+				const double Z = std::abs(Pplus1 - Pminus1) / K_S;
+
+				int velocity_index = HydroSystem<problem_t>::x3Velocity_index;
+				double chi_val = 1.0;
+				if (prim(i + 1, j, k, velocity_index) < prim(i - 1, j, k, velocity_index)) {
+					chi_val = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
+				}
+				xchi(i, j, k) = chi_val;
+			});
+		}
+#endif
 		auto flux = x1Flux_mf.array(mfi);
 		auto faceVel = x1FaceVel_mf.array(mfi);
 		[[maybe_unused]] auto const fc_cons = consVar_fc[static_cast<int>(DIR)].const_array(mfi);
@@ -2049,6 +2234,13 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 			quokka::Array4View<const amrex::Real, DIR> qv(q);
 			quokka::Array4View<amrex::Real, DIR> L(Lstate.array());
 			quokka::Array4View<amrex::Real, DIR> R(Rstate.array());
+			auto const chi1 = chi1Fab.const_array();
+#if (AMREX_SPACEDIM >= 2)
+			auto const chi2 = chi2Fab.const_array();
+#endif
+#if (AMREX_SPACEDIM == 3)
+			auto const chi3 = chi3Fab.const_array();
+#endif
 			amrex::ParallelFor(cellRecon, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 				// compute chi as min of neighbors in all directions
 				double const chi_ijk = std::min({chi1(i_in - 1, j_in, k_in), chi1(i_in, j_in, k_in), chi1(i_in + 1, j_in, k_in)
