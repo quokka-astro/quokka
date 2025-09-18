@@ -298,7 +298,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-	void roundoffMultiFab(amrex::MultiFab &mf);
 	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
@@ -1322,45 +1321,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::roundoffMultiFab(amrex::MultiFab &mf)
-{
-	// Apply roundoff algorithm to reduce floating-point precision errors by removing
-	// the least significant bits from IEEE 754 double precision numbers.
-	//
-	// IEEE 754 double precision format:
-	// - 1 sign bit + 11 exponent bits + 52 mantissa bits = 64 total bits
-	// - The mantissa has an implicit leading 1, giving 53 bits of precision
-	//
-	// By removing 15 bits from the significand (mantissa), we effectively:
-	// - Reduce precision from 53 bits to 38 bits
-	// - In base 10: log10(2^53) ≈ 15.95 decimal digits → log10(2^38) ≈ 11.44 decimal digits
-	// - This removes approximately 4.5 decimal digits of precision
-	// - Equivalent to rounding to ~11-12 significant decimal digits instead of ~16
-	//
-	// The algorithm works by:
-	// 1. Multiplying by factor = 2^15 + 1 = 32769 to shift significant bits
-	// 2. The multiplication and subsequent operations naturally truncate lower-order bits
-	// 3. The final subtraction c - (c - sum) recovers the rounded value
-	constexpr unsigned int digit_to_remove = 15;					 // Remove 15 bits from mantissa
-	constexpr auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^15 + 1 = 32769
-
-	// Get array accessor for all patches at once
-	auto arr = mf.arrays();
-	const int ncomp = mf.nComp();
-
-	// Apply roundoff algorithm to every grid point and component in parallel
-	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// Process all components at this grid point
-		for (int n = 0; n < ncomp; ++n) {
-			const auto sum = arr[bx](i, j, k, n);
-			const auto c = factor * sum;
-			// The key roundoff step: c - (c - sum) removes the least significant bits
-			// This is mathematically equivalent to sum, but with reduced floating-point precision
-			arr[bx](i, j, k, n) = c - (c - sum);
-		}
-	});
-}
-
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
@@ -1408,7 +1368,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 				// apply roundoff to buffer before adding to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
-					roundoffMultiFab(rhs_buffer[lev]);
+					quokka::ParticleUtils::roundoffMultiFab(rhs_buffer[lev]);
 				}
 
 				// add buffer to rhs
@@ -1691,7 +1651,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Apply roundoff to accretion_rate_at_level
-	roundoffMultiFab(accretion_rate_at_level);
+	quokka::ParticleUtils::roundoffMultiFab(accretion_rate_at_level);
 
 	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, geom[lev], lev, time, dt);
