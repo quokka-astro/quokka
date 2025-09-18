@@ -326,10 +326,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			  const amrex::Box &indexRange, int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 	template <FluxDir DIR>
-	void hydroFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
-			       amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel,
-			       amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat,
-			       amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, int ng_reconstruct_total, int nvars);
+	void hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &x1Flux_mf,
+			       amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab &x1FSpds_mf,
+			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat,
+			       amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, int ng_reconstruct, int nvars);
 
 	template <FluxDir DIR>
 	void hydroFOFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
@@ -1869,10 +1869,6 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	std::array<amrex::MultiFab, 3> flatCoefs;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState_bfield;
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState_bfield;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fast_mhd_wavespeeds;
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1881,10 +1877,6 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
-		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
-		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
-		leftState_bfield[idim] = amrex::MultiFab(ba_face, dm, 2, reconstructGhost);
-		rightState_bfield[idim] = amrex::MultiFab(ba_face, dm, 2, reconstructGhost);
 		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost - 1);
 		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, reconstructGhost - 1);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1902,13 +1894,13 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 
 	// compute flux functions
 	AMREX_D_TERM(
-	    hydroFluxFunction<FluxDir::X1>(primVar, cc_bfield_perp_comps, leftState[0], rightState[0], leftState_bfield[0], rightState_bfield[0], flux[0],
-					   facevel[0], fast_mhd_wavespeeds[0], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2], reconstructGhost, nvars);
-	    , hydroFluxFunction<FluxDir::X2>(primVar, cc_bfield_perp_comps, leftState[1], rightState[1], leftState_bfield[1], rightState_bfield[1], flux[1],
-					     facevel[1], fast_mhd_wavespeeds[1], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2], reconstructGhost, nvars);
+	    hydroFluxFunction<FluxDir::X1>(primVar, cc_bfield_perp_comps, flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, flatCoefs[0], flatCoefs[1],
+					   flatCoefs[2], reconstructGhost, nvars);
+	    , hydroFluxFunction<FluxDir::X2>(primVar, cc_bfield_perp_comps, flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, flatCoefs[0], flatCoefs[1],
+					     flatCoefs[2], reconstructGhost, nvars);
 	    ,
-	    hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2], rightState_bfield[2], flux[2],
-					   facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1], flatCoefs[2], reconstructGhost, nvars);)
+	    hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, flatCoefs[0], flatCoefs[1],
+					   flatCoefs[2], reconstructGhost, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -1934,24 +1926,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		WriteSingleLevelPlotfile(flaty_filename, flatCoefs[1], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
 		WriteSingleLevelPlotfile(flatz_filename, flatCoefs[2], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
 
-		// write L interface states
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			if (amrex::ParallelDescriptor::IOProcessor()) {
-				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
-			}
-			std::string const fullprefix =
-			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateL_") + quokka::face_dir_str[idim]);
-			amrex::VisMF::Write(leftState[idim], fullprefix);
-		}
-		// write R interface states
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			if (amrex::ParallelDescriptor::IOProcessor()) {
-				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
-			}
-			std::string const fullprefix =
-			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateR_") + quokka::face_dir_str[idim]);
-			amrex::VisMF::Write(rightState[idim], fullprefix);
-		}
+		// Note: interface states are no longer stored as MultiFabs per-face.
 	}
 
 	// return flux and face-centered velocities
@@ -2003,56 +1978,341 @@ AMREX_FORCE_INLINE void QuokkaSimulation<problem_t>::computeCCPerpBfieldComps(am
 
 template <typename problem_t>
 template <FluxDir DIR>
-void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState,
-						    amrex::MultiFab &rightState, amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield,
-						    amrex::MultiFab &flux, amrex::MultiFab &faceVel, amrex::MultiFab &x1FSpds,
+void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &x1Flux_mf,
+						    amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab &x1FSpds_mf,
 						    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, amrex::MultiFab const &x1Flat,
 						    amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
 {
+	// Precompute perpendicular components of B at cell centers when MHD enabled
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		QuokkaSimulation<problem_t>::template computeCCPerpBfieldComps<DIR>(cc_bfield_perp_comps_mf, consVar_fc);
 	}
 
-	if (reconstructionOrder_ == 5) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											   ng_reconstruct, 2);
-		}
-	} else if (reconstructionOrder_ == 3) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											ng_reconstruct, 2);
-		}
-	} else if (reconstructionOrder_ == 2) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(cc_bfield_perp_comps_mf, leftState_bfield,
-													      rightState_bfield, ng_reconstruct, 2);
-		}
-	} else if (reconstructionOrder_ == 1) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-											     ng_reconstruct, 2);
-		}
-	} else {
-		amrex::Abort("Invalid reconstruction order specified!");
-	}
+	for (amrex::MFIter mfi(primVar_mf); mfi.isValid(); ++mfi) {
+		const amrex::Box &cellValid = mfi.validbox();
+		// Reconstruction uses cell-centered data with at least one ghost layer
+		const amrex::Box cellRecon = amrex::grow(cellValid, 1);
+		// Interfaces for this direction
+		int dir = 0;
+		if constexpr (DIR == FluxDir::X1) dir = 0;
+		else if constexpr (DIR == FluxDir::X2) dir = 1;
+		else if constexpr (DIR == FluxDir::X3) dir = 2;
+		// Range of interfaces to compute fluxes/vels on, include nghost_vel_ ghosts
+		const amrex::Box faceRange = amrex::surroundingNodes(amrex::grow(cellValid, nghost_vel_), dir);
+		const amrex::Box ifaceRecon = amrex::surroundingNodes(cellRecon, dir);
 
-	// cell-centered kernel
-	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar_mf, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+		auto const q = primVar_mf.const_array(mfi);
+		auto const chi1 = x1Flat.const_array(mfi);
+		auto const chi2 = x2Flat.const_array(mfi);
+		auto const chi3 = x3Flat.const_array(mfi);
+		auto flux = x1Flux_mf.array(mfi);
+		auto faceVel = x1FaceVel_mf.array(mfi);
+		[[maybe_unused]] auto const fc_cons = consVar_fc[static_cast<int>(DIR)].const_array(mfi);
 
-	// interface-centered kernel
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											 rightState_bfield, primVar_mf, artificialViscosityK_, &x1FSpds,
-											 &consVar_fc[static_cast<int>(DIR)], nghost_vel_);
-	} else {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											 rightState_bfield, primVar_mf, artificialViscosityK_, nullptr, nullptr,
-											 nghost_vel_);
+		// Scratch FArrayBoxes for L/R states
+		amrex::FArrayBox Lstate(ifaceRecon, nvars, amrex::The_Async_Arena());
+		amrex::FArrayBox Rstate(ifaceRecon, nvars, amrex::The_Async_Arena());
+		[[maybe_unused]] amrex::FArrayBox Lb(ifaceRecon, 2, amrex::The_Async_Arena());
+		[[maybe_unused]] amrex::FArrayBox Rb(ifaceRecon, 2, amrex::The_Async_Arena());
+
+		// Reconstruct primitives to interfaces
+		if (reconstructionOrder_ == 5) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, Lstate.array(), Rstate.array(), cellRecon, ifaceRecon, nvars);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(), Rb.array(),
+											 cellRecon, ifaceRecon, 2);
+			}
+		} else if (reconstructionOrder_ == 3) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, Lstate.array(), Rstate.array(), cellRecon, ifaceRecon, nvars);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(), Rb.array(), cellRecon,
+											ifaceRecon, 2);
+			}
+		} else if (reconstructionOrder_ == 2) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q, Lstate.array(), Rstate.array(), cellRecon, nvars);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(),
+												      Rb.array(), cellRecon, 2);
+			}
+		} else if (reconstructionOrder_ == 1) {
+			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, Lstate.array(), Rstate.array(), ifaceRecon, nvars);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(), Rb.array(),
+											 ifaceRecon, 2);
+			}
+		} else {
+			amrex::Abort("Invalid reconstruction order specified!");
+		}
+
+		// Shock flattening (adapted from HydroSystem::FlattenShocks for array views)
+		{
+			quokka::Array4View<const amrex::Real, DIR> qv(q);
+			quokka::Array4View<amrex::Real, DIR> L(Lstate.array());
+			quokka::Array4View<amrex::Real, DIR> R(Rstate.array());
+			amrex::ParallelFor(cellRecon, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+				// compute chi as min of neighbors in all directions
+				double const chi_ijk = std::min({chi1(i_in - 1, j_in, k_in), chi1(i_in, j_in, k_in), chi1(i_in + 1, j_in, k_in)
+#if (AMREX_SPACEDIM >= 2)
+				                        , chi2(i_in, j_in - 1, k_in), chi2(i_in, j_in, k_in), chi2(i_in, j_in + 1, k_in)
+#endif
+#if (AMREX_SPACEDIM == 3)
+				                        , chi3(i_in, j_in, k_in - 1), chi3(i_in, j_in, k_in), chi3(i_in, j_in, k_in + 1)
+#endif
+				});
+
+				auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+				const double a_minus = R(i, j, k, n);
+				const double a_plus = L(i + 1, j, k, n);
+				const double a_mean = qv(i, j, k, n);
+
+				const double new_a_minus = chi_ijk * a_minus + (1. - chi_ijk) * a_mean;
+				const double new_a_plus = chi_ijk * a_plus + (1. - chi_ijk) * a_mean;
+
+				R(i, j, k, n) = new_a_minus;
+				L(i + 1, j, k, n) = new_a_plus;
+			});
+		}
+
+		// Compute fluxes and face velocities per interface (adapt ComputeFluxes logic)
+		{
+			quokka::Array4View<const amrex::Real, DIR> L(Lstate.array());
+			quokka::Array4View<const amrex::Real, DIR> R(Rstate.array());
+			[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> Lbf(Lb.array());
+			[[maybe_unused]] quokka::Array4View<const amrex::Real, DIR> Rbf(Rb.array());
+			quokka::Array4View<const amrex::Real, DIR> qv(q);
+			quokka::Array4View<amrex::Real, DIR> F(flux);
+			quokka::Array4View<amrex::Real, DIR> vface(faceVel);
+
+			amrex::ParallelFor(faceRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept {
+				auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+				const double rho_L = L(i, j, k, HydroSystem<problem_t>::primDensity_index);
+				const double rho_R = R(i, j, k, HydroSystem<problem_t>::primDensity_index);
+
+				const double vx_L = L(i, j, k, HydroSystem<problem_t>::x1Velocity_index);
+				const double vx_R = R(i, j, k, HydroSystem<problem_t>::x1Velocity_index);
+
+				const double vy_L = L(i, j, k, HydroSystem<problem_t>::x2Velocity_index);
+				const double vy_R = R(i, j, k, HydroSystem<problem_t>::x2Velocity_index);
+
+				const double vz_L = L(i, j, k, HydroSystem<problem_t>::x3Velocity_index);
+				const double vz_R = R(i, j, k, HydroSystem<problem_t>::x3Velocity_index);
+
+				const double ke_L = 0.5 * rho_L * (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
+				const double ke_R = 0.5 * rho_R * (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
+
+				double Eint_L = NAN;
+				double Eint_R = NAN;
+				double P_L = NAN;
+				double P_R = NAN;
+				double E_L = NAN;
+				double E_R = NAN;
+				double cs_L = NAN;
+				double cs_R = NAN;
+
+				double bx1 = 0.0;
+				double by_L = 0.0;
+				double bz_L = 0.0;
+				double by_R = 0.0;
+				double bz_R = 0.0;
+				double magnetic_energy_L = 0.0;
+				double magnetic_energy_R = 0.0;
+
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					quokka::Array4View<const amrex::Real, DIR> fc(fc_cons);
+					bx1 = fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+					by_L = Lbf(i, j, k, 0);
+					bz_L = Lbf(i, j, k, 1);
+					by_R = Rbf(i, j, k, 0);
+					bz_R = Rbf(i, j, k, 1);
+					magnetic_energy_L = 0.5 * (bx1 * bx1 + by_L * by_L + bz_L * bz_L);
+					magnetic_energy_R = 0.5 * (bx1 * bx1 + by_R * by_R + bz_R * bz_R);
+				}
+
+				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+					P_L = rho_L * (HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_);
+					P_R = rho_R * (HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_);
+					cs_L = HydroSystem<problem_t>::cs_iso_;
+					cs_R = HydroSystem<problem_t>::cs_iso_;
+				} else {
+					if constexpr (HydroSystem<problem_t>::reconstruct_eint) {
+						const double eint_L = L(i, j, k, HydroSystem<problem_t>::pressure_index);
+						const double eint_R = R(i, j, k, HydroSystem<problem_t>::pressure_index);
+						auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(L, i, j, k);
+						P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars_L);
+						auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(R, i, j, k);
+						P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars_R);
+						Eint_L = rho_L * L(i, j, k, HydroSystem<problem_t>::primEint_index);
+						Eint_R = rho_R * R(i, j, k, HydroSystem<problem_t>::primEint_index);
+					} else {
+						P_L = L(i, j, k, HydroSystem<problem_t>::pressure_index);
+						P_R = R(i, j, k, HydroSystem<problem_t>::pressure_index);
+						Eint_L = L(i, j, k, HydroSystem<problem_t>::primEint_index);
+						Eint_R = R(i, j, k, HydroSystem<problem_t>::primEint_index);
+					}
+					auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(L, i, j, k);
+					cs_L = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars_L);
+					E_L = quokka::EOS<problem_t>::ComputeEintFromPres(rho_L, P_L, massScalars_L) + ke_L + magnetic_energy_L;
+					auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(R, i, j, k);
+					cs_R = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_R, P_R, massScalars_R);
+					E_R = quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars_R) + ke_R + magnetic_energy_R;
+				}
+
+				AMREX_ASSERT(cs_L > 0.0);
+				AMREX_ASSERT(cs_R > 0.0);
+
+				int velN_index = HydroSystem<problem_t>::x1Velocity_index;
+				int velV_index = HydroSystem<problem_t>::x2Velocity_index;
+				int velW_index = HydroSystem<problem_t>::x3Velocity_index;
+				if constexpr (DIR == FluxDir::X1) {
+					velN_index = HydroSystem<problem_t>::x1Velocity_index;
+					velV_index = HydroSystem<problem_t>::x2Velocity_index;
+					velW_index = HydroSystem<problem_t>::x3Velocity_index;
+				} else if constexpr (DIR == FluxDir::X2) {
+#if (AMREX_SPACEDIM == 2)
+					velN_index = HydroSystem<problem_t>::x2Velocity_index;
+					velV_index = HydroSystem<problem_t>::x1Velocity_index;
+					velW_index = HydroSystem<problem_t>::x3Velocity_index;
+#endif
+#if (AMREX_SPACEDIM == 3)
+					velN_index = HydroSystem<problem_t>::x2Velocity_index;
+					velV_index = HydroSystem<problem_t>::x3Velocity_index;
+					velW_index = HydroSystem<problem_t>::x1Velocity_index;
+#endif
+				} else if constexpr (DIR == FluxDir::X3) {
+					velN_index = HydroSystem<problem_t>::x3Velocity_index;
+					velV_index = HydroSystem<problem_t>::x1Velocity_index;
+					velW_index = HydroSystem<problem_t>::x2Velocity_index;
+				}
+
+				quokka::HydroState<HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_> sL{};
+				sL.rho = rho_L;
+				sL.u = L(i, j, k, velN_index);
+				sL.v = L(i, j, k, velV_index);
+				sL.w = L(i, j, k, velW_index);
+				sL.P = P_L;
+				sL.cs = cs_L;
+				sL.E = E_L;
+				sL.Eint = Eint_L;
+				sL.by = by_L;
+				sL.bz = bz_L;
+
+				quokka::HydroState<HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_> sR{};
+				sR.rho = rho_R;
+				sR.u = R(i, j, k, velN_index);
+				sR.v = R(i, j, k, velV_index);
+				sR.w = R(i, j, k, velW_index);
+				sR.P = P_R;
+				sR.cs = cs_R;
+				sR.E = E_R;
+				sR.Eint = Eint_R;
+				sR.by = by_R;
+				sR.bz = bz_R;
+
+				for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+					const int nstart = HydroSystem<problem_t>::nvar_ - HydroSystem<problem_t>::nscalars_;
+					sL.scalar[n] = L(i, j, k, nstart + n);
+					sR.scalar[n] = R(i, j, k, nstart + n);
+					if (n < HydroSystem<problem_t>::nmscalars_) {
+						sL.massScalar[n] = L(i, j, k, nstart + n);
+						sR.massScalar[n] = R(i, j, k, nstart + n);
+					}
+				}
+
+				const double du = qv(i, j, k, velN_index) - qv(i - 1, j, k, velN_index);
+				// transverse velocity differences for artificial viscosity
+#if AMREX_SPACEDIM == 1
+				const double dw = 0.;
+#else
+				auto dvl = std::min(qv(i - 1, j + 1, k, velV_index) - qv(i - 1, j, k, velV_index),
+				                     qv(i - 1, j, k, velV_index) - qv(i - 1, j - 1, k, velV_index));
+				auto dvr = std::min(qv(i, j + 1, k, velV_index) - qv(i, j, k, velV_index), qv(i, j, k, velV_index) - qv(i, j - 1, k, velV_index));
+				double dw = std::min(dvl, dvr);
+#endif
+#if AMREX_SPACEDIM == 3
+				auto dwl = std::min(qv(i - 1, j, k + 1, velW_index) - qv(i - 1, j, k, velW_index),
+				                   qv(i - 1, j, k, velW_index) - qv(i - 1, j, k - 1, velW_index));
+				auto dwr = std::min(qv(i, j, k + 1, velW_index) - qv(i, j, k, velW_index), qv(i, j, k, velW_index) - qv(i, j, k - 1, velW_index));
+				dw = std::min({dwl, dwr, dw});
+#endif
+
+				quokka::valarray<double, HydroSystem<problem_t>::nvar_> Fcanon{};
+				if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+					Fcanon = quokka::Riemann::HLLC<problem_t, HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_,
+								    HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, du, dw);
+				} else {
+					auto fspds = x1FSpds_mf.array(mfi);
+					auto [Ftmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, HydroSystem<problem_t>::nscalars_,
+											 HydroSystem<problem_t>::nmscalars_, HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, bx1);
+					Fcanon = Ftmp;
+					fspds(i, j, k, 0) = fspd_m;
+					fspds(i, j, k, 1) = fspd_p;
+				}
+
+				auto Fout = Fcanon;
+				const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
+				const double viscosity = artificialViscosityK_ * amrex::max(-div_v, 0.);
+
+				quokka::valarray<double, HydroSystem<problem_t>::nvar_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
+				quokka::valarray<double, HydroSystem<problem_t>::nvar_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
+
+				amrex::Real fluxSum_U_L = 0;
+				amrex::Real fluxSum_U_R = 0;
+				for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+					const int nstart = HydroSystem<problem_t>::nvar_ - HydroSystem<problem_t>::nscalars_;
+					U_L[nstart + n] = sL.scalar[n];
+					U_R[nstart + n] = sR.scalar[n];
+					if (n < HydroSystem<problem_t>::nmscalars_) {
+						fluxSum_U_L += U_L[nstart + n];
+						fluxSum_U_R += U_R[nstart + n];
+					}
+				}
+
+				Fout = Fout + viscosity * (U_L - U_R);
+				// permute momentum components according to DIR
+				Fout[velN_index] = Fcanon[HydroSystem<problem_t>::x1Momentum_index];
+				Fout[velV_index] = Fcanon[HydroSystem<problem_t>::x2Momentum_index];
+				Fout[velW_index] = Fcanon[HydroSystem<problem_t>::x3Momentum_index];
+
+				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+					Fout[HydroSystem<problem_t>::energy_index] = 0;
+					Fout[HydroSystem<problem_t>::internalEnergy_index] = 0;
+				}
+
+				double v_norm = 0.0;
+				if (Fout[HydroSystem<problem_t>::density_index] >= 0.) {
+					if (rho_R > 0.) v_norm = Fout[HydroSystem<problem_t>::density_index] / rho_R;
+				} else {
+					if (rho_L > 0.) v_norm = Fout[HydroSystem<problem_t>::density_index] / rho_L;
+				}
+				vface(i, j, k) = v_norm;
+
+				if (Fout[HydroSystem<problem_t>::density_index] >= 0.) {
+					for (int n = 0; n < HydroSystem<problem_t>::nmscalars_; ++n) {
+						const int nstart = HydroSystem<problem_t>::nvar_ - HydroSystem<problem_t>::nscalars_;
+						if (fluxSum_U_L > 0.) {
+							Fout[nstart + n] = Fout[HydroSystem<problem_t>::density_index] * U_L[nstart + n] / fluxSum_U_L;
+						} else {
+							Fout[nstart + n] = 0.;
+						}
+					}
+				} else {
+					for (int n = 0; n < HydroSystem<problem_t>::nmscalars_; ++n) {
+						const int nstart = HydroSystem<problem_t>::nvar_ - HydroSystem<problem_t>::nscalars_;
+						if (fluxSum_U_R > 0.) {
+							Fout[nstart + n] = Fout[HydroSystem<problem_t>::density_index] * U_R[nstart + n] / fluxSum_U_R;
+						} else {
+							Fout[nstart + n] = 0.;
+						}
+					}
+				}
+
+				for (int nc = 0; nc < HydroSystem<problem_t>::nvar_; ++nc) {
+					AMREX_ASSERT(!std::isnan(Fout[nc]));
+					F(i, j, k, nc) = Fout[nc];
+				}
+			});
+		}
 	}
 }
 
