@@ -1690,7 +1690,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Sink accretion, stage 1: compute the accretion rate
 	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
-	// Sink accretion, stage 2: update the particle states
+	// Apply roundoff to accretion_rate_at_level
+	roundoffMultiFab(accretion_rate_at_level);
+
+	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, geom[lev], lev, time, dt);
 
 	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
