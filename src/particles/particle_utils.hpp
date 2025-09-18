@@ -1,8 +1,8 @@
 #ifndef PARTICLE_UTILS_HPP_
 #define PARTICLE_UTILS_HPP_
 
-#include "fundamental_constants.H"
 #include "AMReX_MultiFab.H"
+#include "fundamental_constants.H"
 
 namespace quokka::ParticleUtils
 {
@@ -115,7 +115,6 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 		}
 	});
 }
-
 
 } // namespace quokka::ParticleUtils
 
