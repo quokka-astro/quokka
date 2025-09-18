@@ -326,9 +326,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			  const amrex::Box &indexRange, int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 	template <FluxDir DIR>
-	void hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &x1Flux_mf,
-			       amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab &x1FSpds_mf,
-			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int ng_reconstruct, int nvars);
+	void hydroFluxFunction(amrex::MultiFab &primVar_mf, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf,
+			       amrex::MultiFab &x1FSpds_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int ng_reconstruct, int nvars);
 
 	template <FluxDir DIR>
 	void hydroFOFluxFunction(amrex::MultiFab &primVar, amrex::MultiFab &cc_bfield_perp_comps_mf, amrex::MultiFab &leftState, amrex::MultiFab &rightState,
@@ -1882,8 +1881,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	AMREX_D_TERM(
 	    hydroFluxFunction<FluxDir::X1>(primVar, cc_bfield_perp_comps, flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, reconstructGhost, nvars);
 	    , hydroFluxFunction<FluxDir::X2>(primVar, cc_bfield_perp_comps, flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, reconstructGhost, nvars);
-	    ,
-	    hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructGhost, nvars);)
+	    , hydroFluxFunction<FluxDir::X3>(primVar, cc_bfield_perp_comps, flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructGhost, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
@@ -1969,9 +1967,12 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 		const amrex::Box cellRecon = amrex::grow(cellValid, 1);
 		// Interfaces for this direction
 		int dir = 0;
-		if constexpr (DIR == FluxDir::X1) dir = 0;
-		else if constexpr (DIR == FluxDir::X2) dir = 1;
-		else if constexpr (DIR == FluxDir::X3) dir = 2;
+		if constexpr (DIR == FluxDir::X1)
+			dir = 0;
+		else if constexpr (DIR == FluxDir::X2)
+			dir = 1;
+		else if constexpr (DIR == FluxDir::X3)
+			dir = 2;
 		// Range of interfaces to compute fluxes/vels on, include nghost_vel_ ghosts
 		const amrex::Box faceRange = amrex::surroundingNodes(amrex::grow(cellValid, nghost_vel_), dir);
 		const amrex::Box ifaceRecon = amrex::surroundingNodes(cellRecon, dir);
@@ -1999,33 +2000,37 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::pressure_index);
-				amrex::Real P      = prim(i    , j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real P = prim(i, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::pressure_index);
 
 				if constexpr (HydroSystem<problem_t>::reconstruct_eint) {
 					auto ms_p2 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 2, j, k);
 					Pplus2 = quokka::EOS<problem_t>::ComputePressure(prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2, ms_p2);
+											 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2,
+											 ms_p2);
 					auto ms_p1 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 1, j, k);
 					Pplus1 = quokka::EOS<problem_t>::ComputePressure(prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1, ms_p1);
-					auto ms    = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
-					P      = quokka::EOS<problem_t>::ComputePressure(prim(i    , j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * P     , ms);
+											 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1,
+											 ms_p1);
+					auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+					P = quokka::EOS<problem_t>::ComputePressure(prim(i, j, k, HydroSystem<problem_t>::primDensity_index),
+										    prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * P, ms);
 					auto ms_m1 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 1, j, k);
-					Pminus1 = quokka::EOS<problem_t>::ComputePressure(prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
+					Pminus1 = quokka::EOS<problem_t>::ComputePressure(
+					    prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
+					    prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
 					auto ms_m2 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 2, j, k);
-					Pminus2 = quokka::EOS<problem_t>::ComputePressure(prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
+					Pminus2 = quokka::EOS<problem_t>::ComputePressure(
+					    prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
+					    prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
 				}
 
 				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 					const amrex::Real cs_sq = HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
-					Pplus2  = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
-					Pplus1  = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
-					P       = prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					P = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 					Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 					Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 				}
@@ -2039,10 +2044,12 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 				const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
 
 				auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
-				double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
-					     prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
+				double K_S =
+				    std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
+				    prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
 				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ *
+					      HydroSystem<problem_t>::cs_iso_;
 				}
 				const double Z = std::abs(Pplus1 - Pminus1) / K_S;
 
@@ -2066,33 +2073,37 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::pressure_index);
-				amrex::Real P      = prim(i    , j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real P = prim(i, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::pressure_index);
 
 				if constexpr (HydroSystem<problem_t>::reconstruct_eint) {
 					auto ms_p2 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 2, j, k);
 					Pplus2 = quokka::EOS<problem_t>::ComputePressure(prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2, ms_p2);
+											 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2,
+											 ms_p2);
 					auto ms_p1 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 1, j, k);
 					Pplus1 = quokka::EOS<problem_t>::ComputePressure(prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1, ms_p1);
-					auto ms    = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
-					P      = quokka::EOS<problem_t>::ComputePressure(prim(i    , j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * P     , ms);
+											 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1,
+											 ms_p1);
+					auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+					P = quokka::EOS<problem_t>::ComputePressure(prim(i, j, k, HydroSystem<problem_t>::primDensity_index),
+										    prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * P, ms);
 					auto ms_m1 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 1, j, k);
-					Pminus1 = quokka::EOS<problem_t>::ComputePressure(prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
+					Pminus1 = quokka::EOS<problem_t>::ComputePressure(
+					    prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
+					    prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
 					auto ms_m2 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 2, j, k);
-					Pminus2 = quokka::EOS<problem_t>::ComputePressure(prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
+					Pminus2 = quokka::EOS<problem_t>::ComputePressure(
+					    prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
+					    prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
 				}
 
 				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 					const amrex::Real cs_sq = HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
-					Pplus2  = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
-					Pplus1  = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
-					P       = prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					P = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 					Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 					Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 				}
@@ -2106,10 +2117,12 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 				const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
 
 				auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
-				double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
-					     prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
+				double K_S =
+				    std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
+				    prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
 				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ *
+					      HydroSystem<problem_t>::cs_iso_;
 				}
 				const double Z = std::abs(Pplus1 - Pminus1) / K_S;
 
@@ -2134,33 +2147,37 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::pressure_index);
-				amrex::Real P      = prim(i    , j, k, HydroSystem<problem_t>::pressure_index);
+				amrex::Real P = prim(i, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::pressure_index);
 				amrex::Real Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::pressure_index);
 
 				if constexpr (HydroSystem<problem_t>::reconstruct_eint) {
 					auto ms_p2 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 2, j, k);
 					Pplus2 = quokka::EOS<problem_t>::ComputePressure(prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2, ms_p2);
+											 prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus2,
+											 ms_p2);
 					auto ms_p1 = RadSystem<problem_t>::ComputeMassScalars(prim, i + 1, j, k);
 					Pplus1 = quokka::EOS<problem_t>::ComputePressure(prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1, ms_p1);
-					auto ms    = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
-					P      = quokka::EOS<problem_t>::ComputePressure(prim(i    , j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * P     , ms);
+											 prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pplus1,
+											 ms_p1);
+					auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
+					P = quokka::EOS<problem_t>::ComputePressure(prim(i, j, k, HydroSystem<problem_t>::primDensity_index),
+										    prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * P, ms);
 					auto ms_m1 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 1, j, k);
-					Pminus1 = quokka::EOS<problem_t>::ComputePressure(prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
+					Pminus1 = quokka::EOS<problem_t>::ComputePressure(
+					    prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index),
+					    prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus1, ms_m1);
 					auto ms_m2 = RadSystem<problem_t>::ComputeMassScalars(prim, i - 2, j, k);
-					Pminus2 = quokka::EOS<problem_t>::ComputePressure(prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
-									 prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
+					Pminus2 = quokka::EOS<problem_t>::ComputePressure(
+					    prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index),
+					    prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * Pminus2, ms_m2);
 				}
 
 				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 					const amrex::Real cs_sq = HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
-					Pplus2  = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
-					Pplus1  = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
-					P       = prim(i    , j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					Pplus1 = prim(i + 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
+					P = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 					Pminus1 = prim(i - 1, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 					Pminus2 = prim(i - 2, j, k, HydroSystem<problem_t>::primDensity_index) * cs_sq;
 				}
@@ -2174,10 +2191,12 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 				const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
 
 				auto ms = RadSystem<problem_t>::ComputeMassScalars(prim, i, j, k);
-				double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
-					     prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
+				double K_S =
+				    std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(prim(i, j, k, HydroSystem<problem_t>::primDensity_index), P, ms), 2) *
+				    prim(i, j, k, HydroSystem<problem_t>::primDensity_index);
 				if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ * HydroSystem<problem_t>::cs_iso_;
+					K_S = prim(i, j, k, HydroSystem<problem_t>::primDensity_index) * HydroSystem<problem_t>::cs_iso_ *
+					      HydroSystem<problem_t>::cs_iso_;
 				}
 				const double Z = std::abs(Pplus1 - Pminus1) / K_S;
 
@@ -2204,26 +2223,27 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 		if (reconstructionOrder_ == 5) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, Lstate.array(), Rstate.array(), cellRecon, ifaceRecon, nvars);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(), Rb.array(),
-											 cellRecon, ifaceRecon, 2);
+				HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(),
+												   Rb.array(), cellRecon, ifaceRecon, 2);
 			}
 		} else if (reconstructionOrder_ == 3) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, Lstate.array(), Rstate.array(), cellRecon, ifaceRecon, nvars);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(), Rb.array(), cellRecon,
-											ifaceRecon, 2);
+				HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(),
+												Rb.array(), cellRecon, ifaceRecon, 2);
 			}
 		} else if (reconstructionOrder_ == 2) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q, Lstate.array(), Rstate.array(), cellRecon, nvars);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q, Lstate.array(), Rstate.array(), cellRecon,
+													      nvars);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(),
-												      Rb.array(), cellRecon, 2);
+				HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(cc_bfield_perp_comps_mf.const_array(mfi),
+														      Lb.array(), Rb.array(), cellRecon, 2);
 			}
 		} else if (reconstructionOrder_ == 1) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, Lstate.array(), Rstate.array(), ifaceRecon, nvars);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(), Rb.array(),
-											 ifaceRecon, 2);
+				HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf.const_array(mfi), Lb.array(),
+												     Rb.array(), ifaceRecon, 2);
 			}
 		} else {
 			amrex::Abort("Invalid reconstruction order specified!");
@@ -2245,10 +2265,12 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 				// compute chi as min of neighbors in all directions
 				double const chi_ijk = std::min({chi1(i_in - 1, j_in, k_in), chi1(i_in, j_in, k_in), chi1(i_in + 1, j_in, k_in)
 #if (AMREX_SPACEDIM >= 2)
-				                        , chi2(i_in, j_in - 1, k_in), chi2(i_in, j_in, k_in), chi2(i_in, j_in + 1, k_in)
+															 ,
+								 chi2(i_in, j_in - 1, k_in), chi2(i_in, j_in, k_in), chi2(i_in, j_in + 1, k_in)
 #endif
 #if (AMREX_SPACEDIM == 3)
-				                        , chi3(i_in, j_in, k_in - 1), chi3(i_in, j_in, k_in), chi3(i_in, j_in, k_in + 1)
+															 ,
+								 chi3(i_in, j_in, k_in - 1), chi3(i_in, j_in, k_in), chi3(i_in, j_in, k_in + 1)
 #endif
 				});
 
@@ -2423,19 +2445,21 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 #endif
 #if AMREX_SPACEDIM == 3
 				auto dwl = std::min(qv(i - 1, j, k + 1, velW_index) - qv(i - 1, j, k, velW_index),
-				                   qv(i - 1, j, k, velW_index) - qv(i - 1, j, k - 1, velW_index));
-				auto dwr = std::min(qv(i, j, k + 1, velW_index) - qv(i, j, k, velW_index), qv(i, j, k, velW_index) - qv(i, j, k - 1, velW_index));
+						    qv(i - 1, j, k, velW_index) - qv(i - 1, j, k - 1, velW_index));
+				auto dwr =
+				    std::min(qv(i, j, k + 1, velW_index) - qv(i, j, k, velW_index), qv(i, j, k, velW_index) - qv(i, j, k - 1, velW_index));
 				dw = std::min({dwl, dwr, dw});
 #endif
 
 				quokka::valarray<double, HydroSystem<problem_t>::nvar_> Fcanon{};
 				if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
 					Fcanon = quokka::Riemann::HLLC<problem_t, HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_,
-								    HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, du, dw);
+								       HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, du, dw);
 				} else {
 					auto fspds = x1FSpds_mf.array(mfi);
-					auto [Ftmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, HydroSystem<problem_t>::nscalars_,
-											 HydroSystem<problem_t>::nmscalars_, HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, bx1);
+					auto [Ftmp, fspd_m, fspd_p] =
+					    quokka::Riemann::HLLD<problem_t, HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_,
+								  HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, bx1);
 					Fcanon = Ftmp;
 					fspds(i, j, k, 0) = fspd_m;
 					fspds(i, j, k, 1) = fspd_p;
@@ -2445,8 +2469,10 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 				const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
 				const double viscosity = artificialViscosityK_ * amrex::max(-div_v, 0.);
 
-				quokka::valarray<double, HydroSystem<problem_t>::nvar_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
-				quokka::valarray<double, HydroSystem<problem_t>::nvar_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
+				quokka::valarray<double, HydroSystem<problem_t>::nvar_> U_L = {sL.rho,	      sL.rho * sL.u, sL.rho * sL.v,
+											       sL.rho * sL.w, sL.E,	     sL.Eint};
+				quokka::valarray<double, HydroSystem<problem_t>::nvar_> U_R = {sR.rho,	      sR.rho * sR.u, sR.rho * sR.v,
+											       sR.rho * sR.w, sR.E,	     sR.Eint};
 
 				amrex::Real fluxSum_U_L = 0;
 				amrex::Real fluxSum_U_R = 0;
@@ -2473,9 +2499,11 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 				double v_norm = 0.0;
 				if (Fout[HydroSystem<problem_t>::density_index] >= 0.) {
-					if (rho_R > 0.) v_norm = Fout[HydroSystem<problem_t>::density_index] / rho_R;
+					if (rho_R > 0.)
+						v_norm = Fout[HydroSystem<problem_t>::density_index] / rho_R;
 				} else {
-					if (rho_L > 0.) v_norm = Fout[HydroSystem<problem_t>::density_index] / rho_L;
+					if (rho_L > 0.)
+						v_norm = Fout[HydroSystem<problem_t>::density_index] / rho_L;
 				}
 				vface(i, j, k) = v_norm;
 
