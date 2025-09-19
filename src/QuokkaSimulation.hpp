@@ -1964,19 +1964,19 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	for (amrex::MFIter mfi(primVar_mf); mfi.isValid(); ++mfi) {
 		const amrex::Box &cellValid = mfi.validbox();
 		// Reconstruction uses cell-centered data with ng_reconstruct ghost layers
-			// Interfaces for this direction
-			int dir = 0;
+		// Interfaces for this direction
+		int dir = 0;
 		if constexpr (DIR == FluxDir::X1)
 			dir = 0;
 		else if constexpr (DIR == FluxDir::X2)
 			dir = 1;
 		else if constexpr (DIR == FluxDir::X3)
 			dir = 2;
-			// Range of interfaces to compute fluxes/vels on, include nghost_vel_ ghosts
-			const amrex::Box faceRange = amrex::surroundingNodes(amrex::grow(cellValid, nghost_vel_), dir);
-			// Reconstruct to cover all interfaces we will compute fluxes on
-			const amrex::Box cellRecon = amrex::grow(cellValid, ng_reconstruct);
-			const amrex::Box ifaceRecon = amrex::surroundingNodes(cellRecon, dir);
+		// Range of interfaces to compute fluxes/vels on, include nghost_vel_ ghosts
+		const amrex::Box faceRange = amrex::surroundingNodes(amrex::grow(cellValid, nghost_vel_), dir);
+		// Reconstruct to cover all interfaces we will compute fluxes on
+		const amrex::Box cellRecon = amrex::grow(cellValid, ng_reconstruct);
+		const amrex::Box ifaceRecon = amrex::surroundingNodes(cellRecon, dir);
 
 		auto const q = primVar_mf.const_array(mfi);
 
@@ -2460,10 +2460,10 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 					Fcanon = quokka::Riemann::HLLC<problem_t, HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_,
 								       HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, du, dw);
 				} else {
-						// write fast MHD wave speeds to the provided MultiFab
-						auto [Ftmp, fspd_m, fspd_p] =
-						    quokka::Riemann::HLLD<problem_t, HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_,
-									  HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, bx1);
+					// write fast MHD wave speeds to the provided MultiFab
+					auto [Ftmp, fspd_m, fspd_p] =
+					    quokka::Riemann::HLLD<problem_t, HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_,
+								  HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, bx1);
 					Fcanon = Ftmp;
 					fspds_view(i, j, k, 0) = fspd_m;
 					fspds_view(i, j, k, 1) = fspd_p;
