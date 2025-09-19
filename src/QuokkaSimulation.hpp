@@ -2297,6 +2297,9 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 			quokka::Array4View<amrex::Real, DIR> F(flux);
 			quokka::Array4View<amrex::Real, DIR> vface(faceVel);
 
+			// Prepare writable view for fast MHD wave speeds (only used for MHD)
+			quokka::Array4View<amrex::Real, DIR> fspds_view(x1FSpds_mf.array(mfi));
+
 			amrex::ParallelFor(faceRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept {
 				auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
@@ -2456,13 +2459,13 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 					Fcanon = quokka::Riemann::HLLC<problem_t, HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_,
 								       HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, du, dw);
 				} else {
-					auto fspds = x1FSpds_mf.array(mfi);
+					// write fast MHD wave speeds to the provided MultiFab
 					auto [Ftmp, fspd_m, fspd_p] =
 					    quokka::Riemann::HLLD<problem_t, HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nmscalars_,
 								  HydroSystem<problem_t>::nvar_>(sL, sR, HydroSystem<problem_t>::gamma_, bx1);
 					Fcanon = Ftmp;
-					fspds(i, j, k, 0) = fspd_m;
-					fspds(i, j, k, 1) = fspd_p;
+					fspds_view(i, j, k, 0) = fspd_m;
+					fspds_view(i, j, k, 1) = fspd_p;
 				}
 
 				auto Fout = Fcanon;
