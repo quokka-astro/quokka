@@ -110,6 +110,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 
 				// Calculate rounding precision for the specified number of significant digits using FastMath
 				// e.g. for value 1.23456789e-44 with precision=8, we want rounding_precision = 1e-51 (8 digits from the leading digit)
+				// Note that the exact value of rounding_precision (to within a factor of a few) is not important, as long as it is deterministic.
 				const amrex::Real rounding_precision = FastMath::pow10(static_cast<amrex::Real>(exponent - precision + 1));
 
 				// Round to the calculated precision
