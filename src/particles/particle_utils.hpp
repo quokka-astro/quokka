@@ -100,11 +100,17 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 			
 			// Only apply roundoff to non-zero values
 			if (std::abs(value) > tiny) {
-				// For values of magnitude ~25, we need to eliminate differences at ~1e-15 level
-				// This corresponds to ~1e-14 absolute precision for values of magnitude 25
-				// Let's be more aggressive and use 1e-12 absolute precision
+				// Round to 8 significant digits to eliminate floating-point non-associativity
+				// This works for any magnitude of values
 				
-				constexpr amrex::Real precision = 1e-8;
+				const amrex::Real abs_val = std::abs(value);
+				const int exponent = static_cast<int>(std::floor(std::log10(abs_val)));
+				
+				// Calculate precision for 8 significant digits
+				// For value 1.23456789e-44, we want precision = 1e-51 (8 digits from the leading digit)
+				const amrex::Real precision = std::pow(10.0, exponent - 7);  // 8 significant digits
+				
+				// Round to the calculated precision
 				value = std::round(value / precision) * precision;
 			} else {
 				value = 0.0;
