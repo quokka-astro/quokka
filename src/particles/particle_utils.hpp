@@ -2,7 +2,9 @@
 #define PARTICLE_UTILS_HPP_
 
 #include "AMReX_MultiFab.H"
+#include "AMReX_FabArray.H"
 #include "fundamental_constants.H"
+#include <cmath>
 
 namespace quokka::ParticleUtils
 {
@@ -79,6 +81,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double 
 
 inline void roundoffMultiFab(amrex::MultiFab &mf)
 {
+	// Deterministic roundoff precision: round to ~1e-12 relative precision
+	// This eliminates floating point non-associativity effects from parallel particle deposition
+	constexpr amrex::Real roundoff_precision = 1e-12;
+	constexpr amrex::Real inv_roundoff_precision = 1.0 / roundoff_precision;
 
 	// Get array accessor for all patches at once
 	auto arr = mf.arrays();
@@ -88,6 +94,17 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// Process all components at this grid point
 		for (int n = 0; n < ncomp; ++n) {
+			amrex::Real &value = arr[bx](i, j, k, n);
+			
+			// Apply deterministic rounding to eliminate small differences
+			// from non-associative floating point operations
+			if (std::abs(value) > roundoff_precision) {
+				// Round to specified precision by scaling, rounding, and scaling back
+				value = std::round(value * inv_roundoff_precision) * roundoff_precision;
+			} else {
+				// Set very small values to exactly zero to ensure reproducibility
+				value = 0.0;
+			}
 		}
 	});
 }
