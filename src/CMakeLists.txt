@@ -49,7 +49,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
         EXCLUDE "${PROJECT_SOURCE_DIR}/extern" "${PROJECT_SOURCE_DIR}/src/test_" "include/openmpi/ompi/mpi/cxx/" "/usr/"
         POST_CMD perl -i -pe s!${PROJECT_SOURCE_DIR}/!!g coverage.json && fastcov_to_sonarqube coverage.json
     )
-    add_compile_options("-O1")
+    add_compile_options("-O0")
     append_coverage_compiler_flags()
 endif()
 
