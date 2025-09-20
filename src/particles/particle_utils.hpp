@@ -96,7 +96,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	// 1. Multiplying by factor = 2^15 + 1 = 32769 to shift significant bits
 	// 2. The multiplication and subsequent operations naturally truncate lower-order bits
 	// 3. The final subtraction c - (c - sum) recovers the rounded value
-	constexpr unsigned int digit_to_remove = 15;					 // Remove 15 bits from mantissa
+	constexpr unsigned int digit_to_remove = 25;					 // Remove 15 bits from mantissa
 	constexpr auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^15 + 1 = 32769
 
 	// Get array accessor for all patches at once
@@ -111,8 +111,11 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 			const auto c = factor * sum;
 			// The key roundoff step: c - (c - sum) removes the least significant bits
 			// This is mathematically equivalent to sum, but with reduced floating-point precision
-			volatile amrex::Real tmp = c - sum; // This is necessary to avoid compiler optimization
-			arr[bx](i, j, k, n) = c - tmp;
+			// We use volatile variables to prevent compiler optimization while avoiding pragma issues
+			volatile amrex::Real vc = c;
+			volatile amrex::Real vsum = sum;
+			volatile amrex::Real tmp = vc - vsum;
+			arr[bx](i, j, k, n) = vc - tmp;
 		}
 	});
 }
