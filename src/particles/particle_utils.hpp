@@ -92,8 +92,8 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	auto arr = mf.arrays();
 	const int ncomp = mf.nComp();
 
-	constexpr int precision = 8;
-	constexpr Real tiny = 1e10 * std::numeric_limits<amrex::Real>::min();
+	constexpr int precision = 12;
+	constexpr amrex::Real tiny = 1e10 * std::numeric_limits<amrex::Real>::min();
 
 	// Apply roundoff algorithm to every grid point and component in parallel
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
