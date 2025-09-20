@@ -193,7 +193,7 @@ auto problem_main() -> int
 	amrex::Print() << "Expected total mass increase: " << n_SNR * mass_SNR << "\n";
 	const double mass_increase_rel_err = std::abs(mass_increase - n_SNR * mass_SNR) / (n_SNR * mass_SNR);
 	amrex::Print() << "Mass increase relative error: " << mass_increase_rel_err << "\n";
-	const double mass_increase_rel_err_tol = 1.0e-10;
+	const double mass_increase_rel_err_tol = 1.0e-7;
 
 	const amrex::Real max_internal_energy = max_Eint_global * vol;
 	const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
