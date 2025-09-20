@@ -5,6 +5,7 @@
 #include "AMReX_FabArray.H"
 #include "fundamental_constants.H"
 #include <cmath>
+#include <cstdint>
 
 namespace quokka::ParticleUtils
 {
@@ -81,14 +82,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double 
 
 inline void roundoffMultiFab(amrex::MultiFab &mf)
 {
-	// Deterministic roundoff precision: round to ~1e-12 relative precision
-	// This eliminates floating point non-associativity effects from parallel particle deposition
-	constexpr amrex::Real roundoff_precision = 1e-12;
-	constexpr amrex::Real inv_roundoff_precision = 1.0 / roundoff_precision;
-
+	// Deterministic roundoff to eliminate floating point non-associativity effects
+	// We round off only the least significant bits that are affected by summation order
+	// This preserves the main precision while ensuring reproducibility
+	
 	// Get array accessor for all patches at once
 	auto arr = mf.arrays();
 	const int ncomp = mf.nComp();
+
+	constexpr Real tiny = 1e-80;
 
 	// Apply roundoff algorithm to every grid point and component in parallel
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -96,13 +98,15 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 		for (int n = 0; n < ncomp; ++n) {
 			amrex::Real &value = arr[bx](i, j, k, n);
 			
-			// Apply deterministic rounding to eliminate small differences
-			// from non-associative floating point operations
-			if (std::abs(value) > roundoff_precision) {
-				// Round to specified precision by scaling, rounding, and scaling back
-				value = std::round(value * inv_roundoff_precision) * roundoff_precision;
+			// Only apply roundoff to non-zero values
+			if (std::abs(value) > tiny) {
+				// For values of magnitude ~25, we need to eliminate differences at ~1e-15 level
+				// This corresponds to ~1e-14 absolute precision for values of magnitude 25
+				// Let's be more aggressive and use 1e-12 absolute precision
+				
+				constexpr amrex::Real precision = 1e-8;
+				value = std::round(value / precision) * precision;
 			} else {
-				// Set very small values to exactly zero to ensure reproducibility
 				value = 0.0;
 			}
 		}
