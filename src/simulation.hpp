@@ -347,6 +347,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
 	void writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
 					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int step);
+	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, 
+	                             const amrex::Vector<std::string> &compNames, int lev, int interval = 1);
 
 	// ABOUTME: Used to handle universal refinement during checkpoint restart operations
 	struct RefinementContext {
@@ -1321,6 +1323,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
+template <typename problem_t> 
+void AMRSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, 
+                                                          const amrex::MultiFab &mf, 
+                                                          const amrex::Vector<std::string> &compNames, 
+                                                          int lev, int interval)
+{
+	if ((istep[lev] % interval) != 0) {
+		return;
+	}
+	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev]);
+	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], tNew_[lev], istep[lev]);
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
@@ -1366,10 +1381,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				// deposit mass into temporary buffer
 				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_);
 
+				const int lev_debug = 0;
+				amrex::Vector<std::string> flatCompNames{"rhs_buffer"};
+				WriteSingleLevelPlotfileSimplified("debug_rhs_buffer", rhs_buffer[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
+
 				// apply roundoff to buffer before adding to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
 					quokka::ParticleUtils::roundoffMultiFab(rhs_buffer[lev]);
 				}
+
+				flatCompNames = {"rhs_buffer"};
+				WriteSingleLevelPlotfileSimplified("debug_rhs_buffer_after", rhs_buffer[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
 
 				// add buffer to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
