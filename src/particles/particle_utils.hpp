@@ -7,6 +7,7 @@
 #include "math/FastMath.hpp"
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 namespace quokka::ParticleUtils
 {
@@ -91,6 +92,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	auto arr = mf.arrays();
 	const int ncomp = mf.nComp();
 
+	constexpr int precision = 8;
 	constexpr Real tiny = 1e10 * std::numeric_limits<amrex::Real>::min();
 
 	// Apply roundoff algorithm to every grid point and component in parallel
@@ -107,12 +109,12 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 				const amrex::Real abs_val = std::abs(value);
 				const int exponent = static_cast<int>(std::floor(FastMath::log10(abs_val)));
 				
-				// Calculate precision for 8 significant digits using FastMath
-				// For value 1.23456789e-44, we want precision = 1e-51 (8 digits from the leading digit)
-				const amrex::Real precision = FastMath::pow10(static_cast<amrex::Real>(exponent - 7));  // 8 significant digits
+				// Calculate rounding precision for the specified number of significant digits using FastMath
+				// For value 1.23456789e-44 with precision=8, we want rounding_precision = 1e-51 (8 digits from the leading digit)
+				const amrex::Real rounding_precision = FastMath::pow10(static_cast<amrex::Real>(exponent - precision + 1));
 				
 				// Round to the calculated precision
-				value = std::round(value / precision) * precision;
+				value = std::round(value / rounding_precision) * rounding_precision;
 			} else {
 				value = 0.0;
 			}
