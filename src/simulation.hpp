@@ -847,6 +847,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 
 	calculateGpotAllLevels();
+	// save single level pltfile
+	amrex::Vector<std::string> flatCompNames{"phi"};
+	WriteSingleLevelPlotfileSimplified("debug_phi", phi[0], flatCompNames, 0, plotfileInterval_);
 
 	// abort if amrex.async_out=1, it is currently broken
 	if (amrex::AsyncOut::UseAsyncOut()) {
@@ -1152,6 +1155,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 
 		// elliptic solve over entire AMR grid (post-timestep)
+		amrex::Print() << "loc1: Saved single level pltfile for phi at level 0; plotfileInterval_ = " << plotfileInterval_ << "\n";
 		ellipticSolveAllLevels(dt_[0]);
 
 		// do particle leapfrog (second kick at t + dt)
@@ -1551,6 +1555,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		if (istep[0] % poissonSupercycleInterval_ == 0) {
 			// do Poisson solve every poissonSupercycleInterval_ coarse steps
 			calculateGpotAllLevels();
+			// save single level pltfile
+			amrex::Vector<std::string> flatCompNames{"phi"};
+			WriteSingleLevelPlotfileSimplified("debug_phi", phi[0], flatCompNames, 0, plotfileInterval_);
+			amrex::Print() << "Saved single level pltfile for phi at level 0; plotfileInterval_ = " << plotfileInterval_ << "\n";
 		}
 		// this must be done every step
 		gravAccelAllLevels(dt);
