@@ -92,7 +92,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	auto arr = mf.arrays();
 	const int ncomp = mf.nComp();
 
-	constexpr int precision = 12;
+	constexpr int precision = 10;
 	constexpr amrex::Real tiny = 1e10 * std::numeric_limits<amrex::Real>::min();
 
 	// Apply roundoff algorithm to every grid point and component in parallel
