@@ -111,7 +111,8 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 			const auto c = factor * sum;
 			// The key roundoff step: c - (c - sum) removes the least significant bits
 			// This is mathematically equivalent to sum, but with reduced floating-point precision
-			arr[bx](i, j, k, n) = c - (c - sum);
+			volatile amrex::Real tmp = c - sum; // This is necessary to avoid compiler optimization
+			arr[bx](i, j, k, n) = c - tmp;
 		}
 	});
 }
