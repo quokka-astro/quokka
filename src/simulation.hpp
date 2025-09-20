@@ -1323,6 +1323,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
+// Save single-level plotfile
+// Example usage: write debug_rhs00000 debug_rhs00001 etc with interval plotfileInterval_
+//   const int lev_debug = 0;
+//   amrex::Vector<std::string> flatCompNames{"rhs"};
+//   WriteSingleLevelPlotfileSimplified("debug_rhs", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
 template <typename problem_t> 
 void AMRSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, 
                                                           const amrex::MultiFab &mf, 
@@ -1381,17 +1386,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				// deposit mass into temporary buffer
 				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_);
 
-				const int lev_debug = 0;
-				amrex::Vector<std::string> flatCompNames{"rhs_buffer"};
-				WriteSingleLevelPlotfileSimplified("debug_rhs_buffer", rhs_buffer[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
-
 				// apply roundoff to buffer before adding to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
 					quokka::ParticleUtils::roundoffMultiFab(rhs_buffer[lev]);
 				}
-
-				flatCompNames = {"rhs_buffer"};
-				WriteSingleLevelPlotfileSimplified("debug_rhs_buffer_after", rhs_buffer[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
 
 				// add buffer to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
