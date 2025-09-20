@@ -347,8 +347,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
 	void writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
 					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int step);
-	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, 
-	                             const amrex::Vector<std::string> &compNames, int lev, int interval = 1);
+	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
+						int lev, int interval = 1);
 
 	// ABOUTME: Used to handle universal refinement during checkpoint restart operations
 	struct RefinementContext {
@@ -1328,11 +1328,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 //   const int lev_debug = 0;
 //   amrex::Vector<std::string> flatCompNames{"rhs"};
 //   WriteSingleLevelPlotfileSimplified("debug_rhs", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
-template <typename problem_t> 
-void AMRSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, 
-                                                          const amrex::MultiFab &mf, 
-                                                          const amrex::Vector<std::string> &compNames, 
-                                                          int lev, int interval)
+template <typename problem_t>
+void AMRSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
+								  const amrex::Vector<std::string> &compNames, int lev, int interval)
 {
 	if ((istep[lev] % interval) != 0) {
 		return;

@@ -1,8 +1,8 @@
 #ifndef PARTICLE_UTILS_HPP_
 #define PARTICLE_UTILS_HPP_
 
-#include "AMReX_MultiFab.H"
 #include "AMReX_FabArray.H"
+#include "AMReX_MultiFab.H"
 #include "fundamental_constants.H"
 #include "math/FastMath.hpp"
 #include <cmath>
@@ -87,7 +87,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	// Deterministic roundoff to eliminate floating point non-associativity effects
 	// We round off only the least significant bits that are affected by summation order
 	// This preserves the main precision while ensuring reproducibility
-	
+
 	// Get array accessor for all patches at once
 	auto arr = mf.arrays();
 	const int ncomp = mf.nComp();
@@ -99,19 +99,19 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp; ++n) {
 			amrex::Real &value = arr[bx](i, j, k, n);
-			
+
 			// Only apply roundoff to non-zero values
 			const amrex::Real abs_val = std::abs(value);
 			if (abs_val > tiny) {
 				// Round to <precision> significant digits to eliminate floating-point non-associativity
 				// Use FastMath for optimal GPU performance
-				
+
 				const int exponent = static_cast<int>(std::floor(FastMath::log10(abs_val)));
-				
+
 				// Calculate rounding precision for the specified number of significant digits using FastMath
 				// e.g. for value 1.23456789e-44 with precision=8, we want rounding_precision = 1e-51 (8 digits from the leading digit)
 				const amrex::Real rounding_precision = FastMath::pow10(static_cast<amrex::Real>(exponent - precision + 1));
-				
+
 				// Round to the calculated precision
 				value = std::round(value / rounding_precision) * rounding_precision;
 			} else {
