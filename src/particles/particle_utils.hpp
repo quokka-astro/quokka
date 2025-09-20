@@ -97,20 +97,19 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 
 	// Apply roundoff algorithm to every grid point and component in parallel
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// Process all components at this grid point
 		for (int n = 0; n < ncomp; ++n) {
 			amrex::Real &value = arr[bx](i, j, k, n);
 			
 			// Only apply roundoff to non-zero values
-			if (std::abs(value) > tiny) {
-				// Round to 8 significant digits to eliminate floating-point non-associativity
+			const amrex::Real abs_val = std::abs(value);
+			if (abs_val > tiny) {
+				// Round to <precision> significant digits to eliminate floating-point non-associativity
 				// Use FastMath for optimal GPU performance
 				
-				const amrex::Real abs_val = std::abs(value);
 				const int exponent = static_cast<int>(std::floor(FastMath::log10(abs_val)));
 				
 				// Calculate rounding precision for the specified number of significant digits using FastMath
-				// For value 1.23456789e-44 with precision=8, we want rounding_precision = 1e-51 (8 digits from the leading digit)
+				// e.g. for value 1.23456789e-44 with precision=8, we want rounding_precision = 1e-51 (8 digits from the leading digit)
 				const amrex::Real rounding_precision = FastMath::pow10(static_cast<amrex::Real>(exponent - precision + 1));
 				
 				// Round to the calculated precision
