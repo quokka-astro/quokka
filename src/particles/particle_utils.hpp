@@ -1,13 +1,8 @@
 #ifndef PARTICLE_UTILS_HPP_
 #define PARTICLE_UTILS_HPP_
 
-#include "AMReX_FabArray.H"
 #include "AMReX_MultiFab.H"
 #include "fundamental_constants.H"
-#include "math/FastMath.hpp"
-#include <cmath>
-#include <cstdint>
-#include <limits>
 
 namespace quokka::ParticleUtils
 {
@@ -84,40 +79,39 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double 
 
 inline void roundoffMultiFab(amrex::MultiFab &mf)
 {
-	// Deterministic roundoff to eliminate floating point non-associativity effects
-	// We round off only the least significant bits that are affected by summation order
-	// This preserves the main precision while ensuring reproducibility
+	// Apply roundoff algorithm to reduce floating-point precision errors by removing
+	// the least significant bits from IEEE 754 double precision numbers.
+	//
+	// IEEE 754 double precision format:
+	// - 1 sign bit + 11 exponent bits + 52 mantissa bits = 64 total bits
+	// - The mantissa has an implicit leading 1, giving 53 bits of precision
+	//
+	// By removing 15 bits from the significand (mantissa), we effectively:
+	// - Reduce precision from 53 bits to 38 bits
+	// - In base 10: log10(2^53) ≈ 15.95 decimal digits → log10(2^38) ≈ 11.44 decimal digits
+	// - This removes approximately 4.5 decimal digits of precision
+	// - Equivalent to rounding to ~11-12 significant decimal digits instead of ~16
+	//
+	// The algorithm works by:
+	// 1. Multiplying by factor = 2^15 + 1 = 32769 to shift significant bits
+	// 2. The multiplication and subsequent operations naturally truncate lower-order bits
+	// 3. The final subtraction c - (c - sum) recovers the rounded value
+	constexpr unsigned int digit_to_remove = 15;					 // Remove 15 bits from mantissa
+	constexpr auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^15 + 1 = 32769
 
 	// Get array accessor for all patches at once
 	auto arr = mf.arrays();
 	const int ncomp = mf.nComp();
 
-	constexpr int precision = 8;
-	constexpr amrex::Real tiny = 1e10 * std::numeric_limits<amrex::Real>::min();
-
 	// Apply roundoff algorithm to every grid point and component in parallel
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// Process all components at this grid point
 		for (int n = 0; n < ncomp; ++n) {
-			amrex::Real &value = arr[bx](i, j, k, n);
-
-			// Only apply roundoff to non-zero values
-			const amrex::Real abs_val = std::abs(value);
-			if (abs_val > tiny) {
-				// Round to <precision> significant digits to eliminate floating-point non-associativity
-				// Use FastMath for optimal GPU performance
-
-				const int exponent = static_cast<int>(std::floor(FastMath::log10(abs_val)));
-
-				// Calculate rounding precision for the specified number of significant digits using FastMath
-				// e.g. for value 1.23456789e-44 with precision=8, we want rounding_precision = 1e-51 (8 digits from the leading digit)
-				// Note that the exact value of rounding_precision (to within a factor of a few) is not important, as long as it is deterministic.
-				const amrex::Real rounding_precision = FastMath::pow10(static_cast<amrex::Real>(exponent - precision + 1));
-
-				// Round to the calculated precision
-				value = std::round(value / rounding_precision) * rounding_precision;
-			} else {
-				value = 0.0;
-			}
+			const auto sum = arr[bx](i, j, k, n);
+			const auto c = factor * sum;
+			// The key roundoff step: c - (c - sum) removes the least significant bits
+			// This is mathematically equivalent to sum, but with reduced floating-point precision
+			arr[bx](i, j, k, n) = c - (c - sum);
 		}
 	});
 }
