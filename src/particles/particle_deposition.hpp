@@ -76,6 +76,25 @@ struct MassDeposition {
 	}
 };
 
+struct DepositionCount {
+	int start_part_comp{}; // Starting component in particle data
+	int start_mesh_comp{}; // Starting component in mesh data
+	int num_comp{};	       // Number of components to deposit
+
+	// Operator to perform mass deposition using linear interpolation
+	template <typename ContainerType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &rho_count,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	{
+		amrex::ParticleInterpolator::NearestEight interp(p, plo, dxi);
+		// Deposit to 1.0 to all eight cells that the particle interacts with
+		interp.ParticleToMesh(p, rho_count, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+			return 1.0;
+		});
+	}
+};
+
 //-------------------- Supernova depositions --------------------
 
 namespace SNFeedbackUtils
