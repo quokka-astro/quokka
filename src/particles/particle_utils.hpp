@@ -99,6 +99,8 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	constexpr unsigned int digit_to_remove = 25;					 // Remove 15 bits from mantissa
 	constexpr auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1); // 2^15 + 1 = 32769
 
+	constexpr amrex::Real tiny = 1.0e10 * std::numeric_limits<amrex::Real>::min();
+
 	// Get array accessor for all patches at once
 	auto arr = mf.arrays();
 	const int ncomp = mf.nComp();
@@ -108,6 +110,11 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 		// Process all components at this grid point
 		for (int n = 0; n < ncomp; ++n) {
 			const auto val = arr[bx](i, j, k, n);
+
+			if (std::abs(val) < tiny) {
+				arr[bx](i, j, k, n) = 0.0;
+				continue;
+			}
 
 			volatile amrex::Real c = factor * val;
 			volatile amrex::Real a = c - val;
