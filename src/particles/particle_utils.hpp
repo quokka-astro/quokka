@@ -116,17 +116,17 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 
 			// Compute digit_to_remove based on count
 			auto digit_to_remove = base_digit_to_remove;
-			
+
 			if (count > 1.0) {
 				// Relative error estimate: (N - 1) * epsilon
 				const amrex::Real scale_up = count - 1.0;
-				
+
 				// Convert to binary digits: log2(scale_up)
 				if (scale_up > 0.0) {
 					const amrex::Real binary_digits = std::max(0.0, FastMath::fastlg(scale_up));
 
 					digit_to_remove += static_cast<unsigned int>(binary_digits);
-					
+
 					// Clamp to reasonable bounds (1 to 52 bits)
 					digit_to_remove = amrex::max(1u, amrex::min(52u, digit_to_remove));
 				}
