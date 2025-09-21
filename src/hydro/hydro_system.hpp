@@ -149,24 +149,24 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 						  amrex::MultiFab &primVar_mf, const int nghost)
 {
 	// convert conserved to primitive variables
-    // Only fetch face-centered arrays if MHD is enabled; otherwise the
-    // MultiFabs may be default-constructed and accessing them is invalid.
-    [[maybe_unused]] decltype(cons_fc_mf[0].const_arrays()) cons_fc_x0;
+	// Only fetch face-centered arrays if MHD is enabled; otherwise the
+	// MultiFabs may be default-constructed and accessing them is invalid.
+	[[maybe_unused]] decltype(cons_fc_mf[0].const_arrays()) cons_fc_x0;
 #if AMREX_SPACEDIM >= 2
-    [[maybe_unused]] decltype(cons_fc_mf[1].const_arrays()) cons_fc_x1;
+	[[maybe_unused]] decltype(cons_fc_mf[1].const_arrays()) cons_fc_x1;
 #endif
 #if AMREX_SPACEDIM == 3
-    [[maybe_unused]] decltype(cons_fc_mf[2].const_arrays()) cons_fc_x2;
+	[[maybe_unused]] decltype(cons_fc_mf[2].const_arrays()) cons_fc_x2;
 #endif
-    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-        cons_fc_x0 = cons_fc_mf[0].const_arrays();
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		cons_fc_x0 = cons_fc_mf[0].const_arrays();
 #if AMREX_SPACEDIM >= 2
-        cons_fc_x1 = cons_fc_mf[1].const_arrays();
+		cons_fc_x1 = cons_fc_mf[1].const_arrays();
 #endif
 #if AMREX_SPACEDIM == 3
-        cons_fc_x2 = cons_fc_mf[2].const_arrays();
+		cons_fc_x2 = cons_fc_mf[2].const_arrays();
 #endif
-    }
+	}
 	auto const &cons_cc = cons_cc_mf.const_arrays();
 	auto const &primVar = primVar_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
