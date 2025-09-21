@@ -95,6 +95,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 	constexpr amrex::Real tiny = 1.0e10 * std::numeric_limits<amrex::Real>::min();
 	constexpr amrex::Real machine_epsilon = std::numeric_limits<amrex::Real>::epsilon();
 	const auto redundancy = static_cast<unsigned int>(reproducibility_roundoff_redundancy);
+	const unsigned int base_digit_to_remove = redundancy + 1; // +1 to account for machine epsilon
 
 	// Get array accessor for all patches at once
 	auto const &arr = mf.arrays();
@@ -114,26 +115,20 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 			}
 
 			// Compute digit_to_remove based on count
-			auto digit_to_remove = redundancy;
+			auto digit_to_remove = base_digit_to_remove;
 			
 			if (count > 1.0) {
 				// Relative error estimate: (N - 1) * epsilon
-				const amrex::Real relative_error = (count - 1.0) * machine_epsilon;
+				const amrex::Real scale_up = count - 1.0;
 				
-				// Convert to binary digits: log2(1/relative_error)
-				if (relative_error > 0.0) {
-					const amrex::Real binary_digits = -FastMath::fastlg(relative_error);
+				// Convert to binary digits: log2(scale_up)
+				if (scale_up > 0.0) {
+					const amrex::Real binary_digits = std::max(0.0, FastMath::fastlg(scale_up));
 
-					if (binary_digits < 0.0) {
-						// count > 1/machine_epsilon; unlikely
-						digit_to_remove = 52u;
-					} else {
-						// Add reproducibility_roundoff_redundancy
-						digit_to_remove += static_cast<unsigned int>(binary_digits);
-						
-						// Clamp to reasonable bounds (1 to 52 bits)
-						digit_to_remove = amrex::max(1u, amrex::min(52u, digit_to_remove));
-					}
+					digit_to_remove += static_cast<unsigned int>(binary_digits);
+					
+					// Clamp to reasonable bounds (1 to 52 bits)
+					digit_to_remove = amrex::max(1u, amrex::min(52u, digit_to_remove));
 				}
 			}
 
