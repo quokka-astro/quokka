@@ -77,18 +77,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double 
 	return jeansNo * jeansNo * M_PI * cs_cell * cs_cell / (C::Gconst * (dx * dx));
 }
 
-// Force actual memory operations to prevent optimization
-AMREX_GPU_HOST_DEVICE static amrex::Real prevent_optimization(amrex::Real value) {
-    // Store to and load from a local array to force actual computation
-    // The compiler cannot optimize this away because it involves memory operations
-    amrex::Real temp_array[2];
-    temp_array[0] = value;
-    temp_array[1] = 0.0;
-    // Use array indexing that compiler cannot predict at compile time
-    int idx = (temp_array[0] != temp_array[0]) ? 1 : 0; // Always 0, but compiler doesn't know
-    return temp_array[idx];
-}
-
 inline void roundoffMultiFab(amrex::MultiFab &mf)
 {
 	// Apply roundoff algorithm to reduce floating-point precision errors by removing
@@ -119,10 +107,11 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// Process all components at this grid point
 		for (int n = 0; n < ncomp; ++n) {
-			const auto sum = arr[bx](i, j, k, n);
-			amrex::Real c = prevent_optimization(factor * sum);
-			amrex::Real temp = prevent_optimization(c - sum);
-			arr[bx](i, j, k, n) = c - temp;
+			const auto val = arr[bx](i, j, k, n);
+
+			volatile amrex::Real c = factor * val;
+			volatile amrex::Real a = c - val;
+			arr[bx](i, j, k, n) = c - a;
 		}
 	});
 }
