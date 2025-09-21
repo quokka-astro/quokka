@@ -3,8 +3,8 @@
 
 #include "AMReX_MultiFab.H"
 #include "fundamental_constants.H"
-#include "particles/particle_types.hpp"
 #include "math/FastMath.hpp"
+#include "particles/particle_types.hpp"
 
 namespace quokka::ParticleUtils
 {
@@ -89,7 +89,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 	// - The mantissa has an implicit leading 1, giving 53 bits of precision
 	//
 	// This version uses mf_count to compute digit_to_remove based on the relative error
-	// formula: relative_error = (N - 1) * epsilon, where N is the count and epsilon 
+	// formula: relative_error = (N - 1) * epsilon, where N is the count and epsilon
 	// is machine epsilon. We convert this to binary digits and add redundancy.
 
 	constexpr amrex::Real tiny = 1.0e10 * std::numeric_limits<amrex::Real>::min();

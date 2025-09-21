@@ -113,7 +113,8 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
 #if AMREX_SPACEDIM == 3
-	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, const amrex::Vector<amrex::MultiFab *> &rhs_count, int finest_lev, amrex::Real Gconst) = 0;
+	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, const amrex::Vector<amrex::MultiFab *> &rhs_count, int finest_lev,
+				 amrex::Real Gconst) = 0;
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
@@ -211,7 +212,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 #if AMREX_SPACEDIM == 3
 
 	// Implementation of mass deposition from particles to grid
-	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, const amrex::Vector<amrex::MultiFab *> &rhs_count, int finest_lev, amrex::Real Gconst) override
+	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, const amrex::Vector<amrex::MultiFab *> &rhs_count, int finest_lev,
+			 amrex::Real Gconst) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			// zero_out_input is false because we want to accumulate mass

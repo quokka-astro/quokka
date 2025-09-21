@@ -14,42 +14,38 @@
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
-
 namespace amrex::ParticleInterpolator
 {
 /** \brief A class that implements nearest-eight-cell interpolation.
-*/
-struct NearestEight : public Base<NearestEight, amrex::Real>
-{
-    static constexpr int stencil_width = 2;
+ */
+struct NearestEight : public Base<NearestEight, amrex::Real> {
+	static constexpr int stencil_width = 2;
 
-    static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0;
-    static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0;
-    static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0;
+	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0;
+	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0;
+	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0;
 
-    amrex::Real weights[3*stencil_width];
+	amrex::Real weights[3 * stencil_width];
 
-    template <typename P>
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE
-    NearestEight (const P& p,
-            amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> const& plo,
-            amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> const& dxi)
-    {
-        w = &weights[0];
-        for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-            amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
-            index[i] = static_cast<int>(amrex::Math::floor(l)) - 1;
-            w[stencil_width*i + 0] = 1.;
-            w[stencil_width*i + 1] = 1.;
-        }
-				for (int i = AMREX_SPACEDIM; i < 3; ++i) {
-            index[i] = 0;
-            w[stencil_width*i + 0] = 1.;
-            w[stencil_width*i + 1] = 0.;
-        }
-    }
+	template <typename P>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE NearestEight(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
+	{
+		w = &weights[0];
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
+			index[i] = static_cast<int>(amrex::Math::floor(l)) - 1;
+			w[stencil_width * i + 0] = 1.;
+			w[stencil_width * i + 1] = 1.;
+		}
+		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
+			index[i] = 0;
+			w[stencil_width * i + 0] = 1.;
+			w[stencil_width * i + 1] = 0.;
+		}
+	}
 };
-}
+} // namespace amrex::ParticleInterpolator
 
 namespace quokka
 {
@@ -126,9 +122,8 @@ struct DepositionCount {
 	{
 		amrex::ParticleInterpolator::NearestEight interp(p, plo, dxi);
 		// Deposit to 1.0 to all eight cells that the particle interacts with
-		interp.ParticleToMesh(p, rho_count, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			return 1.0;
-		});
+		interp.ParticleToMesh(p, rho_count, start_part_comp, start_mesh_comp, num_comp,
+				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) { return 1.0; });
 	}
 };
 
