@@ -1,0 +1,318 @@
+#!/usr/bin/env python
+"""
+Plot Diff - QUOKKA simulation difference visualization tool
+
+This script creates difference plots between two QUOKKA simulation snapshots.
+It generates three plots: original data (from first snapshot), absolute difference, 
+and relative difference between the two snapshots.
+
+FEATURES:
+=========
+- Compare any field between two snapshots
+- Three-panel output: original, absolute difference, relative difference
+- Support for all field types from quick_plot (density, temperature, velocity, etc.)
+- Customizable plot center, width, and visualization parameters
+- Uses FixedResolutionBuffer for consistent grid sampling
+- Handles derived fields (temperature, number density, velocity magnitude)
+
+USAGE EXAMPLES:
+===============
+Basic density difference between two snapshots:
+    ./plot_diff.py plt00001 plt00010
+
+Temperature difference with custom center:
+    ./plot_diff.py plt00001 plt00010 -f T --center 0.5,0.5,0.5
+
+Velocity difference with custom width and output directory:
+    ./plot_diff.py plt00001 plt00010 -f vx --width 10_kpc -o figures
+
+SUPPORTED FIELDS:
+=================
+Same as quick_plot: density, n/nH, T/temperature, vx/vy/vz, v/velocity, p/momentum
+Plus any boxlib field name.
+
+OUTPUT:
+=======
+Three PNG files:
+- {snapshot1}_vs_{snapshot2}_{field}_original.png
+- {snapshot1}_vs_{snapshot2}_{field}_abs_diff.png  
+- {snapshot1}_vs_{snapshot2}_{field}_rel_diff.png
+"""
+
+import os
+import argparse
+import numpy as np
+import yt
+import unyt
+import matplotlib.pyplot as plt
+
+try:
+    import scienceplots
+    plt.style.use(['science', 'nature', 'no-latex'])
+    print("scienceplots loaded successfully")
+except ImportError:
+    print("scienceplots not installed; using default matplotlib style")
+except Exception as e:
+    print(f"scienceplots installed but failed to load style: {e}; using default matplotlib style")
+
+# check yt version
+assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
+
+yt.set_log_level(40)
+
+m_u = 1.660539e-24 * unyt.g
+
+
+def add_derived_fields(ds, field, mean_molecular_weight):
+    """Add derived fields to dataset, similar to quick_plot"""
+    mean_molecular_weight_per_H_atom = mean_molecular_weight * m_u
+    
+    if field == ("gas", "number_density"):
+        ds.add_field(field, function=lambda field, data: data[(
+            "gas", "density")] / mean_molecular_weight_per_H_atom, units="cm**-3", sampling_type="cell")
+    elif field == ("gas", "temperature"):
+        k_B = unyt.physical_constants.boltzmann_constant
+        gamma = 5.0 / 3.0
+        ds.add_field(field, function=lambda field, data: data[("gas", "internal_energy_density")] * (gamma - 1.0) / (
+            data[('gas', 'density')] / mean_molecular_weight_per_H_atom * k_B), units="K", sampling_type="cell")
+    elif field == ("gas", "velocity"):
+        ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "velocity_x")]**2 + data[(
+            "gas", "velocity_y")]**2 + data[("gas", "velocity_z")]**2), units="cm/s", sampling_type="cell")
+    elif field == ("gas", "momentum_density"):
+        ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "momentum_density_x")]**2 + data[(
+            "gas", "momentum_density_y")]**2 + data[("gas", "momentum_density_z")]**2), sampling_type="cell")
+
+
+def map_field_name(field_name):
+    """Map field names to yt field tuples, same as quick_plot"""
+    if field_name is None or field_name in ["density", "rho", "den"]:
+        return ("gas", "density")
+    elif field_name in ["n", "nH", "n_H", "num_density"]:
+        return ("gas", "number_density")
+    elif field_name in ["temperature", "T", "temp"]:
+        return ("gas", "temperature")
+    elif field_name in ['vx', 'velocity-x', 'velocity_x']:
+        return ("gas", "velocity_x")
+    elif field_name in ['vy', 'velocity-y', 'velocity_y']:
+        return ("gas", "velocity_y")
+    elif field_name in ['vz', 'velocity-z', 'velocity_z']:
+        return ("gas", "velocity_z")
+    elif field_name in ['v', 'velocity']:
+        return ("gas", "velocity")
+    elif field_name in ['p', 'momentum']:
+        return ("gas", "momentum_density")
+    else:
+        return ("boxlib", field_name)
+
+
+def get_field_data_on_grid(ds, field, center, width, resolution, view_dir):
+    """Get field data on a regular grid using FixedResolutionBuffer"""
+    
+    # Create a slice object
+    slc = ds.slice(view_dir, center[{"x": 0, "y": 1, "z": 2}[view_dir]])
+    
+    # Create FixedResolutionBuffer
+    if isinstance(width, tuple):
+        width_val = width[0] * ds.quan(1, width[1])
+    else:
+        width_val = width
+        
+    frb = slc.to_frb(width_val, resolution)
+    
+    # Get the field data
+    data = frb[field].v
+    extent = [frb.bounds[0].v, frb.bounds[1].v, frb.bounds[2].v, frb.bounds[3].v]
+    
+    return data, extent
+
+
+def plot_diff(pltdir1, pltdir2, args):
+    """Create difference plots between two snapshots"""
+    
+    print(f"Comparing {pltdir1} vs {pltdir2}")
+    
+    # Load datasets
+    ds1 = yt.load(pltdir1)
+    ds2 = yt.load(pltdir2)
+    
+    # Map field name
+    field = map_field_name(args.field)
+    
+    # Add derived fields to both datasets
+    add_derived_fields(ds1, field, args.mean_molecular_weight)
+    add_derived_fields(ds2, field, args.mean_molecular_weight)
+    
+    # Parse center
+    if args.center is not None:
+        if ',' in args.center:
+            center = tuple(float(x) for x in args.center.split(','))
+        elif '_' in args.center:
+            center = tuple(float(x) for x in args.center.split('_'))
+        else:
+            center = float(args.center)
+    else:
+        center = 'c'
+    
+    # Convert center to actual coordinates if needed
+    if center == 'c':
+        center1 = ds1.domain_center
+        center2 = ds2.domain_center
+    else:
+        center1 = ds1.arr(center, 'code_length')
+        center2 = ds2.arr(center, 'code_length')
+    
+    # Parse width
+    if args.width is not None:
+        if ',' in args.width:
+            width = (float(args.width.split(',')[0]), args.width.split(',')[1])
+        elif '_' in args.width:
+            width = (float(args.width.split('_')[0]), args.width.split('_')[1])
+        else:
+            width = float(args.width)
+    else:
+        width = min(ds1.domain_width)
+    
+    # Get field data on regular grids
+    resolution = args.resolution
+    data1, extent1 = get_field_data_on_grid(ds1, field, center1, width, resolution, args.dir)
+    data2, extent2 = get_field_data_on_grid(ds2, field, center2, width, resolution, args.dir)
+    
+    # Calculate differences
+    abs_diff = np.abs(data2 - data1)
+    
+    # Calculate relative difference, avoiding division by zero
+    with np.errstate(divide='ignore', invalid='ignore'):
+        rel_diff = np.abs((data2 - data1) / data1)
+        rel_diff = np.where(np.isfinite(rel_diff), rel_diff, 0)
+    
+    # Create output directory
+    if args.outdir != ".":
+        os.makedirs(args.outdir, exist_ok=True)
+    
+    # Get field name for filename
+    field_name = field[1] if isinstance(field, tuple) else field
+    snap1_name = os.path.basename(pltdir1)
+    snap2_name = os.path.basename(pltdir2)
+    
+    # Determine colormaps
+    if args.cmap == "default":
+        cmap_orig = "hot" if field == ("gas", "temperature") else "viridis"
+    else:
+        cmap_orig = args.cmap
+    cmap_diff = "plasma"
+    
+    # Create three plots
+    fig_size = (args.figsize, args.figsize)
+    
+    # 1. Original data (from first snapshot)
+    plt.figure(figsize=fig_size)
+    if args.log_scale and np.all(data1 > 0):
+        im = plt.imshow(data1, origin='lower', extent=extent1, cmap=cmap_orig, norm=plt.LogNorm())
+    else:
+        im = plt.imshow(data1, origin='lower', extent=extent1, cmap=cmap_orig)
+    plt.colorbar(im, label=f'{field_name} ({snap1_name})')
+    plt.xlabel(f'{args.dir}_axis')
+    plt.ylabel(f'{args.dir}_axis')
+    plt.title(f'Original: {snap1_name}\n{field_name}')
+    
+    filename = f"{snap1_name}_vs_{snap2_name}_{field_name}_original.png"
+    filepath = os.path.join(args.outdir, filename)
+    plt.savefig(filepath, dpi=300, bbox_inches='tight', pad_inches=0.1)
+    print(f"Saved: {filepath}")
+    plt.close()
+    
+    # 2. Absolute difference
+    plt.figure(figsize=fig_size)
+    if args.log_scale and np.all(abs_diff > 0):
+        im = plt.imshow(abs_diff, origin='lower', extent=extent1, cmap=cmap_diff, norm=plt.LogNorm())
+    else:
+        im = plt.imshow(abs_diff, origin='lower', extent=extent1, cmap=cmap_diff)
+    plt.colorbar(im, label=f'|Δ{field_name}|')
+    plt.xlabel(f'{args.dir}_axis')
+    plt.ylabel(f'{args.dir}_axis')
+    plt.title(f'Absolute Difference\n|{snap2_name} - {snap1_name}|')
+    
+    filename = f"{snap1_name}_vs_{snap2_name}_{field_name}_abs_diff.png"
+    filepath = os.path.join(args.outdir, filename)
+    plt.savefig(filepath, dpi=300, bbox_inches='tight', pad_inches=0.1)
+    print(f"Saved: {filepath}")
+    plt.close()
+    
+    # 3. Relative difference
+    plt.figure(figsize=fig_size)
+    if args.log_scale and np.all(rel_diff > 0):
+        im = plt.imshow(rel_diff, origin='lower', extent=extent1, cmap=cmap_diff, norm=plt.LogNorm())
+    else:
+        im = plt.imshow(rel_diff, origin='lower', extent=extent1, cmap=cmap_diff)
+    plt.colorbar(im, label=f'|Δ{field_name}|/{field_name}')
+    plt.xlabel(f'{args.dir}_axis')
+    plt.ylabel(f'{args.dir}_axis')
+    plt.title(f'Relative Difference\n|({snap2_name} - {snap1_name})/{snap1_name}|')
+    
+    filename = f"{snap1_name}_vs_{snap2_name}_{field_name}_rel_diff.png"
+    filepath = os.path.join(args.outdir, filename)
+    plt.savefig(filepath, dpi=300, bbox_inches='tight', pad_inches=0.1)
+    print(f"Saved: {filepath}")
+    plt.close()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Create difference plots between two QUOKKA simulation snapshots")
+    
+    # Required arguments
+    parser.add_argument("pltdir1", type=str, help="First snapshot directory")
+    parser.add_argument("pltdir2", type=str, help="Second snapshot directory")
+    
+    # Field selection
+    parser.add_argument("-f", "--field", type=str, default="density",
+                        help="Field to plot. Options: density, n, nH, T, vx, vy, vz, v, p, or any boxlib field. Default: density")
+    
+    # Plot parameters
+    parser.add_argument("--dir", type=str, default="z", choices=["x", "y", "z"],
+                        help="View direction for slice. Default: z")
+    
+    parser.add_argument("--center", type=str, default=None,
+                        help="Center coordinates as x,y,z or single value. Default: domain center")
+    
+    parser.add_argument("-w", "--width", type=str, default=None,
+                        help="Width of the plot, e.g. 1 or 10_kpc. Default: domain width")
+    
+    parser.add_argument("--resolution", type=int, default=512,
+                        help="Resolution of the FixedResolutionBuffer. Default: 512")
+    
+    # Visualization parameters
+    parser.add_argument("--cmap", type=str, default="default",
+                        help="Colormap. Default: hot for temperature, viridis for others")
+    
+    parser.add_argument("--log_scale", action="store_true",
+                        help="Use logarithmic color scale. Default: False")
+    
+    parser.add_argument("--figsize", type=float, default=6,
+                        help="Figure size in inches. Default: 6")
+    
+    # Physics parameters
+    parser.add_argument("--mean_molecular_weight", type=float, default=1.0,
+                        help="Mean molecular weight in atomic mass units. Default: 1.0")
+    
+    # Output
+    parser.add_argument("-o", "--outdir", type=str, default=".",
+                        help="Output directory. Default: current directory")
+    
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    
+    # Validate input directories
+    if not os.path.isdir(args.pltdir1):
+        raise ValueError(f"Directory {args.pltdir1} does not exist")
+    if not os.path.isdir(args.pltdir2):
+        raise ValueError(f"Directory {args.pltdir2} does not exist")
+    
+    # Create difference plots
+    plot_diff(args.pltdir1, args.pltdir2, args)
+
+
+if __name__ == "__main__":
+    main()
