@@ -1387,7 +1387,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				const int lev_debug = 0;
 				amrex::Vector<std::string> flatCompNames{"rhs_buffer"};
 				WriteSingleLevelPlotfileSimplified("debug_rhs_buffer", rhs_buffer[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
-				WriteSingleLevelPlotfileSimplified("debug_rhs_buffer_count", rhs_buffer_count[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
+				// WriteSingleLevelPlotfileSimplified("debug_rhs_buffer_count", rhs_buffer_count[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
 
 				// apply roundoff to buffer before adding to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1401,7 +1401,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				for (int lev = 0; lev <= finest_level; ++lev) {
 					amrex::MultiFab::Add(rhs[lev], rhs_buffer[lev], 0, 0, ncomp, 0);
 				}
-				WriteSingleLevelPlotfileSimplified("debug_rhs_after_add", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
+				// WriteSingleLevelPlotfileSimplified("debug_rhs_after_add", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
 			}
 		}
 
@@ -1516,8 +1516,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 			amrex::Real abstol = abstolPoisson_ * rhs_min;
 			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
-			amrex::Vector<std::string> flatCompNames{"phi"};
-			WriteSingleLevelPlotfileSimplified("debug_phi_after_poisson", phi[0], flatCompNames, 0, plotfileInterval_);
+			// amrex::Vector<std::string> flatCompNames{"phi"};
+			// WriteSingleLevelPlotfileSimplified("debug_phi_after_poisson", phi[0], flatCompNames, 0, plotfileInterval_);
 		}
 
 		if (verbose) {
