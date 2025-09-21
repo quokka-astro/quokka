@@ -1391,7 +1391,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 				// apply roundoff to buffer before adding to rhs
 				for (int lev = 0; lev <= finest_level; ++lev) {
-					quokka::ParticleUtils::roundoffMultiFab(rhs_buffer[lev]);
+					quokka::ParticleUtils::roundoffMultiFab(rhs_buffer[lev], rhs_buffer_count[lev]);
 				}
 
 				flatCompNames = {"rhs_buffer"};
