@@ -3,8 +3,8 @@
 
 #include "AMReX_MultiFab.H"
 #include "fundamental_constants.H"
-#include "particles/particle_types.hpp"
 #include "math/FastMath.hpp"
+#include "particles/particle_types.hpp"
 
 namespace quokka::ParticleUtils
 {
@@ -89,7 +89,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 	// - The mantissa has an implicit leading 1, giving 53 bits of precision
 	//
 	// This version uses mf_count to compute digit_to_remove based on the relative error
-	// formula: relative_error = (N - 1) * epsilon, where N is the count and epsilon 
+	// formula: relative_error = (N - 1) * epsilon, where N is the count and epsilon
 	// is machine epsilon. We convert this to binary digits and add redundancy.
 
 	constexpr amrex::Real tiny = 1.0e10 * std::numeric_limits<amrex::Real>::min();
@@ -115,11 +115,11 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 
 			// Compute digit_to_remove based on count
 			auto digit_to_remove = redundancy;
-			
+
 			if (count > 1.0) {
 				// Relative error estimate: (N - 1) * epsilon
 				const amrex::Real relative_error = (count - 1.0) * machine_epsilon;
-				
+
 				// Convert to binary digits: log2(1/relative_error)
 				if (relative_error > 0.0) {
 					const amrex::Real binary_digits = -FastMath::fastlg(relative_error);
@@ -130,7 +130,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 					} else {
 						// Add reproducibility_roundoff_redundancy
 						digit_to_remove += static_cast<unsigned int>(binary_digits);
-						
+
 						// Clamp to reasonable bounds (1 to 52 bits)
 						digit_to_remove = amrex::max(1u, amrex::min(52u, digit_to_remove));
 					}
