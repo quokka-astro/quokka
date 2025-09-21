@@ -2212,7 +2212,15 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 #endif
 		auto flux = x1Flux_mf.array(mfi);
 		auto faceVel = x1FaceVel_mf.array(mfi);
-		[[maybe_unused]] auto const fc_cons = consVar_fc[static_cast<int>(DIR)].const_array(mfi);
+		// Only fetch face-centered conservative array when MHD is enabled.
+		// For non-MHD, provide a default-constructed Array4 that will not be used.
+		[[maybe_unused]] auto const fc_cons = [&]() {
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				return consVar_fc[static_cast<int>(DIR)].const_array(mfi);
+			} else {
+				return decltype(consVar_fc[static_cast<int>(DIR)].const_array(mfi)){};
+			}
+		}();
 
 		// Scratch FArrayBoxes for L/R states
 		amrex::FArrayBox Lstate(ifaceRecon, nvars, amrex::The_Async_Arena());
@@ -2298,8 +2306,15 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 			quokka::Array4View<amrex::Real, DIR> F(flux);
 			quokka::Array4View<amrex::Real, DIR> vface(faceVel);
 
-			// Prepare writable view for fast MHD wave speeds (only used for MHD)
-			quokka::Array4View<amrex::Real, DIR> fspds_view(x1FSpds_mf.array(mfi));
+			// Prepare writable Array4 for fast MHD wave speeds when MHD is enabled;
+			// provide a default-constructed Array4 otherwise (it will not be used).
+			[[maybe_unused]] auto fspds_arr = [&]() {
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					return x1FSpds_mf.array(mfi);
+				} else {
+					return decltype(x1FSpds_mf.array(mfi)){};
+				}
+			}();
 
 			amrex::ParallelFor(faceRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept {
 				auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
@@ -2338,6 +2353,7 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 					quokka::Array4View<const amrex::Real, DIR> fc(fc_cons);
+					quokka::Array4View<amrex::Real, DIR> fspds_view(fspds_arr);
 					bx1 = fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 					by_L = Lbf(i, j, k, 0);
 					bz_L = Lbf(i, j, k, 1);
