@@ -39,7 +39,7 @@ template <typename ArrayVec> class OptionalArrayCapture<false, ArrayVec>
 	using value_type = std::remove_reference_t<decltype(std::declval<ArrayVec>()[0])>;
 
 	AMREX_GPU_HOST_DEVICE constexpr OptionalArrayCapture() noexcept = default;
-	explicit AMREX_GPU_HOST_DEVICE OptionalArrayCapture([[maybe_unused]] ArrayVec const &arrays) noexcept = default;
+	explicit AMREX_GPU_HOST_DEVICE OptionalArrayCapture([[maybe_unused]] ArrayVec const &arrays) noexcept {}
 
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto operator[](int index) const noexcept -> value_type
 	{

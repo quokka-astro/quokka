@@ -167,7 +167,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	auto d_Eg_d_Rg = -1.0 * kappaPoverE;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] <= 0.0) {
-			d_Eg_d_Rg[g] = -LARGE;
+			d_Eg_d_Rg[g] = -kLarge;
 		} else {
 			d_Eg_d_Rg[g] /= tau[g];
 		}
