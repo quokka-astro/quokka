@@ -79,7 +79,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double 
 	return jeansNo * jeansNo * M_PI * cs_cell * cs_cell / (C::Gconst * (dx * dx));
 }
 
-inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
+inline void roundoffMultiFab(amrex::MultiFab &mf)
 {
 	// Apply roundoff algorithm to reduce floating-point precision errors by removing
 	// the least significant bits from IEEE 754 double precision numbers.
@@ -88,9 +88,9 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 	// - 1 sign bit + 11 exponent bits + 52 mantissa bits = 64 total bits
 	// - The mantissa has an implicit leading 1, giving 53 bits of precision
 	//
-	// This version uses mf_count to compute digit_to_remove based on the relative error
-	// formula: relative_error = (N - 1) * epsilon, where N is the count and epsilon
-	// is machine epsilon. We convert this to binary digits and add redundancy.
+	// This version uses the last component of mf as the count to compute digit_to_remove 
+	// based on the relative error formula: relative_error = (N - 1) * epsilon, where N 
+	// is the count and epsilon is machine epsilon. We convert this to binary digits and add redundancy.
 
 	constexpr amrex::Real tiny = 1.0e10 * std::numeric_limits<amrex::Real>::min();
 	const auto redundancy = static_cast<unsigned int>(reproducibility_roundoff_redundancy);
@@ -98,16 +98,16 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 
 	// Get array accessor for all patches at once
 	auto const &arr = mf.arrays();
-	auto const &count_arr = mf_count.const_arrays();
 	const int ncomp = mf.nComp();
+	const int count_comp = ncomp - 1; // Last component is the count
 
 	// Apply roundoff algorithm to every grid point and component in parallel
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		const auto count = count_arr[bx](i, j, k, 0); // integer represented as Real
+		const auto count = arr[bx](i, j, k, count_comp); // integer represented as Real
 
 		if (count > 1.5) {
-			// Process all components at this grid point
-			for (int n = 0; n < ncomp; ++n) {
+			// Process all components at this grid point (except the count component)
+			for (int n = 0; n < count_comp; ++n) {
 				const auto val = arr[bx](i, j, k, n);
 
 				if (std::abs(val) < tiny) {
@@ -153,36 +153,6 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 	});
 }
 
-// Overload for cases where mf_count is not available
-inline void roundoffMultiFab(amrex::MultiFab &mf)
-{
-	// Apply roundoff algorithm with fixed digit_to_remove when count is not available
-	const unsigned int digit_to_remove = reproducibility_roundoff_redundancy + 3;
-	const auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1);
-
-	constexpr amrex::Real tiny = 1.0e10 * std::numeric_limits<amrex::Real>::min();
-
-	// Get array accessor for all patches at once
-	auto const &arr = mf.arrays();
-	const int ncomp = mf.nComp();
-
-	// Apply roundoff algorithm to every grid point and component in parallel
-	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// Process all components at this grid point
-		for (int n = 0; n < ncomp; ++n) {
-			const auto val = arr[bx](i, j, k, n);
-
-			if (std::abs(val) < tiny) {
-				arr[bx](i, j, k, n) = 0.0;
-				continue;
-			}
-
-			volatile amrex::Real const c = factor * val;
-			volatile amrex::Real const a = c - val;
-			arr[bx](i, j, k, n) = c - a;
-		}
-	});
-}
 
 } // namespace quokka::ParticleUtils
 

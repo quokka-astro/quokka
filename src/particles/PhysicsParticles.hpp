@@ -113,8 +113,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
 #if AMREX_SPACEDIM == 3
-	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, const amrex::Vector<amrex::MultiFab *> &rhs_count, int finest_lev,
-				 amrex::Real Gconst) = 0;
+	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
@@ -212,14 +211,16 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 #if AMREX_SPACEDIM == 3
 
 	// Implementation of mass deposition from particles to grid
-	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, const amrex::Vector<amrex::MultiFab *> &rhs_count, int finest_lev,
-			 amrex::Real Gconst) override
+	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			// zero_out_input is false because we want to accumulate mass
 			// vol_weight is false because MassDeposition does the volume weighting
 			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, MassDeposition{Gconst, this->getMassIndex(), 0, 1}, false, false);
-			amrex::ParticleToMesh(*container_, rhs_count, 0, finest_lev, DepositionCount{this->getMassIndex(), 0, 1}, false, false);
+			
+			// Deposit count into the last component of rhs
+			const int count_comp = 1; // Second component is the count
+			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, DepositionCount{this->getMassIndex(), count_comp, 1}, false, false);
 		}
 	}
 
@@ -682,12 +683,12 @@ template <typename problem_t> class PhysicsParticleRegister
 
 #if AMREX_SPACEDIM == 3
 	// Deposit mass from all massive particles
-	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, const amrex::Vector<amrex::MultiFab *> &rhs_count, int finest_lev, amrex::Real Gconst)
+	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::depositMass()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			if (descriptor->getMassIndex() >= 0) {
-				descriptor->depositMass(rhs, rhs_count, finest_lev, Gconst);
+				descriptor->depositMass(rhs, finest_lev, Gconst);
 			}
 		}
 	}
