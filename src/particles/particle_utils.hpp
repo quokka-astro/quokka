@@ -135,6 +135,16 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 
 				const auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1);
 
+				// Use volatile to prevent compiler optimizations that would defeat the roundoff algorithm.
+				// The volatile keyword ensures that:
+				// 1. The compiler doesn't optimize away the intermediate calculations
+				// 2. The operations are performed in the exact order specified
+				// 3. The roundoff effect from the large factor multiplication is preserved
+				//
+				// Without volatile, an optimizing compiler might simplify (c - a) to just (factor * val - (factor * val - val)),
+				// which could eliminate the intended precision truncation that occurs when adding the large factor.
+				// The algorithm relies on the fact that adding a large number and then subtracting it back
+				// will truncate the least significant bits due to IEEE 754 floating-point representation limits.
 				volatile amrex::Real const c = factor * val;
 				volatile amrex::Real const a = c - val;
 				arr[bx](i, j, k, n) = c - a;
