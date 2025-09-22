@@ -129,14 +129,14 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 					digit_to_remove += static_cast<unsigned int>(extra_digits);
 
 					// Clamp to reasonable bounds (1 to 52 bits)
-					digit_to_remove = amrex::max(1u, amrex::min(52u, digit_to_remove));
+					digit_to_remove = amrex::max(1U, amrex::min(52U, digit_to_remove));
 				}
 			}
 
 			const auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1);
 
-			volatile amrex::Real c = factor * val;
-			volatile amrex::Real a = c - val;
+			volatile amrex::Real const c = factor * val;
+			volatile amrex::Real const a = c - val;
 			arr[bx](i, j, k, n) = c - a;
 		}
 	});
@@ -166,8 +166,8 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 				continue;
 			}
 
-			volatile amrex::Real c = factor * val;
-			volatile amrex::Real a = c - val;
+			volatile amrex::Real const c = factor * val;
+			volatile amrex::Real const a = c - val;
 			arr[bx](i, j, k, n) = c - a;
 		}
 	});
