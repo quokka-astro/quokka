@@ -93,9 +93,8 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 	// is machine epsilon. We convert this to binary digits and add redundancy.
 
 	constexpr amrex::Real tiny = 1.0e10 * std::numeric_limits<amrex::Real>::min();
-	constexpr amrex::Real machine_epsilon = std::numeric_limits<amrex::Real>::epsilon();
 	const auto redundancy = static_cast<unsigned int>(reproducibility_roundoff_redundancy);
-	const unsigned int base_digit_to_remove = redundancy + 1; // +1 to account for machine epsilon
+	const unsigned int base_digit_to_remove = redundancy + 2; // +2 to account for machine epsilon
 
 	// Get array accessor for all patches at once
 	auto const &arr = mf.arrays();
@@ -123,19 +122,21 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 
 				// Convert to binary digits: log2(scale_up)
 				if (scale_up > 0.0) {
-					const amrex::Real binary_digits = std::max(0.0, FastMath::fastlg(scale_up));
+					const amrex::Real extra_digits = std::max(0.0, FastMath::fastlg(scale_up));
+					// TODO(cch): we can be less conservative and devide extra_digits by 2 to improve accuracy when scale_up is large. 
+					// Assuming roundoff errors are random walk, the scatter of the accumulative error is sqrt(N) * epsilon.  
 
-					digit_to_remove += static_cast<unsigned int>(binary_digits);
+					digit_to_remove += static_cast<unsigned int>(extra_digits);
 
 					// Clamp to reasonable bounds (1 to 52 bits)
-					digit_to_remove = amrex::max(1u, amrex::min(52u, digit_to_remove));
+					digit_to_remove = amrex::max(1U, amrex::min(52U, digit_to_remove));
 				}
 			}
 
 			const auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1);
 
-			volatile amrex::Real c = factor * val;
-			volatile amrex::Real a = c - val;
+			volatile amrex::Real const c = factor * val;
+			volatile amrex::Real const a = c - val;
 			arr[bx](i, j, k, n) = c - a;
 		}
 	});
@@ -165,8 +166,8 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 				continue;
 			}
 
-			volatile amrex::Real c = factor * val;
-			volatile amrex::Real a = c - val;
+			volatile amrex::Real const c = factor * val;
+			volatile amrex::Real const a = c - val;
 			arr[bx](i, j, k, n) = c - a;
 		}
 	});

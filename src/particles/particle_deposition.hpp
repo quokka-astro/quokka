@@ -123,7 +123,7 @@ struct DepositionCount {
 		amrex::ParticleInterpolator::NearestEight interp(p, plo, dxi);
 		// Deposit to 1.0 to all eight cells that the particle interacts with
 		interp.ParticleToMesh(p, rho_count, start_part_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) { return 1.0; });
+				      [=] AMREX_GPU_DEVICE(const ContainerType & /*part*/, int  /*comp*/) { return 1.0; });
 	}
 };
 
