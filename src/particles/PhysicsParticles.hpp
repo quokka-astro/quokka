@@ -132,8 +132,7 @@ class PhysicsParticleDescriptorBase
 
 	//----- Methods that are implemented for some but not all particle types, so they cannot be pure virtual -----
 
-	virtual auto depositSN(amrex::MultiFab & /*state*/, amrex::MultiFab & /*state_buffer*/, int /*lev*/, amrex::Real /*time*/, amrex::Real /*dt*/)
-	    -> amrex::Real
+	virtual auto depositSN(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*time*/, amrex::Real /*dt*/) -> amrex::Real
 	{
 		return 0.0_rt;
 	}
@@ -526,7 +525,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Implementation of supernova energy and momentum deposition from particles to grid
-	auto depositSN(amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt) -> amrex::Real override
+	auto depositSN(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> amrex::Real override
 	{
 		amrex::Real max_velocity = 0.0;
 
@@ -538,7 +537,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
 				max_velocity =
-				    SNDeposition<ContainerType, problem_t>(this->container_, state, state_buffer, lev, time, dt, this->getMassIndex(),
+				    SNDeposition<ContainerType, problem_t>(this->container_, state, lev, time, dt, this->getMassIndex(),
 									   this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
@@ -698,10 +697,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const BL_PROFILE("PhysicsParticleRegister::depositSN()");
 		amrex::Real max_velocity = 0.0;
-		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp(), state.nGrow());
-		// this function is only implemented for some particle types, so we specify the particle type manually here
+		// Each particle type handles its own buffer creation and roundoff independently
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			const amrex::Real max_velocity_ = descriptor->depositSN(state, state_buffer, lev, time, dt);
+			const amrex::Real max_velocity_ = descriptor->depositSN(state, lev, time, dt);
 			max_velocity = std::max(max_velocity, max_velocity_);
 		}
 		return max_velocity;
