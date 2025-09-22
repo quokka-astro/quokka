@@ -316,7 +316,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 								 int orig_comp); // template specialized by problem generator
 
 	// boundary condition
-	template<quokka::direction dir>
+	template <quokka::direction dir>
 	AMREX_GPU_DEVICE static void setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
 									int numcomp, amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr,
 									int bcomp, int orig_comp); // template specialized by problem generator
@@ -2005,11 +2005,14 @@ template <typename problem_t> struct setBoundaryFunctorFaceVar {
 	{
 		// Now pass the stored direction to the function
 		if (dir_ == quokka::direction::x) {
-			AMRSimulation<problem_t>::template setCustomBoundaryConditionsFaceVar<quokka::direction::x>(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+			AMRSimulation<problem_t>::template setCustomBoundaryConditionsFaceVar<quokka::direction::x>(iv, dest, dcomp, numcomp, geom, time, bcr,
+														    bcomp, orig_comp);
 		} else if (dir_ == quokka::direction::y) {
-			AMRSimulation<problem_t>::template setCustomBoundaryConditionsFaceVar<quokka::direction::y>(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+			AMRSimulation<problem_t>::template setCustomBoundaryConditionsFaceVar<quokka::direction::y>(iv, dest, dcomp, numcomp, geom, time, bcr,
+														    bcomp, orig_comp);
 		} else if (dir_ == quokka::direction::z) {
-			AMRSimulation<problem_t>::template setCustomBoundaryConditionsFaceVar<quokka::direction::z>(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+			AMRSimulation<problem_t>::template setCustomBoundaryConditionsFaceVar<quokka::direction::z>(iv, dest, dcomp, numcomp, geom, time, bcr,
+														    bcomp, orig_comp);
 		}
 	}
 };
