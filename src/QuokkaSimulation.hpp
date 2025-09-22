@@ -2316,12 +2316,12 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 				}
 			}();
 
-            amrex::ParallelFor(faceRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept {
-                auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+			amrex::ParallelFor(faceRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept {
+				auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-                // View for writing fast MHD wave speeds when MHD is enabled.
-                // Mark maybe_unused to avoid warnings in non-MHD builds.
-                [[maybe_unused]] quokka::Array4View<amrex::Real, DIR> fspds_view(fspds_arr);
+				// View for writing fast MHD wave speeds when MHD is enabled.
+				// Mark maybe_unused to avoid warnings in non-MHD builds.
+				[[maybe_unused]] quokka::Array4View<amrex::Real, DIR> fspds_view(fspds_arr);
 
 				const double rho_L = L(i, j, k, HydroSystem<problem_t>::primDensity_index);
 				const double rho_R = R(i, j, k, HydroSystem<problem_t>::primDensity_index);
@@ -2355,13 +2355,13 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 				double magnetic_energy_L = 0.0;
 				double magnetic_energy_R = 0.0;
 
-                if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-                    quokka::Array4View<const amrex::Real, DIR> fc(fc_cons);
-                    bx1 = fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-                    by_L = Lbf(i, j, k, 0);
-                    bz_L = Lbf(i, j, k, 1);
-                    by_R = Rbf(i, j, k, 0);
-                    bz_R = Rbf(i, j, k, 1);
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					quokka::Array4View<const amrex::Real, DIR> fc(fc_cons);
+					bx1 = fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+					by_L = Lbf(i, j, k, 0);
+					bz_L = Lbf(i, j, k, 1);
+					by_R = Rbf(i, j, k, 0);
+					bz_R = Rbf(i, j, k, 1);
 					magnetic_energy_L = 0.5 * (bx1 * bx1 + by_L * by_L + bz_L * bz_L);
 					magnetic_energy_R = 0.5 * (bx1 * bx1 + by_R * by_R + bz_R * bz_R);
 				}
