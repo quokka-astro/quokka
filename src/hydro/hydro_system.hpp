@@ -32,6 +32,7 @@
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/OptionalArrayCapture.hpp"
 #include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
@@ -149,31 +150,23 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 						  amrex::MultiFab &primVar_mf, const int nghost)
 {
 	// convert conserved to primitive variables
-	// Only fetch face-centered arrays if MHD is enabled; otherwise the
-	// MultiFabs may be default-constructed and accessing them is invalid.
-	[[maybe_unused]] decltype(cons_fc_mf[0].const_arrays()) cons_fc_x0;
+	// Only fetch face-centered arrays if MHD is enabled; otherwise provide a
+	// lightweight wrapper that avoids touching potentially invalid MultiFabs.
+	auto const cons_fc_x0 = quokka::detail::make_optional_array_capture<Physics_Traits<problem_t>::is_mhd_enabled>(cons_fc_mf[0]);
 #if AMREX_SPACEDIM >= 2
-	[[maybe_unused]] decltype(cons_fc_mf[1].const_arrays()) cons_fc_x1;
+	auto const cons_fc_x1 = quokka::detail::make_optional_array_capture<Physics_Traits<problem_t>::is_mhd_enabled>(cons_fc_mf[1]);
 #endif
 #if AMREX_SPACEDIM == 3
-	[[maybe_unused]] decltype(cons_fc_mf[2].const_arrays()) cons_fc_x2;
+	auto const cons_fc_x2 = quokka::detail::make_optional_array_capture<Physics_Traits<problem_t>::is_mhd_enabled>(cons_fc_mf[2]);
 #endif
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		cons_fc_x0 = cons_fc_mf[0].const_arrays();
-#if AMREX_SPACEDIM >= 2
-		cons_fc_x1 = cons_fc_mf[1].const_arrays();
-#endif
-#if AMREX_SPACEDIM == 3
-		cons_fc_x2 = cons_fc_mf[2].const_arrays();
-#endif
-	}
 	auto const &cons_cc = cons_cc_mf.const_arrays();
 	auto const &primVar = primVar_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		// First-capture the magnetic field arrays by accessing them early
-		// This forces NVCC to capture them before the constexpr if block
+		// First-capture the magnetic field arrays by accessing them early.
+		// The OptionalArrayCapture wrapper keeps this safe when MHD is disabled while
+		// still satisfying NVCC's capture requirements.
 		[[maybe_unused]] auto fc_x0_ref = cons_fc_x0[bx];
 #if AMREX_SPACEDIM >= 2
 		[[maybe_unused]] auto fc_x1_ref = cons_fc_x1[bx];
@@ -986,14 +979,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
 
-	amrex::MultiArray4<double> x1FSpds_in;
-	amrex::MultiArray4<const double> x1ConsVar_fc_in;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		if (RIEMANN == RiemannSolver::HLLD || RIEMANN == RiemannSolver::LLF_MHD) {
-			x1FSpds_in = (*x1FSpds_mf).arrays();
+	constexpr bool is_mhd = Physics_Traits<problem_t>::is_mhd_enabled;
+	constexpr bool needs_fast_speeds = (RIEMANN == RiemannSolver::HLLD || RIEMANN == RiemannSolver::LLF_MHD);
+
+	if constexpr (is_mhd) {
+		AMREX_ASSERT(x1ConsVar_fc_mf != nullptr);
+		if constexpr (needs_fast_speeds) {
+			AMREX_ASSERT(x1FSpds_mf != nullptr);
 		}
-		x1ConsVar_fc_in = (*x1ConsVar_fc_mf).const_arrays();
 	}
+
+	auto const x1ConsVar_fc_in = quokka::detail::make_optional_array_capture_from_provider<is_mhd>(
+	    [&]() { return (*x1ConsVar_fc_mf).const_arrays(); });
+	auto const x1FSpds_in = quokka::detail::make_optional_array_capture_from_provider<is_mhd && needs_fast_speeds>(
+	    [&]() { return (*x1FSpds_mf).arrays(); });
 
 	// Include ghost cells when computing face velocities
 	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
