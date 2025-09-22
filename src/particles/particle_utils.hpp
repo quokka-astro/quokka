@@ -123,7 +123,7 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 				// Convert to binary digits: log2(scale_up)
 				if (scale_up > 0.0) {
 					const amrex::Real extra_digits = std::max(0.0, FastMath::fastlg(scale_up));
-					// TODO(cch): we can be less conservative and devide extra_digits by 2 to improve accuracy when scale_up is large.
+					// TODO(cch): we can be less conservative and divide extra_digits by 2 to improve accuracy when scale_up is large.
 					// Assuming roundoff errors are random walk, the scatter of the accumulative error is sqrt(N) * epsilon.
 
 					digit_to_remove += static_cast<unsigned int>(extra_digits);
