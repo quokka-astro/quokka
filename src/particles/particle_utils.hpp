@@ -103,20 +103,21 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 
 	// Apply roundoff algorithm to every grid point and component in parallel
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// Process all components at this grid point
-		for (int n = 0; n < ncomp; ++n) {
-			const auto val = arr[bx](i, j, k, n);
-			const auto count = count_arr[bx](i, j, k, n);
+		const auto count = count_arr[bx](i, j, k, 0); // integer represented as Real
 
-			if (std::abs(val) < tiny) {
-				arr[bx](i, j, k, n) = 0.0;
-				continue;
-			}
+		if (count > 1.5) {
+			// Process all components at this grid point
+			for (int n = 0; n < ncomp; ++n) {
+				const auto val = arr[bx](i, j, k, n);
 
-			// Compute digit_to_remove based on count
-			auto digit_to_remove = base_digit_to_remove;
+				if (std::abs(val) < tiny) {
+					arr[bx](i, j, k, n) = 0.0;
+					continue;
+				}
 
-			if (count > 1.0) {
+				// Compute digit_to_remove based on count
+				auto digit_to_remove = base_digit_to_remove;
+
 				// Relative error estimate: (N - 1) * epsilon
 				const amrex::Real scale_up = count - 1.0;
 
@@ -131,13 +132,13 @@ inline void roundoffMultiFab(amrex::MultiFab &mf, amrex::MultiFab &mf_count)
 					// Clamp to reasonable bounds (1 to 52 bits)
 					digit_to_remove = amrex::max(1U, amrex::min(52U, digit_to_remove));
 				}
+
+				const auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1);
+
+				volatile amrex::Real const c = factor * val;
+				volatile amrex::Real const a = c - val;
+				arr[bx](i, j, k, n) = c - a;
 			}
-
-			const auto factor = static_cast<amrex::Real>((1ULL << digit_to_remove) + 1);
-
-			volatile amrex::Real const c = factor * val;
-			volatile amrex::Real const a = c - val;
-			arr[bx](i, j, k, n) = c - a;
 		}
 	});
 }
