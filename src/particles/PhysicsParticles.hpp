@@ -132,10 +132,7 @@ class PhysicsParticleDescriptorBase
 
 	//----- Methods that are implemented for some but not all particle types, so they cannot be pure virtual -----
 
-	virtual auto depositSN(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*time*/, amrex::Real /*dt*/) -> amrex::Real
-	{
-		return 0.0_rt;
-	}
+	virtual auto depositSN(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*time*/, amrex::Real /*dt*/) -> amrex::Real { return 0.0_rt; }
 
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */ }
@@ -536,9 +533,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 								 "UnitSystem must be CGS for particleMeshInteraction");
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
-				max_velocity =
-				    SNDeposition<ContainerType, problem_t>(this->container_, state, lev, time, dt, this->getMassIndex(),
-									   this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+				max_velocity = SNDeposition<ContainerType, problem_t>(this->container_, state, lev, time, dt, this->getMassIndex(),
+										      this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
 				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),

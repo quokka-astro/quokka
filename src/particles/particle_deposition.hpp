@@ -161,7 +161,7 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 							     SNR_pz_per_cell);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
 							     SNR_energy_per_cell);
-				
+
 				// Deposit count into the last component for roundoff algorithm
 				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, count_comp), 1.0);
@@ -255,7 +255,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), dpy);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
-				
+
 				// Deposit count into the last component for roundoff algorithm
 				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, count_comp), 1.0);
@@ -603,8 +603,8 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 } // namespace SNFeedbackUtils
 
 template <typename ContainerType, typename problem_t>
-auto SNDeposition(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex, int birthTimeIndex) -> Real
+auto SNDeposition(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt, int mass_index, int evolutionStageIndex,
+		  int birthTimeIndex) -> Real
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
