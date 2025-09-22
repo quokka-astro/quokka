@@ -1,10 +1,10 @@
 // IWYU pragma: private; include "radiation/radiation_system.hpp"
 #ifndef RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_SINGLE_GROUP_HPP_
-
+// NOLINTNEXTLINE(misc-header-include-cycle)
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
-#define LARGE 1.0e100
+inline constexpr double kLarge = 1.0e100;
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
@@ -26,7 +26,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 	// He, Wibking, & Krumholz (2024)
 
 	// cell-centered kernel
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> void {
 		auto p_iteration_counter_local = p_iteration_counter;		      // NOLINT
 		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
 
@@ -263,6 +263,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
+// NOLINTNEXTLINE(readability-avoid-unconditional-preprocessor-if)
 #if 0
 					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 					if (n == maxIter - 10) {
@@ -307,7 +308,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						J01 = cscale;
 						J10 = 1.0 / c_v * dEg_dT;
 						if (tau <= 0.0) {
-							J11 = -LARGE;
+							J11 = -kLarge;
 						} else {
 							J11 = kappaPoverE * d_fourpiboverc_d_t * dTd_dRg - kappaPoverE / tau - 1.0;
 						}

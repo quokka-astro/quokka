@@ -8,8 +8,10 @@
 /// \file OptionalArrayCapture.hpp
 /// \brief Provides a CUDA-friendly wrapper for conditionally available Array4 vectors.
 
+#include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 
+#include <functional>
 #include <type_traits>
 #include <utility>
 
@@ -37,9 +39,13 @@ template <typename ArrayVec> class OptionalArrayCapture<false, ArrayVec>
 	using value_type = std::remove_reference_t<decltype(std::declval<ArrayVec>()[0])>;
 
 	AMREX_GPU_HOST_DEVICE constexpr OptionalArrayCapture() noexcept = default;
-	explicit AMREX_GPU_HOST_DEVICE OptionalArrayCapture(ArrayVec const &) noexcept {}
+	explicit AMREX_GPU_HOST_DEVICE OptionalArrayCapture([[maybe_unused]] ArrayVec const &arrays) noexcept = default;
 
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto operator[](int) const noexcept -> value_type { return value_type{}; }
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto operator[](int index) const noexcept -> value_type
+	{
+		static_cast<void>(index);
+		return value_type{};
+	}
 };
 
 template <bool Enabled, typename MultiFab> auto make_optional_array_capture(MultiFab const &mf)
@@ -54,10 +60,13 @@ template <bool Enabled, typename MultiFab> auto make_optional_array_capture(Mult
 
 template <bool Enabled, typename Provider> auto make_optional_array_capture_from_provider(Provider &&provider)
 {
-	using ArraysType = decltype(provider());
+	using ProviderType = std::remove_reference_t<Provider>;
+	using ArraysType = std::invoke_result_t<ProviderType &>;
 	if constexpr (Enabled) {
-		return OptionalArrayCapture<true, ArraysType>(provider());
+		auto arrays = std::invoke(std::forward<Provider>(provider));
+		return OptionalArrayCapture<true, ArraysType>(arrays);
 	} else {
+		static_cast<void>(provider);
 		return OptionalArrayCapture<false, ArraysType>();
 	}
 }

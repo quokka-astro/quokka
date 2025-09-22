@@ -1,7 +1,7 @@
 // IWYU pragma: private; include "radiation/radiation_system.hpp"
 #ifndef RAD_SOURCE_TERMS_MULTI_GROUP_HPP_ // NOLINT
 #define RAD_SOURCE_TERMS_MULTI_GROUP_HPP_
-
+// NOLINTNEXTLINE(misc-header-include-cycle)
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
 // Compute kappaE and kappaP based on the opacity model. The result is stored in the last five arguments: alpha_P, alpha_E, kappaP, kappaE, and kappaPoverE.
@@ -323,6 +323,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			break;
 		}
 
+// NOLINTNEXTLINE(readability-avoid-unconditional-preprocessor-if)
 #if 0
 		// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 		if (n == 0) {
@@ -589,7 +590,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 	// Greenough [Journal of Computational Physics 184 (2003) 53–78].
 
 	// cell-centered kernel
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> void {
 		// make a local reference
 		auto p_iteration_counter_local = p_iteration_counter;		      // NOLINT
 		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
