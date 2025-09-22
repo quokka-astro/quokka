@@ -21,17 +21,17 @@ namespace amrex::ParticleInterpolator
 struct NearestEight : public Base<NearestEight, amrex::Real> {
 	static constexpr int stencil_width = 2;
 
-	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0;
-	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0;
-	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0;
+	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0; // NOLINT
 
-	amrex::Real weights[3 * stencil_width];
+	amrex::Real weights[3 * stencil_width]; // NOLINT
 
 	template <typename P>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE NearestEight(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE NearestEight(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
 							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
 	{
-		w = &weights[0];
+		w = &weights[0]; // NOLINT
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
 			index[i] = static_cast<int>(amrex::Math::floor(l)) - 1;
