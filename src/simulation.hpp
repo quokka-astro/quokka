@@ -1357,9 +1357,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
 			if (particleRegister_.HasMassiveParticles()) {
 				// create temporary buffer for mass deposition
+				// The buffer needs an extra component for the count (last component)
 				amrex::Vector<amrex::MultiFab> rhs_buffer(finest_level + 1);
 				for (int lev = 0; lev <= finest_level; ++lev) {
-					rhs_buffer[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
+					rhs_buffer[lev].define(grids[lev], dmap[lev], ncomp + 1, nghost_rhs);
 					rhs_buffer[lev].setVal(0);
 				}
 
@@ -1643,7 +1644,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	state_new_cc_[lev].FillBoundary(geom[lev].periodicity());
 
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
-	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars, nghost);
+	// The extra component is for the particle counts in cells
+	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars + 1, nghost);
 
 	accretion_rate_at_level.setVal(0.0);
 
@@ -1651,6 +1653,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Apply roundoff to accretion_rate_at_level
+	// TODO(cch): compute accumulative errors and pass it to roundoffMultiFab
 	quokka::ParticleUtils::roundoffMultiFab(accretion_rate_at_level);
 
 	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
