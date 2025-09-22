@@ -88,8 +88,8 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 	// - 1 sign bit + 11 exponent bits + 52 mantissa bits = 64 total bits
 	// - The mantissa has an implicit leading 1, giving 53 bits of precision
 	//
-	// This version uses the last component of mf as the count to compute digit_to_remove 
-	// based on the relative error formula: relative_error = (N - 1) * epsilon, where N 
+	// This version uses the last component of mf as the count to compute digit_to_remove
+	// based on the relative error formula: relative_error = (N - 1) * epsilon, where N
 	// is the count and epsilon is machine epsilon. We convert this to binary digits and add redundancy.
 
 	constexpr amrex::Real tiny = 1.0e10 * std::numeric_limits<amrex::Real>::min();
@@ -152,7 +152,6 @@ inline void roundoffMultiFab(amrex::MultiFab &mf)
 		}
 	});
 }
-
 
 } // namespace quokka::ParticleUtils
 
