@@ -838,8 +838,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 {
 	amrex::Print() << "\nDDEBUG fc at direction " << idim << "\n";
 	auto mf_fc = mf.arrays();
-	amrex::ParallelFor(
-	    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void { printf("%f\n", mf_fc[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)); });
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void {
+		printf("%f\n", mf_fc[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+	});
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
@@ -1016,7 +1017,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 	auto rhs = rhs_mf.arrays();
 	const Real G = Gconst_;
 
-amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void {
+	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void {
 		// *add* density to rhs_mf
 		// (N.B. particles **will not work** if you overwrite the density here!)
 		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
@@ -1032,7 +1033,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 	auto const &phi = phi_mf.const_arrays();
 	auto state = state_new_cc_[lev].arrays();
 
-amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void {
+	amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void {
 		// add operator-split gravitational acceleration
 		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
@@ -1111,7 +1112,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(a
 	const BL_PROFILE("QuokkaSimulation::PreInterpState()");
 
 	auto const &cons = mf.arrays();
-amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
 		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 		const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -1130,7 +1131,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpState(
 	const BL_PROFILE("QuokkaSimulation::PostInterpState()");
 
 	auto const &cons = mf.arrays();
-amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
 		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 		const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -1165,9 +1166,7 @@ auto QuokkaSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F co
 			auto const &box = iter.validbox();
 			auto const &state = state_new_cc_[lev].const_array(iter);
 			auto const &result = q[lev].array(iter);
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> void {
-				result(i, j, k) = user_f(i, j, k, state);
-			});
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> void { result(i, j, k) = user_f(i, j, k, state); });
 		}
 	}
 
@@ -1941,7 +1940,7 @@ AMREX_FORCE_INLINE void QuokkaSimulation<problem_t>::computeCCPerpBfieldComps(am
 	constexpr int b_comp = Physics_Indices<problem_t>::mhdFirstIndex;
 
 	amrex::IntVect ng{AMREX_D_DECL(nghost_fc_, nghost_fc_, nghost_fc_)};
-amrex::ParallelFor(cc_bfield_perp_comps_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
+	amrex::ParallelFor(cc_bfield_perp_comps_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
 		const amrex::Real bx2_m = x2State_fc_bfield_in[bx](i, j, k, b_comp);
 		const amrex::Real bx2_p = x2State_fc_bfield_in[bx](i + delta_x2[0], j + delta_x2[1], k + delta_x2[2], b_comp);
 		cc_bfield_perp_comps_out[bx](i, j, k, 0) = 0.5 * (bx2_m + bx2_p);
@@ -1999,7 +1998,7 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 			auto chi = chi1Fab.array();
 			amrex::ParallelFor(chiBox, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept -> void {
 				quokka::Array4View<const amrex::Real, FluxDir::X1> prim(q);
-			quokka::Array4View<amrex::Real, FluxDir::X1> const xchi(chi);
+				quokka::Array4View<amrex::Real, FluxDir::X1> const xchi(chi);
 				auto [i, j, k] = quokka::reorderMultiIndex<FluxDir::X1>(i_in, j_in, k_in);
 
 				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
@@ -2072,7 +2071,7 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 			auto chi = chi2Fab.array();
 			amrex::ParallelFor(chiBox, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept -> void {
 				quokka::Array4View<const amrex::Real, FluxDir::X2> prim(q);
-			quokka::Array4View<amrex::Real, FluxDir::X2> const xchi(chi);
+				quokka::Array4View<amrex::Real, FluxDir::X2> const xchi(chi);
 				auto [i, j, k] = quokka::reorderMultiIndex<FluxDir::X2>(i_in, j_in, k_in);
 
 				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
@@ -2146,7 +2145,7 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 			auto chi = chi3Fab.array();
 			amrex::ParallelFor(chiBox, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) noexcept -> void {
 				quokka::Array4View<const amrex::Real, FluxDir::X3> prim(q);
-			quokka::Array4View<amrex::Real, FluxDir::X3> const xchi(chi);
+				quokka::Array4View<amrex::Real, FluxDir::X3> const xchi(chi);
 				auto [i, j, k] = quokka::reorderMultiIndex<FluxDir::X3>(i_in, j_in, k_in);
 
 				amrex::Real Pplus2 = prim(i + 2, j, k, HydroSystem<problem_t>::pressure_index);
