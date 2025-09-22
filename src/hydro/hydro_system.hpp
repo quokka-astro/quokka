@@ -32,8 +32,8 @@
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/OptionalArrayCapture.hpp"
 #include "util/ArrayView.hpp"
+#include "util/OptionalArrayCapture.hpp"
 #include "util/valarray.hpp"
 
 // Microphysics headers
@@ -989,10 +989,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		}
 	}
 
-	auto const x1ConsVar_fc_in = quokka::detail::make_optional_array_capture_from_provider<is_mhd>(
-	    [&]() { return (*x1ConsVar_fc_mf).const_arrays(); });
-	auto const x1FSpds_in = quokka::detail::make_optional_array_capture_from_provider<is_mhd && needs_fast_speeds>(
-	    [&]() { return (*x1FSpds_mf).arrays(); });
+	auto const x1ConsVar_fc_in = quokka::detail::make_optional_array_capture_from_provider<is_mhd>([&]() { return (*x1ConsVar_fc_mf).const_arrays(); });
+	auto const x1FSpds_in =
+	    quokka::detail::make_optional_array_capture_from_provider < is_mhd && needs_fast_speeds > ([&]() { return (*x1FSpds_mf).arrays(); });
 
 	// Include ghost cells when computing face velocities
 	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
