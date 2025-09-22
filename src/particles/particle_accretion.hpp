@@ -212,7 +212,11 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					AMREX_ASSERT(rho > 0.0);
 					const double rel_accretion_rate = M_dot_cell * dt / (vol * rho);
 					AMREX_ASSERT(rel_accretion_rate <= 0.0);
-					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk), rel_accretion_rate);
+					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk, 0), rel_accretion_rate);
+					
+					// Deposit count into the last component for roundoff algorithm
+					const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk, count_comp), 1.0);
 					//----------------------------------------------------------------------------------------------------
 				}
 			}

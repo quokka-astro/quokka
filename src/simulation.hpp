@@ -1644,7 +1644,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	state_new_cc_[lev].FillBoundary(geom[lev].periodicity());
 
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
-	// The extra component is for the cell count
+	// The extra component is for the particle counts in cells
 	amrex::MultiFab accretion_rate_at_level(grids[lev], dmap[lev], Physics_NumVars::numHydroVars + 1, nghost);
 
 	accretion_rate_at_level.setVal(0.0);
@@ -1653,7 +1653,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt);
 
 	// Apply roundoff to accretion_rate_at_level
-	// TODO(cch): compute cell counts and pass it to roundoffMultiFab
 	// TODO(cch): compute accumulative errors and pass it to roundoffMultiFab
 	quokka::ParticleUtils::roundoffMultiFab(accretion_rate_at_level);
 
