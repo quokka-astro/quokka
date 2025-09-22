@@ -13,6 +13,8 @@
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Gpu.H"
+#include "AMReX_ParmParse.H"
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
@@ -57,12 +59,6 @@ constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveLinear>::gamma;
 constexpr double num_modes = 1;
 constexpr double k_amplitude = 2.0 * M_PI * num_modes;
 
-// alignment between the background magnetic field and the direction of wave propagation (in the x1-x2 plane). recall that hat(k) = (1, 0, 0) and hat(delta_u) =
-// (0, 1, 0)
-constexpr double theta_degrees = 0.0; // degrees
-constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
-constexpr double sin_theta = gcem::sin(theta_degrees * M_PI / 180.0);
-
 // background states
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
@@ -71,19 +67,30 @@ constexpr double bg_mag_amplitude = 1.0;
 // magnetic field properties
 constexpr double delta_b = 1e-6;
 constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
-constexpr double bg_mag_x1 = bg_mag_amplitude * cos_theta;
-constexpr double bg_mag_x2 = bg_mag_amplitude * sin_theta;
 
-constexpr double omega = gcem::sqrt(alfven_speed * alfven_speed * k_amplitude * k_amplitude * cos_theta * cos_theta);
+struct ProblemParams {
+  double theta_degrees = 0.0;
+  double cos_theta = 1.0;
+  double sin_theta = 0.0;
+  double bg_mag_x1 = bg_mag_amplitude;
+  double bg_mag_x2 = 0.0;
+  double omega = alfven_speed * k_amplitude;
+};
+
+AMREX_GPU_MANAGED ProblemParams problem_params;
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double /*x1*/, double /*x2*/, double /*x3*/, double /*time*/) -> double { return 0.0; }
 
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/, double /*x3*/, double time) -> double
 {
-	return -bg_mag_amplitude * delta_b / k_amplitude * std::sin(omega * time - k_amplitude * x1);
+	return -bg_mag_amplitude * delta_b / k_amplitude * std::sin(problem_params.omega * time - k_amplitude * x1);
 }
 
-AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double x2, double /*x3*/, double /*time*/) -> double { return bg_mag_amplitude * x2; }
+AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double x1, double x2, double /*x3*/, double /*time*/) -> double
+{
+  return bg_mag_amplitude * (x2 * problem_params.cos_theta - x1 * problem_params.sin_theta);
+}
+
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
@@ -96,17 +103,17 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
 
 	if (cen == quokka::centering::cc) {
-		const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
+		const double cos_wave_C = std::cos(problem_params.omega * time - k_amplitude * x1_C);
 
 		const double density = bg_density;
 		const double pressure = bg_pressure;
 		const double x1vel = 0.0;
 		const double x2vel = 0.0;
-		const double x3vel = -omega * delta_b / (sound_speed * k_amplitude * cos_theta) * cos_wave_C;
+		const double x3vel = -problem_params.omega * delta_b / (sound_speed * k_amplitude * problem_params.cos_theta) * cos_wave_C;
 
 		// magnetic field at the center of the cell
-		const double x1mag = bg_mag_x1;
-		const double x2mag = bg_mag_x2;
+		const double x1mag = problem_params.bg_mag_x1;
+		const double x2mag = problem_params.bg_mag_x2;
 		const double x3mag = bg_mag_amplitude * delta_b * cos_wave_C;
 
 		const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
@@ -229,6 +236,26 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution_fc(amrex::Mult
 
 auto problem_main() -> int
 {
+	double theta_degrees = 0.0;
+	amrex::ParmParse const hpp("test");
+	hpp.query("angle", theta_degrees);
+
+	constexpr double deg2rad = M_PI / 180.0;
+	const double theta_rad  = theta_degrees * deg2rad;
+	const double cos_theta  = std::cos(theta_rad);
+	const double sin_theta  = std::sin(theta_rad);
+
+	const double bg_mag_x1 = bg_mag_amplitude * cos_theta;
+	const double bg_mag_x2 = bg_mag_amplitude * sin_theta;
+	const double omega = std::sqrt(alfven_speed * alfven_speed * k_amplitude * k_amplitude * cos_theta * cos_theta);
+
+	problem_params.theta_degrees = theta_degrees;
+	problem_params.cos_theta = cos_theta;
+	problem_params.sin_theta = sin_theta;
+	problem_params.bg_mag_x1 = bg_mag_x1;
+	problem_params.bg_mag_x2 = bg_mag_x2;
+	problem_params.omega = omega;
+
 	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir); // periodic
 
 	const int nvars_fc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_fc;
