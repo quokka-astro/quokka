@@ -6,16 +6,16 @@
 /// \brief Defines a test problem to make sure face-centred quantities are created correctly.
 ///
 
+#include <array>
 #include <cassert>
 #include <cmath>
-#include <array>
 #include <gcem.hpp>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
-#include "AMReX_REAL.H"
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
@@ -27,7 +27,8 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct AlfvenWaveLinear {};
+struct AlfvenWaveLinear {
+};
 
 template <> struct quokka::EOS_Traits<AlfvenWaveLinear> {
 	static constexpr double gamma = 5. / 3.;
@@ -54,24 +55,18 @@ constexpr double bg_b_magn = 1.0;
 constexpr double delta_b_magn = 1e-6;
 constexpr double alfven_speed = bg_b_magn / gcem::sqrt(bg_density);
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE
-double computeDotProduct(const std::array<double, 3>& vfield1, const std::array<double, 3>& vfield2)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE double computeDotProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2)
 {
 	return vfield1[0] * vfield2[0] + vfield1[1] * vfield2[1] + vfield1[2] * vfield2[2];
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE
-std::array<double, 3> computeCrossProduct(const std::array<double, 3>& vfield1, const std::array<double, 3>& vfield2)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE std::array<double, 3> computeCrossProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2)
 {
-	return {
-		vfield1[1] * vfield2[2] - vfield1[2] * vfield2[1],
-		vfield1[2] * vfield2[0] - vfield1[0] * vfield2[2],
-		vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]
-	};
+	return {vfield1[1] * vfield2[2] - vfield1[2] * vfield2[1], vfield1[2] * vfield2[0] - vfield1[0] * vfield2[2],
+		vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]};
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE
-void normaliseVector(std::array<double, 3>& vfield)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normaliseVector(std::array<double, 3> &vfield)
 {
 	const double field_magn = std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
 	if (field_magn > 1e-14) {
@@ -81,9 +76,7 @@ void normaliseVector(std::array<double, 3>& vfield)
 	}
 }
 
-
-struct ProblemSetup
-{
+struct ProblemSetup {
 	// angles (radians) in the math reference frame (MRF)
 	double angle_between_k_b0 = 0.0;
 	double cos_angle_k_b0 = 1.0;
@@ -94,9 +87,9 @@ struct ProblemSetup
 	double k_elevation_xy = 0.0;
 
 	// MRF expressed in problem refrence frame (PRF)
-	std::array<double,3> k_dir_prf {1.0, 0.0, 0.0};
-	std::array<double,3> inplane_dir_prf {0.0, 1.0, 0.0};
-	std::array<double,3> outofplane_dir_prf {0.0, 0.0, 1.0};
+	std::array<double, 3> k_dir_prf{1.0, 0.0, 0.0};
+	std::array<double, 3> inplane_dir_prf{0.0, 1.0, 0.0};
+	std::array<double, 3> outofplane_dir_prf{0.0, 0.0, 1.0};
 
 	double k_magn = 2.0 * M_PI;
 	double omega = alfven_speed * k_magn;
@@ -109,16 +102,13 @@ struct ProblemSetup
 
 AMREX_GPU_MANAGED ProblemSetup problem_setup;
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE
-double computeVectorPotential(const double x1, const double x2, const double x3, const double time, const int component)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE double computeVectorPotential(const double x1, const double x2, const double x3, const double time, const int component)
 {
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		component == 0 || component == 1 || component == 2,
-		"computeVectorPotential(): component must be an integer in {0, 1, 2}"
-	);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(component == 0 || component == 1 || component == 2,
+					 "computeVectorPotential(): component must be an integer in {0, 1, 2}");
 
 	// position in the problem reference frame (PRF)
-	const std::array<double, 3> x_prf{ x1, x2, x3 };
+	const std::array<double, 3> x_prf{x1, x2, x3};
 
 	// map PRF vector to MRF coordinates by projecting onto the MRF basis
 	// equivalently: x_mrf = transpose(R) * x_prf, where R = [k_dir_prf, inplane_dir_prf, outofplane_dir_prf]
@@ -162,30 +152,26 @@ double computeVectorPotential(const double x1, const double x2, const double x3,
 	const double A1_prf = A0_mrf * problem_setup.k_dir_prf[1] + A1_mrf * problem_setup.inplane_dir_prf[1] + A2_mrf * problem_setup.outofplane_dir_prf[1];
 	const double A2_prf = A0_mrf * problem_setup.k_dir_prf[2] + A1_mrf * problem_setup.inplane_dir_prf[2] + A2_mrf * problem_setup.outofplane_dir_prf[2];
 
-	if (component == 0) { return A0_prf; }
-	if (component == 1) { return A1_prf; }
-	if (component == 2) { return A2_prf; }
+	if (component == 0) {
+		return A0_prf;
+	}
+	if (component == 1) {
+		return A1_prf;
+	}
+	if (component == 2) {
+		return A2_prf;
+	}
 }
 
+AMREX_GPU_DEVICE inline double Ax(const double x1, const double x2, const double x3, const double t) { return computeVectorPotential(x1, x2, x3, t, 0); }
 
-AMREX_GPU_DEVICE inline double Ax(const double x1, const double x2, const double x3, const double t) {
-	return computeVectorPotential(x1, x2, x3, t, 0);
-}
+AMREX_GPU_DEVICE inline double Ay(const double x1, const double x2, const double x3, const double t) { return computeVectorPotential(x1, x2, x3, t, 1); }
 
-AMREX_GPU_DEVICE inline double Ay(const double x1, const double x2, const double x3, const double t) {
-	return computeVectorPotential(x1, x2, x3, t, 1);
-}
-
-AMREX_GPU_DEVICE inline double Az(const double x1, const double x2, const double x3, const double t) {
-	return computeVectorPotential(x1, x2, x3, t, 2);
-}
+AMREX_GPU_DEVICE inline double Az(const double x1, const double x2, const double x3, const double t) { return computeVectorPotential(x1, x2, x3, t, 2); }
 
 AMREX_GPU_DEVICE
-void computeWaveSolution(int i, int j, int k,
-                         amrex::Array4<amrex::Real> const &state,
-                         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-                         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-                         quokka::centering cen, quokka::direction dir, double time)
+void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, double time)
 {
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
@@ -196,7 +182,7 @@ void computeWaveSolution(int i, int j, int k,
 	const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
 
 	if (cen == quokka::centering::cc) {
-		const std::array<double,3> xC_prf{ x1_C, x2_C, x3_C };
+		const std::array<double, 3> xC_prf{x1_C, x2_C, x3_C};
 		const double x0_mrf = computeDotProduct(xC_prf, problem_setup.k_dir_prf);
 		const double phase_mrf = problem_setup.omega * time - problem_setup.k_magn * x0_mrf;
 		const double cos_phase_mrf = std::cos(phase_mrf);
@@ -209,18 +195,12 @@ void computeWaveSolution(int i, int j, int k,
 		const double v_x2 = delta_v * problem_setup.outofplane_dir_prf[1];
 		const double v_x3 = delta_v * problem_setup.outofplane_dir_prf[2];
 
-		const double b0_x1 = bg_b_magn * (
-			problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[0] +
-			problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[0]
-		);
-		const double b0_x2 = bg_b_magn * (
-			problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[1] +
-			problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[1]
-		);
-		const double b0_x3 = bg_b_magn * (
-			problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[2] +
-			problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[2]
-		);
+		const double b0_x1 =
+		    bg_b_magn * (problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[0] + problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[0]);
+		const double b0_x2 =
+		    bg_b_magn * (problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[1] + problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[1]);
+		const double b0_x3 =
+		    bg_b_magn * (problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[2] + problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[2]);
 
 		const double delta_b_x1 = bg_b_magn * delta_b_magn * cos_phase_mrf * problem_setup.outofplane_dir_prf[0];
 		const double delta_b_x2 = bg_b_magn * delta_b_magn * cos_phase_mrf * problem_setup.outofplane_dir_prf[1];
@@ -230,7 +210,7 @@ void computeWaveSolution(int i, int j, int k,
 		const double b_x2 = b0_x2 + delta_b_x2;
 		const double b_x3 = b0_x3 + delta_b_x3;
 
-		const double density  = bg_density;
+		const double density = bg_density;
 		const double pressure = bg_pressure;
 
 		const double v_magn_sq = v_x1 * v_x1 + v_x2 * v_x2 + v_x3 * v_x3;
@@ -240,43 +220,28 @@ void computeWaveSolution(int i, int j, int k,
 		const double Eint = pressure / (gamma_gas - 1);
 		const double Etot = Ekin + Emag + Eint;
 
-		state(i,j,k, HydroSystem<AlfvenWaveLinear>::density_index) = density;
-		state(i,j,k, HydroSystem<AlfvenWaveLinear>::x1Momentum_index) = v_x1 * density;
-		state(i,j,k, HydroSystem<AlfvenWaveLinear>::x2Momentum_index) = v_x2 * density;
-		state(i,j,k, HydroSystem<AlfvenWaveLinear>::x3Momentum_index) = v_x3 * density;
-		state(i,j,k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
-		state(i,j,k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::density_index) = density;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x1Momentum_index) = v_x1 * density;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x2Momentum_index) = v_x2 * density;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x3Momentum_index) = v_x3 * density;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		const double b_x1 = (
-			Az(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) -
-			Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)
-		) / dx[1] - (
-			Ay(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) -
-			Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)
-		) / dx[2];
+		const double b_x1 = (Az(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) / dx[1] -
+				    (Ay(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) / dx[2];
 
-		const double b_x2 = (
-			Ax(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) -
-			Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)
-		) / dx[2] - (
-			Az(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) -
-			Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)
-		) / dx[0];
+		const double b_x2 = (Ax(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) / dx[2] -
+				    (Az(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) / dx[0];
 
-		const double b_x3 = (
-			Ay(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) -
-			Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)
-		) / dx[0] - (
-			Ax(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) -
-			Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)
-		) / dx[1];
+		const double b_x3 = (Ay(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) / dx[0] -
+				    (Ax(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) / dx[1];
 
 		if (dir == quokka::direction::x) {
-			state(i,j,k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1;
 		} else if (dir == quokka::direction::y) {
-			state(i,j,k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x2;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x2;
 		} else if (dir == quokka::direction::z) {
-			state(i,j,k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x3;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x3;
 		}
 	}
 }
@@ -374,19 +339,10 @@ auto problem_main() -> int
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 
-	const std::array<double,3> k_vec_prf = {
-		2.0 * M_PI * static_cast<double>(num_modes_x),
-		2.0 * M_PI * static_cast<double>(num_modes_y),
-		2.0 * M_PI * static_cast<double>(num_modes_z)
-	};
-	const double k_magn = std::sqrt(
-		k_vec_prf[0] * k_vec_prf[0] + k_vec_prf[1] * k_vec_prf[1] + k_vec_prf[2] * k_vec_prf[2]
-	);
-	std::array<double,3> k_dir_prf = {
-		k_vec_prf[0] / k_magn,
-		k_vec_prf[1] / k_magn,
-		k_vec_prf[2] / k_magn
-	};
+	const std::array<double, 3> k_vec_prf = {2.0 * M_PI * static_cast<double>(num_modes_x), 2.0 * M_PI * static_cast<double>(num_modes_y),
+						 2.0 * M_PI * static_cast<double>(num_modes_z)};
+	const double k_magn = std::sqrt(k_vec_prf[0] * k_vec_prf[0] + k_vec_prf[1] * k_vec_prf[1] + k_vec_prf[2] * k_vec_prf[2]);
+	std::array<double, 3> k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
 	const double k_rotation_xy = std::atan2(k_dir_prf[1], k_dir_prf[0]);
 	const double k_elevation_xy = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
@@ -398,13 +354,14 @@ auto problem_main() -> int
 
 	const double omega = alfven_speed * k_magn * cos_angle_k_b0;
 
-	std::array<double,3> ref_prf{0.0, 0.0, 1.0};
-	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) ref_prf = {1.0, 0.0, 0.0};
+	std::array<double, 3> ref_prf{0.0, 0.0, 1.0};
+	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999)
+		ref_prf = {1.0, 0.0, 0.0};
 
-	std::array<double,3> inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
+	std::array<double, 3> inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
 	normaliseVector(inplane_dir_prf);
-	
-	std::array<double,3> outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
+
+	std::array<double, 3> outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normaliseVector(outofplane_dir_prf);
 
 	problem_setup.angle_between_k_b0 = angle_between_k_b0;
