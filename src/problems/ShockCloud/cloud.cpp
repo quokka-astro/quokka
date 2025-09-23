@@ -262,8 +262,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 
 		const bool use_postshock_bc = use_postshock;
 		const Real boundary_pressure = (use_postshock_bc || (time >= 1.1 * ::shock_crossing_time)) ? P_wind : ::P0;
-		NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom,
-												       boundary_pressure);
+		NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, boundary_pressure);
 	}
 }
 
