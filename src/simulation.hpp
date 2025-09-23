@@ -244,6 +244,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
+	virtual void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, 
+	                             const amrex::Vector<std::string> &compNames, int lev, Real time, int interval) = 0;
 
 	// compute derived variables
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
@@ -347,8 +349,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
 	void writeReconstructedStatesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &leftState,
 					    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int step);
-	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, 
-	                             const amrex::Vector<std::string> &compNames, int lev, int interval = 1);
 
 	// ABOUTME: Used to handle universal refinement during checkpoint restart operations
 	struct RefinementContext {
@@ -1321,24 +1321,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	// close Ascent
 	ascent_.close();
 #endif
-}
-
-// Save single-level plotfile
-// Example usage: write debug_rhs00000 debug_rhs00001 etc with interval plotfileInterval_
-//   const int lev_debug = 0;
-//   amrex::Vector<std::string> flatCompNames{"rhs"};
-//   WriteSingleLevelPlotfileSimplified("debug_rhs", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
-template <typename problem_t> 
-void AMRSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, 
-                                                          const amrex::MultiFab &mf, 
-                                                          const amrex::Vector<std::string> &compNames, 
-                                                          int lev, int interval)
-{
-	if ((istep[lev] % interval) != 0) {
-		return;
-	}
-	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev]);
-	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], tNew_[lev], istep[lev]);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
