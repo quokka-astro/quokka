@@ -1103,9 +1103,9 @@ void QuokkaSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Mu
 	}
 
 	if (cen == quokka::centering::cc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, fptype, PreInterpState, PostInterpState);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, dir, fptype, PreInterpState, PostInterpState);
 	} else if (cen == quokka::centering::fc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, fptype, PreInterpState, PostInterpState);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, dir, fptype, PreInterpState, PostInterpState);
 	}
 }
 

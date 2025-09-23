@@ -69,6 +69,7 @@ add_subdirectory(CurrentSheet)
 add_subdirectory(OrszagTang)
 add_subdirectory(FastWave)
 add_subdirectory(FieldLoop)
+add_subdirectory(BrioWuShockTube)
 
 add_subdirectory(DiskGalaxy)
 add_subdirectory(BinaryOrbitCIC)
