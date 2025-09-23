@@ -647,6 +647,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	cc_mf_EMF.FillBoundary(); // fill ghost cells
 	amrex::Gpu::streamSynchronize();
 
+	
+
 	// now that EMF is calculated at cell center, we need to interpolate to cell edge
 	// we also need to get the magnetic field from the face to cell edge to use the Balsara method
 	// otherwise, if other methods are desired, LD04 or BalsaraSpicer just need the reconstructed emf
@@ -654,6 +656,12 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	// focus first on taking EMF to cell edge:
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) { // keep
 		const amrex::Box &box_cc = mfi.validbox();
+
+		std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
+		    amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		    amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		    amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+		};
 
 		for (int iedge = 0; iedge < 3; ++iedge) {
 
@@ -769,6 +777,18 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				    ec_fabs_Bi_ieside[icomp][0].setVal(0.0);
     				ec_fabs_Bi_ieside[icomp][1].setVal(0.0);
 				}
+							// extrapolate the two required face-centered magnetic field components to the cell-edge
+				for (int icomp = 0; icomp < 2; ++icomp) {
+					const int extrap_dir2edge = extrap_dirs[(icomp + 1) % 2];
+					const auto dir2edge = static_cast<FluxDir>(extrap_dir2edge);
+					const int wcomp = extrap_dirs[icomp];
+					const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
+					const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
+					// extrapolate face-centered magnetic components to the cell-edge
+					MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
+										ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+				}
+
 				if (emf_avg_type == EMFAvgType::LD04) {
 					MHDSystem<problem_t>::EMFSolver_LD04(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
 				}
