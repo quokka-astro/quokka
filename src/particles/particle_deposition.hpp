@@ -14,6 +14,39 @@
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
+namespace amrex::ParticleInterpolator
+{
+/** \brief A class that implements nearest-eight-cell interpolation.
+ */
+struct NearestEight : public Base<NearestEight, amrex::Real> {
+	static constexpr int stencil_width = 2;
+
+	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0; // NOLINT
+
+	amrex::Real weights[3 * stencil_width]; // NOLINT
+
+	template <typename P>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE NearestEight(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
+							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
+	{
+		w = &weights[0]; // NOLINT
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
+			index[i] = static_cast<int>(amrex::Math::floor(l)) - 1;
+			w[stencil_width * i + 0] = 1.;
+			w[stencil_width * i + 1] = 1.;
+		}
+		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
+			index[i] = 0;
+			w[stencil_width * i + 0] = 1.;
+			w[stencil_width * i + 1] = 0.;
+		}
+	}
+};
+} // namespace amrex::ParticleInterpolator
+
 namespace quokka
 {
 
@@ -76,6 +109,24 @@ struct MassDeposition {
 	}
 };
 
+struct DepositionCount {
+	int start_part_comp{}; // Starting component in particle data
+	int start_mesh_comp{}; // Starting component in mesh data
+	int num_comp{};	       // Number of components to deposit
+
+	// Operator to perform mass deposition using linear interpolation
+	template <typename ContainerType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &rho_count,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	{
+		amrex::ParticleInterpolator::NearestEight interp(p, plo, dxi);
+		// Deposit to 1.0 to all eight cells that the particle interacts with
+		interp.ParticleToMesh(p, rho_count, start_part_comp, start_mesh_comp, num_comp,
+				      [=] AMREX_GPU_DEVICE(const ContainerType & /*part*/, int /*comp*/) { return 1.0; });
+	}
+};
+
 //-------------------- Supernova depositions --------------------
 
 namespace SNFeedbackUtils
@@ -110,6 +161,10 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 							     SNR_pz_per_cell);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
 							     SNR_energy_per_cell);
+
+				// Deposit count into the last component for roundoff algorithm
+				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, count_comp), 1.0);
 			}
 		}
 	}
@@ -200,6 +255,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), dpy);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
+
+				// Deposit count into the last component for roundoff algorithm
+				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, count_comp), 1.0);
 			}
 		}
 	}
@@ -544,14 +603,15 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 } // namespace SNFeedbackUtils
 
 template <typename ContainerType, typename problem_t>
-auto SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex, int birthTimeIndex) -> Real
+auto SNDeposition(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt, int mass_index, int evolutionStageIndex,
+		  int birthTimeIndex) -> Real
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
 		      "SN_stencil_size must be <= 3"); // SN_stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
 
-	// Zero the buffer for each particle type
+	// Create buffer for this particle type with extra component for count
+	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
 	state_buffer.setVal(0.0);
 
 	// copy host variables to device
