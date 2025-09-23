@@ -600,7 +600,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 		const auto &cc_a4_EMFx2 = cc_mf_EMF[mfi].array(2);
 
 		const auto &cc_a4_cVars = cc_mf_cVars[mfi].const_array();
-		std::array<amrex::Array4<amrex::Real>, 3> cc_a4_EMF_array = {cc_a4_EMFx0, cc_a4_EMFx1, cc_a4_EMFx2};
+		std::array<amrex::Array4<amrex::Real>, 3> const cc_a4_EMF_array = {cc_a4_EMFx0, cc_a4_EMFx1, cc_a4_EMFx2};
 		std::array<amrex::FArrayBox, 3> fc_fabs_Bx = {
 		    amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
 		    amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
