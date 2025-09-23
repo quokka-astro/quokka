@@ -271,10 +271,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void print_multifab_fc(amrex::MultiFab &mf, std::string const &name, int lev, int idim);
 
-	// write single-level plotfile wrapper
-	void writeSingleLevelPlotfile(const std::string &plotfile_prefix, const amrex::MultiFab &mf, 
-	                             const amrex::Vector<std::string> &compNames, int lev);
-
 	// add gravitational acceleration to hydro state
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
@@ -2567,16 +2563,6 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange,
 							  consState, dx, use_wavespeed_correction_); // watch out for argument order!!
-}
-
-template <typename problem_t> 
-void QuokkaSimulation<problem_t>::writeSingleLevelPlotfile(const std::string &plotfile_prefix, 
-                                                          const amrex::MultiFab &mf, 
-                                                          const amrex::Vector<std::string> &compNames, 
-                                                          int lev)
-{
-	std::string plotfile_name = CustomPlotFileName(plotfile_prefix, istep[lev] + 1);
-	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], time, istep[lev] + 1);
 }
 
 #endif // RADIATION_SIMULATION_HPP_
