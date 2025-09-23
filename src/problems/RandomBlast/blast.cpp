@@ -54,8 +54,8 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-constexpr Real Tgas0 = 1.0e4;								// K
-constexpr Real nH0 = 0.1;								// cm^-3
+constexpr Real Tgas0 = 1.0e4; // K
+constexpr Real nH0 = 0.1;     // cm^-3
 constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
