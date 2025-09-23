@@ -81,6 +81,7 @@ AMREX_GPU_MANAGED Real rho_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-cons
 AMREX_GPU_MANAGED Real v_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real P_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real delta_vx = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED int use_postshock_setup = 1;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid const &grid)
 {
@@ -97,60 +98,111 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 	const amrex::Box &indexRange = grid.indexRange_;
 	auto const &state = grid.array_;
 
-	const Real v_wind = ::v_wind;
-	const Real delta_vx = ::delta_vx;
-	const Real vx_background = v_wind - delta_vx;
-	const Real rho_background = ::rho_wind;
-	const Real P_background = ::P_wind;
-	const Real P_cloud = ::P0;
-	const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
+	const bool use_postshock = (::use_postshock_setup != 0);
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
-		Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
-		Real const z = prob_lo[2] + (k + static_cast<Real>(0.5)) * dx[2];
-		Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+	if (use_postshock) {
+		const Real v_wind = ::v_wind;
+		const Real delta_vx = ::delta_vx;
+		const Real vx_background = v_wind - delta_vx;
+		const Real rho_background = ::rho_wind;
+		const Real P_background = ::P_wind;
+		const Real P_cloud = ::P0;
+		const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
 
-		Real rho = NAN;
-		Real C = NAN;
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
+			Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
+			Real const z = prob_lo[2] + (k + static_cast<Real>(0.5)) * dx[2];
+			Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
-		if (sharp_cloud_edge) {
-			if (R < R_cloud) {
-				rho = rho1; // cloud density
-				C = 1.0;    // concentration is unity inside the cloud
+			Real rho = NAN;
+			Real C = NAN;
+
+			if (sharp_cloud_edge) {
+				if (R < R_cloud) {
+					rho = rho1; // cloud density
+					C = 1.0;    // concentration is unity inside the cloud
+				} else {
+					rho = rho_background; // post-shock background density
+					C = 0.0;	      // concentration is zero outside the cloud
+				}
 			} else {
-				rho = rho_background; // post-shock background density
-				C = 0.0;	      // concentration is zero outside the cloud
+				const Real h_smooth = R_cloud / 20.;
+				const Real ramp = 0.5 * (1. - std::tanh((R - R_cloud) / h_smooth));
+				rho = ramp * (rho1 - rho_background) + rho_background;
+				C = ramp * 1.0; // concentration is unity inside the cloud
 			}
-		} else {
-			const Real h_smooth = R_cloud / 20.;
-			const Real ramp = 0.5 * (1. - std::tanh((R - R_cloud) / h_smooth));
-			rho = ramp * (rho1 - rho_background) + rho_background;
-			C = ramp * 1.0; // concentration is unity inside the cloud
-		}
 
-		AMREX_ALWAYS_ASSERT(rho > 0.);
-		AMREX_ALWAYS_ASSERT(C >= 0.);
-		AMREX_ALWAYS_ASSERT(C <= 1.);
+			AMREX_ALWAYS_ASSERT(rho > 0.);
+			AMREX_ALWAYS_ASSERT(C >= 0.);
+			AMREX_ALWAYS_ASSERT(C <= 1.);
 
-		Real const vx = (1.0 - C) * vx_background;
-		Real const xmom = rho * vx;
-		Real const ymom = 0;
-		Real const zmom = 0;
-		Real const P = C * P_cloud + (1.0 - C) * P_background;
-		Real const Eint = P / (gamma - 1.);
-		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+			Real const vx = (1.0 - C) * vx_background;
+			Real const xmom = rho * vx;
+			Real const ymom = 0;
+			Real const zmom = 0;
+			Real const P = C * P_cloud + (1.0 - C) * P_background;
+			Real const Eint = P / (gamma - 1.);
+			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-		state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-		state(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-		state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-		state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-		state(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-		state(i, j, k, RadSystem<ShockCloud>::scalar0_index) = C;
-		state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = C * rho;	    // cloud partial density
-		state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = (1.0 - C) * rho; // non-cloud partial density
-	});
+			state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+			state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+			state(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+			state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+			state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+			state(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+			state(i, j, k, RadSystem<ShockCloud>::scalar0_index) = C;
+			state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = C * rho;	    // cloud partial density
+			state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = (1.0 - C) * rho; // non-cloud partial density
+		});
+	} else {
+		const Real P0_local = ::P0;
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
+			Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
+			Real const z = prob_lo[2] + (k + static_cast<Real>(0.5)) * dx[2];
+			Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+
+			Real rho = NAN;
+			Real C = NAN;
+
+			if (sharp_cloud_edge) {
+				if (R < R_cloud) {
+					rho = rho1; // cloud density
+					C = 1.0;    // concentration is unity inside the cloud
+				} else {
+					rho = rho0; // background density
+					C = 0.0;    // concentration is zero outside the cloud
+				}
+			} else {
+				const Real h_smooth = R_cloud / 20.;
+				const Real ramp = 0.5 * (1. - std::tanh((R - R_cloud) / h_smooth));
+				rho = ramp * (rho1 - rho0) + rho0;
+				C = ramp * 1.0; // concentration is unity inside the cloud
+			}
+
+			AMREX_ALWAYS_ASSERT(rho > 0.);
+			AMREX_ALWAYS_ASSERT(C >= 0.);
+			AMREX_ALWAYS_ASSERT(C <= 1.);
+
+			Real const xmom = 0;
+			Real const ymom = 0;
+			Real const zmom = 0;
+			Real const Eint = P0_local / (quokka::EOS_Traits<ShockCloud>::gamma - 1.);
+			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+
+			state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+			state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+			state(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+			state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+			state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+			state(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+			state(i, j, k, RadSystem<ShockCloud>::scalar0_index) = C;
+			state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = C * rho;	    // cloud partial density
+			state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = (1.0 - C) * rho; // non-cloud partial density
+		});
+	}
 }
 
 template <>
@@ -171,27 +223,47 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	const Real rho_wind = ::rho_wind;
 	const Real v_wind = ::v_wind;
 	const Real P_wind = ::P_wind;
+	const bool use_postshock = (::use_postshock_setup != 0);
 
 	if (i < ilo) {
-		// x1 lower boundary -- prescribe post-shock wind as a subsonic inflow
 		Real const rho = rho_wind;
 		Real const vx = v_wind - delta_vx;
 		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
 		Real const T_wind = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 		amrex::GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
-		NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
+		if (use_postshock) {
+			// x1 lower boundary -- prescribe post-shock wind as a subsonic inflow
+			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
+		} else {
+			if (time < 0.1 * ::shock_crossing_time) {
+				// Shock boundary condition [all primitive variables specified]
+				Real const xmom = rho_wind * vx;
+				Real const ymom = 0;
+				Real const zmom = 0;
+				Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+				consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+				consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+				consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+				consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+				consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+				consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+				consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
+				consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
+				consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
+			} else {
+				// Subsonic inflow boundary condition [all *except one* primitive variable specified]
+				NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
+			}
+		}
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC subsonic outflow
 		// (For this boundary condition, we must specify the pressure at the boundary.)
 
-		if (time < 1.1 * ::shock_crossing_time) {
-			// before the shock hits the boundary, set the boundary pressure to the background pressure P0.
-			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
-		} else {
-			// shock has passed, so we set the boundary pressure to the wind pressure P_wind.
-			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
-		}
+		const bool use_postshock_bc = use_postshock;
+		const Real boundary_pressure = (use_postshock_bc || (time >= 1.1 * ::shock_crossing_time)) ? P_wind : ::P0;
+		NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom,
+												       boundary_pressure);
 	}
 }
 
@@ -935,6 +1007,11 @@ auto problem_main() -> int
 
 	// simulation end time (in number of cloud-crushing times)
 	pp.query("max_t_cc", max_t_cc); // dimensionless
+
+	// choose between pre-shock (development) or post-shock (current branch) setup
+	int use_postshock_setup_pp = ::use_postshock_setup;
+	pp.query("use_postshock_setup", use_postshock_setup_pp);
+	::use_postshock_setup = use_postshock_setup_pp != 0;
 
 	// compute background pressure
 	// (pressure equilibrium should hold *before* the shock enters the box)
