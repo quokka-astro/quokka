@@ -1,20 +1,18 @@
 // ABOUTME: Test problem for cooling integrator accuracy using isochoric cooling
-// ABOUTME: Supports both ResampledCooling and TabulatedCooling modules via runtime parameter
+// ABOUTME: Uses the ResampledCooling module via runtime parameter
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_resampled_cooling.cpp
-/// \brief Defines a test problem for cooling integrator accuracy (supports ResampledCooling and TabulatedCooling).
+/// \brief Defines a test problem for cooling integrator accuracy using the ResampledCooling module.
 ///
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "cooling/TabulatedCooling.hpp"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
 #include <fmt/format.h>
@@ -149,12 +147,11 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 
 		// Get temperature from tables
 		amrex::Real T = NAN;
-		if (coolingTableType_ == "grackle") {
-			T = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, gamma, grackleTables_.const_tables());
-		} else if (coolingTableType_ == "resampled") {
+		if (coolingTableType_.empty()) {
+			coolingTableType_ = "resampled";
+		}
+		if (coolingTableType_ == "resampled") {
 			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
-		} else if (coolingTableType_ == "cloudy_cooling_tools") {
-			T = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudyTables_.const_tables());
 		} else {
 			amrex::Abort("Unsupported cooling table type: " + coolingTableType_);
 		}
