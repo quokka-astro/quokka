@@ -97,6 +97,10 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 	const amrex::Box &indexRange = grid.indexRange_;
 	auto const &state = grid.array_;
 
+	const Real v_wind = ::v_wind;
+	const Real delta_vx = ::delta_vx;
+	const Real vx_background = v_wind - delta_vx;
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
 		Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
@@ -125,7 +129,8 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 		AMREX_ALWAYS_ASSERT(C >= 0.);
 		AMREX_ALWAYS_ASSERT(C <= 1.);
 
-		Real const xmom = 0;
+		Real const vx = (1.0 - C) * vx_background;
+		Real const xmom = rho * vx;
 		Real const ymom = 0;
 		Real const zmom = 0;
 		Real const Eint = P0 / (quokka::EOS_Traits<ShockCloud>::gamma - 1.);
@@ -163,32 +168,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	const Real P_wind = ::P_wind;
 
 	if (i < ilo) {
-		// x1 lower boundary
+		// x1 lower boundary -- prescribe post-shock wind as a subsonic inflow
 		Real const rho = rho_wind;
 		Real const vx = v_wind - delta_vx;
 		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
 		Real const T_wind = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 		amrex::GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
-		if (time < 0.1 * ::shock_crossing_time) {
-			// Shock boundary condition [all primitive variables specified]
-			Real const xmom = rho_wind * vx;
-			Real const ymom = 0;
-			Real const zmom = 0;
-			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
-			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-			consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-			consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-			consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
-		} else {
-			// Subsonic inflow boundary condition [all *except one* primitive variable specified]
-			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
-		}
+		NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC subsonic outflow
 		// (For this boundary condition, we must specify the pressure at the boundary.)
