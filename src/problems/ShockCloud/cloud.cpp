@@ -619,7 +619,7 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
 
 	auto tables = resampledTables_.const_tables();
-	Real H_mass_fraction = tables.cloudy_H_mass_fraction;
+	Real const H_mass_fraction = tables.cloudy_H_mass_fraction;
 
 	// compute (total) density projection
 	proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
