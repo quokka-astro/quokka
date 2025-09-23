@@ -120,7 +120,7 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 				C = 1.0;    // concentration is unity inside the cloud
 			} else {
 				rho = rho_background; // post-shock background density
-				C = 0.0;    // concentration is zero outside the cloud
+				C = 0.0;	      // concentration is zero outside the cloud
 			}
 		} else {
 			const Real h_smooth = R_cloud / 20.;
