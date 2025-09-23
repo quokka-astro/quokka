@@ -100,6 +100,10 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 	const Real v_wind = ::v_wind;
 	const Real delta_vx = ::delta_vx;
 	const Real vx_background = v_wind - delta_vx;
+	const Real rho_background = ::rho_wind;
+	const Real P_background = ::P_wind;
+	const Real P_cloud = ::P0;
+	const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
@@ -115,13 +119,13 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 				rho = rho1; // cloud density
 				C = 1.0;    // concentration is unity inside the cloud
 			} else {
-				rho = rho0; // background density
+				rho = rho_background; // post-shock background density
 				C = 0.0;    // concentration is zero outside the cloud
 			}
 		} else {
 			const Real h_smooth = R_cloud / 20.;
 			const Real ramp = 0.5 * (1. - std::tanh((R - R_cloud) / h_smooth));
-			rho = ramp * (rho1 - rho0) + rho0;
+			rho = ramp * (rho1 - rho_background) + rho_background;
 			C = ramp * 1.0; // concentration is unity inside the cloud
 		}
 
@@ -133,7 +137,8 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 		Real const xmom = rho * vx;
 		Real const ymom = 0;
 		Real const zmom = 0;
-		Real const Eint = P0 / (quokka::EOS_Traits<ShockCloud>::gamma - 1.);
+		Real const P = C * P_cloud + (1.0 - C) * P_background;
+		Real const Eint = P / (gamma - 1.);
 		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
 		state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
