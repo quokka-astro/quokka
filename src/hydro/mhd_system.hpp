@@ -55,14 +55,13 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 	static void EMFSolver_BalsaraSpicer(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec);
 
-	static void EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-						   amrex::Box const &box_ec, std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
-						  std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
-						   
-	static void EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-						   amrex::Box const &box_ec, std::array<int, 2> extrap_dirs, 
-						   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
-							std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
+	static void EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
+				   std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
+				   std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
+
+	static void EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
+					      std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
+					      std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -664,7 +663,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 			const amrex::Box box_ec = amrex::convert(box_cc, vec_cc2ec);
 			const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
 			// indexing: field[4: quadrant around edge]
-			
+
 			// initializing array to hold EMF at cell edge
 			const auto &E2_array = ec_mf_emf_components[iedge][mfi].array();
 			std::array<amrex::FArrayBox, 2> ec_fabs_EMF_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
@@ -678,7 +677,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				ec_fabs_EMF_q[iquad] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 				ec_fabs_EMF_q[iquad].setVal<amrex::RunOn::Device>(0.0);
 			}
-
 
 			// interpolate the cell-centered EMF to the cell-edge
 			// there are two possible permutations for doing this: getting cell-centered quanties to a cell-edge
@@ -751,33 +749,29 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 			for (int iquad = 0; iquad < 4; ++iquad) {
 				ec_fabs_EMF_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 			}
-			
+
 			if (emf_avg_type == EMFAvgType::BalsaraSpicer) {
 				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_array, ec_fabs_EMF_q, box_ec);
 			} else {
 				// get fspds to pass to LD04 or Balsara2025_HLL solver if needed
 				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds = {
-					fcx_mf_fspds[0].const_array(mfi),
-					fcx_mf_fspds[1].const_array(mfi),
-					fcx_mf_fspds[2].const_array(mfi)
-				};
+				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
 				std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 					ec_fabs_Bi_ieside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-					//initialize to zero to avoid garbage values on GPU
-				    ec_fabs_Bi_ieside[icomp][0].setVal(0.0);
-    				ec_fabs_Bi_ieside[icomp][1].setVal(0.0);
+					// initialize to zero to avoid garbage values on GPU
+					ec_fabs_Bi_ieside[icomp][0].setVal(0.0);
+					ec_fabs_Bi_ieside[icomp][1].setVal(0.0);
 				}
 				if (emf_avg_type == EMFAvgType::LD04) {
 					MHDSystem<problem_t>::EMFSolver_LD04(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
-				}
-				else if (emf_avg_type == EMFAvgType::Balsara2025_HLL){
+				} else if (emf_avg_type == EMFAvgType::Balsara2025_HLL) {
 					MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
 				} else {
 					amrex::Abort("Unknown EMF averaging type");
 				}
-			}			
+			}
 		}
 	}
 }
@@ -805,14 +799,11 @@ void MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(amrex::Array4<amrex::Real> E2
 	});
 }
 
-
 template <typename problem_t>
-void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-						   amrex::Box const &box_ec, std::array<int, 2> extrap_dirs, 
-						   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
-							std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
+void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
+					  std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
+					  std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
 {
-
 
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
 	const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
@@ -837,10 +828,8 @@ void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std
 	const auto &fspd_x0 = fspds[w0_comp];
 	const auto &fspd_x1 = fspds[w1_comp];
 
-
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-
-	// 	// LD04 scheme:
+		// 	// LD04 scheme:
 		const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
 		const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
 		const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
@@ -855,27 +844,24 @@ void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std
 		const double B0_m_ = B0_m(i, j, k);
 		const double B1_p_ = B1_p(i, j, k);
 		const double B1_m_ = B1_m(i, j, k);
-	// 	// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-	// 	// (-,+) | (+,+)
-	// 	//   1   |   2
-	// 	// ------+------
-	// 	//   0   |   3
-	// 	// (-,-) | (+,-)
+		// 	// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
+		// 	// (-,+) | (+,+)
+		// 	//   1   |   2
+		// 	// ------+------
+		// 	//   0   |   3
+		// 	// (-,-) | (+,-)
 
-		const double num1 =
-			((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
-		const double num2 =
-			((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
+		const double num1 = ((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
+		const double num2 = ((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
 
-	// 	// must be averaged for exact floating-point symmetry
+		// 	// must be averaged for exact floating-point symmetry
 		const double numerator = 0.5 * (num1 + num2);
 		const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
 
-	// 	// NOTE: there is a sign error in Equation 56 of Felker & Stone
-		const double term2 =
-			((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
+		// 	// NOTE: there is a sign error in Equation 56 of Felker & Stone
+		const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
 
-	 	E2_ave(i, j, k) = (numerator / denominator) + term2;
+		E2_ave(i, j, k) = (numerator / denominator) + term2;
 	});
 }
 
@@ -884,9 +870,9 @@ void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-						   amrex::Box const &box_ec, std::array<int, 2> extrap_dirs, 
-						   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
-							std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
+						     amrex::Box const &box_ec, std::array<int, 2> extrap_dirs,
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
+						     std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
 {
 	const BL_PROFILE("MHDSystem::ApplyBalsaraEMFSolver()");
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
