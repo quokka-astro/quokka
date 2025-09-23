@@ -734,7 +734,7 @@ auto problem_main() -> int
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.coolingTableType_ == "resampled", "ShockCloud setup requires resampled cooling tables.");
 	auto cooling_tables = sim.resampledTables_.const_tables();
 	// compute mass density of background, cloud
-	Real H_mass_fraction = cooling_tables.cloudy_H_mass_fraction;
+	Real const H_mass_fraction = cooling_tables.cloudy_H_mass_fraction;
 	::rho0 = nH_bg * m_H / H_mass_fraction;	   // g cm^-3
 	::rho1 = nH_cloud * m_H / H_mass_fraction; // g cm^-3
 
