@@ -646,8 +646,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	cc_mf_EMF.FillBoundary(); // fill ghost cells
 	amrex::Gpu::streamSynchronize();
 
-	
-
 	// now that EMF is calculated at cell center, we need to interpolate to cell edge
 	// we also need to get the magnetic field from the face to cell edge to use the Balsara method
 	// otherwise, if other methods are desired, LD04 or BalsaraSpicer just need the reconstructed emf
@@ -772,7 +770,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					ec_fabs_Bi_ieside[icomp][0].setVal(0.0);
 					ec_fabs_Bi_ieside[icomp][1].setVal(0.0);
 				}
-							// extrapolate the two required face-centered magnetic field components to the cell-edge
+				// extrapolate the two required face-centered magnetic field components to the cell-edge
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					const int extrap_dir2edge = extrap_dirs[(icomp + 1) % 2];
 					const auto dir2edge = static_cast<FluxDir>(extrap_dir2edge);
@@ -781,7 +779,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 					// extrapolate face-centered magnetic components to the cell-edge
 					MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-										ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+									    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 				}
 
 				if (emf_avg_type == EMFAvgType::LD04) {
