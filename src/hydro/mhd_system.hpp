@@ -620,7 +620,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 							cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho};
 			// Loop over each dimension to compute the corresponding EMF component
 			for (int idim = 0; idim < 3; ++idim) {
-				int x2ind = (idim + 1) % 3;
+				int const x2ind = (idim + 1) % 3;
 				int x3ind = (idim + 2) % 3;
 
 				std::array<int, 3> delta_x2 = {0, 0, 0};
