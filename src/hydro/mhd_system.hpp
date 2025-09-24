@@ -920,13 +920,10 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const double SD = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0), fspd_x1(i, j, k, 0));
 		const double SU = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1), fspd_x1(i, j, k, 1));
 
-		if (!isfinite(SL) || !isfinite(SR) || !isfinite(SD) || !isfinite(SU)) {
 			// AMReX may have other GPU-safe printing options
-			amrex::Print() << "Invalid wave speeds at (" << i << ", " << j << ", " << k << "): SL=" << SL << ", SR=" << SR << ", SD=" << SD
+			amrex::Print() << "Wave speeds at (" << i << ", " << j << ", " << k << "): SL=" << SL << ", SR=" << SR << ", SD=" << SD
 				       << ", SU=" << SU << "\n";
-			E2_ave(i, j, k) = 0.0;
-			return;
-		}
+
 
 		// EMF quadrants
 		const auto E2_LD = E2_q0(i, j, k);
@@ -941,20 +938,16 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto B1_L = B1_p(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
 
 		// Check magnetic field components
-		if (!isfinite(B0_U) || !isfinite(B0_D) || !isfinite(B1_R) || !isfinite(B1_L)) {
-			amrex::Print() << "Invalid magnetic field at (" << i << ", " << j << ", " << k << "): B0_U=" << B0_U << ", B0_D=" << B0_D
+		
+			amrex::Print() << "Magnetic field at (" << i << ", " << j << ", " << k << "): B0_U=" << B0_U << ", B0_D=" << B0_D
 				       << ", B1_R=" << B1_R << ", B1_L=" << B1_L << "\n";
-			E2_ave(i, j, k) = 0.0;
-			return;
-		}
+
 
 		// Check EMF quadrants
-		if (!isfinite(E2_LD) || !isfinite(E2_LU) || !isfinite(E2_RD) || !isfinite(E2_RU)) {
-			amrex::Print() << "Invalid EMF quadrants at (" << i << ", " << j << ", " << k << "): E2_LD=" << E2_LD << ", E2_LU=" << E2_LU
+
+			amrex::Print() << "EMF quadrants at (" << i << ", " << j << ", " << k << "): E2_LD=" << E2_LD << ", E2_LU=" << E2_LU
 				       << ", E2_RD=" << E2_RD << ", E2_RU=" << E2_RU << "\n";
-			E2_ave(i, j, k) = 0.0;
-			return;
-		}
+
 
 		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
 		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
