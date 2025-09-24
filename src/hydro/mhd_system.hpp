@@ -839,11 +839,9 @@ void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std
 	int const w1_comp = extrap_dirs[1];
 	std::array<int, 3> delta_w0 = {0, 0, 0};
 	std::array<int, 3> delta_w1 = {0, 0, 0};
-	std::array<int, 3> delta_w_both = {0, 0, 0};
+
 	delta_w0[w0_comp] = 1;
 	delta_w1[w1_comp] = 1;
-	delta_w_both[w0_comp] = 1;
-	delta_w_both[w1_comp] = 1;
 
 	const auto &fspd_x0 = fspds[w0_comp];
 	const auto &fspd_x1 = fspds[w1_comp];
@@ -909,11 +907,10 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 	int const w1_comp = extrap_dirs[1];
 	std::array<int, 3> delta_w0 = {0, 0, 0};
 	std::array<int, 3> delta_w1 = {0, 0, 0};
-	std::array<int, 3> delta_w_both = {0, 0, 0};
+
 	delta_w0[w0_comp] = 1;
 	delta_w1[w1_comp] = 1;
-	delta_w_both[w0_comp] = 1;
-	delta_w_both[w1_comp] = 1;
+
 
 	const auto &fspd_x0 = fspds[w0_comp];
 	const auto &fspd_x1 = fspds[w1_comp];
