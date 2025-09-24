@@ -102,7 +102,7 @@ struct ProblemSetup {
 
 AMREX_GPU_MANAGED ProblemSetup problem_setup;
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE double computeVectorPotential(const double x1, const double x2, const double x3, const double time, const int component)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1, const double x2, const double x3, const double time, const int component) -> double
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(component == 0 || component == 1 || component == 2,
 					 "computeVectorPotential(): component must be an integer in {0, 1, 2}");
@@ -163,11 +163,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE double computeVectorPotential(const double x
 	}
 }
 
-AMREX_GPU_DEVICE inline double Ax(const double x1, const double x2, const double x3, const double t) { return computeVectorPotential(x1, x2, x3, t, 0); }
+AMREX_GPU_DEVICE inline auto Ax(const double x1, const double x2, const double x3, const double t) -> double { return computeVectorPotential(x1, x2, x3, t, 0); }
 
-AMREX_GPU_DEVICE inline double Ay(const double x1, const double x2, const double x3, const double t) { return computeVectorPotential(x1, x2, x3, t, 1); }
+AMREX_GPU_DEVICE inline auto Ay(const double x1, const double x2, const double x3, const double t) -> double { return computeVectorPotential(x1, x2, x3, t, 1); }
 
-AMREX_GPU_DEVICE inline double Az(const double x1, const double x2, const double x3, const double t) { return computeVectorPotential(x1, x2, x3, t, 2); }
+AMREX_GPU_DEVICE inline auto Az(const double x1, const double x2, const double x3, const double t) -> double { return computeVectorPotential(x1, x2, x3, t, 2); }
 
 AMREX_GPU_DEVICE
 void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
