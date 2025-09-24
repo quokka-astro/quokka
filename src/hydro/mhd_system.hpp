@@ -21,6 +21,7 @@
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
+#include <iostream>
 
 AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04, Balsara2025_HLL); // NOLINT
 
@@ -915,10 +916,18 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		// Wave speeds
-		const double SL = amrex::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0), fspd_x0(i, j, k, 0));
-		const double SR = amrex::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1), fspd_x0(i, j, k, 1));
-		const double SD = amrex::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0), fspd_x1(i, j, k, 0));
-		const double SU = amrex::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1), fspd_x1(i, j, k, 1));
+		const double SL = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0), fspd_x0(i, j, k, 0));
+		const double SR = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1), fspd_x0(i, j, k, 1));
+		const double SD = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0), fspd_x1(i, j, k, 0));
+		const double SU = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1), fspd_x1(i, j, k, 1));
+
+		    // Debug: Check for invalid values
+		if (!isfinite(SL) || !isfinite(SR) || !isfinite(SD) || !isfinite(SU)) {
+			std::cout<<"Invalid wave speeds at (" << i << ", " << j << ", " << k << "): SL=" << SL << ", SR=" << SR
+					 << ", SD=" << SD << ", SU=" << SU << std::endl;
+			E2_ave(i, j, k) = 0.0;
+			return;
+		}
 
 		// EMF quadrants
 		const auto E2_LD = E2_q0(i, j, k);
@@ -932,10 +941,27 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto B1_R = B1_m(i, j, k);
 		const auto B1_L = B1_p(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
 
+		    // Check magnetic field components for invalid values
+		if (!isfinite(B0_U) || !isfinite(B0_D) || !isfinite(B1_R) || !isfinite(B1_L)) {
+			E2_ave(i, j, k) = 0.0;
+			std::cout<<"Invalid magnetic fields at (" << i << ", " << j << ", " << k << "): B0_U=" << B0_U << ", B0_D=" << B0_D
+					 << ", B1_R=" << B1_R << ", B1_L=" << B1_L << std::endl;
+			return;
+		}
+		
+		// Check EMF quadrants for invalid values
+		if (!isfinite(E2_LD) || !isfinite(E2_LU) || !isfinite(E2_RD) || !isfinite(E2_RU)) {
+			std::cout<<"Invalid EMF quadrants at (" << i << ", " << j << ", " << k << "): E2_LD=" << E2_LD << ", E2_LU=" << E2_LU
+					 << ", E2_RD=" << E2_RD << ", E2_RU=" << E2_RU << std::endl;
+			E2_ave(i, j, k) = 0.0;
+			return;
+		}
+    
+
 		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
 		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
-		const auto E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) - (SU * SD) * (B0_U - B0_D) / (SU - SD);
-		const auto E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) - (SU * SD) * (B0_U - B0_D) / (SU - SD);
+		const auto E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) + (SU * SD) * (B0_U - B0_D) / (SU - SD);
+		const auto E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) + (SU * SD) * (B0_U - B0_D) / (SU - SD);
 
 		const auto B0_dstar = (SU * B0_U - SD * B0_D) / (SU - SD) + (E2_LD - E2_LU + E2_RD - E2_RU) / (2.0 * (SU - SD));
 		const auto B1_dstar = (SR * B1_R - SL * B1_L) / (SR - SL) + (-E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SR - SL));
@@ -943,8 +969,8 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + (SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) -
 					SU * SD * (B0_D - B0_U) / (SU - SD) + (SR * B1_R + SL * B1_L) / 2.0;
 
-		const auto E2_dstar_2 = -(SU + SD) * B0_dstar / 2.0 + (SR * (E2_RU + E2_LU) - SL * (E2_RD + E2_LD)) / (2.0 * (SR - SL)) -
-					SR * SL * (B1_L - B1_R) / (SR - SL) + (SU * B0_U + SD * B0_D) / 2.0;
+		const auto E2_dstar_2 = (SU + SD) * B0_dstar / 2.0 + (SR * (E2_RU + E2_LU) - SL * (E2_RD + E2_LD)) / (2.0 * (SR - SL)) -
+					(SU * B0_U + SD * B0_D) / 2.0 - SR * SL * (B1_R - B1_L) / (SR - SL);
 
 		const auto E2_dstar = 0.5 * (E2_dstar_1 + E2_dstar_2);
 
