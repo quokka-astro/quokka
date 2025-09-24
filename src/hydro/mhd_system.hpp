@@ -929,7 +929,6 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto B1_R = B1_m(i, j, k);
 		const auto B1_L = B1_p(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
 
-
 		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
 		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
 		const auto E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) + (SU * SD) * (B0_U - B0_D) / (SU - SD);
