@@ -768,8 +768,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 					ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 					ec_fabs_Bi_ieside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 					// initialize to zero to avoid garbage values on GPU
-					ec_fabs_Bi_ieside[icomp][0].setVal(0.0);
-					ec_fabs_Bi_ieside[icomp][1].setVal(0.0);
+					// ec_fabs_Bi_ieside[icomp][0].setVal(0.0);
+					// ec_fabs_Bi_ieside[icomp][1].setVal(0.0);
 				}
 				// extrapolate the two required face-centered magnetic field components to the cell-edge
 				for (int icomp = 0; icomp < 2; ++icomp) {
