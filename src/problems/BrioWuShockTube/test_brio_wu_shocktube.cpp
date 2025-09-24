@@ -194,10 +194,11 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::Int
 }
 
 template <>
+template <quokka::direction dir>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
 								       int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/, quokka::direction dir)
+								       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 1)
 	auto i = iv.toArray()[0];
@@ -237,7 +238,7 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditionsFaceVar(const amr
 			if (i < lo[0]) {
 				// Set z-direction left boundary values
 				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;
-			} else if (i >= hi[0]) {
+			} else if (i > hi[0]) {
 				// Set z-direction right boundary values
 				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;
 			}
