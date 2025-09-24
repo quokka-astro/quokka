@@ -921,8 +921,8 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const double SU = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1), fspd_x1(i, j, k, 1));
 
 			// AMReX may have other GPU-safe printing options
-			amrex::Print() << "Wave speeds at (" << i << ", " << j << ", " << k << "): SL=" << SL << ", SR=" << SR << ", SD=" << SD
-				       << ", SU=" << SU << "\n";
+    	printf("Wave speeds at (%d, %d, %d): SL=%.6e, SR=%.6e, SD=%.6e, SU=%.6e\n", 
+           i, j, k, SL, SR, SD, SU);
 
 
 		// EMF quadrants
@@ -938,16 +938,15 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto B1_L = B1_p(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
 
 		// Check magnetic field components
-		
-			amrex::Print() << "Magnetic field at (" << i << ", " << j << ", " << k << "): B0_U=" << B0_U << ", B0_D=" << B0_D
-				       << ", B1_R=" << B1_R << ", B1_L=" << B1_L << "\n";
 
 
 		// Check EMF quadrants
 
-			amrex::Print() << "EMF quadrants at (" << i << ", " << j << ", " << k << "): E2_LD=" << E2_LD << ", E2_LU=" << E2_LU
-				       << ", E2_RD=" << E2_RD << ", E2_RU=" << E2_RU << "\n";
+    	printf("Magnetic field at (%d, %d, %d): B0_U=%.6e, B0_D=%.6e, B1_R=%.6e, B1_L=%.6e\n", 
+           i, j, k, B0_U, B0_D, B1_R, B1_L);
 
+		printf("Invalid EMF quadrants at (%d, %d, %d): E2_LD=%.6e, E2_LU=%.6e, E2_RD=%.6e, E2_RU=%.6e\n", 
+           i, j, k, E2_LD, E2_LU, E2_RD, E2_RU);
 
 		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
 		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
