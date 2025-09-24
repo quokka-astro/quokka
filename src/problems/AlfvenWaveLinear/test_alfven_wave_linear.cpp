@@ -86,7 +86,7 @@ struct ProblemSetup {
 	double k_rotation_xy = 0.0;
 	double k_elevation_xy = 0.0;
 
-	// MRF expressed in problem refrence frame (PRF)
+	// MRF expressed in problem reference frame (PRF)
 	std::array<double, 3> k_dir_prf{1.0, 0.0, 0.0};
 	std::array<double, 3> inplane_dir_prf{0.0, 1.0, 0.0};
 	std::array<double, 3> outofplane_dir_prf{0.0, 0.0, 1.0};
@@ -100,7 +100,7 @@ struct ProblemSetup {
 	double bg_mag_x3_prf = 0.0;
 };
 
-AMREX_GPU_MANAGED ProblemSetup problem_setup;
+AMREX_GPU_MANAGED ProblemSetup ps;
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1, const double x2, const double x3, const double time, const int component) -> double
 {
@@ -114,13 +114,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1,
 	// equivalently: x_mrf = transpose(R) * x_prf, where R = [k_dir_prf, inplane_dir_prf, outofplane_dir_prf]
 	// the columns of R are the MRF basis vectors expressed in the PRF
 	// because R is orthonormal, its inverse is its transpose, so multiplying by R^T is exactly taking dot products
-	const double x0_mrf = computeDotProduct(x_prf, problem_setup.k_dir_prf);
-	const double x1_mrf = computeDotProduct(x_prf, problem_setup.inplane_dir_prf);
-	const double x2_mrf = computeDotProduct(x_prf, problem_setup.outofplane_dir_prf);
+	const double x0_mrf = computeDotProduct(x_prf, ps.k_dir_prf);
+	const double x1_mrf = computeDotProduct(x_prf, ps.inplane_dir_prf);
+	const double x2_mrf = computeDotProduct(x_prf, ps.outofplane_dir_prf);
 
 	// b_mrf = (b0*cos(theta), b0*sin(theta), 0)
-	const double b0_mrf = bg_b_magn * problem_setup.cos_angle_k_b0;
-	const double b1_mrf = bg_b_magn * problem_setup.sin_angle_k_b0;
+	const double b0_mrf = bg_b_magn * ps.cos_angle_k_b0;
+	const double b1_mrf = bg_b_magn * ps.sin_angle_k_b0;
 	const double b2_mrf = 0.0;
 
 	// we choose a Coulomb-gauge vector potential to compute the uniform field
@@ -137,10 +137,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1,
 	// we achieve point (2) by perturbing ONLY the in-plane component: A1 = A1(x0_mrf, t).
 	// curl(A_perturb) with A_perturb = A1(x0) * e1 yields delta_b_magn = dA1 / dx0 * e2, which is purely out-of-plane
 	// and so the phase = omega * t - |k| * x0_mrf
-	const double phase_mrf = problem_setup.omega * time - problem_setup.k_magn * x0_mrf;
+	const double phase_mrf = ps.omega * time - ps.k_magn * x0_mrf;
 
 	// small-amplitude perturbation: amplitude = b0 * delta_b_magn / |k| where delta_b_magn << b0
-	const double A1_perturb_mrf = -(bg_b_magn * delta_b_magn / problem_setup.k_magn) * std::sin(phase_mrf);
+	const double A1_perturb_mrf = -(bg_b_magn * delta_b_magn / ps.k_magn) * std::sin(phase_mrf);
 
 	// total vector potential
 	const double A0_mrf = A0_uniform_mrf;
@@ -148,9 +148,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1,
 	const double A2_mrf = A2_uniform_mrf;
 
 	// map the vector potential back to the PRF
-	const double A0_prf = A0_mrf * problem_setup.k_dir_prf[0] + A1_mrf * problem_setup.inplane_dir_prf[0] + A2_mrf * problem_setup.outofplane_dir_prf[0];
-	const double A1_prf = A0_mrf * problem_setup.k_dir_prf[1] + A1_mrf * problem_setup.inplane_dir_prf[1] + A2_mrf * problem_setup.outofplane_dir_prf[1];
-	const double A2_prf = A0_mrf * problem_setup.k_dir_prf[2] + A1_mrf * problem_setup.inplane_dir_prf[2] + A2_mrf * problem_setup.outofplane_dir_prf[2];
+	const double A0_prf = A0_mrf * ps.k_dir_prf[0] + A1_mrf * ps.inplane_dir_prf[0] + A2_mrf * ps.outofplane_dir_prf[0];
+	const double A1_prf = A0_mrf * ps.k_dir_prf[1] + A1_mrf * ps.inplane_dir_prf[1] + A2_mrf * ps.outofplane_dir_prf[1];
+	const double A2_prf = A0_mrf * ps.k_dir_prf[2] + A1_mrf * ps.inplane_dir_prf[2] + A2_mrf * ps.outofplane_dir_prf[2];
 
 	if (component == 0) {
 		return A0_prf;
@@ -183,28 +183,25 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 
 	if (cen == quokka::centering::cc) {
 		const std::array<double, 3> xC_prf{x1_C, x2_C, x3_C};
-		const double x0_mrf = computeDotProduct(xC_prf, problem_setup.k_dir_prf);
-		const double phase_mrf = problem_setup.omega * time - problem_setup.k_magn * x0_mrf;
+		const double x0_mrf = computeDotProduct(xC_prf, ps.k_dir_prf);
+		const double phase_mrf = ps.omega * time - ps.k_magn * x0_mrf;
 		const double cos_phase_mrf = std::cos(phase_mrf);
 
 		double delta_v = 0.0;
-		if (std::abs(problem_setup.cos_angle_k_b0) > 1e-14) {
-			delta_v = -problem_setup.omega * delta_b_magn / (sound_speed * problem_setup.k_magn * problem_setup.cos_angle_k_b0) * cos_phase_mrf;
+		if (std::abs(ps.cos_angle_k_b0) > 1e-14) {
+			delta_v = -ps.omega * delta_b_magn / (sound_speed * ps.k_magn * ps.cos_angle_k_b0) * cos_phase_mrf;
 		}
-		const double v_x1 = delta_v * problem_setup.outofplane_dir_prf[0];
-		const double v_x2 = delta_v * problem_setup.outofplane_dir_prf[1];
-		const double v_x3 = delta_v * problem_setup.outofplane_dir_prf[2];
+		const double v_x1 = delta_v * ps.outofplane_dir_prf[0];
+		const double v_x2 = delta_v * ps.outofplane_dir_prf[1];
+		const double v_x3 = delta_v * ps.outofplane_dir_prf[2];
 
-		const double b0_x1 =
-		    bg_b_magn * (problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[0] + problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[0]);
-		const double b0_x2 =
-		    bg_b_magn * (problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[1] + problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[1]);
-		const double b0_x3 =
-		    bg_b_magn * (problem_setup.cos_angle_k_b0 * problem_setup.k_dir_prf[2] + problem_setup.sin_angle_k_b0 * problem_setup.inplane_dir_prf[2]);
+		const double b0_x1 = bg_b_magn * (ps.cos_angle_k_b0 * ps.k_dir_prf[0] + ps.sin_angle_k_b0 * ps.inplane_dir_prf[0]);
+		const double b0_x2 = bg_b_magn * (ps.cos_angle_k_b0 * ps.k_dir_prf[1] + ps.sin_angle_k_b0 * ps.inplane_dir_prf[1]);
+		const double b0_x3 = bg_b_magn * (ps.cos_angle_k_b0 * ps.k_dir_prf[2] + ps.sin_angle_k_b0 * ps.inplane_dir_prf[2]);
 
-		const double delta_b_x1 = bg_b_magn * delta_b_magn * cos_phase_mrf * problem_setup.outofplane_dir_prf[0];
-		const double delta_b_x2 = bg_b_magn * delta_b_magn * cos_phase_mrf * problem_setup.outofplane_dir_prf[1];
-		const double delta_b_x3 = bg_b_magn * delta_b_magn * cos_phase_mrf * problem_setup.outofplane_dir_prf[2];
+		const double delta_b_x1 = bg_b_magn * delta_b_magn * cos_phase_mrf * ps.outofplane_dir_prf[0];
+		const double delta_b_x2 = bg_b_magn * delta_b_magn * cos_phase_mrf * ps.outofplane_dir_prf[1];
+		const double delta_b_x3 = bg_b_magn * delta_b_magn * cos_phase_mrf * ps.outofplane_dir_prf[2];
 
 		const double b_x1 = b0_x1 + delta_b_x1;
 		const double b_x2 = b0_x2 + delta_b_x2;
@@ -227,14 +224,23 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		const double b_x1 = (Az(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) / dx[1] -
-				    (Ay(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) / dx[2];
+		const double b_x1 = (
+				Az(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)
+			) / dx[1] - (
+				Ay(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)
+			) / dx[2];
 
-		const double b_x2 = (Ax(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) / dx[2] -
-				    (Az(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) / dx[0];
+		const double b_x2 = (
+				Ax(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)
+			) / dx[2] - (
+				Az(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)
+			) / dx[0];
 
-		const double b_x3 = (Ay(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) / dx[0] -
-				    (Ax(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) / dx[1];
+		const double b_x3 = (
+				Ay(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)
+			) / dx[0] - (
+				Ax(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)
+			) / dx[1];
 
 		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1;
@@ -354,30 +360,35 @@ auto problem_main() -> int
 
 	const double omega = alfven_speed * k_magn * cos_angle_k_b0;
 
-	std::array<double, 3> ref_prf{0.0, 0.0, 1.0};
-	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999)
+	// to build our orthonormal basis in the problem reference frame (PRF)
+	// first choose a vector that is not aligned/parallel with the wave propagation direction
+	std::array<double, 3> ref_prf{0.0, 0.0, 1.0}; // guess a direction
+	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) {
 		ref_prf = {1.0, 0.0, 0.0};
+	}
 
-	std::array<double, 3> inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
-	normaliseVector(inplane_dir_prf);
-
-	std::array<double, 3> outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
+	// define the plane in which b0 will sit
+	std::array<double, 3> outofplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
 	normaliseVector(outofplane_dir_prf);
 
-	problem_setup.angle_between_k_b0 = angle_between_k_b0;
-	problem_setup.k_rotation_xy = k_rotation_xy;
-	problem_setup.k_elevation_xy = k_elevation_xy;
-	problem_setup.cos_angle_k_b0 = cos_angle_k_b0;
-	problem_setup.sin_angle_k_b0 = sin_angle_k_b0;
-	problem_setup.k_magn = k_magn;
-	problem_setup.omega = omega;
-	problem_setup.k_dir_prf = k_dir_prf;
-	problem_setup.inplane_dir_prf = inplane_dir_prf;
-	problem_setup.outofplane_dir_prf = outofplane_dir_prf;
+	// define the direction the perturbation will be made
+	std::array<double, 3> inplane_dir_prf = computeCrossProduct(k_dir_prf, outofplane_dir_prf);
+	normaliseVector(inplane_dir_prf);
 
-	problem_setup.bg_mag_x1_prf = bg_b_magn * (cos_angle_k_b0 * k_dir_prf[0] + sin_angle_k_b0 * inplane_dir_prf[0]);
-	problem_setup.bg_mag_x2_prf = bg_b_magn * (cos_angle_k_b0 * k_dir_prf[1] + sin_angle_k_b0 * inplane_dir_prf[1]);
-	problem_setup.bg_mag_x3_prf = bg_b_magn * (cos_angle_k_b0 * k_dir_prf[2] + sin_angle_k_b0 * inplane_dir_prf[2]);
+	ps.angle_between_k_b0 = angle_between_k_b0;
+	ps.k_rotation_xy = k_rotation_xy;
+	ps.k_elevation_xy = k_elevation_xy;
+	ps.cos_angle_k_b0 = cos_angle_k_b0;
+	ps.sin_angle_k_b0 = sin_angle_k_b0;
+	ps.k_magn = k_magn;
+	ps.omega = omega;
+	ps.k_dir_prf = k_dir_prf;
+	ps.inplane_dir_prf = inplane_dir_prf;
+	ps.outofplane_dir_prf = outofplane_dir_prf;
+
+	ps.bg_mag_x1_prf = bg_b_magn * (cos_angle_k_b0 * k_dir_prf[0] + sin_angle_k_b0 * inplane_dir_prf[0]);
+	ps.bg_mag_x2_prf = bg_b_magn * (cos_angle_k_b0 * k_dir_prf[1] + sin_angle_k_b0 * inplane_dir_prf[1]);
+	ps.bg_mag_x3_prf = bg_b_magn * (cos_angle_k_b0 * k_dir_prf[2] + sin_angle_k_b0 * inplane_dir_prf[2]);
 
 	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
 
