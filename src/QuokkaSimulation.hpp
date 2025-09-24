@@ -241,7 +241,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction dir);
 	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, 
-	                             const amrex::Vector<std::string> &compNames, int lev, Real time, int interval) override;
+	                             const amrex::Vector<std::string> &compNames, int lev, int interval) override;
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
@@ -1300,7 +1300,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		bpMeshHost.set(mesh); // copy to host mem (needed for Blueprint HDF5 output)
 		amrex::WriteBlueprintFiles(bpMeshHost, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
 #else
-		WriteSingleLevelPlotfileSimplified("debug_hydro_state_fatal", state_new_cc_[lev], componentNames_cc_, lev, time, 1);
+		WriteSingleLevelPlotfileSimplified("debug_hydro_state_fatal", state_new_cc_[lev], componentNames_cc_, lev, 1);
 #endif
 		amrex::ParallelDescriptor::Barrier();
 
@@ -1491,7 +1491,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if (lowLevelDebuggingOutput_ == 1) {
 			// write rhs
 			std::string plotfile_name = CustomPlotFileName("debug_stage1_rhs_fluxes", istep[lev] + 1);
-			WriteSingleLevelPlotfileSimplified("debug_stage1_rhs_fluxes", rhs, componentNames_cc_, lev, time, 1);
+			WriteSingleLevelPlotfileSimplified("debug_stage1_rhs_fluxes", rhs, componentNames_cc_, lev, 1);
 
 			// write fluxes
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1925,13 +1925,13 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	if (lowLevelDebuggingOutput_ == 1) {
 		// write primitive cell-centered state
 		std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev] + 1);
-		WriteSingleLevelPlotfileSimplified("debug_reconstruction", primVar, componentNames_cc_, lev, 0.0, 1);
+		WriteSingleLevelPlotfileSimplified("debug_reconstruction", primVar, componentNames_cc_, lev, 1);
 
 		// write flattening coefficients
 		amrex::Vector<std::string> flatCompNames{"chi"};
-		WriteSingleLevelPlotfileSimplified("debug_flattening_x", flatCoefs[0], flatCompNames, lev, 0.0, 1);
-		WriteSingleLevelPlotfileSimplified("debug_flattening_y", flatCoefs[1], flatCompNames, lev, 0.0, 1);
-		WriteSingleLevelPlotfileSimplified("debug_flattening_z", flatCoefs[2], flatCompNames, lev, 0.0, 1);
+		WriteSingleLevelPlotfileSimplified("debug_flattening_x", flatCoefs[0], flatCompNames, lev, 1);
+		WriteSingleLevelPlotfileSimplified("debug_flattening_y", flatCoefs[1], flatCompNames, lev, 1);
+		WriteSingleLevelPlotfileSimplified("debug_flattening_z", flatCoefs[2], flatCompNames, lev, 1);
 
 		// write L interface states
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2575,13 +2575,13 @@ template <typename problem_t>
 void QuokkaSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, 
                                                           const amrex::MultiFab &mf, 
                                                           const amrex::Vector<std::string> &compNames, 
-                                                          int lev, Real time, int interval)
+                                                          int lev, int interval)
 {
 	if ((istep[lev] % interval) != 0) {
 		return;
 	}
-	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev] + 1);
-	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], time, istep[lev] + 1);
+	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev]);
+	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], tNew_[lev], istep[lev]);
 }
 
 
