@@ -965,6 +965,7 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		} else {
 			E2_ave(i, j, k) = E2_dstar;
 		}
+		std::cout << "E2_ave:" << E2_ave(i, j, k) << "\n";
 	});
 }
 
