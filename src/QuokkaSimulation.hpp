@@ -63,9 +63,7 @@ namespace filesystem = experimental::filesystem;
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
-#include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "cooling/TabulatedCooling.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
@@ -133,8 +131,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
-	quokka::GrackleLikeCooling::grackle_tables grackleTables_;
-	quokka::TabulatedCooling::cloudy_tables cloudyTables_;
 	quokka::ResampledCooling::resampled_tables resampledTables_;
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
@@ -501,22 +497,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("enabled", enableCooling_);
 		hpp.query("cooling_table_type", coolingTableType_);
 		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
+		if (coolingTableType_.empty()) {
+			coolingTableType_ = "resampled";
+		}
 		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
 			hpp.query("hdf5_data_file", coolingTableFilename_);
-			if (coolingTableType_ == "grackle") {
-				// read Grackle tables
-				amrex::Print() << "Reading Grackle tables...\n";
-				quokka::GrackleLikeCooling::readGrackleData(coolingTableFilename_, grackleTables_);
-			} else if (coolingTableType_ == "cloudy_cooling_tools") {
-				// read cloudy_cooling_tools tables
-				amrex::Print() << "Reading cloudy-cooling-tools tables...\n";
-				quokka::TabulatedCooling::readCloudyData(coolingTableFilename_, cloudyTables_);
-			} else if (coolingTableType_ == "resampled") {
+			if (coolingTableType_ == "resampled") {
 				// read resampled cooling tables
 				amrex::Print() << "Reading resampled cooling tables...\n";
 				quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
 			} else {
-				amrex::Abort("Invalid cooling table type!");
+				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 			}
 		}
 	}
@@ -757,15 +748,13 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	if (enableCooling_ == 1) {
-		// compute cooling
-		if (coolingTableType_ == "grackle") {
-			cool_success = quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
-		} else if (coolingTableType_ == "cloudy_cooling_tools") {
-			cool_success = quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
-		} else if (coolingTableType_ == "resampled") {
+		if (coolingTableType_.empty()) {
+			coolingTableType_ = "resampled";
+		}
+		if (coolingTableType_ == "resampled") {
 			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_);
 		} else {
-			amrex::Abort("Invalid cooling table type!");
+			amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 		}
 	}
 
