@@ -890,7 +890,7 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 						     amrex::Box const &box_ec, std::array<int, 2> extrap_dirs,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
 						     std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
-{	
+{
 	const BL_PROFILE("MHDSystem::ApplyBalsaraEMFSolver()");
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
 	const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
@@ -922,8 +922,8 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 
 		if (!isfinite(SL) || !isfinite(SR) || !isfinite(SD) || !isfinite(SU)) {
 			// AMReX may have other GPU-safe printing options
-			amrex::Print() << "Invalid wave speeds at (" << i << ", " << j << ", " << k 
-						<< "): SL=" << SL << ", SR=" << SR << ", SD=" << SD << ", SU=" << SU << "\n";
+			amrex::Print() << "Invalid wave speeds at (" << i << ", " << j << ", " << k << "): SL=" << SL << ", SR=" << SR << ", SD=" << SD
+				       << ", SU=" << SU << "\n";
 			E2_ave(i, j, k) = 0.0;
 			return;
 		}
@@ -942,19 +942,16 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 
 		// Check magnetic field components
 		if (!isfinite(B0_U) || !isfinite(B0_D) || !isfinite(B1_R) || !isfinite(B1_L)) {
-			amrex::Print() << "Invalid magnetic field at (" << i << ", " << j << ", " << k 
-						<< "): B0_U=" << B0_U << ", B0_D=" << B0_D 
-						<< ", B1_R=" << B1_R << ", B1_L=" << B1_L << "\n";
+			amrex::Print() << "Invalid magnetic field at (" << i << ", " << j << ", " << k << "): B0_U=" << B0_U << ", B0_D=" << B0_D
+				       << ", B1_R=" << B1_R << ", B1_L=" << B1_L << "\n";
 			E2_ave(i, j, k) = 0.0;
 			return;
 		}
-    
-		
+
 		// Check EMF quadrants
 		if (!isfinite(E2_LD) || !isfinite(E2_LU) || !isfinite(E2_RD) || !isfinite(E2_RU)) {
-			amrex::Print() << "Invalid EMF quadrants at (" << i << ", " << j << ", " << k 
-						<< "): E2_LD=" << E2_LD << ", E2_LU=" << E2_LU 
-						<< ", E2_RD=" << E2_RD << ", E2_RU=" << E2_RU << "\n";
+			amrex::Print() << "Invalid EMF quadrants at (" << i << ", " << j << ", " << k << "): E2_LD=" << E2_LD << ", E2_LU=" << E2_LU
+				       << ", E2_RD=" << E2_RD << ", E2_RU=" << E2_RU << "\n";
 			E2_ave(i, j, k) = 0.0;
 			return;
 		}
