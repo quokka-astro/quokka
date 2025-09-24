@@ -2566,7 +2566,7 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 
 // Save single-level plotfile
 // This is a wrapper around the WriteSingleLevelPlotfile function in the AMReX library.
-// The step number of the plotfile is set to istep[lev] + 1 and the time is set to the current time tNew_[lev].
+// The step number of the plotfile is set to istep[lev] and the time is set to the current time tNew_[lev].
 // Example usage: write debug_rhs00000 debug_rhs00001 etc with interval plotfileInterval_
 //   const int lev_debug = 0;
 //   amrex::Vector<std::string> flatCompNames{"rhs"};
