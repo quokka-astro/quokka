@@ -141,7 +141,6 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 
 		const amrex::Real Etot = values.at(HydroSystem<ResampledCoolingTest>::energy_index)[0];
 		const amrex::Real rho = values.at(HydroSystem<ResampledCoolingTest>::density_index)[0];
-		const amrex::Real gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
 		// For isochoric cooling with no kinetic energy, Eint = Etot
 		const amrex::Real Eint = Etot;
 
