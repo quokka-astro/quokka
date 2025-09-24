@@ -767,9 +767,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				for (int icomp = 0; icomp < 2; ++icomp) {
 					ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 					ec_fabs_Bi_ieside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-					// initialize to zero to avoid garbage values on GPU
-					// ec_fabs_Bi_ieside[icomp][0].setVal(0.0);
-					// ec_fabs_Bi_ieside[icomp][1].setVal(0.0);
 				}
 				// extrapolate the two required face-centered magnetic field components to the cell-edge
 				for (int icomp = 0; icomp < 2; ++icomp) {
@@ -920,9 +917,6 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const double SD = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0), fspd_x1(i, j, k, 0));
 		const double SU = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1), fspd_x1(i, j, k, 1));
 
-		// AMReX may have other GPU-safe printing options
-		printf("Wave speeds at (%d, %d, %d): SL=%.6e, SR=%.6e, SD=%.6e, SU=%.6e\n", i, j, k, SL, SR, SD, SU);
-
 		// EMF quadrants
 		const auto E2_LD = E2_q0(i, j, k);
 		const auto E2_LU = E2_q1(i, j, k);
@@ -935,13 +929,6 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto B1_R = B1_m(i, j, k);
 		const auto B1_L = B1_p(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
 
-		// Check magnetic field components
-
-		// Check EMF quadrants
-
-		printf("Magnetic field at (%d, %d, %d): B0_U=%.6e, B0_D=%.6e, B1_R=%.6e, B1_L=%.6e\n", i, j, k, B0_U, B0_D, B1_R, B1_L);
-
-		printf("Invalid EMF quadrants at (%d, %d, %d): E2_LD=%.6e, E2_LU=%.6e, E2_RD=%.6e, E2_RU=%.6e\n", i, j, k, E2_LD, E2_LU, E2_RD, E2_RU);
 
 		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
 		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
