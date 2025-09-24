@@ -102,7 +102,8 @@ struct ProblemSetup {
 
 AMREX_GPU_MANAGED ProblemSetup ps;
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1, const double x2, const double x3, const double time, const int component) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1, const double x2, const double x3, const double time, const int component)
+    -> double
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(component == 0 || component == 1 || component == 2,
 					 "computeVectorPotential(): component must be an integer in {0, 1, 2}");
@@ -152,15 +153,24 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1,
 	const double A1_prf = A0_mrf * ps.k_dir_prf[1] + A1_mrf * ps.inplane_dir_prf[1] + A2_mrf * ps.outofplane_dir_prf[1];
 	const double A2_prf = A0_mrf * ps.k_dir_prf[2] + A1_mrf * ps.inplane_dir_prf[2] + A2_mrf * ps.outofplane_dir_prf[2];
 
-	const std::array<double,3> A_prf{A0_prf, A1_prf, A2_prf};
-  return A_prf[component];
+	const std::array<double, 3> A_prf{A0_prf, A1_prf, A2_prf};
+	return A_prf[component];
 }
 
-AMREX_GPU_DEVICE inline auto Ax(const double x1, const double x2, const double x3, const double t) -> double { return computeVectorPotential(x1, x2, x3, t, 0); }
+AMREX_GPU_DEVICE inline auto Ax(const double x1, const double x2, const double x3, const double t) -> double
+{
+	return computeVectorPotential(x1, x2, x3, t, 0);
+}
 
-AMREX_GPU_DEVICE inline auto Ay(const double x1, const double x2, const double x3, const double t) -> double { return computeVectorPotential(x1, x2, x3, t, 1); }
+AMREX_GPU_DEVICE inline auto Ay(const double x1, const double x2, const double x3, const double t) -> double
+{
+	return computeVectorPotential(x1, x2, x3, t, 1);
+}
 
-AMREX_GPU_DEVICE inline auto Az(const double x1, const double x2, const double x3, const double t) -> double { return computeVectorPotential(x1, x2, x3, t, 2); }
+AMREX_GPU_DEVICE inline auto Az(const double x1, const double x2, const double x3, const double t) -> double
+{
+	return computeVectorPotential(x1, x2, x3, t, 2);
+}
 
 AMREX_GPU_DEVICE
 void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -217,23 +227,14 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		const double b_x1 = (
-				Az(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)
-			) / dx[1] - (
-				Ay(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)
-			) / dx[2];
+		const double b_x1 = (Az(x1_L, x2_L + dx[1], x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) / dx[1] -
+				    (Ay(x1_L, x2_L + dx[1] / 2.0, x3_L + dx[2], time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) / dx[2];
 
-		const double b_x2 = (
-				Ax(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)
-			) / dx[2] - (
-				Az(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)
-			) / dx[0];
+		const double b_x2 = (Ax(x1_L + dx[0] / 2.0, x2_L, x3_L + dx[2], time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) / dx[2] -
+				    (Az(x1_L + dx[0], x2_L, x3_L + dx[2] / 2.0, time) - Az(x1_L, x2_L, x3_L + dx[2] / 2.0, time)) / dx[0];
 
-		const double b_x3 = (
-				Ay(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)
-			) / dx[0] - (
-				Ax(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)
-			) / dx[1];
+		const double b_x3 = (Ay(x1_L + dx[0], x2_L + dx[1] / 2.0, x3_L, time) - Ay(x1_L, x2_L + dx[1] / 2.0, x3_L, time)) / dx[0] -
+				    (Ax(x1_L + dx[0] / 2.0, x2_L + dx[1], x3_L, time) - Ax(x1_L + dx[0] / 2.0, x2_L, x3_L, time)) / dx[1];
 
 		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1;
