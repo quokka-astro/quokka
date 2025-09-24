@@ -10,6 +10,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/valarray.hpp"
 
 struct ParticleRadiationProblem {
@@ -125,22 +126,22 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 	static constexpr double star_lum_per_M_solar = 4.0e33;
 
 	template <typename problem_t, typename ParticleType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, int mass_idx, int lum_idx, int birth_time_idx,
-									 amrex::Real current_time) noexcept
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time) noexcept
 	{
-		if (mass_idx >= 0 && birth_time_idx >= 0 && lum_idx >= 0) {
-			const amrex::Real age = current_time - p.rdata(birth_time_idx);
-			const amrex::Real mass = p.rdata(mass_idx);
+		const int mass_idx = StochasticStellarPopParticleMassIdx;
+		const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
+		const int lum_idx = StochasticStellarPopParticleLumIdx;
+		const amrex::Real age = current_time - p.rdata(birth_time_idx);
+		const amrex::Real mass = p.rdata(mass_idx);
 
-			// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
-			// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
-			const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
+		// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
+		// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
+		const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
 
-			// Update luminosity components (they are stored consecutively starting at lum_idx)
-			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-				const amrex::Real luminosity = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
-				p.rdata(lum_idx + g) = luminosity;
-			}
+		// Update luminosity components (they are stored consecutively starting at lum_idx)
+		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+			const amrex::Real luminosity = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
+			p.rdata(lum_idx + g) = luminosity;
 		}
 	}
 };
@@ -159,10 +160,10 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 
 		// Set radiation variables
 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0;
-			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::gasEnergy_index) = rho_e;
 		state_cc(i, j, k, RadSystem<ParticleRadiationProblem>::gasDensity_index) = rho;
@@ -175,44 +176,7 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<ParticleRadiationProblem>::x1GasMomentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleRadiationProblem>::x2GasMomentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<ParticleRadiationProblem>::x3GasMomentum_index) && (dim == 2)) {
-			return true;
-		}
-		// Check radiation flux components
-		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-			if ((n == RadSystem<ParticleRadiationProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 0)) {
-				return true;
-			}
-			if ((n == RadSystem<ParticleRadiationProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 1)) {
-				return true;
-			}
-			if ((n == RadSystem<ParticleRadiationProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) && (dim == 2)) {
-				return true;
-			}
-		}
-		return false;
-	};
-
-	const int ncomp_cc = RadSystem<ParticleRadiationProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<ParticleRadiationProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleRadiationProblem> sim(BCs_cc);
@@ -231,7 +195,8 @@ auto problem_main() -> int
 	// Total radiation energy in the field
 	amrex::Real total_Erad_init = 0.0;
 	for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+		total_Erad_init +=
+		    sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
 	}
 
 	// total gas energy
@@ -248,7 +213,7 @@ auto problem_main() -> int
 	// Total radiation energy in the field
 	amrex::Real total_Erad = 0.0;
 	for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-		total_Erad += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+		total_Erad += sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
 	}
 
 	// total gas energy

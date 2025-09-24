@@ -57,6 +57,35 @@ This will cause the CPU to wait until the GPU kernel execution is complete befor
 
 For more details, refer to the [AMReX GPU debugging guide](https://amrex-codes.github.io/amrex/docs_html/Debugging.html#basic-gpu-debugging).
 
+## Testing for GPU race conditions
+
+GPU race conditions can cause non-deterministic behavior where the same simulation produces different results on different runs, or crashes only intermittently. To systematically test for race conditions, use the provided test script:
+
+```bash
+./scripts/bash/test_gpu_race.sh -b <binary> -i <input_file> -n <max_timesteps>
+```
+
+**Parameters:**
+- `-b <binary>`: Path to the test binary (e.g., `./build/src/FieldLoop/test_field_loop`)
+- `-i <input_file>`: Path to the input file (e.g., `inputs/field_loop.in`)
+- `-n <max_timesteps>`: Maximum number of timesteps to run
+
+**Example:**
+```bash
+./scripts/bash/test_gpu_race.sh -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10
+```
+
+**How it works:**
+1. Runs the same simulation twice - once with `CUDA_LAUNCH_BLOCKING=1` (synchronous) and once with `CUDA_LAUNCH_BLOCKING=0` (asynchronous)
+2. Compares the final plotfiles using AMReX's `fcompare` tool with zero tolerance
+3. If the results differ, this indicates a race condition where kernel execution order affects the outcome
+
+**Interpreting results:**
+- **SUCCESS**: Plotfiles are identical - no race condition detected
+- **FAILURE**: Plotfiles differ or non-blocking run crashes - race condition detected
+
+The script preserves temporary files for analysis when a race condition is found. These can be examined to understand the nature of the differences between the two runs.
+
 ## When all else fails: Debugging with `printf`
 
 If you have tried *all* of the above steps, then you have to resort to adding `printf` statements within the GPU code. Note that `printf` inside GPU code is different from the CPU-side `printf` function, as explained in the [NVIDIA documentation](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#formatted-output).

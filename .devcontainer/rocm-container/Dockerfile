@@ -9,14 +9,14 @@ COPY rocm_so.conf rocm_so.conf
 RUN if ! zypper repos -E | grep devel_languages_perl; then \
     zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.6/devel:languages:perl.repo; \
     fi && \
-    echo "[ROCm-6.4.0]" | tee --append /etc/zypp/repos.d/rocm.repo && \
-    echo "name=ROCm6.4.0" | tee --append /etc/zypp/repos.d/rocm.repo && \
-    echo "baseurl=https://repo.radeon.com/rocm/zyp/6.4/main" | tee --append /etc/zypp/repos.d/rocm.repo && \
+    echo "[ROCm-7.0.0]" | tee --append /etc/zypp/repos.d/rocm.repo && \
+    echo "name=ROCm7.0.0" | tee --append /etc/zypp/repos.d/rocm.repo && \
+    echo "baseurl=https://repo.radeon.com/rocm/zyp/7.0/main" | tee --append /etc/zypp/repos.d/rocm.repo && \
     echo "enabled=1" | tee --append /etc/zypp/repos.d/rocm.repo && \
     echo "gpgcheck=1" | tee --append /etc/zypp/repos.d/rocm.repo && \
     echo "gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" | tee --append /etc/zypp/repos.d/rocm.repo && \
     zypper --non-interactive --gpg-auto-import-keys refresh && \
-    zypper --non-interactive install rocm6.4.0 && \
+    zypper --non-interactive install rocm7.0.0 && \
     zypper clean --all && \
     cat rocm_so.conf >> /etc/ld.so.conf.d/rocm.conf && \
     rm rocm_so.conf && \

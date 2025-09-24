@@ -15,11 +15,9 @@ namespace quokka
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 	// Default implementation - does nothing
 	template <typename problem_t, typename ParticleType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, int mass_idx, int lum_idx, int birth_time_idx,
-									 amrex::Real current_time) noexcept
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType & /*p*/, amrex::Real /*current_time*/) noexcept
 	{
 		// Default implementation does nothing
-		amrex::ignore_unused(p, mass_idx, lum_idx, birth_time_idx, current_time);
 	}
 };
 } // namespace quokka

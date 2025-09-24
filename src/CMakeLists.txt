@@ -144,9 +144,7 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/TabulatedCooling.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/CloudyDataReader.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/math/interpolate.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/util/DataTable.cpp"
                         "${openPMDSources}")
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")

@@ -16,13 +16,12 @@
 #include <fmt/format.h>
 #include <fstream>
 
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -200,9 +199,9 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 	interpolate_arrays(xs.data(), eint_exact_interp.data(), static_cast<int>(xs.size()), xs_exact.data(), eint_exact.data(),
 			   static_cast<int>(xs_exact.size()));
 
-	amrex::Gpu::DeviceVector<double> rho_g(density_exact_interp.size());
-	amrex::Gpu::DeviceVector<double> vx_g(velocity_exact_interp.size());
-	amrex::Gpu::DeviceVector<double> P_g(pressure_exact_interp.size());
+	amrex::Gpu::AsyncVector<double> rho_g(density_exact_interp.size());
+	amrex::Gpu::AsyncVector<double> vx_g(velocity_exact_interp.size());
+	amrex::Gpu::AsyncVector<double> P_g(pressure_exact_interp.size());
 
 	// copy exact solution to device
 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, density_exact_interp.begin(), density_exact_interp.end(), rho_g.begin());
@@ -315,17 +314,7 @@ auto problem_main() -> int
 	const double max_dt = 1e-3;
 	const int max_timesteps = 5000;
 
-	// Problem initialization
-	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[0].setLo(0, amrex::BCType::ext_dir); // Dirichlet
-		BCs_cc[0].setHi(0, amrex::BCType::ext_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
 

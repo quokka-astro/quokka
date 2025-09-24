@@ -34,6 +34,8 @@ These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` 
 | checkpoint_prefix | String | The prefix for checkpoint output filenames. Default: "chk". |
 | do_subcycle | Integer | This turns on subcycling at coarse-fine boundaries (1) or turns it off (0). Default: 1 (on). |
 | poisson_supercycle_interval | Integer | The number of coarse timesteps between Poisson supercycle operations. |
+| poisson_reltol | Float | Relative tolerance for the Poisson solver convergence. Default: 1.0e-5. |
+| poisson_abstol | Float | Absolute tolerance for the Poisson solver convergence (scaled by minimum RHS value). Default: 1.0e-5. |
 | print_cycle_timing | Integer | If set to 1, prints per-cycle timing information. Default: 0 (disabled). |
 | restartfile | String | The path to a checkpoint file from which to restart the simulation. |
 | amr.plot_nfiles | Integer | Maximum number of binary files per multifab for plotfiles. Controls parallel I/O chunking. |
@@ -62,6 +64,15 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 | radiation.cfl | Float | Sets the CFL number for the radiation advance. This is independent of the hydro CFL number. |
 | radiation.dust_gas_interaction_coeff | Float | Coefficient for dust-gas interaction in radiation calculations. |
 | radiation.print_iteration_counts | Integer | If set to 1, prints radiation iteration counts for debugging. Default: 0 (disabled). |
+
+## MHD
+
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+
+| Parameter Name | Type | Description |
+|----|----|----|
+| mhd.emf_averaging_method | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer` or `LD04`. Default: `LD04`. |
+| mhd.emf_reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |
 
 ## Optically-thin radiative cooling
 
