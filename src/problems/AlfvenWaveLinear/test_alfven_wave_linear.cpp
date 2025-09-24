@@ -100,7 +100,7 @@ struct ProblemSetup {
 	double bg_mag_x3_prf = 0.0;
 };
 
-AMREX_GPU_MANAGED ProblemSetup ps;
+AMREX_GPU_MANAGED ProblemSetup ps; // NOLINT
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1, const double x2, const double x3, const double time, const int component)
     -> double
