@@ -909,7 +909,6 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 	delta_w0[w0_comp] = 1;
 	delta_w1[w1_comp] = 1;
 
-
 	const auto &fspd_x0 = fspds[w0_comp];
 	const auto &fspd_x1 = fspds[w1_comp];
 
