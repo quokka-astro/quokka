@@ -152,15 +152,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotential(const double x1,
 	const double A1_prf = A0_mrf * ps.k_dir_prf[1] + A1_mrf * ps.inplane_dir_prf[1] + A2_mrf * ps.outofplane_dir_prf[1];
 	const double A2_prf = A0_mrf * ps.k_dir_prf[2] + A1_mrf * ps.inplane_dir_prf[2] + A2_mrf * ps.outofplane_dir_prf[2];
 
-	if (component == 0) {
-		return A0_prf;
-	}
-	if (component == 1) {
-		return A1_prf;
-	}
-	if (component == 2) {
-		return A2_prf;
-	}
+	const std::array<double,3> A_prf{A0_prf, A1_prf, A2_prf};
+  return A_prf[component];
 }
 
 AMREX_GPU_DEVICE inline auto Ax(const double x1, const double x2, const double x3, const double t) -> double { return computeVectorPotential(x1, x2, x3, t, 0); }
