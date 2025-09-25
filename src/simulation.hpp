@@ -374,7 +374,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
 	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
-						const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, quokka::direction dir);
+							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, quokka::direction dir);
 	void interpolateFaceCenteredArrayFromRestart(amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &target_array,
 						     const amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &source_array, const RefinementContext &context,
 						     const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom);
@@ -3628,7 +3628,7 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredArrayFromRestart(amrex::Ar
 		}
 
 		amrex::InterpFromCoarseLevel(target_array, 0., source_array, 0, 0, source_array[0]->nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0,
-				     fineBdryFunct, 0, restart_ref_ratio, &amrex::face_divfree_interp, BCs_array, 0);
+					     fineBdryFunct, 0, restart_ref_ratio, &amrex::face_divfree_interp, BCs_array, 0);
 	}
 }
 
