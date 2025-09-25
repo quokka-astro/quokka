@@ -930,25 +930,6 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto B1_R_ = B1_R(i,j,k);
 		const auto B1_L_ = B1_L(i,j,k);
 
-
-		if (SU == SD && B0_D_ != B0_U_) {
-			std::cout << "[SD==SU condition] At (i=" << i << ", j=" << j << ", k=" << k << "): "
-					<< "\tSU=\t" << SU
-					<< "\tSD=\t" << SD
-					<< "\tB0_U=\t" << B0_U_
-					<< "\tB0_D=\t" << B0_D_
-					<< std::endl;
-		}
-
-		if (SR == SL && B1_R_ != B1_L_) {
-			std::cout << "[SR==SL condition] At (i=" << i << ", j= " << j << ", k=" << k << "): "
-					<< "\tSL=\t" << SL
-					<< "\tSR=\t" << SR
-					<< "\tB1_L=\t" << B1_L_
-					<< "\tB1_R=\t" << B1_R_
-					<< std::endl;
-		}
-
 		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
 		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
 		const auto E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) + (SU * SD) * (B0_U_ - B0_D_) / (SU - SD);
