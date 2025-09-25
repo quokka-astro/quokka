@@ -662,6 +662,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 		};
 
 		for (int iedge = 0; iedge < 3; ++iedge) {
+			std::cout << "iedge = " << iedge << std::endl;
 
 			std::array<int, 2> extrap_dirs = {(iedge + 1) % 3, (iedge + 2) % 3};
 			std::array<amrex::IntVect, 2> vecs_cc2ec = {amrex::IntVect::TheDimensionVector(extrap_dirs[0]),
@@ -894,10 +895,10 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 	const auto &E2_q2 = ec_fabs_EMF_q[2].const_array();
 	const auto &E2_q3 = ec_fabs_EMF_q[3].const_array();
 
-	const auto &B0_m = ec_fabs_Bi_ieside[0][0].const_array();
-	const auto &B0_p = ec_fabs_Bi_ieside[0][1].const_array();
-	const auto &B1_m = ec_fabs_Bi_ieside[1][0].const_array();
-	const auto &B1_p = ec_fabs_Bi_ieside[1][1].const_array();
+	const auto &B0_D = ec_fabs_Bi_ieside[0][0].const_array();
+	const auto &B0_U = ec_fabs_Bi_ieside[0][1].const_array();
+	const auto &B1_R = ec_fabs_Bi_ieside[1][0].const_array();
+	const auto &B1_L = ec_fabs_Bi_ieside[1][1].const_array();
 
 	int const w0_comp = extrap_dirs[0];
 	int const w1_comp = extrap_dirs[1];
@@ -912,36 +913,55 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		// Wave speeds
-		const double SL = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0), fspd_x0(i, j, k, 0));
-		const double SR = std::max(fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1), fspd_x0(i, j, k, 1));
-		const double SD = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0), fspd_x1(i, j, k, 0));
-		const double SU = std::max(fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1), fspd_x1(i, j, k, 1));
+		const double SL = std::max(fspd_x0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0), fspd_x0(i, j, k, 0));
+		const double SR = std::max(fspd_x0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1), fspd_x0(i, j, k, 1));
+		const double SU = std::max(fspd_x1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0), fspd_x1(i, j, k, 1));
+		const double SD = std::max(fspd_x1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1), fspd_x1(i, j, k, 0));
 
 		// EMF quadrants
 		const auto E2_LD = E2_q0(i, j, k);
 		const auto E2_LU = E2_q1(i, j, k);
-		const auto E2_RD = E2_q2(i, j, k);
-		const auto E2_RU = E2_q3(i, j, k);
+		const auto E2_RU = E2_q2(i, j, k);
+		const auto E2_RD = E2_q3(i, j, k);
 
 		// Magnetic field components
-		const auto B0_U = B0_m(i, j, k);
-		const auto B0_D = B0_p(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
-		const auto B1_R = B1_m(i, j, k);
-		const auto B1_L = B1_p(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+		const auto B0_U_ = B0_U(i,j,k);
+		const auto B0_D_ = B0_D(i,j,k);
+		const auto B1_R_ = B1_R(i,j,k);
+		const auto B1_L_ = B1_L(i,j,k);
 
-		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
-		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R - B1_L) / (SR - SL);
-		const auto E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) + (SU * SD) * (B0_U - B0_D) / (SU - SD);
-		const auto E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) + (SU * SD) * (B0_U - B0_D) / (SU - SD);
 
-		const auto B0_dstar = (SU * B0_U - SD * B0_D) / (SU - SD) + (E2_LD - E2_LU + E2_RD - E2_RU) / (2.0 * (SU - SD));
-		const auto B1_dstar = (SR * B1_R - SL * B1_L) / (SR - SL) + (-E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SR - SL));
+		if (SU == SD && B0_D_ != B0_U_) {
+			std::cout << "[SD==SU condition] At (i=" << i << ", j=" << j << ", k=" << k << "): "
+					<< "\tSU=\t" << SU
+					<< "\tSD=\t" << SD
+					<< "\tB0_U=\t" << B0_U_
+					<< "\tB0_D=\t" << B0_D_
+					<< std::endl;
+		}
+
+		if (SR == SL && B1_R_ != B1_L_) {
+			std::cout << "[SR==SL condition] At (i=" << i << ", j= " << j << ", k=" << k << "): "
+					<< "\tSL=\t" << SL
+					<< "\tSR=\t" << SR
+					<< "\tB1_L=\t" << B1_L_
+					<< "\tB1_R=\t" << B1_R_
+					<< std::endl;
+		}
+
+		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
+		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
+		const auto E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) + (SU * SD) * (B0_U_ - B0_D_) / (SU - SD);
+		const auto E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) + (SU * SD) * (B0_U_ - B0_D_) / (SU - SD);
+
+		const auto B0_dstar = (SU * B0_U_ - SD * B0_D_) / (SU - SD) + (E2_LD - E2_LU + E2_RD - E2_RU) / (2.0 * (SU - SD));
+		const auto B1_dstar = (SR * B1_R_ - SL * B1_L_) / (SR - SL) + (-E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SR - SL));
 
 		const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + (SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) -
-					SU * SD * (B0_D - B0_U) / (SU - SD) + (SR * B1_R + SL * B1_L) / 2.0;
+								SU * SD * (B0_D_ - B0_U_) / (SU - SD) + (SR * B1_R_ + SL * B1_L_) / 2.0;
 
 		const auto E2_dstar_2 = (SU + SD) * B0_dstar / 2.0 + (SR * (E2_RU + E2_LU) - SL * (E2_RD + E2_LD)) / (2.0 * (SR - SL)) -
-					(SU * B0_U + SD * B0_D) / 2.0 - SR * SL * (B1_R - B1_L) / (SR - SL);
+								(SU * B0_U_ + SD * B0_D_) / 2.0 - SR * SL * (B1_R_ - B1_L_) / (SR - SL);
 
 		const auto E2_dstar = 0.5 * (E2_dstar_1 + E2_dstar_2);
 
@@ -964,7 +984,6 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		} else {
 			E2_ave(i, j, k) = E2_dstar;
 		}
-		std::cout << "E2_ave:" << E2_ave(i, j, k) << "\n";
 	});
 }
 
