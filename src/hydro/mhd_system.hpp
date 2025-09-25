@@ -925,28 +925,19 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto E2_RD = E2_q3(i, j, k);
 
 		// Magnetic field components
-		const auto B0_U_ = B0_U(i,j,k);
-		const auto B0_D_ = B0_D(i,j,k);
-		const auto B1_R_ = B1_R(i,j,k);
-		const auto B1_L_ = B1_L(i,j,k);
-
+		const auto B0_U_ = B0_U(i, j, k);
+		const auto B0_D_ = B0_D(i, j, k);
+		const auto B1_R_ = B1_R(i, j, k);
+		const auto B1_L_ = B1_L(i, j, k);
 
 		if (SU == SD && B0_D_ != B0_U_) {
 			std::cout << "[SD==SU condition] At (i=" << i << ", j=" << j << ", k=" << k << "): "
-					<< "\tSU=\t" << SU
-					<< "\tSD=\t" << SD
-					<< "\tB0_U=\t" << B0_U_
-					<< "\tB0_D=\t" << B0_D_
-					<< std::endl;
+				  << "\tSU=\t" << SU << "\tSD=\t" << SD << "\tB0_U=\t" << B0_U_ << "\tB0_D=\t" << B0_D_ << std::endl;
 		}
 
 		if (SR == SL && B1_R_ != B1_L_) {
 			std::cout << "[SR==SL condition] At (i=" << i << ", j= " << j << ", k=" << k << "): "
-					<< "\tSL=\t" << SL
-					<< "\tSR=\t" << SR
-					<< "\tB1_L=\t" << B1_L_
-					<< "\tB1_R=\t" << B1_R_
-					<< std::endl;
+				  << "\tSL=\t" << SL << "\tSR=\t" << SR << "\tB1_L=\t" << B1_L_ << "\tB1_R=\t" << B1_R_ << std::endl;
 		}
 
 		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
@@ -958,10 +949,10 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto B1_dstar = (SR * B1_R_ - SL * B1_L_) / (SR - SL) + (-E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SR - SL));
 
 		const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + (SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) -
-								SU * SD * (B0_D_ - B0_U_) / (SU - SD) + (SR * B1_R_ + SL * B1_L_) / 2.0;
+					SU * SD * (B0_D_ - B0_U_) / (SU - SD) + (SR * B1_R_ + SL * B1_L_) / 2.0;
 
 		const auto E2_dstar_2 = (SU + SD) * B0_dstar / 2.0 + (SR * (E2_RU + E2_LU) - SL * (E2_RD + E2_LD)) / (2.0 * (SR - SL)) -
-								(SU * B0_U_ + SD * B0_D_) / 2.0 - SR * SL * (B1_R_ - B1_L_) / (SR - SL);
+					(SU * B0_U_ + SD * B0_D_) / 2.0 - SR * SL * (B1_R_ - B1_L_) / (SR - SL);
 
 		const auto E2_dstar = 0.5 * (E2_dstar_1 + E2_dstar_2);
 
