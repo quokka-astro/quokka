@@ -925,10 +925,10 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto E2_RD = E2_q3(i, j, k);
 
 		// Magnetic field components
-		const auto B0_U_ = B0_U(i,j,k);
-		const auto B0_D_ = B0_D(i,j,k);
-		const auto B1_R_ = B1_R(i,j,k);
-		const auto B1_L_ = B1_L(i,j,k);
+		const auto B0_U_ = B0_U(i, j, k);
+		const auto B0_D_ = B0_D(i, j, k);
+		const auto B1_R_ = B1_R(i, j, k);
+		const auto B1_L_ = B1_L(i, j, k);
 
 		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
 		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
