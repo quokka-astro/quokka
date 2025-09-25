@@ -42,9 +42,11 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::cycleCount_;
+	using AMRSimulation<problem_t>::istep;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
 
+	using AMRSimulation<problem_t>::CustomPlotFileName;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
 	using AMRSimulation<problem_t>::grids;
@@ -84,6 +86,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
+	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
+						int lev, int interval) override;
 	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
@@ -499,5 +503,24 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 
 	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux, x1LeftState, x1RightState, x1FaceVel, advectionVel, nvars);
 }
+
+// Save single-level plotfile
+// This is a wrapper around the WriteSingleLevelPlotfile function in the AMReX library.
+// The step number of the plotfile is set to istep[lev] and the time is set to the current time tNew_[lev].
+// Example usage: write debug_rhs00000 debug_rhs00001 etc with interval plotfileInterval_
+//   const int lev_debug = 0;
+//   amrex::Vector<std::string> flatCompNames{"rhs"};
+//   WriteSingleLevelPlotfileSimplified("debug_rhs", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
+								     const amrex::Vector<std::string> &compNames, int lev, int interval)
+{
+	if ((istep[lev] % interval) != 0) {
+		return;
+	}
+	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev]);
+	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], tNew_[lev], istep[lev]);
+}
+
 
 #endif // ADVECTION_SIMULATION_HPP_
