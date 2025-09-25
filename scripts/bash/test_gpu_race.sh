@@ -6,20 +6,21 @@ set -e
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 -b <binary> -i <input_file> -n <max_timesteps> [-s] [-r] [-c] [-h]"
+    echo "Usage: $0 -b <binary> -i <input_file> -n <max_timesteps> [-m <mode>] [-s] [-r] [-c] [-h]"
     echo ""
     echo "Options:"
     echo "  -b <binary>         Path to the test binary"
     echo "  -i <input_file>     Path to the input file"
     echo "  -n <max_timesteps>  Maximum number of timesteps to run"
-    echo "  -s                  Use single GPU stream (amrex.max_gpu_streams=1)"
+    echo "  -m <mode>           Select run mode; supported: default, single_stream"
+    echo "  -s                  Use single GPU stream (alias for -m single_stream)"
     echo "  -r                  Test reproducibility (run twice with CUDA_LAUNCH_BLOCKING=1)"
     echo "  -c                  Run under compute-sanitizer to detect memory errors and race conditions"
     echo "  -h                  Display this help message"
     echo ""
     echo "Example:"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10"
-    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -s"
+    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -m single_stream"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -r"
     echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -c"
     exit 1
@@ -29,9 +30,10 @@ usage() {
 SINGLE_STREAM=false
 REPRODUCIBILITY_TEST=false
 COMPUTE_SANITIZER=false
+RUN_MODE="default"
 
 # Parse command line arguments
-while getopts "b:i:n:srch" opt; do
+while getopts "b:i:n:srcm:h" opt; do
     case ${opt} in
         b)
             BINARY="${OPTARG}"
@@ -44,6 +46,9 @@ while getopts "b:i:n:srch" opt; do
             ;;
         s)
             SINGLE_STREAM=true
+            ;;
+        m)
+            RUN_MODE="${OPTARG}"
             ;;
         r)
             REPRODUCIBILITY_TEST=true
@@ -64,6 +69,19 @@ while getopts "b:i:n:srch" opt; do
             ;;
     esac
 done
+
+# Normalize mode selection
+case "${RUN_MODE}" in
+    default)
+        ;;
+    single_stream|single-stream|single)
+        SINGLE_STREAM=true
+        ;;
+    *)
+        echo "Error: Unsupported mode '${RUN_MODE}'"
+        usage
+        ;;
+esac
 
 # Check if all required arguments are provided
 if [ -z "${BINARY}" ] || [ -z "${INPUT_FILE}" ] || [ -z "${MAX_TIMESTEPS}" ]; then
