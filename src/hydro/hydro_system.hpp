@@ -33,6 +33,7 @@
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayView.hpp"
+#include "util/OptionalArrayCapture.hpp"
 #include "util/valarray.hpp"
 
 // Microphysics headers
@@ -56,7 +57,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
 	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_;
 
-	enum consVarIndex {
+	enum consVarIndex { // NOLINT(cppcoreguidelines-use-enum-class)
 		density_index = Physics_Indices<problem_t>::hydroFirstIndex,
 		x1Momentum_index,
 		x2Momentum_index,
@@ -66,7 +67,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		scalar0_index	      // first passive scalar (only present if nscalars > 0!)
 	};
 
-	enum primVarIndex {
+	enum primVarIndex { // NOLINT(cppcoreguidelines-use-enum-class)
 		primDensity_index = 0,
 		x1Velocity_index,
 		x2Velocity_index,
@@ -149,20 +150,23 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 						  amrex::MultiFab &primVar_mf, const int nghost)
 {
 	// convert conserved to primitive variables
-	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+	// Only fetch face-centered arrays if MHD is enabled; otherwise provide a
+	// lightweight wrapper that avoids touching potentially invalid MultiFabs.
+	auto const cons_fc_x0 = quokka::detail::make_optional_array_capture<Physics_Traits<problem_t>::is_mhd_enabled>(cons_fc_mf[0]);
 #if AMREX_SPACEDIM >= 2
-	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
+	auto const cons_fc_x1 = quokka::detail::make_optional_array_capture<Physics_Traits<problem_t>::is_mhd_enabled>(cons_fc_mf[1]);
 #endif
 #if AMREX_SPACEDIM == 3
-	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
+	auto const cons_fc_x2 = quokka::detail::make_optional_array_capture<Physics_Traits<problem_t>::is_mhd_enabled>(cons_fc_mf[2]);
 #endif
 	auto const &cons_cc = cons_cc_mf.const_arrays();
 	auto const &primVar = primVar_mf.arrays();
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
-	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		// First-capture the magnetic field arrays by accessing them early
-		// This forces NVCC to capture them before the constexpr if block
+	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
+		// First-capture the magnetic field arrays by accessing them early.
+		// The OptionalArrayCapture wrapper keeps this safe when MHD is disabled while
+		// still satisfying NVCC's capture requirements.
 		[[maybe_unused]] auto fc_x0_ref = cons_fc_x0[bx];
 #if AMREX_SPACEDIM >= 2
 		[[maybe_unused]] auto fc_x1_ref = cons_fc_x1[bx];
@@ -272,7 +276,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 						   std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, array_t &maxSignal,
 						   amrex::Box const &indexRange)
 {
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> void {
 		// First-capture by early access
 		[[maybe_unused]] const auto fc_ref = cons_fc;
 
@@ -544,7 +548,7 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::
 #endif
 	auto rhs = rhs_mf.arrays();
 
-	amrex::ParallelFor(rhs_mf, amrex::IntVect{0}, nvars, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
+	amrex::ParallelFor(rhs_mf, amrex::IntVect{0}, nvars, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept -> void {
 		rhs[bx](i, j, k, n) = AMREX_D_TERM((1.0 / dx[0]) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
 						   +(1.0 / dx[1]) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
 						   +(1.0 / dx[2]) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n)));
@@ -562,7 +566,7 @@ void HydroSystem<problem_t>::PredictStep(amrex::MultiFab const &consVarOld_mf, a
 	auto consVarNew = consVarNew_mf.arrays();
 	auto redoFlag = redoFlag_mf.arrays();
 
-	amrex::ParallelFor(consVarNew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(consVarNew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void {
 		for (int n = 0; n < nvars; ++n) {
 			consVarNew[bx](i, j, k, n) = consVarOld[bx](i, j, k, n) + dt * rhs[bx](i, j, k, n);
 		}
@@ -587,7 +591,7 @@ void HydroSystem<problem_t>::AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::Multi
 	auto U_new = Unew_mf.arrays();
 	auto redoFlag = redoFlag_mf.arrays();
 
-	amrex::ParallelFor(Unew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(Unew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void {
 		for (int n = 0; n < nvars; ++n) {
 			// RK-SSP2 integrator
 			const double U_0 = U0[bx](i, j, k, n);
@@ -626,7 +630,7 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	// cell-centered kernel
-	amrex::ParallelFor(primVar_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
+	amrex::ParallelFor(primVar_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) -> void {
 		quokka::Array4View<const amrex::Real, DIR> primVar(primVar_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1Chi(x1Chi_in[bx]);
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
@@ -723,7 +727,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
 	// cell-centered kernel
-	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) {
+	amrex::ParallelFor(q_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) -> void {
 		quokka::Array4View<const amrex::Real, DIR> q(q_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
@@ -778,7 +782,7 @@ template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::
 {
 	auto state = state_mf.arrays();
 
-	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> void {
 		// Enforce density floor (do not adjust energies here!!)
 		amrex::Real rho_new = NAN;
 		{
@@ -871,7 +875,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 	auto const &redoFlag = redoFlag_mf.const_arrays();
 	auto rhs = rhs_mf.arrays();
 
-	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
 		// get cell-centered pressure
 		const amrex::Real Pgas = ComputePressure(consVar[bx], i, j, k);
 
@@ -909,7 +913,7 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::
 #endif
 #endif
 
-	amrex::ParallelFor(consVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+	amrex::ParallelFor(consVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) -> void {
 		amrex::Real const rho = consVar[bx](i, j, k, density_index);
 		amrex::Real const px = consVar[bx](i, j, k, x1Momentum_index);
 		amrex::Real const py = consVar[bx](i, j, k, x2Momentum_index);
@@ -975,18 +979,24 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	auto x1Flux_in = x1Flux_mf.arrays();
 	auto x1FaceVel_in = x1FaceVel_mf.arrays();
 
-	amrex::MultiArray4<double> x1FSpds_in;
-	amrex::MultiArray4<const double> x1ConsVar_fc_in;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		if (RIEMANN == RiemannSolver::HLLD || RIEMANN == RiemannSolver::LLF_MHD) {
-			x1FSpds_in = (*x1FSpds_mf).arrays();
+	constexpr bool is_mhd = Physics_Traits<problem_t>::is_mhd_enabled;
+	constexpr bool needs_fast_speeds = (RIEMANN == RiemannSolver::HLLD || RIEMANN == RiemannSolver::LLF_MHD);
+
+	if constexpr (is_mhd) {
+		AMREX_ASSERT(x1ConsVar_fc_mf != nullptr);
+		if constexpr (needs_fast_speeds) {
+			AMREX_ASSERT(x1FSpds_mf != nullptr);
 		}
-		x1ConsVar_fc_in = (*x1ConsVar_fc_mf).const_arrays();
 	}
+
+	auto const x1ConsVar_fc_in = quokka::detail::make_optional_array_capture_from_provider<is_mhd>(
+	    [&]() -> decltype((*x1ConsVar_fc_mf).const_arrays()) { return (*x1ConsVar_fc_mf).const_arrays(); });
+	auto const x1FSpds_in = quokka::detail::make_optional_array_capture_from_provider < is_mhd &&
+				needs_fast_speeds > ([&]() -> decltype((*x1FSpds_mf).arrays()) { return (*x1FSpds_mf).arrays(); });
 
 	// Include ghost cells when computing face velocities
 	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
-	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
+	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) -> void {
 		// first capture
 		[[maybe_unused]] const auto x1ConsVar_fc_ref = x1ConsVar_fc_in[bx];
 		[[maybe_unused]] const auto x1FSpds_ref = x1FSpds_in[bx];
