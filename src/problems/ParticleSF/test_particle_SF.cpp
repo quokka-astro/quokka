@@ -9,6 +9,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
+#include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -86,15 +87,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::T
 auto problem_main() -> int
 {
 
-	const int ncomp_cc = Physics_Indices<ParticleSFProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// periodic boundaries
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<ParticleSFProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<ParticleSFProblem> sim(BCs_cc);

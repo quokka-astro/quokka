@@ -15,10 +15,9 @@
 #include <fmt/format.h>
 #include <vector>
 
-#include "AMReX_BC_TYPES.H"
-
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 
 struct CouplingProblem {
@@ -159,14 +158,7 @@ auto problem_main() -> int
 	const double constant_dt = 1.0e-8; // s
 
 	// Problem initialization
-	constexpr int ncomp_cc = Physics_Indices<CouplingProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap); // extrapolate
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		}
-	}
+	auto BCs_cc = quokka::BC<CouplingProblem>(quokka::BCType::foextrap); // extrapolate
 
 	QuokkaSimulation<CouplingProblem> sim(BCs_cc);
 

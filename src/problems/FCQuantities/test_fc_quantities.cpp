@@ -22,7 +22,7 @@
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
-#include "util/fextract.hpp"
+#include "util/BC.hpp"
 
 struct FCQuantities {
 };
@@ -139,15 +139,8 @@ void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const
 
 auto problem_main() -> int
 {
-	// Problem initialization
-	const int ncomp_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	// Set boundary conditions - periodic
+	auto BCs_cc = quokka::BC<FCQuantities>(quokka::BCType::int_dir);
 
 	const int nvars_fc = Physics_Indices<FCQuantities>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);

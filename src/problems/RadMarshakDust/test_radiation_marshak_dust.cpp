@@ -13,6 +13,7 @@
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_dust_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include "util/valarray.hpp"
 #include <fmt/format.h>
