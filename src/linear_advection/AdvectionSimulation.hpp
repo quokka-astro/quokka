@@ -513,7 +513,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 //   WriteSingleLevelPlotfileSimplified("debug_rhs", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
-								     const amrex::Vector<std::string> &compNames, int lev, int interval)
+									const amrex::Vector<std::string> &compNames, int lev, int interval)
 {
 	if ((istep[lev] % interval) != 0) {
 		return;
@@ -521,6 +521,5 @@ void AdvectionSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const st
 	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev]);
 	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], tNew_[lev], istep[lev]);
 }
-
 
 #endif // ADVECTION_SIMULATION_HPP_
