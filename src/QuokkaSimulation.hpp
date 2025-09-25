@@ -104,6 +104,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
 	using AMRSimulation<problem_t>::finest_level;
 	using AMRSimulation<problem_t>::finestLevel;
+	using AMRSimulation<problem_t>::tNew_;
 	using AMRSimulation<problem_t>::do_reflux;
 	using AMRSimulation<problem_t>::do_tracers;
 	using AMRSimulation<problem_t>::Verbose;
@@ -235,6 +236,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 	void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction dir);
+	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
+						int lev, int interval) override;
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
@@ -1286,8 +1289,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		bpMeshHost.set(mesh); // copy to host mem (needed for Blueprint HDF5 output)
 		amrex::WriteBlueprintFiles(bpMeshHost, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
 #else
-		WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_new_cc_[lev], componentNames_cc_, geom[lev], time,
-					 istep[lev] + 1);
+		WriteSingleLevelPlotfileSimplified("debug_hydro_state_fatal", state_new_cc_[lev], componentNames_cc_, lev, 1);
 #endif
 		amrex::ParallelDescriptor::Barrier();
 
@@ -1478,7 +1480,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if (lowLevelDebuggingOutput_ == 1) {
 			// write rhs
 			std::string plotfile_name = CustomPlotFileName("debug_stage1_rhs_fluxes", istep[lev] + 1);
-			WriteSingleLevelPlotfile(plotfile_name, rhs, componentNames_cc_, geom[lev], time, istep[lev] + 1);
+			WriteSingleLevelPlotfileSimplified("debug_stage1_rhs_fluxes", rhs, componentNames_cc_, lev, 1);
 
 			// write fluxes
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1912,16 +1914,13 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	if (lowLevelDebuggingOutput_ == 1) {
 		// write primitive cell-centered state
 		std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev] + 1);
-		WriteSingleLevelPlotfile(plotfile_name, primVar, componentNames_cc_, geom[lev], 0.0, istep[lev] + 1);
+		WriteSingleLevelPlotfileSimplified("debug_reconstruction", primVar, componentNames_cc_, lev, 1);
 
 		// write flattening coefficients
-		std::string flatx_filename = CustomPlotFileName("debug_flattening_x", istep[lev] + 1);
-		std::string flaty_filename = CustomPlotFileName("debug_flattening_y", istep[lev] + 1);
-		std::string flatz_filename = CustomPlotFileName("debug_flattening_z", istep[lev] + 1);
 		amrex::Vector<std::string> flatCompNames{"chi"};
-		WriteSingleLevelPlotfile(flatx_filename, flatCoefs[0], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
-		WriteSingleLevelPlotfile(flaty_filename, flatCoefs[1], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
-		WriteSingleLevelPlotfile(flatz_filename, flatCoefs[2], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
+		WriteSingleLevelPlotfileSimplified("debug_flattening_x", flatCoefs[0], flatCompNames, lev, 1);
+		WriteSingleLevelPlotfileSimplified("debug_flattening_y", flatCoefs[1], flatCompNames, lev, 1);
+		WriteSingleLevelPlotfileSimplified("debug_flattening_z", flatCoefs[2], flatCompNames, lev, 1);
 
 		// write L interface states
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2552,6 +2551,24 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange,
 							  consState, dx, use_wavespeed_correction_); // watch out for argument order!!
+}
+
+// Save single-level plotfile
+// This is a wrapper around the WriteSingleLevelPlotfile function in the AMReX library.
+// The step number of the plotfile is set to istep[lev] and the time is set to the current time tNew_[lev].
+// Example usage: write debug_rhs00000 debug_rhs00001 etc with interval plotfileInterval_
+//   const int lev_debug = 0;
+//   amrex::Vector<std::string> flatCompNames{"rhs"};
+//   WriteSingleLevelPlotfileSimplified("debug_rhs", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
+								     const amrex::Vector<std::string> &compNames, int lev, int interval)
+{
+	if ((istep[lev] % interval) != 0) {
+		return;
+	}
+	const auto plotfile_name = CustomPlotFileName(plotfile_prefix.c_str(), istep[lev]);
+	WriteSingleLevelPlotfile(plotfile_name, mf, compNames, geom[lev], tNew_[lev], istep[lev]);
 }
 
 #endif // RADIATION_SIMULATION_HPP_
