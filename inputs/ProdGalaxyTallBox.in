@@ -39,7 +39,7 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 perturb.filename = "../inputs/zdrv.hdf5"
 perturb.amplitude = 1.5e4 # cm/s
 
-projection_interval = 500
-projection.dirs = y
+#projection_interval = 500
+#projection.dirs = y
 
 tiny_profiler.enabled = 0
