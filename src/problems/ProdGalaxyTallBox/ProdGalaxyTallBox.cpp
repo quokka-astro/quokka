@@ -22,14 +22,18 @@
 #include "io/projection.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "turbulence/TurbDataReader.hpp"
 
 static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap, 3: symmetry
 static constexpr bool enable_self_gravity = true;
 // static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop | ParticleSwitch::CIC;
-static std::string stars_file = "../stars.txt";
-static std::string CIC_file = "../CICs.txt";
+// static std::string stars_file = "../stars.txt";
+// static std::string CIC_file = "../CICs.txt";
+static std::string stars_file = "none";
+static std::string CIC_file = "none";
 
 constexpr double pc = C::parsec;
+constexpr int turbdata_size = 128;
 
 // global variables needed for Dirichlet boundary condition and initial conditions
 // copy from data_sets.dat depending on galaxy environment
@@ -115,6 +119,13 @@ template <> struct SimulationData<TheProblem> {
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_z;
 
+	// turbulent velocity fields
+	amrex::TableData<Real, 3> dvx;
+	amrex::TableData<Real, 3> dvy;
+	amrex::TableData<Real, 3> dvz;
+	Real dv_rms_generated{};
+	Real turbulent_amplitude{};
+
 	int nblast = 0;
 	int SN_counter_cumulative = 0;
 	Real SN_rate_per_vol = NAN;	  // rate per unit time per unit volume
@@ -169,6 +180,46 @@ template <> void QuokkaSimulation<TheProblem>::createInitialCICParticles()
 	CICParticles->InitFromAsciiFile(CIC_file, nreal_extra, nullptr);
 }
 
+template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
+{
+	static bool isSamplingDone = false;
+	if (!isSamplingDone) {
+		// read perturbations from file
+		turb_data turbData;
+		amrex::ParmParse const pp("perturb");
+		std::string turbdata_filename = "zdrv.hdf5";
+		pp.query("filename", turbdata_filename);
+		initialize_turbdata(turbData, turbdata_filename);
+
+		// copy to pinned memory
+		auto pinned_dvx = get_tabledata(turbData.dvx);
+		auto pinned_dvy = get_tabledata(turbData.dvy);
+		auto pinned_dvz = get_tabledata(turbData.dvz);
+
+		// compute normalisation
+		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
+		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
+
+		// set constant amplitude: 0.05 * cs at 10K (~0.3 km/s)
+		const Real cs_10K = 0.3e5; // 0.3 km/s in cm/s (CGS units)
+		userData_.turbulent_amplitude = 0.05 * cs_10K;
+		amrex::Print() << "turbulent amplitude = " << userData_.turbulent_amplitude << " cm/s\n";
+		amrex::Print() << "turbulence data size assumed: " << turbdata_size << "^3\n";
+
+		// copy to GPU
+		userData_.dvx.resize(pinned_dvx.lo(), pinned_dvx.hi());
+		userData_.dvx.copy(pinned_dvx);
+
+		userData_.dvy.resize(pinned_dvy.lo(), pinned_dvy.hi());
+		userData_.dvy.copy(pinned_dvy);
+
+		userData_.dvz.resize(pinned_dvz.lo(), pinned_dvz.hi());
+		userData_.dvz.copy(pinned_dvz);
+
+		isSamplingDone = true;
+	}
+}
+
 template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 
@@ -178,6 +229,27 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+
+	// turbulence parameters
+	const Real turb_amp = userData_.turbulent_amplitude;
+	const Real dv_rms = userData_.dv_rms_generated;
+	const Real renorm_factor = (dv_rms > 0.0) ? turb_amp / dv_rms : 0.0;
+
+	auto const &dvx = userData_.dvx.const_table();
+	auto const &dvy = userData_.dvy.const_table();
+	auto const &dvz = userData_.dvz.const_table();
+
+	// get turbulence data bounds
+	amrex::Array<int, 3> turb_lo = userData_.dvx.lo();
+
+	// get simulation box x-dimension as reference
+	const int nx = indexRange.length(0);
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= turbdata_size, "nx must be less than or equal to turbdata_size (128)");
+	
+	// z-range limits: apply turbulence only from 1.5*nx to 2.5*nx
+	const int k_start = static_cast<int>(1.5 * nx);
+	const int k_end = static_cast<int>(2.5 * nx);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
@@ -212,12 +284,29 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 		const auto gamma = HydroSystem<TheProblem>::gamma_;
 
+		// add turbulent velocities
+		double vx = 0.0;
+		double vy = 0.0;
+		double vz = 0.0;
+
+		// check if we're in the z-range where turbulence should be applied
+		if (renorm_factor > 0.0 && k >= k_start && k < k_end) {
+			// use first nx elements from turbdata directly
+			const int turb_i = i;
+			const int turb_j = j;
+			const int turb_k = k - k_start;
+			
+			vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
+			vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
+			vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
+		}
+
 		state_cc(i, j, k, HydroSystem<TheProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = rho * vx;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = rho * vy;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.);
+		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx*vx + vy*vy + vz*vz);
 		state_cc(i, j, k, Physics_Indices<TheProblem>::pscalarFirstIndex) = 1.e-5 / vol; // Injected tracer
 	});
 }
@@ -321,13 +410,19 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			x2mom_new = x2mom + dt * (-rho * GradPhi[1]);
 			x3mom_new = x3mom + dt * (-rho * GradPhi[2]);
 
+			AMREX_ASSERT(!std::isnan(x1mom_new));
+			AMREX_ASSERT(!std::isnan(x2mom_new));
+			AMREX_ASSERT(!std::isnan(x3mom_new));
+
 			// State momentum values need to be updated this way.
 			state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = x1mom_new;
 			state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2mom_new;
 			state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3mom_new;
 
-			state(i, j, k, HydroSystem<TheProblem>::energy_index) =
-			    RadSystem<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
+			const Real Egas_new = RadSystem<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
+			AMREX_ASSERT(!std::isnan(Egas_new));
+
+			state(i, j, k, HydroSystem<TheProblem>::energy_index) = Egas_new;
 		});
 	}
 }
