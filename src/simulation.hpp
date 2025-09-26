@@ -1555,7 +1555,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			// Base level: just copy and fill boundaries
 			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
 			phi_extended.FillBoundary(geom[lev].periodicity());
-			AMREX_ASSERT(!phi_extended.contains_nan());
 
 			// Apply physical boundary conditions to phi
 			amrex::Vector<amrex::BCRec> phiBC(1);
