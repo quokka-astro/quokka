@@ -98,7 +98,7 @@ static constexpr amrex::Real rho01 = 2.78556e-24;
 static constexpr amrex::Real rho02 = 2.7855600000000006e-29;
 
 template <> struct Particle_Traits<TheProblem> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
 template <> struct HydroSystem_Traits<TheProblem> {
