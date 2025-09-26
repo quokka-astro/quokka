@@ -67,8 +67,8 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
-#include <AMReX_FluxRegister.H>
 #include <AMReX_EdgeFluxRegister.H>
+#include <AMReX_FluxRegister.H>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <yaml-cpp/yaml.h>
@@ -303,11 +303,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
 
-	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev);
+	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
+				    int lev, amrex::Real dt_lev);
 
 	void incrementEMFRegisters(amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int lev, amrex::Real dt_lev);
+				   std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int lev, amrex::Real dt_lev);
 
 	void particleMeshInteraction(amrex::Real time, amrex::Real dt);
 
@@ -443,10 +443,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::string> m_diagVars;
 
 	/// AMR-specific parameters
-	int regrid_int = 2;	 // regrid interval (number of coarse steps)
-	int do_reflux = 1;	 // 1 == reflux, 0 == no reflux
-	int do_subcycle = 1;	 // 1 == subcycle, 0 == no subcyle
-	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
+	int regrid_int = 2;		    // regrid interval (number of coarse steps)
+	int do_reflux = 1;		    // 1 == reflux, 0 == no reflux
+	int do_subcycle = 1;		    // 1 == subcycle, 0 == no subcyle
+	int suppress_output = 0;	    // 1 == show timestepping, 0 == do not output each timestep
 	int do_flux_register_init = 1;	    // 1 == initialize flux registers, 0 == skip initialization
 	int do_flux_register_reset = 1;	    // 1 == reset flux registers each timestep, 0 == skip reset
 	int do_flux_register_increment = 1; // 1 == increment flux registers during updates, 0 == skip increment
@@ -1861,7 +1861,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 			if (ncomp == 0) {
 				continue;
 			}
-		fr_as_crse->CrseInit(fluxArrays[dir], dir, 0, 0, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
+			fr_as_crse->CrseInit(fluxArrays[dir], dir, 0, 0, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
 		}
 	}
 
@@ -1964,7 +1964,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1; // EMF has 1 component per dimension
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-									    Geom(level - 1), nemf_vars);
+										    Geom(level - 1), nemf_vars);
 		}
 	}
 
@@ -2015,7 +2015,7 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1; // EMF has 1 component per dimension
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-									    Geom(level - 1), nemf_vars);
+										    Geom(level - 1), nemf_vars);
 		}
 	}
 
@@ -2046,11 +2046,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::ClearLevel(int leve
 
 	state_new_cc_[level].clear();
 	state_old_cc_[level].clear();
-		max_signal_speed_[level].clear();
+	max_signal_speed_[level].clear();
 
-		flux_reg_[level].reset(nullptr);
-		emf_reg_[level].reset(nullptr);
-		fillpatcher_[level].reset(nullptr);
+	flux_reg_[level].reset(nullptr);
+	emf_reg_[level].reset(nullptr);
+	fillpatcher_[level].reset(nullptr);
 
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -2232,7 +2232,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1; // EMF has 1 component per dimension
 			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-									    Geom(level - 1), nemf_vars);
+										    Geom(level - 1), nemf_vars);
 		}
 	}
 
@@ -3575,14 +3575,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
-			if (lev > 0 && (do_flux_register_init != 0)) {
-				flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(lev - 1), lev, ncomp_cc);
-				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					const int nemf_vars = 1;
-					emf_reg_[lev] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
-									    Geom(lev - 1), nemf_vars);
-				}
+		if (lev > 0 && (do_flux_register_init != 0)) {
+			flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(lev - 1), lev, ncomp_cc);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				const int nemf_vars = 1;
+				emf_reg_[lev] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
+											  Geom(lev - 1), nemf_vars);
 			}
+		}
 
 		const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
 		const int nghost_fc = nghost_fc_;
