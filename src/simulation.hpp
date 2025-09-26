@@ -1551,9 +1551,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// Fill extended potential from existing phi using FillPatch
 		// This handles coarse-fine boundaries without InterpFromCoarseLevel
 		if (lev == 0) {
+			AMREX_ASSERT(!phi[lev].contains_nan());
 			// Base level: just copy and fill boundaries
 			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
 			phi_extended.FillBoundary(geom[lev].periodicity());
+			AMREX_ASSERT(!phi_extended.contains_nan());
 
 			// Apply physical boundary conditions to phi
 			amrex::Vector<amrex::BCRec> phiBC(1);
@@ -1580,6 +1582,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 		}
+
+		// check for NaN
+		AMREX_ASSERT(!phi_extended.contains_nan());
 
 		// Create cell-centered acceleration MultiFab
 		amrex::MultiFab accel_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
