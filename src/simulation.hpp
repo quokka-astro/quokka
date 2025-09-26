@@ -562,13 +562,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 
 	bool wroteWarning = false;
 	if (max_level > 0) {
-		amrex::Print() << "\n[Warning] [Reproducibility] Adaptive mesh refinement is enabled; reflux corrections use atomic updates, so results are not bitwise reproducible.\n";
+		amrex::Print() << "\n[Warning] [Reproducibility] Adaptive mesh refinement is enabled; reflux corrections use atomic updates, so results are "
+				  "not bitwise reproducible.\n";
 		wroteWarning = true;
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
-		amrex::Print() << (wroteWarning ? "" : "\n")
-			       << "[Warning] [Reproducibility] Particle deposition uses atomic reductions; runs with physical particles are not bitwise reproducible.\n";
+		amrex::Print()
+		    << (wroteWarning ? "" : "\n")
+		    << "[Warning] [Reproducibility] Particle deposition uses atomic reductions; runs with physical particles are not bitwise reproducible.\n";
 		wroteWarning = true;
 	}
 
