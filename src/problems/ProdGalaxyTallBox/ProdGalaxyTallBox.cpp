@@ -44,7 +44,7 @@ template <> struct SimulationData<TheProblem> {
 	amrex::TableData<Real, 3> dvy;
 	amrex::TableData<Real, 3> dvz;
 	Real dv_rms_generated{};
-	Real turbulent_amplitude{};
+	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
 };
@@ -181,6 +181,8 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		pp.query("filename", turbdata_filename);
 		initialize_turbdata(turbData, turbdata_filename);
 
+		pp.query("amplitude", userData_.turbulent_amplitude); // amplitude in cm/s, default is 0.05 * 0.3 km/s = 1,500 cm/s
+
 		// copy to pinned memory
 		auto pinned_dvx = get_tabledata(turbData.dvx);
 		auto pinned_dvy = get_tabledata(turbData.dvy);
@@ -190,9 +192,6 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
 		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
 
-		// set constant amplitude: 0.05 * cs at 10K (~0.3 km/s)
-		const Real cs_10K = 0.3e5; // 0.3 km/s in cm/s (CGS units)
-		userData_.turbulent_amplitude = 0.05 * cs_10K;
 		amrex::Print() << "turbulent amplitude = " << userData_.turbulent_amplitude << " cm/s\n";
 		amrex::Print() << "turbulence data size assumed: " << turbdata_size << "^3\n";
 
