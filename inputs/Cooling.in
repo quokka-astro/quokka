@@ -22,5 +22,6 @@ do_reflux = 0
 do_subcycle = 0
 
 cooling.enabled = 1
-cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 10  # K

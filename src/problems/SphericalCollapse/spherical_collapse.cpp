@@ -7,23 +7,21 @@
 /// \brief Defines a test problem for pressureless spherical collapse.
 ///
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
-#include <fstream>
-#include <limits>
 
-#include "AMReX.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
-#include "AMReX_Print.H"
-
-#include "AMReX_SPACE.H"
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "util/BC.hpp"
+
+struct GlobalConfig {
+	static int num_particles;
+	static int seed;
+};
+
+// Initialize static members with default values
+int GlobalConfig::num_particles = 1000;
+int GlobalConfig::seed = 42;
 
 struct CollapseProblem {
 };
@@ -98,8 +96,8 @@ template <> void QuokkaSimulation<CollapseProblem>::createInitialCICParticles()
 {
 	// add particles at random positions in the box
 	const bool generate_on_root_rank = true;
-	const int iseed = 42;
-	const int num_particles = 1000;
+	const int iseed = GlobalConfig::seed;
+	const int num_particles = GlobalConfig::num_particles;
 	const double total_particle_mass = 0.5; // about 0.1 of the total fluid mass
 	const double particle_mass = total_particle_mass / static_cast<double>(num_particles);
 
@@ -142,6 +140,10 @@ auto problem_main() -> int
 {
 	// boundary conditions
 	auto BCs_cc = quokka::BC<CollapseProblem>(quokka::BCType::reflecting);
+
+	amrex::ParmParse const pp("problem");
+	pp.query("num_particles", GlobalConfig::num_particles);
+	pp.query("seed", GlobalConfig::seed);
 
 	// Problem initialization
 	QuokkaSimulation<CollapseProblem> sim(BCs_cc);
