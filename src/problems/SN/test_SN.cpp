@@ -28,7 +28,7 @@ static std::vector<double> max_Eint_history{}; // NOLINT
 static std::vector<double> t_history{};	       // NOLINT
 
 static std::string SN_particles_file = "SN_particles.txt"; // NOLINT
-static std::string coolingTableType_ = "grackle";	   // NOLINT
+static std::string coolingTableType_ = "resampled";	   // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
 // constexpr double mu = 1.295 * C::m_u; // neutral gas
