@@ -1186,99 +1186,144 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 								 amrex::YAFluxRegister *fr_as_fine)
 {
 	const BL_PROFILE_REGION("HydroSolver");
-	// timestep retries
 	const int max_retries = 6;
-	bool success = false;
+	bool overall_success = true;
 
-	// save the pre-advance fine flux register state in originalFineData
-	amrex::MultiFab originalFineData;
-	if (fr_as_fine != nullptr) {
-		amrex::MultiFab const &fineData = fr_as_fine->getFineData();
-		originalFineData.define(fineData.boxArray(), fineData.DistributionMap(), fineData.nComp(), 0);
-		amrex::Copy(originalFineData, fineData, 0, 0, fineData.nComp(), 0);
+	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+	amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> accepted_state_fc;
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
+			accepted_state_fc[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+			amrex::Copy(accepted_state_fc[idim], state_old_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+		}
 	}
 
-	amrex::AmrTracerParticleContainer::ContainerLike<amrex::DefaultAllocator> originalTracerPC;
-	if (do_tracers != 0) {
-		// save the pre-advance tracer particles
-		originalTracerPC = TracerPC->make_alike();	 // create empty particle container
-		originalTracerPC.copyParticles(*TracerPC, true); // do local copy of particles
-	}
-
-	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
-		// reduce timestep by a factor of 2^retry_count
-		const int nsubsteps = static_cast<int>(std::pow(2, retry_count));
-		const amrex::Real dt_step = dt_lev / nsubsteps;
-
-		if (retry_count > 0 && Verbose()) {
-			amrex::Print() << "\t>> Re-trying hydro advance at level " << lev << " with reduced timestep (nsubsteps = " << nsubsteps
-				       << ", dt_new = " << dt_step << ")\n";
-		}
-
-		if (retry_count > 0) {
-			// reset the flux registers to their pre-advance state
-			if (fr_as_crse != nullptr) {
-				fr_as_crse->reset();
-			}
-			if (fr_as_fine != nullptr) {
-				amrex::Copy(fr_as_fine->getFineData(), originalFineData, 0, 0, originalFineData.nComp(), 0);
-			}
-
-			if (do_tracers != 0) {
-				// reset the tracer particles to their pre-advance state
-				TracerPC->copyParticles(originalTracerPC, true);
-			}
-		}
-
-		// create temporary multifab for old cell-cenetered state
-		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
-		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
-
-		// create temporary array (different faces) of multifabs for old face-centered state
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
+	auto restoreHydroState = [&]() {
+		amrex::Copy(state_new_cc_[lev], accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				state_old_fc_tmp[idim].define(amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim)), dmap[lev],
-							      Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
-				amrex::Copy(state_old_fc_tmp[idim], state_old_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				amrex::Copy(state_new_fc_[lev][idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
 			}
 		}
+	};
 
-		// subcycle advanceHydroAtLevel, checking return value
-		for (int substep = 0; substep < nsubsteps; ++substep) {
-			if (substep > 0) {
-				// since we are starting a new substep, we need to copy hydro state from
-				//  the new state vector to old state vector
-				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
-				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-						amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc,
-							    nghost_fc_);
+	auto updateAcceptedHydroState = [&]() {
+		amrex::Copy(accepted_state_cc, state_new_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::Copy(accepted_state_fc[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+			}
+		}
+	};
+
+	restoreHydroState();
+
+	amrex::Real completed_time = 0.;
+	amrex::Real current_time = time;
+	int start_retry_count = 0;
+
+	while (completed_time < dt_lev && overall_success) {
+		amrex::Real dt_remaining = dt_lev - completed_time;
+		if (dt_remaining <= 0.) {
+			break;
+		}
+
+		bool completed_this_remaining = false;
+		bool partial_progress = false;
+		int retry_count = start_retry_count;
+
+		while (retry_count <= max_retries) {
+			const int nsubsteps = 1 << retry_count;
+			const amrex::Real dt_step = dt_remaining / static_cast<amrex::Real>(nsubsteps);
+
+			if (retry_count > 0 && Verbose()) {
+				amrex::Print() << "	>> Re-trying hydro advance at level " << lev << " with reduced timestep (remaining dt = " << dt_remaining
+					       << ", nsubsteps = " << nsubsteps << ", dt_new = " << dt_step << ")\n";
+			}
+
+			restoreHydroState();
+
+			amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+			amrex::Copy(state_old_cc_tmp, accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
+					state_old_fc_tmp[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+					amrex::Copy(state_old_fc_tmp[idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				}
+			}
+
+			bool attempt_success = true;
+			int substeps_accepted_in_attempt = 0;
+			amrex::Real substep_time = current_time;
+
+			for (int substep = 0; substep < nsubsteps; ++substep) {
+				if (substep > 0) {
+					amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
+					if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+						for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+							amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+						}
 					}
 				}
+
+				const bool substep_success =
+				    advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, substep_time, dt_step);
+				if (!substep_success) {
+					attempt_success = false;
+					break;
+				}
+
+				substep_time += dt_step;
+				++substeps_accepted_in_attempt;
+				completed_time += dt_step;
+				if (completed_time > dt_lev) {
+					completed_time = std::min(completed_time, dt_lev);
+				}
+				current_time = substep_time;
+
+				updateAcceptedHydroState();
 			}
 
-			success = advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
-
-			if (!success) {
-				if (Verbose()) {
-					amrex::Print() << "\t>> WARNING: Hydro advance failed on level " << lev << "\n";
-				}
+			if (attempt_success) {
+				completed_this_remaining = true;
+				start_retry_count = 0;
 				break;
 			}
+
+			restoreHydroState();
+
+			dt_remaining = dt_lev - completed_time;
+			if (substeps_accepted_in_attempt > 0) {
+				partial_progress = true;
+				start_retry_count = std::max(start_retry_count, 1);
+				break;
+			}
+
+			++retry_count;
+			start_retry_count = retry_count;
 		}
 
-		if (success) {
-			// we are done, do not attempt more retries
-			break;
+		if (!completed_this_remaining) {
+			if (!partial_progress && retry_count > max_retries) {
+				overall_success = false;
+			}
+			if (!overall_success) {
+				break;
+			}
+			continue;
 		}
 	}
 
-	if (!success) {
+	if (!overall_success) {
 		// crash, we have exceeded max_retries
 		amrex::Print() << "\nQUOKKA FATAL ERROR\n"
-			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
-			       << std::endl; // NOLINT(performance-avoid-endl)
+		       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
+		       << std::endl; // NOLINT(performance-avoid-endl)
 
 		// write plotfile or Ascent Blueprint file
 		amrex::ParallelDescriptor::Barrier();
@@ -1346,12 +1391,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 {
 	const BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
 
-	amrex::Real fluxScaleFactor = NAN;
-	if (integratorOrder_ == 2) {
-		fluxScaleFactor = 0.5;
-	} else if (integratorOrder_ == 1) {
-		fluxScaleFactor = 1.0;
-	}
+	const amrex::Real stage1Weight = (integratorOrder_ == 2) ? 0.5 : 1.0;
 
 	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
@@ -1461,10 +1501,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
-			amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, 0);
+			amrex::MultiFab::Saxpy(flux_rk2[idim], stage1Weight, fluxArrays[idim], 0, 0, ncompHydro_, 0);
+			amrex::MultiFab::Saxpy(avgFaceVel[idim], stage1Weight, faceVel[idim], 0, 0, 1, 0);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], 0.5, ec_emf_components_rk_stage1[idim], 0, 0, 1, 0);
+				amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], stage1Weight, ec_emf_components_rk_stage1[idim], 0, 0, 1, 0);
 			}
 		}
 
@@ -1559,10 +1599,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			HydroSystem<problem_t>::SyncDualEnergy(stateNew_cc, stateNew_fc);
 		}
 
-		if (do_reflux == 1) {
-			// increment flux registers
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
-		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
 
@@ -1673,10 +1709,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			HydroSystem<problem_t>::SyncDualEnergy(stateFinal_cc, stateFinal_fc);
 		}
 
-		if (do_reflux == 1) {
-			// increment flux registers
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
-		}
 	} else { // we are only doing forward Euler
 		amrex::Copy(state_new_cc_[lev], state_inter_cc_, 0, 0, ncompHydro_, 0);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1687,16 +1719,21 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 	amrex::Gpu::streamSynchronizeAll();
 
-	// advect tracer particles using avgFaceVel
-	if (do_tracers != 0) {
-		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
-	}
-
 	// do Strang split source terms (second half-step)
 	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
-	// check if we have violated the CFL timestep or reactions failed for source terms
-	return (!isCflViolated(lev, time, dt_lev) && burn_success_second);
+	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
+	bool const final_success = (cfl_ok && burn_success_second);
+
+	if (do_reflux == 1 && final_success) {
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
+	}
+
+	if (do_tracers != 0 && final_success) {
+		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
+	}
+
+	return final_success;
 }
 
 template <typename problem_t>
