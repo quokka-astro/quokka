@@ -308,8 +308,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
 
-	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev);
+	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
+				    int lev, amrex::Real dt_lev);
 
 	void incrementEMFRegisters(amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine,
 				   std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int lev, amrex::Real dt_lev);
@@ -1878,7 +1878,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 			if (ncomp == 0) {
 				continue;
 			}
-		fr_as_crse->CrseInit(fluxArrays[dir], dir, 0, 0, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
+			fr_as_crse->CrseInit(fluxArrays[dir], dir, 0, 0, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
 		}
 	}
 

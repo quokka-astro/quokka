@@ -292,15 +292,14 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// radiation subcycle
 	void swapRadiationState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc);
 	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
-	void advanceRadiationSubstepAtLevel(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps,
-					    amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine);
+	void advanceRadiationSubstepAtLevel(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
+					    amrex::FluxRegister *fr_as_fine);
 	void advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
 					  amrex::FluxRegister *fr_as_fine);
 	void advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::FluxRegister *fr_as_crse,
 					 amrex::FluxRegister *fr_as_fine);
 
-	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::FluxRegister *fr_as_crse,
-				      amrex::FluxRegister *fr_as_fine);
+	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine);
 
 	auto computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, int nvars,
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
@@ -1342,9 +1341,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCoordinates
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
-						      amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
-						      amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time,
-						      amrex::Real dt_lev) -> bool
+						      amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
+						      amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool
 {
 	const BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
 
@@ -2388,7 +2386,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				auto &dest = reflux_flux_stage[idim][iter];
 				dest.copy<amrex::RunOn::Device>(expandedFluxes[idim], expandedFluxes[idim].box(), 0, expandedFluxes[idim].box(), 0,
-							 dest.nComp());
+								dest.nComp());
 			}
 		}
 	}
@@ -2428,7 +2426,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				auto &dest = reflux_flux_stage[idim][iter];
 				dest.copy<amrex::RunOn::Device>(expandedFluxes[idim], expandedFluxes[idim].box(), 0, expandedFluxes[idim].box(), 0,
-							 dest.nComp());
+								dest.nComp());
 			}
 		}
 	}
@@ -2441,7 +2439,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
-						       int const /*nsubsteps*/, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine)
+							       int const /*nsubsteps*/, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine)
 {
 	// get cell sizes
 	auto const &dx = geom[lev].CellSizeArray();
@@ -2479,7 +2477,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				auto &dest = reflux_flux_stage[idim][iter];
 				dest.copy<amrex::RunOn::Device>(expandedFluxes[idim], expandedFluxes[idim].box(), 0, expandedFluxes[idim].box(), 0,
-							 dest.nComp());
+								dest.nComp());
 			}
 		}
 	}
@@ -2492,7 +2490,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
-						      int const /*nsubsteps*/, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine)
+							      int const /*nsubsteps*/, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine)
 {
 	auto const &dx = geom[lev].CellSizeArray();
 
@@ -2533,7 +2531,7 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				auto &dest = reflux_flux_stage[idim][iter];
 				dest.copy<amrex::RunOn::Device>(expandedFluxes[idim], expandedFluxes[idim].box(), 0, expandedFluxes[idim].box(), 0,
-							 dest.nComp());
+								dest.nComp());
 			}
 		}
 	}
