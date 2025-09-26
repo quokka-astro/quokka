@@ -30,6 +30,7 @@ nav:
     - In-situ analysis: insitu_analysis.md
     - Postprocessing: postprocessing.md
     - Debugging simulation instability: instability.md
+    - Sources of nondeterminism: nondeterminism.md
   - Developer Guide:
     - Contributing Guide: contributing.md
     - Flowchart: flowchart.md
