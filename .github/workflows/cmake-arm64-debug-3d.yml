@@ -48,9 +48,8 @@ jobs:
     - name: Configure CMake
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-              -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-              -DAMReX_SPACEDIM=3
+      run: cmake $GITHUB_WORKSPACE -DAMReX_SPACEDIM=3 -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+              -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
