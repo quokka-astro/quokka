@@ -324,6 +324,60 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<TheProblem>::GetGradFixedPo
 	return grad_potential;
 }
 
+// Add Strang Split Source Term for External Fixed Potential Here
+template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
+{
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
+	const Real dt = dt_lev;
+
+	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = mf.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec;  // NOLINT
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> GradPhi; // NOLINT
+			double x1mom_new = NAN;
+			double x2mom_new = NAN;
+			double x3mom_new = NAN;
+
+			const Real rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+			const Real x1mom = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+			const Real x2mom = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+			const Real x3mom = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+			const Real Egas = state(i, j, k, HydroSystem<TheProblem>::energy_index);
+
+			const Real Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
+
+			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
+			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
+			posvec[2] = prob_lo[2] + (k + 0.5) * dx[2];
+
+			GradPhi = HydroSystem<TheProblem>::GetGradFixedPotential(posvec);
+
+			x1mom_new = x1mom + dt * (-rho * GradPhi[0]);
+			x2mom_new = x2mom + dt * (-rho * GradPhi[1]);
+			x3mom_new = x3mom + dt * (-rho * GradPhi[2]);
+
+			AMREX_ASSERT(!std::isnan(x1mom_new));
+			AMREX_ASSERT(!std::isnan(x2mom_new));
+			AMREX_ASSERT(!std::isnan(x3mom_new));
+
+			// State momentum values need to be updated this way.
+			state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = x1mom_new;
+			state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2mom_new;
+			state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3mom_new;
+
+			const Real Egas_new = RadSystem<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
+			AMREX_ASSERT(!std::isnan(Egas_new));
+
+			state(i, j, k, HydroSystem<TheProblem>::energy_index) = Egas_new;
+		});
+	}
+}
+
+
 // Implement User-defined diode BC
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
