@@ -3036,10 +3036,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 		} else if (value_string) {
 			simulationMetadata_[key] = value_string.value();
 			amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
-			if (key == "random_number_generator_state") { // Restore RNG state
-				std::stringstream ss;
-				amrex::RestoreRandomState(ss, 1, 0);
-			}
 		} else {
 			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
 		}
