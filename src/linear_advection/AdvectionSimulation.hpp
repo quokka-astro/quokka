@@ -21,7 +21,6 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TagBox.H"
-#include "AMReX_YAFluxRegister.H"
 #include <AMReX_FluxRegister.H>
 
 #include "linear_advection/linear_advection.hpp"
@@ -305,31 +304,16 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
 
-#ifdef USE_YAFLUXREGISTER
 	// get flux registers
-	amrex::YAFluxRegister *fr_as_crse = nullptr;
-	amrex::YAFluxRegister *fr_as_fine = nullptr;
-
-	if (do_reflux) {
-		if (lev < finestLevel()) {
-			fr_as_crse = flux_reg_[lev + 1].get();
-			fr_as_crse->reset();
-		}
-		if (lev > 0) {
-			fr_as_fine = flux_reg_[lev].get();
-		}
-	}
-#else
-	amrex::FluxRegister *fine = nullptr;
-	amrex::FluxRegister *current = nullptr;
-
+	amrex::FluxRegister *fr_as_crse = nullptr;
+	amrex::FluxRegister *fr_as_fine = nullptr;
 	if (do_reflux && lev < finest_level) {
-		fine = flux_reg_[lev + 1].get();
-		fine->setVal(0.0);
+		fr_as_crse = flux_reg_[lev + 1].get();
+		fr_as_crse->setVal(0.0);
 	}
 
 	if (do_reflux && lev > 0) {
-		current = flux_reg_[lev].get();
+		fr_as_fine = flux_reg_[lev].get();
 	}
 
 	// create temporary MultiFab to store the fluxes from each grid on this level
@@ -340,10 +324,9 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 			amrex::BoxArray ba = state_new_cc_[lev].boxArray();
 			ba.surroundingNodes(j);
 			fluxes[j].define(ba, dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, 0);
-			fluxes[j].setVal(0.);
+			fluxes[j].setVal(0.0);
 		}
 	}
-#endif // USE_YAFLUXREGISTER
 
 	// We use the RK2-SSP integrator in a method-of-lines framework. It needs 2
 	// registers: one to store the old timestep, and one to store the intermediate stage
@@ -361,11 +344,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 		fluxScaleFactor = 1.0;
 	}
 
-	// advance all grids on local processor (Stage 1 of integrator)
-	{
-		auto const &stateOld = state_old_cc_[lev];
-		auto &stateNew = state_new_cc_[lev];
-		auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
+		// advance all grids on local processor (Stage 1 of integrator)
+		{
+			auto const &stateOld = state_old_cc_[lev];
+			auto &stateNew = state_new_cc_[lev];
+			auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 		// Write face velocities to disk
 		// this->writeFaceVelocitiesToDisk(faceVelArrays, lev, cycleCount_);
@@ -377,73 +360,41 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 		LinearAdvectionSystem<problem_t>::PredictStep(stateOld, stateNew, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
 							      Physics_Indices<problem_t>::nvarTotal_cc);
 
-		if (do_reflux) {
-#ifdef USE_YAFLUXREGISTER
-			// increment flux registers
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
-#else
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
+			if (do_reflux) {
+				for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+					fluxes[i].plus(fluxArrays[i], 0, fluxArrays[i].nComp(), 0);
+				}
 			}
-#endif // USE_YAFLUXREGISTER
 		}
-	}
 
-	if constexpr (integratorOrder_ == 2) {
+		if constexpr (integratorOrder_ == 2) {
 		// update ghost zones [w/ intermediate stage stored in state_new_cc_]
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_lev), quokka::centering::cc, quokka::direction::na,
 				       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone);
 
-		// advance all grids on local processor (Stage 2 of integrator)
-		{
-			auto const &stateInOld = state_old_cc_[lev];
-			auto const &stateInStar = state_new_cc_[lev];
-			auto &stateOut = state_new_cc_[lev];
-			auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] =
-			    computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
+			// advance all grids on local processor (Stage 2 of integrator)
+			{
+				auto const &stateInOld = state_old_cc_[lev];
+				auto const &stateInStar = state_new_cc_[lev];
+				auto &stateOut = state_new_cc_[lev];
+				auto [fluxArrays, faceVelArrays, leftStateArrays, rightStateArrays] =
+				    computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 			// Stage 2 of RK2-SSP
 			LinearAdvectionSystem<problem_t>::AddFluxesRK2(stateOut, stateInOld, stateInStar, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
 								       Physics_Indices<problem_t>::nvarTotal_cc);
 
-			if (do_reflux) {
-#ifdef USE_YAFLUXREGISTER
-				// increment flux registers
-				incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
-#else
-				for (int i = 0; i < AMREX_SPACEDIM; i++) {
-					fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
+				if (do_reflux) {
+					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+						fluxes[i].plus(fluxArrays[i], 0, fluxArrays[i].nComp(), 0);
+					}
 				}
-#endif // USE_YAFLUXREGISTER
 			}
 		}
-	}
 
-#ifndef USE_YAFLUXREGISTER
 	if (do_reflux) {
-		// rescale by face area
-		auto dx = geomLevel.CellSizeArray();
-		amrex::Real const cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-
-		for (int i = 0; i < AMREX_SPACEDIM; i++) {
-			amrex::Real const face_area = cell_vol / dx[i];
-			amrex::Real const rescaleFactor = fluxScaleFactor * dt_lev * face_area;
-			fluxes[i].mult(rescaleFactor);
-		}
-
-		if (current != nullptr) {
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				current->FineAdd(fluxes[i], i, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, 1.);
-			}
-		}
-
-		if (fine != nullptr) {
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fine->CrseInit(fluxes[i], i, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, -1.);
-			}
-		}
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxes, lev, fluxScaleFactor * dt_lev);
 	}
-#endif
 }
 
 template <typename problem_t>
