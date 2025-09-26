@@ -1239,8 +1239,9 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			const amrex::Real dt_step = dt_remaining / static_cast<amrex::Real>(nsubsteps);
 
 			if (retry_count > 0 && Verbose()) {
-				amrex::Print() << "	>> Re-trying hydro advance at level " << lev << " with reduced timestep (remaining dt = " << dt_remaining
-					       << ", nsubsteps = " << nsubsteps << ", dt_new = " << dt_step << ")\n";
+				amrex::Print() << "	>> Re-trying hydro advance at level " << lev
+					       << " with reduced timestep (remaining dt = " << dt_remaining << ", nsubsteps = " << nsubsteps
+					       << ", dt_new = " << dt_step << ")\n";
 			}
 
 			restoreHydroState();
@@ -1253,7 +1254,8 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
 					state_old_fc_tmp[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
-					amrex::Copy(state_old_fc_tmp[idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+					amrex::Copy(state_old_fc_tmp[idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc,
+						    nghost_fc_);
 				}
 			}
 
@@ -1266,7 +1268,8 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 					amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
 					if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 						for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-							amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+							amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0,
+								    Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
 						}
 					}
 				}
@@ -1322,8 +1325,8 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 	if (!overall_success) {
 		// crash, we have exceeded max_retries
 		amrex::Print() << "\nQUOKKA FATAL ERROR\n"
-		       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
-		       << std::endl; // NOLINT(performance-avoid-endl)
+			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
+			       << std::endl; // NOLINT(performance-avoid-endl)
 
 		// write plotfile or Ascent Blueprint file
 		amrex::ParallelDescriptor::Barrier();
@@ -1598,7 +1601,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			// sync internal energy (requires positive density)
 			HydroSystem<problem_t>::SyncDualEnergy(stateNew_cc, stateNew_fc);
 		}
-
 	}
 	amrex::Gpu::streamSynchronizeAll();
 
