@@ -1,4 +1,4 @@
-name: linux-arm64-debug
+name: linux-arm64-debug-3d
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
     branches: [ development ]
 
 concurrency:
-  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-linux-arm64-debug
+  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-linux-arm64-debug-3d
   cancel-in-progress: true
 
 env:
@@ -24,7 +24,7 @@ jobs:
   check_changes:
     uses: ./.github/workflows/check_changes.yml
     with:
-      workflow_file: '.github/workflows/cmake-arm64-debug.yml'
+      workflow_file: '.github/workflows/cmake-arm64-debug-3d.yml'
 
   build:
     runs-on: ubuntu-24.04-arm
