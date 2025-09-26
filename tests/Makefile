@@ -15,13 +15,15 @@ com-cpu:
 test-cpu:
 	../build/cpu-3d/src/problems/ProdGalaxyTallBox/ProdGalaxyTallBox ../inputs/ProdGalaxyTallBox.in max_timesteps=2
 
-config-debug:
+config-d:
 	cd ../build/debug-3d/ && (rm -rf ./* | true) && cmake -B . -S ../.. -DCMAKE_BUILD_TYPE=Debug -DAMReX_SPACEDIM=3 -G Ninja
-com-debug:
+com-d:
 	cd ../build/debug-3d/ && ninja -j12 ProdGalaxyTallBox
-test-debug:
+test-d:
 	../build/debug-3d/src/problems/ProdGalaxyTallBox/ProdGalaxyTallBox ../inputs/ProdGalaxyTallBox.in max_timesteps=2
 
+binary-d:
+	cd ../build/debug-3d/ && ninja -j12 binary_orbit && cd ../../tests/ && ../build/debug-3d/src/problems/BinaryOrbitCIC/binary_orbit ../inputs/BinaryOrbit.in max_timesteps=10
 
 
 QK := /home/chongchong/softwares-setonix/quokka
