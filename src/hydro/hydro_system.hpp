@@ -163,14 +163,23 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 	amrex::ParallelFor(cons_cc_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		// First-capture the magnetic field arrays by accessing them early
 		// This forces NVCC to capture them before the constexpr if block
-		[[maybe_unused]] auto fc_x0_ref = cons_fc_x0[bx];
+		std::remove_cv_t<std::remove_reference_t<decltype(cons_fc_x0[bx])>> fc_x0_ref{};
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			// If not wrapped in this if clause, this will fail in Debug mode due to nan values
+			fc_x0_ref = cons_fc_x0[bx];
+		}
 #if AMREX_SPACEDIM >= 2
-		[[maybe_unused]] auto fc_x1_ref = cons_fc_x1[bx];
+		std::remove_cv_t<std::remove_reference_t<decltype(cons_fc_x1[bx])>> fc_x1_ref{};
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			fc_x1_ref = cons_fc_x1[bx];
+		}
 #endif
 #if AMREX_SPACEDIM == 3
-		[[maybe_unused]] auto fc_x2_ref = cons_fc_x2[bx];
+		std::remove_cv_t<std::remove_reference_t<decltype(cons_fc_x2[bx])>> fc_x2_ref{};
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			fc_x2_ref = cons_fc_x2[bx];
+		}
 #endif
-
 		const amrex::Real rho = cons_cc[bx](i, j, k, density_index);
 		const amrex::Real px = cons_cc[bx](i, j, k, x1Momentum_index);
 		const amrex::Real py = cons_cc[bx](i, j, k, x2Momentum_index);
@@ -988,8 +997,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 	amrex::IntVect ng{AMREX_D_DECL(nghost_vel, nghost_vel, nghost_vel)};
 	amrex::ParallelFor(x1Flux_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
 		// first capture
-		[[maybe_unused]] const auto x1ConsVar_fc_ref = x1ConsVar_fc_in[bx];
-		[[maybe_unused]] const auto x1FSpds_ref = x1FSpds_in[bx];
+		[[maybe_unused]] std::remove_cv_t<std::remove_reference_t<decltype(x1ConsVar_fc_in[bx])>> x1ConsVar_fc_ref{};
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			x1ConsVar_fc_ref = x1ConsVar_fc_in[bx];
+		}
+		[[maybe_unused]] std::remove_cv_t<std::remove_reference_t<decltype(x1FSpds_in[bx])>> x1FSpds_ref{};
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			x1FSpds_ref = x1FSpds_in[bx];
+		}
 
 		quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
 		quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
