@@ -79,25 +79,25 @@ static constexpr amrex::Real sigma2 = 7000000.0;
 static constexpr amrex::Real rho01 = 2.78556e-24;
 static constexpr amrex::Real rho02 = 2.7855600000000006e-29;
 
-struct MetalProblem {
+struct TheProblem {
 };
 
-template <> struct Particle_Traits<MetalProblem> {
+template <> struct Particle_Traits<TheProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop | ParticleSwitch::CIC;
 };
 
-template <> struct HydroSystem_Traits<MetalProblem> {
+template <> struct HydroSystem_Traits<TheProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr bool reconstruct_eint = true; // Set to true - temperature
 };
 
-template <> struct quokka::EOS_Traits<MetalProblem> {
+template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<MetalProblem> {
+template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_self_gravity_enabled = enable_self_gravity;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
@@ -109,7 +109,7 @@ template <> struct Physics_Traits<MetalProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> struct SimulationData<MetalProblem> {
+template <> struct SimulationData<TheProblem> {
 
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
@@ -123,7 +123,7 @@ template <> struct SimulationData<MetalProblem> {
 	Real refine_threshold = 1.0;	  // gradient refinement threshold
 };
 
-template <> void QuokkaSimulation<MetalProblem>::createInitialStochasticStellarPopParticles()
+template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
 {
 	// if stars_file == "none", return 
 	if (stars_file == "none") {
@@ -156,7 +156,7 @@ template <> void QuokkaSimulation<MetalProblem>::createInitialStochasticStellarP
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<MetalProblem>::createInitialCICParticles()
+template <> void QuokkaSimulation<TheProblem>::createInitialCICParticles()
 {
 	// if CIC_file == "none", return
 	if (CIC_file == "none") {
@@ -169,7 +169,7 @@ template <> void QuokkaSimulation<MetalProblem>::createInitialCICParticles()
 	CICParticles->InitFromAsciiFile(CIC_file, nreal_extra, nullptr);
 }
 
-template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -210,19 +210,19 @@ template <> void QuokkaSimulation<MetalProblem>::setInitialConditionsOnGrid(quok
 
 		AMREX_ASSERT(!std::isnan(rho));
 
-		const auto gamma = HydroSystem<MetalProblem>::gamma_;
+		const auto gamma = HydroSystem<TheProblem>::gamma_;
 
-		state_cc(i, j, k, HydroSystem<MetalProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<MetalProblem>::energy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex) = 1.e-5 / vol; // Injected tracer
+		state_cc(i, j, k, HydroSystem<TheProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
+		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.);
+		state_cc(i, j, k, Physics_Indices<TheProblem>::pscalarFirstIndex) = 1.e-5 / vol; // Injected tracer
 	});
 }
 
-template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
+template <> void QuokkaSimulation<TheProblem>::computeBeforeTimestep()
 {
 	// compute how many (and where) SNe will go off on the this coarse timestep
 	// sample from Poisson distribution
@@ -261,7 +261,7 @@ template <> void QuokkaSimulation<MetalProblem>::computeBeforeTimestep()
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<TheProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
     -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
 {
 
@@ -286,7 +286,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<MetalProblem>::GetGradFixed
 }
 
 // Add Strang Split Source Term for External Fixed Potential Here
-template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
+template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
@@ -303,57 +303,57 @@ template <> void QuokkaSimulation<MetalProblem>::addStrangSplitSources(amrex::Mu
 			double x2mom_new = NAN;
 			double x3mom_new = NAN;
 
-			const Real rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-			const Real x1mom = state(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index);
-			const Real x2mom = state(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index);
-			const Real x3mom = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index);
-			const Real Egas = state(i, j, k, HydroSystem<MetalProblem>::energy_index);
+			const Real rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+			const Real x1mom = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+			const Real x2mom = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+			const Real x3mom = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+			const Real Egas = state(i, j, k, HydroSystem<TheProblem>::energy_index);
 
-			const Real Eint = RadSystem<MetalProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
+			const Real Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
 
 			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
 			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
 			posvec[2] = prob_lo[2] + (k + 0.5) * dx[2];
 
-			GradPhi = HydroSystem<MetalProblem>::GetGradFixedPotential(posvec);
+			GradPhi = HydroSystem<TheProblem>::GetGradFixedPotential(posvec);
 
 			x1mom_new = x1mom + dt * (-rho * GradPhi[0]);
 			x2mom_new = x2mom + dt * (-rho * GradPhi[1]);
 			x3mom_new = x3mom + dt * (-rho * GradPhi[2]);
 
 			// State momentum values need to be updated this way.
-			state(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = x1mom_new;
-			state(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = x2mom_new;
-			state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = x3mom_new;
+			state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = x1mom_new;
+			state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2mom_new;
+			state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3mom_new;
 
-			state(i, j, k, HydroSystem<MetalProblem>::energy_index) =
-			    RadSystem<MetalProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
+			state(i, j, k, HydroSystem<TheProblem>::energy_index) =
+			    RadSystem<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
 		});
 	}
 }
 
 // Code for producing in-situ Projection plots
 template <>
-auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+auto QuokkaSimulation<TheProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// compute density projection
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
 
 	proj["mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
+		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+		    Real const vx3 = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
 		    return (rho * vx3);
 	    });
 
 	proj["hot_mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    double flux = NAN;
-		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
-		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
-		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+		    Real const vx3 = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
+		    Real const Eint = state(i, j, k, HydroSystem<TheProblem>::internalEnergy_index);
+		    amrex::GpuArray<Real, 0> massScalars = RadSystem<TheProblem>::ComputeMassScalars(state, i, j, k);
+		    Real const primTemp = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
 		    if (primTemp > 1.e6) {
 			    flux = rho * vx3;
 		    } else {
@@ -365,11 +365,11 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 	proj["warm_mass_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    double flux = NAN;
-		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
-		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
-		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+		    Real const vx3 = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
+		    Real const Eint = state(i, j, k, HydroSystem<TheProblem>::internalEnergy_index);
+		    amrex::GpuArray<Real, 0> massScalars = RadSystem<TheProblem>::ComputeMassScalars(state, i, j, k);
+		    Real const primTemp = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
 		    if (primTemp < 2.e4) {
 			    flux = rho * vx3;
 		    } else {
@@ -380,21 +380,21 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 
 	proj["scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
-		    Real const vz = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
+		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+		    Real const rhoZ = state(i, j, k, Physics_Indices<TheProblem>::pscalarFirstIndex);
+		    Real const vz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
 		    return (rhoZ * vz);
 	    });
 
 	proj["warm_scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    double flux = NAN;
-		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
-		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
-		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
-		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+		    Real const rhoZ = state(i, j, k, Physics_Indices<TheProblem>::pscalarFirstIndex);
+		    Real const vx3 = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
+		    Real const Eint = state(i, j, k, HydroSystem<TheProblem>::internalEnergy_index);
+		    amrex::GpuArray<Real, 0> massScalars = RadSystem<TheProblem>::ComputeMassScalars(state, i, j, k);
+		    Real const primTemp = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
 		    if (primTemp < 2.e4) {
 			    flux = rhoZ * vx3;
 		    } else {
@@ -406,12 +406,12 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 	proj["hot_scalar_outflow"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    double flux = NAN;
-		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
-		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
-		    Real const vx3 = state(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) / rho;
-		    Real const Eint = state(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index);
-		    amrex::GpuArray<Real, 0> massScalars = RadSystem<MetalProblem>::ComputeMassScalars(state, i, j, k);
-		    Real const primTemp = quokka::EOS<MetalProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
+		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+		    Real const rhoZ = state(i, j, k, Physics_Indices<TheProblem>::pscalarFirstIndex);
+		    Real const vx3 = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
+		    Real const Eint = state(i, j, k, HydroSystem<TheProblem>::internalEnergy_index);
+		    amrex::GpuArray<Real, 0> massScalars = RadSystem<TheProblem>::ComputeMassScalars(state, i, j, k);
+		    Real const primTemp = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint, massScalars);
 		    if (primTemp > 1.e6) {
 			    flux = rhoZ * vx3;
 		    } else {
@@ -422,13 +422,13 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 
 	proj["rho"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho = state(i, j, k, HydroSystem<MetalProblem>::density_index);
+		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
 		    return (rho);
 	    });
 
 	proj["scalar"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
 	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rhoZ = state(i, j, k, Physics_Indices<MetalProblem>::pscalarFirstIndex);
+		    Real const rhoZ = state(i, j, k, Physics_Indices<TheProblem>::pscalarFirstIndex);
 		    return (rhoZ);
 	    });
 	return proj;
@@ -437,7 +437,7 @@ auto QuokkaSimulation<MetalProblem>::ComputeProjections(const amrex::Direction d
 // Implement User-defined diode BC
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MetalProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
 							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
@@ -458,38 +458,38 @@ AMRSimulation<MetalProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		normal = 1.0;
 	}
 
-	const double rho_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::density_index);
-	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x1Momentum_index);
-	const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x2Momentum_index);
-	double x3Mom_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
-	const double etot_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::energy_index);
-	const double eint_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::internalEnergy_index);
-	const double pscalar_edge = consVar(i, j, kedge, HydroSystem<MetalProblem>::scalar0_index);
+	const double rho_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::density_index);
+	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::x1Momentum_index);
+	const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::x2Momentum_index);
+	double x3Mom_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::x3Momentum_index);
+	const double etot_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::energy_index);
+	const double eint_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::internalEnergy_index);
+	const double pscalar_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::scalar0_index);
 
 	if ((x3Mom_edge * normal) < 0) { // gas is inflowing
-		x3Mom_edge = -1. * consVar(i, j, kedge, HydroSystem<MetalProblem>::x3Momentum_index);
+		x3Mom_edge = -1. * consVar(i, j, kedge, HydroSystem<TheProblem>::x3Momentum_index);
 	}
 
-	consVar(i, j, k, HydroSystem<MetalProblem>::density_index) = rho_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::x1Momentum_index) = x1Mom_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::x2Momentum_index) = x2Mom_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::x3Momentum_index) = x3Mom_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::energy_index) = etot_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::internalEnergy_index) = eint_edge;
-	consVar(i, j, k, HydroSystem<MetalProblem>::scalar0_index) = pscalar_edge;
+	consVar(i, j, k, HydroSystem<TheProblem>::density_index) = rho_edge;
+	consVar(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = x1Mom_edge;
+	consVar(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2Mom_edge;
+	consVar(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3Mom_edge;
+	consVar(i, j, k, HydroSystem<TheProblem>::energy_index) = etot_edge;
+	consVar(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = eint_edge;
+	consVar(i, j, k, HydroSystem<TheProblem>::scalar0_index) = pscalar_edge;
 }
 
 auto problem_main() -> int
 {
 
-	const int ncomp_cc = Physics_Indices<MetalProblem>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<TheProblem>::nvarTotal_cc;
 	// amrex::Vector<quokka::BCRec> BCs_cc(ncomp_cc);
 
-	auto BCs_cc = quokka::BC<MetalProblem>(quokka::BCType::reflecting);
+	auto BCs_cc = quokka::BC<TheProblem>(quokka::BCType::reflecting);
 	if constexpr (BC_TYPE == 1) {
-		BCs_cc = quokka::BC<MetalProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::ext_dir);
+		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::ext_dir);
 	} else if constexpr (BC_TYPE == 2) {
-		BCs_cc = quokka::BC<MetalProblem>(quokka::BCType::foextrap);
+		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::foextrap);
 	}
 
 	amrex::ParmParse const pp("problem");
@@ -501,7 +501,7 @@ auto problem_main() -> int
 	amrex::InitRandom(seed, 1); // all ranks should produce the same values
 
 	// Problem initialization
-	QuokkaSimulation<MetalProblem> sim(BCs_cc);
+	QuokkaSimulation<TheProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
