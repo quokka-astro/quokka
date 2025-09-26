@@ -35,6 +35,20 @@ static std::string CIC_file = "none";
 constexpr double pc = C::parsec;
 constexpr int turbdata_size = 128;
 
+struct TheProblem {
+};
+
+template <> struct SimulationData<TheProblem> {
+	// turbulent velocity fields
+	amrex::TableData<Real, 3> dvx;
+	amrex::TableData<Real, 3> dvy;
+	amrex::TableData<Real, 3> dvz;
+	Real dv_rms_generated{};
+	Real turbulent_amplitude{};
+
+	Real refine_parameter = 1.0; // placeholder for refinement control
+};
+
 // global variables needed for Dirichlet boundary condition and initial conditions
 // copy from data_sets.dat depending on galaxy environment
 static constexpr int ARR_SIZE = 100;
@@ -83,9 +97,6 @@ static constexpr amrex::Real sigma2 = 7000000.0;
 static constexpr amrex::Real rho01 = 2.78556e-24;
 static constexpr amrex::Real rho02 = 2.7855600000000006e-29;
 
-struct TheProblem {
-};
-
 template <> struct Particle_Traits<TheProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop | ParticleSwitch::CIC;
 };
@@ -111,27 +122,6 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr int numPassiveScalars = 1; // number of passive scalars
 	static constexpr int nGroups = 1;	    // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
-};
-
-template <> struct SimulationData<TheProblem> {
-
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_z;
-
-	// turbulent velocity fields
-	amrex::TableData<Real, 3> dvx;
-	amrex::TableData<Real, 3> dvy;
-	amrex::TableData<Real, 3> dvz;
-	Real dv_rms_generated{};
-	Real turbulent_amplitude{};
-
-	int nblast = 0;
-	int SN_counter_cumulative = 0;
-	Real SN_rate_per_vol = NAN;	  // rate per unit time per unit volume
-	Real E_blast = 1.0e51;		  // ergs
-	Real M_ejecta = 5.0 * C::M_solar; // 5.0 * Msun; // g
-	Real refine_threshold = 1.0;	  // gradient refinement threshold
 };
 
 template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
@@ -309,44 +299,6 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx*vx + vy*vy + vz*vz);
 		state_cc(i, j, k, Physics_Indices<TheProblem>::pscalarFirstIndex) = 1.e-5 / vol; // Injected tracer
 	});
-}
-
-template <> void QuokkaSimulation<TheProblem>::computeBeforeTimestep()
-{
-	// compute how many (and where) SNe will go off on the this coarse timestep
-	// sample from Poisson distribution
-
-	const Real dt_coarse = dt_[0];
-	const Real domain_area = geom[0].ProbLength(0) * geom[0].ProbLength(1);
-	const Real mean = 0.0;
-	const Real stddev = hscale / geom[0].ProbLength(2) / 2.;
-
-	const Real expectation_value = ks_sigma_sfr * domain_area * dt_coarse;
-
-	const int count = static_cast<int>(amrex::RandomPoisson(expectation_value));
-
-	// resize particle arrays
-	amrex::Array<int, 1> const lo{0};
-	amrex::Array<int, 1> const hi{count};
-	userData_.blast_x = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_y = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_z = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.nblast = count;
-	userData_.SN_counter_cumulative += count;
-
-	// for each, sample location at random
-	auto const &px = userData_.blast_x->table();
-	auto const &py = userData_.blast_y->table();
-	auto const &pz = userData_.blast_z->table();
-	for (int i = 0; i < count; ++i) {
-		px(i) = geom[0].ProbLength(0) * amrex::Random();
-		py(i) = geom[0].ProbLength(1) * amrex::Random();
-		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
-	}
-
-	std::ostringstream oss;
-	amrex::SaveRandomState(oss);
-	simulationMetadata_["random_number_generator_state"] = oss.str();
 }
 
 template <>
