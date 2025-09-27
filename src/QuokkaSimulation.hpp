@@ -1235,7 +1235,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		int retry_count = start_retry_count;
 
 		while (retry_count <= max_retries) {
-			const int nsubsteps = static_cast<int>(1u << static_cast<unsigned>(retry_count));
+			const int nsubsteps = static_cast<int>(1U << static_cast<unsigned>(retry_count));
 			const amrex::Real dt_step = dt_remaining / static_cast<amrex::Real>(nsubsteps);
 
 			if (retry_count > 0 && Verbose()) {
