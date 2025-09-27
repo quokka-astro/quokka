@@ -55,17 +55,17 @@ constexpr double b0_magn = 1.0;
 constexpr double delta_b_magn = 1e-6;
 constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE double computeMagnitude(const std::array<double, 3> &vfield)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<double, 3> &vfield) -> double
 {
 	return gcem::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE double computeDotProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2) -> double
 {
 	return vfield1[0] * vfield2[0] + vfield1[1] * vfield2[1] + vfield1[2] * vfield2[2];
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE std::array<double, 3> computeCrossProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeCrossProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2) -> std::array<double, 3>
 {
 	return {vfield1[1] * vfield2[2] - vfield1[2] * vfield2[1], vfield1[2] * vfield2[0] - vfield1[0] * vfield2[2],
 		vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]};
@@ -103,14 +103,14 @@ struct ProblemSetup {
 
 AMREX_GPU_MANAGED ProblemSetup ps; // NOLINT
 
-std::array<double, 3> rotatePRF2MRF(const std::array<double, 3> &vec_prf)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<double, 3> &vec_prf) -> std::array<double, 3>
 {
 	return {vec_prf[0] * ps.k_dir_prf[0] + vec_prf[1] * ps.k_dir_prf[1] + vec_prf[2] * ps.k_dir_prf[2],
 		vec_prf[0] * ps.inplane_dir_prf[0] + vec_prf[1] * ps.inplane_dir_prf[1] + vec_prf[2] * ps.inplane_dir_prf[2],
 		vec_prf[0] * ps.outofplane_dir_prf[0] + vec_prf[1] * ps.outofplane_dir_prf[1] + vec_prf[2] * ps.outofplane_dir_prf[2]};
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE std::array<double, 3> rotateMRF2PRF(const std::array<double, 3> &vec_mrf)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<double, 3> &vec_mrf) -> std::array<double, 3>
 {
 	return {vec_mrf[0] * ps.k_dir_prf[0] + vec_mrf[1] * ps.inplane_dir_prf[0] + vec_mrf[2] * ps.outofplane_dir_prf[0],
 		vec_mrf[0] * ps.k_dir_prf[1] + vec_mrf[1] * ps.inplane_dir_prf[1] + vec_mrf[2] * ps.outofplane_dir_prf[1],
@@ -173,8 +173,8 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double cos_phase = std::cos(ps.omega * time - ps.k_magn * x_vec_mrf_C[0]);
 
 		constexpr double elsasser_sgn = -1.0;
-		// equivelant to, but numerically safer than -omega / (k_magn * cos_theta)
-		double delta_v_magn = elsasser_sgn * alfven_speed * delta_b_magn * cos_phase;
+		// equivalent to, but numerically safer than -omega / (k_magn * cos_theta)
+		const double delta_v_magn = elsasser_sgn * alfven_speed * delta_b_magn * cos_phase;
 
 		const double v_x1_prf = delta_v_magn * ps.outofplane_dir_prf[0];
 		const double v_x2_prf = delta_v_magn * ps.outofplane_dir_prf[1];
@@ -210,6 +210,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
+		// comppute b-field using the magnetic vector potential to preserve div(b) = 0 topology
 		const double b_x1 =
 		    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[1] -
 		    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[2];
