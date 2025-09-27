@@ -1224,66 +1224,66 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 	int cur_retry_level = 0;
 
 	while (completed_units < max_total_substeps && cur_retry_level <= max_retries) {
-	  const int total_substeps = static_cast<int>(1U << static_cast<unsigned>(cur_retry_level));
-	  const int units_per_substep = max_total_substeps / total_substeps;
-	  const int start_substep = completed_units / units_per_substep;
-	  const amrex::Real dt_substep = dt_lev / static_cast<amrex::Real>(total_substeps);
-	  const amrex::Real dt_attempt_remaining = dt_substep * static_cast<amrex::Real>(total_substeps - start_substep);
+		const int total_substeps = static_cast<int>(1U << static_cast<unsigned>(cur_retry_level));
+		const int units_per_substep = max_total_substeps / total_substeps;
+		const int start_substep = completed_units / units_per_substep;
+		const amrex::Real dt_substep = dt_lev / static_cast<amrex::Real>(total_substeps);
+		const amrex::Real dt_attempt_remaining = dt_substep * static_cast<amrex::Real>(total_substeps - start_substep);
 
-	  if (cur_retry_level > 0 && Verbose()) {
-	    amrex::Print() << "\t>> Re-trying hydro advance at level " << lev << " with reduced timestep (remaining dt = " << dt_attempt_remaining
-			   << ", total substeps = " << total_substeps << ", completed substeps = " << start_substep << ", dt_new = " << dt_substep
-			   << ")\n";
-	  }
-	  
-	  amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
-	  amrex::Copy(state_old_cc_tmp, accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
-	  
-	  std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
-	  if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-	    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-	      auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
-	      state_old_fc_tmp[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
-	      amrex::Copy(state_old_fc_tmp[idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
-	    }
-	  }
-	  
-	  bool attempt_failed = false;
-	  
-	  for (int substep_index = start_substep; substep_index < total_substeps; ++substep_index) {
-            if (substep_index > start_substep) {
-	      amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
-	      if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		  amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0,
-			      Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+		if (cur_retry_level > 0 && Verbose()) {
+			amrex::Print() << "\t>> Re-trying hydro advance at level " << lev << " with reduced timestep (remaining dt = " << dt_attempt_remaining
+				       << ", total substeps = " << total_substeps << ", completed substeps = " << start_substep << ", dt_new = " << dt_substep
+				       << ")\n";
 		}
-	      }
-            }
 
-	    const amrex::Real current_substep_time = time + static_cast<amrex::Real>(substep_index) * dt_substep;
-	    const bool substep_success =
-	      advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, current_substep_time, dt_substep);
-	    if (!substep_success) {
-	      attempt_failed = true;
-	      break;
-	    }
-	    
-	    completed_units += units_per_substep;
-	    if (completed_units > max_total_substeps) {
-	      completed_units = max_total_substeps;
-	    }
-	    
-	    updateAcceptedHydroState();
-	  }
-	  
-	  if (attempt_failed) {
-	    restoreHydroState();
-	    ++cur_retry_level;
-	    continue;
-	  }
-	  
-	  break;
+		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+		amrex::Copy(state_old_cc_tmp, accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
+				state_old_fc_tmp[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				amrex::Copy(state_old_fc_tmp[idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+			}
+		}
+
+		bool attempt_failed = false;
+
+		for (int substep_index = start_substep; substep_index < total_substeps; ++substep_index) {
+			if (substep_index > start_substep) {
+				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+						amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc,
+							    nghost_fc_);
+					}
+				}
+			}
+
+			const amrex::Real current_substep_time = time + static_cast<amrex::Real>(substep_index) * dt_substep;
+			const bool substep_success =
+			    advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, current_substep_time, dt_substep);
+			if (!substep_success) {
+				attempt_failed = true;
+				break;
+			}
+
+			completed_units += units_per_substep;
+			if (completed_units > max_total_substeps) {
+				completed_units = max_total_substeps;
+			}
+
+			updateAcceptedHydroState();
+		}
+
+		if (attempt_failed) {
+			restoreHydroState();
+			++cur_retry_level;
+			continue;
+		}
+
+		break;
 	}
 
 	if (completed_units < max_total_substeps) {
