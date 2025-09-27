@@ -129,10 +129,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const std::array<double, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double b0_x1_mrf = b0_magn * ps.cos_angle_between_k_b0;
 	const double b0_x2_mrf = b0_magn * ps.sin_angle_between_k_b0;
-	// bg_A = (0, 0, b0x * y - b0y * x) -> curl(bg_A) = (b0x, b0y, 0)
+	// bg_A = (0, 0, b0_x1 * x2 - b0_x2 * x1) -> curl(bg_A) = (b0_x1, b0_x2, 0)
 	const double bg_A1_mrf = 0.0;
 	const double bg_A2_mrf = 0.0;
 	const double bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
+	// d/dx A_x2 = bg_b * delta_b * cos(omega t - k x1); A_x1 = A_x3 = 0 -> delta_b_x1 = delta_b_x3 = 0
 	const double delta_A1_mrf = 0.0;
 	const double delta_A2_mrf = -(b0_magn * delta_b_magn / ps.k_magn) * std::sin(ps.omega * time - ps.k_magn * x_vec_mrf[0]);
 	const double delta_A3_mrf = 0.0;
