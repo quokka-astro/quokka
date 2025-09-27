@@ -124,9 +124,10 @@ auto problem_main() -> int
 		// for exact dust density (shifted assuming no interaction and periodic boundaries)
 		amrex::Real const t = sim.tNew_[0];
 		amrex::Real x_initial = std::fmod(x - v0 * t, Lx);
-		if (x_initial < 0.0) x_initial += Lx;
+		if (x_initial < 0.0)
+			x_initial += Lx;
 		rho_dust_exact.at(i) = (x_initial < 0.5) ? rho : 2.0 * rho;
-		vx_exact.at(i) = v0; // expected x velocity
+		vx_exact.at(i) = v0;	  // expected x velocity
 		vx_dust_exact.at(i) = v0; // expected x velocity of dust
 
 		// compute x velocity from momentum and density
