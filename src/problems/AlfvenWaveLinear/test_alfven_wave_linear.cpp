@@ -65,7 +65,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array
 	return vfield1[0] * vfield2[0] + vfield1[1] * vfield2[1] + vfield1[2] * vfield2[2];
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeCrossProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2) -> std::array<double, 3>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeCrossProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2)
+    -> std::array<double, 3>
 {
 	return {vfield1[1] * vfield2[2] - vfield1[2] * vfield2[1], vfield1[2] * vfield2[0] - vfield1[0] * vfield2[2],
 		vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]};
