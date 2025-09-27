@@ -1189,7 +1189,6 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 {
 	const BL_PROFILE_REGION("HydroSolver");
 	const int max_retries = 6;
-	bool overall_success = true;
 
 	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1220,13 +1219,11 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		}
 	};
 
-	restoreHydroState();
+	const int max_total_substeps = 1 << max_retries;
+	int completed_units = 0;
+	int cur_retry_level = 0;
 
-    const int max_total_substeps = 1 << max_retries;
-    int completed_units = 0;
-    int cur_retry_level = 0;
-
-    while (overall_success && completed_units < max_total_substeps && cur_retry_level <= max_retries) {
+	while (completed_units < max_total_substeps && cur_retry_level <= max_retries) {
         const int total_substeps = static_cast<int>(1U << static_cast<unsigned>(cur_retry_level));
         const int units_per_substep = max_total_substeps / total_substeps;
         AMREX_ALWAYS_ASSERT(max_total_substeps % total_substeps == 0);
@@ -1257,9 +1254,9 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
             }
         }
 
-        bool attempt_failed = false;
+		bool attempt_failed = false;
 
-        for (int substep_index = start_substep; substep_index < total_substeps; ++substep_index) {
+		for (int substep_index = start_substep; substep_index < total_substeps; ++substep_index) {
             if (substep_index > start_substep) {
                 amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
                 if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1292,13 +1289,10 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			continue;
 		}
 
-        break;
-    }
+		break;
+	}
 
-    if (completed_units < max_total_substeps) {
-        overall_success = false;
-    }
-	if (!overall_success) {
+	if (completed_units < max_total_substeps) {
 		// crash, we have exceeded max_retries
 		amrex::Print() << "\nQUOKKA FATAL ERROR\n"
 			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"

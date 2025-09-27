@@ -28,40 +28,39 @@ Throughout each timestep the solver decorates the update with physics-aware stab
 ## Hydro retries algorithm
 The retry loop surrounding the integrator helps prevent crashes in the presence of strong nonlinearities in the solution:
 
-1. **State checkpointing:** Before each attempt the routine snapshots the last accepted solution into `accepted_state_cc` (and `accepted_state_fc` for MHD). Failed attempts always restore these buffers so that no partial update contaminates subsequent retries.
-2. **Adaptive substepping:** Each retry chooses `nsubsteps = 2^{retry_count}` (with `retry_count ≤ max_retries = 6`). Progress is recorded as an integer number of base units, where one unit represents `dt_lev / (2^{max_retries})`. This guarantees that any retry can reinterpret previously accepted work exactly on its canonical grid.
-3. **Substep execution:** For the current retry level the code computes `units_per_substep = 2^{max_retries - retry_count}` and evaluates `completed_substeps = completed_units / units_per_substep`. Only the remaining substeps are executed. The floating-point time passed to `advanceHydroAtLevel` is reconstructed on demand from the integer unit count: `t_sub = t0 + completed_units * dt_lev / 2^{max_retries}`.
-4. **Partial progress handling:** Accepting a substep immediately increments the integer progress counter. If a failure occurs after some substeps succeed, the retry level is bumped (capped by `max_retries`) so the next attempt uses smaller substeps; a fully successful pass exits the outer loop immediately.
+1. **State checkpointing:** Before each attempt the routine snapshots the last accepted solution into `accepted_state_cc` (and `accepted_state_fc` for MHD). Failed attempts always call `restoreHydroState()` so that no partial update contaminates subsequent retries.
+2. **Adaptive substepping:** Each retry chooses `total_substeps = 2^{cur_retry_level}` (with `cur_retry_level ≤ max_retries = 6`). Progress is recorded as an integer number of base units, where one unit represents `dt_lev / (2^{max_retries})`. This guarantees that any retry can reinterpret previously accepted work exactly on its canonical grid.
+3. **Substep execution:** For the current retry level the code computes `units_per_substep = 2^{max_retries - cur_retry_level}` and evaluates `start_substep = completed_units / units_per_substep`. Only the remaining substeps are executed. The floating-point time passed to `advanceHydroAtLevel` is reconstructed on demand as `current_substep_time = time + substep_index * dt_substep`.
+4. **Partial progress handling:** Accepting a substep immediately increments `completed_units` and calls `updateAcceptedHydroState()`. If a failure occurs after some substeps succeed, the retry level is bumped (capped by `max_retries`) so the next attempt uses smaller substeps; a fully successful pass exits the outer loop immediately.
 5. **Failure diagnostics:** Exceeding the retry budget triggers a fatal diagnostic: the code writes a `debug_hydro_state_fatal` plotfile (or Blueprint output when Ascent is enabled) and aborts, ensuring that difficult-to-integrate states can be debugged.
 
 ### Pseudocode outline
 
 ```text
-t0 = currentLevelTime
-maxUnits = 1 << maxRetries
-acceptedState = snapshotCellCenteredState()
-acceptedFaceState = snapshotFaceCenteredState()
+time = currentLevelTime
+max_total_substeps = 1 << max_retries
+accepted_state_cc = snapshotCellCenteredState()
+accepted_state_fc = snapshotFaceCenteredState()
 
-completedUnits = 0
-curRetryLevel = 0
-while completedUnits < maxUnits and curRetryLevel <= maxRetries:
-    totalSubsteps = 1 << curRetryLevel
-    unitsPerSubstep = maxUnits // totalSubsteps
-    startSubstep = completedUnits // unitsPerSubstep
-    dtSubstep = dtTotal / totalSubsteps
+completed_units = 0
+cur_retry_level = 0
+while completed_units < max_total_substeps and cur_retry_level <= max_retries:
+    total_substeps = 1 << cur_retry_level
+    units_per_substep = max_total_substeps // total_substeps
+    start_substep = completed_units // units_per_substep
+    dt_substep = dt_lev / total_substeps
 
-    for substepIndex in range(startSubstep, totalSubsteps):
-        substepTime = t0 + substepIndex * dtSubstep
-        status = advanceHydroAtLevel(substepTime, dtSubstep)
-        if status.failed():
-            restoreStateFrom(acceptedState, acceptedFaceState)
-            curRetryLevel += 1
+    for substep_index in range(start_substep, total_substeps):
+        current_substep_time = time + substep_index * dt_substep
+        substep_success = advanceHydroAtLevel(current_substep_time, dt_substep)
+        if not substep_success:
+            restoreHydroState()
+            cur_retry_level += 1
             break
-        else:
-            completedUnits += unitsPerSubstep
-            commitAcceptedState()
+        completed_units += units_per_substep
+        updateAcceptedHydroState()
 
-if completedUnits < maxUnits:
+if completed_units < max_total_substeps:
     writeFatalDiagnostics()
     abortHydroStep()
 ```
