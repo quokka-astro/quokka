@@ -103,29 +103,25 @@ struct ProblemSetup {
 
 AMREX_GPU_MANAGED ProblemSetup ps; // NOLINT
 
-std::array<double,3> rotatePRF2MRF(const std::array<double, 3>& vec_prf)
+std::array<double, 3> rotatePRF2MRF(const std::array<double, 3> &vec_prf)
 {
-	return {
-		vec_prf[0] * ps.k_dir_prf[0] + vec_prf[1] * ps.k_dir_prf[1] + vec_prf[2] * ps.k_dir_prf[2],
+	return {vec_prf[0] * ps.k_dir_prf[0] + vec_prf[1] * ps.k_dir_prf[1] + vec_prf[2] * ps.k_dir_prf[2],
 		vec_prf[0] * ps.inplane_dir_prf[0] + vec_prf[1] * ps.inplane_dir_prf[1] + vec_prf[2] * ps.inplane_dir_prf[2],
-		vec_prf[0] * ps.outofplane_dir_prf[0] + vec_prf[1] * ps.outofplane_dir_prf[1] + vec_prf[2] * ps.outofplane_dir_prf[2]
-	};
+		vec_prf[0] * ps.outofplane_dir_prf[0] + vec_prf[1] * ps.outofplane_dir_prf[1] + vec_prf[2] * ps.outofplane_dir_prf[2]};
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE
-std::array<double,3> rotateMRF2PRF(const std::array<double, 3>& vec_mrf)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE std::array<double, 3> rotateMRF2PRF(const std::array<double, 3> &vec_mrf)
 {
-	return {
-		vec_mrf[0] * ps.k_dir_prf[0] + vec_mrf[1] * ps.inplane_dir_prf[0] + vec_mrf[2] * ps.outofplane_dir_prf[0],
+	return {vec_mrf[0] * ps.k_dir_prf[0] + vec_mrf[1] * ps.inplane_dir_prf[0] + vec_mrf[2] * ps.outofplane_dir_prf[0],
 		vec_mrf[0] * ps.k_dir_prf[1] + vec_mrf[1] * ps.inplane_dir_prf[1] + vec_mrf[2] * ps.outofplane_dir_prf[1],
-		vec_mrf[0] * ps.k_dir_prf[2] + vec_mrf[1] * ps.inplane_dir_prf[2] + vec_mrf[2] * ps.outofplane_dir_prf[2]
-	};
+		vec_mrf[0] * ps.k_dir_prf[2] + vec_mrf[1] * ps.inplane_dir_prf[2] + vec_mrf[2] * ps.outofplane_dir_prf[2]};
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time, const int icomp)
-    -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
+									     const int icomp) -> double
 {
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2, "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2,
+					 "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
 	const std::array<double, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double b0_x1_mrf = b0_magn * ps.cos_angle_between_k_b0;
 	const double b0_x2_mrf = b0_magn * ps.sin_angle_between_k_b0;
@@ -142,7 +138,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const std::array<double, 3> A_vec_prf = rotateMRF2PRF({A1_mrf, A2_mrf, A3_mrf});
 	return A_vec_prf[icomp];
 }
- 
+
 AMREX_GPU_DEVICE inline auto Ax_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time) -> double
 {
 	return computeVectorPotentialComponent_prf(x1_prf, x2_prf, x3_prf, time, 0);
@@ -178,7 +174,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		constexpr double elsasser_sgn = -1.0;
 		// equivelant to, but numerically safer than -omega / (k_magn * cos_theta)
 		double delta_v_magn = elsasser_sgn * alfven_speed * delta_b_magn * cos_phase;
-		
+
 		const double v_x1_prf = delta_v_magn * ps.outofplane_dir_prf[0];
 		const double v_x2_prf = delta_v_magn * ps.outofplane_dir_prf[1];
 		const double v_x3_prf = delta_v_magn * ps.outofplane_dir_prf[2];
@@ -213,23 +209,17 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		const double b_x1 = (
-				Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)
-			) / dx[1] - (
-				Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)
-			) / dx[2];
+		const double b_x1 =
+		    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[1] -
+		    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[2];
 
-		const double b_x2 = (
-				Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)
-			) / dx[2] - (
-				Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)
-			) / dx[0];
+		const double b_x2 =
+		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[2] -
+		    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[0];
 
-		const double b_x3 = (
-				Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)
-			) / dx[0] - (
-				Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)
-			) / dx[1];
+		const double b_x3 =
+		    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[0] -
+		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[1];
 
 		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1;
@@ -339,11 +329,8 @@ auto problem_main() -> int
 	}
 
 	// we assume box length = 1.0
-	const std::array<double, 3> k_vec_prf = {
-		2.0 * M_PI * static_cast<double>(num_modes_x), 
-		2.0 * M_PI * static_cast<double>(num_modes_y),
-		2.0 * M_PI * static_cast<double>(num_modes_z)
-	};
+	const std::array<double, 3> k_vec_prf = {2.0 * M_PI * static_cast<double>(num_modes_x), 2.0 * M_PI * static_cast<double>(num_modes_y),
+						 2.0 * M_PI * static_cast<double>(num_modes_z)};
 	const double k_magn = computeMagnitude(k_vec_prf);
 	const std::array<double, 3> k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
