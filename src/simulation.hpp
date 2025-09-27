@@ -3735,16 +3735,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
-			if (lev > 0 && (do_flux_register_init != 0)) {
-				flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(lev - 1), lev, ncomp_cc);
+		if (lev > 0 && (do_flux_register_init != 0)) {
+			flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(lev - 1), lev, ncomp_cc);
 
-				// Initialize EdgeFluxRegister for MHD restarts
-				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					const int nemf_vars = 1; // EMF has 1 component per dimension
-					emf_reg_[lev] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
-											      Geom(lev - 1), nemf_vars);
-				}
+			// Initialize EdgeFluxRegister for MHD restarts
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				const int nemf_vars = 1; // EMF has 1 component per dimension
+				emf_reg_[lev] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
+											  Geom(lev - 1), nemf_vars);
 			}
+		}
 
 		const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
 		const int nghost_fc = nghost_fc_;
