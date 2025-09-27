@@ -127,10 +127,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2, "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
 	const std::array<double, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
-	const double A0_mrf = 0.0;
-	const double A1_mrf = -(b0_magn * delta_b_magn / ps.k_magn) * std::sin(ps.omega * time - ps.k_magn * x_vec_mrf[0]);
-	const double A2_mrf = b0_magn * ps.cos_angle_between_k_b0 + b0_magn * ps.sin_angle_between_k_b0;
-	const std::array<double, 3> A_vec_prf = rotateMRF2PRF({A0_mrf, A1_mrf, A2_mrf});
+	const double b0_x1_mrf = b0_magn * ps.cos_angle_between_k_b0;
+	const double b0_x2_mrf = b0_magn * ps.sin_angle_between_k_b0;
+	// bg_A = (0, 0, b0x * y - b0y * x) -> curl(bg_A) = (b0x, b0y, 0)
+	const double bg_A1_mrf = 0.0;
+	const double bg_A2_mrf = 0.0;
+	const double bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
+	const double delta_A1_mrf = 0.0;
+	const double delta_A2_mrf = -(b0_magn * delta_b_magn / ps.k_magn) * std::sin(ps.omega * time - ps.k_magn * x_vec_mrf[0]);
+	const double delta_A3_mrf = 0.0;
+	const double A1_mrf = bg_A1_mrf + delta_A1_mrf;
+	const double A2_mrf = bg_A2_mrf + delta_A2_mrf;
+	const double A3_mrf = bg_A3_mrf + delta_A3_mrf;
+	const std::array<double, 3> A_vec_prf = rotateMRF2PRF({A1_mrf, A2_mrf, A3_mrf});
 	return A_vec_prf[icomp];
 }
  
@@ -161,27 +170,28 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const amrex::Real x1_prf_C = x1_prf_L + static_cast<amrex::Real>(0.5) * dx[0];
 		const amrex::Real x2_prf_C = x2_prf_L + static_cast<amrex::Real>(0.5) * dx[1];
 		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
-		const std::array<double, 3> x_vec_mrf_C = rotateMRF2PRF({x1_prf_C, x2_prf_C, x3_prf_C});
+		const std::array<double, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
 		// this is agnostic to the choice of reference frame: vec(k) dot vec(x) is invariant under rotation
 		const double cos_phase = std::cos(ps.omega * time - ps.k_magn * x_vec_mrf_C[0]);
 
-		double delta_v_magn = 0.0;
-		if (std::abs(ps.cos_angle_between_k_b0) > 1e-14) {
-			delta_v_magn = -ps.omega * delta_b_magn / (sound_speed * ps.k_magn * ps.cos_angle_between_k_b0) * cos_phase;
-		}
+		constexpr double elsasser_sgn = -1.0;
+		// equivelant to, but numerically safer than -omega / (k_magn * cos_theta)
+		double delta_v_magn = elsasser_sgn * alfven_speed * delta_b_magn * cos_phase;
+		
 		const double v_x1_prf = delta_v_magn * ps.outofplane_dir_prf[0];
 		const double v_x2_prf = delta_v_magn * ps.outofplane_dir_prf[1];
 		const double v_x3_prf = delta_v_magn * ps.outofplane_dir_prf[2];
 
+		// background b
 		const double b0_x1_prf = b0_magn * (ps.cos_angle_between_k_b0 * ps.k_dir_prf[0] + ps.sin_angle_between_k_b0 * ps.inplane_dir_prf[0]);
 		const double b0_x2_prf = b0_magn * (ps.cos_angle_between_k_b0 * ps.k_dir_prf[1] + ps.sin_angle_between_k_b0 * ps.inplane_dir_prf[1]);
 		const double b0_x3_prf = b0_magn * (ps.cos_angle_between_k_b0 * ps.k_dir_prf[2] + ps.sin_angle_between_k_b0 * ps.inplane_dir_prf[2]);
-
+		// perturbed b
 		const double delta_b_x1_prf = b0_magn * delta_b_magn * cos_phase * ps.outofplane_dir_prf[0];
 		const double delta_b_x2_prf = b0_magn * delta_b_magn * cos_phase * ps.outofplane_dir_prf[1];
 		const double delta_b_x3_prf = b0_magn * delta_b_magn * cos_phase * ps.outofplane_dir_prf[2];
-
+		// total b
 		const double b_x1_prf = b0_x1_prf + delta_b_x1_prf;
 		const double b_x2_prf = b0_x2_prf + delta_b_x2_prf;
 		const double b_x3_prf = b0_x3_prf + delta_b_x3_prf;
