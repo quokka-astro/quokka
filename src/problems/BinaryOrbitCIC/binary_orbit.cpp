@@ -30,8 +30,8 @@
 struct BinaryOrbit {
 };
 
-static bool do_split_particles = false; // NOLINT
-static int split_factor = 8;		// NOLINT
+static bool do_split_particles = false;	 // NOLINT
+static int split_factor = 8;		 // NOLINT
 static int use_transmitting_bc_in_z = 0; // NOLINT
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
@@ -153,9 +153,9 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<BinaryOrbit>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-												int /*orig_comp*/)
+												 int /*dcomp*/, int /*numcomp*/,
+												 amrex::GeometryData const &geom, const Real /*time*/,
+												 const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// transmitting boundary condition in the z direction
 
@@ -205,9 +205,10 @@ auto problem_main() -> int
 
 	// A temporary hack: use geometry.is_periodic to set either int_dir or reflecting. Later, we should remove the redundant geometry::is_periodic runtime
 	// parameter.
-	auto BCs_cc = quokka::BC<BinaryOrbit>(is_periodic[0] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting,
-					      is_periodic[1] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting,
-					      is_periodic[2] == 1 ? quokka::BCType::int_dir : (use_transmitting_bc_in_z == 1 ? quokka::BCType::ext_dir : quokka::BCType::reflecting)); // NOLINT
+	auto BCs_cc = quokka::BC<BinaryOrbit>(
+	    is_periodic[0] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting,
+	    is_periodic[1] == 1 ? quokka::BCType::int_dir : quokka::BCType::reflecting,
+	    is_periodic[2] == 1 ? quokka::BCType::int_dir : (use_transmitting_bc_in_z == 1 ? quokka::BCType::ext_dir : quokka::BCType::reflecting)); // NOLINT
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim(BCs_cc);

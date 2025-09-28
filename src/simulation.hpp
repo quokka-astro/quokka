@@ -1616,7 +1616,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			}
 		});
 
-
 		amrex::ParallelFor(accel_cc, amrex::IntVect{nghost_acc}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 			// Compute cell-centered acceleration using central differences of potential
 			// accel = -grad(phi)
