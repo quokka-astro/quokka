@@ -1610,6 +1610,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		const auto dx_inv = geom[lev].InvCellSizeArray();
 		auto accel_arr = accel_cc.arrays();
 
+		amrex::ParallelFor(phi_extended, amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			if (k == -2) {
+				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
+			}
+		});
+
+
 		amrex::ParallelFor(accel_cc, amrex::IntVect{nghost_acc}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 			// Compute cell-centered acceleration using central differences of potential
 			// accel = -grad(phi)
