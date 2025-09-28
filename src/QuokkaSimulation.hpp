@@ -956,6 +956,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	if (do_reflux != 0) {
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
+			if (fr_as_crse != nullptr) {
+				fr_as_crse->setVal(0.0);
+			}
 		}
 		if (lev > 0) {
 			fr_as_fine = flux_reg_[lev].get();
@@ -2350,6 +2353,22 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
 
+	auto initRefluxFluxes = [&](std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			amrex::BoxArray ba = state_new_cc_[lev].boxArray();
+			ba.surroundingNodes(dir);
+			fluxes[dir].define(ba, dmap[lev], state_new_cc_[lev].nComp(), 0);
+			fluxes[dir].setVal(0.0);
+		}
+	};
+
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> stage1Fluxes;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> stage2Fluxes;
+	if (do_reflux) {
+		initRefluxFluxes(stage1Fluxes);
+		initRefluxFluxes(stage2Fluxes);
+	}
+
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -2364,16 +2383,23 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
 		if (do_reflux) {
-			// increment flux registers
-			// WARNING: as written, diffusive flux correction is not compatible with reflux!!
 			auto expandedFluxes = expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_cc_[lev].nComp());
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev, 0.5 * dt_radiation);
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				stage1Fluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(), 0,
+						  stage1Fluxes[dir].nComp());
+			}
 		}
+	}
+
+	if (do_reflux) {
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, stage1Fluxes, lev, 0.5 * dt_radiation);
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
 	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
+
+	// stage2Fluxes already initialized when do_reflux
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -2390,11 +2416,16 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
 		if (do_reflux) {
-			// increment flux registers
-			// WARNING: as written, diffusive flux correction is not compatible with reflux!!
 			auto expandedFluxes = expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_cc_[lev].nComp());
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev, 0.5 * dt_radiation);
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				stage2Fluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(), 0,
+						  stage2Fluxes[dir].nComp());
+			}
 		}
+	}
+
+	if (do_reflux) {
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, stage2Fluxes, lev, 0.5 * dt_radiation);
 	}
 }
 
@@ -2404,6 +2435,19 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 {
 	// get cell sizes
 	auto const &dx = geom[lev].CellSizeArray();
+
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> refluxFluxes;
+	if (do_reflux) {
+		auto initRefluxFluxes = [&](std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				amrex::BoxArray ba = state_new_cc_[lev].boxArray();
+				ba.surroundingNodes(dir);
+				fluxes[dir].define(ba, dmap[lev], state_new_cc_[lev].nComp(), 0);
+				fluxes[dir].setVal(0.0);
+			}
+		};
+		initRefluxFluxes(refluxFluxes);
+	}
 
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
@@ -2423,11 +2467,16 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
 		if (do_reflux) {
-			// increment flux registers
-			// WARNING: as written, diffusive flux correction is not compatible with reflux!!
 			auto expandedFluxes = expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_cc_[lev].nComp());
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev, 0.5 * dt_radiation);
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(), 0,
+						  refluxFluxes[dir].nComp());
+			}
 		}
+	}
+
+	if (do_reflux) {
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation);
 	}
 }
 
@@ -2436,6 +2485,19 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 							      int const /*nsubsteps*/, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine)
 {
 	auto const &dx = geom[lev].CellSizeArray();
+
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> refluxFluxes;
+	if (do_reflux) {
+		auto initRefluxFluxes = [&](std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				amrex::BoxArray ba = state_new_cc_[lev].boxArray();
+				ba.surroundingNodes(dir);
+				fluxes[dir].define(ba, dmap[lev], state_new_cc_[lev].nComp(), 0);
+				fluxes[dir].setVal(0.0);
+			}
+		};
+		initRefluxFluxes(refluxFluxes);
+	}
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
 	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
@@ -2459,11 +2521,16 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
 		if (do_reflux) {
-			// increment flux registers
-			// WARNING: as written, diffusive flux correction is not compatible with reflux!!
 			auto expandedFluxes = expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_cc_[lev].nComp());
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev, 0.5 * dt_radiation);
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(), 0,
+						  refluxFluxes[dir].nComp());
+			}
 		}
+	}
+
+	if (do_reflux) {
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation);
 	}
 }
 
