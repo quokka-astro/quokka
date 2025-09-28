@@ -2385,8 +2385,8 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 		if (do_reflux) {
 			auto expandedFluxes = expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_cc_[lev].nComp());
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				stage1Fluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(), 0,
-						  stage1Fluxes[dir].nComp());
+				stage1Fluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(),
+										   0, stage1Fluxes[dir].nComp());
 			}
 		}
 	}
@@ -2418,8 +2418,8 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 		if (do_reflux) {
 			auto expandedFluxes = expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_cc_[lev].nComp());
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				stage2Fluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(), 0,
-						  stage2Fluxes[dir].nComp());
+				stage2Fluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(),
+										   0, stage2Fluxes[dir].nComp());
 			}
 		}
 	}
@@ -2469,8 +2469,8 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 		if (do_reflux) {
 			auto expandedFluxes = expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_cc_[lev].nComp());
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(), 0,
-						  refluxFluxes[dir].nComp());
+				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(),
+										   0, refluxFluxes[dir].nComp());
 			}
 		}
 	}
@@ -2523,8 +2523,8 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 		if (do_reflux) {
 			auto expandedFluxes = expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_cc_[lev].nComp());
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(), 0,
-						  refluxFluxes[dir].nComp());
+				refluxFluxes[dir][iter].copy<amrex::RunOn::Device>(expandedFluxes[dir], expandedFluxes[dir].box(), 0, expandedFluxes[dir].box(),
+										   0, refluxFluxes[dir].nComp());
 			}
 		}
 	}
