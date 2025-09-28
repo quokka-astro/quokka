@@ -1,29 +1,54 @@
-# Star Formation Recipe 
+# Star Formation
 
-## Checking for Jeans Violation
-The star formation recipe is implemented via the Stochastic Stellar Population specialisation. Every cell is checked for Jeans violation and star particles are added if $\lambda_J = c_s/\sqrt{G\rho} < J \cdot dx$, where J is $0.5$. 
+## Overview
 
-Adding a star particle to every Jeans violating cell can lead to a large number of small mass stars which can be cumbersome. To alleviate this issue, we control the star formation rate through $\epsilon_{\rm ff}$ and $\epsilon_{*}$. $\epsilon_{\rm ff}$ is the efficiency per freefall time given by $\frac{\dot{M}_{*} \cdot t_{\rm ff}}{M_{\rm cell} \cdot dt}$, while $\epsilon_{*}$ is the fraction of cell mass that gets converted into stars. 
+The star formation module adds star particles through a lightweight stochastic prescription that plugs into the Stochastic Stellar Population specialisation.
 
-We emulate the stochasticity of star formation in the following manner. We associate a probability P to the process of spawning a star in the cell. To set P, we note that the expectation value of the stellar mass formed is P multiplied by the mass of the star that will be inserted, $\epsilon_{*} M_{\rm cell}$, so $\langle M_{*} \rangle = P \epsilon_{*} M_{\rm cell} $. This must match the target mass determined by $\epsilon_{\rm ff}$, which is $\langle M_{*} \rangle = \epsilon_{\rm ff} M_{\rm cell} (dt/t_{\rm ff}), thereby requiring $P=(\epsilon_{\rm ff}/\epsilon_{*}) dt/t_{\rm ff}$. It should be noted that this is the probability for $\epsilon_{\rm ff}$ averaged over the timestep rather than for the instantaneous star formation rate, which should be integrated over the timestep dt. 
+- Runs once per hydro timestep and evaluates each cell independently.
+- Always spawns a low-mass star particle when a trial succeeds.
+- Adds high-mass particles probabilistically so the Chabrier initial mass function (IMF) is satisfied in expectation.
 
-Both the descriptions of P, from assuming a star formation rate averaged over timestep or an instantaneous star formation rate, lead to identical expression of P if $dt<t_{\rm ff}$. Because we operator-split the process of star formation from the hydrodynamic update, it is important to note that we should not expect to get exactly the correct star formation rate for time steps that are large compared to $t_{\rm ff}. We do not explicitly enforce this as a constraint on the time step, but in practice the CFL condition will almost always guarantee that $dt << t_{\rm ff}$.
+## Jeans instability filter
 
+Eligible cells are first identified through a Jeans-length check before any stochastic sampling occurs.
 
-## Estimating number and type of stars
+- Compute the Jeans length \(\lambda_J = c_s / \sqrt{G \rho}\) in every cell.
+- Mark the cell as eligible when \(\lambda_J < J \cdot \Delta x\) with \(J = 0.5\).
+- Only eligible cells continue to the sampling steps below.
 
-Once we establish that a star will form in a cell, we need to find out the stellar population looks like. In our implementation, the population comprises at least one particle representing the low mass star ($M<8M_{\odot}$) population plus a random number of particles, each representing a high mass star.
+## Controlling the formation rate
 
-The number of high mass stars is determined by the initial mass function, taken to be Chabrier03. The IMF is represented by a log normal for $M<M_{\odot}$ and a power law with a slope of $2.35$ above that. From the IMF, we can estimate the mass fraction of the high mass stars, $f_{*,\rm{high}}$, and the average mass of high mass stars, $\langle m \rangle _{*,\rm{high}}$. The expectation value of the number of high mass stars, *num_high_mass_stars*, then is the ratio of the total mass in high mass stars and $\langle m \rangle _{*,\rm{high}}$. 
+Two efficiency parameters tune how aggressively eligible gas is converted into star particles during each hydro step.
 
-The total number of star particles to be spawned in a cell is $1+$ Poission distribution with an expectation value of *num_high_mass_stars*. A fraction $1-f_{*,\rm{high}}$ goes into the particle representing low mass stars while the mass of the high mass star particles is randomly drawn from the high mass part of the IMF.
+- \(\epsilon_{ff}\): efficiency per free-fall time, defined through \(\epsilon_{ff} = (\dot M_{\star} \, t_{ff}) / (M_{cell} \, \Delta t)\).
+- \(\epsilon_{\star}\): fraction of the cell mass used when a particle is spawned.
+- The target stellar mass for the step is \(\epsilon_{ff} M_{cell} (\Delta t / t_{ff})\).
+- Bernoulli probability for spawning: \( P = \frac{\epsilon_{ff}}{\epsilon_{\star}} \frac{\Delta t}{t_{ff}} \).
+- The expectation value \(\langle M_{\star} \rangle = P \epsilon_{\star} M_{cell}\) matches the target mass provided \(\Delta t < t_{ff}\); the CFL condition typically enforces that inequality.
 
-In the case there are no high mass stars in the cell, the low mass star particle gets spawned at the centre of the cell with a velocity identical to the gas velocity. 
+## Sampling the stellar population
 
+Once a cell passes the filter and the Bernoulli draw succeeds, we construct the composite stellar population represented by the spawned particles.
 
+- Every accepted draw creates one low-mass particle that represents all stars with \(M < 8 M_{\odot}\).
+- High-mass stars follow the Chabrier (2003) IMF: log-normal below \(1 M_{\odot}\) and a slope of \(2.35\) above it.
+- Pre-computed IMF integrals provide the mass fraction \(f_{\star,high}\) and mean mass \(\langle m \rangle_{\star,high}\) of the high-mass component.
+- The expected number of massive stars is \(f_{\star,high} \epsilon_{\star} M_{cell} / \langle m \rangle_{\star,high}\); a Poisson variate with that mean sets the actual count.
+- Each massive star draws its mass from the high-mass end of the IMF, while the low-mass particle retains the remaining fraction \(1 - f_{\star,high}\) of the spawned mass.
+- If the Poisson draw returns zero, only the low-mass particle is inserted and it inherits the local gas velocity.
 
-## Estimating the Velocity of the High Mass Star(s)
+## Assigning particle velocities
 
-In the presence of high mass stars, we first assign momentum to these stars. The velocity of these particles is derived from a log normal distribution. The mean of this distribution is the cell velocity while its dispersion is obtained by mass-averaging over the neighbouring cells. 
+Sampled star particles receive velocities that combine the local bulk flow with an isotropic runaway kick.
 
-We track the total momentum of the high mass star particles in the three directions and in order to conserve momentum we impart an equal and opposite momentum to the low mass star. 
+- Each massive star draws a speed from a power-law distribution \(p(v) \propto v^{-1.8}\) truncated between 3 and 385 km s\(^{-1}\), then converts it to cgs units.
+- A random direction is chosen by sampling \(\cos \theta\) uniformly in \([-1, 1]\) and \(\phi\) in \([0, 2\pi)\); the resulting kick is added to the gas velocity of the parent cell.
+- The total momentum of all massive stars is accumulated, and the low-mass composite particle receives the opposite momentum so that the cell-level particle system conserves momentum.
+
+## Practical considerations
+
+A few implementation notes help interpret corner cases and limitations of the current recipe.
+
+- Star formation is operator-split from the hydrodynamics. Large timesteps compared with \(t_{ff}\) will therefore overshoot the desired rate; no explicit limiter is enforced beyond the CFL-controlled hydro step.
+- All spawned particles are inserted at the cell centre. The caller is responsible for any subsequent repositioning or feedback coupling.
+
