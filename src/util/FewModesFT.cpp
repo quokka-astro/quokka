@@ -21,13 +21,15 @@ namespace detail
 {
 // Standalone functions to avoid CUDA extended device lambda restrictions
 
-namespace {
+namespace
+{
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto wrap_index(int idx, int period) -> int
 {
 	int mod = idx % period;
 	return (mod < 0) ? mod + period : mod;
 }
+
 void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *var_hat_imag_ptr, int size)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
@@ -62,8 +64,7 @@ void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const 
 	});
 }
 
-void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
-			     amrex::Real *var_hat_new_imag_ptr)
+void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		const int n = idx / num_modes;
@@ -82,8 +83,7 @@ void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amr
 	});
 }
 
-void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
-			     amrex::Real *var_hat_new_imag_ptr)
+void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(num_modes, [=] AMREX_GPU_DEVICE(int m) {
 		const amrex::Real kx = k_vec_ptr[0 * num_modes + m];
@@ -122,8 +122,8 @@ void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *
 	});
 }
 
-void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amrex::Real *var_hat_real_ptr,
-				amrex::Real *var_hat_imag_ptr, const amrex::Real *var_hat_new_real_ptr, const amrex::Real *var_hat_new_imag_ptr)
+void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amrex::Real *var_hat_real_ptr, amrex::Real *var_hat_imag_ptr,
+			 const amrex::Real *var_hat_new_real_ptr, const amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		// Update persistent GPU storage with evolved coefficients
