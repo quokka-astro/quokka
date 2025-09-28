@@ -20,7 +20,8 @@ namespace detail
 {
 // Standalone functions to avoid CUDA extended device lambda restrictions
 
-namespace {
+namespace
+{
 void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *var_hat_imag_ptr, int size)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
@@ -29,8 +30,7 @@ void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *var_hat
 	});
 }
 
-void compute_phase_i(int size, int lo_i, int ni, int num_modes, int gnx1, const amrex::Real *k_vec_ptr,
-			    amrex::Array4<amrex::Real> const &phases_i_arr)
+void compute_phase_i(int size, int lo_i, int ni, int num_modes, int gnx1, const amrex::Real *k_vec_ptr, amrex::Array4<amrex::Real> const &phases_i_arr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		const int i = lo_i + (idx % ni);
@@ -53,8 +53,7 @@ void compute_phase_i(int size, int lo_i, int ni, int num_modes, int gnx1, const 
 	});
 }
 
-void compute_phase_j(int size, int lo_j, int nj, int num_modes, int gnx2, const amrex::Real *k_vec_ptr,
-			    amrex::Array4<amrex::Real> const &phases_j_arr)
+void compute_phase_j(int size, int lo_j, int nj, int num_modes, int gnx2, const amrex::Real *k_vec_ptr, amrex::Array4<amrex::Real> const &phases_j_arr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		const int j = lo_j + (idx % nj);
@@ -71,8 +70,7 @@ void compute_phase_j(int size, int lo_j, int nj, int num_modes, int gnx2, const 
 	});
 }
 
-void compute_phase_k(int size, int lo_k, int nk, int num_modes, int gnx3, const amrex::Real *k_vec_ptr,
-			    amrex::Array4<amrex::Real> const &phases_k_arr)
+void compute_phase_k(int size, int lo_k, int nk, int num_modes, int gnx3, const amrex::Real *k_vec_ptr, amrex::Array4<amrex::Real> const &phases_k_arr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		const int k = lo_k + (idx % nk);
@@ -89,8 +87,8 @@ void compute_phase_k(int size, int lo_k, int nk, int num_modes, int gnx3, const 
 	});
 }
 
-void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const amrex::Real *k_vec_ptr,
-				    const amrex::Real *random_num_ptr, amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
+void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const amrex::Real *k_vec_ptr, const amrex::Real *random_num_ptr,
+			     amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		const int n = idx / num_modes;
@@ -115,8 +113,7 @@ void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const 
 	});
 }
 
-void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
-			     amrex::Real *var_hat_new_imag_ptr)
+void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		const int n = idx / num_modes;
@@ -135,8 +132,7 @@ void enforce_symmetry(int size, int num_modes, const amrex::Real *k_vec_ptr, amr
 	});
 }
 
-void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr,
-			     amrex::Real *var_hat_new_imag_ptr)
+void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *k_vec_ptr, amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(num_modes, [=] AMREX_GPU_DEVICE(int m) {
 		const amrex::Real kx = k_vec_ptr[0 * num_modes + m];
@@ -175,8 +171,8 @@ void apply_projection(int num_modes, amrex::Real sol_weight, const amrex::Real *
 	});
 }
 
-void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amrex::Real *var_hat_real_ptr,
-				amrex::Real *var_hat_imag_ptr, const amrex::Real *var_hat_new_real_ptr, const amrex::Real *var_hat_new_imag_ptr)
+void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amrex::Real *var_hat_real_ptr, amrex::Real *var_hat_imag_ptr,
+			 const amrex::Real *var_hat_new_real_ptr, const amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		// Update persistent GPU storage with evolved coefficients
@@ -185,11 +181,9 @@ void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amre
 	});
 }
 
-void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, const amrex::Real *var_hat_real_ptr,
-					      const amrex::Real *var_hat_imag_ptr, amrex::Array4<amrex::Real> const &mf_arr,
-					      amrex::Array4<amrex::Real const> const &phases_i_arr,
-					      amrex::Array4<amrex::Real const> const &phases_j_arr,
-					      amrex::Array4<amrex::Real const> const &phases_k_arr)
+void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, const amrex::Real *var_hat_real_ptr, const amrex::Real *var_hat_imag_ptr,
+				       amrex::Array4<amrex::Real> const &mf_arr, amrex::Array4<amrex::Real const> const &phases_i_arr,
+				       amrex::Array4<amrex::Real const> const &phases_j_arr, amrex::Array4<amrex::Real const> const &phases_k_arr)
 {
 	amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < 3; ++n) {
