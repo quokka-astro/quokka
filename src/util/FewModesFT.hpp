@@ -47,8 +47,17 @@ class FewModesFT
 	amrex::Real t_corr_;	 // correlation time for evolution of Ornstein-Uhlenbeck process
 	bool fill_ghosts_;	 // if the inverse transform should also fill ghost zones
 
-	// Phase arrays for each spatial dimension
-	amrex::MultiFab phases_i_, phases_j_, phases_k_;
+	int gnx1_{};
+	int gnx2_{};
+	int gnx3_{};
+	bool phases_initialized_{false};
+
+	amrex::Gpu::DeviceVector<amrex::Real> phase_i_real_d_;
+	amrex::Gpu::DeviceVector<amrex::Real> phase_i_imag_d_;
+	amrex::Gpu::DeviceVector<amrex::Real> phase_j_real_d_;
+	amrex::Gpu::DeviceVector<amrex::Real> phase_j_imag_d_;
+	amrex::Gpu::DeviceVector<amrex::Real> phase_k_real_d_;
+	amrex::Gpu::DeviceVector<amrex::Real> phase_k_imag_d_;
 
       public:
 	FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,

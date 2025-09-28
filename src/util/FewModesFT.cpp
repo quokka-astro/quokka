@@ -6,6 +6,7 @@
 /// \brief Implementation of Gaussian random vector field generator
 
 #include "FewModesFT.hpp"
+#include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_GpuLaunch.H"
 #include <algorithm>
@@ -21,71 +22,17 @@ namespace detail
 // Standalone functions to avoid CUDA extended device lambda restrictions
 
 namespace {
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto wrap_index(int idx, int period) -> int
+{
+	int mod = idx % period;
+	return (mod < 0) ? mod + period : mod;
+}
 void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *var_hat_imag_ptr, int size)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		var_hat_real_ptr[idx] = 0.0;
 		var_hat_imag_ptr[idx] = 0.0;
-	});
-}
-
-void compute_phase_i(int size, int lo_i, int ni, int num_modes, int gnx1, const amrex::Real *k_vec_ptr,
-			    amrex::Array4<amrex::Real> const &phases_i_arr)
-{
-	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
-		const int i = lo_i + (idx % ni);
-		const int m = idx / ni;
-
-		const auto gi = static_cast<amrex::Real>(i % gnx1);
-		const amrex::Real w_kx = k_vec_ptr[0 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx1);
-
-		const amrex::Real cos_phase = std::cos(w_kx * gi);
-		const amrex::Real sin_phase = std::sin(w_kx * gi);
-
-		// Adjust phase factor for Complex->Real IFT: u_hat*(k) = u_hat(-k)
-		if (k_vec_ptr[0 * num_modes + m] == 0.0) {
-			phases_i_arr(i, 0, 0, m * 2) = 0.5 * cos_phase;
-			phases_i_arr(i, 0, 0, m * 2 + 1) = 0.5 * sin_phase;
-		} else {
-			phases_i_arr(i, 0, 0, m * 2) = cos_phase;
-			phases_i_arr(i, 0, 0, m * 2 + 1) = sin_phase;
-		}
-	});
-}
-
-void compute_phase_j(int size, int lo_j, int nj, int num_modes, int gnx2, const amrex::Real *k_vec_ptr,
-			    amrex::Array4<amrex::Real> const &phases_j_arr)
-{
-	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
-		const int j = lo_j + (idx % nj);
-		const int m = idx / nj;
-
-		const auto gj = static_cast<amrex::Real>(j % gnx2);
-		const amrex::Real w_ky = k_vec_ptr[1 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx2);
-
-		const amrex::Real cos_phase = std::cos(w_ky * gj);
-		const amrex::Real sin_phase = std::sin(w_ky * gj);
-
-		phases_j_arr(0, j, 0, m * 2) = cos_phase;
-		phases_j_arr(0, j, 0, m * 2 + 1) = sin_phase;
-	});
-}
-
-void compute_phase_k(int size, int lo_k, int nk, int num_modes, int gnx3, const amrex::Real *k_vec_ptr,
-			    amrex::Array4<amrex::Real> const &phases_k_arr)
-{
-	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
-		const int k = lo_k + (idx % nk);
-		const int m = idx / nk;
-
-		const auto gk = static_cast<amrex::Real>(k % gnx3);
-		const amrex::Real w_kz = k_vec_ptr[2 * num_modes + m] * 2.0 * M_PI / static_cast<amrex::Real>(gnx3);
-
-		const amrex::Real cos_phase = std::cos(w_kz * gk);
-		const amrex::Real sin_phase = std::sin(w_kz * gk);
-
-		phases_k_arr(0, 0, k, m * 2) = cos_phase;
-		phases_k_arr(0, 0, k, m * 2 + 1) = sin_phase;
 	});
 }
 
@@ -186,22 +133,27 @@ void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amre
 }
 
 void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, const amrex::Real *var_hat_real_ptr,
-					      const amrex::Real *var_hat_imag_ptr, amrex::Array4<amrex::Real> const &mf_arr,
-					      amrex::Array4<amrex::Real const> const &phases_i_arr,
-					      amrex::Array4<amrex::Real const> const &phases_j_arr,
-					      amrex::Array4<amrex::Real const> const &phases_k_arr)
+					      const amrex::Real *var_hat_imag_ptr, const amrex::Real *phase_i_real_ptr,
+					      const amrex::Real *phase_i_imag_ptr, const amrex::Real *phase_j_real_ptr,
+					      const amrex::Real *phase_j_imag_ptr, const amrex::Real *phase_k_real_ptr,
+					      const amrex::Real *phase_k_imag_ptr, int gnx1, int gnx2, int gnx3,
+					      amrex::Array4<amrex::Real> const &mf_arr)
 {
 	amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const int gi = wrap_index(i, gnx1);
+		const int gj = wrap_index(j, gnx2);
+		const int gk = wrap_index(k, gnx3);
+
 		for (int n = 0; n < 3; ++n) {
 			mf_arr(i, j, k, n) = 0.0;
 
 			for (int m = 0; m < num_modes; ++m) {
-				const amrex::Real phase_i_real = phases_i_arr(i, 0, 0, m * 2);
-				const amrex::Real phase_i_imag = phases_i_arr(i, 0, 0, m * 2 + 1);
-				const amrex::Real phase_j_real = phases_j_arr(0, j, 0, m * 2);
-				const amrex::Real phase_j_imag = phases_j_arr(0, j, 0, m * 2 + 1);
-				const amrex::Real phase_k_real = phases_k_arr(0, 0, k, m * 2);
-				const amrex::Real phase_k_imag = phases_k_arr(0, 0, k, m * 2 + 1);
+				const amrex::Real phase_i_real = phase_i_real_ptr[m * gnx1 + gi];
+				const amrex::Real phase_i_imag = phase_i_imag_ptr[m * gnx1 + gi];
+				const amrex::Real phase_j_real = phase_j_real_ptr[m * gnx2 + gj];
+				const amrex::Real phase_j_imag = phase_j_imag_ptr[m * gnx2 + gj];
+				const amrex::Real phase_k_real = phase_k_real_ptr[m * gnx3 + gk];
+				const amrex::Real phase_k_imag = phase_k_imag_ptr[m * gnx3 + gk];
 
 				// Complex multiplication: phase = phase_i * phase_j * phase_k
 				const amrex::Real temp_real = phase_i_real * phase_j_real - phase_i_imag * phase_j_imag;
@@ -252,22 +204,16 @@ FewModesFT::FewModesFT(std::string prefix, int num_modes, const std::vector<std:
 	detail::initialize_coefficients(var_hat_real_ptr, var_hat_imag_ptr, 3 * num_modes);
 
 	// Initialize GPU-resident wave vectors
-	amrex::Real *k_vec_ptr = k_vec_d_.data();
+	amrex::Gpu::HostVector<amrex::Real> k_vec_h(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes));
 
-	// Copy k_vec data to device (one-time initialization)
 	for (int dim = 0; dim < 3; ++dim) {
 		for (int m = 0; m < num_modes; ++m) {
-			k_vec_ptr[dim * num_modes + m] = k_vec[dim][m];
+			k_vec_h[dim * num_modes + m] = k_vec[dim][m];
 		}
 	}
 
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, k_vec_h.cbegin(), k_vec_h.cend(), k_vec_d_.begin());
 	amrex::Gpu::streamSynchronize();
-
-	// Initialize phase arrays
-	const int nghost = fill_ghosts ? 1 : 0;
-	phases_i_.define(ba, dm, num_modes * 2, nghost); // 2 components for real/imag
-	phases_j_.define(ba, dm, num_modes * 2, nghost);
-	phases_k_.define(ba, dm, num_modes * 2, nghost);
 
 	// Initialize random number generator
 	rng_.seed(rseed);
@@ -284,56 +230,76 @@ void FewModesFT::SetPhases(const amrex::Geometry &geom)
 	const amrex::Real Lz = prob_hi[2] - prob_lo[2];
 
 	const auto domain = geom.Domain();
-	const int gnx1 = domain.length(0);
-	const int gnx2 = domain.length(1);
-	const int gnx3 = domain.length(2);
+	gnx1_ = domain.length(0);
+	gnx2_ = domain.length(1);
+	gnx3_ = domain.length(2);
 
 	// Check that the domain is cubic and has uniform spacing
-	AMREX_ALWAYS_ASSERT(gnx1 == gnx2 && gnx2 == gnx3);
+	AMREX_ALWAYS_ASSERT(gnx1_ == gnx2_ && gnx2_ == gnx3_);
 	AMREX_ALWAYS_ASSERT(std::abs(Lx - Ly) < 1e-12 && std::abs(Ly - Lz) < 1e-12);
 
-	const Complex I(0.0, 1.0);
+	const auto num_modes = num_modes_;
 
-	// Set phases for each direction
-	for (amrex::MFIter mfi(phases_i_); mfi.isValid(); ++mfi) {
-		const amrex::Box &gbx = mfi.growntilebox();
+	phase_i_real_d_.resize(static_cast<std::size_t>(num_modes) * static_cast<std::size_t>(gnx1_));
+	phase_i_imag_d_.resize(static_cast<std::size_t>(num_modes) * static_cast<std::size_t>(gnx1_));
+	phase_j_real_d_.resize(static_cast<std::size_t>(num_modes) * static_cast<std::size_t>(gnx2_));
+	phase_j_imag_d_.resize(static_cast<std::size_t>(num_modes) * static_cast<std::size_t>(gnx2_));
+	phase_k_real_d_.resize(static_cast<std::size_t>(num_modes) * static_cast<std::size_t>(gnx3_));
+	phase_k_imag_d_.resize(static_cast<std::size_t>(num_modes) * static_cast<std::size_t>(gnx3_));
 
-		auto &phases_i_fab = phases_i_[mfi];
-		auto &phases_j_fab = phases_j_[mfi];
-		auto &phases_k_fab = phases_k_[mfi];
+	amrex::Gpu::HostVector<amrex::Real> phase_i_real_h(phase_i_real_d_.size());
+	amrex::Gpu::HostVector<amrex::Real> phase_i_imag_h(phase_i_imag_d_.size());
+	amrex::Gpu::HostVector<amrex::Real> phase_j_real_h(phase_j_real_d_.size());
+	amrex::Gpu::HostVector<amrex::Real> phase_j_imag_h(phase_j_imag_d_.size());
+	amrex::Gpu::HostVector<amrex::Real> phase_k_real_h(phase_k_real_d_.size());
+	amrex::Gpu::HostVector<amrex::Real> phase_k_imag_h(phase_k_imag_d_.size());
 
-		// Calculate phases for i-direction
-		const auto lo_i = gbx.loVect()[0];
-		const auto hi_i = gbx.hiVect()[0];
-		const auto num_modes = num_modes_;
-		const auto *k_vec_ptr = k_vec_d_.data();
-		auto phases_i_arr = phases_i_fab.array();
+	for (int m = 0; m < num_modes; ++m) {
+		const amrex::Real kx = k_vec_[0][m];
+		const amrex::Real ky = k_vec_[1][m];
+		const amrex::Real kz = k_vec_[2][m];
 
-		const int ni = hi_i - lo_i + 1;
-		detail::compute_phase_i(ni * num_modes, lo_i, ni, num_modes, gnx1, k_vec_ptr, phases_i_arr);
+		const amrex::Real w_kx = kx * 2.0 * M_PI / static_cast<amrex::Real>(gnx1_);
+		const amrex::Real w_ky = ky * 2.0 * M_PI / static_cast<amrex::Real>(gnx2_);
+		const amrex::Real w_kz = kz * 2.0 * M_PI / static_cast<amrex::Real>(gnx3_);
 
-		// Calculate phases for j-direction
-		const auto lo_j = gbx.loVect()[1];
-		const auto hi_j = gbx.hiVect()[1];
-		auto phases_j_arr = phases_j_fab.array();
+		const bool zero_kx = (kx == 0.0);
 
-		const int nj = hi_j - lo_j + 1;
-		detail::compute_phase_j(nj * num_modes, lo_j, nj, num_modes, gnx2, k_vec_ptr, phases_j_arr);
+		for (int gi = 0; gi < gnx1_; ++gi) {
+			const amrex::Real cos_phase = std::cos(w_kx * static_cast<amrex::Real>(gi));
+			const amrex::Real sin_phase = std::sin(w_kx * static_cast<amrex::Real>(gi));
+			const amrex::Real factor = zero_kx ? 0.5 : 1.0;
+			phase_i_real_h[m * gnx1_ + gi] = factor * cos_phase;
+			phase_i_imag_h[m * gnx1_ + gi] = factor * sin_phase;
+		}
 
-		// Calculate phases for k-direction
-		const auto lo_k = gbx.loVect()[2];
-		const auto hi_k = gbx.hiVect()[2];
-		auto phases_k_arr = phases_k_fab.array();
+		for (int gj = 0; gj < gnx2_; ++gj) {
+			const amrex::Real cos_phase = std::cos(w_ky * static_cast<amrex::Real>(gj));
+			const amrex::Real sin_phase = std::sin(w_ky * static_cast<amrex::Real>(gj));
+			phase_j_real_h[m * gnx2_ + gj] = cos_phase;
+			phase_j_imag_h[m * gnx2_ + gj] = sin_phase;
+		}
 
-		const int nk = hi_k - lo_k + 1;
-		detail::compute_phase_k(nk * num_modes, lo_k, nk, num_modes, gnx3, k_vec_ptr, phases_k_arr);
+		for (int gk = 0; gk < gnx3_; ++gk) {
+			const amrex::Real cos_phase = std::cos(w_kz * static_cast<amrex::Real>(gk));
+			const amrex::Real sin_phase = std::sin(w_kz * static_cast<amrex::Real>(gk));
+			phase_k_real_h[m * gnx3_ + gk] = cos_phase;
+			phase_k_imag_h[m * gnx3_ + gk] = sin_phase;
+		}
 	}
+
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_i_real_h.cbegin(), phase_i_real_h.cend(), phase_i_real_d_.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_i_imag_h.cbegin(), phase_i_imag_h.cend(), phase_i_imag_d_.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_j_real_h.cbegin(), phase_j_real_h.cend(), phase_j_real_d_.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_j_imag_h.cbegin(), phase_j_imag_h.cend(), phase_j_imag_d_.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_k_real_h.cbegin(), phase_k_real_h.cend(), phase_k_real_d_.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_k_imag_h.cbegin(), phase_k_imag_h.cend(), phase_k_imag_d_.begin());
+	
+	phases_initialized_ = true;
 }
 
 void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 {
-	const Complex I(0.0, 1.0);
-
 	// Generate random numbers on host to ensure deterministic behavior
 	amrex::Real v1 = 0.0;
 	amrex::Real v2 = 0.0;
@@ -352,18 +318,23 @@ void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 		}
 	}
 
+	AMREX_ALWAYS_ASSERT(phases_initialized_);
+
 	// Copy random numbers to device-accessible memory
-	amrex::Gpu::DeviceVector<amrex::Real> random_num_d(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes_) * static_cast<std::size_t>(2));
-	amrex::Real *random_num_ptr = random_num_d.data();
+	amrex::Gpu::HostVector<amrex::Real> random_num_h(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes_) * static_cast<std::size_t>(2));
+	amrex::Gpu::DeviceVector<amrex::Real> random_num_d(random_num_h.size());
 
 	for (int n = 0; n < 3; ++n) {
 		for (int m = 0; m < num_modes_; ++m) {
 			const int idx_real = (n * num_modes_ + m) * 2;
 			const int idx_imag = (n * num_modes_ + m) * 2 + 1;
-			random_num_ptr[idx_real] = random_num_[n][m][0];
-			random_num_ptr[idx_imag] = random_num_[n][m][1];
+			random_num_h[idx_real] = random_num_[n][m][0];
+			random_num_h[idx_imag] = random_num_[n][m][1];
 		}
 	}
+
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, random_num_h.cbegin(), random_num_h.cend(), random_num_d.begin());
+	amrex::Real *random_num_ptr = random_num_d.data();
 
 	// Use GPU-resident k_vec data (initialized once in constructor)
 	amrex::Real *k_vec_ptr = k_vec_d_.data();
@@ -407,18 +378,18 @@ void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 	for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
 		const amrex::Box &bx = mfi.validbox();
 		auto &mf_fab = mf[mfi];
-		const auto &phases_i_fab = phases_i_[mfi];
-		const auto &phases_j_fab = phases_j_[mfi];
-		const auto &phases_k_fab = phases_k_[mfi];
-
 		auto mf_arr = mf_fab.array();
-		auto phases_i_arr = phases_i_fab.const_array();
-		auto phases_j_arr = phases_j_fab.const_array();
-		auto phases_k_arr = phases_k_fab.const_array();
 
 		const auto num_modes = num_modes_;
+		const amrex::Real *phase_i_real_ptr = phase_i_real_d_.data();
+		const amrex::Real *phase_i_imag_ptr = phase_i_imag_d_.data();
+		const amrex::Real *phase_j_real_ptr = phase_j_real_d_.data();
+		const amrex::Real *phase_j_imag_ptr = phase_j_imag_d_.data();
+		const amrex::Real *phase_k_real_ptr = phase_k_real_d_.data();
+		const amrex::Real *phase_k_imag_ptr = phase_k_imag_d_.data();
 
-		detail::compute_inverse_fourier_transform(bx, num_modes, var_hat_real_ptr, var_hat_imag_ptr, mf_arr, phases_i_arr, phases_j_arr, phases_k_arr);
+		detail::compute_inverse_fourier_transform(bx, num_modes, var_hat_real_ptr, var_hat_imag_ptr, phase_i_real_ptr, phase_i_imag_ptr, phase_j_real_ptr,
+					       phase_j_imag_ptr, phase_k_real_ptr, phase_k_imag_ptr, gnx1_, gnx2_, gnx3_, mf_arr);
 	}
 }
 
