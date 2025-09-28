@@ -1757,10 +1757,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 		// do post-timestep operations
 
-                if (do_reflux != 0) {
-                        if (flux_reg_[lev + 1] != nullptr) {
-                                flux_reg_[lev + 1]->Reflux(state_new_cc_[lev], 1.0, 0, 0, state_new_cc_[lev].nComp(), geom[lev]);
-                        }
+		if (do_reflux != 0) {
+			if (flux_reg_[lev + 1] != nullptr) {
+				flux_reg_[lev + 1]->Reflux(state_new_cc_[lev], 1.0, 0, 0, state_new_cc_[lev].nComp(), geom[lev]);
+			}
 		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
@@ -1831,17 +1831,17 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 		}
 	}
 
-        if (fr_as_fine != nullptr) {
-                AMREX_ASSERT(lev > 0);
-                AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
-                for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-                        int const ncomp = fluxArrays[dir].nComp();
-                        if (ncomp == 0) {
-                                continue;
-                        }
-                        fr_as_fine->FineAdd(fluxArrays[dir], dir, 0, 0, ncomp, dt_lev * face_area[dir]);
-                }
-        }
+	if (fr_as_fine != nullptr) {
+		AMREX_ASSERT(lev > 0);
+		AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			int const ncomp = fluxArrays[dir].nComp();
+			if (ncomp == 0) {
+				continue;
+			}
+			fr_as_fine->FineAdd(fluxArrays[dir], dir, 0, 0, ncomp, dt_lev * face_area[dir]);
+		}
+	}
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *
