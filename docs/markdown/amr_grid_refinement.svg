@@ -7,18 +7,22 @@
       <rect width="8" height="8" fill="#ffe8cc" />
       <rect x="0" y="0" width="8" height="4" fill="#ffd1a6" />
     </pattern>
+    <mask id="ring-mask">
+      <rect width="480" height="480" fill="#ffffff" />
+      <circle cx="240" cy="240" r="110" fill="#000000" />
+    </mask>
   </defs>
   <rect x="30" y="30" width="420" height="420" fill="#f8f8f8" stroke="#1d1d1d" stroke-width="2" />
-  <circle cx="240" cy="240" r="150" fill="url(#tagged)" stroke="#f0a25b" stroke-width="18" stroke-opacity="0.75" />
-  <circle cx="240" cy="240" r="110" fill="#f8f8f8" stroke="#f8f8f8" stroke-width="2" />
+  <circle cx="240" cy="240" r="150" fill="url(#tagged)" mask="url(#ring-mask)" />
+  <circle cx="240" cy="240" r="150" fill="none" stroke="#f0a25b" stroke-width="6" stroke-opacity="0.75" />
+  <circle cx="240" cy="240" r="110" fill="none" stroke="#f0a25b" stroke-width="4" stroke-opacity="0.35" />
   <rect x="187.5" y="135" width="105" height="52.5" fill="none" stroke="#005bbb" stroke-width="3" stroke-dasharray="10 6" />
   <rect x="135" y="187.5" width="210" height="52.5" fill="none" stroke="#005bbb" stroke-width="3" stroke-dasharray="10 6" />
   <rect x="135" y="240" width="210" height="52.5" fill="none" stroke="#005bbb" stroke-width="3" stroke-dasharray="10 6" />
   <rect x="187.5" y="292.5" width="105" height="52.5" fill="none" stroke="#005bbb" stroke-width="3" stroke-dasharray="10 6" />
   <rect x="60" y="60" width="72" height="32" fill="#f8f8f8" />
-  <rect x="310" y="360" width="110" height="60" fill="#f8f8f8" />
   <circle cx="84" cy="76" r="12" fill="#ffd1a6" stroke="#f0a25b" stroke-width="3" />
-  <rect x="332" y="380" width="20" height="20" fill="none" stroke="#005bbb" stroke-width="3" stroke-dasharray="10 6" />
+  <rect x="305" y="405" width="20" height="20" fill="none" stroke="#005bbb" stroke-width="3" stroke-dasharray="10 6" />
   <text x="104" y="80" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#3a2f20">Tagged cells</text>
-  <text x="360" y="395" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#00335f">Level 1 grids</text>
+  <text x="335" y="427" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#00335f">Level 1 grids</text>
 </svg>
