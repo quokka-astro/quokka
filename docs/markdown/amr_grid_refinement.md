@@ -27,6 +27,21 @@ GPU runs typically favor `blocking_factor ≥ 32` so each patch keeps SMs busy; 
 
 Inspect the grid structure early in a run by opening the plotfile header or by enabling verbose regridding logs in AMReX. When the layout diverges from expectations, compare the tagged volume to the resulting grid inventory—discrepancies usually trace back to either tag dilution during coarsening or to efficiency limits that extend each patch. The spherical collapse study documented in [GitHub issue #978](https://github.com/quokka-astro/quokka/issues/978) is a useful reminder that large blocking factors can still trigger whole-domain refinement if tags are sparse, so monitor that scenario whenever you upscale a production run.
 
+### Inspecting grids with `amrex_fboxinfo`
+
+AMReX ships a lightweight reporter named `amrex_fboxinfo` that prints the box layout stored in a plotfile. Make sure your CMake cache was configured with `-DAMReX_PLOTFILE_TOOLS=ON`, then build the utility once per build tree with `cmake --build build --target fboxinfo`. The resulting executable lives at `build/extern/amrex/Tools/Plotfile/amrex_fboxinfo`. Point it at any plotfile to see how much of the domain each AMR level occupies and how many boxes AMReX created:
+
+```
+$ build/extern/amrex/Tools/Plotfile/amrex_fboxinfo plt00040
+ plotfile: plt00040
+ level   0: number of boxes =      1, volume = 100.00%, number of cells = 16384
+          maximum zones =     128 x     128
+ level   1: number of boxes =      4, volume =  12.50%, number of cells =  8192
+          maximum zones =     256 x     256
+```
+
+The summary lines are the quickest health check: `volume` reports the percentage of the level-`ℓ` domain covered by refined grids, so values creeping toward 100% warn that your refinement criteria are effectively forcing a uniform mesh. The `maximum zones` line prints the physical extents of each level’s valid domain; large jumps confirm that refinement ratios and blocking factors coarsen or refine by the factors you expect. Add `--full` to list every box and verify the coordinates land on multiples of `blocking_factor`, or `--gridfile` to emit a grid-description file for AMReX regression tools. When you only need the number of active refinement levels (for log parsing, for example), pass `--levels` to suppress the rest of the report.
+
 ### Example: Berger-Rigoutsos in Practice
 
 ![Tagged cells and Berger-Rigoutsos boxes](amr_grid_refinement.svg)
