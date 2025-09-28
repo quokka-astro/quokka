@@ -1610,12 +1610,27 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		const auto dx_inv = geom[lev].InvCellSizeArray();
 		auto accel_arr = accel_cc.arrays();
 
+		amrex::Box const &box = geom[lev].Domain();
+		const auto &domain_lo = box.loVect3d();
+		const auto &domain_hi = box.hiVect3d();
+		const int klo = domain_lo[2];
+		const int khi = domain_hi[2];
+
+		amrex::Print() << "phi_arr at k = -2: \n";
+
 		amrex::ParallelFor(phi_extended, amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			if (k == -2) {
+			if (k == klo - 2) {
 				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
 			}
 		});
 
+		amrex::Print() << "phi_arr at k = 2: \n";
+
+		amrex::ParallelFor(phi_extended, amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			if (k == khi + 2) {
+				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
+			}
+		});
 
 		amrex::ParallelFor(accel_cc, amrex::IntVect{nghost_acc}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 			// Compute cell-centered acceleration using central differences of potential
