@@ -92,7 +92,7 @@ template <> void QuokkaSimulation<ScalarProblem>::setInitialConditionsOnGrid(quo
 
 template <>
 void QuokkaSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
-							       amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real /*time*/)
+							       amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();

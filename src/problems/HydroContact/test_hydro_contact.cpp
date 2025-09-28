@@ -91,7 +91,7 @@ template <> void QuokkaSimulation<ContactProblem>::setInitialConditionsOnGrid(qu
 
 template <>
 void QuokkaSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::Real /*time*/)
+								amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();

@@ -241,7 +241,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #endif // AMREX_SPACEDIM == 3
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
-	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons, amrex::Real time) = 0;
+	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
 
@@ -1262,7 +1262,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	amrex::Real elapsed_sec = getWalltime();
 
 	// compute reference solution (if it's a test problem)
-	computeAfterEvolve(init_sum_cons, cur_time);
+	computeAfterEvolve(init_sum_cons);
 
 	// compute conservation error
 	for (int n = 0; n < ncomp_cc; ++n) {
