@@ -50,5 +50,5 @@ Sampled star particles receive velocities that combine the local bulk flow with 
 A few implementation notes help interpret corner cases and limitations of the current recipe.
 
 - Star formation is operator-split from the hydrodynamics. Large timesteps compared with \(t_{ff}\) will therefore overshoot the desired rate; no explicit limiter is enforced beyond the CFL-controlled hydro step.
-- All spawned particles are inserted at the cell centre. The caller is responsible for any subsequent repositioning or feedback coupling.
+- All spawned particles are inserted at the cell centre. Other physics modules are responsible for any subsequent repositioning or feedback coupling.
 
