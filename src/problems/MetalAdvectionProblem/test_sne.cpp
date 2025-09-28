@@ -26,7 +26,7 @@
 #include "io/projection.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
-#include "test_sne.hpp"
+// #include "test_sne.hpp"
 
 // global variables needed for Dirichlet boundary condition and initial conditions
 // copy from data_sets.dat depending on galaxy environment
