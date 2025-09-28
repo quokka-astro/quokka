@@ -38,8 +38,8 @@ void initialize_coefficients(amrex::Real *var_hat_real_ptr, amrex::Real *var_hat
 	});
 }
 
-void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const amrex::Real *k_vec_ptr,
-				    const amrex::Real *random_num_ptr, amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
+void generate_power_spectrum(int size, int num_modes, amrex::Real k_peak, const amrex::Real *k_vec_ptr, const amrex::Real *random_num_ptr,
+			     amrex::Real *var_hat_new_real_ptr, amrex::Real *var_hat_new_imag_ptr)
 {
 	amrex::ParallelFor(size, [=] AMREX_GPU_DEVICE(int idx) {
 		const int n = idx / num_modes;
@@ -132,12 +132,10 @@ void evolve_coefficients(int size, amrex::Real c_drift, amrex::Real c_diff, amre
 	});
 }
 
-void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, const amrex::Real *var_hat_real_ptr,
-					      const amrex::Real *var_hat_imag_ptr, const amrex::Real *phase_i_real_ptr,
-					      const amrex::Real *phase_i_imag_ptr, const amrex::Real *phase_j_real_ptr,
-					      const amrex::Real *phase_j_imag_ptr, const amrex::Real *phase_k_real_ptr,
-					      const amrex::Real *phase_k_imag_ptr, int gnx1, int gnx2, int gnx3,
-					      amrex::Array4<amrex::Real> const &mf_arr)
+void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, const amrex::Real *var_hat_real_ptr, const amrex::Real *var_hat_imag_ptr,
+				       const amrex::Real *phase_i_real_ptr, const amrex::Real *phase_i_imag_ptr, const amrex::Real *phase_j_real_ptr,
+				       const amrex::Real *phase_j_imag_ptr, const amrex::Real *phase_k_real_ptr, const amrex::Real *phase_k_imag_ptr, int gnx1,
+				       int gnx2, int gnx3, amrex::Array4<amrex::Real> const &mf_arr)
 {
 	amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const int gi = wrap_index(i, gnx1);
@@ -294,7 +292,7 @@ void FewModesFT::SetPhases(const amrex::Geometry &geom)
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_j_imag_h.cbegin(), phase_j_imag_h.cend(), phase_j_imag_d_.begin());
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_k_real_h.cbegin(), phase_k_real_h.cend(), phase_k_real_d_.begin());
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, phase_k_imag_h.cbegin(), phase_k_imag_h.cend(), phase_k_imag_d_.begin());
-	
+
 	phases_initialized_ = true;
 }
 
@@ -388,8 +386,8 @@ void FewModesFT::Generate(amrex::MultiFab &mf, amrex::Real dt)
 		const amrex::Real *phase_k_real_ptr = phase_k_real_d_.data();
 		const amrex::Real *phase_k_imag_ptr = phase_k_imag_d_.data();
 
-		detail::compute_inverse_fourier_transform(bx, num_modes, var_hat_real_ptr, var_hat_imag_ptr, phase_i_real_ptr, phase_i_imag_ptr, phase_j_real_ptr,
-					       phase_j_imag_ptr, phase_k_real_ptr, phase_k_imag_ptr, gnx1_, gnx2_, gnx3_, mf_arr);
+		detail::compute_inverse_fourier_transform(bx, num_modes, var_hat_real_ptr, var_hat_imag_ptr, phase_i_real_ptr, phase_i_imag_ptr,
+							  phase_j_real_ptr, phase_j_imag_ptr, phase_k_real_ptr, phase_k_imag_ptr, gnx1_, gnx2_, gnx3_, mf_arr);
 	}
 }
 
