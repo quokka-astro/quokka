@@ -6,7 +6,7 @@ The star formation module adds star particles through a lightweight stochastic p
 
 - Runs once per hydro timestep and evaluates each cell independently.
 - Always spawns a low-mass star particle when a trial succeeds.
-- Adds high-mass particles probabilistically so the Chabrier initial mass function (IMF) is satisfied in expectation.
+- Adds high-mass particles probabilistically so the Chabrier (2005) initial mass function (IMF) is satisfied in expectation.
 
 ## Jeans instability filter
 
@@ -31,7 +31,7 @@ Two efficiency parameters tune how aggressively eligible gas is converted into s
 Once a cell passes the filter and the Bernoulli draw succeeds, we construct the composite stellar population represented by the spawned particles.
 
 - Every accepted draw creates one low-mass particle that represents all stars with \(M < 8 M_{\odot}\).
-- High-mass stars follow the Chabrier (2003) IMF: log-normal below \(1 M_{\odot}\) and a slope of \(2.35\) above it.
+- High-mass stars follow the Chabrier (2005) IMF: log-normal below \(1 M_{\odot}\) and a slope of \(2.35\) above it.
 - Pre-computed IMF integrals provide the mass fraction \(f_{\star,high}\) and mean mass \(\langle m \rangle_{\star,high}\) of the high-mass component.
 - The expected number of massive stars is \(f_{\star,high} \epsilon_{\star} M_{cell} / \langle m \rangle_{\star,high}\); a Poisson variate with that mean sets the actual count.
 - Each massive star draws its mass from the high-mass end of the IMF, while the low-mass particle retains the remaining fraction \(1 - f_{\star,high}\) of the spawned mass.
@@ -49,6 +49,6 @@ Sampled star particles receive velocities that combine the local bulk flow with 
 
 A few implementation notes help interpret corner cases and limitations of the current recipe.
 
-- Star formation is operator-split from the hydrodynamics. Large timesteps compared with \(t_{ff}\) will therefore overshoot the desired rate; no explicit limiter is enforced beyond the CFL-controlled hydro step.
+- Star formation is operator-split from the hydrodynamics. When \(t_{ff}\) is unresolved (\(\Delta t \gtrsim t_{ff}\)), the true star formation rate is not captured, and this scheme provides one possible approximation; no explicit limiter is enforced beyond the CFL-controlled hydro step.
 - All spawned particles are inserted at the cell centre. Other physics modules are responsible for any subsequent repositioning or feedback coupling.
 
