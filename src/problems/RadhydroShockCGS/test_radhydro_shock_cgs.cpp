@@ -22,6 +22,7 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "util/ArrayUtil.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 
 struct ShockProblem {
@@ -112,7 +113,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
-	if ((bcr->lo(0) != amrex::BCType::ext_dir) && (bcr->hi(0) != amrex::BCType::ext_dir)) {
+	if ((bcr->lo(0) != quokka::BCType::ext_dir) && (bcr->hi(0) != quokka::BCType::ext_dir)) {
 		return;
 	}
 
@@ -240,16 +241,7 @@ auto problem_main() -> int
 	//  const double max_dt = max_dtau / c_s0;
 	const double max_time = 1.0e-9; // 9.08e-10; // s
 
-	constexpr int nvars = RadSystem<ShockProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	    // custom x1
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir);	    // custom x1
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {	    // x2- and x3- directions
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<ShockProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<ShockProblem> sim(BCs_cc);

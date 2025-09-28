@@ -13,7 +13,6 @@
 
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_BoxArray.H"
 #include "AMReX_Config.H"
@@ -25,6 +24,7 @@
 #include "AMReX_REAL.H"
 
 #include "linear_advection/AdvectionSimulation.hpp"
+#include "util/BC.hpp"
 
 using amrex::Real;
 
@@ -137,15 +137,8 @@ auto problem_main() -> int
 	const double CFL_number = 0.4;
 	const double max_time = 1.0;
 	const int max_timesteps = 1e4;
-	const int nvars = 1;
 
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<SquareProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
 	AdvectionSimulation<SquareProblem> sim(BCs_cc);

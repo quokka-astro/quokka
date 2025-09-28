@@ -18,6 +18,7 @@
 
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 
 struct ShockProblem {
@@ -105,7 +106,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) { // NOLINT
+	if (!((bcr->lo(0) == quokka::BCType::ext_dir) || (bcr->hi(0) == quokka::BCType::ext_dir))) { // NOLINT
 		return;
 	}
 
@@ -143,10 +144,10 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_L + (px_L * px_L) / (2 * rho0);
 		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_L;
 		for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
-			consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
+			consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 	} else if (i >= hi[0]) {
 		const double px_R = rho1 * v1;
@@ -163,10 +164,10 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_R + (px_R * px_R) / (2 * rho1);
 		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_R;
 		for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
-			consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
+			consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 	}
 }
@@ -215,10 +216,10 @@ template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
 		state_cc(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = energy - (x1Momentum * x1Momentum) / (2 * density);
 		for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
-			state_cc(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = x1RadFlux;
-			state_cc(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
+			state_cc(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x1RadFlux;
+			state_cc(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 	});
 }
@@ -235,16 +236,7 @@ auto problem_main() -> int
 	//  const double max_dt = max_dtau / c_s0;
 	const double max_time = 1.0e-9; // 9.08e-10; // s
 
-	constexpr int nvars = RadSystem<ShockProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	    // custom x1
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir);	    // custom x1
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {	    // x2- and x3- directions
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<ShockProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<ShockProblem> sim(BCs_cc);
@@ -280,7 +272,7 @@ auto problem_main() -> int
 
 			double Erad_t = 0.0;
 			for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
-				Erad_t += values.at(RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+				Erad_t += values.at(RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 			}
 			Erad.at(i) = Erad_t / a_rad;			       // scaled
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_lo; // dimensionless

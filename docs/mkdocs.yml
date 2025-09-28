@@ -18,6 +18,7 @@ nav:
   - User guide:
     - Installation: installation.md
     - Running on HPC clusters: running_on_hpc_clusters.md
+    - Grid refinement (AMR): amr_grid_refinement.md
     - Test problems:
       - Radiative shock test: tests/radshock.md
       - Shu-Osher shock test: tests/shu_osher.md
@@ -32,6 +33,7 @@ nav:
   - Developer Guide:
     - Contributing Guide: contributing.md
     - Flowchart: flowchart.md
+    - Hydro Integrator: hydro_integrator.md
     - Debugging: debugging.md
     - Assertions and error checking: error_checking.md
     - Performance tips: performance.md

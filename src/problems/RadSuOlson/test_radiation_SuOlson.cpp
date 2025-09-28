@@ -29,6 +29,7 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
+#include "util/BC.hpp"
 
 struct MarshakProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -91,17 +92,17 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMea
 
 [[maybe_unused]] static constexpr int nmscalars_ = Physics_Traits<MarshakProblem>::numMassScalars;
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
-									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<MarshakProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
+						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
-									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<MarshakProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
+						 [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas * Tgas * Tgas * Tgas);
 }
@@ -109,7 +110,7 @@ AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintFromTgas(cons
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-						       std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+						       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -189,41 +190,7 @@ auto problem_main() -> int
 	const double max_time = 10.0;	// dimensionless time
 	// const double max_time = 3.16228;	  // dimensionless time
 
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<MarshakProblem>::x1RadFlux_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x2RadFlux_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x3RadFlux_index) && (dim == 2)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x1GasMomentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x2GasMomentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<MarshakProblem>::x3GasMomentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	constexpr int nvars = RadSystem<MarshakProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<MarshakProblem>(quokka::BCType::reflecting);
 
 	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
 
@@ -254,10 +221,10 @@ auto problem_main() -> int
 
 		for (int i = 0; i < nx; ++i) {
 			xs.at(i) = position[i];
-			const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index)[i];
-			const auto Etot_t = values.at(RadSystem<MarshakProblem>::gasEnergy_index)[i];
-			const auto rho = values.at(RadSystem<MarshakProblem>::gasDensity_index)[i];
-			const auto x1GasMom = values.at(RadSystem<MarshakProblem>::x1GasMomentum_index)[i];
+			const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
+			const auto Etot_t = values.at(RadSystem<MarshakProblem>::gasEnergy_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
+			const auto rho = values.at(RadSystem<MarshakProblem>::gasDensity_index)[i];	    // NOLINT(cppcoreguidelines-init-variables)
+			const auto x1GasMom = values.at(RadSystem<MarshakProblem>::x1GasMomentum_index)[i]; // NOLINT(cppcoreguidelines-init-variables)
 
 			Erad.at(i) = Erad_t;
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);

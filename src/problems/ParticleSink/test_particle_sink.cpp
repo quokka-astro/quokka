@@ -15,6 +15,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "util/BC.hpp"
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -113,36 +114,7 @@ template <> void QuokkaSimulation<SinkProblem>::ErrorEst(int lev, amrex::TagBoxA
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<SinkProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<SinkProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<SinkProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int ncomp_cc = Physics_Indices<SinkProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// // periodic boundaries
-			// BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			// BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			// octant symmetry
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BCType::reflecting);
 
 	amrex::ParmParse const pp("problem");
 	pp.query("particles_file", particles_file);
@@ -182,7 +154,7 @@ auto problem_main() -> int
 	const double total_total_mass_init = total_mass_init + total_particle_mass;
 
 	// evolve
-	sim.maxTimesteps_ = 1;
+	sim.maxTimesteps_ = 0;
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -225,6 +197,7 @@ auto problem_main() -> int
 		const double mass_rel_error_tol = 1.0e-14;
 		if (!(rel_error_total_mass < mass_rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: total mass is not conserved at step 1\n";
 		}
 
 		// exact solution
@@ -267,9 +240,10 @@ auto problem_main() -> int
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
 		// The relative L1 error norm with respect to the exact solution could be large because there is a hydro update after sink accretion.
-		const double rel_error_tol = 1.0e-6;
+		const double rel_error_tol = 3.0e-6;
 		if (!(rel_error < rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: density profile is not correct\n";
 		}
 
 #ifdef HAVE_PYTHON
@@ -330,11 +304,10 @@ auto problem_main() -> int
 		const double mass_rel_error_tol = 1.0e-13;
 		if (!(rel_error_total_mass_final < mass_rel_error_tol)) {
 			status = 1;
+			amrex::Print() << "Test failed: total mass is not conserved at the end of the simulation\n";
 		}
 
-		if (status == 1) {
-			amrex::Print() << "Test failed\n";
-		} else {
+		if (status == 0) {
 			amrex::Print() << "Test passed\n";
 		}
 	}

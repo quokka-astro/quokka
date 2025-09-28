@@ -1,21 +1,20 @@
 // ABOUTME: Test problem for cooling integrator accuracy using isochoric cooling
-// ABOUTME: Supports both ResampledCooling and TabulatedCooling modules via runtime parameter
+// ABOUTME: Uses the ResampledCooling module via runtime parameter
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_resampled_cooling.cpp
-/// \brief Defines a test problem for cooling integrator accuracy (supports ResampledCooling and TabulatedCooling).
+/// \brief Defines a test problem for cooling integrator accuracy using the ResampledCooling module.
 ///
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "cooling/GrackleLikeCooling.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "cooling/TabulatedCooling.hpp"
 #include "math/interpolate.hpp"
+#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <fstream>
 #include <iomanip>
@@ -142,18 +141,16 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 
 		const amrex::Real Etot = values.at(HydroSystem<ResampledCoolingTest>::energy_index)[0];
 		const amrex::Real rho = values.at(HydroSystem<ResampledCoolingTest>::density_index)[0];
-		const amrex::Real gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
 		// For isochoric cooling with no kinetic energy, Eint = Etot
 		const amrex::Real Eint = Etot;
 
 		// Get temperature from tables
 		amrex::Real T = NAN;
-		if (coolingTableType_ == "grackle") {
-			T = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, gamma, grackleTables_.const_tables());
-		} else if (coolingTableType_ == "resampled") {
+		if (coolingTableType_.empty()) {
+			coolingTableType_ = "resampled";
+		}
+		if (coolingTableType_ == "resampled") {
 			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
-		} else if (coolingTableType_ == "cloudy_cooling_tools") {
-			T = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, cloudyTables_.const_tables());
 		} else {
 			amrex::Abort("Unsupported cooling table type: " + coolingTableType_);
 		}
@@ -172,15 +169,8 @@ auto problem_main() -> int
 	std::string output_csv_file;
 	pp.query("output_csv_file", output_csv_file);
 
-	// Problem initialization
-	constexpr int ncomp_cc = Physics_Indices<ResampledCoolingTest>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap); // extrapolate
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		}
-	}
+	// Set boundary conditions - extrapolate
+	auto BCs_cc = quokka::BC<ResampledCoolingTest>(quokka::BCType::foextrap);
 
 	QuokkaSimulation<ResampledCoolingTest> sim(BCs_cc);
 

@@ -12,7 +12,6 @@
 #endif
 #include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BoxArray.H"
 #include "AMReX_Config.H"
 #include "AMReX_CoordSys.H"
@@ -25,6 +24,7 @@
 #include <fmt/format.h>
 
 #include "linear_advection/AdvectionSimulation.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 
 struct SawtoothProblem {
@@ -131,15 +131,8 @@ auto problem_main() -> int
 	const double max_time = 1.0;
 	const double max_dt = 1.0e-4;
 	const int max_timesteps = 1e4;
-	const int nvars = 1; // only density
 
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<SawtoothProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
 	AdvectionSimulation<SawtoothProblem> sim(BCs_cc);

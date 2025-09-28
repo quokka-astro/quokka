@@ -9,6 +9,7 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
+#include "util/BC.hpp"
 #include <array>
 #include <fmt/format.h>
 #include <random>
@@ -250,21 +251,8 @@ auto problem_main() -> int
 	const double max_time = 5e16; // > 1 Gyr
 	const int max_timesteps = 5;
 
-	// Problem initialization
-	constexpr int ncomp_cc = Physics_Indices<PrimordialChemTest>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
-#if AMREX_SPACEDIM >= 2
-		BCs_cc[n].setLo(1, amrex::BCType::foextrap);
-		BCs_cc[n].setHi(1, amrex::BCType::foextrap);
-#endif
-#if AMREX_SPACEDIM == 3
-		BCs_cc[n].setLo(2, amrex::BCType::foextrap);
-		BCs_cc[n].setHi(2, amrex::BCType::foextrap);
-#endif
-	}
+	// Set boundary conditions - extrapolate
+	auto BCs_cc = quokka::BC<PrimordialChemTest>(quokka::BCType::foextrap);
 
 	QuokkaSimulation<PrimordialChemTest> sim(BCs_cc);
 

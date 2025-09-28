@@ -10,7 +10,6 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
@@ -26,6 +25,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include <fstream>
 #include <unistd.h>
 
@@ -144,9 +144,9 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 	amrex::Gpu::HostVector<double> P_interp(x.size());
 	interpolate_arrays(x.data(), P_interp.data(), static_cast<int>(x.size()), x_exact.data(), P_exact.data(), static_cast<int>(x_exact.size()));
 
-	amrex::Gpu::DeviceVector<double> rho_g(d_interp.size());
-	amrex::Gpu::DeviceVector<double> vx_g(vx_interp.size());
-	amrex::Gpu::DeviceVector<double> P_g(P_interp.size());
+	amrex::Gpu::AsyncVector<double> rho_g(d_interp.size());
+	amrex::Gpu::AsyncVector<double> vx_g(vx_interp.size());
+	amrex::Gpu::AsyncVector<double> P_g(P_interp.size());
 
 	// copy exact solution to device
 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, d_interp.begin(), d_interp.end(), rho_g.begin());
@@ -253,16 +253,7 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 auto problem_main() -> int
 {
 	// Problem parameters
-	const int ncomp_cc = Physics_Indices<HighMachProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[0].setLo(0, amrex::BCType::int_dir); // periodic
-		BCs_cc[0].setHi(0, amrex::BCType::int_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<HighMachProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<HighMachProblem> sim(BCs_cc);

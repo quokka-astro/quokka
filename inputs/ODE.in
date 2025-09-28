@@ -13,13 +13,13 @@ amr.v               = 0     # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 4 4 4
+amr.n_cell          = 8 8 8
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 4   # grid size must be divisible by this
-amr.max_grid_size   = 4
+amr.blocking_factor = 8   # grid size must be divisible by this
+amr.max_grid_size   = 8
 
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
-grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
-#grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012_high_density.h5"
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
