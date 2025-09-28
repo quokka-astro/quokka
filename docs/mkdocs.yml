@@ -33,6 +33,7 @@ nav:
   - Developer Guide:
     - Contributing Guide: contributing.md
     - Flowchart: flowchart.md
+    - Hydro Integrator: hydro_integrator.md
     - Debugging: debugging.md
     - Assertions and error checking: error_checking.md
     - Performance tips: performance.md
