@@ -438,9 +438,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::string> m_diagVars;
 
 	/// AMR-specific parameters
-	int regrid_int = 2;		 // regrid interval (number of coarse steps)
-	int do_reflux = 1;		 // 1 == reflux, 0 == no reflux
-	int do_subcycle = 1;		 // 1 == subcycle, 0 == no subcyle
+	int regrid_int = 2;	 // regrid interval (number of coarse steps)
+	int do_reflux = 1;	 // 1 == reflux, 0 == no reflux
+	int do_subcycle = 1;	 // 1 == subcycle, 0 == no subcyle
 	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
 
 	// performance metrics
