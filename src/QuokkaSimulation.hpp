@@ -1219,7 +1219,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		}
 	};
 
-	const int max_total_substeps = 1 << max_retries;
+	const int max_total_substeps = static_cast<int>(1U << static_cast<unsigned>(max_retries));
 	int completed_units = 0;
 	int cur_retry_level = 0;
 
@@ -1270,9 +1270,7 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			}
 
 			completed_units += units_per_substep;
-			if (completed_units > max_total_substeps) {
-				completed_units = max_total_substeps;
-			}
+			completed_units = std::min(completed_units, max_total_substeps);
 
 			updateAcceptedHydroState();
 		}
