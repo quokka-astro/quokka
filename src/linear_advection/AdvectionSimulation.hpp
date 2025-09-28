@@ -83,9 +83,9 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
 	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
-	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
+	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons, amrex::Real time) override;
 	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
+				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time);
 	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
 						int lev, int interval) override;
 	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
@@ -258,17 +258,17 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::FixupState(in
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-							      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+							      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time)
 {
 	// user implemented
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
+template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/, amrex::Real time)
 {
 	// compute reference solution
 	const int ncomp = state_new_cc_[0].nComp();
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
-	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), geom[0].ProbHiArray());
+	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), geom[0].ProbHiArray(), time);
 
 	// compute error norm
 	amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, 0);

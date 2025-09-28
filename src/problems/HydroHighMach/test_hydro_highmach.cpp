@@ -89,7 +89,7 @@ template <> void QuokkaSimulation<HighMachProblem>::setInitialConditionsOnGrid(q
 
 template <>
 void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const & /*dx*/,
-								 amrex::GpuArray<Real, AMREX_SPACEDIM> const & /*prob_lo*/)
+								 amrex::GpuArray<Real, AMREX_SPACEDIM> const & /*prob_lo*/, amrex::Real /*time*/)
 {
 
 	// extract solution

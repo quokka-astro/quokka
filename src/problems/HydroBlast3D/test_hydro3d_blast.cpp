@@ -137,7 +137,7 @@ template <> void QuokkaSimulation<SedovProblem>::refineGrid(int lev, amrex::TagB
 	}
 }
 
-template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
+template <> void QuokkaSimulation<SedovProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("blast_problem");
 	bool checkSolution = true;

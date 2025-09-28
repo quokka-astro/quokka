@@ -237,7 +237,7 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
+template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons, amrex::Real /*time*/) {}
 
 auto problem_main() -> int
 {
