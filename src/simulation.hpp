@@ -443,17 +443,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// AMR-specific parameters
 	int regrid_int = 2;	 // regrid interval (number of coarse steps)
-	int do_reflux = 1;	 // 1 == reflux, 0 == no reflux (DEPRECATED: use individual reflux controls below)
+	int do_reflux = 1;	 // 1 == reflux, 0 == no reflux
 	int do_subcycle = 1;	 // 1 == subcycle, 0 == no subcyle
 	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
-
-	// Fine-grained reflux control parameters
-	int do_flux_register_init = 1;	    // 1 == initialize flux registers, 0 == skip initialization
-	int do_flux_register_reset = 1;	    // 1 == reset flux registers each timestep, 0 == skip reset
-	int do_flux_register_increment = 1; // 1 == increment flux registers during updates, 0 == skip increment
-	int do_emf_register_increment = 1;  // 1 == increment EMF registers for MHD, 0 == skip EMF increment
-	int do_reflux_apply_cc = 1;	    // 1 == apply reflux correction for cell-centered vars, 0 == skip
-	int do_reflux_apply_fc = 1;	    // 1 == apply reflux correction for face-centered vars (MHD), 0 == skip
 
 	// performance metrics
 	amrex::Long cellUpdates_ = 0;
@@ -763,25 +755,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
-
-	// Fine-grained reflux control parameters
-	// If do_reflux is set to 0, override all individual controls
-	if (do_reflux == 0) {
-		do_flux_register_init = 0;
-		do_flux_register_reset = 0;
-		do_flux_register_increment = 0;
-		do_emf_register_increment = 0;
-		do_reflux_apply_cc = 0;
-		do_reflux_apply_fc = 0;
-	} else {
-		// Query individual controls (defaults to 1 if not specified)
-		pp.query("do_flux_register_init", do_flux_register_init);
-		pp.query("do_flux_register_reset", do_flux_register_reset);
-		pp.query("do_flux_register_increment", do_flux_register_increment);
-		pp.query("do_emf_register_increment", do_emf_register_increment);
-		pp.query("do_reflux_apply_cc", do_reflux_apply_cc);
-		pp.query("do_reflux_apply_fc", do_reflux_apply_fc);
-	}
 
 	// Default do_subcycle = 1
 	pp.query("do_subcycle", do_subcycle);
@@ -1789,14 +1762,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 		// do post-timestep operations
 
-		if (do_reflux_apply_cc != 0) {
+		if (do_reflux != 0) {
 			amrex::Gpu::streamSynchronizeAll();
 			if (flux_reg_[lev + 1] != nullptr) {
 				flux_reg_[lev + 1]->Reflux(state_new_cc_[lev], 1.0, 0, 0, state_new_cc_[lev].nComp(), geom[lev]);
 			}
-		}
-
-		if (do_reflux_apply_fc != 0) {
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				if (emf_reg_[lev + 1] != nullptr) {
 					// NOLINTNEXTLINE(readability-container-data-pointer)
@@ -1965,7 +1935,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && (do_flux_register_init != 0)) {
+	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1;
@@ -2014,7 +1984,7 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && (do_flux_register_init != 0)) {
+	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1;
@@ -2229,7 +2199,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && (do_flux_register_init != 0)) {
+	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			const int nemf_vars = 1;
@@ -3577,7 +3547,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
-		if (lev > 0 && (do_flux_register_init != 0)) {
+		if (lev > 0 && (do_reflux != 0)) {
 			flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(lev - 1), lev, ncomp_cc);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				const int nemf_vars = 1;

@@ -957,19 +957,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	if (do_reflux != 0) {
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
-			if (fr_as_crse != nullptr && this->do_flux_register_reset != 0) {
+			if (fr_as_crse != nullptr) {
 				fr_as_crse->setVal(0.0);
 			}
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				emf_as_crse = emf_reg_[lev + 1].get();
-				if (emf_as_crse != nullptr && this->do_flux_register_reset != 0) {
+				if (emf_as_crse != nullptr) {
 					emf_as_crse->reset();
 				}
 			}
 		}
 		if (lev > 0) {
 			fr_as_fine = flux_reg_[lev].get();
-			if (fr_as_fine != nullptr && this->do_flux_register_reset != 0) {
+			if (fr_as_fine != nullptr) {
 				fr_as_fine->setVal(0.0);
 			}
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1706,11 +1706,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	if (final_success) {
 		amrex::Gpu::streamSynchronizeAll();
-		if (do_reflux != 0 && this->do_flux_register_increment == 1) {
+		if (do_reflux != 0) {
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
-		}
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			if (do_reflux != 0 && this->do_emf_register_increment == 1) {
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				// E = -v x B, our emf is v x B, so we need to pass -dt
 				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_ave, lev, -1.0 * dt_lev);
 			}
