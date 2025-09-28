@@ -1568,6 +1568,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 		// Create potential MultiFab with sufficient ghost cells for gradient computation
 		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi);
+		// initialize to nan
+		phi_extended.setVal(std::numeric_limits<amrex::Real>::quiet_NaN());
 
 		// Fill extended potential from existing phi using FillPatch
 		// This handles coarse-fine boundaries without InterpFromCoarseLevel
@@ -1619,7 +1621,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		amrex::Print() << "phi_arr at k = -2: \n";
 
 		amrex::ParallelFor(phi_extended, amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			if (k == klo - 2) {
+			if (k == klo - 2 && i <= 2 && j <= 2) {
 				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
 			}
 		});
@@ -1627,7 +1629,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		amrex::Print() << "phi_arr at k = 2: \n";
 
 		amrex::ParallelFor(phi_extended, amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			if (k == khi + 2) {
+			if (k == khi + 2 && i <= 2 && j <= 2) {
 				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
 			}
 		});
