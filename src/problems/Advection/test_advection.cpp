@@ -70,7 +70,7 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditionsOnGri
 template <>
 void AdvectionSimulation<SawtoothProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
+								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 
 	// fill reference solution multifab

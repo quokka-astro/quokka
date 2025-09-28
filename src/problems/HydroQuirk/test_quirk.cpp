@@ -191,7 +191,7 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
 	}
 }
 
-template <> void QuokkaSimulation<QuirkProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
+template <> void QuokkaSimulation<QuirkProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/, amrex::Real /*time*/)
 {
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		auto const &deltas_vec = getDeltaEntropyVector();
