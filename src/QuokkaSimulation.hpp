@@ -1197,7 +1197,8 @@ auto QuokkaSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F co
 
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::FluxRegister *fr_as_crse,
-								 amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine)
+								 amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
+								 amrex::EdgeFluxRegister *emf_as_fine)
 {
 	const BL_PROFILE_REGION("HydroSolver");
 	const int max_retries = 6;
@@ -1251,14 +1252,14 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		amrex::Copy(state_old_cc_tmp, accepted_state_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
-			state_old_fc_tmp[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
-			amrex::Copy(state_old_fc_tmp[idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				auto ba_fc = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
+				state_old_fc_tmp[idim].define(ba_fc, dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+				amrex::Copy(state_old_fc_tmp[idim], accepted_state_fc[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+			}
 		}
-	}
 
 		bool attempt_failed = false;
 
@@ -1274,8 +1275,8 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			}
 
 			const amrex::Real current_substep_time = time + static_cast<amrex::Real>(substep_index) * dt_substep;
-			const bool substep_success = advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, emf_as_crse,
-						    emf_as_fine, lev, current_substep_time, dt_substep);
+			const bool substep_success = advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, emf_as_crse, emf_as_fine,
+									 lev, current_substep_time, dt_substep);
 			if (!substep_success) {
 				attempt_failed = true;
 				break;

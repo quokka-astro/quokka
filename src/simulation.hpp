@@ -45,11 +45,11 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_BCRec.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
+#include "AMReX_EdgeFluxRegister.H"
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
 #include "AMReX_FillPatcher.H"
-#include "AMReX_EdgeFluxRegister.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
@@ -304,9 +304,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void ellipticSolveAllLevels(amrex::Real dt);
 
 	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
-				int lev, amrex::Real dt_lev);
+				    int lev, amrex::Real dt_lev);
 	void incrementEMFRegisters(amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int lev, amrex::Real dt_lev);
+				   std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int lev, amrex::Real dt_lev);
 
 	void particleMeshInteraction(amrex::Real time, amrex::Real dt);
 
@@ -3582,7 +3582,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				const int nemf_vars = 1;
 				emf_reg_[lev] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
-										    Geom(lev - 1), nemf_vars);
+											  Geom(lev - 1), nemf_vars);
 			}
 		}
 
