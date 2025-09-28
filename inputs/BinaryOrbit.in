@@ -32,3 +32,5 @@ tiny_profiler.enabled = 0
 cfl = 0.3
 max_timesteps = 2000
 stop_time = 5.0e7   # s
+
+problem.use_transmitting_bc_in_z = 1
