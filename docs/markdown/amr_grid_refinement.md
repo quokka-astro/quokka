@@ -1,134 +1,42 @@
-# Grid Refinement in Berger-Collela AMR
+# Adaptive Mesh Refinement Guidelines
 
-This document explains how Adaptive Mesh Refinement (AMR) works in Quokka, which uses the Berger-Collela AMR algorithm implemented in AMReX. Understanding these concepts is crucial for setting up AMR simulations effectively and avoiding common pitfalls.
+Quokka relies on the Berger-Collela AMR algorithm [@berger1989local] provided by AMReX to create a hierarchy of nested grids. This page distills practical advice for planning and tuning AMR runs so the mesh tracks the physics you care about without wasting resolution elsewhere.
 
-## Overview of Berger-Collela AMR
+## Understanding the Refinement Workflow
 
-Quokka uses the Berger-Collela AMR algorithm [@berger1989local] as implemented in the AMReX library. This algorithm automatically creates and manages a hierarchy of nested grids with different spatial resolutions to efficiently resolve features of interest while maintaining computational efficiency.
+AMReX walks through a predictable sequence each time it builds or adjusts the mesh hierarchy. Cells are tagged inside `ErrorEst`, those tags are coarsened according to `blocking_factor/ref_ratio`, clustered by the Berger-Rigoutsos algorithm [@berger1991algorithm], and then promoted to new grids that honor `blocking_factor` and `max_grid_size`. The resulting hierarchy is averaged down so coarse levels remain consistent with fine ones. Keeping this loop in mind helps interpret why the mesh responds the way it does when the problem evolves or when you revisit the `ErrorEst` logic.
 
-### Key Concepts
+## Setting AMR Parameters
 
-The AMR algorithm works by:
-
-1. **Tagging cells** for refinement based on user-defined criteria (implemented in the `ErrorEst` function)
-2. **Clustering tagged cells** into rectangular boxes using the Berger-Rigoutsos algorithm [@berger1991algorithm]
-3. **Creating new grids** at the next refinement level based on these clusters
-4. **Managing the grid hierarchy** across multiple refinement levels
-
-## AMR Parameters
-
-Several key parameters control the grid generation process:
+Several inputs shape how aggressively the hierarchy responds to refinement tags:
 
 | Parameter | Description | Typical Values | Performance Impact |
 |-----------|-------------|----------------|-------------------|
-| `blocking_factor` | Minimum grid size; grids must be divisible by this value | 8-32 | Higher values improve GPU performance but may cause over-refinement |
-| `grid_efficiency` | Minimum fraction of refined cells in each grid | 0.7-1.0 | Higher values create more efficient grids but may increase memory usage |
-| `max_grid_size` | Maximum size of individual grids | 64-128 | Affects load balancing and memory locality |
-| `ref_ratio` | Refinement ratio between levels | 2 or 4 | Factor by which resolution increases at each level |
+| `blocking_factor` | Minimum grid dimension; grids must be integer multiples of this value | 8-32 | Large values improve GPU throughput but can force broad refinement |
+| `grid_efficiency` | Minimum fraction of tagged cells in each grid | 0.7-1.0 | Higher values reduce wasted work yet may spawn extra boxes |
+| `max_grid_size` | Maximum dimension of a grid patch | 64-128 | Smaller sizes improve load balance; larger sizes cut communication |
+| `ref_ratio` | Refinement ratio between adjacent levels | 2 or 4 | Larger ratios sharpen features faster but deepen the hierarchy |
 
-## Common Unintuitive Behaviors
+Choose these controls as a set: a generous `blocking_factor` demands tighter tagging or higher `grid_efficiency` to avoid carpet refinement, while a smaller blocking factor allows surgical meshes but can stress GPUs. When in doubt, run short experiments that sweep one parameter at a time and compare the resulting plotfile headers to see how many grids are created per level.
 
-### Whole Domain Refinement
+## Performance and Scaling Considerations
 
-**Problem**: When setting `amr.max_level = 1`, you may observe that the entire computational domain gets refined to level 1, even when only a small region should be refined according to your refinement criteria.
+GPU runs typically favor `blocking_factor ≥ 32` so each patch keeps SMs busy; values below 32 almost always break memory coalescing across a warp and leave expensive kernels underutilized even when occupancy looks fine. CPU multigrid solves prefer at least 8. If you push those limits, guard your memory footprint by trimming the number of refinement levels or enlarging `max_grid_size` so patches do not proliferate. Also watch how frequently you trigger `regrid` calls—rapid regridding magnifies the cost of tag evaluation and repartitioning, so coarse control logic or hysteresis in `ErrorEst` can pay dividends on very dynamic problems.
 
-**Cause**: This happens due to the interaction between several AMR parameters:
+## Observing and Adjusting the Hierarchy
 
-1. **Blocking Factor Constraint**: All grids must have dimensions that are multiples of `blocking_factor`. If your `blocking_factor` is large (e.g., 32 or 64), and you have scattered refinement tags, the algorithm may need to create grids that cover most of the domain to satisfy this constraint.
+Inspect the grid structure early in a run by opening the plotfile header or by enabling verbose regridding logs in AMReX. When the layout diverges from expectations, compare the tagged volume to the resulting grid inventory—discrepancies usually trace back to either tag dilution during coarsening or to efficiency limits that extend each patch. The spherical collapse study documented in [GitHub issue #978](https://github.com/quokka-astro/quokka/issues/978) is a useful reminder that large blocking factors can still trigger whole-domain refinement if tags are sparse, so monitor that scenario whenever you upscale a production run.
 
-2. **Grid Efficiency**: The algorithm tries to maintain a minimum `grid_efficiency` (fraction of tagged cells in each grid). Low efficiency may cause the algorithm to include many untagged cells.
+### Example: Berger-Rigoutsos in Practice
 
-3. **Coarsening Effect**: The AMReX algorithm first coarsens the tag list by `blocking_factor/ref_ratio` before applying the Berger-Rigoutsos clustering algorithm. This can cause small, isolated regions to merge into larger blocks.
+![Tagged cells and Berger-Rigoutsos boxes](amr_grid_refinement.svg)
 
-**Example**: In the SphericalCollapse test problem, when `blocking_factor = 64` and the domain is 128³ cells, even a small spherical region requiring refinement can result in the entire domain being refined because the algorithm cannot create efficient grids smaller than the blocking factor.
+Compile Quokka with `-DAMReX_SPACEDIM=2`, then run the HydroBlast2D driver with the bundled `inputs/blast2d_amr_example.in`. That input sets `amr.n_cell = 128 128 4`, `amr.ref_ratio = 2 2 1`, `amr.blocking_factor = 32 32 4`, `amr.grid_eff = 0.8`, and `amr.n_error_buf = 1`. The third entry in each list is ignored in 2D, so the effective blocking factor is 32. The pressure-gradient trigger in `ErrorEst` tags a thin ring around the blast front. AMReX coarsens those tags by 16 cells before clustering, so the Berger-Rigoutsos pass finds four rectangles that tile the annulus: two long bands `(lo, hi) = (64,96)→(191,127)` and `(64,128)→(191,159)` plus two shorter bridges `(96,64)→(159,95)` and `(96,160)→(159,191)`. Running `amrex_fboxinfo --full plt00040` on the resulting plotfile shows the same coordinates, confirming that the level-one patches are multiples of 32 cells in each direction and fully envelop the tagged region after refinement. Comparing those boxes with the tags in the plotfile (as sketched above) is a quick way to verify that the clustering step is behaving the way you expect.
 
-**Solutions**:
-- Reduce `blocking_factor` to allow finer control (minimum value is typically 4, constrained by `n_ghost`)
-- Increase `grid_efficiency` closer to 1.0 to avoid including many untagged cells
-- Consider the trade-off between refinement precision and computational performance
+## Troubleshooting Patterns
 
-### Performance vs. Precision Trade-offs
-
-**GPU Performance**: On GPUs, `blocking_factor` should typically be ≥32 for good performance. This conflicts with the desire for precise refinement.
-
-**CPU Performance**: Even on CPUs, `blocking_factor` should be ≥8 for efficient multigrid operations in the Poisson solver.
-
-**Memory Efficiency**: Large blocking factors can lead to significant memory overhead when refinement is only needed in small regions.
-
-### Grid Efficiency Interactions
-
-The `grid_efficiency` parameter can cause unexpected behavior:
-
-- **Low efficiency** (< 0.8): May include many untagged cells, leading to unnecessary computation
-- **High efficiency** (> 0.95): May create many small, inefficient grids that hurt performance
-- **Default value** (0.7): Usually provides a good balance but may still cause over-refinement in some cases
-
-## Understanding the Refinement Process
-
-### Error Estimation and Tagging
-
-The refinement process begins with the `ErrorEst` function, which is called by AMReX to determine which cells should be tagged for refinement. This is a virtual function that gets called indirectly through the AMReX grid management routines:
-
-- `AmrCore::InitFromScratch()` during initialization
-- `AmrCore::regrid()` during runtime regridding
-- `AmrMesh::MakeNewGrids()` as part of the grid generation process
-
-### Grid Generation Algorithm
-
-1. **Tag Collection**: Cells meeting refinement criteria are tagged
-2. **Coarsening**: Tags are coarsened by `blocking_factor/ref_ratio`
-3. **Clustering**: The Berger-Rigoutsos algorithm groups tagged cells into rectangular boxes
-4. **Grid Creation**: New grids are created from these boxes, respecting `blocking_factor` and `max_grid_size` constraints
-5. **Efficiency Check**: Grids not meeting `grid_efficiency` requirements may be merged or extended
-
-### Averaging Down Effects
-
-After creating refined grids, the solution is averaged down from fine to coarse levels. This can improve the solution on coarse grids, potentially changing the refinement criteria on subsequent regridding steps. This feedback effect can lead to expanding or contracting refinement regions over time.
-
-## Best Practices
-
-### For Test Problems
-
-- Use `blocking_factor = 4` or `blocking_factor = 8` to demonstrate proper refinement behavior
-- Set `grid_efficiency = 1.0` for maximum precision when performance is not critical
-- Monitor the actual grid structure in output files to verify expected refinement patterns
-
-### For Production Runs
-
-- Balance `blocking_factor` based on your computational platform:
-  - GPU: ≥32 for performance
-  - CPU: ≥8 for multigrid efficiency
-- Test different `grid_efficiency` values to find the optimal balance for your problem
-- Consider the memory and computational overhead of over-refinement
-
-### Debugging Refinement Issues
-
-When debugging unexpected refinement behavior:
-
-1. **Check grid structure**: Examine plotfile headers or use visualization tools to see actual grid layout
-2. **Reduce blocking_factor**: Temporarily use smaller values to verify refinement criteria
-3. **Monitor efficiency**: Check if grids meet your `grid_efficiency` requirements
-4. **Visualize tags**: Output refinement tags to understand what the `ErrorEst` function is actually selecting
-
-## Detection and Warnings
-
-Consider implementing detection for whole-domain refinement scenarios, especially during initialization. When the entire domain is refined to level 1, it often indicates:
-
-- `blocking_factor` is too large for the problem size
-- Refinement criteria are too broad
-- Grid efficiency settings are suboptimal
-
-Such detection can help users identify and correct these parameter mismatches early in their simulations.
+Start with the simplest levers. Reduce `blocking_factor` temporarily to verify the tagging logic, then restore the larger production value once you confirm the tags are reasonable. Next, nudge `grid_efficiency` upward until the refined region stabilizes without spawning many more boxes. If the hierarchy thrashes between steps, consider caching diagnostic arrays that record why cells were tagged; a quick visualization of those masks often pinpoints whether gradients, thresholds, or boundary effects are misbehaving.
 
 ## Further Reading
 
-For more detailed information about the Berger-Collela algorithm:
-
-- Berger & Colella (1989): "Local adaptive mesh refinement for shock hydrodynamics" [@berger1989local]
-- Berger & Rigoutsos (1991): "An Algorithm for Point Clustering and Grid Generation" [@berger1991algorithm]
-- [AMReX-Astro Castro documentation on regridding](https://amrex-astro.github.io/Castro/docs/regridding.html)
-- [AMReX source code documentation](https://github.com/AMReX-Codes/amrex)
-
-## References
-
-The behavior described in this document was identified and discussed in [GitHub issue #978](https://github.com/quokka-astro/quokka/issues/978).
+For deeper dives into refinement theory and AMReX implementation details, consult the original Berger & Colella paper [@berger1989local], the Berger-Rigoutsos clustering method [@berger1991algorithm], and the [AMReX-Astro Castro regridding notes](https://amrex-astro.github.io/Castro/docs/regridding.html). The [AMReX source documentation](https://github.com/AMReX-Codes/amrex) also clarifies lower-level options that Quokka exposes through its input files.
