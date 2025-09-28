@@ -67,7 +67,6 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
-#include <AMReX_EdgeFluxRegister.H>
 #include <AMReX_FluxRegister.H>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -306,9 +305,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
 				    int lev, amrex::Real dt_lev);
 
-	void incrementEMFRegisters(amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine,
-				   std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int lev, amrex::Real dt_lev);
-
 	void particleMeshInteraction(amrex::Real time, amrex::Real dt);
 
 	// boundary condition
@@ -412,7 +408,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// therefore flux_reg[0] and flux_reg[nlevs_max] are never actually used in
 	// the reflux operation
 	amrex::Vector<std::unique_ptr<amrex::FluxRegister>> flux_reg_;
-	amrex::Vector<std::unique_ptr<amrex::EdgeFluxRegister>> emf_reg_;
 
 	// This is for fillpatch during timestepping, but not for regridding.
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
@@ -443,16 +438,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::string> m_diagVars;
 
 	/// AMR-specific parameters
-	int regrid_int = 2;		    // regrid interval (number of coarse steps)
-	int do_reflux = 1;		    // 1 == reflux, 0 == no reflux
-	int do_subcycle = 1;		    // 1 == subcycle, 0 == no subcyle
-	int suppress_output = 0;	    // 1 == show timestepping, 0 == do not output each timestep
-	int do_flux_register_init = 1;	    // 1 == initialize flux registers, 0 == skip initialization
-	int do_flux_register_reset = 1;	    // 1 == reset flux registers each timestep, 0 == skip reset
-	int do_flux_register_increment = 1; // 1 == increment flux registers during updates, 0 == skip increment
-	int do_emf_register_increment = 1;  // 1 == increment EMF registers for MHD, 0 == skip EMF increment
-	int do_reflux_apply_cc = 1;	    // 1 == apply reflux correction for cell-centered vars, 0 == skip
-	int do_reflux_apply_fc = 1;	    // 1 == apply reflux correction for face-centered vars (MHD), 0 == skip
+	int regrid_int = 2;		 // regrid interval (number of coarse steps)
+	int do_reflux = 1;		 // 1 == reflux, 0 == no reflux
+	int do_subcycle = 1;		 // 1 == subcycle, 0 == no subcyle
+	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
 
 	// performance metrics
 	amrex::Long cellUpdates_ = 0;
@@ -593,7 +582,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	state_old_fc_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
 	flux_reg_.resize(nlevs_max + 1);
-	emf_reg_.resize(nlevs_max + 1);
 	fillpatcher_.resize(nlevs_max + 1);
 	cellUpdatesEachLevel_.resize(nlevs_max, 0);
 
@@ -762,21 +750,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
-	if (do_reflux == 0) {
-		do_flux_register_init = 0;
-		do_flux_register_reset = 0;
-		do_flux_register_increment = 0;
-		do_emf_register_increment = 0;
-		do_reflux_apply_cc = 0;
-		do_reflux_apply_fc = 0;
-	} else {
-		pp.query("do_flux_register_init", do_flux_register_init);
-		pp.query("do_flux_register_reset", do_flux_register_reset);
-		pp.query("do_flux_register_increment", do_flux_register_increment);
-		pp.query("do_emf_register_increment", do_emf_register_increment);
-		pp.query("do_reflux_apply_cc", do_reflux_apply_cc);
-		pp.query("do_reflux_apply_fc", do_reflux_apply_fc);
-	}
 
 	// Default do_subcycle = 1
 	pp.query("do_subcycle", do_subcycle);
@@ -1785,15 +1758,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// do post-timestep operations
 
 		if (do_reflux != 0) {
-			if (do_reflux_apply_cc != 0) {
-				amrex::Gpu::streamSynchronizeAll();
+			amrex::Gpu::streamSynchronizeAll();
+			if (flux_reg_[lev + 1] != nullptr) {
 				flux_reg_[lev + 1]->Reflux(state_new_cc_[lev], 1.0, 0, 0, state_new_cc_[lev].nComp(), geom[lev]);
-			}
-			if (do_reflux_apply_fc != 0) {
-				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					// NOLINTNEXTLINE(readability-container-data-pointer)
-					emf_reg_[lev + 1]->Reflux({AMREX_D_DECL(&state_new_fc_[lev][0], &state_new_fc_[lev][1], &state_new_fc_[lev][2])});
-				}
 			}
 		}
 
@@ -1880,35 +1847,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-template <typename problem_t>
-void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *emf_as_crse, amrex::EdgeFluxRegister *emf_as_fine,
-						     std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_emf_components, int const lev, amrex::Real const dt_lev)
-{
-	BL_PROFILE("AMRSimulation::incrementEMFRegisters()"); // NOLINT(misc-const-correctness)
-
-#if (AMREX_SPACEDIM == 3)
-	amrex::Gpu::streamSynchronizeAll();
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		if (emf_as_crse != nullptr) {
-			AMREX_ASSERT(lev < finestLevel());
-			AMREX_ASSERT(emf_as_crse == emf_reg_[lev + 1].get());
-			emf_as_crse->CrseAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
-					     dt_lev);
-		}
-
-		if (emf_as_fine != nullptr) {
-			AMREX_ASSERT(lev > 0);
-			AMREX_ASSERT(emf_as_fine == emf_reg_[lev].get());
-			emf_as_fine->FineAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
-					     dt_lev);
-		}
-	}
-	amrex::Gpu::streamSynchronizeAll();
-#else
-	amrex::ignore_unused(emf_as_crse, emf_as_fine, ec_emf_components, lev, dt_lev);
-#endif
-}
-
 template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *
 {
 	amrex::MFInterpolater *mapper = nullptr;
@@ -1957,15 +1895,8 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && (do_flux_register_init != 0)) {
+	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
-
-		// Initialize EdgeFluxRegister for MHD
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			const int nemf_vars = 1; // EMF has 1 component per dimension
-			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-										    Geom(level - 1), nemf_vars);
-		}
 	}
 
 	// face-centred
@@ -2008,15 +1939,8 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && (do_flux_register_init != 0)) {
+	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
-
-		// Initialize EdgeFluxRegister for MHD
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			const int nemf_vars = 1; // EMF has 1 component per dimension
-			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-										    Geom(level - 1), nemf_vars);
-		}
 	}
 
 	// face-centred
@@ -2049,7 +1973,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ClearLevel(int leve
 	max_signal_speed_[level].clear();
 
 	flux_reg_[level].reset(nullptr);
-	emf_reg_[level].reset(nullptr);
 	fillpatcher_[level].reset(nullptr);
 
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -2225,15 +2148,8 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && (do_flux_register_init != 0)) {
+	if (level > 0 && (do_reflux != 0)) {
 		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
-
-		// Initialize EdgeFluxRegister for MHD
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			const int nemf_vars = 1; // EMF has 1 component per dimension
-			emf_reg_[level] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-										    Geom(level - 1), nemf_vars);
-		}
 	}
 
 	// face-centred
@@ -3575,13 +3491,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
-		if (lev > 0 && (do_flux_register_init != 0)) {
+		if (lev > 0 && (do_reflux != 0)) {
 			flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(lev - 1), lev, ncomp_cc);
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				const int nemf_vars = 1;
-				emf_reg_[lev] = std::make_unique<amrex::EdgeFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
-											  Geom(lev - 1), nemf_vars);
-			}
 		}
 
 		const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
