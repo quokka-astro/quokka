@@ -10,15 +10,15 @@
 ///
 
 // external headers
-#include "fundamental_constants.H"
-#include <fmt/format.h>
+// #include "fundamental_constants.H"
+// #include <fmt/format.h>
 
-constexpr double yr_to_s = 3.154e7;
-constexpr double Myr = 1.e6 * yr_to_s;
-constexpr double pc = C::parsec;
-constexpr double kpc = 1.e3 * pc;
-constexpr double kmps = 1.e5;
+// constexpr double yr_to_s = 3.154e7;
+// constexpr double Myr = 1.e6 * yr_to_s;
+// constexpr double pc = C::parsec;
+// constexpr double kpc = 1.e3 * pc;
+// constexpr double kmps = 1.e5;
 
-// internal headers
+// // internal headers
 
-#endif // TEST_SNE_
+// #endif // TEST_SNE_
