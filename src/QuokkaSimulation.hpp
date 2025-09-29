@@ -981,9 +981,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 		}
 		if (lev > 0) {
 			fr_as_fine = flux_reg_[lev].get();
-			if (fr_as_fine != nullptr) {
-				fr_as_fine->setVal(0.0);
-			}
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				emf_as_fine = emf_reg_[lev].get();
 			}
