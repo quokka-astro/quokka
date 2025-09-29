@@ -124,20 +124,11 @@ auto problem_main() -> int
 
 		// for exact dust density (shifted assuming no interaction and periodic boundaries)
 		amrex::Real const t = sim.tNew_[0];
-<<<<<<< HEAD
 		amrex::Real x_initial = std::fmod(x - dust_v0 * t, Lx);
 		if (x_initial < 0.0) {x_initial += Lx;}
 		rho_dust_exact.at(i) = (x_initial >= 0.4 && x_initial <= 0.6) ? 2.0 * rho : rho;
 		vx_exact.at(i) = v0; // expected x velocity
 		vx_dust_exact.at(i) = dust_v0; // expected x velocity of dust
-=======
-		amrex::Real x_initial = std::fmod(x - v0 * t, Lx);
-		if (x_initial < 0.0)
-			x_initial += Lx;
-		rho_dust_exact.at(i) = (x_initial < 0.5) ? rho : 2.0 * rho;
-		vx_exact.at(i) = v0;	  // expected x velocity
-		vx_dust_exact.at(i) = v0; // expected x velocity of dust
->>>>>>> feedff0562dd0287533a8c1c947bd65c519a57cc
 
 		// compute x velocity from momentum and density
 		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[i];
