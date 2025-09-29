@@ -1337,7 +1337,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		constexpr int nghost_phi = 3;
 		constexpr int nghost_deposit = nghost_phi; // CIC deposition requires 1 ghost cell
-		constexpr int nghost_drift = 1;	  // particle can drift up to 1 cell
+		constexpr int nghost_drift = 1;		   // particle can drift up to 1 cell
 		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
 		constexpr int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
@@ -1520,7 +1520,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
 			}
 		});
-		
+
 		amrex::Print() << "after solver, phi at k = 0: \n";
 		amrex::ParallelFor(phi[lev], amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 			if (k == klo && i <= 17 && i >= 15 && j <= 17 && j >= 15) {
