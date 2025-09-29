@@ -35,3 +35,6 @@ ascent_interval = 100
 plotfile_interval = 200
 particle_csv_interval = 200
 checkpoint_interval = 1000
+
+projection_interval = 200
+projection.dirs = x z
