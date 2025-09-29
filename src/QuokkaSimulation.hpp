@@ -188,6 +188,12 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 #if (AMREX_SPACEDIM != 3)
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "MHD is only supported in 3D.");
 #endif // (AMREX_SPACEDIM != 3)
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			if (max_level > 0) {
+				amrex::Error("MHD is only supported for uniform grids (max_level must be 0).");
+			}
+		}
+
 		defineComponentNames();
 		defineDefaultPlotfileVariables();
 		// read in runtime parameters
@@ -581,7 +587,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			// radiation hydro/mhd, or radiation only
 			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, maxSignal, indexRange);
 			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
-				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange, 1, amrex::The_Async_Arena());
+				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
 				auto const &maxSignalHydro = maxSignalHydroFAB.array();
 				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew_cc, stateNew_fc, maxSignalHydro, indexRange);
 				const int maxSubsteps = maxSubsteps_;
@@ -886,7 +892,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 
 		amrex::Real sol_norm = 0.;
 		amrex::Real err_norm = 0.;
-		// compute rms of each component
 		for (int n = 0; n < ncomp; ++n) {
 			sol_norm += std::pow(state_ref_level0.norm1(n), 2);
 			err_norm += std::pow(residual.norm1(n), 2);
@@ -894,9 +899,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		sol_norm = std::sqrt(sol_norm);
 		err_norm = std::sqrt(err_norm);
 
-		const double rel_error = (sol_norm > 0.0) ? (err_norm / sol_norm) : 0.0;
-		errorNorm_ = rel_error;
-		amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
+		double rel_error = NAN;
+		if (sol_norm > 0.) {
+			rel_error = err_norm / sol_norm;
+			errorNorm_ = rel_error;
+			amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
+		} else {
+			// if the reference solution is identically zero -> only report absolute error instead
+			errorNorm_ = err_norm;
+			amrex::Print() << "Reference norm is zero; reporting absolute L1 error norm = " << err_norm << '\n';
+		}
+
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 
@@ -916,7 +929,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 
 				amrex::Real sol_norm = 0.;
 				amrex::Real err_norm = 0.;
-				// compute rms of each component
 				for (int n = 0; n < ncomp; ++n) {
 					sol_norm += std::pow(state_ref_level0.norm1(n), 2);
 					err_norm += std::pow(residual.norm1(n), 2);
@@ -924,10 +936,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 				sol_norm = std::sqrt(sol_norm);
 				err_norm = std::sqrt(err_norm);
 
-				const double rel_error = (sol_norm > 0.0) ? (err_norm / sol_norm) : 0.0;
-				errorNorm_ = rel_error;
-				amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
-					       << " and sol_norm = " << sol_norm << "\n";
+				double rel_error = NAN;
+				if (sol_norm > 0.) {
+					rel_error = err_norm / sol_norm;
+					errorNorm_ = rel_error;
+					amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
+						       << " and sol_norm = " << sol_norm << "\n";
+				} else {
+					errorNorm_ = err_norm;
+					amrex::Print() << "Reference norm is zero; reporting absolute L1 error norm = " << err_norm << " (sol_norm = 0)\n";
+				}
 			}
 		}
 	}
@@ -953,7 +971,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	amrex::FluxRegister *fr_as_fine = nullptr;
 	amrex::EdgeFluxRegister *emf_as_crse = nullptr;
 	amrex::EdgeFluxRegister *emf_as_fine = nullptr;
-
 	if (do_reflux != 0) {
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
@@ -1203,6 +1220,10 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 	const BL_PROFILE_REGION("HydroSolver");
 	const int max_retries = 6;
 
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		amrex::ignore_unused(emf_as_crse, emf_as_fine);
+	}
+
 	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> accepted_state_fc;
@@ -1368,6 +1389,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 						      amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool
 {
 	const BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
+
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		amrex::ignore_unused(emf_as_crse, emf_as_fine);
+	}
 
 	const amrex::Real stage1Weight = (integratorOrder_ == 2) ? 0.5 : 1.0;
 
@@ -1585,13 +1610,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		//  update ghost zones [intermediate stage stored in state_inter_cc_]
 		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, quokka::centering::cc, quokka::direction::na, PreInterpState,
 				       PostInterpState);
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				fillBoundaryConditions(state_inter_fc_[idim], state_inter_fc_[idim], lev, time, quokka::centering::fc, quokka::direction{idim},
-						       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-						       FillPatchType::fillpatch_function);
-			}
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			fillBoundaryConditions(state_inter_fc_[idim], state_inter_fc_[idim], lev, time, quokka::centering::fc, quokka::direction{idim},
+					       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
+					       FillPatchType::fillpatch_function);
 		}
+	}
 
 		// check intermediate state validity
 		AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
@@ -1704,18 +1729,16 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);
 
-	if (final_success) {
-		amrex::Gpu::streamSynchronizeAll();
-		if (do_reflux != 0) {
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				// E = -v x B, our emf is v x B, so we need to pass -dt
-				incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_ave, lev, -1.0 * dt_lev);
-			}
+	if (do_reflux == 1 && final_success) {
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			// E = -v x B, our emf is v x B, so we need to pass -dt
+			incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_ave, lev, -1.0 * dt_lev);
 		}
-		if (do_tracers != 0) {
-			TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
-		}
+	}
+
+	if (do_tracers != 0 && final_success) {
+		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
 
 	return final_success;

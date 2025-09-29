@@ -1763,7 +1763,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// do post-timestep operations
 
 		if (do_reflux != 0) {
-			amrex::Gpu::streamSynchronizeAll();
 			if (flux_reg_[lev + 1] != nullptr) {
 				flux_reg_[lev + 1]->Reflux(state_new_cc_[lev], 1.0, 0, 0, state_new_cc_[lev].nComp(), geom[lev]);
 			}
@@ -1855,7 +1854,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 		}
 	}
 
-	amrex::Gpu::streamSynchronizeAll();
+
 }
 
 template <typename problem_t>
@@ -1865,7 +1864,6 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 	BL_PROFILE("AMRSimulation::incrementEMFRegisters()"); // NOLINT(misc-const-correctness)
 
 #if (AMREX_SPACEDIM == 3)
-	amrex::Gpu::streamSynchronizeAll();
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (emf_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
@@ -1881,7 +1879,6 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 					     dt_lev);
 		}
 	}
-	amrex::Gpu::streamSynchronizeAll();
 #else
 	amrex::ignore_unused(emf_as_crse, emf_as_fine, ec_emf_components, lev, dt_lev);
 #endif

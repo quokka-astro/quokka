@@ -10,12 +10,12 @@ theme:
 nav:
   - About: about.md
   - Equations: equations.md
+  - Citation: citation.md
   - Physics Modules:
     - Magnetohydrodynamics: mhd_module.md
     - Star Formation: star_formation.md
-  - Citation: citation.md
   - Simulation gallery:
-    - Hydro : gallery.md
+    - Hydro: gallery.md
   - User guide:
     - Installation: installation.md
     - Running on HPC clusters: running_on_hpc_clusters.md
