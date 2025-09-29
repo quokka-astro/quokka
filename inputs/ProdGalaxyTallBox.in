@@ -26,7 +26,7 @@ do_reflux     = 1
 do_subcycle   = 0
 stop_time     = 9.462e+15
 max_timesteps = 2
-plotfile_interval = 1000
+plotfile_interval = 512
 checkpoint_interval = -1
 
 density_floor = 1.67e-30 #in g cm^-3
@@ -37,9 +37,29 @@ cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 perturb.filename = "../inputs/zdrv.hdf5"
-perturb.amplitude = 1.5e4 # cm/s
+perturb.amplitude = 0.35e5 # cm/s, = 0.05 * 7 km/s
 
-#projection_interval = 500
-#projection.dirs = y
+tiny_profiler.enabled = 1
 
-tiny_profiler.enabled = 0
+statistics_interval = 128
+projection_interval = 128
+projection.dirs = x z
+
+derived_vars = temperature c_s
+
+quokka.diagnostics = slice_x slice_z
+quokka.slice_x.type = DiagFramePlane
+quokka.slice_x.file = slicex_plt
+quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 1.509001e21
+quokka.slice_x.int = 128
+quokka.slice_x.interpolation = Linear
+quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+
+quokka.slice_z.type = DiagFramePlane
+quokka.slice_z.file = slicez_plt
+quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
+quokka.slice_z.int = 128
+quokka.slice_z.interpolation = Linear
+quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
