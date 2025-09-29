@@ -87,7 +87,7 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> z_data{
     1.21085081e+22}; // NOLINTEND
 
 static constexpr amrex::Real z_star = 245.0 * pc;
-static constexpr amrex::Real Sigma_star = 42.0 * C::M_solar / pc / pc;
+static constexpr amrex::Real Sigma_star = 29.0 * C::M_solar / pc / pc; // originally 42.0 when there is no self gravity
 static constexpr amrex::Real rho_dm = 0.0064 * C::M_solar / pc / pc / pc;
 static constexpr amrex::Real R0_Gal = 8.e3 * pc;
 static constexpr amrex::Real ks_sigma_sfr = 2.088579882548443e-55;
