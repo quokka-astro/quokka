@@ -417,6 +417,20 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 	}
 }
 
+// Code for producing in-situ Projection plots
+template <>
+auto QuokkaSimulation<TheProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+{
+	// compute density projection
+	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
+
+	proj["rho"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+		    return (rho);
+	    });
+	return proj;
+}
 
 // Implement User-defined diode BC
 template <>
