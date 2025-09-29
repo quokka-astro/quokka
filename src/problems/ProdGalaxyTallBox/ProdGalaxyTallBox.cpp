@@ -299,6 +299,46 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	});
 }
 
+template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const
+{
+	// compute derived variables and save in 'mf'
+
+	if (dname == "temperature") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<TheProblem>::energy_index);
+			Real const Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+			output[bx](i, j, k, ncomp) = Tgas;
+		});
+	} else if (dname == "c_s") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<TheProblem>::energy_index);
+			Real const Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
+			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
+		});
+	}
+	amrex::Gpu::streamSynchronizeAll();
+}
+
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<TheProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
     -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
