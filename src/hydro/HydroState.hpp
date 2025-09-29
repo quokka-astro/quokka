@@ -22,10 +22,10 @@ template <int Nall, int Nmass> struct HydroState {
 };
 
 struct DustState {
-	double rho;				   // density
-	double u;				   // normal velocity component
-	double v;				   // transverse velocity component
-	double w;				   // 2nd transverse velocity component
+	double rho; // density
+	double u;   // normal velocity component
+	double v;   // transverse velocity component
+	double w;   // 2nd transverse velocity component
 };
 
 } // namespace quokka

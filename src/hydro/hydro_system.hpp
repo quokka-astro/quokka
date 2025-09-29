@@ -55,9 +55,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
-	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_ + Physics_Traits<problem_t>::nDustGroups * Physics_NumVars::numDustVarsPerGroup; // total number of variables
-	static constexpr int nHydroScalars_ = Physics_NumVars::numHydroVars + nscalars_; 
-	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup;			 // number of dust variables for each dust group
+	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_ +
+				     Physics_Traits<problem_t>::nDustGroups * Physics_NumVars::numDustVarsPerGroup; // total number of variables
+	static constexpr int nHydroScalars_ = Physics_NumVars::numHydroVars + nscalars_;
+	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup; // number of dust variables for each dust group
 
 	enum consVarIndex {
 		density_index = Physics_Indices<problem_t>::hydroFirstIndex,
@@ -80,7 +81,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	};
 
 	enum dustVarIndex { dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex, x1DustMomentum_index, x2DustMomentum_index, x3DustMomentum_index };
-  
+
 	static constexpr int primDustFirstIndex = primScalar0_index + nscalars_;
 	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index };
 
@@ -94,9 +95,11 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static auto CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool;
 
-	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> quokka::valarray<amrex::Real, nHydroScalars_>;
+	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+	    -> quokka::valarray<amrex::Real, nHydroScalars_>;
 
-	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nHydroScalars_> const &prim) -> quokka::valarray<amrex::Real, nHydroScalars_>;
+	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nHydroScalars_> const &prim)
+	    -> quokka::valarray<amrex::Real, nHydroScalars_>;
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -248,32 +251,32 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 			primVar[bx](i, j, k, primScalar0_index + nc) = cons_cc[bx](i, j, k, scalar0_index + nc);
 		}
 
-		// handle dust 
+		// handle dust
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-					const int cons_offset = dustDensity_index + numDustVars_ * g;  
-					const int prim_offset = primDustDensity_index + numDustVars_ * g;
+				const int cons_offset = dustDensity_index + numDustVars_ * g;
+				const int prim_offset = primDustDensity_index + numDustVars_ * g;
 
-					const amrex::Real dust_rho = cons_cc[bx](i, j, k, dustDensity_index + numDustVars_ * g);
-					const amrex::Real dust_px = cons_cc[bx](i, j, k, x1DustMomentum_index + numDustVars_ * g);
-					const amrex::Real dust_py = cons_cc[bx](i, j, k, x2DustMomentum_index + numDustVars_ * g);
-					const amrex::Real dust_pz = cons_cc[bx](i, j, k, x3DustMomentum_index + numDustVars_ * g);
+				const amrex::Real dust_rho = cons_cc[bx](i, j, k, dustDensity_index + numDustVars_ * g);
+				const amrex::Real dust_px = cons_cc[bx](i, j, k, x1DustMomentum_index + numDustVars_ * g);
+				const amrex::Real dust_py = cons_cc[bx](i, j, k, x2DustMomentum_index + numDustVars_ * g);
+				const amrex::Real dust_pz = cons_cc[bx](i, j, k, x3DustMomentum_index + numDustVars_ * g);
 
-					AMREX_ASSERT(!std::isnan(dust_rho));
-					AMREX_ASSERT(!std::isnan(dust_px));
-					AMREX_ASSERT(!std::isnan(dust_py));
-					AMREX_ASSERT(!std::isnan(dust_pz));
+				AMREX_ASSERT(!std::isnan(dust_rho));
+				AMREX_ASSERT(!std::isnan(dust_px));
+				AMREX_ASSERT(!std::isnan(dust_py));
+				AMREX_ASSERT(!std::isnan(dust_pz));
 
-					AMREX_ASSERT(dust_rho > 0.);
+				AMREX_ASSERT(dust_rho > 0.);
 
-					const amrex::Real dust_vx = dust_px / dust_rho;
-					const amrex::Real dust_vy = dust_py / dust_rho;
-					const amrex::Real dust_vz = dust_pz / dust_rho;
+				const amrex::Real dust_vx = dust_px / dust_rho;
+				const amrex::Real dust_vy = dust_py / dust_rho;
+				const amrex::Real dust_vz = dust_pz / dust_rho;
 
-					primVar[bx](i, j, k, primDustDensity_index + numDustVars_ * g) = dust_rho;
-					primVar[bx](i, j, k, x1DustVelocity_index + numDustVars_ * g) = dust_vx;
-					primVar[bx](i, j, k, x2DustVelocity_index + numDustVars_ * g) = dust_vy;
-					primVar[bx](i, j, k, x3DustVelocity_index + numDustVars_ * g) = dust_vz;
+				primVar[bx](i, j, k, primDustDensity_index + numDustVars_ * g) = dust_rho;
+				primVar[bx](i, j, k, x1DustVelocity_index + numDustVars_ * g) = dust_vx;
+				primVar[bx](i, j, k, x2DustVelocity_index + numDustVars_ * g) = dust_vy;
+				primVar[bx](i, j, k, x3DustVelocity_index + numDustVars_ * g) = dust_vz;
 			}
 		}
 	});
@@ -1221,7 +1224,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF_MHD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
-			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, bx1);
+			auto [F_canonical_tmp, fspd_m, fspd_p] =
+			    quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, bx1);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;
@@ -1315,7 +1319,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		// calculate dust fluxes if enabled
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-        // gather left- and right- density for dust
+				// gather left- and right- density for dust
 				const double dust_rho_L = x1LeftState(i, j, k, primDustDensity_index + numDustVars_ * g);
 				const double dust_rho_R = x1RightState(i, j, k, primDustDensity_index + numDustVars_ * g);
 
@@ -1345,11 +1349,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 					dust_velW_index = x2DustVelocity_index + numDustVars_ * g;
 				}
 
-				quokka::DustState dust_sL{};  
+				quokka::DustState dust_sL{};
 				dust_sL.rho = dust_rho_L;
-				dust_sL.u = x1LeftState(i, j, k, dust_velN_index);  
-				dust_sL.v = x1LeftState(i, j, k, dust_velV_index);  
-				dust_sL.w = x1LeftState(i, j, k, dust_velW_index);  
+				dust_sL.u = x1LeftState(i, j, k, dust_velN_index);
+				dust_sL.v = x1LeftState(i, j, k, dust_velV_index);
+				dust_sL.w = x1LeftState(i, j, k, dust_velW_index);
 
 				quokka::DustState dust_sR{};
 				dust_sR.rho = dust_rho_R;
@@ -1367,7 +1371,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				dust_F[dust_velV_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x2DustMomentum_index - nHydroScalars_];
 				dust_F[dust_velW_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x3DustMomentum_index - nHydroScalars_];
 
-        // copy all dust flux components to the flux array
+				// copy all dust flux components to the flux array
 				for (int nc = 0; nc < numDustVars_; ++nc) {
 					AMREX_ASSERT(!std::isnan(dust_F[nc])); // check dust flux is valid
 					x1Flux(i, j, k, Physics_Indices<problem_t>::dustFirstIndex + nc + numDustVars_ * g) = dust_F[nc];

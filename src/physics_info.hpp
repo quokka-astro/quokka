@@ -20,7 +20,7 @@ template <typename problem_t> struct Physics_Traits {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
+	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr double boltzmann_constant = C::k_B;	    // Hydro, EOS
@@ -42,16 +42,18 @@ template <typename problem_t> struct Physics_Indices {
 		if constexpr (!(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled)) {
 			return nvarTotal_cc_adv;
 		}
-		return Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars + Physics_NumVars::numDustVarsPerGroup *
-			Physics_Traits<problem_t>::nDustGroups * static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled) +
-			Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups *
-			static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
+		return Physics_Traits<problem_t>::numPassiveScalars + Physics_NumVars::numHydroVars +
+		       Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups *
+			   static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled) +
+		       Physics_NumVars::numRadVarsPerGroup * Physics_Traits<problem_t>::nGroups *
+			   static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
 	}();
 	// cell-centered
 	static constexpr int hydroFirstIndex = 0;
 	static constexpr int pscalarFirstIndex = Physics_NumVars::numHydroVars;
 	static constexpr int dustFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
-	static constexpr int radFirstIndex = dustFirstIndex + Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups * static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled);
+	static constexpr int radFirstIndex = dustFirstIndex + Physics_NumVars::numDustVarsPerGroup * Physics_Traits<problem_t>::nDustGroups *
+								  static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled);
 	// face-centered
 	static constexpr int nvarPerDim_fc = Physics_NumVars::numMHDVars_per_dim * static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled);
 	static constexpr int nvarTotal_fc = AMREX_SPACEDIM * nvarPerDim_fc;
