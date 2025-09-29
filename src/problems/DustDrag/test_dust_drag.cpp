@@ -14,7 +14,8 @@ struct StreamingProblem {
 
 constexpr double initial_Egas = 1.0e-5;
 constexpr double rho = 1.0;
-constexpr double v0 = 1.0;
+constexpr double v0 = 0.2;
+constexpr double dust_v0 = 0.2; 
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -47,7 +48,7 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 	const auto vx0 = v0; // initial x velocity
 
 	const auto rho_dust = rho;
-	const auto vx_dust = v0;
+	const auto vx_dust = dust_v0; // initial x velocity of dust
 
 	// get geometry information for physical coordinates
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = Geom(0).CellSizeArray();
@@ -55,18 +56,18 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<StreamingProblem>::density_index) = rho;
+		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+		amrex::Real const rho_gas_local = (x >= 0.4 && x <= 0.6) ? 2.0 * rho : rho;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::density_index) = rho_gas_local;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::energy_index) = Egas0;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::internalEnergy_index) = Egas0;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x1Momentum_index) = rho * vx0;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x3Momentum_index) = 0.;
 
-		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-		amrex::Real rho_dust_local = (x < 0.5) ? rho_dust : 2.0 * rho_dust;
-
+		amrex::Real const rho_dust_local = (x >= 0.4 && x <= 0.6) ? 2.0 * rho_dust : rho_dust;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index) = rho_dust_local;
-		state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust_local * 0.0;
+		state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust_local * vx_dust;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index) = 0.;
 	});
@@ -78,7 +79,7 @@ auto problem_main() -> int
 	// const int nx = 1000;
 	const double Lx = 1.0;
 	const double CFL_number = 0.8;
-	const double tmax = 1.0;
+	const double tmax = 0.1;
 	const int max_timesteps = 100;
 
 	// Boundary conditions
@@ -123,11 +124,11 @@ auto problem_main() -> int
 
 		// for exact dust density (shifted assuming no interaction and periodic boundaries)
 		amrex::Real const t = sim.tNew_[0];
-		amrex::Real x_initial = std::fmod(x - v0 * t, Lx);
-		if (x_initial < 0.0) x_initial += Lx;
-		rho_dust_exact.at(i) = (x_initial < 0.5) ? rho : 2.0 * rho;
+		amrex::Real x_initial = std::fmod(x - dust_v0 * t, Lx);
+		if (x_initial < 0.0) {x_initial += Lx;}
+		rho_dust_exact.at(i) = (x_initial >= 0.4 && x_initial <= 0.6) ? 2.0 * rho : rho;
 		vx_exact.at(i) = v0; // expected x velocity
-		vx_dust_exact.at(i) = v0; // expected x velocity of dust
+		vx_dust_exact.at(i) = dust_v0; // expected x velocity of dust
 
 		// compute x velocity from momentum and density
 		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[i];
@@ -166,56 +167,76 @@ auto problem_main() -> int
 	amrex::Print() << "Relative L1 norm for dust density = " << rel_err_norm_dust_rho << '\n';
 
 #ifdef HAVE_PYTHON
-	// Plot results
+	// === Plot density (gas + dust) ===
 	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 1.1);
 
-	std::map<std::string, std::string> vx_args;
-	std::map<std::string, std::string> vx_exact_args;
-	vx_args["label"] = "numerical solution";
-	vx_exact_args["label"] = "exact solution";
-	vx_exact_args["linestyle"] = "--";
-	matplotlibcpp::plot(xs, vx_sim, vx_args);
-	matplotlibcpp::plot(xs, vx_exact, vx_exact_args);
-
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("gas velocity");
-	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::save("./dust_drag_gas_velocity.pdf");
-
-	// plot dust velocity
-	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 1.1);
-	std::map<std::string, std::string> vx_dust_args;
-	std::map<std::string, std::string> vx_dust_exact_args;
-	vx_dust_args["label"] = "numerical solution";
-	vx_dust_args["linestyle"] = "-";
-	vx_dust_exact_args["label"] = "exact solution";
-	vx_dust_exact_args["linestyle"] = "--";
-	matplotlibcpp::plot(xs, vx_dust_sim, vx_dust_args);
-	matplotlibcpp::plot(xs, vx_dust_exact, vx_dust_exact_args);
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("dust velocity");
-	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::save("./dust_drag_dust_velocity.pdf");
-
-	// plot dust density
-	matplotlibcpp::clf();
+	std::map<std::string, std::string> rho_gas_args;
 	std::map<std::string, std::string> rho_dust_args;
 	std::map<std::string, std::string> rho_dust_exact_args;
-	rho_dust_args["label"] = "numerical solution";
+
+	rho_gas_args["label"] = "gas density (numerical)";
+	rho_gas_args["color"] = "r";
+	rho_gas_args["linestyle"] = "-";
+
+	rho_dust_args["label"] = "dust density (numerical)";
+	rho_dust_args["color"] = "b";
 	rho_dust_args["linestyle"] = "-";
-	rho_dust_exact_args["label"] = "exact solution";
+
+	rho_dust_exact_args["label"] = "dust density (exact)";
+	rho_dust_exact_args["color"] = "b";
 	rho_dust_exact_args["linestyle"] = "--";
+
+	// gas density (from state)
+	std::vector<double> rho_gas_sim(nx);
+	for (int i = 0; i < nx; ++i) {
+		rho_gas_sim.at(i) = values.at(HydroSystem<StreamingProblem>::density_index)[i];
+	}
+
+	matplotlibcpp::plot(xs, rho_gas_sim, rho_gas_args);
 	matplotlibcpp::plot(xs, rho_dust_sim, rho_dust_args);
 	matplotlibcpp::plot(xs, rho_dust_exact, rho_dust_exact_args);
+
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("dust density");
+	matplotlibcpp::ylabel("density");
 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::save("./dust_drag_dust_density.pdf");
+	matplotlibcpp::save("./dust_drag_density.pdf");
+
+	// === Plot velocity (gas + dust) ===
+	matplotlibcpp::clf();
+	matplotlibcpp::ylim(0.0, 1.1);
+
+	std::map<std::string, std::string> vx_gas_args;
+	std::map<std::string, std::string> vx_gas_exact_args;
+	std::map<std::string, std::string> vx_dust_args;
+	std::map<std::string, std::string> vx_dust_exact_args;
+
+	vx_gas_args["label"] = "gas velocity (numerical)";
+	vx_gas_args["color"] = "r";
+	vx_gas_args["linestyle"] = "-";
+
+	vx_gas_exact_args["label"] = "gas velocity (exact)";
+	vx_gas_exact_args["color"] = "r";
+	vx_gas_exact_args["linestyle"] = "--";
+
+	vx_dust_args["label"] = "dust velocity (numerical)";
+	vx_dust_args["color"] = "b";
+	vx_dust_args["linestyle"] = "-.";
+
+	vx_dust_exact_args["label"] = "dust velocity (exact)";
+	vx_dust_exact_args["color"] = "b";
+	vx_dust_exact_args["linestyle"] = "--";
+
+	matplotlibcpp::plot(xs, vx_sim, vx_gas_args);
+	matplotlibcpp::plot(xs, vx_exact, vx_gas_exact_args);
+	matplotlibcpp::plot(xs, vx_dust_sim, vx_dust_args);
+	matplotlibcpp::plot(xs, vx_dust_exact, vx_dust_exact_args);
+
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("velocity");
+	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::save("./dust_drag_velocity.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit
