@@ -6,15 +6,15 @@
 
 ## Repository tour
 - `src/`
-  - **Framework layer.** `simulation.hpp` defines `AMRSimulation`, the central driver that manages AMReX state, time stepping, outputs, and particle infrastructure ([simulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/simulation.hpp#L1-L120)).
-  - **Physics modules.** Hydrodynamics, radiation, MHD, chemistry, and cooling each live in subdirectories such as `hydro/`, `radiation/`, and `cooling/`, which are wired into `QuokkaSimulation` via the `Physics_Traits` mechanism ([QuokkaSimulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L66-L200)).
-  - **Problem drivers.** Each scenario in `src/problems/` defines a `problem_t` type, customises traits, sets initial conditions, and then instantiates `QuokkaSimulation` to run; see [`src/problems/OrszagTang/test_orszag_tang.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/OrszagTang/test_orszag_tang.cpp#L27-L138) for a representative setup.
+    - **Framework layer.** `simulation.hpp` defines `AMRSimulation`, the central driver that manages AMReX state, time stepping, outputs, and particle infrastructure ([simulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/simulation.hpp#L1-L120)).
+    - **Physics modules.** Hydrodynamics, radiation, MHD, chemistry, and cooling each live in subdirectories such as `hydro/`, `radiation/`, and `cooling/`, which are wired into `QuokkaSimulation` via the `Physics_Traits` mechanism ([QuokkaSimulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L66-L200)).
+    - **Problem drivers.** Each scenario in `src/problems/` defines a `problem_t` type, customises traits, sets initial conditions, and then instantiates `QuokkaSimulation` to run; see [`src/problems/OrszagTang/test_orszag_tang.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/OrszagTang/test_orszag_tang.cpp#L27-L138) for a representative setup.
 - `inputs/`
-  - Runtime parameter files that pair with problem drivers; regression entries reference them directly when defining automated tests ([regression/quokka-tests.ini](https://github.com/quokka-astro/quokka/blob/development/regression/quokka-tests.ini#L65-L146)).
+    - Runtime parameter files that pair with problem drivers; regression entries reference them directly when defining automated tests ([regression/quokka-tests.ini](https://github.com/quokka-astro/quokka/blob/development/regression/quokka-tests.ini#L65-L146)).
 - `regression/`
-  - The regression harness (`quokka-tests.ini`) enumerates long-running GPU test suites, including MPI launch commands, linked data files, and which executables to build ([regression/quokka-tests.ini](https://github.com/quokka-astro/quokka/blob/development/regression/quokka-tests.ini#L1-L146)).
+    - The regression harness (`quokka-tests.ini`) enumerates long-running GPU test suites, including MPI launch commands, linked data files, and which executables to build ([regression/quokka-tests.ini](https://github.com/quokka-astro/quokka/blob/development/regression/quokka-tests.ini#L1-L146)).
 - `docs/`
-  - Source for the published documentation site (MkDocs). The landing page summarises Quokka’s goals and AMReX integration, and additional pages cover workflow diagrams, testing, debugging, and performance topics ([site overview](index.md), [simulation flowchart](flowchart.md), [test catalog](tests/index.md)).
+    - Source for the published documentation site (MkDocs). The landing page summarises Quokka’s goals and AMReX integration, and additional pages cover workflow diagrams, testing, debugging, and performance topics ([site overview](index.md), [simulation flowchart](flowchart.md), [test catalog](tests/index.md)).
 
 ## Execution flow in practice
 - Start-up: `main.cpp` initialises AMReX, then calls `problem_main()` declared in `main.hpp` and implemented by each problem driver ([main.cpp](https://github.com/quokka-astro/quokka/blob/development/src/main.cpp#L1-L55), [main.hpp](https://github.com/quokka-astro/quokka/blob/development/src/main.hpp#L8-L19)).
