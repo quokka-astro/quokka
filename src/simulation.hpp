@@ -1335,8 +1335,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		phi.resize(finest_level + 1);
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
-		constexpr int nghost_phi = 1;
-		constexpr int nghost_deposit = 1; // CIC deposition requires 1 ghost cell
+		constexpr int nghost_phi = 3;
+		constexpr int nghost_deposit = nghost_phi; // CIC deposition requires 1 ghost cell
 		constexpr int nghost_drift = 1;	  // particle can drift up to 1 cell
 		constexpr int nghost_rhs = nghost_deposit + nghost_drift;
 		constexpr int ncomp = 1;
@@ -1498,6 +1498,36 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::Print() << "\n";
 		}
 
+		const int lev = 0;
+		amrex::Box const &box = geom[lev].Domain();
+
+		const auto &phi_arr = phi[lev].const_arrays();
+		const auto &domain_lo = box.loVect3d();
+		const auto &domain_hi = box.hiVect3d();
+		const int klo = domain_lo[2];
+		const int khi = domain_hi[2];
+
+		amrex::Print() << "after solver, phi at k = -2: \n";
+		amrex::ParallelFor(phi[lev], amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			if (k == klo - 2 && i <= 17 && i >= 15 && j <= 17 && j >= 15) {
+				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
+			}
+		});
+
+		amrex::Print() << "after solver, phi at k = -1: \n";
+		amrex::ParallelFor(phi[lev], amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			if (k == klo - 1 && i <= 17 && i >= 15 && j <= 17 && j >= 15) {
+				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
+			}
+		});
+		
+		amrex::Print() << "after solver, phi at k = 0: \n";
+		amrex::ParallelFor(phi[lev], amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			if (k == klo && i <= 17 && i >= 15 && j <= 17 && j >= 15) {
+				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
+			}
+		});
+
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
@@ -1566,49 +1596,49 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		const int nghost_acc = 2;
 		const int nghost_phi = nghost_acc + 1; // Need extra ghost cell for centered difference
 
-		// Create potential MultiFab with sufficient ghost cells for gradient computation
-		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi);
-		// initialize to nan
-		phi_extended.setVal(std::numeric_limits<amrex::Real>::quiet_NaN());
+		// // Create potential MultiFab with sufficient ghost cells for gradient computation
+		// amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi);
+		// // initialize to nan
+		// phi_extended.setVal(std::numeric_limits<amrex::Real>::quiet_NaN());
 
-		// Fill extended potential from existing phi using FillPatch
-		// This handles coarse-fine boundaries without InterpFromCoarseLevel
-		if (lev == 0) {
-			// Base level: just copy and fill boundaries
-			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
-			phi_extended.FillBoundary(geom[lev].periodicity());
+		// // Fill extended potential from existing phi using FillPatch
+		// // This handles coarse-fine boundaries without InterpFromCoarseLevel
+		// if (lev == 0) {
+		// 	// Base level: just copy and fill boundaries
+		// 	amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, nghost_phi);
+		// 	// phi_extended.FillBoundary(geom[lev].periodicity());
 
-			// Apply physical boundary conditions to phi
-			amrex::Vector<amrex::BCRec> phiBC(1);
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-			}
+		// 	// Apply physical boundary conditions to phi
+		// 	amrex::Vector<amrex::BCRec> phiBC(1);
+		// 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+		// 		phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+		// 		phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+		// 	}
 
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
-		} else {
-			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
-			amrex::Vector<amrex::BCRec> phiBC(1);
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-			}
+		// 	amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+		// 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+		// 	phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
+		// } else {
+		// 	// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
+		// 	amrex::Vector<amrex::BCRec> phiBC(1);
+		// 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+		// 		phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+		// 		phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+		// 	}
 
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
+		// 	amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+		// 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+		// 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
-			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
-						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
-		}
+		// 	amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
+		// 				  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
+		// }
 
 		// Create cell-centered acceleration MultiFab
 		amrex::MultiFab accel_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
 
 		// Compute acceleration directly from potential gradient at cell centers
-		const auto &phi_arr = phi_extended.const_arrays();
+		const auto &phi_arr = phi[lev].const_arrays();
 		const auto dx_inv = geom[lev].InvCellSizeArray();
 		auto accel_arr = accel_cc.arrays();
 
@@ -1620,7 +1650,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 		amrex::Print() << "phi_arr at k = -2: \n";
 
-		amrex::ParallelFor(phi_extended, amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		amrex::ParallelFor(phi[lev], amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 			if (k == klo - 2 && i <= 2 && j <= 2) {
 				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
 			}
@@ -1628,7 +1658,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 		amrex::Print() << "phi_arr at k = 2: \n";
 
-		amrex::ParallelFor(phi_extended, amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		amrex::ParallelFor(phi[lev], amrex::IntVect{nghost_phi}, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 			if (k == khi + 2 && i <= 2 && j <= 2) {
 				printf("%.3e\n", phi_arr[bx](i, j, k, 0));
 			}
