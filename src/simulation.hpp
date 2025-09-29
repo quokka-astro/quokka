@@ -1853,8 +1853,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 			fr_as_fine->FineAdd(fluxArrays[dir], dir, 0, 0, ncomp, dt_lev * face_area[dir]);
 		}
 	}
-
-
 }
 
 template <typename problem_t>
