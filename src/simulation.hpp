@@ -294,8 +294,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
 	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
 			     quokka::direction dir);
+	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
+				      amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array);
 	void GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime, quokka::centering cen,
 		     quokka::direction dir);
+	void GetDataFaceArray(int lev, amrex::Real time, amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &data_array,
+			      amrex::Vector<amrex::Real> &datatime);
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
@@ -1904,10 +1908,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterC
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterFaceCentered() -> amrex::Interpolater *
 {
-	// TODO(bwibking): this must be changed to amrex::face_divfree_interp for magnetic fields!
-	// TODO(neco): implement fc interpolator
-	amrex::Interpolater *mapper = &amrex::face_linear_interp;
-	return mapper; // global object, so this is ok
+	// Use linear interpolation for generic face-centered operations (e.g., ghost fills).
+	return &amrex::face_linear_interp;
 }
 
 // Make a new level using provided BoxArray and DistributionMapping and fill
@@ -1948,11 +1950,17 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 			    amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
 			state_old_fc_[level][idim] =
 			    amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
-			FillCoarsePatch(level, time, state_new_fc_[level][idim], 0, ncomp_per_dim_fc, BCs_fc_, quokka::centering::fc,
-					static_cast<quokka::direction>(idim));
-			FillCoarsePatch(level, time, state_old_fc_[level][idim], 0, ncomp_per_dim_fc, BCs_fc_, quokka::centering::fc,
-					static_cast<quokka::direction>(idim)); // also necessary
 		}
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> new_mf_array;
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> old_mf_array;
+		amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			new_mf_array[idim] = &state_new_fc_[level][idim];
+			old_mf_array[idim] = &state_old_fc_[level][idim];
+			BCs_array[idim] = BCs_fc_;
+		}
+		FillCoarsePatchFaceArray(level, time, new_mf_array, 0, ncomp_per_dim_fc, BCs_array);
+		FillCoarsePatchFaceArray(level, time, old_mf_array, 0, ncomp_per_dim_fc, BCs_array);
 	}
 }
 
@@ -1992,15 +2000,22 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		const int ncomp_per_dim_fc = state_new_fc_[level][0].nComp();
 		const int nghost_fc = state_new_fc_[level][0].nGrow();
-		amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_new_fc;
-		amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_old_fc;
-		// define
+	amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_new_fc;
+	amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_old_fc;
+	amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			int_state_new_fc[idim] = amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
 			int_state_old_fc[idim] = amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
+			BCs_array[idim] = BCs_fc_;
 		}
-		// TODO(neco): fillPatchFC
-		// swap
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> int_state_new_fc_ptr;
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> int_state_old_fc_ptr;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			int_state_new_fc_ptr[idim] = &int_state_new_fc[idim];
+			int_state_old_fc_ptr[idim] = &int_state_old_fc[idim];
+		}
+		FillCoarsePatchFaceArray(level, time, int_state_new_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
+		FillCoarsePatchFaceArray(level, time, int_state_old_fc_ptr, 0, ncomp_per_dim_fc, BCs_array);
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			std::swap(int_state_new_fc[idim], state_new_fc_[level][idim]);
 			std::swap(int_state_old_fc[idim], state_old_fc_[level][idim]);
@@ -2390,7 +2405,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 // this comes into play when a new level of refinement appears
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
-					       quokka::centering cen, quokka::direction dir)
+				   quokka::centering cen, quokka::direction dir)
 {							// here neco
 	BL_PROFILE("AMRSimulation::FillCoarsePatch()"); // NOLINT(misc-const-correctness)
 
@@ -2412,11 +2427,56 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
 					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
 	} else if (cen == quokka::centering::fc) {
+		auto *face_mapper = [&]() -> amrex::Interpolater * {
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				return &amrex::face_divfree_interp;
+			}
+			return &amrex::face_linear_interp;
+		}();
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterFaceCentered(), BCs, 0);
+					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), face_mapper, BCs, 0);
 	} else {
 		amrex::Abort("AMR interpolation is not implemented for this zone centering!");
 	}
+}
+
+// Fill face-centred data for all directions simultaneously using divergence-free interpolation
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp,
+							int ncomp, amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> &BCs_array)
+{
+	BL_PROFILE("AMRSimulation::FillCoarsePatchFaceArray()"); // NOLINT(misc-const-correctness)
+
+	AMREX_ASSERT(lev > 0);
+
+	amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> cmf_array;
+	amrex::Vector<amrex::Real> ctime;
+	GetDataFaceArray(lev - 1, time, cmf_array, ctime);
+
+	if (ctime.size() != 1) {
+		amrex::Abort("FillCoarsePatchFaceArray: time interpolation not yet implemented for face arrays");
+	}
+
+	amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> cmf_ptrs;
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		if (cmf_array[idim].size() != 1) {
+			amrex::Abort("FillCoarsePatchFaceArray: unexpected number of face-centred MultiFabs");
+		}
+		cmf_ptrs[idim] = cmf_array[idim][0];
+	}
+
+	using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+	BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{});
+	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> finePhysicalBoundaryFunctor;
+	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarsePhysicalBoundaryFunctor;
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		finePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
+		coarsePhysicalBoundaryFunctor[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
+	}
+
+	amrex::InterpFromCoarseLevel(mf_array, time, cmf_ptrs, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
+				     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
 }
 
 // utility to copy in data from state_old_cc_[lev] and/or state_new_cc_[lev]
@@ -2460,6 +2520,38 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time, amrex::Vector<
 		} else if (cen == quokka::centering::fc) {
 			data.push_back(&state_old_fc_[lev][dim]);
 			data.push_back(&state_new_fc_[lev][dim]);
+		}
+	}
+}
+
+// Retrieve face-centred data for all spatial directions at the requested time
+template <typename problem_t>
+void AMRSimulation<problem_t>::GetDataFaceArray(int lev, amrex::Real time, amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &data_array,
+				      amrex::Vector<amrex::Real> &datatime)
+{
+	BL_PROFILE("AMRSimulation::GetDataFaceArray()"); // NOLINT(misc-const-correctness)
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		data_array[idim].clear();
+	}
+	datatime.clear();
+
+	if (amrex::almostEqual(time, tNew_[lev], 5)) {
+		datatime.push_back(tNew_[lev]);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			data_array[idim].push_back(&state_new_fc_[lev][idim]);
+		}
+	} else if (amrex::almostEqual(time, tOld_[lev], 5)) {
+		datatime.push_back(tOld_[lev]);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			data_array[idim].push_back(&state_old_fc_[lev][idim]);
+		}
+	} else {
+		datatime.push_back(tOld_[lev]);
+		datatime.push_back(tNew_[lev]);
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			data_array[idim].push_back(&state_old_fc_[lev][idim]);
+			data_array[idim].push_back(&state_new_fc_[lev][idim]);
 		}
 	}
 }
@@ -3436,8 +3528,14 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
 		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, BCs_fc_, boundaryFunctor);
 		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_fc_, boundaryFunctor);
+		auto *face_mapper = [&]() -> amrex::Interpolater * {
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				return &amrex::face_divfree_interp;
+			}
+			return &amrex::face_linear_interp;
+		}();
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
-					     restart_ref_ratio, getAmrInterpolaterFaceCentered(), BCs_fc_, 0);
+				     restart_ref_ratio, face_mapper, BCs_fc_, 0);
 	}
 }
 
