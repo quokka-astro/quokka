@@ -31,9 +31,11 @@ nav:
     - Postprocessing: postprocessing.md
     - Debugging simulation instability: instability.md
   - Developer Guide:
+    - Code Walkthrough: developer_onboarding.md
     - Contributing Guide: contributing.md
     - Flowchart: flowchart.md
     - Hydro Integrator: hydro_integrator.md
+    - Writing new problems: developing_problem_generators.md
     - Debugging: debugging.md
     - Assertions and error checking: error_checking.md
     - Performance tips: performance.md
