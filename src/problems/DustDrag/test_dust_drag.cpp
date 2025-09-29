@@ -28,7 +28,7 @@ template <> struct Physics_Traits<StreamingProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = true;
+	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
@@ -79,8 +79,6 @@ auto problem_main() -> int
 	// const int nx = 1000;
 	const double Lx = 1.0;
 	const double CFL_number = 0.8;
-	const double tmax = 0.1;
-	const int max_timesteps = 100;
 
 	// Boundary conditions
 	constexpr int nvars = HydroSystem<StreamingProblem>::nvar_;
@@ -96,8 +94,6 @@ auto problem_main() -> int
 	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.stopTime_ = tmax;
-	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
 	// initialize

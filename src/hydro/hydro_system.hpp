@@ -56,7 +56,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
 	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_ +
-				     Physics_Traits<problem_t>::nDustGroups * Physics_NumVars::numDustVarsPerGroup; // total number of variables
+				     (Physics_Traits<problem_t>::is_dust_enabled ? (Physics_Traits<problem_t>::nDustGroups * Physics_NumVars::numDustVarsPerGroup) : 0); // total number of variables
 	static constexpr int nHydroScalars_ = Physics_NumVars::numHydroVars + nscalars_;
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup; // number of dust variables for each dust group
 
