@@ -23,7 +23,6 @@
 #include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
-#include "cooling/GrackleLikeCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/quadrature.hpp"
@@ -55,9 +54,10 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-constexpr Real Tgas0 = 1.0e4;								// K
-constexpr Real nH0 = 0.1;								// cm^-3
-constexpr Real rho0 = nH0 * (m_H / quokka::GrackleLikeCooling::cloudy_H_mass_fraction); // g cm^-3
+constexpr Real Tgas0 = 1.0e4; // K
+constexpr Real nH0 = 0.1;     // cm^-3
+constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
+constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
@@ -229,8 +229,9 @@ template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "RandomBlast diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_cc_in;
-		auto tables = grackleTables_.const_tables();
+		auto tables = resampledTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
@@ -244,7 +245,7 @@ template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::
 				Real const x3Mom = state(i, j, k, HydroSystem<RandomBlast>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
 				Real const Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<RandomBlast>::gamma_, tables);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -287,7 +288,7 @@ template <> void QuokkaSimulation<RandomBlast>::refineGrid(int lev, amrex::TagBo
 
 auto problem_main() -> int
 {
-	// This problem is only implemented in CGS units because the Grackle cooling tables are in CGS units.
+	// This problem is only implemented in CGS units because the cooling tables are provided in CGS units.
 	static_assert(Physics_Traits<RandomBlast>::unit_system == UnitSystem::CGS);
 
 	// read parameters

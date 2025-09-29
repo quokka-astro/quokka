@@ -37,5 +37,5 @@ SN_rate_per_volume = 0.03  # yr^-1 kpc^-1
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = grackle
-cooling.hdf5_data_file = "./CloudyData_UVB=HM2012.h5"
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
