@@ -2000,9 +2000,9 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		const int ncomp_per_dim_fc = state_new_fc_[level][0].nComp();
 		const int nghost_fc = state_new_fc_[level][0].nGrow();
-	amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_new_fc;
-	amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_old_fc;
-	amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
+		amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_new_fc;
+		amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_old_fc;
+		amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			int_state_new_fc[idim] = amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
 			int_state_old_fc[idim] = amrex::MultiFab(amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_per_dim_fc, nghost_fc);
@@ -2405,7 +2405,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 // this comes into play when a new level of refinement appears
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
-				   quokka::centering cen, quokka::direction dir)
+					       quokka::centering cen, quokka::direction dir)
 {							// here neco
 	BL_PROFILE("AMRSimulation::FillCoarsePatch()"); // NOLINT(misc-const-correctness)
 
@@ -2527,7 +2527,7 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time, amrex::Vector<
 // Retrieve face-centred data for all spatial directions at the requested time
 template <typename problem_t>
 void AMRSimulation<problem_t>::GetDataFaceArray(int lev, amrex::Real time, amrex::Array<amrex::Vector<amrex::MultiFab *>, AMREX_SPACEDIM> &data_array,
-				      amrex::Vector<amrex::Real> &datatime)
+						amrex::Vector<amrex::Real> &datatime)
 {
 	BL_PROFILE("AMRSimulation::GetDataFaceArray()"); // NOLINT(misc-const-correctness)
 
@@ -3535,7 +3535,7 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 			return &amrex::face_linear_interp;
 		}();
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
-				     restart_ref_ratio, face_mapper, BCs_fc_, 0);
+					     restart_ref_ratio, face_mapper, BCs_fc_, 0);
 	}
 }
 
