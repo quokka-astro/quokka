@@ -940,11 +940,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 					rel_error = err_norm / sol_norm;
 					errorNorm_ = rel_error;
 					amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
-					               << " and sol_norm = " << sol_norm << "\n";
+						       << " and sol_norm = " << sol_norm << "\n";
 				} else {
 					errorNorm_ = err_norm;
-					amrex::Print() << "Reference norm is zero; reporting absolute L1 error norm = " << err_norm
-					               << " (sol_norm = 0)\n";
+					amrex::Print() << "Reference norm is zero; reporting absolute L1 error norm = " << err_norm << " (sol_norm = 0)\n";
 				}
 			}
 		}
@@ -961,7 +960,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		amrex::Print() << '\n';
 	}
 }
-
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
 {
