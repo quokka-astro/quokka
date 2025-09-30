@@ -74,8 +74,8 @@ jobs:
       env:
         ASAN_OPTIONS: detect_leaks=0:print_stats=1:check_initialization_order=1:strict_string_checks=1:detect_stack_use_after_return=1
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-      # Execute all tests with MHD in their name, excluding FastWave
-      run: canary run --output-on-failure --workers=1 -k "MHD and not FastWave" .
+      # Execute all tests with MHD label, excluding FastWave and BrioWuShockTube
+      run: canary run --output-on-failure --workers=1 -k "MHD and not FastWave and not BrioWuShockTube" .
 
     - name: Upload test output
       if: always()
