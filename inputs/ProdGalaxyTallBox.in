@@ -13,7 +13,7 @@ amr.v              = 1      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 256
+amr.n_cell          = 256 256 1024
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 256   # at least 128 for GPUs
 amr.blocking_factor_x = 64   # grid size must be divisible by this
@@ -36,7 +36,8 @@ cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
-perturb.filename = "../inputs/zdrv.hdf5"
+perturb.filename = "/Users/cche/Projects-cloud/2025-quokka-ISRF/job3-turbulent-box/turb128/zdrv.hdf5"
+perturb.use_superresolution = 1
 #perturb.amplitude = 0.35e5 # cm/s, = 0.05 * 7 km/s
 perturb.amplitude = 7e5 # 7 km/s
 
