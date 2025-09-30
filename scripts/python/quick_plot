@@ -153,6 +153,15 @@ def plot_one(pltdir, args):
 
     mean_molecular_weight_per_H_atom = mean_molecular_weight * m_u
 
+    field_root = field if not isinstance(field, tuple) else field[1]
+
+    # take a guess on the output filename: e.g. plt00008_Slice_z_density.png, and skip if it already exists
+    fn_slc = {"slc": "Slice", "prj": "Projection"}[kind]
+    fig_name = f"{ds.basename}_{fn_slc}_{view_dir}_{field_root}.png"
+    if skip_existing and os.path.exists(os.path.join(outdir, fig_name)):
+        print(f"skipping existing figure: {fig_name}")
+        return
+
     # add derived fields
     if field == ("gas", "number_density"):
         # be sure to use a name that does not conflict with existing fields. Do not use ("gas", "number_density")!!!
@@ -173,8 +182,6 @@ def plot_one(pltdir, args):
         ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "momentum_density_x")]**2 + data[(
             "gas", "momentum_density_y")]**2 + data[("gas", "momentum_density_z")]**2), sampling_type="cell")
 
-    field_root = field if not isinstance(field, tuple) else field[1]
-
     # plot slice or projection
     field_rho = ("gas", "density")
     if kind in ["slc", "slice"]:
@@ -186,13 +193,6 @@ def plot_one(pltdir, args):
                                 weight_field=field_rho, center=center)
     else:
         raise ValueError(f"kind {kind} not supported")
-
-    # take a guess on the output filename: e.g. plt00008_Slice_z_density.png, and skip if it already exists
-    fn_slc = {"slc": "Slice", "prj": "Projection"}[kind]
-    fig_name = f"{ds.basename}_{fn_slc}_{view_dir}_{field_root}.png"
-    if skip_existing and os.path.exists(os.path.join(outdir, fig_name)):
-        print(f"skipping existing figure: {fig_name}")
-        return
 
     if cmap == "default":
         cmap = "viridis"
