@@ -21,6 +21,7 @@ nav:
     - Running on HPC clusters: running_on_hpc_clusters.md
     - Grid refinement (AMR): amr_grid_refinement.md
     - Test problems:
+      - Overview: tests/index.md
       - Radiative shock test: tests/radshock.md
       - Shu-Osher shock test: tests/shu_osher.md
       - Slow-moving shock test: tests/sms.md
@@ -32,6 +33,8 @@ nav:
     - Postprocessing: postprocessing.md
     - Debugging simulation instability: instability.md
   - Developer Guide:
+    - Developer onboarding: developer_onboarding.md
+    - Developing a new problem generator: developing_problem_generators.md
     - Contributing Guide: contributing.md
     - Flowchart: flowchart.md
     - Hydro Integrator: hydro_integrator.md
