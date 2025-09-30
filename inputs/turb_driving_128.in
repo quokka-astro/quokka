@@ -18,7 +18,7 @@ plotfile_interval   = 20000
 checkpoint_interval = -1
 max_timesteps       = 20000
 stop_time           = 1.0
-cfl                 = 0.3
+cfl                 = 0.2
 statistics_interval = 100
 
 # FewModes forcing parameters
@@ -28,4 +28,7 @@ fewmodesft.solenoidal_weight = 0.5
 fewmodesft.t_corr            = 1.0
 fewmodesft.random_seed       = 12345
 fewmodesft.rho0              = 1.0
-fewmodesft.force_amplitude   = 1.0
+fewmodesft.force_amplitude   = 50.0
+
+density_floor = 1e-3
+hydro.reconstruction_order = 2
