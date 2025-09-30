@@ -28,7 +28,7 @@ plotfile_prefix = alfven_wave_linear_plt
 checkpoint_interval = -1
 cfl = 0.3
 stop_time = 5.0
-max_timesteps = 8000
+max_timesteps = 10000
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 5
