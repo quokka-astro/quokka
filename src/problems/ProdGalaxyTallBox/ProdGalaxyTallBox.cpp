@@ -33,7 +33,6 @@ static std::string stars_file = "none";
 static std::string CIC_file = "none";
 
 constexpr double pc = C::parsec;
-constexpr int turbdata_size = 128;
 
 struct TheProblem {
 };
@@ -45,6 +44,7 @@ template <> struct SimulationData<TheProblem> {
 	amrex::TableData<Real, 3> dvz;
 	Real dv_rms_generated{};
 	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
+	int turbulent_size = 128;
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
 };
@@ -193,7 +193,9 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
 
 		amrex::Print() << "turbulent amplitude = " << userData_.turbulent_amplitude << " cm/s\n";
-		amrex::Print() << "turbulence data size assumed: " << turbdata_size << "^3\n";
+
+		userData_.turbulent_size = turbData.dvx.end[0] - turbData.dvx.begin[0];
+		amrex::Print() << "turbulence data size is: " << userData_.turbulent_size << "^3\n";
 
 		// copy to GPU
 		userData_.dvx.resize(pinned_dvx.lo(), pinned_dvx.hi());
@@ -234,7 +236,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	// get simulation box x-dimension as reference
 	const int nx = indexRange.length(0);
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= turbdata_size, "nx must be less than or equal to turbdata_size (128)");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= userData_.turbulent_size, "nx must be less than or equal to turbulent_size (128)");
 	
 	// z-range limits: apply turbulence only from 1.5*nx to 2.5*nx
 	const int k_start = static_cast<int>(1.5 * nx);
