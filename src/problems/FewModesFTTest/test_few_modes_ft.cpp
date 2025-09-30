@@ -115,7 +115,7 @@ auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry co
 	return forcing;
 }
 
-void clear_forcing_state() { levelForcing.clear(); }
+void clear_forcing_state() { forcing_context().levelForcing.clear(); }
 
 } // namespace
 
