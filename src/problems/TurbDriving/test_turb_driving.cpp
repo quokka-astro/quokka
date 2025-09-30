@@ -2,7 +2,9 @@
 // FewModesFT test problem with operator-split stochastic forcing
 //==============================================================================
 
+#include <cmath>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -35,6 +37,7 @@ struct ForcingParameters {
 	int randomSeed{12345};
 	amrex::Real initialDensity{1.0};
 	amrex::Real initialPressure{1.0};
+	amrex::Real forceAmplitude{1.0};
 };
 
 struct ForcingState {
@@ -84,6 +87,7 @@ void parse_parameters()
 	pp.query("random_seed", forcingParams.randomSeed);
 	pp.query("rho0", forcingParams.initialDensity);
 	pp.query("p0", forcingParams.initialPressure);
+	pp.query("force_amplitude", forcingParams.forceAmplitude);
 	context.parametersParsed = true;
 }
 
@@ -182,6 +186,9 @@ template <> void QuokkaSimulation<FewModesFTProblem>::computeAfterLevelAdvance(i
 
 	forcing.driver->Generate(*forcing.acceleration, dt_lev);
 
+	const amrex::Real amplitude = forcing_context().params.forceAmplitude;
+	forcing.acceleration->mult(amplitude, 0, AMREX_SPACEDIM);
+
 	const auto accel = forcing.acceleration->const_arrays();
 	const auto state = state_mf.arrays();
 
@@ -209,6 +216,48 @@ template <> void QuokkaSimulation<FewModesFTProblem>::computeAfterLevelAdvance(i
 		state[bx](i, j, k, HydroSystem<FewModesFTProblem>::energy_index) += dKE;
 	});
 	amrex::Gpu::streamSynchronize();
+}
+
+template <> auto QuokkaSimulation<FewModesFTProblem>::ComputeStatistics() -> std::map<std::string, amrex::Real>
+{
+	std::map<std::string, amrex::Real> stats;
+
+	const amrex::Real mach_sq_integral = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
+		const amrex::Real rho = state(i, j, k, HydroSystem<FewModesFTProblem>::density_index);
+		if (rho <= 0.0) {
+			return amrex::Real(0.0);
+		}
+
+		const amrex::Real px = state(i, j, k, HydroSystem<FewModesFTProblem>::x1Momentum_index);
+		const amrex::Real py = state(i, j, k, HydroSystem<FewModesFTProblem>::x2Momentum_index);
+		const amrex::Real pz = state(i, j, k, HydroSystem<FewModesFTProblem>::x3Momentum_index);
+		const amrex::Real inv_rho = 1.0 / rho;
+		const amrex::Real vx = px * inv_rho;
+		const amrex::Real vy = py * inv_rho;
+		const amrex::Real vz = pz * inv_rho;
+		const amrex::Real speed_sq = vx * vx + vy * vy + vz * vz;
+
+		const amrex::Real cs = HydroSystem<FewModesFTProblem>::ComputeSoundSpeed(state, i, j, k);
+		if (cs <= 0.0) {
+			return amrex::Real(0.0);
+		}
+
+		return speed_sq / (cs * cs);
+	});
+
+	const amrex::Geometry &geom0 = this->Geom(0);
+	const amrex::Real *prob_lo = geom0.ProbLo();
+	const amrex::Real *prob_hi = geom0.ProbHi();
+	const amrex::Real total_volume = (prob_hi[0] - prob_lo[0]) * (prob_hi[1] - prob_lo[1]) * (prob_hi[2] - prob_lo[2]);
+
+	amrex::Real mach_rms = 0.0;
+	if (total_volume > 0.0) {
+		mach_rms = std::sqrt(mach_sq_integral / total_volume);
+	}
+
+	stats["mach_rms"] = mach_rms;
+	return stats;
 }
 
 auto problem_main() -> int
