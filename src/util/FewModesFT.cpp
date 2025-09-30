@@ -418,7 +418,6 @@ auto MakeRandomModes(int num_modes, amrex::Real k_peak, uint32_t rseed) -> std::
 	amrex::Real k_mag = 0.0;
 	amrex::Real ampl = 0.0;
 	bool mode_exists = false;
-	bool conjugate_exists = false;
 
 	while (n_mode < num_modes && n_attempt < max_attempts) {
 		n_attempt++;
@@ -433,21 +432,15 @@ auto MakeRandomModes(int num_modes, amrex::Real k_peak, uint32_t rseed) -> std::
 
 		// Check if mode was already picked
 		mode_exists = false;
-		conjugate_exists = false;
 		for (int n_mode_exist = 0; n_mode_exist < n_mode; ++n_mode_exist) {
 			if (k_vec[0][n_mode_exist] == kx1 && k_vec[1][n_mode_exist] == kx2 && k_vec[2][n_mode_exist] == kx3) {
 				mode_exists = true;
 				break;
 			}
-			if (kx1 == 0.0 && k_vec[0][n_mode_exist] == 0.0 && k_vec[1][n_mode_exist] == -kx2 && k_vec[2][n_mode_exist] == -kx3) {
-				// avoid adding both members of a ±ky/±kz pair when kx == 0
-				conjugate_exists = true;
-				break;
-			}
 		}
 
 		// kx1 < 0.0 because we use an explicit symmetric Complex to Real transform
-		if (ampl < 0.0 || k_mag < k_low || k_mag > k_high || mode_exists || conjugate_exists || kx1 < 0.0) {
+		if (ampl < 0.0 || k_mag < k_low || k_mag > k_high || mode_exists || kx1 < 0.0) {
 			continue;
 		}
 
