@@ -67,7 +67,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
-#include "AMReX_YAFluxRegister.H"
+#include <AMReX_FluxRegister.H>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <yaml-cpp/yaml.h>
@@ -98,8 +98,6 @@ namespace filesystem = experimental::filesystem;
 #ifdef QUOKKA_USE_OPENPMD
 #include "io/openPMD.hpp"
 #endif
-
-#define USE_YAFLUXREGISTER
 
 #ifdef AMREX_USE_ASCENT
 using namespace conduit;
@@ -304,11 +302,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
 
-	void incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-				    std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev);
-
-	void incrementFluxRegisters(amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int lev, amrex::Real dt_lev);
+	void incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
+				    int lev, amrex::Real dt_lev);
 
 	void particleMeshInteraction(amrex::Real time, amrex::Real dt);
 
@@ -412,7 +407,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// the lev/lev-1 interface (and has grid spacing associated with lev-1)
 	// therefore flux_reg[0] and flux_reg[nlevs_max] are never actually used in
 	// the reflux operation
-	amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
+	amrex::Vector<std::unique_ptr<amrex::FluxRegister>> flux_reg_;
 
 	// This is for fillpatch during timestepping, but not for regridding.
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
@@ -1763,8 +1758,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// do post-timestep operations
 
 		if (do_reflux != 0) {
-			// update lev based on coarse-fine flux mismatch
-			flux_reg_[lev + 1]->Reflux(state_new_cc_[lev]);
+			if (flux_reg_[lev + 1] != nullptr) {
+				flux_reg_[lev + 1]->Reflux(state_new_cc_[lev], 1.0, 0, 0, state_new_cc_[lev].nComp(), geom[lev]);
+			}
 		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
@@ -1800,45 +1796,50 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 }
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-						      std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
+void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
+						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()"); // NOLINT(misc-const-correctness)
+
+	if ((fr_as_crse == nullptr) && (fr_as_fine == nullptr)) {
+		return;
+	}
+
+	const auto dx = geom[lev].CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> face_area{};
+
+	if constexpr (AMREX_SPACEDIM == 1) {
+		face_area[0] = 1.0;
+	} else if constexpr (AMREX_SPACEDIM == 2) {
+		face_area[0] = dx[1];
+		face_area[1] = dx[0];
+	} else {
+		face_area[0] = dx[1] * dx[2];
+		face_area[1] = dx[0] * dx[2];
+		face_area[2] = dx[0] * dx[1];
+	}
 
 	if (fr_as_crse != nullptr) {
 		AMREX_ASSERT(lev < finestLevel());
 		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, // NOLINT(readability-container-data-pointer)
-				    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			int const ncomp = fluxArrays[dir].nComp();
+			if (ncomp == 0) {
+				continue;
+			}
+			fr_as_crse->CrseInit(fluxArrays[dir], dir, 0, 0, ncomp, -dt_lev * face_area[dir], amrex::FluxRegister::ADD);
+		}
 	}
 
 	if (fr_as_fine != nullptr) {
 		AMREX_ASSERT(lev > 0);
 		AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
-		fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, // NOLINT(readability-container-data-pointer)
-				    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
-	}
-}
-
-template <typename problem_t>
-void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
-						      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev, amrex::Real const dt_lev)
-{
-	BL_PROFILE("AMRSimulation::incrementFluxRegisters()"); // NOLINT(misc-const-correctness)
-
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		if (fr_as_crse != nullptr) {
-			AMREX_ASSERT(lev < finestLevel());
-			AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-			fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi), fluxArrays[1].fabPtr(mfi), fluxArrays[2].fabPtr(mfi))},
-					    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
-		}
-
-		if (fr_as_fine != nullptr) {
-			AMREX_ASSERT(lev > 0);
-			AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
-			fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi), fluxArrays[1].fabPtr(mfi), fluxArrays[2].fabPtr(mfi))},
-					    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			int const ncomp = fluxArrays[dir].nComp();
+			if (ncomp == 0) {
+				continue;
+			}
+			fr_as_fine->FineAdd(fluxArrays[dir], dir, 0, 0, ncomp, dt_lev * face_area[dir]);
 		}
 	}
 }
@@ -1892,8 +1893,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && (do_reflux != 0)) {
-		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-									   Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
+		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
 	}
 
 	// face-centred
@@ -1937,8 +1937,7 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && (do_reflux != 0)) {
-		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-									   Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
+		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
 	}
 
 	// face-centred
@@ -2147,8 +2146,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && (do_reflux != 0)) {
-		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-									   Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
+		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(level - 1), level, ncomp_cc);
 	}
 
 	// face-centred
@@ -3491,8 +3489,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
 		if (lev > 0 && (do_reflux != 0)) {
-			flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev), Geom(lev - 1),
-										 refRatio(lev - 1), lev, ncomp_cc);
+			flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(ba, dm, refRatio(lev - 1), lev, ncomp_cc);
 		}
 
 		const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
