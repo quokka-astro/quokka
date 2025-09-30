@@ -9,9 +9,13 @@ config:
 
 com:
 	cd ../build/gpu-3d/ && ninja -j36 ProdGalaxyTallBox
-
 test:
 	../build/gpu-3d/src/problems/ProdGalaxyTallBox/ProdGalaxyTallBox ../inputs/ProdGalaxyTallBox.in max_timesteps=2
+
+comcpu:
+	cd ../build/clang-3d/ && ninja -j36 ProdGalaxyTallBox
+testcpu:
+	../build/clang-3d/src/problems/ProdGalaxyTallBox/ProdGalaxyTallBox ../inputs/ProdGalaxyTallBox.in max_timesteps=2
 
 pp:
 	$(quick_plot) plt* -j ${MP} --dir z --width 0.98,kpc --par StochasticStellarPop_particles --kind slc \
