@@ -60,7 +60,7 @@ class FewModesFT
 
       public:
 	FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
-		   amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm);
+		   amrex::Real t_corr, uint32_t rseed);
 
 	void SetPhases(const amrex::Geometry &geom);
 	void Generate(amrex::MultiFab &mf, amrex::Real dt);

@@ -38,15 +38,23 @@ struct ForcingParameters {
 };
 
 struct ForcingState {
-	std::unique_ptr<quokka::util::FewModesFT> driver{};
-	std::unique_ptr<amrex::MultiFab> acceleration{};
-	std::vector<std::vector<amrex::Real>> modes{};
+	std::unique_ptr<quokka::util::FewModesFT> driver;
+	std::unique_ptr<amrex::MultiFab> acceleration;
+	std::vector<std::vector<amrex::Real>> modes;
 	bool phasesInitialized{false};
 };
 
-ForcingParameters forcingParams{};
-std::vector<ForcingState> levelForcing;
-bool parametersParsed = false;
+struct ForcingContext {
+	ForcingParameters params;
+	std::vector<ForcingState> levelForcing;
+	bool parametersParsed{false};
+};
+
+auto forcing_context() -> ForcingContext &
+{
+	static ForcingContext context;
+	return context;
+}
 
 void clear_forcing_state();
 
@@ -61,11 +69,13 @@ void ensure_finalize_cleanup_registered()
 
 void parse_parameters()
 {
-	if (parametersParsed) {
+	auto &context = forcing_context();
+	if (context.parametersParsed) {
 		return;
 	}
 	ensure_finalize_cleanup_registered();
-	amrex::ParmParse pp("fewmodesft");
+	const amrex::ParmParse pp("fewmodesft");
+	auto &forcingParams = context.params;
 	pp.query("prefix", forcingParams.prefix);
 	pp.query("num_modes", forcingParams.numModes);
 	pp.query("k_peak", forcingParams.kPeak);
@@ -74,13 +84,15 @@ void parse_parameters()
 	pp.query("random_seed", forcingParams.randomSeed);
 	pp.query("rho0", forcingParams.initialDensity);
 	pp.query("p0", forcingParams.initialPressure);
-	parametersParsed = true;
+	context.parametersParsed = true;
 }
 
 auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry const &geom) -> ForcingState &
 {
-	if (static_cast<std::size_t>(lev + 1) > levelForcing.size()) {
-		levelForcing.resize(static_cast<std::size_t>(lev + 1));
+	auto &levelForcing = forcing_context().levelForcing;
+	const auto requiredSize = static_cast<std::size_t>(lev) + 1;
+	if (requiredSize > levelForcing.size()) {
+		levelForcing.resize(requiredSize);
 	}
 
 	ForcingState &forcing = levelForcing[static_cast<std::size_t>(lev)];
@@ -90,11 +102,11 @@ auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry co
 					  forcing.acceleration->DistributionMap() != dm;
 
 	if (needs_allocation) {
+		auto const &forcingParams = forcing_context().params;
 		const auto level_seed = static_cast<uint32_t>(forcingParams.randomSeed + lev);
 		forcing.modes = quokka::util::MakeRandomModes(forcingParams.numModes, forcingParams.kPeak, level_seed);
 		forcing.driver = std::make_unique<quokka::util::FewModesFT>(forcingParams.prefix, forcingParams.numModes, forcing.modes,
-						forcingParams.kPeak, forcingParams.solenoidalWeight, forcingParams.correlationTime,
-						level_seed, ba, dm);
+						forcingParams.kPeak, forcingParams.solenoidalWeight, forcingParams.correlationTime, level_seed);
 		forcing.driver->SetPhases(geom);
 		forcing.phasesInitialized = true;
 		forcing.acceleration = std::make_unique<amrex::MultiFab>(ba, dm, AMREX_SPACEDIM, 0);
@@ -106,7 +118,7 @@ auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry co
 
 void clear_forcing_state()
 {
-	levelForcing.clear();
+	forcing_context().levelForcing.clear();
 }
 
 } // namespace
@@ -145,6 +157,7 @@ template <> void QuokkaSimulation<FewModesFTProblem>::setInitialConditionsOnGrid
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
+	const auto &forcingParams = forcing_context().params;
 	const auto rho0 = forcingParams.initialDensity;
 	const auto P0 = forcingParams.initialPressure;
 	const auto gamma = quokka::EOS_Traits<FewModesFTProblem>::gamma;
@@ -210,7 +223,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<FewModesFTProblem>(quokka::BCType::int_dir);
 	QuokkaSimulation<FewModesFTProblem> sim(BCs_cc);
 
-	amrex::ParmParse pp;
+	const amrex::ParmParse pp;
 	int max_grid_size = 32;
 	pp.query("max_grid_size", max_grid_size);
 	amrex::ParmParse amr_pp("amr");

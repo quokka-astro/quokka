@@ -26,7 +26,7 @@ namespace
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto wrap_index(int idx, int period) -> int
 {
-	int mod = idx % period;
+	const int mod = idx % period;
 	return (mod < 0) ? mod + period : mod;
 }
 
@@ -172,7 +172,7 @@ void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, cons
 } // namespace detail
 
 FewModesFT::FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
-		       amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm)
+		       amrex::Real t_corr, uint32_t rseed)
     : num_modes_(num_modes), prefix_(std::move(prefix)), var_hat_real_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)),
       var_hat_imag_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)),
       k_vec_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)), k_vec_(k_vec), k_peak_(k_peak), sol_weight_(sol_weight), t_corr_(t_corr)
@@ -212,8 +212,8 @@ FewModesFT::FewModesFT(std::string prefix, int num_modes, const std::vector<std:
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, k_vec_h.cbegin(), k_vec_h.cend(), k_vec_d_.begin());
 	amrex::Gpu::streamSynchronize();
 
-	// Initialize random number generator
-	rng_.seed(rseed);
+	// Initialize random number generator using the caller-provided seed
+	rng_.seed(rseed); // NOLINT(cert-msc32-c,cert-msc51-cpp)
 	dist_ = std::uniform_real_distribution<>(-1.0, 1.0);
 }
 
