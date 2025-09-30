@@ -171,6 +171,7 @@ void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, cons
 
 } // namespace detail
 
+// NOLINTNEXTLINE(cert-msc32-c,cert-msc51-cpp)
 FewModesFT::FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
 		       amrex::Real t_corr, uint32_t rseed)
     : num_modes_(num_modes), prefix_(std::move(prefix)), var_hat_real_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)),
