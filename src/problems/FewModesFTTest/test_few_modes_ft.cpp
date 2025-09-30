@@ -86,15 +86,13 @@ auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry co
 	ForcingState &forcing = levelForcing[static_cast<std::size_t>(lev)];
 	const auto &ba = state_mf.boxArray();
 	const auto &dm = state_mf.DistributionMap();
-	const bool needs_allocation = !forcing.acceleration || forcing.acceleration->boxArray() != ba ||
-					  forcing.acceleration->DistributionMap() != dm;
+	const bool needs_allocation = !forcing.acceleration || forcing.acceleration->boxArray() != ba || forcing.acceleration->DistributionMap() != dm;
 
 	if (needs_allocation) {
 		const auto level_seed = static_cast<uint32_t>(forcingParams.randomSeed + lev);
 		forcing.modes = quokka::util::MakeRandomModes(forcingParams.numModes, forcingParams.kPeak, level_seed);
-		forcing.driver = std::make_unique<quokka::util::FewModesFT>(forcingParams.prefix, forcingParams.numModes, forcing.modes,
-						forcingParams.kPeak, forcingParams.solenoidalWeight, forcingParams.correlationTime,
-						level_seed, ba, dm);
+		forcing.driver = std::make_unique<quokka::util::FewModesFT>(forcingParams.prefix, forcingParams.numModes, forcing.modes, forcingParams.kPeak,
+									    forcingParams.solenoidalWeight, forcingParams.correlationTime, level_seed, ba, dm);
 		forcing.driver->SetPhases(geom);
 		forcing.phasesInitialized = true;
 		forcing.acceleration = std::make_unique<amrex::MultiFab>(ba, dm, AMREX_SPACEDIM, 0);
@@ -104,10 +102,7 @@ auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry co
 	return forcing;
 }
 
-void clear_forcing_state()
-{
-	levelForcing.clear();
-}
+void clear_forcing_state() { levelForcing.clear(); }
 
 } // namespace
 
