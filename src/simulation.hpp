@@ -3524,7 +3524,7 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
 		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, BCs_fc_, boundaryFunctor);
 		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_fc_, boundaryFunctor);
-		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;		
+		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
 					     restart_ref_ratio, face_mapper, BCs_fc_, 0);
 	}
