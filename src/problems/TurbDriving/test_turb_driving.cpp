@@ -238,7 +238,7 @@ template <> auto QuokkaSimulation<FewModesFTProblem>::ComputeStatistics() -> std
 		    const amrex::Real vz = pz * inv_rho;
 		    const amrex::Real speed_sq = vx * vx + vy * vy + vz * vz;
 		    if (cs_iso <= 0.0) {
-			    return amrex::Real(0.0);
+			    return static_cast<amrex::Real>(0.0);
 		    }
 
 		    return speed_sq / (cs_iso * cs_iso);
