@@ -104,8 +104,8 @@ auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry co
 		auto const &forcingParams = forcing_context().params;
 		const auto level_seed = static_cast<uint32_t>(forcingParams.randomSeed + lev);
 		forcing.modes = quokka::util::MakeRandomModes(forcingParams.numModes, forcingParams.kPeak, level_seed);
-		forcing.driver = std::make_unique<quokka::util::FewModesFT>(forcingParams.prefix, forcingParams.numModes, forcing.modes,
-						forcingParams.kPeak, forcingParams.solenoidalWeight, forcingParams.correlationTime, level_seed);
+		forcing.driver = std::make_unique<quokka::util::FewModesFT>(forcingParams.prefix, forcingParams.numModes, forcing.modes, forcingParams.kPeak,
+									    forcingParams.solenoidalWeight, forcingParams.correlationTime, level_seed);
 		forcing.driver->SetPhases(geom);
 		forcing.phasesInitialized = true;
 		forcing.acceleration = std::make_unique<amrex::MultiFab>(ba, dm, AMREX_SPACEDIM, 0);
@@ -218,7 +218,7 @@ auto problem_main() -> int
 
 	auto BCs_cc = quokka::BC<FewModesFTProblem>(quokka::BCType::int_dir);
 	QuokkaSimulation<FewModesFTProblem> sim(BCs_cc);
-	
+
 	sim.setInitialConditions();
 	sim.evolve();
 
