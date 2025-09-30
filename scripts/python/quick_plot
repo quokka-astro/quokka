@@ -150,6 +150,7 @@ def plot_one(pltdir, args):
     outdir = args.outdir
     hide_all = args.hide_all
     hide_axes = args.hide_axes
+    weight_field = args.weight_field
 
     mean_molecular_weight_per_H_atom = mean_molecular_weight * m_u
 
@@ -187,7 +188,7 @@ def plot_one(pltdir, args):
     if kind == "slc":
         slc = yt.SlicePlot(ds, view_dir, field, center=center)
     elif kind == "prj":
-        slc = yt.ProjectionPlot(ds, view_dir, field, weight_field=field_rho, center=center)
+        slc = yt.ProjectionPlot(ds, view_dir, field, weight_field=args.weight_field, center=center)
     else:
         raise ValueError(f"kind {kind} not supported")
 
@@ -363,6 +364,26 @@ def test_filter_snapshots_by_time_interval():
     print(filtered_times)
 
 
+def get_index_from_pltdir(pltdir):
+    idx = 0
+    try:
+        idx = int(os.path.basename(pltdir)[-8:])
+    except ValueError:
+        try:
+            idx = int(os.path.basename(pltdir)[-7:])
+        except ValueError:
+            try:
+                idx = int(os.path.basename(pltdir)[-6:])
+            except ValueError:
+                try:
+                    idx = int(os.path.basename(pltdir)[-5:])
+                except ValueError:
+                    try:
+                        idx = int(os.path.basename(pltdir)[-4:])
+                    except ValueError:
+                        raise ValueError(f"Cannot get index from {pltdir}")
+    return idx
+
 def main(args):
 
     if args.print_field_list:
@@ -403,10 +424,22 @@ def main(args):
     else:
         raise ValueError(f"kind {args.kind} not supported")
 
+    if args.weight_field in ["density", "rho", "den"]:
+        args.weight_field = ("gas", "density")
+    elif args.weight_field in ["volume", "vol"]:
+        args.weight_field = ("boxlib", "volume")
+    elif args.weight_field is None:
+        pass
+    else:
+        raise ValueError(f"weight_field {args.weight_field} not supported")
+
     # Filter out invalid directories and old directories
     valid_pltdirs = [
         pltdir for pltdir in args.pltdirs if os.path.isdir(pltdir) and ".old." not in os.path.basename(pltdir)
     ]
+
+    # sort pltdir
+    valid_pltdirs = sorted(valid_pltdirs, key=get_index_from_pltdir)
 
     # Filter snapshots by time interval if specified
     if args.time_interval is not None:
@@ -540,6 +573,8 @@ def parse_args():
     parser.add_argument("--hide_all", action="store_true", help="Hide both cb and cb labels")
     # maximum number of snapshots to plot
     parser.add_argument("--max_snapshots", type=int, default=None, help="Maximum number of snapshots to plot. Default: None (no filtering)")
+    # field to weight with in projection plot
+    parser.add_argument("--weight_field", type=str, default=None, help="Field to weight with in projection plot. Default: None (no weighting)")
 
     return parser.parse_args()
 
