@@ -71,6 +71,7 @@ namespace filesystem = experimental::filesystem;
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
+#include "turbulence/FewModesDriver.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 
@@ -735,7 +736,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterTime
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
 {
-	// user should implement if desired
+	static_cast<void>(time);
+	static_cast<void>(ncycle);
+	quokka::turbulence::ApplyFewModesDriver<problem_t>(lev, state_new_cc_[lev], this->Geom(lev), dt_lev);
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)

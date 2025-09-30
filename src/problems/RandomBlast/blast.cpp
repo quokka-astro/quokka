@@ -27,6 +27,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/quadrature.hpp"
 #include "physics_info.hpp"
+#include "turbulence/FewModesDriver.hpp"
 #include "util/BC.hpp"
 
 using amrex::Real;
@@ -197,10 +198,11 @@ template <> void QuokkaSimulation<RandomBlast>::computeBeforeTimestep()
 	// TODO(ben): need to force refinement to highest level for cells near particles
 }
 
-template <> void QuokkaSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real /*dt_lev*/, int /*ncycle*/)
+template <> void QuokkaSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real dt_lev, int /*ncycle*/)
 {
 	// compute operator split physics
 	injectEnergy(state_new_cc_[lev], geom[lev].ProbLoArray(), geom[lev].ProbHiArray(), geom[lev].CellSizeArray(), userData_);
+	quokka::turbulence::ApplyFewModesDriver<RandomBlast>(lev, state_new_cc_[lev], geom[lev], dt_lev);
 }
 
 template <> void QuokkaSimulation<RandomBlast>::computeAfterTimestep()
