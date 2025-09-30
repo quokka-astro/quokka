@@ -1,3 +1,6 @@
+quick_plot := /software/projects/pawsey0807/chongchong/setonix/quokka/scripts/python/quick_plot
+MP := 12
+
 t:
 	@echo $(PAWSEY_HDF5_HOME)
 
@@ -10,6 +13,9 @@ com:
 test:
 	../build/gpu-3d/src/problems/ProdGalaxyTallBox/ProdGalaxyTallBox ../inputs/ProdGalaxyTallBox.in max_timesteps=2
 
+pp:
+	$(quick_plot) plt* -j ${MP} --dir z --width 0.98,kpc --par StochasticStellarPop_particles --kind slc \
+	  && $(quick_plot) plt* -j ${MP} --dir z --width 0.98,kpc --par StochasticStellarPop_particles -f v
 
 config-cpu:
 	cd ../build/cpu-3d/ && (rm -rf ./* | true) && cmake -B . -S ../.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -G Ninja
