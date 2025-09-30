@@ -1,0 +1,30 @@
+#*****************************************************************
+# FewModesFT stochastic forcing test, 32^3 domain
+#*****************************************************************
+
+# Geometry
+geometry.prob_lo     = 0.0 0.0 0.0
+geometry.prob_hi     = 1.0 1.0 1.0
+geometry.is_periodic = 1   1   1
+
+# AMR / grid setup
+amr.n_cell          = 32 32 32
+amr.max_level       = 0
+amr.max_grid_size   = 32
+amr.blocking_factor = 16
+amr.n_error_buf     = 3
+amr.grid_eff        = 0.7
+
+# Timestep / output control
+plotfile_interval   = 2000
+checkpoint_interval = 0
+
+# FewModes forcing parameters
+fewmodesft.num_modes         = 10
+fewmodesft.k_peak            = 2.0
+fewmodesft.solenoidal_weight = 0.5
+fewmodesft.t_corr            = 1.0
+fewmodesft.random_seed       = 12345
+fewmodesft.rho0              = 1.0
+fewmodesft.p0                = 1.0
+
