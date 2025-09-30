@@ -184,13 +184,10 @@ def plot_one(pltdir, args):
 
     # plot slice or projection
     field_rho = ("gas", "density")
-    if kind in ["slc", "slice"]:
-        kind = "slc"
+    if kind == "slc":
         slc = yt.SlicePlot(ds, view_dir, field, center=center)
-    elif kind in ["prj", "proj", "projection"]:
-        kind = "prj"
-        slc = yt.ProjectionPlot(ds, view_dir, field,
-                                weight_field=field_rho, center=center)
+    elif kind == "prj":
+        slc = yt.ProjectionPlot(ds, view_dir, field, weight_field=field_rho, center=center)
     else:
         raise ValueError(f"kind {kind} not supported")
 
@@ -399,6 +396,13 @@ def main(args):
     else:
         args.field = ("boxlib", args.field)
 
+    if args.kind in ["slc", "slice"]:
+        args.kind = "slc"
+    elif args.kind in ["prj", "proj", "projection"]:
+        args.kind = "prj"
+    else:
+        raise ValueError(f"kind {args.kind} not supported")
+
     # Filter out invalid directories and old directories
     valid_pltdirs = [
         pltdir for pltdir in args.pltdirs if os.path.isdir(pltdir) and ".old." not in os.path.basename(pltdir)
@@ -413,6 +417,12 @@ def main(args):
         print(
             f"Selected {len(valid_pltdirs)} snapshots based on time interval of {args.time_interval}")
     print(f"Valid pltdirs: {valid_pltdirs}")
+
+    # Filter by maximum number of snapshots allowed
+    if args.max_snapshots is not None:
+        filter_step = len(valid_pltdirs) // args.max_snapshots + 1
+        valid_pltdirs = sorted(valid_pltdirs)[::filter_step]
+        print(f"Selected {len(valid_pltdirs)} snapshots based on max_snapshots of {args.max_snapshots}")
 
     # parse center
     if args.center is not None:
@@ -528,6 +538,8 @@ def parse_args():
     parser.add_argument("--axis_unit", type=str, default=None, help="Units for x and y axis, e.g. 'kpc', 'cm', 'pc'. Default: None (use dataset units)")
     parser.add_argument("--hide_axes", action="store_true", help="Hide hide axes")
     parser.add_argument("--hide_all", action="store_true", help="Hide both cb and cb labels")
+    # maximum number of snapshots to plot
+    parser.add_argument("--max_snapshots", type=int, default=None, help="Maximum number of snapshots to plot. Default: None (no filtering)")
 
     return parser.parse_args()
 
