@@ -53,13 +53,8 @@ derived_vars = pressure entropy nH temperature cooling_length \
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 
-## Resampled
-#cooling.cooling_table_type = resampled
-#cooling.hdf5_data_file = "../extern/cooling/isrf_1000Go_grains_resampled.h5"
-
-## CloudyCoolingTools
-cooling.cooling_table_type = cloudy_cooling_tools
-cooling.hdf5_data_file = "../extern/cooling/isrf_1000Go_grains.h5"
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/isrf_1000Go_grains_resampled.h5"
 
 nH_bg    = 0.003356403333 # cm^-3
 nH_cloud = 1.006921e+00   # cm^-3

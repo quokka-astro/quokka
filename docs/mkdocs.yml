@@ -10,11 +10,11 @@ theme:
 nav:
   - About: about.md
   - Equations: equations.md
+  - Citation: citation.md
   - Physics Modules:
     - Star Formation: star_formation.md
-  - Citation: citation.md
   - Simulation gallery:
-    - Hydro : gallery.md
+    - Hydro: gallery.md
   - User guide:
     - Installation: installation.md
     - Running on HPC clusters: running_on_hpc_clusters.md
@@ -33,6 +33,7 @@ nav:
   - Developer Guide:
     - Contributing Guide: contributing.md
     - Flowchart: flowchart.md
+    - Hydro Integrator: hydro_integrator.md
     - Debugging: debugging.md
     - Assertions and error checking: error_checking.md
     - Performance tips: performance.md
