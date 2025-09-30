@@ -127,7 +127,8 @@ struct FewModesFTProblem {
 };
 
 template <> struct quokka::EOS_Traits<FewModesFTProblem> {
-	static constexpr double gamma = 5.0 / 3.0;
+	static constexpr double gamma = 1.0;
+	static constexpr double cs_isothermal = 1.0;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
@@ -159,9 +160,7 @@ template <> void QuokkaSimulation<FewModesFTProblem>::setInitialConditionsOnGrid
 
 	const auto &forcingParams = forcing_context().params;
 	const auto rho0 = forcingParams.initialDensity;
-	const auto P0 = forcingParams.initialPressure;
-	const auto gamma = quokka::EOS_Traits<FewModesFTProblem>::gamma;
-	const auto eint0 = P0 / (gamma - 1.0);
+	constexpr auto eint0 = 0.0;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		state_cc(i, j, k, HydroSystem<FewModesFTProblem>::density_index) = rho0;
@@ -222,6 +221,7 @@ template <> auto QuokkaSimulation<FewModesFTProblem>::ComputeStatistics() -> std
 {
 	std::map<std::string, amrex::Real> stats;
 
+	const amrex::Real cs_iso = quokka::EOS_Traits<FewModesFTProblem>::cs_isothermal;
 	const amrex::Real mach_sq_integral =
 	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
 		    const amrex::Real rho = state(i, j, k, HydroSystem<FewModesFTProblem>::density_index);
@@ -237,13 +237,11 @@ template <> auto QuokkaSimulation<FewModesFTProblem>::ComputeStatistics() -> std
 		    const amrex::Real vy = py * inv_rho;
 		    const amrex::Real vz = pz * inv_rho;
 		    const amrex::Real speed_sq = vx * vx + vy * vy + vz * vz;
-
-		    const amrex::Real cs = HydroSystem<FewModesFTProblem>::ComputeSoundSpeed(state, i, j, k);
-		    if (cs <= 0.0) {
+		    if (cs_iso <= 0.0) {
 			    return amrex::Real(0.0);
 		    }
 
-		    return speed_sq / (cs * cs);
+		    return speed_sq / (cs_iso * cs_iso);
 	    });
 
 	const amrex::Geometry &geom0 = this->Geom(0);

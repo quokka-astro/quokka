@@ -20,7 +20,6 @@ max_timesteps       = 20000
 stop_time           = 1.0
 cfl                 = 0.3
 statistics_interval = 100
-stats_file          = turb_driving_stats.txt
 
 # FewModes forcing parameters
 fewmodesft.num_modes         = 10
@@ -29,5 +28,4 @@ fewmodesft.solenoidal_weight = 0.5
 fewmodesft.t_corr            = 1.0
 fewmodesft.random_seed       = 12345
 fewmodesft.rho0              = 1.0
-fewmodesft.p0                = 1.0
 fewmodesft.force_amplitude   = 1.0
