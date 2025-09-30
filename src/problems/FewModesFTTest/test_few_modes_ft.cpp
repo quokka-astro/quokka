@@ -98,8 +98,7 @@ auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry co
 	ForcingState &forcing = levelForcing[static_cast<std::size_t>(lev)];
 	const auto &ba = state_mf.boxArray();
 	const auto &dm = state_mf.DistributionMap();
-	const bool needs_allocation = !forcing.acceleration || forcing.acceleration->boxArray() != ba ||
-					  forcing.acceleration->DistributionMap() != dm;
+	const bool needs_allocation = !forcing.acceleration || forcing.acceleration->boxArray() != ba || forcing.acceleration->DistributionMap() != dm;
 
 	if (needs_allocation) {
 		auto const &forcingParams = forcing_context().params;
@@ -116,10 +115,7 @@ auto ensure_forcing_state(int lev, amrex::MultiFab &state_mf, amrex::Geometry co
 	return forcing;
 }
 
-void clear_forcing_state()
-{
-	forcing_context().levelForcing.clear();
-}
+void clear_forcing_state() { levelForcing.clear(); }
 
 } // namespace
 
@@ -222,17 +218,7 @@ auto problem_main() -> int
 
 	auto BCs_cc = quokka::BC<FewModesFTProblem>(quokka::BCType::int_dir);
 	QuokkaSimulation<FewModesFTProblem> sim(BCs_cc);
-
-	const amrex::ParmParse pp;
-	int max_grid_size = 32;
-	pp.query("max_grid_size", max_grid_size);
-	amrex::ParmParse amr_pp("amr");
-	amr_pp.add("max_grid_size", max_grid_size);
-	sim.maxTimesteps_ = 20000;
-	sim.stopTime_ = 1.0;
-	sim.cflNumber_ = 0.3;
-	sim.plotfileInterval_ = -1;
-
+	
 	sim.setInitialConditions();
 	sim.evolve();
 
