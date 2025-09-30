@@ -738,7 +738,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterLeve
 {
 	static_cast<void>(time);
 	static_cast<void>(ncycle);
-	quokka::turbulence::ApplyFewModesDriver<problem_t>(lev, state_new_cc_[lev], this->Geom(lev), dt_lev);
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+		quokka::turbulence::ApplyFewModesDriver<problem_t>(lev, state_new_cc_[lev], this->Geom(lev), dt_lev);
+	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
