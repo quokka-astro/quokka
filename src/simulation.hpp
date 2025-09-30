@@ -2427,12 +2427,7 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
 					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
 	} else if (cen == quokka::centering::fc) {
-		auto *face_mapper = [&]() -> amrex::Interpolater * {
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				return &amrex::face_divfree_interp;
-			}
-			return &amrex::face_linear_interp;
-		}();
+		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;
 		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
 					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), face_mapper, BCs, 0);
 	} else {
@@ -3529,12 +3524,7 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
 		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, BCs_fc_, boundaryFunctor);
 		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_fc_, boundaryFunctor);
-		auto *face_mapper = [&]() -> amrex::Interpolater * {
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				return &amrex::face_divfree_interp;
-			}
-			return &amrex::face_linear_interp;
-		}();
+		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;		
 		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
 					     restart_ref_ratio, face_mapper, BCs_fc_, 0);
 	}
