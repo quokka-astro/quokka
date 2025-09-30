@@ -239,8 +239,8 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= userData_.turbulent_size, "nx must be less than or equal to turbulent_size (128)");
 	
 	// z-range limits: apply turbulence only from 1.5*nx to 2.5*nx
-	const int k_start = static_cast<int>(1.5 * nx);
-	const int k_end = static_cast<int>(2.5 * nx);
+	const int k_start = nx + nx / 2;
+	const int k_end = 2 * nx + nx / 2;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
