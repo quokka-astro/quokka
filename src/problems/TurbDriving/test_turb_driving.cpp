@@ -222,29 +222,29 @@ template <> auto QuokkaSimulation<FewModesFTProblem>::ComputeStatistics() -> std
 {
 	std::map<std::string, amrex::Real> stats;
 
-	const amrex::Real mach_sq_integral = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
-		const amrex::Real rho = state(i, j, k, HydroSystem<FewModesFTProblem>::density_index);
-		if (rho <= 0.0) {
-			return amrex::Real(0.0);
-		}
+	const amrex::Real mach_sq_integral =
+	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
+		    const amrex::Real rho = state(i, j, k, HydroSystem<FewModesFTProblem>::density_index);
+		    if (rho <= 0.0) {
+			    return amrex::Real(0.0);
+		    }
 
-		const amrex::Real px = state(i, j, k, HydroSystem<FewModesFTProblem>::x1Momentum_index);
-		const amrex::Real py = state(i, j, k, HydroSystem<FewModesFTProblem>::x2Momentum_index);
-		const amrex::Real pz = state(i, j, k, HydroSystem<FewModesFTProblem>::x3Momentum_index);
-		const amrex::Real inv_rho = 1.0 / rho;
-		const amrex::Real vx = px * inv_rho;
-		const amrex::Real vy = py * inv_rho;
-		const amrex::Real vz = pz * inv_rho;
-		const amrex::Real speed_sq = vx * vx + vy * vy + vz * vz;
+		    const amrex::Real px = state(i, j, k, HydroSystem<FewModesFTProblem>::x1Momentum_index);
+		    const amrex::Real py = state(i, j, k, HydroSystem<FewModesFTProblem>::x2Momentum_index);
+		    const amrex::Real pz = state(i, j, k, HydroSystem<FewModesFTProblem>::x3Momentum_index);
+		    const amrex::Real inv_rho = 1.0 / rho;
+		    const amrex::Real vx = px * inv_rho;
+		    const amrex::Real vy = py * inv_rho;
+		    const amrex::Real vz = pz * inv_rho;
+		    const amrex::Real speed_sq = vx * vx + vy * vy + vz * vz;
 
-		const amrex::Real cs = HydroSystem<FewModesFTProblem>::ComputeSoundSpeed(state, i, j, k);
-		if (cs <= 0.0) {
-			return amrex::Real(0.0);
-		}
+		    const amrex::Real cs = HydroSystem<FewModesFTProblem>::ComputeSoundSpeed(state, i, j, k);
+		    if (cs <= 0.0) {
+			    return amrex::Real(0.0);
+		    }
 
-		return speed_sq / (cs * cs);
-	});
+		    return speed_sq / (cs * cs);
+	    });
 
 	const amrex::Geometry &geom0 = this->Geom(0);
 	const amrex::Real *prob_lo = geom0.ProbLo();
