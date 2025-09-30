@@ -139,7 +139,6 @@ template <> void QuokkaSimulation<FieldLoop>::ErrorEst(int lev, amrex::TagBoxArr
 		const auto &Bx_fc = state_new_fc_[lev][0].const_array(mfi);
 		const auto &By_fc = state_new_fc_[lev][1].const_array(mfi);
 		const auto &Bz_fc = state_new_fc_[lev][2].const_array(mfi);
-		constexpr int idx = Physics_Indices<FieldLoop>::mhdFirstIndex;
 
 		if (refine_based_on == RefineOn::Region) {
 			// static mesh refinement
@@ -151,8 +150,9 @@ template <> void QuokkaSimulation<FieldLoop>::ErrorEst(int lev, amrex::TagBoxArr
 					tag(i, j, k) = amrex::TagBox::SET;
 				}
 			});
-		} else if (refine_based_on == RefineOn::MagneticEnergy) {
-			// refine on magnetic energy density
+			} else if (refine_based_on == RefineOn::MagneticEnergy) {
+				// refine on magnetic energy density
+				constexpr int idx = Physics_Indices<FieldLoop>::mhdFirstIndex;
 			amrex::Real const threshold = 0.5 * A * A;
 			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real bx = 0.5 * (Bx_fc(i, j, k, idx) + Bx_fc(i + 1, j, k, idx));
