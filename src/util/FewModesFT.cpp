@@ -172,11 +172,10 @@ void compute_inverse_fourier_transform(const amrex::Box &bx, int num_modes, cons
 } // namespace detail
 
 FewModesFT::FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
-		       amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, bool fill_ghosts)
+		       amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm)
     : num_modes_(num_modes), prefix_(std::move(prefix)), var_hat_real_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)),
       var_hat_imag_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)),
-      k_vec_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)), k_vec_(k_vec), k_peak_(k_peak), sol_weight_(sol_weight), t_corr_(t_corr),
-      fill_ghosts_(fill_ghosts)
+      k_vec_d_(static_cast<std::size_t>(3) * static_cast<std::size_t>(num_modes)), k_vec_(k_vec), k_peak_(k_peak), sol_weight_(sol_weight), t_corr_(t_corr)
 {
 
 	if (num_modes > 100) {

@@ -45,7 +45,6 @@ class FewModesFT
 	std::uniform_real_distribution<> dist_;
 	amrex::Real sol_weight_; // power in solenoidal modes for projection. Set to negative to disable projection
 	amrex::Real t_corr_;	 // correlation time for evolution of Ornstein-Uhlenbeck process
-	bool fill_ghosts_;	 // if the inverse transform should also fill ghost zones
 
 	int gnx1_{};
 	int gnx2_{};
@@ -61,7 +60,7 @@ class FewModesFT
 
       public:
 	FewModesFT(std::string prefix, int num_modes, const std::vector<std::vector<amrex::Real>> &k_vec, amrex::Real k_peak, amrex::Real sol_weight,
-		   amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, bool fill_ghosts = false);
+		   amrex::Real t_corr, uint32_t rseed, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm);
 
 	void SetPhases(const amrex::Geometry &geom);
 	void Generate(amrex::MultiFab &mf, amrex::Real dt);

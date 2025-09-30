@@ -57,8 +57,8 @@ auto problem_main() -> int
 	// Generate random wave vectors
 	auto k_vec = quokka::util::MakeRandomModes(num_modes, k_peak, rseed);
 
-	// Create FewModesFT object with ghost cells enabled for proper divergence calculation
-	quokka::util::FewModesFT few_modes_ft("test", num_modes, k_vec, k_peak, sol_weight, t_corr, rseed, ba, dm, true);
+	// Create FewModesFT object
+	quokka::util::FewModesFT few_modes_ft("test", num_modes, k_vec, k_peak, sol_weight, t_corr, rseed, ba, dm);
 
 	// Set up phases
 	few_modes_ft.SetPhases(geom);
@@ -70,10 +70,11 @@ auto problem_main() -> int
 	// Compute some statistics
 	std::array<amrex::Real, 3> mean_field = {0.0, 0.0, 0.0};
 	std::array<amrex::Real, 3> rms_field = {0.0, 0.0, 0.0};
+	const amrex::Real total_cells = static_cast<amrex::Real>(geom.Domain().numPts());
 
 	for (int n = 0; n < 3; ++n) {
-		mean_field[n] = mf.norm0(n);
-		rms_field[n] = mf.norm2(n) / std::sqrt(static_cast<amrex::Real>(n_cell * n_cell * n_cell));
+		mean_field[n] = mf.sum(n, 1) / total_cells;
+		rms_field[n] = mf.norm2(n) / std::sqrt(total_cells);
 	}
 
 	amrex::Print() << "FewModesFT Test Results:\n";
