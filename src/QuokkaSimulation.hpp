@@ -2429,7 +2429,6 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 	}
 
 	if (do_reflux) {
-		amrex::Gpu::streamSynchronizeAll();
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, stage1Fluxes, lev, 0.5 * dt_radiation);
 	}
 
@@ -2463,7 +2462,6 @@ void QuokkaSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amrex:
 	}
 
 	if (do_reflux) {
-		amrex::Gpu::streamSynchronizeAll();
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, stage2Fluxes, lev, 0.5 * dt_radiation);
 	}
 }
@@ -2515,7 +2513,6 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 	}
 
 	if (do_reflux) {
-		amrex::Gpu::streamSynchronizeAll();
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation);
 	}
 }
@@ -2570,7 +2567,6 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 	}
 
 	if (do_reflux) {
-		amrex::Gpu::streamSynchronizeAll();
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, refluxFluxes, lev, 0.5 * dt_radiation);
 	}
 }
