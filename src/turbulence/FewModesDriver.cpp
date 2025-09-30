@@ -73,10 +73,7 @@ auto Params() -> FewModesDriverParameters const &
 	return ctx.params;
 }
 
-auto Enabled(FewModesDriverParameters const &params) -> bool
-{
-	return (params.numModes > 0) && (params.forceAmplitude != 0.0);
-}
+auto Enabled(FewModesDriverParameters const &params) -> bool { return (params.numModes > 0) && (params.forceAmplitude != 0.0); }
 
 auto StateForLevel(int lev, amrex::MultiFab &state_mf, amrex::Geometry const &geom) -> FewModesDriverState &
 {
@@ -96,7 +93,7 @@ auto StateForLevel(int lev, amrex::MultiFab &state_mf, amrex::Geometry const &ge
 		const auto level_seed = static_cast<uint32_t>(params.randomSeed + lev);
 		state.modes = quokka::util::MakeRandomModes(params.numModes, params.kPeak, level_seed);
 		state.driver = std::make_unique<quokka::util::FewModesFT>(params.prefix, params.numModes, state.modes, params.kPeak, params.solenoidalWeight,
-							      params.correlationTime, level_seed);
+									  params.correlationTime, level_seed);
 		state.driver->SetPhases(geom);
 		state.acceleration = std::make_unique<amrex::MultiFab>(ba, dm, AMREX_SPACEDIM, 0);
 		state.acceleration->setVal(0.0);
@@ -123,15 +120,9 @@ void GenerateAcceleration(FewModesDriverState &state, amrex::Real dt)
 
 } // namespace detail
 
-auto GetFewModesDriverParameters() -> FewModesDriverParameters const &
-{
-	return detail::Params();
-}
+auto GetFewModesDriverParameters() -> FewModesDriverParameters const & { return detail::Params(); }
 
-void ResetFewModesDriver()
-{
-	detail::ResetContext();
-}
+void ResetFewModesDriver() { detail::ResetContext(); }
 
 auto FewModesDriverEnabled() -> bool
 {

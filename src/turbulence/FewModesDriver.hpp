@@ -38,8 +38,7 @@ void GenerateAcceleration(FewModesDriverState &state, amrex::Real dt);
 void ResetContext();
 } // namespace detail
 
-template <typename problem_t>
-void ApplyFewModesDriver(int lev, amrex::MultiFab &state_mf, amrex::Geometry const &geom, amrex::Real dt)
+template <typename problem_t> void ApplyFewModesDriver(int lev, amrex::MultiFab &state_mf, amrex::Geometry const &geom, amrex::Real dt)
 {
 	static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "FewModes driver requires hydro to be enabled");
 

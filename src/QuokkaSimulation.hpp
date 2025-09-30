@@ -71,9 +71,9 @@ namespace filesystem = experimental::filesystem;
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
-#include "turbulence/FewModesDriver.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
+#include "turbulence/FewModesDriver.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
