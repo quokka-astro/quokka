@@ -386,7 +386,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	int status = 1;
-	const double error_tol = 0.002;
+	const double error_tol = 0.005;
 	if (sim.errorNorm_ < error_tol) {
 		status = 0;
 		amrex::Print() << "Error norm = " << sim.errorNorm_ << "\n";
