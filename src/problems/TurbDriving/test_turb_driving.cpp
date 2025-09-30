@@ -226,7 +226,7 @@ template <> auto QuokkaSimulation<FewModesFTProblem>::ComputeStatistics() -> std
 	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
 		    const amrex::Real rho = state(i, j, k, HydroSystem<FewModesFTProblem>::density_index);
 		    if (rho <= 0.0) {
-			    return amrex::Real(0.0);
+			    return static_cast<amrex::Real>(0.0);
 		    }
 
 		    const amrex::Real px = state(i, j, k, HydroSystem<FewModesFTProblem>::x1Momentum_index);
