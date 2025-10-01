@@ -47,8 +47,11 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	template <typename problem_t>
 	void writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 			   const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-			   const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers,
-			   void *tracerPC_ptr, const YAML::Node &simulationMetadata);
+			   const amrex::Vector<amrex::IntVect> &a_refRatio,
+			   const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
+			   const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc, int /*nghost_fc*/,
+			   quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
+			   const YAML::Node &simulationMetadata);
 
 	// Check if this diagnostic should write at this time/step (not needed since we use doDiag directly)
 	// [[nodiscard]] auto shouldWrite(const amrex::Real &a_time, int a_nstep) const -> bool { return doDiag(a_time, a_nstep); }
@@ -72,8 +75,11 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 template <typename problem_t>
 void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-				 const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers,
-				 void *tracerPC_ptr, const YAML::Node &simulationMetadata)
+				 const amrex::Vector<amrex::IntVect> &a_refRatio,
+				 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
+				 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc, int /*nghost_fc*/,
+				 quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
+				 const YAML::Node &simulationMetadata)
 {
 	BL_PROFILE("DiagPlotfile::writePlotfile()");
 
@@ -93,6 +99,25 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 
 	// Write the main plotfile data using standard AMReX format
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, a_mf, a_varnames, a_geoms, a_time, a_istep, a_refRatio);
+
+	// Write face-centered variables if present
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		// Create fc_vars directory if it doesn't exist
+		const std::string fc_vars_dir = plotfilename + "/fc_vars";
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::UtilCreateDirectory(fc_vars_dir, 0755);
+		}
+		amrex::ParallelDescriptor::Barrier();
+
+		std::vector<std::string> dimNames = {"x", "y", "z"};
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
+			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, a_nstep, 5);
+			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, a_mf_fc[idim], a_varnames_fc[idim], a_geoms, a_time, a_istep,
+						       a_refRatio);
+			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", simulationMetadata);
+		}
+	}
 
 	// Write metadata file (inside the plotfile directory)
 	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);

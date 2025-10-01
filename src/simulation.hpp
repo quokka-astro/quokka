@@ -2971,9 +2971,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 				auto const varnames = GetPlotfileVarNames();
 
+				// Prepare face-centered data
+				std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
+				std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> mf_fc_ptr;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					mf_fc_ptr[idim] = amrex::GetVecOfConstPtrs(mf_fc[idim]);
+				}
+				auto const varnames_fc = GetPlotfileVarNames_fc();
+
 				// Call DiagPlotfile's special writePlotfile method
 				plotfileDiag->writePlotfile(istep[0], tNew_[0], finestLevel(), mf_cc_ptr, varnames, Geom(0, finestLevel()), istep,
-							    refRatio(), particleRegister_, do_tracers, TracerPC.get(), simulationMetadata_);
+							    refRatio(), mf_fc_ptr, varnames_fc, nghost_fc_, particleRegister_, do_tracers, TracerPC.get(),
+							    simulationMetadata_);
 			} else {
 				// Regular diagnostic
 				diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, simulationMetadata_);
