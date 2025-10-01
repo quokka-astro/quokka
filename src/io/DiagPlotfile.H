@@ -14,6 +14,10 @@
 #include "particles/PhysicsParticles.hpp"
 #include <fstream>
 
+#ifdef QUOKKA_USE_OPENPMD
+#include "io/openPMD.hpp"
+#endif
+
 // Forward declaration
 namespace quokka
 {
@@ -59,6 +63,9 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	std::vector<std::string> m_particleTypes; // List of particle types to include
 	bool m_includeAllParticles{true};	  // If true, include all particle types
 	int m_nfiles{-1};			  // Number of files for output (-1 means default)
+
+	// Helper function to write metadata file
+	static void WriteMetadataFile(const std::string &metadataFilename, const YAML::Node &simulationMetadata);
 };
 
 // Template implementation must be in header
@@ -73,25 +80,22 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
 	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
 
+#ifdef QUOKKA_USE_OPENPMD
+	// Write using OpenPMD format
+	// TODO(bwibking): write particles using openPMD
+	quokka::OpenPMDOutput::WriteFile(a_varnames, finest_level + 1, a_mf, a_geoms, m_diagfile, a_time, a_nstep);
+	
+	// Write metadata file (outside the plotfile directory for OpenPMD)
+	WriteMetadataFile(plotfilename + ".yaml", simulationMetadata);
+#else
 	// Set the number of output files if specified
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
 
-	// Write the main plotfile data
+	// Write the main plotfile data using standard AMReX format
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, a_mf, a_varnames, a_geoms, a_time, a_istep, a_refRatio);
 
-	// Write metadata file
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
-		std::ofstream MetadataFile;
-		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
-		const std::string metadataFilename = plotfilename + "/metadata.yaml";
-		MetadataFile.open(metadataFilename.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
-		if (!MetadataFile.good()) {
-			amrex::FileOpenFailed(metadataFilename);
-		}
-		MetadataFile << simulationMetadata << '\n';
-		MetadataFile.close();
-	}
+	// Write metadata file (inside the plotfile directory)
+	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);
 
 	// Write tracer particles if enabled
 	if (do_tracers != 0) {
@@ -108,6 +112,23 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 	} else {
 		// Write only specified particle types using the filtered method
 		particleRegister.writePlotFileFiltered(plotfilename, m_particleTypes);
+	}
+#endif
+}
+
+// Helper function implementation
+inline void DiagPlotfile::WriteMetadataFile(const std::string &metadataFilename, const YAML::Node &simulationMetadata)
+{
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream MetadataFile;
+		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		MetadataFile.open(metadataFilename.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!MetadataFile.good()) {
+			amrex::FileOpenFailed(metadataFilename);
+		}
+		MetadataFile << simulationMetadata << '\n';
+		MetadataFile.close();
 	}
 }
 
