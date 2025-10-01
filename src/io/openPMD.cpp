@@ -91,7 +91,7 @@ auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::
 //----------------------------------------------------------------------------------------
 //! \fn void OpenPMDOutput:::WriteOutputFile(Mesh *pm)
 //  \brief  Write cell-centered MultiFab using openPMD
-void WriteFile(const std::vector<std::string> &varnames, int const output_levels, amrex::Vector<const amrex::MultiFab *> &mf,
+void WriteFile(const std::vector<std::string> &varnames, int const output_levels, const amrex::Vector<const amrex::MultiFab *> &mf,
 	       amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number)
 {
 	// open file
