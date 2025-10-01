@@ -616,32 +616,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Utility method to convert string name to particle type enum
-	[[nodiscard]] static auto stringToParticleType(const std::string &particleTypeName) -> std::optional<ParticleType>
-	{
-		if (particleTypeName == "Rad_particles") {
-			return ParticleType::Rad;
-		}
-#if AMREX_SPACEDIM == 3
-		if (particleTypeName == "CIC_particles") {
-			return ParticleType::CIC;
-		}
-		if (particleTypeName == "CICRad_particles") {
-			return ParticleType::CICRad;
-		}
-		if (particleTypeName == "StochasticStellarPop_particles") {
-			return ParticleType::StochasticStellarPop;
-		}
-		if (particleTypeName == "Sink_particles") {
-			return ParticleType::Sink;
-		}
-		if (particleTypeName == "Test_particles") {
-			return ParticleType::Test;
-		}
-#endif
-		return std::nullopt; // Unknown particle type
-	}
-
 	// Register a new particle type with specified properties
 	template <typename ContainerType> void registerParticleType(ContainerType *container, ParticleType type)
 	{
@@ -783,19 +757,29 @@ template <typename problem_t> class PhysicsParticleRegister
 	void writePlotFileFiltered(const std::string &plotfilename, const std::vector<std::string> &particleTypeNames)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::writePlotFileFiltered()");
-		for (const auto &particleTypeName : particleTypeNames) {
-			// Convert string name to ParticleType enum
-			auto ptype_opt = stringToParticleType(particleTypeName);
-
-			if (ptype_opt.has_value()) {
-				const ParticleType ptype = ptype_opt.value();
-				auto *descriptor = getParticleDescriptor(ptype);
-				if (descriptor != nullptr) {
-					descriptor->writePlotFile(plotfilename, particleTypeName);
-					descriptor->writeUnitsFile(plotfilename, particleTypeName);
+		
+		// Iterate through registered particles and write those whose names match the requested list
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			const std::string typeName = getParticleTypeName(type);
+			
+			// Check if this particle type is in the requested list
+			if (std::find(particleTypeNames.begin(), particleTypeNames.end(), typeName) != particleTypeNames.end()) {
+				descriptor->writePlotFile(plotfilename, typeName);
+				descriptor->writeUnitsFile(plotfilename, typeName);
+			}
+		}
+		
+		// Optionally warn about requested particle types that weren't found
+		for (const auto &requestedName : particleTypeNames) {
+			bool found = false;
+			for (const auto &[type, descriptor] : particleRegistry_) {
+				if (getParticleTypeName(type) == requestedName) {
+					found = true;
+					break;
 				}
-			} else {
-				amrex::Print() << "Warning: Unknown particle type '" << particleTypeName << "' will be skipped.\n";
+			}
+			if (!found) {
+				amrex::Print() << "Warning: Requested particle type '" << requestedName << "' is not registered.\n";
 			}
 		}
 	}
