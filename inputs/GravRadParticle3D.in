@@ -43,10 +43,8 @@ quokka.slice_z.int    = 2                   # Output cadence (in number of coars
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
 
-statistics_interval = 2
 projection_interval = 2
 projection.dirs = x
-derived_vars = nH
 
 max_timesteps = 2
 
