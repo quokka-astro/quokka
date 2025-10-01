@@ -4,7 +4,7 @@ This document lists all of the runtime parameters in Quokka that are set using t
 
 ## General
 
-These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` function in ``src/simulation.hpp``.
+These parameters are read in the [AMRSimulation<problem_t>::readParameters()](https://github.com/quokka-astro/quokka/blob/development/src/simulation.hpp#L702-L779) function in [`src/simulation.hpp`](https://github.com/quokka-astro/quokka/blob/development/src/simulation.hpp).
 
 | Parameter Name | Type | Description |
 |----|----|----|
@@ -43,7 +43,7 @@ These parameters are read in the ``AMRSimulation<problem_t>::readParameters()`` 
 
 ## Hydrodynamics
 
-These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+These parameters are read in the [QuokkaSimulation<problem_t>::readParmParse()](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L474-L535) function in [`src/QuokkaSimulation.hpp`](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp).
 
 | Parameter Name | Type | Description |
 |----|----|----|
@@ -56,7 +56,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 
 ## Radiation
 
-These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+These parameters are read in the [QuokkaSimulation<problem_t>::readParmParse()](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L474-L535) function in [`src/QuokkaSimulation.hpp`](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp).
 
 | Parameter Name | Type | Description |
 |----|----|----|
@@ -67,7 +67,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 
 ## MHD
 
-These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+These parameters are read in the [QuokkaSimulation<problem_t>::readParmParse()](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L474-L535) function in [`src/QuokkaSimulation.hpp`](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp).
 
 | Parameter Name | Type | Description |
 |----|----|----|
@@ -76,7 +76,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 
 ## Optically-thin radiative cooling
 
-These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+These parameters are read in the [QuokkaSimulation<problem_t>::readParmParse()](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L474-L535) function in [`src/QuokkaSimulation.hpp`](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp).
 
 | Parameter Name | Type | Description |
 |----|----|----|
@@ -87,7 +87,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 
 ## Chemistry
 
-These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+These parameters are read in the [QuokkaSimulation<problem_t>::readParmParse()](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L474-L535) function in [`src/QuokkaSimulation.hpp`](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp).
 
 | Parameter Name | Type | Description |
 |----|----|----|
@@ -97,7 +97,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 
 ## Particles
 
-These parameters are read in the ``particleParmParse()`` function in ``src/particles/particle_types.hpp``.
+These parameters are read in the [`particleParmParse()`](https://github.com/quokka-astro/quokka/blob/development/src/particles/particle_types.hpp#L331-L359) function in [`src/particles/particle_types.hpp`](https://github.com/quokka-astro/quokka/blob/development/src/particles/particle_types.hpp).
 
 | Parameter Name | Type | Description |
 |----|----|----|
