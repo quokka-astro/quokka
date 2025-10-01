@@ -12,6 +12,7 @@ nav:
   - Equations: equations.md
   - Citation: citation.md
   - Physics Modules:
+    - Magnetohydrodynamics: mhd_module.md
     - Star Formation: star_formation.md
   - Simulation gallery:
     - Hydro: gallery.md

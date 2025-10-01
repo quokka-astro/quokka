@@ -102,7 +102,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::dmap;
 	using AMRSimulation<problem_t>::istep;
 	using AMRSimulation<problem_t>::flux_reg_;
+	using AMRSimulation<problem_t>::emf_reg_;
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
+	using AMRSimulation<problem_t>::incrementEMFRegisters;
 	using AMRSimulation<problem_t>::finest_level;
 	using AMRSimulation<problem_t>::finestLevel;
 	using AMRSimulation<problem_t>::tNew_;
@@ -186,11 +188,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 #if (AMREX_SPACEDIM != 3)
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "MHD is only supported in 3D.");
 #endif // (AMREX_SPACEDIM != 3)
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			if (max_level > 0) {
-				amrex::Error("MHD is only supported for uniform grids (max_level must be 0).");
-			}
-		}
 
 		defineComponentNames();
 		defineDefaultPlotfileVariables();
@@ -282,10 +279,12 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void printCoordinates(int lev, const amrex::IntVect &cell_idx);
 
-	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine);
+	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
+					    amrex::EdgeFluxRegister *emf_as_crse = nullptr, amrex::EdgeFluxRegister *emf_as_fine = nullptr);
 
 	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
-				 amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
+				 amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
+				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
@@ -962,18 +961,29 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 {
 	const BL_PROFILE("QuokkaSimulation::advanceSingleTimestepAtLevel()");
 
-	// get flux registers
+	// get flux and EMF registers
 	amrex::FluxRegister *fr_as_crse = nullptr;
 	amrex::FluxRegister *fr_as_fine = nullptr;
+	amrex::EdgeFluxRegister *emf_as_crse = nullptr;
+	amrex::EdgeFluxRegister *emf_as_fine = nullptr;
 	if (do_reflux != 0) {
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
 			if (fr_as_crse != nullptr) {
 				fr_as_crse->setVal(0.0);
 			}
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				emf_as_crse = emf_reg_[lev + 1].get();
+				if (emf_as_crse != nullptr) {
+					emf_as_crse->reset();
+				}
+			}
 		}
 		if (lev > 0) {
 			fr_as_fine = flux_reg_[lev].get();
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				emf_as_fine = emf_reg_[lev].get();
+			}
 		}
 	}
 
@@ -988,7 +998,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 
 	// advance hydro
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
-		advanceHydroAtLevelWithRetries(lev, time, dt_lev, fr_as_crse, fr_as_fine);
+		advanceHydroAtLevelWithRetries(lev, time, dt_lev, fr_as_crse, fr_as_fine, emf_as_crse, emf_as_fine);
 	} else {
 		// copy hydro vars from state_old_cc_ to state_new_cc_
 		// (otherwise radiation update will be wrong!)
@@ -1196,10 +1206,15 @@ auto QuokkaSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F co
 
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::FluxRegister *fr_as_crse,
-								 amrex::FluxRegister *fr_as_fine)
+								 amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
+								 amrex::EdgeFluxRegister *emf_as_fine)
 {
 	const BL_PROFILE_REGION("HydroSolver");
 	const int max_retries = 6;
+
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		amrex::ignore_unused(emf_as_crse, emf_as_fine);
+	}
 
 	amrex::MultiFab accepted_state_cc(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	amrex::Copy(accepted_state_cc, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1273,8 +1288,8 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			}
 
 			const amrex::Real current_substep_time = time + static_cast<amrex::Real>(substep_index) * dt_substep;
-			const bool substep_success =
-			    advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, current_substep_time, dt_substep);
+			const bool substep_success = advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, emf_as_crse, emf_as_fine,
+									 lev, current_substep_time, dt_substep);
 			if (!substep_success) {
 				attempt_failed = true;
 				break;
@@ -1362,10 +1377,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCoordinates
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
-						      amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, int lev, amrex::Real time,
-						      amrex::Real dt_lev) -> bool
+						      amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
+						      amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool
 {
 	const BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
+
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		amrex::ignore_unused(emf_as_crse, emf_as_fine);
+	}
 
 	const amrex::Real stage1Weight = (integratorOrder_ == 2) ? 0.5 : 1.0;
 
@@ -1421,7 +1440,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			fillBoundaryConditions(state_old_fc_tmp[idim], state_old_fc_tmp[idim], lev, time, quokka::centering::fc, quokka::direction{idim},
-					       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone);
+					       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
+					       FillPatchType::fillpatch_function);
 		}
 	}
 
@@ -1585,7 +1605,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				fillBoundaryConditions(state_inter_fc_[idim], state_inter_fc_[idim], lev, time, quokka::centering::fc, quokka::direction{idim},
-						       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone);
+						       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
+						       FillPatchType::fillpatch_function);
 			}
 		}
 
@@ -1702,6 +1723,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	if (do_reflux == 1 && final_success) {
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			// E = -v x B, our emf is v x B, so we need to pass -dt
+			incrementEMFRegisters(emf_as_crse, emf_as_fine, ec_emf_components_rk_ave, lev, -1.0 * dt_lev);
+		}
 	}
 
 	if (do_tracers != 0 && final_success) {
