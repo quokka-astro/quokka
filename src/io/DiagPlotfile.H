@@ -4,12 +4,19 @@
 #include <string>
 #include <vector>
 
+#include "AMReX_AmrParticles.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_PlotFileUtil.H"
+#include "AMReX_Print.H"
 #include "AMReX_Vector.H"
 #include "DiagBase.H"
+#include "io/io_utils.hpp"
+#include "particles/PhysicsParticles.hpp"
+#include <fstream>
 
 // Forward declaration
-namespace quokka {
+namespace quokka
+{
 template <typename problem_t> class PhysicsParticleRegister;
 enum class ParticleType;
 } // namespace quokka
@@ -35,10 +42,9 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	// This is called directly from AMRSimulation::doDiagnostics()
 	template <typename problem_t>
 	void writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
-			   const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
-			   const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
-			   quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
-			   const YAML::Node &simulationMetadata);
+			   const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
+			   const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers,
+			   void *tracerPC_ptr, const YAML::Node &simulationMetadata);
 
 	// Check if this diagnostic should write at this time/step (not needed since we use doDiag directly)
 	// [[nodiscard]] auto shouldWrite(const amrex::Real &a_time, int a_nstep) const -> bool { return doDiag(a_time, a_nstep); }
@@ -56,19 +62,11 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 };
 
 // Template implementation must be in header
-#include "AMReX_AmrParticles.H"
-#include "AMReX_PlotFileUtil.H"
-#include "AMReX_Print.H"
-#include "io/io_utils.hpp"
-#include "particles/PhysicsParticles.hpp"
-#include <fstream>
-
 template <typename problem_t>
 void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
-				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
-				 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
-				 quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
-				 const YAML::Node &simulationMetadata)
+				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
+				 const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers,
+				 void *tracerPC_ptr, const YAML::Node &simulationMetadata)
 {
 	BL_PROFILE("DiagPlotfile::writePlotfile()");
 
