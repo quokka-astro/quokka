@@ -95,7 +95,7 @@ AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0}; // 
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
 
 // wavefront
-AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI;
+AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amrex::Real, 3> &vec_prf) -> std::array<amrex::Real, 3>
 {
