@@ -2979,10 +2979,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				}
 				auto const varnames_fc = GetPlotfileVarNames_fc();
 
-				// Call DiagPlotfile's special writePlotfile method
+				// Write cell-centered data and particles
 				plotfileDiag->writePlotfile(istep[0], tNew_[0], finestLevel(), mf_cc_ptr, varnames, Geom(0, finestLevel()), istep,
-							    refRatio(), mf_fc_ptr, varnames_fc, nghost_fc_, particleRegister_, do_tracers, TracerPC.get(),
-							    simulationMetadata_);
+							  refRatio(), particleRegister_, do_tracers, TracerPC.get(), simulationMetadata_);
+
+				// Write face-centered data if present
+				plotfileDiag->writePlotfileFC<problem_t>(amrex::Concatenate(plotfileDiag->getDiagFileName(), istep[0], 5), finestLevel(),
+								       mf_fc_ptr, varnames_fc, Geom(0, finestLevel()), tNew_[0], istep, refRatio(),
+								       simulationMetadata_);
 			} else {
 				// Regular diagnostic
 				diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, simulationMetadata_);

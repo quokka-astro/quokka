@@ -42,23 +42,14 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 
 	void close() override {}
 
-	// Special method for writing full plotfiles with particle data
+	// Special method for writing cell-centered data and particles
 	// This is called directly from AMRSimulation::doDiagnostics()
 	template <typename problem_t>
 	void writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 			   const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
 			   const amrex::Vector<amrex::IntVect> &a_refRatio,
-			   const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
-			   const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc, int /*nghost_fc*/,
 			   quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
 			   const YAML::Node &simulationMetadata);
-
-	// Helper method for writing cell-centered data
-	template <typename problem_t>
-	void writePlotfileCC(const std::string &plotfilename, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
-			     const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
-			     const amrex::Real &a_time, const amrex::Vector<int> &a_istep,
-			     const amrex::Vector<amrex::IntVect> &a_refRatio, const YAML::Node &simulationMetadata);
 
 	// Helper method for writing face-centered data
 	template <typename problem_t>
@@ -78,6 +69,9 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	// Check if all particles should be included
 	[[nodiscard]] auto includeAllParticles() const -> bool { return m_includeAllParticles; }
 
+	// Get the diagnostic file name
+	[[nodiscard]] auto getDiagFileName() const -> const std::string & { return m_diagfile; }
+
       private:
 	std::vector<std::string> m_particleTypes; // List of particle types to include
 	bool m_includeAllParticles{true};	  // If true, include all particle types
@@ -89,12 +83,16 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 
 // Template implementation must be in header
 template <typename problem_t>
-void DiagPlotfile::writePlotfileCC(const std::string &plotfilename, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
-				  const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
-				  const amrex::Real &a_time, const amrex::Vector<int> &a_istep,
-				  const amrex::Vector<amrex::IntVect> &a_refRatio, const YAML::Node &simulationMetadata)
+void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
+				const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
+				const amrex::Vector<amrex::IntVect> &a_refRatio,
+				quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
+				const YAML::Node &simulationMetadata)
 {
-	BL_PROFILE("DiagPlotfile::writePlotfileCC()");
+	BL_PROFILE("DiagPlotfile::writePlotfile()");
+
+	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
+	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
 
 #ifdef QUOKKA_USE_OPENPMD
 	// Write using OpenPMD format
@@ -111,6 +109,23 @@ void DiagPlotfile::writePlotfileCC(const std::string &plotfilename, int finest_l
 
 	// Write metadata file (inside the plotfile directory)
 	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);
+
+	// Write tracer particles if enabled
+	if (do_tracers != 0) {
+		auto *tracerPC = static_cast<amrex::AmrTracerParticleContainer *>(tracerPC_ptr);
+		if (tracerPC != nullptr) {
+			tracerPC->WritePlotFile(plotfilename, "tracer_particles");
+		}
+	}
+
+	// Write physics particles based on configuration
+	if (m_includeAllParticles) {
+		// Write all particle types
+		particleRegister.writePlotFile(plotfilename);
+	} else {
+		// Write only specified particle types using the filtered method
+		particleRegister.writePlotFileFiltered(plotfilename, m_particleTypes);
+	}
 #endif
 }
 
@@ -141,46 +156,6 @@ void DiagPlotfile::writePlotfileFC(const std::string &plotfilename, int finest_l
 						     a_refRatio);
 			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", simulationMetadata);
 		}
-	}
-#endif
-}
-
-template <typename problem_t>
-void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
-				const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-				const amrex::Vector<amrex::IntVect> &a_refRatio,
-				const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
-				const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc, int /*nghost_fc*/,
-				quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
-				const YAML::Node &simulationMetadata)
-{
-	BL_PROFILE("DiagPlotfile::writePlotfile()");
-
-	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
-	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
-
-	// Write cell-centered data
-	writePlotfileCC<problem_t>(plotfilename, finest_level, a_mf, a_varnames, a_geoms, a_time, a_istep, a_refRatio, simulationMetadata);
-
-	// Write face-centered data
-	writePlotfileFC<problem_t>(plotfilename, finest_level, a_mf_fc, a_varnames_fc, a_geoms, a_time, a_istep, a_refRatio, simulationMetadata);
-
-#ifndef QUOKKA_USE_OPENPMD
-	// Write tracer particles if enabled
-	if (do_tracers != 0) {
-		auto *tracerPC = static_cast<amrex::AmrTracerParticleContainer *>(tracerPC_ptr);
-		if (tracerPC != nullptr) {
-			tracerPC->WritePlotFile(plotfilename, "tracer_particles");
-		}
-	}
-
-	// Write physics particles based on configuration
-	if (m_includeAllParticles) {
-		// Write all particle types
-		particleRegister.writePlotFile(plotfilename);
-	} else {
-		// Write only specified particle types using the filtered method
-		particleRegister.writePlotFileFiltered(plotfilename, m_particleTypes);
 	}
 #endif
 }
