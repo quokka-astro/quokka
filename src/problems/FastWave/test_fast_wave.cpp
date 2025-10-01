@@ -201,13 +201,12 @@ void QuokkaSimulation<FastWave>::computeReferenceSolution(amrex::MultiFab &ref, 
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
-		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, time);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, 0);
 		});
 	}
 }
@@ -220,13 +219,12 @@ void QuokkaSimulation<FastWave>::computeReferenceSolution_fc(amrex::MultiFab &re
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
-		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, time);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, 0);
 		});
 	}
 }
