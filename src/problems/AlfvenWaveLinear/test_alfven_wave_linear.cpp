@@ -53,7 +53,7 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
 constexpr double delta_b_magn = 1e-6;
-constexpr double alfven_speed = b0_magn / std::sqrt(bg_density);
+constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
 {
