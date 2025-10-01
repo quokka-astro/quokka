@@ -85,8 +85,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normaliseVector(std::array<double,
 struct ProblemSetup {
 	// angles (radians) in the math reference frame (MRF)
 	double angle_between_k_b0_rad = 0.0;
-	double cos_angle_between_k_b0 = std::cos(angle_between_k_b0_rad);
-	double sin_angle_between_k_b0 = std::sin(angle_between_k_b0_rad);
+	double cos_angle_between_k_b0 = gcem::cos(angle_between_k_b0_rad);
+	double sin_angle_between_k_b0 = gcem::sin(angle_between_k_b0_rad);
 
 	// rotation from the problem reference frame (PRF) to the mrf
 	double k_rotation_in_xy_rad = 0.0;
@@ -132,7 +132,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
 	// d/dx A_x2 = bg_b * delta_b * cos(omega t - k x1); A_x1 = A_x3 = 0 -> delta_b_x1 = delta_b_x3 = 0
 	const double delta_A1_mrf = 0.0;
-	const double delta_A2_mrf = -(b0_magn * delta_b_magn / ps.k_magn) * std::sin(ps.omega * time - ps.k_magn * x_vec_mrf[0]);
+	const double delta_A2_mrf = -(b0_magn * delta_b_magn / ps.k_magn) * gcem::sin(ps.omega * time - ps.k_magn * x_vec_mrf[0]);
 	const double delta_A3_mrf = 0.0;
 	const double A1_mrf = bg_A1_mrf + delta_A1_mrf;
 	const double A2_mrf = bg_A2_mrf + delta_A2_mrf;
@@ -158,7 +158,7 @@ AMREX_GPU_DEVICE inline auto Az_prf(const double x1_prf, const double x2_prf, co
 
 AMREX_GPU_DEVICE
 void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, double time)
+			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, amrex::Real time)
 {
 	const amrex::Real x1_prf_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_prf_L = prob_lo[1] + j * dx[1];
@@ -171,7 +171,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const std::array<double, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
 		// this is agnostic to the choice of reference frame: vec(k) dot vec(x) is invariant under rotation
-		const double cos_phase = std::cos(ps.omega * time - ps.k_magn * x_vec_mrf_C[0]);
+		const double cos_phase = gcem::cos(ps.omega * time - ps.k_magn * x_vec_mrf_C[0]);
 
 		constexpr double elsasser_sgn = -1.0;
 		// equivalent to, but numerically safer than -omega / (k_magn * cos_theta)
@@ -280,12 +280,13 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution(amrex::MultiFa
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
+		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, tNew_[0]);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, time);
 		});
 	}
 }
@@ -298,12 +299,13 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution_fc(amrex::Mult
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
+		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, tNew_[0]);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, time);
 		});
 	}
 }
@@ -317,8 +319,8 @@ auto problem_main() -> int
 
 	constexpr double deg2rad = M_PI / 180.0;
 	const double angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-	const double cos_angle_between_k_b0 = std::cos(angle_between_k_b0_rad);
-	const double sin_angle_between_k_b0 = std::sin(angle_between_k_b0_rad);
+	const double cos_angle_between_k_b0 = gcem::cos(angle_between_k_b0_rad);
+	const double sin_angle_between_k_b0 = gcem::sin(angle_between_k_b0_rad);
 
 	int num_modes_x = 0;
 	int num_modes_y = 0;
