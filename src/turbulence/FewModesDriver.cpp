@@ -78,7 +78,7 @@ auto Enabled(FewModesDriverParameters const &params) -> bool { return (params.nu
 auto StateForLevel(int lev, amrex::MultiFab &state_mf, amrex::Geometry const &geom) -> FewModesDriverState &
 {
 	auto &ctx = context();
-	const auto requiredSize = static_cast<std::size_t>(lev + 1);
+	const auto requiredSize = static_cast<std::size_t>(lev + 1); // NOLINT(bugprone-misplaced-widening-cast)
 	if (ctx.levelStates.size() < requiredSize) {
 		ctx.levelStates.resize(requiredSize);
 	}
