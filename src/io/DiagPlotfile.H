@@ -108,45 +108,8 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 		// Write all particle types
 		particleRegister.writePlotFile(plotfilename);
 	} else {
-		// Write only specified particle types
-		for (const auto &particleTypeName : m_particleTypes) {
-			// Convert string name to ParticleType enum
-			bool found = false;
-			quokka::ParticleType ptype = quokka::ParticleType::Rad; // Initialize to avoid warning
-
-			if (particleTypeName == "Rad_particles") {
-				ptype = quokka::ParticleType::Rad;
-				found = true;
-			}
-#if AMREX_SPACEDIM == 3
-			else if (particleTypeName == "CIC_particles") {
-				ptype = quokka::ParticleType::CIC;
-				found = true;
-			} else if (particleTypeName == "CICRad_particles") {
-				ptype = quokka::ParticleType::CICRad;
-				found = true;
-			} else if (particleTypeName == "StochasticStellarPop_particles") {
-				ptype = quokka::ParticleType::StochasticStellarPop;
-				found = true;
-			} else if (particleTypeName == "Sink_particles") {
-				ptype = quokka::ParticleType::Sink;
-				found = true;
-			} else if (particleTypeName == "Test_particles") {
-				ptype = quokka::ParticleType::Test;
-				found = true;
-			}
-#endif
-
-			if (found) {
-				auto *descriptor = particleRegister.getParticleDescriptor(ptype);
-				if (descriptor != nullptr) {
-					descriptor->writePlotFile(plotfilename, particleTypeName);
-					descriptor->writeUnitsFile(plotfilename, particleTypeName);
-				}
-			} else {
-				amrex::Print() << "Warning: Unknown particle type '" << particleTypeName << "' will be skipped.\n";
-			}
-		}
+		// Write only specified particle types using the filtered method
+		particleRegister.writePlotFileFiltered(plotfilename, m_particleTypes);
 	}
 }
 
