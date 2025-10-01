@@ -92,6 +92,7 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "io/DiagBase.H"
+#include "io/DiagPlotfile.H"
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
@@ -2906,6 +2907,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 			amrex::Abort("[Diagnostics] Field " + v + " is not available!");
 		}
 	}
+
+	// Check if any diagnostic is a PlotFile type and disable regular plotfile output
+	for (const auto &diag : m_diagnostics) {
+		if (dynamic_cast<DiagPlotfile *>(diag.get()) != nullptr) {
+			if (plotfileInterval_ > 0) {
+				amrex::Print() << "DiagPlotfile detected: disabling regular plotfile output (plotfileInterval_ set to -1)\n";
+				plotfileInterval_ = -1;
+			}
+			break;
+		}
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::updateDiagnostics()
@@ -2950,7 +2962,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 
 	for (const auto &diag : m_diagnostics) {
 		if (diag->doDiag(tNew_[0], istep[0])) {
-			diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, simulationMetadata_);
+			// Check if this is a DiagPlotfile - if so, call its special writePlotfile method
+			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
+			if (plotfileDiag != nullptr) {
+				// Prepare full plotfile data
+				int const included_ghosts = std::min(nghost_cc_, nghost_fc_);
+				amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts);
+				amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
+				auto const varnames = GetPlotfileVarNames();
+
+				// Call DiagPlotfile's special writePlotfile method
+				plotfileDiag->writePlotfile(istep[0], tNew_[0], finestLevel(), mf_cc_ptr, varnames, Geom(0, finestLevel()), istep,
+							    refRatio(), particleRegister_, do_tracers, TracerPC.get(), simulationMetadata_);
+			} else {
+				// Regular diagnostic
+				diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, simulationMetadata_);
+			}
 		}
 	}
 }

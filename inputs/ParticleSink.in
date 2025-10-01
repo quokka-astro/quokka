@@ -39,7 +39,8 @@ tiny_profiler.enabled = 0
 quokka.diagnostics = plt
 quokka.plt.type = PlotFile         # pltfile for the whole box
 quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
-quokka.plt.int  = 3                # Output cadence (in number of coarse steps)
+quokka.plt.int  = 2                # Output cadence (in number of coarse steps)
+quokka.plt.particles = Sink_particles  # Only include Sink particles
 
 #quokka.slice_z.type = DiagFramePlane         # Diagnostic type
 #quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
