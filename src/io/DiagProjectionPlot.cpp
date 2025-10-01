@@ -114,4 +114,3 @@ void DiagProjectionPlot::addVars(amrex::Vector<std::string> & /*a_varList*/)
 	// DiagProjectionPlot doesn't use the standard diagnostic variable extraction system
 	// It accesses the full state data directly, so we don't add variables here
 }
-

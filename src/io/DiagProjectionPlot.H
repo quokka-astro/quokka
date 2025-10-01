@@ -54,7 +54,7 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	[[nodiscard]] auto getProjectionDirs() const -> const std::vector<amrex::Direction> & { return m_projectionDirs; }
 
       private:
-	std::vector<std::string> m_particleTypes; // List of particle types to include (default: empty)
+	std::vector<std::string> m_particleTypes;	// List of particle types to include (default: empty)
 	std::vector<amrex::Direction> m_projectionDirs; // Projection directions (x, y, z)
 };
 
@@ -77,4 +77,3 @@ void DiagProjectionPlot::writeProjection(amrex::Direction dir, std::unordered_ma
 }
 
 #endif // DIAGPROJECTIONPLOT_H
-

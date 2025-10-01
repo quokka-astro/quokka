@@ -122,8 +122,8 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 // Overload with particle support
 template <typename problem_t>
 void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
-		     const std::string &basename, quokka::PhysicsParticleRegister<problem_t> &particleRegister,
-		     const std::vector<std::string> &particleTypes, const YAML::Node &simulationMetadata)
+		     const std::string &basename, quokka::PhysicsParticleRegister<problem_t> &particleRegister, const std::vector<std::string> &particleTypes,
+		     const YAML::Node &simulationMetadata)
 {
 	BL_PROFILE("quokka::diagnostics::WriteProjection(with particles)");
 

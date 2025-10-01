@@ -872,7 +872,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		WritePlotFile();
 	}
 
-
 	if (particleInterval_ > 0) {
 		WriteParticleFile();
 	}
@@ -1203,7 +1202,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			WritePlotFile();
 		}
 
-
 		if (particleInterval_ > 0 && (step + 1) % particleInterval_ == 0) {
 			last_particle_step = step + 1;
 			WriteParticleFile();
@@ -1292,7 +1290,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && istep[0] > last_plot_file_step) {
 		WritePlotFile();
 	}
-
 
 	// write final particle file
 	if (particleInterval_ > 0 && istep[0] > last_particle_step) {
@@ -2983,7 +2980,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 					// Compute and write projections for each direction
 					for (auto const &dir : projectionDiag->getProjectionDirs()) {
 						std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-						projectionDiag->writeProjection<problem_t>(dir, proj, tNew_[0], istep[0], particleRegister_, simulationMetadata_);
+						projectionDiag->writeProjection<problem_t>(dir, proj, tNew_[0], istep[0], particleRegister_,
+											   simulationMetadata_);
 					}
 				} else {
 					// Regular diagnostic
