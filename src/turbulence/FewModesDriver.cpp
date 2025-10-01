@@ -57,7 +57,7 @@ auto Params() -> FewModesDriverParameters const &
 		RegisterFinalizeCleanup();
 
 		ctx.params = FewModesDriverParameters{};
-		amrex::ParmParse pp("fewmodesft");
+		amrex::ParmParse const pp("fewmodesft");
 		pp.query("prefix", ctx.params.prefix);
 		pp.query("num_modes", ctx.params.numModes);
 		pp.query("k_peak", ctx.params.kPeak);
