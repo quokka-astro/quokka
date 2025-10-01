@@ -82,40 +82,33 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normaliseVector(std::array<amrex::
 	}
 }
 
-struct ProblemSetup {
-	// angles (radians) in the math reference frame (MRF)
-	double angle_between_k_b0_rad = 0.0;
-	double cos_angle_between_k_b0 = std::cos(angle_between_k_b0_rad);
-	double sin_angle_between_k_b0 = std::sin(angle_between_k_b0_rad);
+// angles (radians) in the math reference frame (MRF)
+AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0;
 
-	// rotation from the problem reference frame (PRF) to the mrf
-	double k_rotation_in_xy_rad = 0.0;
-	double k_elevation_from_xy_rad = 0.0;
+// rotation from the problem reference frame (PRF) to the MRF
+AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;
+AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0;
 
-	// MRF expressed in the PRF
-	std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};
-	std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};
-	std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0};
+// MRF expressed in the PRF
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0};
 
-	// wavefront
-	double k_magn = 2.0 * M_PI;
-	double omega = alfven_speed * k_magn;
-};
-
-AMREX_GPU_MANAGED ProblemSetup ps; // NOLINT
+// wavefront
+AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI;
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amrex::Real, 3> &vec_prf) -> std::array<amrex::Real, 3>
 {
-	return {vec_prf[0] * ps.k_dir_prf[0] + vec_prf[1] * ps.k_dir_prf[1] + vec_prf[2] * ps.k_dir_prf[2],
-		vec_prf[0] * ps.inplane_dir_prf[0] + vec_prf[1] * ps.inplane_dir_prf[1] + vec_prf[2] * ps.inplane_dir_prf[2],
-		vec_prf[0] * ps.outofplane_dir_prf[0] + vec_prf[1] * ps.outofplane_dir_prf[1] + vec_prf[2] * ps.outofplane_dir_prf[2]};
+	return {vec_prf[0] * k_dir_prf[0] + vec_prf[1] * k_dir_prf[1] + vec_prf[2] * k_dir_prf[2],
+		vec_prf[0] * inplane_dir_prf[0] + vec_prf[1] * inplane_dir_prf[1] + vec_prf[2] * inplane_dir_prf[2],
+		vec_prf[0] * outofplane_dir_prf[0] + vec_prf[1] * outofplane_dir_prf[1] + vec_prf[2] * outofplane_dir_prf[2]};
 }
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amrex::Real, 3> &vec_mrf) -> std::array<amrex::Real, 3>
 {
-	return {vec_mrf[0] * ps.k_dir_prf[0] + vec_mrf[1] * ps.inplane_dir_prf[0] + vec_mrf[2] * ps.outofplane_dir_prf[0],
-		vec_mrf[0] * ps.k_dir_prf[1] + vec_mrf[1] * ps.inplane_dir_prf[1] + vec_mrf[2] * ps.outofplane_dir_prf[1],
-		vec_mrf[0] * ps.k_dir_prf[2] + vec_mrf[1] * ps.inplane_dir_prf[2] + vec_mrf[2] * ps.outofplane_dir_prf[2]};
+	return {vec_mrf[0] * k_dir_prf[0] + vec_mrf[1] * inplane_dir_prf[0] + vec_mrf[2] * outofplane_dir_prf[0],
+		vec_mrf[0] * k_dir_prf[1] + vec_mrf[1] * inplane_dir_prf[1] + vec_mrf[2] * outofplane_dir_prf[1],
+		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
@@ -124,15 +117,16 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2,
 					 "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
-	const double b0_x1_mrf = b0_magn * ps.cos_angle_between_k_b0;
-	const double b0_x2_mrf = b0_magn * ps.sin_angle_between_k_b0;
+	const double b0_x1_mrf = b0_magn * std::cos(angle_between_k_b0_rad);
+	const double b0_x2_mrf = b0_magn * std::sin(angle_between_k_b0_rad);
 	// bg_A = (0, 0, b0_x1 * x2 - b0_x2 * x1) -> curl(bg_A) = (b0_x1, b0_x2, 0)
 	const double bg_A1_mrf = 0.0;
 	const double bg_A2_mrf = 0.0;
 	const double bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
 	// d/dx A_x2 = bg_b * delta_b * cos(omega t - k x1); A_x1 = A_x3 = 0 -> delta_b_x1 = delta_b_x3 = 0
+	const double omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
 	const double delta_A1_mrf = 0.0;
-	const double delta_A2_mrf = -(b0_magn * delta_b_magn / ps.k_magn) * std::sin(ps.omega * time - ps.k_magn * x_vec_mrf[0]);
+	const double delta_A2_mrf = -(b0_magn * delta_b_magn / k_magn) * std::sin(omega * time - k_magn * x_vec_mrf[0]);
 	const double delta_A3_mrf = 0.0;
 	const double A1_mrf = bg_A1_mrf + delta_A1_mrf;
 	const double A2_mrf = bg_A2_mrf + delta_A2_mrf;
@@ -171,24 +165,25 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
 		// this is agnostic to the choice of reference frame: vec(k) dot vec(x) is invariant under rotation
-		const double cos_phase = std::cos(ps.omega * time - ps.k_magn * x_vec_mrf_C[0]);
+		const double omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
+		const double cos_phase = std::cos(omega * time - k_magn * x_vec_mrf_C[0]);
 
 		constexpr double elsasser_sgn = -1.0;
 		// equivalent to, but numerically safer than -omega / (k_magn * cos_theta)
 		const double delta_v_magn = elsasser_sgn * alfven_speed * delta_b_magn * cos_phase;
 
-		const double v_x1_prf = delta_v_magn * ps.outofplane_dir_prf[0];
-		const double v_x2_prf = delta_v_magn * ps.outofplane_dir_prf[1];
-		const double v_x3_prf = delta_v_magn * ps.outofplane_dir_prf[2];
+		const double v_x1_prf = delta_v_magn * outofplane_dir_prf[0];
+		const double v_x2_prf = delta_v_magn * outofplane_dir_prf[1];
+		const double v_x3_prf = delta_v_magn * outofplane_dir_prf[2];
 
 		// background b
-		const double b0_x1_prf = b0_magn * (ps.cos_angle_between_k_b0 * ps.k_dir_prf[0] + ps.sin_angle_between_k_b0 * ps.inplane_dir_prf[0]);
-		const double b0_x2_prf = b0_magn * (ps.cos_angle_between_k_b0 * ps.k_dir_prf[1] + ps.sin_angle_between_k_b0 * ps.inplane_dir_prf[1]);
-		const double b0_x3_prf = b0_magn * (ps.cos_angle_between_k_b0 * ps.k_dir_prf[2] + ps.sin_angle_between_k_b0 * ps.inplane_dir_prf[2]);
+		const double b0_x1_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[0] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[0]);
+		const double b0_x2_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[1] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[1]);
+		const double b0_x3_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[2] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[2]);
 		// perturbed b
-		const double delta_b_x1_prf = b0_magn * delta_b_magn * cos_phase * ps.outofplane_dir_prf[0];
-		const double delta_b_x2_prf = b0_magn * delta_b_magn * cos_phase * ps.outofplane_dir_prf[1];
-		const double delta_b_x3_prf = b0_magn * delta_b_magn * cos_phase * ps.outofplane_dir_prf[2];
+		const double delta_b_x1_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[0];
+		const double delta_b_x2_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[1];
+		const double delta_b_x3_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[2];
 		// total b
 		const double b_x1_prf = b0_x1_prf + delta_b_x1_prf;
 		const double b_x2_prf = b0_x2_prf + delta_b_x2_prf;
@@ -318,9 +313,7 @@ auto problem_main() -> int
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 
 	constexpr double deg2rad = M_PI / 180.0;
-	const double angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-	const double cos_angle_between_k_b0 = std::cos(angle_between_k_b0_rad);
-	const double sin_angle_between_k_b0 = std::sin(angle_between_k_b0_rad);
+	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 
 	int num_modes_x = 0;
 	int num_modes_y = 0;
@@ -336,14 +329,11 @@ auto problem_main() -> int
 	// we assume box length = 1.0
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
-	const double k_magn = computeMagnitude(k_vec_prf);
-	const std::array<amrex::Real, 3> k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
+	k_magn = computeMagnitude(k_vec_prf);
+	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
-	const double k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
-	const double k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
-
-	// note that this is rotation invariant
-	const double omega = alfven_speed * k_magn * cos_angle_between_k_b0;
+	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
+	k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
 
 	// to build our orthonormal basis in the problem reference frame (PRF)
 	// first choose a vector that is not aligned/parallel with the wave propagation direction
@@ -353,23 +343,12 @@ auto problem_main() -> int
 	}
 
 	// define the plane in which b0 will sit
-	std::array<amrex::Real, 3> inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
+	inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
 	normaliseVector(inplane_dir_prf);
 
 	// define the direction the perturbation will be induced
-	std::array<amrex::Real, 3> outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
+	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normaliseVector(outofplane_dir_prf);
-
-	ps.angle_between_k_b0_rad = angle_between_k_b0_rad;
-	ps.cos_angle_between_k_b0 = cos_angle_between_k_b0;
-	ps.sin_angle_between_k_b0 = sin_angle_between_k_b0;
-	ps.k_rotation_in_xy_rad = k_rotation_in_xy_rad;
-	ps.k_elevation_from_xy_rad = k_elevation_from_xy_rad;
-	ps.k_dir_prf = k_dir_prf;
-	ps.k_magn = k_magn;
-	ps.omega = omega;
-	ps.inplane_dir_prf = inplane_dir_prf;
-	ps.outofplane_dir_prf = outofplane_dir_prf;
 
 	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
 
