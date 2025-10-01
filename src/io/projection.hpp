@@ -139,7 +139,8 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 	const std::string filename = amrex::Concatenate(basename, istep, 5);
 
 	// Write particles using the filtered method
-	particleRegister.writePlotFileFiltered(filename, particleTypes);
+	constexpr int max_particles_to_write = 10000;
+	particleRegister.writePlotFileFiltered(filename, particleTypes, max_particles_to_write);
 
 	amrex::Print() << "  Wrote particles to projection " << filename << "\n";
 }

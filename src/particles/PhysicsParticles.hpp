@@ -754,7 +754,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Write only specified particle types to plot file
-	void writePlotFileFiltered(const std::string &plotfilename, const std::vector<std::string> &particleTypeNames)
+	void writePlotFileFiltered(const std::string &plotfilename, const std::vector<std::string> &particleTypeNames, const int max_particles_to_write = -1)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::writePlotFileFiltered()");
 
@@ -764,6 +764,10 @@ template <typename problem_t> class PhysicsParticleRegister
 
 			// Check if this particle type is in the requested list
 			if (std::find(particleTypeNames.begin(), particleTypeNames.end(), typeName) != particleTypeNames.end()) {
+				if (max_particles_to_write > 0 && descriptor->getNumParticles() > max_particles_to_write) {
+					amrex::Print() << "Warning: Skipping particle type '" << typeName << "' because it has more than " << max_particles_to_write << " particles.\n";
+					continue;
+				}
 				descriptor->writePlotFile(plotfilename, typeName);
 				descriptor->writeUnitsFile(plotfilename, typeName);
 			}
