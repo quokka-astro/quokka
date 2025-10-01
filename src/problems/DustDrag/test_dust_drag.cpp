@@ -83,7 +83,7 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 
 auto problem_main() -> int
 {
-    // Problem parameters
+    // problem parameters
     const double Lx = 1.0;
     const double CFL_number = 0.8;
 
@@ -93,7 +93,7 @@ auto problem_main() -> int
     const double sigma = 0.1;
     const double xc = 0.5;
 
-    // Boundary conditions
+    // boundary conditions
     constexpr int nvars = HydroSystem<StreamingProblem>::nvar_;
     amrex::Vector<amrex::BCRec> BCs_cc(nvars);
     for (int n = 0; n < nvars; ++n) {
@@ -103,7 +103,7 @@ auto problem_main() -> int
         }
     }
 
-    // Problem initialization
+    // problem initialization
     QuokkaSimulation<StreamingProblem> sim(BCs_cc);
 
     sim.reconstructionOrder_ = 3;
@@ -188,7 +188,7 @@ auto problem_main() -> int
         amrex::Print() << "Relative L1 norm for dust density   = " << rel_err_norm_dust_rho << '\n';
 
 #ifdef HAVE_PYTHON
-        // === Plot density (gas + dust) ===
+        // plot density (gas + dust) 
         matplotlibcpp::clf();
 
         std::map<std::string, std::string> rho_gas_args;
@@ -212,7 +212,7 @@ auto problem_main() -> int
         rho_dust_exact_args["color"] = "b";
         rho_dust_exact_args["linestyle"] = ":";
 
-        // gas density (from state)
+        // gas density
         std::vector<double> rho_gas_sim(nx);
         for (int i = 0; i < nx; ++i) {
             rho_gas_sim.at(i) = values.at(HydroSystem<StreamingProblem>::density_index)[i];
@@ -229,7 +229,7 @@ auto problem_main() -> int
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
         matplotlibcpp::save("./dust_drag_density.pdf");
 
-        // === Plot velocity (gas + dust) ===
+        // plot velocity (gas + dust) 
         matplotlibcpp::clf();
         matplotlibcpp::ylim(0.0, 6.0);
 
@@ -304,7 +304,7 @@ auto problem_main() -> int
         amrex::Print() << "Dust is disabled; skipped dust diagnostics." << '\n';
 
 #ifdef HAVE_PYTHON
-        // === Plot density (gas only) ===
+        // plot density (gas only)
         matplotlibcpp::clf();
 
         std::map<std::string, std::string> rho_gas_args;
@@ -331,7 +331,7 @@ auto problem_main() -> int
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
         matplotlibcpp::save("./dust_drag_density.pdf");
 
-        // === Plot velocity (gas only) ===
+        // plot velocity (gas only) 
         matplotlibcpp::clf();
         matplotlibcpp::ylim(0.0, 1.1);
 

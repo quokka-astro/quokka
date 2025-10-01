@@ -81,11 +81,11 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 
 auto problem_main() -> int
 {
-    // Problem parameters
+    // problem parameters
     const double Lx = 1.0;
     const double CFL_number = 0.8;
 
-    // Boundary conditions
+    // boundary conditions
     constexpr int nvars = HydroSystem<StreamingProblem>::nvar_;
     amrex::Vector<amrex::BCRec> BCs_cc(nvars);
     for (int n = 0; n < nvars; ++n) {
@@ -95,7 +95,7 @@ auto problem_main() -> int
         }
     }
 
-    // Problem initialization
+    // problem initialization
     QuokkaSimulation<StreamingProblem> sim(BCs_cc);
 
     sim.reconstructionOrder_ = 3;
@@ -115,7 +115,7 @@ auto problem_main() -> int
     std::vector<double> xs(nx);
 
     if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
-        // === numerical values ===
+        // numerical values
         std::vector<double> vx_sim(nx);
         std::vector<double> vx_dust1_sim(nx);
         std::vector<double> vx_dust2_sim(nx);
@@ -124,7 +124,7 @@ auto problem_main() -> int
         std::vector<double> rho_dust1_sim(nx);
         std::vector<double> rho_dust2_sim(nx);
 
-        // === exact values ===
+        // exact values
         std::vector<double> vx_exact(nx);
         std::vector<double> vx_dust1_exact(nx);
         std::vector<double> vx_dust2_exact(nx);
@@ -136,7 +136,7 @@ auto problem_main() -> int
         for (int i = 0; i < nx; ++i) {
             xs[i] = position[i];
 
-            // velocities (constant in this setup)
+            // velocities 
             vx_exact[i] = v0;
             vx_dust1_exact[i] = 2.0 * v0;
             vx_dust2_exact[i] = 0.5 * v0;
@@ -158,7 +158,7 @@ auto problem_main() -> int
             rho_dust2_sim[i] = dust2_density;
         }
 
-        // === Error norms (check gas + dust1 + dust2) ===
+        // error norms (check gas + dust1 + dust2)
         auto rel_err = [&](const std::vector<double> &sim, const std::vector<double> &exact) {
             double err = 0.0;
 						double sol = 0.0;
@@ -184,7 +184,7 @@ auto problem_main() -> int
         }
 
 #ifdef HAVE_PYTHON
-        // === Plot density ===
+        // plot density 
         matplotlibcpp::clf();
         matplotlibcpp::ylim(0.0, 2.0);  
         matplotlibcpp::plot(xs, rho_gas_sim, {{"label", "gas (num)"}, {"color", "r"}, {"linestyle", "-"}});
@@ -200,7 +200,7 @@ auto problem_main() -> int
 				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_damping_density.pdf");
 
-        // === Plot velocity ===
+        // plot velocity
         matplotlibcpp::clf();
         matplotlibcpp::ylim(0.0, 2.5 * v0); 
         matplotlibcpp::plot(xs, vx_sim, {{"label", "gas vx (num)"}, {"color", "r"}, {"linestyle", "-"}});
@@ -220,7 +220,7 @@ auto problem_main() -> int
         return status;
 
     } else {
-        // === Dust disabled case ===
+        // dust disabled case
         std::vector<double> vx_sim(nx);
 				std::vector<double> vx_exact(nx);
         std::vector<double> rho_gas_sim(nx, rho);
