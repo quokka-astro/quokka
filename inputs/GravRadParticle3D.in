@@ -28,7 +28,7 @@ stop_time = 0.4
 plotfile_interval = -1
 checkpointtime_interval = -1
 
-quokka.diagnostics = plt slice_z 
+quokka.diagnostics = plt slice_z proj
 
 quokka.plt.type = PlotFile         # pltfile for the whole box
 quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
@@ -43,8 +43,11 @@ quokka.slice_z.int    = 2                   # Output cadence (in number of coars
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
 
-projection_interval = 2
-projection.dirs = x
+quokka.proj.type = ProjectionPlot   # Projection plot diagnostic
+quokka.proj.file = proj_plt         # Output file prefix (must end in "plt")
+quokka.proj.int  = 2                # Output cadence (in number of coarse steps)
+quokka.proj.dirs = x                # Projection directions (x, y, z)
+quokka.proj.particles = CIC_particles # List of particle types to include in output (default to none)
 
 max_timesteps = 2
 

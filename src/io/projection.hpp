@@ -9,6 +9,7 @@
 ///  \brief AMReX I/O for 2D projections
 
 #include <string>
+#include <vector>
 
 // AMReX headers
 #include "AMReX_MultiFab.H"
@@ -17,13 +18,22 @@
 #include "AMReX_VisMF.H"
 #include <AMReX.H>
 
+// YAML headers
+#include <yaml-cpp/yaml.h>
+
+// Forward declarations
+namespace quokka
+{
+template <typename problem_t> class PhysicsParticleRegister;
+} // namespace quokka
+
 namespace quokka::diagnostics
 {
 
 namespace detail
 {
 
-auto direction_to_string(const amrex::Direction dir) -> std::string;
+auto direction_to_string(amrex::Direction dir) -> std::string;
 auto transform_box_to_2D(amrex::Direction const &dir, amrex::Box const &box) -> amrex::Box;
 auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &box) -> amrex::RealBox;
 
@@ -81,9 +91,9 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 	auto const &domain_box = geom[0].Domain();
 	auto const &dx = geom[0].CellSizeArray();
 	auto const &arr = q[0].const_arrays();
-	amrex::BaseFab<amrex::Real> proj =
-	    amrex::ReduceToPlane<ReduceOp, amrex::Real>(int(dir), domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-		    return dx[int(dir)] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
+	amrex::BaseFab<amrex::Real> proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
+	    static_cast<int>(dir), domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+		    return dx[static_cast<int>(dir)] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 	    });
 	amrex::Gpu::streamSynchronize();
 
@@ -106,7 +116,33 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 	return proj_host;
 }
 
-void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep);
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
+		     const std::string &basename, const YAML::Node &simulationMetadata);
+
+// Overload with particle support
+template <typename problem_t>
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
+		     const std::string &basename, quokka::PhysicsParticleRegister<problem_t> &particleRegister,
+		     const std::vector<std::string> &particleTypes, const YAML::Node &simulationMetadata)
+{
+	BL_PROFILE("quokka::diagnostics::WriteProjection(with particles)");
+
+	// First, write the projection data using the base function (includes metadata)
+	WriteProjection(dir, proj, time, istep, basename, simulationMetadata);
+
+	// If no particle types specified, skip particle output
+	if (particleTypes.empty()) {
+		return;
+	}
+
+	// Construct the plotfile name (same directory as field data)
+	const std::string filename = amrex::Concatenate(basename, istep, 5);
+
+	// Write particles using the filtered method
+	particleRegister.writePlotFileFiltered(filename, particleTypes);
+
+	amrex::Print() << "  Wrote particles to projection " << filename << "\n";
+}
 
 } // namespace quokka::diagnostics
 

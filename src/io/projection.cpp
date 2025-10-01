@@ -7,7 +7,6 @@
 ///  \brief AMReX I/O for 2D projections
 
 #include "AMReX_Array.H"
-#include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FPC.H"
 #include "AMReX_Geometry.H"
@@ -511,7 +510,8 @@ auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &
 
 } // namespace detail
 
-void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep)
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
+		     const std::string &basename, const YAML::Node &simulationMetadata)
 {
 	// write projections to plotfile
 	auto const &firstFab = proj.begin()->second;
@@ -523,7 +523,7 @@ void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string,
 	//  it is necessary to transform the geometry so that the data is stored in
 	//  the x-y plane.
 	amrex::Geometry geom3d{};
-	geom3d.Setup(); // read from ParmParse
+	amrex::Geometry::Setup(); // read from ParmParse (static method)
 	const amrex::Box box2d = detail::transform_box_to_2D(dir, firstFab.box());
 	const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom3d.ProbDomain());
 	const amrex::Geometry geom2d(box2d, &domain2d);
@@ -570,12 +570,25 @@ void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string,
 	}
 
 	// write mf_all to disk
-	const std::string basename = "proj_" + detail::direction_to_string(dir) + "_plt";
 	const std::string filename = amrex::Concatenate(basename, istep, 5);
 	const amrex::Vector<const amrex::MultiFab *> mfs = {&mf_all};
 	amrex::Print() << "Writing projection " << filename << "\n";
 
 	detail::Write2DMultiLevelPlotfile(filename, 1, mfs, varnames, {geom2d}, time, {istep}, {});
+
+	// Write metadata file (inside the plotfile directory)
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const std::string metadataFilename = filename + "/metadata.yaml";
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream MetadataFile;
+		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		MetadataFile.open(metadataFilename.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!MetadataFile.good()) {
+			amrex::FileOpenFailed(metadataFilename);
+		}
+		MetadataFile << simulationMetadata << '\n';
+		MetadataFile.close();
+	}
 }
 
 } // namespace quokka::diagnostics
