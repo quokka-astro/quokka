@@ -122,6 +122,22 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 	});
 }
 
+template <> void QuokkaSimulation<ParticleProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const
+{
+	// compute derived variables and save in 'mf'
+
+	if (dname == "nH") {
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_cc_[lev].const_arrays();
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, RadSystem<ParticleProblem>::gasDensity_index);
+			output[bx](i, j, k, ncomp) = rho / C::m_p;
+		});
+	}
+	amrex::Gpu::streamSynchronizeAll();
+}
+
 auto problem_main() -> int
 {
 	// Problem parameters

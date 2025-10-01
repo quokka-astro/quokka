@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -2.0  -2.0  -2.0 
 geometry.prob_hi     =  2.0  2.0  2.0
-geometry.is_periodic =  0    0    0
+geometry.is_periodic =  1    1    1
 
 # *****************************************************************
 # VERBOSITY
@@ -32,15 +32,22 @@ quokka.diagnostics = plt slice_z
 
 quokka.plt.type = PlotFile         # pltfile for the whole box
 quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
-quokka.plt.int  = 32                # Output cadence (in number of coarse steps)
+quokka.plt.int  = 2                # Output cadence (in number of coarse steps)
 quokka.plt.particles = CICRad_particles CIC_particles # select particle types to output; default is all particles
 
 quokka.slice_z.type = DiagFramePlane         # Diagnostic type
 quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
 quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_z.center = 0.001                # Coordinate in the normal direction (cannot lie *exactly* on domain boundary)
-quokka.slice_z.int    = 32                   # Output cadence (in number of coarse steps)
+quokka.slice_z.int    = 2                   # Output cadence (in number of coarse steps)
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
+
+statistics_interval = 2
+projection_interval = 2
+projection.dirs = x
+derived_vars = nH
+
+max_timesteps = 2
 
 tiny_profiler.enabled = 0
