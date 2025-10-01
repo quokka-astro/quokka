@@ -86,12 +86,12 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normaliseVector(std::array<amrex::
 AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 
 // rotation from the problem reference frame (PRF) to the MRF
-AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0; // NOLINT
+AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
 AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
 
 // MRF expressed in the PRF
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0}; // NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0}; // NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
 
 // wavefront
