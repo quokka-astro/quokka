@@ -53,6 +53,22 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 			   quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
 			   const YAML::Node &simulationMetadata);
 
+	// Helper method for writing cell-centered data
+	template <typename problem_t>
+	void writePlotfileCC(const std::string &plotfilename, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
+			     const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
+			     const amrex::Real &a_time, const amrex::Vector<int> &a_istep,
+			     const amrex::Vector<amrex::IntVect> &a_refRatio, const YAML::Node &simulationMetadata);
+
+	// Helper method for writing face-centered data
+	template <typename problem_t>
+	void writePlotfileFC(const std::string &plotfilename, int finest_level,
+			     const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
+			     const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc,
+			     const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
+			     const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
+			     const YAML::Node &simulationMetadata);
+
 	// Check if this diagnostic should write at this time/step (not needed since we use doDiag directly)
 	// [[nodiscard]] auto shouldWrite(const amrex::Real &a_time, int a_nstep) const -> bool { return doDiag(a_time, a_nstep); }
 
@@ -73,23 +89,16 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 
 // Template implementation must be in header
 template <typename problem_t>
-void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
-				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-				 const amrex::Vector<amrex::IntVect> &a_refRatio,
-				 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
-				 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc, int /*nghost_fc*/,
-				 quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
-				 const YAML::Node &simulationMetadata)
+void DiagPlotfile::writePlotfileCC(const std::string &plotfilename, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
+				  const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms,
+				  const amrex::Real &a_time, const amrex::Vector<int> &a_istep,
+				  const amrex::Vector<amrex::IntVect> &a_refRatio, const YAML::Node &simulationMetadata)
 {
-	BL_PROFILE("DiagPlotfile::writePlotfile()");
-
-	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
-	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
+	BL_PROFILE("DiagPlotfile::writePlotfileCC()");
 
 #ifdef QUOKKA_USE_OPENPMD
 	// Write using OpenPMD format
-	// TODO(bwibking): write particles using openPMD
-	quokka::OpenPMDOutput::WriteFile(a_varnames, finest_level + 1, a_mf, a_geoms, m_diagfile, a_time, a_nstep);
+	quokka::OpenPMDOutput::WriteFile(a_varnames, finest_level + 1, a_mf, a_geoms, m_diagfile, a_time, a_istep[0]);
 	
 	// Write metadata file (outside the plotfile directory for OpenPMD)
 	WriteMetadataFile(plotfilename + ".yaml", simulationMetadata);
@@ -100,7 +109,22 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 	// Write the main plotfile data using standard AMReX format
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, a_mf, a_varnames, a_geoms, a_time, a_istep, a_refRatio);
 
-	// Write face-centered variables if present
+	// Write metadata file (inside the plotfile directory)
+	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);
+#endif
+}
+
+template <typename problem_t>
+void DiagPlotfile::writePlotfileFC(const std::string &plotfilename, int finest_level,
+				  const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
+				  const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc,
+				  const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
+				  const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
+				  const YAML::Node &simulationMetadata)
+{
+	BL_PROFILE("DiagPlotfile::writePlotfileFC()");
+
+#ifndef QUOKKA_USE_OPENPMD
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		// Create fc_vars directory if it doesn't exist
 		const std::string fc_vars_dir = plotfilename + "/fc_vars";
@@ -112,16 +136,36 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
-			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, a_nstep, 5);
+			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, a_istep[0], 5);
 			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, a_mf_fc[idim], a_varnames_fc[idim], a_geoms, a_time, a_istep,
-						       a_refRatio);
+						     a_refRatio);
 			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", simulationMetadata);
 		}
 	}
+#endif
+}
 
-	// Write metadata file (inside the plotfile directory)
-	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);
+template <typename problem_t>
+void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
+				const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
+				const amrex::Vector<amrex::IntVect> &a_refRatio,
+				const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
+				const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc, int /*nghost_fc*/,
+				quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers, void *tracerPC_ptr,
+				const YAML::Node &simulationMetadata)
+{
+	BL_PROFILE("DiagPlotfile::writePlotfile()");
 
+	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
+	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
+
+	// Write cell-centered data
+	writePlotfileCC<problem_t>(plotfilename, finest_level, a_mf, a_varnames, a_geoms, a_time, a_istep, a_refRatio, simulationMetadata);
+
+	// Write face-centered data
+	writePlotfileFC<problem_t>(plotfilename, finest_level, a_mf_fc, a_varnames_fc, a_geoms, a_time, a_istep, a_refRatio, simulationMetadata);
+
+#ifndef QUOKKA_USE_OPENPMD
 	// Write tracer particles if enabled
 	if (do_tracers != 0) {
 		auto *tracerPC = static_cast<amrex::AmrTracerParticleContainer *>(tracerPC_ptr);
