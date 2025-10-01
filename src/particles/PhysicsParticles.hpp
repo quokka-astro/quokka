@@ -757,18 +757,18 @@ template <typename problem_t> class PhysicsParticleRegister
 	void writePlotFileFiltered(const std::string &plotfilename, const std::vector<std::string> &particleTypeNames)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::writePlotFileFiltered()");
-		
+
 		// Iterate through registered particles and write those whose names match the requested list
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			const std::string typeName = getParticleTypeName(type);
-			
+
 			// Check if this particle type is in the requested list
 			if (std::find(particleTypeNames.begin(), particleTypeNames.end(), typeName) != particleTypeNames.end()) {
 				descriptor->writePlotFile(plotfilename, typeName);
 				descriptor->writeUnitsFile(plotfilename, typeName);
 			}
 		}
-		
+
 		// Optionally warn about requested particle types that weren't found
 		for (const auto &requestedName : particleTypeNames) {
 			bool found = false;
