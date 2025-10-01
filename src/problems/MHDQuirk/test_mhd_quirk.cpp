@@ -80,14 +80,12 @@ template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGridFaceVars(
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const quokka::centering cen = grid_elem.cen_;
-	const quokka::direction dir = grid_elem.dir_;
 
 	const int ncomp_fc = Physics_Indices<MHDQuirk>::nvarPerDim_fc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
-			state_fc(i, j, k, n) = 0; // fill unused quantities with zeros
+			state_fc(i, j, k, n) = 0; // fill all b-field quantities with zeros
 		}
 	});
 }
