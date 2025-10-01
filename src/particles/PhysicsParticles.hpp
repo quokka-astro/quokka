@@ -765,7 +765,8 @@ template <typename problem_t> class PhysicsParticleRegister
 			// Check if this particle type is in the requested list
 			if (std::find(particleTypeNames.begin(), particleTypeNames.end(), typeName) != particleTypeNames.end()) {
 				if (max_particles_to_write > 0 && descriptor->getNumParticles() > max_particles_to_write) {
-					amrex::Print() << "Warning: Skipping particle type '" << typeName << "' because it has more than " << max_particles_to_write << " particles.\n";
+					amrex::Print() << "Warning: Skipping particle type '" << typeName << "' because it has more than "
+						       << max_particles_to_write << " particles.\n";
 					continue;
 				}
 				descriptor->writePlotFile(plotfilename, typeName);
