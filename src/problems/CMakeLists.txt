@@ -71,6 +71,7 @@ add_subdirectory(FastWave)
 add_subdirectory(FieldLoop)
 add_subdirectory(MHDBlast)
 add_subdirectory(BrioWuShockTube)
+add_subdirectory(MHDQuirk)
 
 add_subdirectory(DiskGalaxy)
 add_subdirectory(BinaryOrbitCIC)
