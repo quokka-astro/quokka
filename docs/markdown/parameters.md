@@ -81,7 +81,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 | Parameter Name | Type | Description |
 |----|----|----|
 | cooling.enabled | Integer | If set to 1, turns on optically-thin radiative cooling as a Strang-split source term. Default: 0 (disabled). |
-| cooling.cooling_table_type | String | Specifies the type of cooling table to use. Options: "grackle", "cloudy_cooling_tools", "resampled". |
+| cooling.cooling_table_type | String | Specifies the type of cooling table to use. The only supported option is "resampled". |
 | cooling.read_tables_even_if_disabled | Integer | If set to 1, reads the cooling tables even if the cooling module is disabled. |
 | cooling.hdf5_data_file | String | The path to the cooling tables in HDF5 format. |
 
