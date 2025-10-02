@@ -18,20 +18,27 @@ fi
 # Check if pre-commit is installed, offer to install if missing
 if ! command -v pre-commit &> /dev/null; then
     echo "pre-commit is not installed."
-    read -p "Install via 'pip install --user pre-commit'? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        # Install in virtual environment or with --user flag
-        if [[ -z "$VIRTUAL_ENV" ]]; then
+    # Install in virtual environment or with --user flag
+    if [[ -z "$VIRTUAL_ENV" ]]; then
+        read -p "Install via 'pip install --user pre-commit'? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
             pip install --user pre-commit
             # Add to PATH if needed
             [[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
         else
-            pip install pre-commit
+            echo "Aborted: pre-commit is required. Install it manually and try again."
+            exit 1
         fi
     else
-        echo "Aborted: pre-commit is required"
-        exit 1
+        read -p "Install via 'pip install pre-commit'? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            pip install pre-commit
+        else
+            echo "Aborted: pre-commit is required. Install it manually and try again."
+            exit 1
+        fi
     fi
 fi
 
