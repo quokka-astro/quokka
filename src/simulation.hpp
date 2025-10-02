@@ -2965,19 +2965,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				}
 				auto const varnames_fc = GetPlotfileVarNames_fc();
 
-				// Call unified processDiag with all data: cell-centered, face-centered, and tracer particles
-				plotfileDiag->processDiag(istep[0], tNew_[0], mf_cc_ptr, varnames, finestLevel(), Geom(0, finestLevel()), istep, refRatio(),
-							  nullptr, do_tracers, TracerPC.get(), &mf_fc_ptr, &varnames_fc, simulationMetadata_);
-
-				// Write physics particles (requires template parameter, so done separately)
+				// Create particle writer callback
+				DiagBase::ParticleWriterFunc particleWriter;
 #ifndef QUOKKA_USE_OPENPMD
-				const std::string plotfilename = amrex::Concatenate(plotfileDiag->getDiagFileName(), istep[0], 5);
 				if (plotfileDiag->includeAllParticles()) {
-					particleRegister_.writePlotFile(plotfilename);
+					particleWriter = [this](const std::string &plotfilename) { particleRegister_.writePlotFile(plotfilename); };
 				} else if (!plotfileDiag->getParticleTypes().empty()) {
-					particleRegister_.writePlotFileFiltered(plotfilename, plotfileDiag->getParticleTypes());
+					particleWriter = [this, plotfileDiag](const std::string &plotfilename) {
+						particleRegister_.writePlotFileFiltered(plotfilename, plotfileDiag->getParticleTypes());
+					};
 				}
 #endif
+
+				// Call unified processDiag with all data: cell-centered, face-centered, tracer particles, and physics particles
+				plotfileDiag->processDiag(istep[0], tNew_[0], mf_cc_ptr, varnames, finestLevel(), Geom(0, finestLevel()), istep, refRatio(),
+							  do_tracers, TracerPC.get(), &mf_fc_ptr, &varnames_fc, particleWriter, simulationMetadata_);
 			} else {
 				// Check if this is a DiagProjectionPlot - if so, call its special writeProjection method
 				auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
@@ -2989,9 +2991,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 											   simulationMetadata_);
 					}
 				} else {
-					// Regular diagnostic - pass nullptrs for face-centered data
+					// Regular diagnostic - pass nullptrs for face-centered data and empty particle writer
 					diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(), Geom(0, finestLevel()),
-							  istep, refRatio(), nullptr, do_tracers, TracerPC.get(), nullptr, nullptr, simulationMetadata_);
+							  istep, refRatio(), do_tracers, TracerPC.get(), nullptr, nullptr, {}, simulationMetadata_);
 				}
 			}
 		}

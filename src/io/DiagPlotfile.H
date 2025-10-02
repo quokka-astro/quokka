@@ -37,10 +37,11 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 
 	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			 const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *particleRegister_ptr,
+			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
 			 int do_tracers, void *tracerPC_ptr,
 			 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
-			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const YAML::Node &simulationMetadata) override;
+			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc,
+			 const ParticleWriterFunc &particleWriter, const YAML::Node &simulationMetadata) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -78,7 +79,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 
 // Template implementation must be in header
 // This is a convenience wrapper for backwards compatibility
-// It calls processDiag and handles physics particles which require template parameter
+// It calls processDiag with a particle writer callback
 template <typename problem_t>
 void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
@@ -87,25 +88,24 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 {
 	BL_PROFILE("DiagPlotfile::writePlotfile()");
 
-	// Call the main processDiag implementation for cell-centered data and tracer particles
-	// Face-centered data is passed as nullptr since it's handled separately
-	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, nullptr, do_tracers, tracerPC_ptr, nullptr,
-		    nullptr, simulationMetadata);
-
+	// Create particle writer callback
+	ParticleWriterFunc particleWriter;
 #ifndef QUOKKA_USE_OPENPMD
-	// Write physics particles based on configuration (only for AMReX format)
-	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
 	if (m_includeAllParticles) {
-		// Write all particle types
-		particleRegister.writePlotFile(plotfilename);
-	} else {
-		// Write only specified particle types using the filtered method
-		particleRegister.writePlotFileFiltered(plotfilename, m_particleTypes);
+		particleWriter = [&particleRegister](const std::string &plotfilename) { particleRegister.writePlotFile(plotfilename); };
+	} else if (!m_particleTypes.empty()) {
+		particleWriter = [&particleRegister, this](const std::string &plotfilename) {
+			particleRegister.writePlotFileFiltered(plotfilename, m_particleTypes);
+		};
 	}
 #else
-	// Suppress unused parameter warning for OpenPMD builds
 	amrex::ignore_unused(particleRegister);
 #endif
+
+	// Call the main processDiag implementation
+	// Face-centered data is passed as nullptr since it's handled separately
+	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, do_tracers, tracerPC_ptr, nullptr, nullptr,
+		    particleWriter, simulationMetadata);
 }
 
 // Helper function implementation

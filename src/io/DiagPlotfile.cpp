@@ -56,10 +56,11 @@ void DiagPlotfile::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometr
 
 void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			       const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			       const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void * /*particleRegister_ptr*/,
+			       const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
 			       int do_tracers, void *tracerPC_ptr,
 			       const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
-			       const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const YAML::Node &simulationMetadata)
+			       const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc,
+			       const ParticleWriterFunc &particleWriter, const YAML::Node &simulationMetadata)
 {
 	BL_PROFILE("DiagPlotfile::processDiag()");
 
@@ -109,9 +110,10 @@ void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amr
 		}
 	}
 
-	// Note: Physics particles are not written here since we don't have type information.
-	// They must be written by the caller using the templated writePlotfile() method or
-	// by directly accessing the diagnostic from the simulation code.
+	// Write physics particles using the provided callback
+	if (particleWriter) {
+		particleWriter(plotfilename);
+	}
 #endif
 }
 
