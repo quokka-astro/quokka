@@ -56,11 +56,10 @@ void DiagPlotfile::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometr
 
 void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			       const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			       const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
-			       int do_tracers, void *tracerPC_ptr,
+			       const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, int do_tracers, void *tracerPC_ptr,
 			       const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
-			       const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc,
-			       const ParticleWriterFunc &particleWriter, const YAML::Node &simulationMetadata)
+			       const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
+			       const YAML::Node &simulationMetadata)
 {
 	BL_PROFILE("DiagPlotfile::processDiag()");
 
@@ -104,8 +103,8 @@ void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amr
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
 			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, a_istep[0], 5);
-			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, (*a_state_fc)[idim], (*a_varNames_fc)[idim], a_geoms,
-						       a_time, a_istep, a_refRatio);
+			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, (*a_state_fc)[idim], (*a_varNames_fc)[idim], a_geoms, a_time, a_istep,
+						       a_refRatio);
 			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", simulationMetadata);
 		}
 	}
