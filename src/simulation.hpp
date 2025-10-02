@@ -1052,7 +1052,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #ifdef AMREX_USE_ASCENT
 	int last_ascent_step = 0;
 #endif
-	int last_projection_step = 0;
 	int last_particle_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
