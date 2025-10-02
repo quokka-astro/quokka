@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_fc_quantities.cpp
-/// \brief Defines a test problem to make sure face-centred quantities are created correctly.
+/// \brief Defines a test problem to make sure face-centered quantities are created correctly.
 ///
 
 #include <array>
@@ -72,7 +72,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeCrossProduct(const std::arr
 		vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]};
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normaliseVector(std::array<amrex::Real, 3> &vfield)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::Real, 3> &vfield)
 {
 	const double vfield_magn = computeMagnitude(vfield);
 	if (vfield_magn > 1e-14) {
@@ -206,7 +206,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		// comppute b-field using the magnetic vector potential to preserve div(b) = 0 topology
+		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
 		const double b_x1 =
 		    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[1] -
 		    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[2];
@@ -344,11 +344,11 @@ auto problem_main() -> int
 
 	// define the plane in which b0 will sit
 	inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
-	normaliseVector(inplane_dir_prf);
+	normalizeVector(inplane_dir_prf);
 
 	// define the direction the perturbation will be induced
 	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
-	normaliseVector(outofplane_dir_prf);
+	normalizeVector(outofplane_dir_prf);
 
 	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
 
