@@ -89,23 +89,13 @@ auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::
 }
 } // namespace detail
 //----------------------------------------------------------------------------------------
-//! \fn void OpenPMDOutput:::WriteOutputFile(Mesh *pm)
-//  \brief  Write cell-centered MultiFab using openPMD
-void WriteFile(const std::vector<std::string> &varnames, int const output_levels, amrex::Vector<const amrex::MultiFab *> &mf,
-	       amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number)
+//! n void OpenPMDOutput::WriteFields
+//  rief  Write cell-centered MultiFab data to an existing openPMD iteration
+void WriteFields(openPMD::Series &series, openPMD::Iteration &iteration, const std::vector<std::string> &varnames,
+	       int const output_levels, amrex::Vector<const amrex::MultiFab *> &mf, amrex::Vector<amrex::Geometry> &geom)
 {
-	// open file
-	std::string const filename = output_basename + "%05T.bp";
-	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
-	series.setSoftware("Quokka", "1.0");
-	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
+	auto meshes = iteration.meshes;
 
-	auto series_iteration = series.iterations[file_number];
-	series_iteration.open();
-	series_iteration.setTime(time);
-	auto meshes = series_iteration.meshes;
-
-	// loop over levels up to output_levels
 	for (int lev = 0; lev < output_levels; lev++) {
 		amrex::Geometry full_geom = geom[lev];
 		amrex::Box const &global_box = full_geom.Domain();
@@ -119,32 +109,47 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 			}
 		}
 
-		// pass data pointers for each box to ADIOS
 		for (int icomp = 0; icomp < ncomp; icomp++) {
 			std::string const field_name = detail::GetMeshComponentName(lev, varnames[icomp]);
-			openPMD::MeshRecordComponent mesh = series_iteration.meshes[field_name][openPMD::MeshRecordComponent::SCALAR];
+			openPMD::MeshRecordComponent mesh = meshes[field_name][openPMD::MeshRecordComponent::SCALAR];
 
-			// Loop through the multifab, and store each box as a chunk in the openPMD file.
 			for (amrex::MFIter mfi(*mf[lev]); mfi.isValid(); ++mfi) {
 				amrex::FArrayBox const &fab = (*mf[lev])[mfi];
 				amrex::Box const &local_box = fab.box();
 
-				// Determine the offset and size of this chunk
 				amrex::IntVect const box_offset = local_box.smallEnd() - global_box.smallEnd();
-				auto chunk_offset = detail::getReversedVec(box_offset); // this overflows if ghost zones are used (!)
+				auto chunk_offset = detail::getReversedVec(box_offset);
 				auto chunk_size = detail::getReversedVec(local_box.size());
 
-				// pass device pointer directly to ADIOS
 				amrex::Real const *local_data = fab.dataPtr(icomp);
 				mesh.storeChunkRaw(local_data, chunk_offset, chunk_size);
 			}
 		}
 
-		// flush this level to disk
 		series.flush();
 	}
+}
 
-	// close file
+//----------------------------------------------------------------------------------------
+//! n void OpenPMDOutput:::WriteOutputFile(Mesh *pm)
+//  rief  Write cell-centered MultiFab using openPMD
+void WriteFile(const std::vector<std::string> &varnames, int const output_levels, amrex::Vector<const amrex::MultiFab *> &mf,
+	       amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number)
+{
+	std::string const filename = output_basename + "%05T.bp";
+	openPMD::Series series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
+	series.setSoftware("Quokka", "1.0");
+	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
+	series.setMeshesPath("fields");
+
+	openPMD::Iteration iteration = series.iterations[file_number];
+	iteration.open();
+	iteration.setTime(time);
+
+	WriteFields(series, iteration, varnames, output_levels, mf, geom);
+
+	iteration.close();
+	series.flush();
 	series.close();
 }
 

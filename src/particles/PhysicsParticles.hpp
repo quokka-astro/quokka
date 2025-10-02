@@ -163,6 +163,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	ContainerType *container_{}; // Pointer to the actual particle container - moved to protected
 
       public:
+	using ContainerT = ContainerType;
 	// Get the particle type
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
@@ -173,6 +174,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	      container_(container)
 	{
 	}
+
+	[[nodiscard]] ContainerType *getContainer() { return container_; }
+	[[nodiscard]] const ContainerType *getContainer() const { return container_; }
 
 	// Get positions and fields data from all particles at level 0 from all ranks and gather them on rank 0.
 	// This method creates a temporary particle container on rank 0 and copies all particles to it.
@@ -663,6 +667,22 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 		amrex::Abort("Particle type not found");
 		return nullptr;
+	}
+
+	// Apply a functor to every registered particle descriptor
+	template <typename Func> void forEachDescriptor(Func &&func)
+	{
+		for (auto &entry : particleRegistry_) {
+			func(entry.first, *entry.second);
+		}
+	}
+
+	// Apply a functor to every registered particle descriptor (const overload)
+	template <typename Func> void forEachDescriptor(Func &&func) const
+	{
+		for (auto const &entry : particleRegistry_) {
+			func(entry.first, *entry.second);
+		}
 	}
 
 	// Deposit radiation from all luminous particles
