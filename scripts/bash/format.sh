@@ -6,6 +6,7 @@
 #
 # Usage: ./scripts/bash/format.sh
 
+
 set -e
 
 # Check if this is the Quokka repository
