@@ -11,6 +11,7 @@ add_subdirectory(SN)
 add_subdirectory(ParticleSF)
 
 add_subdirectory(DustDamping)
+add_subdirectory(DustDiffusion)
 add_subdirectory(DustDrag)
 add_subdirectory(DustDragBase)
 
