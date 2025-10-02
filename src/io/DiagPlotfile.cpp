@@ -61,7 +61,7 @@ void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amr
 			       const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
 			       const YAML::Node &simulationMetadata)
 {
-	BL_PROFILE("DiagPlotfile::processDiag()");
+	const BL_PROFILE("DiagPlotfile::processDiag()");
 
 	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
 	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
@@ -72,6 +72,8 @@ void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amr
 
 	// Write metadata file (outside the plotfile directory for OpenPMD)
 	WriteMetadataFile(plotfilename + ".yaml", simulationMetadata);
+
+	amrex::ignore_unused(do_tracers, a_refRatio, tracerPC_ptr, a_state_fc, a_varNames_fc, particleWriter);
 #else
 	// Set the number of output files if specified
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
