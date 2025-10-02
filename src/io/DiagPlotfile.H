@@ -38,7 +38,9 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			 const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
 			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *particleRegister_ptr,
-			 int do_tracers, void *tracerPC_ptr, const YAML::Node &simulationMetadata) override;
+			 int do_tracers, void *tracerPC_ptr,
+			 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
+			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const YAML::Node &simulationMetadata) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -52,13 +54,6 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 			   const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers,
 			   void *tracerPC_ptr, const YAML::Node &simulationMetadata);
 
-	// Helper method for writing face-centered data
-	template <typename problem_t>
-	void writePlotfileFC(const std::string &plotfilename, int finest_level,
-			     const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
-			     const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc, const amrex::Vector<amrex::Geometry> &a_geoms,
-			     const amrex::Real &a_time, const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
-			     const YAML::Node &simulationMetadata);
 
 	// Check if this diagnostic should write at this time/step (not needed since we use doDiag directly)
 	// [[nodiscard]] auto shouldWrite(const amrex::Real &a_time, int a_nstep) const -> bool { return doDiag(a_time, a_nstep); }
@@ -82,7 +77,8 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 };
 
 // Template implementation must be in header
-// This is a convenience wrapper that calls processDiag and handles physics particles
+// This is a convenience wrapper for backwards compatibility
+// It calls processDiag and handles physics particles which require template parameter
 template <typename problem_t>
 void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
@@ -92,7 +88,9 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 	BL_PROFILE("DiagPlotfile::writePlotfile()");
 
 	// Call the main processDiag implementation for cell-centered data and tracer particles
-	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, nullptr, do_tracers, tracerPC_ptr, simulationMetadata);
+	// Face-centered data is passed as nullptr since it's handled separately
+	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, nullptr, do_tracers, tracerPC_ptr, nullptr,
+		    nullptr, simulationMetadata);
 
 #ifndef QUOKKA_USE_OPENPMD
 	// Write physics particles based on configuration (only for AMReX format)
@@ -107,36 +105,6 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 #else
 	// Suppress unused parameter warning for OpenPMD builds
 	amrex::ignore_unused(particleRegister);
-#endif
-}
-
-template <typename problem_t>
-void DiagPlotfile::writePlotfileFC(const std::string &plotfilename, int finest_level,
-				   const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> &a_mf_fc,
-				   const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> &a_varnames_fc, const amrex::Vector<amrex::Geometry> &a_geoms,
-				   const amrex::Real &a_time, const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio,
-				   const YAML::Node &simulationMetadata)
-{
-	BL_PROFILE("DiagPlotfile::writePlotfileFC()");
-
-#ifndef QUOKKA_USE_OPENPMD
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		// Create fc_vars directory if it doesn't exist
-		const std::string fc_vars_dir = plotfilename + "/fc_vars";
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::UtilCreateDirectory(fc_vars_dir, 0755);
-		}
-		amrex::ParallelDescriptor::Barrier();
-
-		std::vector<std::string> dimNames = {"x", "y", "z"};
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
-			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, a_istep[0], 5);
-			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, a_mf_fc[idim], a_varnames_fc[idim], a_geoms, a_time, a_istep,
-						       a_refRatio);
-			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", simulationMetadata);
-		}
-	}
 #endif
 }
 

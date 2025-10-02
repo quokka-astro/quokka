@@ -2948,18 +2948,26 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 
 	for (const auto &diag : m_diagnostics) {
 		if (diag->doDiag(tNew_[0], istep[0])) {
-			// Check if this is a DiagPlotfile - if so, prepare full plotfile data
+			// Check if this is a DiagPlotfile - if so, prepare full plotfile data including face-centered
 			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
 			if (plotfileDiag != nullptr) {
-				// Prepare full plotfile data
+				// Prepare cell-centered data
 				int const included_ghosts = std::min(nghost_cc_, nghost_fc_);
 				amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts);
 				amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 				auto const varnames = GetPlotfileVarNames();
 
-				// Call processDiag to write cell-centered data and tracer particles
+				// Prepare face-centered data
+				std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
+				std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> mf_fc_ptr;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					mf_fc_ptr[idim] = amrex::GetVecOfConstPtrs(mf_fc[idim]);
+				}
+				auto const varnames_fc = GetPlotfileVarNames_fc();
+
+				// Call unified processDiag with all data: cell-centered, face-centered, and tracer particles
 				plotfileDiag->processDiag(istep[0], tNew_[0], mf_cc_ptr, varnames, finestLevel(), Geom(0, finestLevel()), istep, refRatio(),
-							  nullptr, do_tracers, TracerPC.get(), simulationMetadata_);
+							  nullptr, do_tracers, TracerPC.get(), &mf_fc_ptr, &varnames_fc, simulationMetadata_);
 
 				// Write physics particles (requires template parameter, so done separately)
 #ifndef QUOKKA_USE_OPENPMD
@@ -2970,17 +2978,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 					particleRegister_.writePlotFileFiltered(plotfilename, plotfileDiag->getParticleTypes());
 				}
 #endif
-
-				// Write face-centered data if present
-				std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
-				std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> mf_fc_ptr;
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					mf_fc_ptr[idim] = amrex::GetVecOfConstPtrs(mf_fc[idim]);
-				}
-				auto const varnames_fc = GetPlotfileVarNames_fc();
-				plotfileDiag->writePlotfileFC<problem_t>(amrex::Concatenate(plotfileDiag->getDiagFileName(), istep[0], 5), finestLevel(),
-									 mf_fc_ptr, varnames_fc, Geom(0, finestLevel()), tNew_[0], istep, refRatio(),
-									 simulationMetadata_);
 			} else {
 				// Check if this is a DiagProjectionPlot - if so, call its special writeProjection method
 				auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
@@ -2992,9 +2989,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 											   simulationMetadata_);
 					}
 				} else {
-					// Regular diagnostic
+					// Regular diagnostic - pass nullptrs for face-centered data
 					diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(), Geom(0, finestLevel()),
-							  istep, refRatio(), nullptr, do_tracers, TracerPC.get(), simulationMetadata_);
+							  istep, refRatio(), nullptr, do_tracers, TracerPC.get(), nullptr, nullptr, simulationMetadata_);
 				}
 			}
 		}
