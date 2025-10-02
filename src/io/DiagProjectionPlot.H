@@ -33,17 +33,11 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, int do_tracers, void *tracerPC_ptr,
 			 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
 			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
-			 const YAML::Node &simulationMetadata) override;
+			 const YAML::Node &simulationMetadata, const ProjectionData *projectionData, amrex::Direction projectionDir) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
 	void close() override {}
-
-	// Special method for writing projections with optional particles
-	// This is called directly from the simulation
-	template <typename problem_t>
-	void writeProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
-			     quokka::PhysicsParticleRegister<problem_t> &particleRegister, const YAML::Node &simulationMetadata);
 
 	// Get the list of particle types to include (empty means none)
 	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
@@ -61,23 +55,5 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	std::vector<std::string> m_particleTypes;	// List of particle types to include (default: empty)
 	std::vector<amrex::Direction> m_projectionDirs; // Projection directions (x, y, z)
 };
-
-// Template implementation must be in header
-template <typename problem_t>
-void DiagProjectionPlot::writeProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time,
-					 int istep, quokka::PhysicsParticleRegister<problem_t> &particleRegister, const YAML::Node &simulationMetadata)
-{
-	BL_PROFILE("DiagProjectionPlot::writeProjection()");
-
-	// Construct the base filename: proj_<direction>_<file>
-	// e.g., if m_diagfile is "proj_plt", this becomes "proj_x_proj_plt"
-	std::string basename = "proj_";
-	basename += quokka::diagnostics::detail::direction_to_string(dir);
-	basename += "_";
-	basename += m_diagfile;
-
-	// Call the new WriteProjection function with particle support
-	quokka::diagnostics::WriteProjection<problem_t>(dir, proj, time, istep, basename, particleRegister, m_particleTypes, simulationMetadata);
-}
 
 #endif // DIAGPROJECTIONPLOT_H

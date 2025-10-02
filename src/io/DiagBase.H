@@ -2,10 +2,12 @@
 #define DIAGBASE_H
 
 #include "AMReX_MultiFab.H"
+#include "AMReX_Orientation.H"
 #include "DiagFilter.H"
 #include "Factory.H"
 #include "yaml-cpp/yaml.h"
 #include <functional>
+#include <unordered_map>
 
 class DiagBase : public quokka::Factory<DiagBase>
 {
@@ -28,12 +30,16 @@ class DiagBase : public quokka::Factory<DiagBase>
 	// Callback type for writing physics particles (allows handling templated particle registers)
 	using ParticleWriterFunc = std::function<void(const std::string &plotfilename)>;
 
+	// Type for projection data (used by DiagProjectionPlot)
+	using ProjectionData = std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>;
+
 	virtual void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 				 const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
 				 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, int do_tracers, void *tracerPC_ptr,
 				 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
 				 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
-				 const YAML::Node &simulationMetadata) = 0;
+				 const YAML::Node &simulationMetadata, const ProjectionData *projectionData = nullptr,
+				 amrex::Direction projectionDir = amrex::Direction::x) = 0;
 
 	virtual void addVars(amrex::Vector<std::string> &a_varList);
 

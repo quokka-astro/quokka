@@ -40,7 +40,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, int do_tracers, void *tracerPC_ptr,
 			 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
 			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
-			 const YAML::Node &simulationMetadata) override;
+			 const YAML::Node &simulationMetadata, const ProjectionData *projectionData, amrex::Direction projectionDir) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -101,9 +101,9 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 #endif
 
 	// Call the main processDiag implementation
-	// Face-centered data is passed as nullptr since it's handled separately
+	// Face-centered data and projection data are passed as nullptr since they're handled separately
 	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, do_tracers, tracerPC_ptr, nullptr, nullptr, particleWriter,
-		    simulationMetadata);
+		    simulationMetadata, nullptr, amrex::Direction::x);
 }
 
 // Helper function implementation

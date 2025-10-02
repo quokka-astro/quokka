@@ -2979,21 +2979,32 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 
 				// Call unified processDiag with all data: cell-centered, face-centered, tracer particles, and physics particles
 				plotfileDiag->processDiag(istep[0], tNew_[0], mf_cc_ptr, varnames, finestLevel(), Geom(0, finestLevel()), istep, refRatio(),
-							  do_tracers, TracerPC.get(), &mf_fc_ptr, &varnames_fc, particleWriter, simulationMetadata_);
+							  do_tracers, TracerPC.get(), &mf_fc_ptr, &varnames_fc, particleWriter, simulationMetadata_, nullptr,
+							  amrex::Direction::x);
 			} else {
-				// Check if this is a DiagProjectionPlot - if so, call its special writeProjection method
+				// Check if this is a DiagProjectionPlot - if so, compute projections and pass to processDiag
 				auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
 				if (projectionDiag != nullptr) {
+					// Create particle writer callback for projections
+					DiagBase::ParticleWriterFunc particleWriter;
+					if (projectionDiag->includeParticles()) {
+						particleWriter = [this, projectionDiag](const std::string &plotfilename) {
+							particleRegister_.writePlotFileFiltered(plotfilename, projectionDiag->getParticleTypes());
+						};
+					}
+
 					// Compute and write projections for each direction
 					for (auto const &dir : projectionDiag->getProjectionDirs()) {
 						std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-						projectionDiag->writeProjection<problem_t>(dir, proj, tNew_[0], istep[0], particleRegister_,
-											   simulationMetadata_);
+						diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(),
+								  Geom(0, finestLevel()), istep, refRatio(), do_tracers, TracerPC.get(), nullptr, nullptr,
+								  particleWriter, simulationMetadata_, &proj, dir);
 					}
 				} else {
-					// Regular diagnostic - pass nullptrs for face-centered data and empty particle writer
+					// Regular diagnostic - pass nullptrs for face-centered data, projection data, and empty particle writer
 					diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(), Geom(0, finestLevel()),
-							  istep, refRatio(), do_tracers, TracerPC.get(), nullptr, nullptr, {}, simulationMetadata_);
+							  istep, refRatio(), do_tracers, TracerPC.get(), nullptr, nullptr, {}, simulationMetadata_, nullptr,
+							  amrex::Direction::x);
 				}
 			}
 		}
