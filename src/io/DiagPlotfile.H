@@ -51,8 +51,8 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	template <typename problem_t>
 	void writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 			   const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-			   const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister,
-			   void *tracerPC_ptr, const YAML::Node &simulationMetadata);
+			   const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, void *tracerPC_ptr,
+			   const YAML::Node &simulationMetadata);
 
 	// Check if this diagnostic should write at this time/step (not needed since we use doDiag directly)
 	// [[nodiscard]] auto shouldWrite(const amrex::Real &a_time, int a_nstep) const -> bool { return doDiag(a_time, a_nstep); }

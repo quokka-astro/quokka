@@ -2996,8 +2996,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 					for (auto const &dir : projectionDiag->getProjectionDirs()) {
 						std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
 						projectionDiag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(),
-									    Geom(0, finestLevel()), istep, refRatio(), TracerPC.get(), nullptr,
-									    nullptr, particleWriter, simulationMetadata_, &proj, dir);
+									    Geom(0, finestLevel()), istep, refRatio(), TracerPC.get(), nullptr, nullptr,
+									    particleWriter, simulationMetadata_, &proj, dir);
 					}
 				} else {
 					// Regular diagnostic - pass nullptrs for face-centered data, projection data, and empty particle writer
