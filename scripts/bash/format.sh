@@ -20,9 +20,14 @@ if ! command -v pre-commit &> /dev/null; then
     read -p "Install via 'pip install --user pre-commit'? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        pip install --user pre-commit
-        # Add to PATH if needed
-        [[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
+        # Install in virtual environment or with --user flag
+        if [[ -z "$VIRTUAL_ENV" ]]; then
+            pip install --user pre-commit
+            # Add to PATH if needed
+            [[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
+        else
+            pip install pre-commit
+        fi
     else
         echo "Aborted: pre-commit is required"
         exit 1
