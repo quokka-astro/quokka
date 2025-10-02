@@ -2996,7 +2996,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 					// Compute and write projections for each direction
 					for (auto const &dir : projectionDiag->getProjectionDirs()) {
 						std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-						diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(),
+						projectionDiag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(),
 								  Geom(0, finestLevel()), istep, refRatio(), do_tracers, TracerPC.get(), nullptr, nullptr,
 								  particleWriter, simulationMetadata_, &proj, dir);
 					}
