@@ -227,6 +227,7 @@ auto problem_main() -> int
         matplotlibcpp::xlabel("x");
         matplotlibcpp::ylabel("density");
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_drag_density.pdf");
 
         // plot velocity (gas + dust) 
@@ -263,6 +264,7 @@ auto problem_main() -> int
         matplotlibcpp::xlabel("x");
         matplotlibcpp::ylabel("velocity");
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_drag_velocity.pdf");
 #endif // HAVE_PYTHON
 
@@ -298,7 +300,7 @@ auto problem_main() -> int
 
         const double rel_err_norm = err_norm / sol_norm;
         const double rel_err_tol = 0.01;
-        int status = (rel_err_norm < rel_err_tol) ? 0 : 1;
+        const int status = (rel_err_norm < rel_err_tol) ? 0 : 1;
 
         amrex::Print() << "Relative L1 norm for gas x velocity = " << rel_err_norm << '\n';
         amrex::Print() << "Dust is disabled; skipped dust diagnostics." << '\n';
@@ -329,11 +331,12 @@ auto problem_main() -> int
         matplotlibcpp::xlabel("x");
         matplotlibcpp::ylabel("density");
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_drag_density.pdf");
 
         // plot velocity (gas only) 
         matplotlibcpp::clf();
-        matplotlibcpp::ylim(0.0, 1.1);
+        matplotlibcpp::ylim(0.0, 6.0);
 
         std::map<std::string, std::string> vx_gas_args;
         std::map<std::string, std::string> vx_gas_exact_args;
@@ -353,6 +356,7 @@ auto problem_main() -> int
         matplotlibcpp::xlabel("x");
         matplotlibcpp::ylabel("velocity");
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_drag_velocity.pdf");
 #endif // HAVE_PYTHON
 

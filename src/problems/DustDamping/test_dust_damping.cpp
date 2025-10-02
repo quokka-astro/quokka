@@ -12,7 +12,7 @@
 struct StreamingProblem {
 };
 
-constexpr double initial_Egas = 1.0e-9;
+constexpr double initial_Egas = 1.0e-5;
 constexpr double rho = 1.0;
 constexpr double v0 = 1.0;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
@@ -245,7 +245,7 @@ auto problem_main() -> int
 
         amrex::Print() << "Relative L1 norm for gas vx = " << rel_err_norm << "\n";
 
-        int status = (rel_err_norm < 0.01) ? 0 : 1;
+        const int status = (rel_err_norm < 0.01) ? 0 : 1;
 
 #ifdef HAVE_PYTHON
         matplotlibcpp::clf();

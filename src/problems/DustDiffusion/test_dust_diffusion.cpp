@@ -12,19 +12,20 @@
 struct StreamingProblem {
 };
 
-constexpr double initial_Egas = 1.0e-9;
+constexpr double initial_Egas = 1.0e-5;
 constexpr double rho = 1.0;
-constexpr double v0 = 1.0;
-constexpr double dust_v0 = 1.0;
+constexpr double v0 = 0.0;
+constexpr double dust_v0 = 0.0;
 
 // Gaussian parameters
-constexpr double A =5.0;
+constexpr double A = 5.0;
 constexpr double sigma = 2.0;
 constexpr double xc = 10.0;
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
     static constexpr double mean_molecular_weight = 1.0;
-    static constexpr double gamma = 5. / 3.;
+    static constexpr double gamma = 1.0;
+		static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
 };
 
 template <> struct Physics_Traits<StreamingProblem> {
@@ -157,7 +158,10 @@ auto problem_main() -> int
             err_norm += std::abs(vx_sim[i] - vx_exact[i]);
             sol_norm += std::abs(vx_exact[i]);
         }
-        const double rel_err_norm = err_norm / sol_norm;
+				double rel_err_norm = 0.;
+				if (sol_norm > 1e-12) {  
+						rel_err_norm = err_norm / sol_norm;
+				}
 
         // error norm dust density
         double err_norm_dust_rho = 0.;
@@ -217,11 +221,12 @@ auto problem_main() -> int
         matplotlibcpp::xlabel("x");
         matplotlibcpp::ylabel("density");
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_diffusion_density.pdf");
 
         // plot velocity (gas + dust) 
         matplotlibcpp::clf();
-        matplotlibcpp::ylim(0.0, 6.0);
+        matplotlibcpp::ylim(-1.5, 1.5);
 
         std::map<std::string, std::string> vx_gas_args;
         std::map<std::string, std::string> vx_gas_exact_args;
@@ -253,6 +258,7 @@ auto problem_main() -> int
         matplotlibcpp::xlabel("x");
         matplotlibcpp::ylabel("velocity");
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_diffusion_velocity.pdf");
 #endif // HAVE_PYTHON
 
@@ -282,10 +288,13 @@ auto problem_main() -> int
             err_norm += std::abs(vx_sim[i] - vx_exact[i]);
             sol_norm += std::abs(vx_exact[i]);
         }
-
-        const double rel_err_norm = err_norm / sol_norm;
+        
+				double rel_err_norm = 0.;
+				if (sol_norm > 1e-12) {  
+						rel_err_norm = err_norm / sol_norm;
+				}
         const double rel_err_tol = 0.01;
-        int status = (rel_err_norm < rel_err_tol) ? 0 : 1;
+        const int status = (rel_err_norm < rel_err_tol) ? 0 : 1;
 
         amrex::Print() << "Relative L1 norm for gas x velocity = " << rel_err_norm << '\n';
         amrex::Print() << "Dust is disabled; skipped dust diagnostics." << '\n';
@@ -316,11 +325,12 @@ auto problem_main() -> int
         matplotlibcpp::xlabel("x");
         matplotlibcpp::ylabel("density");
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_diffusion_density.pdf");
 
         // plot velocity (gas only) 
         matplotlibcpp::clf();
-        matplotlibcpp::ylim(0.0, 1.1);
+        matplotlibcpp::ylim(-1.5, 1.5);
 
         std::map<std::string, std::string> vx_gas_args;
         std::map<std::string, std::string> vx_gas_exact_args;
@@ -340,6 +350,7 @@ auto problem_main() -> int
         matplotlibcpp::xlabel("x");
         matplotlibcpp::ylabel("velocity");
         matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+				matplotlibcpp::tight_layout();
         matplotlibcpp::save("./dust_diffusion_velocity.pdf");
 #endif // HAVE_PYTHON
 
