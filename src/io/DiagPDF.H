@@ -16,7 +16,7 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 
 	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			 const amrex::Vector<std::string> &a_stateVar, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, int do_tracers, void *tracerPC_ptr,
+			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *tracerPC_ptr,
 			 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
 			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
 			 const YAML::Node &simulationMetadata, const ProjectionData *projectionData, amrex::Direction projectionDir) override;

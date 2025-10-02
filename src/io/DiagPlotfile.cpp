@@ -56,7 +56,7 @@ void DiagPlotfile::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometr
 
 void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			       const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			       const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, int do_tracers, void *tracerPC_ptr,
+			       const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *tracerPC_ptr,
 			       const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
 			       const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
 			       const YAML::Node &simulationMetadata, const ProjectionData * /*projectionData*/, amrex::Direction /*projectionDir*/)
@@ -73,7 +73,7 @@ void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amr
 	// Write metadata file (outside the plotfile directory for OpenPMD)
 	WriteMetadataFile(plotfilename + ".yaml", simulationMetadata);
 
-	amrex::ignore_unused(do_tracers, a_refRatio, tracerPC_ptr, a_state_fc, a_varNames_fc, particleWriter);
+	amrex::ignore_unused(a_refRatio, tracerPC_ptr, a_state_fc, a_varNames_fc, particleWriter);
 #else
 	// Set the number of output files if specified
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
@@ -85,11 +85,9 @@ void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amr
 	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);
 
 	// Write tracer particles if enabled
-	if (do_tracers != 0) {
-		auto *tracerPC = static_cast<amrex::AmrTracerParticleContainer *>(tracerPC_ptr);
-		if (tracerPC != nullptr) {
-			tracerPC->WritePlotFile(plotfilename, "tracer_particles");
-		}
+	auto *tracerPC = static_cast<amrex::AmrTracerParticleContainer *>(tracerPC_ptr);
+	if (tracerPC != nullptr) {
+		tracerPC->WritePlotFile(plotfilename, "tracer_particles");
 	}
 
 	// Write face-centered data if provided

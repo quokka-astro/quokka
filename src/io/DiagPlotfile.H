@@ -37,7 +37,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 
 	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			 const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, int do_tracers, void *tracerPC_ptr,
+			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *tracerPC_ptr,
 			 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
 			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
 			 const YAML::Node &simulationMetadata, const ProjectionData *projectionData, amrex::Direction projectionDir) override;
@@ -51,7 +51,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	template <typename problem_t>
 	void writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 			   const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-			   const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers,
+			   const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister,
 			   void *tracerPC_ptr, const YAML::Node &simulationMetadata);
 
 	// Check if this diagnostic should write at this time/step (not needed since we use doDiag directly)
@@ -81,7 +81,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 template <typename problem_t>
 void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-				 const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, int do_tracers,
+				 const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister,
 				 void *tracerPC_ptr, const YAML::Node &simulationMetadata)
 {
 	BL_PROFILE("DiagPlotfile::writePlotfile()");
@@ -102,7 +102,7 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 
 	// Call the main processDiag implementation
 	// Face-centered data and projection data are passed as nullptr since they're handled separately
-	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, do_tracers, tracerPC_ptr, nullptr, nullptr, particleWriter,
+	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, tracerPC_ptr, nullptr, nullptr, particleWriter,
 		    simulationMetadata, nullptr, amrex::Direction::x);
 }
 
