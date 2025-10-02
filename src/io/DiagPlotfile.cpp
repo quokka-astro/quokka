@@ -54,11 +54,45 @@ void DiagPlotfile::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometr
 	DiagBase::prepare(0, {}, {}, {}, {});
 }
 
-void DiagPlotfile::processDiag(int /*a_nstep*/, const amrex::Real & /*a_time*/, const amrex::Vector<const amrex::MultiFab *> & /*a_state*/,
-			       const amrex::Vector<std::string> & /*a_varNames*/, const YAML::Node & /*simulationMetadata*/)
+void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
+			       const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
+			       const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void * /*particleRegister_ptr*/,
+			       int do_tracers, void *tracerPC_ptr, const YAML::Node &simulationMetadata)
 {
-	// The actual work is done in writePlotfile() which is called directly from AMRSimulation
-	// This method is just a placeholder to satisfy the DiagBase interface
+	BL_PROFILE("DiagPlotfile::processDiag()");
+
+	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
+	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
+
+#ifdef QUOKKA_USE_OPENPMD
+	// Write using OpenPMD format
+	quokka::OpenPMDOutput::WriteFile(a_varNames, finest_level + 1, a_state, a_geoms, m_diagfile, a_time, a_istep[0]);
+
+	// Write metadata file (outside the plotfile directory for OpenPMD)
+	WriteMetadataFile(plotfilename + ".yaml", simulationMetadata);
+#else
+	// Set the number of output files if specified
+	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
+
+	// Write the main plotfile data using standard AMReX format
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, a_state, a_varNames, a_geoms, a_time, a_istep, a_refRatio);
+
+	// Write metadata file (inside the plotfile directory)
+	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);
+
+	// Write tracer particles if enabled
+	if (do_tracers != 0) {
+		auto *tracerPC = static_cast<amrex::AmrTracerParticleContainer *>(tracerPC_ptr);
+		if (tracerPC != nullptr) {
+			tracerPC->WritePlotFile(plotfilename, "tracer_particles");
+		}
+	}
+
+	// Note: Physics particles are not written here since we don't have type information.
+	// They should be written by the caller if needed, or we need a different approach.
+	// For now, this matches the DiagFramePlane pattern where particle-specific logic
+	// is handled separately.
+#endif
 }
 
 void DiagPlotfile::addVars(amrex::Vector<std::string> & /*a_varList*/)

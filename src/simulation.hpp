@@ -2948,7 +2948,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 
 	for (const auto &diag : m_diagnostics) {
 		if (diag->doDiag(tNew_[0], istep[0])) {
-			// Check if this is a DiagPlotfile - if so, call its special writePlotfile method
+			// Check if this is a DiagPlotfile - if so, prepare full plotfile data
 			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
 			if (plotfileDiag != nullptr) {
 				// Prepare full plotfile data
@@ -2957,19 +2957,27 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 				auto const varnames = GetPlotfileVarNames();
 
-				// Prepare face-centered data
+				// Call processDiag to write cell-centered data and tracer particles
+				plotfileDiag->processDiag(istep[0], tNew_[0], mf_cc_ptr, varnames, finestLevel(), Geom(0, finestLevel()), istep, refRatio(),
+							  nullptr, do_tracers, TracerPC.get(), simulationMetadata_);
+
+				// Write physics particles (requires template parameter, so done separately)
+#ifndef QUOKKA_USE_OPENPMD
+				const std::string plotfilename = amrex::Concatenate(plotfileDiag->getDiagFileName(), istep[0], 5);
+				if (plotfileDiag->includeAllParticles()) {
+					particleRegister_.writePlotFile(plotfilename);
+				} else if (!plotfileDiag->getParticleTypes().empty()) {
+					particleRegister_.writePlotFileFiltered(plotfilename, plotfileDiag->getParticleTypes());
+				}
+#endif
+
+				// Write face-centered data if present
 				std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
 				std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> mf_fc_ptr;
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					mf_fc_ptr[idim] = amrex::GetVecOfConstPtrs(mf_fc[idim]);
 				}
 				auto const varnames_fc = GetPlotfileVarNames_fc();
-
-				// Write cell-centered data and particles
-				plotfileDiag->writePlotfile(istep[0], tNew_[0], finestLevel(), mf_cc_ptr, varnames, Geom(0, finestLevel()), istep, refRatio(),
-							    particleRegister_, do_tracers, TracerPC.get(), simulationMetadata_);
-
-				// Write face-centered data if present
 				plotfileDiag->writePlotfileFC<problem_t>(amrex::Concatenate(plotfileDiag->getDiagFileName(), istep[0], 5), finestLevel(),
 									 mf_fc_ptr, varnames_fc, Geom(0, finestLevel()), tNew_[0], istep, refRatio(),
 									 simulationMetadata_);
@@ -2985,7 +2993,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 					}
 				} else {
 					// Regular diagnostic
-					diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, simulationMetadata_);
+					diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(), Geom(0, finestLevel()),
+							  istep, refRatio(), nullptr, do_tracers, TracerPC.get(), simulationMetadata_);
 				}
 			}
 		}

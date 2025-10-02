@@ -25,7 +25,9 @@ class DiagBase : public quokka::Factory<DiagBase>
 			     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames);
 
 	virtual void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-				 const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata) = 0;
+				 const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
+				 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *particleRegister_ptr,
+				 int do_tracers, void *tracerPC_ptr, const YAML::Node &simulationMetadata) = 0;
 
 	virtual void addVars(amrex::Vector<std::string> &a_varList);
 

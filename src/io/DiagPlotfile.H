@@ -36,7 +36,9 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			 const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata) override;
+			 const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
+			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *particleRegister_ptr,
+			 int do_tracers, void *tracerPC_ptr, const YAML::Node &simulationMetadata) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -80,6 +82,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 };
 
 // Template implementation must be in header
+// This is a convenience wrapper that calls processDiag and handles physics particles
 template <typename problem_t>
 void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
 				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
@@ -88,34 +91,12 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 {
 	BL_PROFILE("DiagPlotfile::writePlotfile()");
 
+	// Call the main processDiag implementation for cell-centered data and tracer particles
+	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, nullptr, do_tracers, tracerPC_ptr, simulationMetadata);
+
+#ifndef QUOKKA_USE_OPENPMD
+	// Write physics particles based on configuration (only for AMReX format)
 	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
-	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
-
-#ifdef QUOKKA_USE_OPENPMD
-	// Write using OpenPMD format
-	quokka::OpenPMDOutput::WriteFile(a_varnames, finest_level + 1, a_mf, a_geoms, m_diagfile, a_time, a_istep[0]);
-
-	// Write metadata file (outside the plotfile directory for OpenPMD)
-	WriteMetadataFile(plotfilename + ".yaml", simulationMetadata);
-#else
-	// Set the number of output files if specified
-	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
-
-	// Write the main plotfile data using standard AMReX format
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, a_mf, a_varnames, a_geoms, a_time, a_istep, a_refRatio);
-
-	// Write metadata file (inside the plotfile directory)
-	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);
-
-	// Write tracer particles if enabled
-	if (do_tracers != 0) {
-		auto *tracerPC = static_cast<amrex::AmrTracerParticleContainer *>(tracerPC_ptr);
-		if (tracerPC != nullptr) {
-			tracerPC->WritePlotFile(plotfilename, "tracer_particles");
-		}
-	}
-
-	// Write physics particles based on configuration
 	if (m_includeAllParticles) {
 		// Write all particle types
 		particleRegister.writePlotFile(plotfilename);
@@ -123,6 +104,9 @@ void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int fin
 		// Write only specified particle types using the filtered method
 		particleRegister.writePlotFileFiltered(plotfilename, m_particleTypes);
 	}
+#else
+	// Suppress unused parameter warning for OpenPMD builds
+	amrex::ignore_unused(particleRegister);
 #endif
 }
 

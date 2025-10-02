@@ -103,7 +103,10 @@ void DiagProjectionPlot::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::G
 }
 
 void DiagProjectionPlot::processDiag(int /*a_nstep*/, const amrex::Real & /*a_time*/, const amrex::Vector<const amrex::MultiFab *> & /*a_state*/,
-				     const amrex::Vector<std::string> & /*a_varNames*/, const YAML::Node & /*simulationMetadata*/)
+				     const amrex::Vector<std::string> & /*a_varNames*/, int /*finest_level*/,
+				     const amrex::Vector<amrex::Geometry> & /*a_geoms*/, const amrex::Vector<int> & /*a_istep*/,
+				     const amrex::Vector<amrex::IntVect> & /*a_refRatio*/, void * /*particleRegister_ptr*/, int /*do_tracers*/,
+				     void * /*tracerPC_ptr*/, const YAML::Node & /*simulationMetadata*/)
 {
 	// The actual work is done in writeProjection() which is called directly from the simulation
 	// This method is just a placeholder to satisfy the DiagBase interface
