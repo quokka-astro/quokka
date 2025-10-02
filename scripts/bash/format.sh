@@ -6,7 +6,6 @@
 #
 # Usage: ./scripts/bash/format.sh
 
-
 set -e
 
 # Check if this is the Quokka repository
@@ -18,12 +17,20 @@ fi
 # Check if pre-commit is installed, offer to install if missing
 if ! command -v pre-commit &> /dev/null; then
     echo "pre-commit is not installed."
+    
+    # Determine which package manager to use
+    if command -v uv &> /dev/null; then
+        PKG_MGR="uv pip"
+    else
+        PKG_MGR="pip"
+    fi
+    
     # Install in virtual environment or with --user flag
     if [[ -z "$VIRTUAL_ENV" ]]; then
-        read -p "Install via 'pip install --user pre-commit'? (y/n) " -n 1 -r
+        read -p "Install via '$PKG_MGR install --user pre-commit'? (y/n) " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            pip install --user pre-commit
+            $PKG_MGR install --user pre-commit
             # Add to PATH if needed
             [[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
         else
@@ -31,10 +38,10 @@ if ! command -v pre-commit &> /dev/null; then
             exit 1
         fi
     else
-        read -p "Install via 'pip install pre-commit'? (y/n) " -n 1 -r
+        read -p "Install via '$PKG_MGR install pre-commit'? (y/n) " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            pip install pre-commit
+            $PKG_MGR install pre-commit
         else
             echo "Aborted: pre-commit is required. Install it manually and try again."
             exit 1
