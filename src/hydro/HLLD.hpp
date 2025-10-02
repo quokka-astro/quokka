@@ -127,7 +127,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	double tp = (max_spd - std::min(para_v_jump, 0.0)) / denom_tp;
 	tp = std::clamp(tp, 0.0, 1.0);
 	theta = SQUARE(SQUARE(tp));
-	// modified middle speed S_M
+	// modified middle speed S_M from MK5 eqn (38)
 	const double sm_denom = (siui_R * u_R.rho - siui_L * u_L.rho);
 	spds[2] = (siui_R * u_R.mx - siui_L * u_L.mx + theta * (ptot_L - ptot_R)) / sm_denom;
 	// S_i - S_M (for i=L or R)
