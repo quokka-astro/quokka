@@ -89,7 +89,51 @@ AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
 AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
 
-// MRF expressed in the PRF
+//------------------------------------------------------------------------------
+// Reference frames and rotation matrix
+//
+// We work with two right-handed, orthonormal frames:
+//
+// PRF (Problem Reference Frame): the simulation's grid-aligned axes.
+// MRF (Math Reference Frame):    a wave-aligned basis:
+//                                e1 = k_dir_prf          (propagation direction)
+//                                e2 = inplane_dir_prf    (lies in the k-b0 plane)
+//                                e3 = outofplane_dir_prf (perpendicular to that plane)
+//
+// The three unit vectors (k_dir_prf, inplane_dir_prf, outofplane_dir_prf) are
+// stored as 3-vectors *expressed in PRF coordinates*. Arranged as the *rows*
+// of a 3x3 matrix
+//
+//             [ k_dir_prf^T         ]    [ r00 r01 r02   (row 0)
+// R  =  rows  [ inplane_dir_prf^T   ]  =   r10 r11 r12   (row 1)
+//             [ outofplane_dir_prf^T]      r20 r21 r22 ] (row 2)
+//
+// R maps PRF component vectors into MRF component vectors via a standard
+// rotation (passive change of basis):
+//
+// v_mrf = R * v_prf
+//
+// Because the rows are orthonormal, R is a pure rotation, so the inverse is
+// its transpose:
+//
+// v_prf = R^T * v_mrf
+//
+// The two helpers below implement exactly these operations using dot products
+// with the basis vectors (to stay GPU-friendly and avoid building dynamic
+// matrices):
+//
+// - rotatePRF2MRF(v_prf) -> R * v_prf
+// - rotateMRF2PRF(v_mrf) -> R^T * v_mrf
+//
+// Preconditions:
+//  (k_dir_prf, inplane_dir_prf, outofplane_dir_prf) form a right-handed,
+//  orthonormal basis (constructed in problem_main()).
+//------------------------------------------------------------------------------
+
+// Unit basis vectors of the MRF, expressed in PRF coordinates (rows of R):
+// row 0: e1 = k_dir_prf (propagation)
+// row 1: e2 = inplane_dir_prf (k-b0 plane)
+// row 2: e3 = outofplane_dir_prf (perpendicular to that plane)
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
@@ -97,15 +141,27 @@ AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; 
 // wavefront
 AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
 
+/// \brief Rotate a vector from PRF to MRF by multiplying with the rotation matrix R.
+/// \details Implements v_mrf = R * v_prf, where the rows of R are the
+///          MRF basis vectors expressed in PRF coordinates:
+///          R = [k_dir_prf^T; inplane_dir_prf^T; outofplane_dir_prf^T].
+/// \param vec_prf Components of the vector in the PRF.
+/// \return Components of the same geometric vector in the MRF.
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amrex::Real, 3> &vec_prf) -> std::array<amrex::Real, 3>
 {
+	// v_mrf[i] = e_i^T * v_prf  (i = 0:k, 1:in-plane, 2:out-of-plane)
 	return {vec_prf[0] * k_dir_prf[0] + vec_prf[1] * k_dir_prf[1] + vec_prf[2] * k_dir_prf[2],
 		vec_prf[0] * inplane_dir_prf[0] + vec_prf[1] * inplane_dir_prf[1] + vec_prf[2] * inplane_dir_prf[2],
 		vec_prf[0] * outofplane_dir_prf[0] + vec_prf[1] * outofplane_dir_prf[1] + vec_prf[2] * outofplane_dir_prf[2]};
 }
 
+/// \brief Rotate a vector from MRF back to PRF by multiplying with R^T.
+/// \details Implements v_prf = R^T * v_mrf. Because R is orthonormal, R^{-1}=R^T.
+/// \param vec_mrf Components of the vector in the MRF.
+/// \return Components of the same geometric vector in the PRF.
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amrex::Real, 3> &vec_mrf) -> std::array<amrex::Real, 3>
 {
+	// v_prf = k_dir_prf * v_mrf[0] + inplane_dir_prf * v_mrf[1] + outofplane_dir_prf * v_mrf[2]
 	return {vec_mrf[0] * k_dir_prf[0] + vec_mrf[1] * inplane_dir_prf[0] + vec_mrf[2] * outofplane_dir_prf[0],
 		vec_mrf[0] * k_dir_prf[1] + vec_mrf[1] * inplane_dir_prf[1] + vec_mrf[2] * outofplane_dir_prf[1],
 		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
@@ -114,6 +170,10 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amr
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
 									     const int icomp) -> double
 {
+	// Computes A in PRF by:
+	// 1. rotating x_vec from PRF->MRF,
+	// 2. building A in MRF,
+	// 3. rotating A back MRF->PRF and selecting the relevant component.
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2,
 					 "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
