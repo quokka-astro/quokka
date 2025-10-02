@@ -55,3 +55,7 @@ pre-commit run --all-files
 
 # Always uninstall hooks when done
 pre-commit uninstall
+
+echo "Uninstalled pre-commit hooks"
+
+echo "Done!"
