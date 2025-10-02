@@ -65,7 +65,7 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 			    amrex::Vector<amrex::IntVect> const &ref_ratio, const amrex::Direction dir, F const &user_f) -> amrex::BaseFab<amrex::Real>
 {
 	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
-	BL_PROFILE("quokka::DiagProjection::computePlaneProjection()");
+	const BL_PROFILE("quokka::DiagProjection::computePlaneProjection()");
 
 	// allocate temporary multifabs
 	amrex::Vector<amrex::MultiFab> q;
@@ -125,7 +125,7 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 		     const std::string &basename, quokka::PhysicsParticleRegister<problem_t> &particleRegister, const std::vector<std::string> &particleTypes,
 		     const YAML::Node &simulationMetadata)
 {
-	BL_PROFILE("quokka::diagnostics::WriteProjection(with particles)");
+	const BL_PROFILE("quokka::diagnostics::WriteProjection(with particles)");
 
 	// First, write the projection data using the base function (includes metadata)
 	WriteProjection(dir, proj, time, istep, basename, simulationMetadata);
