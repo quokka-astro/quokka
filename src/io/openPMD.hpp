@@ -36,14 +36,13 @@ auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::
 } // namespace detail
 
 void WriteFields(openPMD::Series &series, openPMD::Iteration &iteration, const std::vector<std::string> &varnames, int output_levels,
-	amrex::Vector<const amrex::MultiFab *> &mf, amrex::Vector<amrex::Geometry> &geom);
+		 amrex::Vector<const amrex::MultiFab *> &mf, amrex::Vector<amrex::Geometry> &geom);
 
-void WriteFile(const std::vector<std::string> &varnames, int output_levels, amrex::Vector<const amrex::MultiFab *> &mf,
-	amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real time, int file_number);
+void WriteFile(const std::vector<std::string> &varnames, int output_levels, amrex::Vector<const amrex::MultiFab *> &mf, amrex::Vector<amrex::Geometry> &geom,
+	       const std::string &output_basename, amrex::Real time, int file_number);
 
 template <typename problem_t>
-void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration,
-	            PhysicsParticleRegister<problem_t> &particle_register, amrex::Real time);
+void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, PhysicsParticleRegister<problem_t> &particle_register, amrex::Real time);
 
 } // namespace quokka::OpenPMDOutput
 
