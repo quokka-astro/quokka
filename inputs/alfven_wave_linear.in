@@ -13,12 +13,12 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = 32 32 32
+amr.n_cell = 16 16 16
 amr.max_level = 0
-amr.max_grid_size = 32
-amr.blocking_factor_x = 32
-amr.blocking_factor_y = 32
-amr.blocking_factor_z = 32
+amr.max_grid_size = 16
+amr.blocking_factor_x = 16
+amr.blocking_factor_y = 16
+amr.blocking_factor_z = 16
 
 do_reflux = 0
 do_subcycle = 0
@@ -38,6 +38,6 @@ hydro.use_dual_energy = 0
 mhd.emf_averaging_method = LD04
 
 setup.num_modes_x = 1
-setup.num_modes_y = 2
-setup.num_modes_z = 3
-setup.angle_between_k_b0 = 45
+setup.num_modes_y = 1
+setup.num_modes_z = 1
+setup.angle_between_k_b0 = 90
