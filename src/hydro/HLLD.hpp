@@ -18,7 +18,8 @@ constexpr double DELTA = 1.0e-4;
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
-					      const double gamma, const double bx, const double perp_v_jump) -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
+					      const double gamma, const double bx, const double perp_v_jump)
+    -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
 {
 	//--- Step 1. Compute L/R states
 
