@@ -125,8 +125,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// tp := shock anisotropy, clamped to [0, 1], with theta = tp^4
 	const double denom_tp = std::max(1e-14, max_spd - std::min(perp_v_jump, 0.0));
 	double tp = (max_spd - std::min(para_v_jump, 0.0)) / denom_tp;
-	tp = std::max(tp, 0.0); // for completeness, but not strictly mathematically necessary
-	tp = std::min(tp, 1.0);
+	tp = std::clamp(tp, 0.0, 1.0);
 	theta = SQUARE(SQUARE(tp));
 	// modified middle speed S_M
 	const double sm_denom = (siui_R * u_R.rho - siui_L * u_L.rho);
