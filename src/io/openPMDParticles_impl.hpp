@@ -116,10 +116,7 @@ inline ParticleLayout buildParticleLayout(const PhysicsParticleDescriptorBase &d
 	return layout;
 }
 
-
-
-template <typename ContainerType>
-ParticleCountSummary computeParticleCountSummary(ContainerType &container)
+template <typename ContainerType> ParticleCountSummary computeParticleCountSummary(ContainerType &container)
 {
 	ParticleCountSummary summary{};
 	const int finest = container.finestLevel();
@@ -169,9 +166,9 @@ ParticleCountSummary computeParticleCountSummary(ContainerType &container)
 	return summary;
 }
 
-inline void initializeSpecies(openPMD::ParticleSpecies &species, const std::vector<std::string> &position_components,
-                             const ParticleLayout &layout, const std::vector<std::string> &velocity_components,
-                             const std::vector<std::string> &luminosity_components, unsigned long long total_particles)
+inline void initializeSpecies(openPMD::ParticleSpecies &species, const std::vector<std::string> &position_components, const ParticleLayout &layout,
+			      const std::vector<std::string> &velocity_components, const std::vector<std::string> &luminosity_components,
+			      unsigned long long total_particles)
 {
 	auto real_dataset = openPMD::Dataset(openPMD::determineDatatype<amrex::ParticleReal>(), {total_particles});
 	auto id_dataset = openPMD::Dataset(openPMD::determineDatatype<uint64_t>(), {total_particles});
@@ -211,8 +208,7 @@ inline void initializeSpecies(openPMD::ParticleSpecies &species, const std::vect
 	}
 }
 
-template <typename T>
-inline void storeChunk(openPMD::RecordComponent component, const T *ptr, unsigned long long offset, unsigned long long extent)
+template <typename T> inline void storeChunk(openPMD::RecordComponent component, const T *ptr, unsigned long long offset, unsigned long long extent)
 {
 	const std::vector<uint64_t> offset_vec{offset};
 	const std::vector<uint64_t> extent_vec{extent};
@@ -220,8 +216,7 @@ inline void storeChunk(openPMD::RecordComponent component, const T *ptr, unsigne
 }
 
 template <typename DescriptorType>
-void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration, DescriptorType &descriptor,
-                         const std::string &species_name)
+void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration, DescriptorType &descriptor, const std::string &species_name)
 {
 	using ContainerType = typename DescriptorType::ContainerT;
 	ContainerType *container = descriptor.getContainer();
@@ -425,13 +420,12 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 			auto *vel_dst_z = (vel_components > 2) ? velocity_dests[2].data() : nullptr;
 #endif
 
-			amrex::ParallelFor(num_particles,
-			    [aos_ptr, pos_x_ptr,
+			amrex::ParallelFor(num_particles, [aos_ptr, pos_x_ptr,
 #if AMREX_SPACEDIM >= 2
-			     pos_y_ptr,
+							   pos_y_ptr,
 #endif
 #if AMREX_SPACEDIM >= 3
-			     pos_z_ptr,
+							   pos_z_ptr,
 #endif
 			     id_ptr, mass_src_soa, mass_rdata_index, mass_dst, vel_src_soa_x, vel_rdata_index_x, vel_dst_x,
 #if AMREX_SPACEDIM >= 2
@@ -561,16 +555,12 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 
 			if (layout.has_luminosity) {
 				for (int idx = 0; idx < layout.luminosity_components; ++idx) {
-					storeChunk(
-					    species["luminosity"][luminosity_components[idx]],
-					    luminosity_buffers[idx].data(), global_offset, extent);
+					storeChunk(species["luminosity"][luminosity_components[idx]], luminosity_buffers[idx].data(), global_offset, extent);
 				}
 			}
 
 			if (layout.has_stage) {
-				storeChunk(
-				    species["evolutionStage"][openPMD::RecordComponent::SCALAR],
-				    stage_dst, global_offset, extent);
+				storeChunk(species["evolutionStage"][openPMD::RecordComponent::SCALAR], stage_dst, global_offset, extent);
 			}
 		}
 	}
@@ -579,60 +569,59 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 } // namespace detail
 
 template <typename problem_t>
-void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration,
-                    PhysicsParticleRegister<problem_t> &particle_register, amrex::Real /*time*/)
+void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, PhysicsParticleRegister<problem_t> &particle_register, amrex::Real /*time*/)
 {
-	particle_register.forEachDescriptor([
-	    &series, &iteration](ParticleType type, PhysicsParticleDescriptorBase &descriptor_base) {
+	particle_register.forEachDescriptor([&series, &iteration](ParticleType type, PhysicsParticleDescriptorBase &descriptor_base) {
 		const std::string species_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(type);
 
 		switch (type) {
-		case ParticleType::Rad: {
-			using Descriptor = PhysicsParticleDescriptor<RadParticleContainer<problem_t>, problem_t, ParticleType::Rad>;
-			if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-				detail::writeParticleSpecies(series, iteration, *typed, species_name);
+			case ParticleType::Rad: {
+				using Descriptor = PhysicsParticleDescriptor<RadParticleContainer<problem_t>, problem_t, ParticleType::Rad>;
+				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
+					detail::writeParticleSpecies(series, iteration, *typed, species_name);
+				}
+				break;
 			}
-			break;
-		}
 #if AMREX_SPACEDIM == 3
-		case ParticleType::CIC: {
-			using Descriptor = PhysicsParticleDescriptor<CICParticleContainer, problem_t, ParticleType::CIC>;
-			if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-				detail::writeParticleSpecies(series, iteration, *typed, species_name);
+			case ParticleType::CIC: {
+				using Descriptor = PhysicsParticleDescriptor<CICParticleContainer, problem_t, ParticleType::CIC>;
+				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
+					detail::writeParticleSpecies(series, iteration, *typed, species_name);
+				}
+				break;
 			}
-			break;
-		}
-		case ParticleType::CICRad: {
-			using Descriptor = PhysicsParticleDescriptor<CICRadParticleContainer<problem_t>, problem_t, ParticleType::CICRad>;
-			if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-				detail::writeParticleSpecies(series, iteration, *typed, species_name);
+			case ParticleType::CICRad: {
+				using Descriptor = PhysicsParticleDescriptor<CICRadParticleContainer<problem_t>, problem_t, ParticleType::CICRad>;
+				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
+					detail::writeParticleSpecies(series, iteration, *typed, species_name);
+				}
+				break;
 			}
-			break;
-		}
-		case ParticleType::StochasticStellarPop: {
-			using Descriptor = PhysicsParticleDescriptor<StochasticStellarPopParticleContainer<problem_t>, problem_t, ParticleType::StochasticStellarPop>;
-			if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-				detail::writeParticleSpecies(series, iteration, *typed, species_name);
+			case ParticleType::StochasticStellarPop: {
+				using Descriptor =
+				    PhysicsParticleDescriptor<StochasticStellarPopParticleContainer<problem_t>, problem_t, ParticleType::StochasticStellarPop>;
+				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
+					detail::writeParticleSpecies(series, iteration, *typed, species_name);
+				}
+				break;
 			}
-			break;
-		}
-		case ParticleType::Sink: {
-			using Descriptor = PhysicsParticleDescriptor<SinkParticleContainer, problem_t, ParticleType::Sink>;
-			if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-				detail::writeParticleSpecies(series, iteration, *typed, species_name);
+			case ParticleType::Sink: {
+				using Descriptor = PhysicsParticleDescriptor<SinkParticleContainer, problem_t, ParticleType::Sink>;
+				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
+					detail::writeParticleSpecies(series, iteration, *typed, species_name);
+				}
+				break;
 			}
-			break;
-		}
-		case ParticleType::Test: {
-			using Descriptor = PhysicsParticleDescriptor<TestParticleContainer<problem_t>, problem_t, ParticleType::Test>;
-			if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-				detail::writeParticleSpecies(series, iteration, *typed, species_name);
+			case ParticleType::Test: {
+				using Descriptor = PhysicsParticleDescriptor<TestParticleContainer<problem_t>, problem_t, ParticleType::Test>;
+				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
+					detail::writeParticleSpecies(series, iteration, *typed, species_name);
+				}
+				break;
 			}
-			break;
-		}
 #endif
-		default:
-			break;
+			default:
+				break;
 		}
 	});
 }

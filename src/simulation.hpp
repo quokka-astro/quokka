@@ -691,7 +691,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 				  "128 (or greater) when running on GPUs, and 64 (or "
 				  "greater) when running on CPUs.\n";
 	}
-
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()

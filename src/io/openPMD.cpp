@@ -91,8 +91,8 @@ auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::
 //----------------------------------------------------------------------------------------
 //! n void OpenPMDOutput::WriteFields
 //  rief  Write cell-centered MultiFab data to an existing openPMD iteration
-void WriteFields(openPMD::Series &series, openPMD::Iteration &iteration, const std::vector<std::string> &varnames,
-	       int const output_levels, amrex::Vector<const amrex::MultiFab *> &mf, amrex::Vector<amrex::Geometry> &geom)
+void WriteFields(openPMD::Series &series, openPMD::Iteration &iteration, const std::vector<std::string> &varnames, int const output_levels,
+		 amrex::Vector<const amrex::MultiFab *> &mf, amrex::Vector<amrex::Geometry> &geom)
 {
 	auto meshes = iteration.meshes;
 
