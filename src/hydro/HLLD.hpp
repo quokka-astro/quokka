@@ -5,6 +5,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include <AMReX.H>
 #include <AMReX_REAL.H>
+#include <algorithm>
 
 #include "hydro/HydroState.hpp"
 #include "util/ArrayView.hpp"
@@ -17,7 +18,7 @@ constexpr double DELTA = 1.0e-4;
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
-					      const double gamma, const double bx) -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
+					      const double gamma, const double bx, const double perp_v_jump) -> std::tuple<quokka::valarray<double, fluxdim>, double, double>
 {
 	//--- Step 1. Compute L/R states
 
@@ -116,9 +117,21 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// MK5: S_i - u_i (for i=L or R)
 	double siui_L = spds[0] - sL.u;
 	double siui_R = spds[4] - sR.u;
-	// MK5: S_M from eqn (38)
-	// group ptot terms for floating-point associativity symmetry
-	spds[2] = (siui_R * u_R.mx - siui_L * u_L.mx + (ptot_L - ptot_R)) / (siui_R * u_R.rho - siui_L * u_L.rho);
+	// carbuncle detector
+	const double max_spd = std::max(fspd_L, fspd_R);
+	const double para_v_jump = sL.u - sR.u; // negative -> compression
+	double theta = 1.0;
+	if (para_v_jump < 0.0) {
+		// tp := shock anisotropy, clamped to [0, 1], with theta = tp^4
+		const double denom_tp = std::max(1e-14, max_spd - std::min(perp_v_jump, 0.0));
+		double tp = (max_spd - std::min(para_v_jump, 0.0)) / denom_tp;
+		tp = std::max(tp, 0.0); // for completeness, but not strictly mathematically necessary
+		tp = std::min(tp, 1.0);
+		theta = SQUARE(SQUARE(tp));
+	}
+	// modified middle speed S_M
+	const double sm_denom = (siui_R * u_R.rho - siui_L * u_L.rho);
+	spds[2] = (siui_R * u_R.mx - siui_L * u_L.mx + theta * (ptot_L - ptot_R)) / sm_denom;
 	// S_i - S_M (for i=L or R)
 	double sism_L = spds[0] - spds[2];
 	double sism_R = spds[4] - spds[2];
