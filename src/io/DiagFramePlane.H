@@ -18,8 +18,7 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
 	// Template implementation - called from AMRSimulation::doDiagnostics()
-	template <typename problem_t>
-	void processDiag(int a_nstep, const amrex::Real &a_time);
+	template <typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time);
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -66,8 +65,7 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 };
 
 // Template implementation
-template <typename problem_t>
-void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time)
+template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time)
 {
 	BL_PROFILE("DiagFramePlane::processDiag()");
 

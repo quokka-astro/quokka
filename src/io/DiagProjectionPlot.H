@@ -33,8 +33,7 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	void close() override {}
 
 	// Template implementation - called from AMRSimulation::doDiagnostics()
-	template <typename problem_t>
-	void processDiag(int a_nstep, const amrex::Real &a_time);
+	template <typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time);
 
 	// Get the list of particle types to include (empty means none)
 	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
@@ -45,8 +44,7 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 };
 
 // Template implementation
-template <typename problem_t>
-void DiagProjectionPlot::processDiag(int a_nstep, const amrex::Real &a_time)
+template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, const amrex::Real &a_time)
 {
 	BL_PROFILE("DiagProjectionPlot::processDiag()");
 
