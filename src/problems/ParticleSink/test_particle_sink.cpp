@@ -312,5 +312,5 @@ auto problem_main() -> int
 		}
 	}
 
-	return 0;
+	return status;
 }
