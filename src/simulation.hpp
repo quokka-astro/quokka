@@ -2977,7 +2977,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 					}
 				} else {
 					// Regular diagnostic - call virtual processDiag
-					diag->processDiag(istep[0], tNew_[0], nullptr, amrex::Direction::x);
+					diag->processDiag(istep[0], tNew_[0]);
 				}
 			}
 		}
