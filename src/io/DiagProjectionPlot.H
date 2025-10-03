@@ -34,13 +34,10 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 
 	// Template implementation - called from AMRSimulation::doDiagnostics()
 	template <typename problem_t>
-	void processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir);
+	void processDiag(int a_nstep, const amrex::Real &a_time);
 
 	// Get the list of particle types to include (empty means none)
 	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
-
-	// Get projection directions
-	[[nodiscard]] auto getProjectionDirs() const -> const std::vector<amrex::Direction> & { return m_projectionDirs; }
 
       private:
 	std::vector<std::string> m_particleTypes;	// List of particle types to include (default: empty)
@@ -49,32 +46,38 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 
 // Template implementation
 template <typename problem_t>
-void DiagProjectionPlot::processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir)
+void DiagProjectionPlot::processDiag(int a_nstep, const amrex::Real &a_time)
 {
 	BL_PROFILE("DiagProjectionPlot::processDiag()");
 
 	// Get the simulation pointer
 	auto *sim = getSim<problem_t>();
 
-	// If no projection data is provided, skip
-	if (projectionData == nullptr || projectionData->empty()) {
-		return;
-	}
+	// Loop through all requested projection directions
+	for (auto const &dir : m_projectionDirs) {
+		// Compute projections for this direction
+		std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = sim->ComputeProjections(dir);
 
-	// Construct the base filename: proj_<direction>_<file>
-	std::string basename = "proj_";
-	basename += quokka::diagnostics::detail::direction_to_string(projectionDir);
-	basename += "_";
-	basename += m_diagfile;
+		// Skip if no projection data
+		if (proj.empty()) {
+			continue;
+		}
 
-	// Write projection data
-	quokka::diagnostics::WriteProjection(projectionDir, *projectionData, a_time, a_nstep, basename, sim->simulationMetadata_);
+		// Construct the base filename: proj_<direction>_<file>
+		std::string basename = "proj_";
+		basename += quokka::diagnostics::detail::direction_to_string(dir);
+		basename += "_";
+		basename += m_diagfile;
 
-	// If particles are requested, write them
-	if (!m_particleTypes.empty()) {
-		const std::string filename = amrex::Concatenate(basename, a_nstep, 5);
-		sim->particleRegister_.writePlotFileFiltered(filename, m_particleTypes);
-		amrex::Print() << "  Wrote particles to projection " << filename << "\n";
+		// Write projection data
+		quokka::diagnostics::WriteProjection(dir, proj, a_time, a_nstep, basename, sim->simulationMetadata_);
+
+		// If particles are requested, write them
+		if (!m_particleTypes.empty()) {
+			const std::string filename = amrex::Concatenate(basename, a_nstep, 5);
+			sim->particleRegister_.writePlotFileFiltered(filename, m_particleTypes);
+			amrex::Print() << "  Wrote particles to projection " << filename << "\n";
+		}
 	}
 }
 

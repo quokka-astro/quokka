@@ -2964,29 +2964,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			// Set common diagnostic data (including simulation pointer)
 			diag->setDiagData(this, &diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
 
-			// Check if this is a DiagPlotfile - call template version
+			// Call the appropriate template processDiag for each diagnostic type
+			// All diagnostics now have a unified API: processDiag<problem_t>(nstep, time)
 			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
 			if (plotfileDiag != nullptr) {
 				plotfileDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 			} else {
-				// Check if this is a DiagProjectionPlot - call template version for each direction
 				auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
 				if (projectionDiag != nullptr) {
-					// Compute and write projections for each direction
-					for (auto const &dir : projectionDiag->getProjectionDirs()) {
-						std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-						projectionDiag->processDiag<problem_t>(istep[0], tNew_[0], &proj, dir);
-					}
+					projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				} else {
-					// Check if this is a DiagFramePlane - call template version
 					auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag.get());
 					if (framePlaneDiag != nullptr) {
-						framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0], nullptr, amrex::Direction::x);
+						framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 					} else {
-						// Check if this is a DiagPDF - call template version
 						auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
 						if (pdfDiag != nullptr) {
-							pdfDiag->processDiag<problem_t>(istep[0], tNew_[0], nullptr, amrex::Direction::x);
+							pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 						} else {
 							// Unknown diagnostic type
 							amrex::Abort("Unknown diagnostic type - all diagnostic types must implement template processDiag");

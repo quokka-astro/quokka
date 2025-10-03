@@ -17,7 +17,7 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 
 	// Template implementation - called from AMRSimulation::doDiagnostics()
 	template <typename problem_t>
-	void processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir);
+	void processDiag(int a_nstep, const amrex::Real &a_time);
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -70,7 +70,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto DiagPDF::getTotalBinCount() -> amrex::Lo
 
 // Template implementation
 template <typename problem_t>
-void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData * /*projectionData*/, amrex::Direction /*projectionDir*/)
+void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time)
 {
 	BL_PROFILE("DiagPDF::processDiag()");
 
