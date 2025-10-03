@@ -20,7 +20,8 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct HydroBalsaraVortex {};
+struct HydroBalsaraVortex {
+};
 
 template <> struct quokka::EOS_Traits<HydroBalsaraVortex> {
 	static constexpr double gamma = 5.0 / 3.0;
@@ -53,11 +54,8 @@ constexpr double vortex_drift_x2 = 0.0;
 constexpr double vortex_drift_x3 = 0.0;
 
 AMREX_GPU_DEVICE
-inline void computeVortexSolution(
-	int i, int j, int k,
-	amrex::Array4<amrex::Real> const &state,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+inline void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
@@ -67,8 +65,8 @@ inline void computeVortexSolution(
 	const double rel_x1 = static_cast<double>(x1_C) - vortex_x0;
 	const double rel_x2 = static_cast<double>(x2_C) - vortex_y0;
 	const double radius_sq = rel_x1 * rel_x1 + rel_x2 * rel_x2;
-	
-	const double density  = bg_density;
+
+	const double density = bg_density;
 	const double pressure = bg_pressure - 0.5 * vortex_speed * vortex_speed * gcem::exp(1.0 - radius_sq);
 
 	const double delta_vel_x1 = -rel_x2 * vortex_speed * gcem::exp(0.5 * (1.0 - radius_sq));
@@ -93,8 +91,7 @@ inline void computeVortexSolution(
 	state(i, j, k, HydroSystem<HydroBalsaraVortex>::internalEnergy_index) = Eint;
 }
 
-template <>
-void QuokkaSimulation<HydroBalsaraVortex>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<HydroBalsaraVortex>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -111,10 +108,8 @@ void QuokkaSimulation<HydroBalsaraVortex>::setInitialConditionsOnGrid(quokka::gr
 }
 
 template <>
-void QuokkaSimulation<HydroBalsaraVortex>::computeReferenceSolution(
-	amrex::MultiFab &ref,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+void QuokkaSimulation<HydroBalsaraVortex>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
