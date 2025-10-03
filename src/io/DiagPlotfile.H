@@ -123,8 +123,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
 			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, sim->istep[0], 5);
 			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
-			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc[idim], geoms, a_time, sim->istep,
-						       refRatio);
+			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc[idim], geoms, a_time, sim->istep, refRatio);
 			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", sim->simulationMetadata_);
 		}
 	}

@@ -46,9 +46,8 @@ class DiagBase : public quokka::Factory<DiagBase>
 
 	// Set diagnostic data - called by AMRSimulation::doDiagnostics()
 	template <typename problem_t>
-	void setDiagData(AMRSimulation<problem_t> *sim, const amrex::Vector<const amrex::MultiFab *> *diagMF,
-			 const amrex::Vector<std::string> *diagVars, const amrex::Vector<amrex::Geometry> *geoms,
-			 const amrex::Vector<amrex::IntVect> *refRatio, const YAML::Node *metadata)
+	void setDiagData(AMRSimulation<problem_t> *sim, const amrex::Vector<const amrex::MultiFab *> *diagMF, const amrex::Vector<std::string> *diagVars,
+			 const amrex::Vector<amrex::Geometry> *geoms, const amrex::Vector<amrex::IntVect> *refRatio, const YAML::Node *metadata)
 	{
 		m_simulation = sim;
 		m_diagMF = diagMF;
@@ -79,10 +78,7 @@ class DiagBase : public quokka::Factory<DiagBase>
 	const YAML::Node *m_metadata{nullptr};
 
 	// Helper to get simulation pointer with correct type
-	template <typename problem_t> auto getSim() const -> AMRSimulation<problem_t> *
-	{
-		return static_cast<AMRSimulation<problem_t> *>(m_simulation);
-	}
+	template <typename problem_t> auto getSim() const -> AMRSimulation<problem_t> * { return static_cast<AMRSimulation<problem_t> *>(m_simulation); }
 
 	// Make AMRSimulation a friend so derived diagnostic classes can access its members
 	template <typename problem_t> friend class AMRSimulation;
