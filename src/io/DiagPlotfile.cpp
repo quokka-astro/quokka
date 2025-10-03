@@ -21,11 +21,10 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 		}
 	}
 
-	// Read particle types to include (optional)
+	// Read particle types to include (optional, empty means all)
 	int const nParticleTypes = pp.countval("particles");
 	if (nParticleTypes > 0) {
 		m_particleTypes.resize(nParticleTypes);
-		m_includeAllParticles = false;
 		for (int n = 0; n < nParticleTypes; ++n) {
 			pp.get("particles", m_particleTypes[n], n);
 		}
@@ -36,7 +35,6 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 		}
 		amrex::Print() << "\n";
 	} else {
-		m_includeAllParticles = true;
 		amrex::Print() << "DiagPlotfile: Including all particle types\n";
 	}
 
@@ -54,66 +52,18 @@ void DiagPlotfile::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometr
 	DiagBase::prepare(0, {}, {}, {}, {});
 }
 
-void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			       const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			       const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *tracerPC_ptr,
-			       const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
-			       const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
-			       const YAML::Node &simulationMetadata, const ProjectionData * /*projectionData*/, amrex::Direction /*projectionDir*/)
+void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData * /*projectionData*/, amrex::Direction /*projectionDir*/)
 {
 	const BL_PROFILE("DiagPlotfile::processDiag()");
 
-	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
-	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
-
-#ifdef QUOKKA_USE_OPENPMD
-	// Write using OpenPMD format
-	quokka::OpenPMDOutput::WriteFile(a_varNames, finest_level + 1, a_state, a_geoms, m_diagfile, a_time, a_istep[0]);
-
-	// Write metadata file (outside the plotfile directory for OpenPMD)
-	WriteMetadataFile(plotfilename + ".yaml", simulationMetadata);
-
-	amrex::ignore_unused(a_refRatio, tracerPC_ptr, a_state_fc, a_varNames_fc, particleWriter);
-#else
-	// Set the number of output files if specified
-	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
-
-	// Write the main plotfile data using standard AMReX format
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, a_state, a_varNames, a_geoms, a_time, a_istep, a_refRatio);
-
-	// Write metadata file (inside the plotfile directory)
-	WriteMetadataFile(plotfilename + "/metadata.yaml", simulationMetadata);
-
-	// Write tracer particles if enabled
-	auto *tracerPC = static_cast<amrex::AmrTracerParticleContainer *>(tracerPC_ptr);
-	if (tracerPC != nullptr) {
-		tracerPC->WritePlotFile(plotfilename, "tracer_particles");
-	}
-
-	// Write face-centered data if provided
-	if (a_state_fc != nullptr && a_varNames_fc != nullptr) {
-		// Create fc_vars directory if it doesn't exist
-		const std::string fc_vars_dir = plotfilename + "/fc_vars";
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::UtilCreateDirectory(fc_vars_dir, 0755);
-		}
-		amrex::ParallelDescriptor::Barrier();
-
-		std::vector<std::string> dimNames = {"x", "y", "z"};
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
-			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, a_istep[0], 5);
-			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, (*a_state_fc)[idim], (*a_varNames_fc)[idim], a_geoms, a_time, a_istep,
-						       a_refRatio);
-			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", simulationMetadata);
-		}
-	}
-
-	// Write physics particles using the provided callback
-	if (particleWriter) {
-		particleWriter(plotfilename);
-	}
-#endif
+	// Note: This is a template-independent function, but it needs to access simulation data.
+	// We cannot know the problem_t at compile time here, so we'll need to be called from
+	// a context that knows the problem_t. For now, we implement a workaround by making this
+	// function templated in practice through the caller.
+	
+	// This implementation will be moved to a template helper that knows problem_t.
+	// For now, we'll just mark this as not implemented and rely on the new calling pattern.
+	amrex::Abort("DiagPlotfile::processDiag should not be called directly. Implementation moved to template-aware context.");
 }
 
 void DiagPlotfile::addVars(amrex::Vector<std::string> & /*a_varList*/)

@@ -102,37 +102,11 @@ void DiagProjectionPlot::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::G
 	DiagBase::prepare(0, {}, {}, {}, {});
 }
 
-void DiagProjectionPlot::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> & /*a_state*/,
-				     const amrex::Vector<std::string> & /*a_varNames*/, int /*finest_level*/,
-				     const amrex::Vector<amrex::Geometry> & /*a_geoms*/, const amrex::Vector<int> & /*a_istep*/,
-				     const amrex::Vector<amrex::IntVect> & /*a_refRatio*/, void * /*tracerPC_ptr*/,
-				     const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> * /*a_state_fc*/,
-				     const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> * /*a_varNames_fc*/, const ParticleWriterFunc &particleWriter,
-				     const YAML::Node &simulationMetadata, const ProjectionData *projectionData, amrex::Direction projectionDir)
+void DiagProjectionPlot::processDiag(int /*a_nstep*/, const amrex::Real & /*a_time*/, const ProjectionData * /*projectionData*/,
+				     amrex::Direction /*projectionDir*/)
 {
-	BL_PROFILE("DiagProjectionPlot::processDiag()");
-
-	// If no projection data is provided, skip (user must call ComputeProjections first)
-	if (projectionData == nullptr || projectionData->empty()) {
-		return;
-	}
-
-	// Construct the base filename: proj_<direction>_<file>
-	// e.g., if m_diagfile is "proj_plt", this becomes "proj_x_proj_plt"
-	std::string basename = "proj_";
-	basename += quokka::diagnostics::detail::direction_to_string(projectionDir);
-	basename += "_";
-	basename += m_diagfile;
-
-	// Write projection data
-	quokka::diagnostics::WriteProjection(projectionDir, *projectionData, a_time, a_nstep, basename, simulationMetadata);
-
-	// If particles are requested and a particle writer is provided, write them
-	if (!m_particleTypes.empty() && particleWriter) {
-		const std::string filename = amrex::Concatenate(basename, a_nstep, 5);
-		particleWriter(filename);
-		amrex::Print() << "  Wrote particles to projection " << filename << "\n";
-	}
+	// This should not be called directly - implementation is in processDiagImpl template
+	amrex::Abort("DiagProjectionPlot::processDiag should not be called directly. Use processDiagImpl instead.");
 }
 
 void DiagProjectionPlot::addVars(amrex::Vector<std::string> & /*a_varList*/)

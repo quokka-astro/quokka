@@ -35,75 +35,102 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
-	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			 const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *tracerPC_ptr,
-			 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
-			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
-			 const YAML::Node &simulationMetadata, const ProjectionData *projectionData, amrex::Direction projectionDir) override;
+	void processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData = nullptr,
+			 amrex::Direction projectionDir = amrex::Direction::x) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
 	void close() override {}
 
-	// Special method for writing cell-centered data and particles
-	// This is called directly from AMRSimulation::doDiagnostics()
-	template <typename problem_t>
-	void writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
-			   const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-			   const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister, void *tracerPC_ptr,
-			   const YAML::Node &simulationMetadata);
-
-	// Check if this diagnostic should write at this time/step (not needed since we use doDiag directly)
-	// [[nodiscard]] auto shouldWrite(const amrex::Real &a_time, int a_nstep) const -> bool { return doDiag(a_time, a_nstep); }
-
-	// Get the list of particle types to include (empty means all)
-	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
-
-	// Check if all particles should be included
-	[[nodiscard]] auto includeAllParticles() const -> bool { return m_includeAllParticles; }
+	// Template method that does the actual work - called from AMRSimulation::doDiagnostics()
+	template <typename problem_t> void processDiagImpl(AMRSimulation<problem_t> *sim, int a_nstep, const amrex::Real &a_time);
 
 	// Get the diagnostic file name
 	[[nodiscard]] auto getDiagFileName() const -> const std::string & { return m_diagfile; }
 
+	// Get particle types
+	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
+
       private:
-	std::vector<std::string> m_particleTypes; // List of particle types to include
-	bool m_includeAllParticles{true};	  // If true, include all particle types
+	std::vector<std::string> m_particleTypes; // List of particle types to include (empty means all)
 	int m_nfiles{-1};			  // Number of files for output (-1 means default)
 
 	// Helper function to write metadata file
 	static void WriteMetadataFile(const std::string &metadataFilename, const YAML::Node &simulationMetadata);
 };
 
-// Template implementation must be in header
-// This is a convenience wrapper for backwards compatibility
-// It calls processDiag with a particle writer callback
-template <typename problem_t>
-void DiagPlotfile::writePlotfile(int a_nstep, const amrex::Real &a_time, int finest_level, const amrex::Vector<const amrex::MultiFab *> &a_mf,
-				 const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<int> &a_istep,
-				 const amrex::Vector<amrex::IntVect> &a_refRatio, quokka::PhysicsParticleRegister<problem_t> &particleRegister,
-				 void *tracerPC_ptr, const YAML::Node &simulationMetadata)
+// Template implementation - processes diagnostic with full access to simulation
+template <typename problem_t> void DiagPlotfile::processDiagImpl(AMRSimulation<problem_t> *sim, int a_nstep, const amrex::Real &a_time)
 {
-	BL_PROFILE("DiagPlotfile::writePlotfile()");
+	const BL_PROFILE("DiagPlotfile::processDiagImpl()");
 
-	// Create particle writer callback
-	ParticleWriterFunc particleWriter;
-#ifndef QUOKKA_USE_OPENPMD
-	if (m_includeAllParticles) {
-		particleWriter = [&particleRegister](const std::string &plotfilename) { particleRegister.writePlotFile(plotfilename); };
-	} else if (!m_particleTypes.empty()) {
-		particleWriter = [&particleRegister, this](const std::string &plotfilename) {
-			particleRegister.writePlotFileFiltered(plotfilename, m_particleTypes);
-		};
-	}
+	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
+	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
+
+	// Prepare cell-centered data
+	int const included_ghosts = std::min(sim->nghost_cc_, sim->nghost_fc_);
+	amrex::Vector<amrex::MultiFab> mf_cc = sim->PlotFileMF_cc(included_ghosts);
+	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
+	auto const varnames = sim->GetPlotfileVarNames();
+
+	// Prepare face-centered data
+	std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = sim->PlotFileMF_fc(sim->nghost_fc_);
+	auto const varnames_fc = sim->GetPlotfileVarNames_fc();
+
+	auto const finest_level = sim->finestLevel();
+	auto const geoms = sim->Geom(0, finest_level);
+	auto const refRatio = sim->refRatio();
+
+#ifdef QUOKKA_USE_OPENPMD
+	// Write using OpenPMD format
+	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, geoms, m_diagfile, a_time, sim->istep[0]);
+
+	// Write metadata file (outside the plotfile directory for OpenPMD)
+	WriteMetadataFile(plotfilename + ".yaml", sim->simulationMetadata_);
 #else
-	amrex::ignore_unused(particleRegister);
-#endif
+	// Set the number of output files if specified
+	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
 
-	// Call the main processDiag implementation
-	// Face-centered data and projection data are passed as nullptr since they're handled separately
-	processDiag(a_nstep, a_time, a_mf, a_varnames, finest_level, a_geoms, a_istep, a_refRatio, tracerPC_ptr, nullptr, nullptr, particleWriter,
-		    simulationMetadata, nullptr, amrex::Direction::x);
+	// Write the main plotfile data using standard AMReX format
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, geoms, a_time, sim->istep, refRatio);
+
+	// Write metadata file (inside the plotfile directory)
+	WriteMetadataFile(plotfilename + "/metadata.yaml", sim->simulationMetadata_);
+
+	// Write tracer particles if enabled
+	if (sim->TracerPC != nullptr) {
+		sim->TracerPC->WritePlotFile(plotfilename, "tracer_particles");
+	}
+
+	// Write face-centered data
+	if (!varnames_fc[0].empty()) {
+		// Create fc_vars directory if it doesn't exist
+		const std::string fc_vars_dir = plotfilename + "/fc_vars";
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::UtilCreateDirectory(fc_vars_dir, 0755);
+		}
+		amrex::ParallelDescriptor::Barrier();
+
+		std::vector<std::string> dimNames = {"x", "y", "z"};
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
+			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, sim->istep[0], 5);
+			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
+			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc[idim], geoms, a_time, sim->istep,
+						       refRatio);
+			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", sim->simulationMetadata_);
+		}
+	}
+
+	// Write physics particles
+	if (m_particleTypes.empty()) {
+		// Write all particle types
+		sim->particleRegister_.writePlotFile(plotfilename);
+	} else {
+		// Write only specified particle types
+		sim->particleRegister_.writePlotFileFiltered(plotfilename, m_particleTypes);
+	}
+#endif
 }
 
 // Helper function implementation

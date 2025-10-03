@@ -159,6 +159,12 @@ enum class FillPatchType { fillpatch_class, fillpatch_function };
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
+	// Allow diagnostic classes to access protected members
+	friend class DiagPlotfile;
+	friend class DiagProjectionPlot;
+	friend class DiagPDF;
+	friend class DiagFramePlane;
+
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
@@ -2925,6 +2931,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	    std::any_of(m_diagnostics.cbegin(), m_diagnostics.cend(), [this](const auto &diag) { return diag->doDiag(tNew_[0], istep[0]); });
 
 	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
+	amrex::Vector<const amrex::MultiFab *> diagMFVec_ptr;
 	if (computeVars) {
 		for (int lev{0}; lev <= finestLevel(); ++lev) {
 			diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
@@ -2943,67 +2950,34 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
 			}
 		}
+		diagMFVec_ptr = GetVecOfConstPtrs(diagMFVec);
 	}
+
+	// Prepare common diagnostic data
+	auto const geoms = Geom(0, finestLevel());
+	auto const ref_ratio = refRatio();
 
 	for (const auto &diag : m_diagnostics) {
 		if (diag->doDiag(tNew_[0], istep[0])) {
-			// Check if this is a DiagPlotfile - if so, prepare full plotfile data including face-centered
+			// Set common diagnostic data
+			diag->setDiagData(&diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
+
+			// Check if this is a DiagPlotfile - call template method directly
 			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
 			if (plotfileDiag != nullptr) {
-				// Prepare cell-centered data
-				int const included_ghosts = std::min(nghost_cc_, nghost_fc_);
-				amrex::Vector<amrex::MultiFab> mf_cc = PlotFileMF_cc(included_ghosts);
-				amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
-				auto const varnames = GetPlotfileVarNames();
-
-				// Prepare face-centered data
-				std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM> mf_fc = PlotFileMF_fc(nghost_fc_);
-				std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> mf_fc_ptr;
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					mf_fc_ptr[idim] = amrex::GetVecOfConstPtrs(mf_fc[idim]);
-				}
-				auto const varnames_fc = GetPlotfileVarNames_fc();
-
-				// Create particle writer callback
-				DiagBase::ParticleWriterFunc particleWriter;
-#ifndef QUOKKA_USE_OPENPMD
-				if (plotfileDiag->includeAllParticles()) {
-					particleWriter = [this](const std::string &plotfilename) { particleRegister_.writePlotFile(plotfilename); };
-				} else if (!plotfileDiag->getParticleTypes().empty()) {
-					particleWriter = [this, plotfileDiag](const std::string &plotfilename) {
-						particleRegister_.writePlotFileFiltered(plotfilename, plotfileDiag->getParticleTypes());
-					};
-				}
-#endif
-
-				// Call unified processDiag with all data: cell-centered, face-centered, tracer particles, and physics particles
-				plotfileDiag->processDiag(istep[0], tNew_[0], mf_cc_ptr, varnames, finestLevel(), Geom(0, finestLevel()), istep, refRatio(),
-							  TracerPC.get(), &mf_fc_ptr, &varnames_fc, particleWriter, simulationMetadata_, nullptr,
-							  amrex::Direction::x);
+				plotfileDiag->processDiagImpl(this, istep[0], tNew_[0]);
 			} else {
-				// Check if this is a DiagProjectionPlot - if so, compute projections and pass to processDiag
+				// Check if this is a DiagProjectionPlot - call template method for each direction
 				auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
 				if (projectionDiag != nullptr) {
-					// Create particle writer callback for projections
-					DiagBase::ParticleWriterFunc particleWriter;
-					if (projectionDiag->includeParticles()) {
-						particleWriter = [this, projectionDiag](const std::string &plotfilename) {
-							particleRegister_.writePlotFileFiltered(plotfilename, projectionDiag->getParticleTypes());
-						};
-					}
-
 					// Compute and write projections for each direction
 					for (auto const &dir : projectionDiag->getProjectionDirs()) {
 						std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-						projectionDiag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(),
-									    Geom(0, finestLevel()), istep, refRatio(), TracerPC.get(), nullptr, nullptr,
-									    particleWriter, simulationMetadata_, &proj, dir);
+						projectionDiag->processDiagImpl(this, istep[0], tNew_[0], &proj, dir);
 					}
 				} else {
-					// Regular diagnostic - pass nullptrs for face-centered data, projection data, and empty particle writer
-					diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, finestLevel(), Geom(0, finestLevel()),
-							  istep, refRatio(), TracerPC.get(), nullptr, nullptr, {}, simulationMetadata_, nullptr,
-							  amrex::Direction::x);
+					// Regular diagnostic - call virtual processDiag
+					diag->processDiag(istep[0], tNew_[0], nullptr, amrex::Direction::x);
 				}
 			}
 		}

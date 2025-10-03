@@ -28,25 +28,20 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
-	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			 const amrex::Vector<std::string> &a_varNames, int finest_level, const amrex::Vector<amrex::Geometry> &a_geoms,
-			 const amrex::Vector<int> &a_istep, const amrex::Vector<amrex::IntVect> &a_refRatio, void *tracerPC_ptr,
-			 const std::array<amrex::Vector<const amrex::MultiFab *>, AMREX_SPACEDIM> *a_state_fc,
-			 const std::array<amrex::Vector<std::string>, AMREX_SPACEDIM> *a_varNames_fc, const ParticleWriterFunc &particleWriter,
-			 const YAML::Node &simulationMetadata, const ProjectionData *projectionData, amrex::Direction projectionDir) override;
+	void processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData = nullptr,
+			 amrex::Direction projectionDir = amrex::Direction::x) override;
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
 	void close() override {}
 
+	// Template method that does the actual work - called from AMRSimulation::doDiagnostics()
+	template <typename problem_t>
+	void processDiagImpl(AMRSimulation<problem_t> *sim, int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData,
+			     amrex::Direction projectionDir);
+
 	// Get the list of particle types to include (empty means none)
 	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
-
-	// Check if any particles should be included
-	[[nodiscard]] auto includeParticles() const -> bool { return !m_particleTypes.empty(); }
-
-	// Get the diagnostic file name
-	[[nodiscard]] auto getDiagFileName() const -> const std::string & { return m_diagfile; }
 
 	// Get projection directions
 	[[nodiscard]] auto getProjectionDirs() const -> const std::vector<amrex::Direction> & { return m_projectionDirs; }
@@ -55,5 +50,34 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	std::vector<std::string> m_particleTypes;	// List of particle types to include (default: empty)
 	std::vector<amrex::Direction> m_projectionDirs; // Projection directions (x, y, z)
 };
+
+// Template implementation
+template <typename problem_t>
+void DiagProjectionPlot::processDiagImpl(AMRSimulation<problem_t> *sim, int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData,
+					 amrex::Direction projectionDir)
+{
+	BL_PROFILE("DiagProjectionPlot::processDiagImpl()");
+
+	// If no projection data is provided, skip
+	if (projectionData == nullptr || projectionData->empty()) {
+		return;
+	}
+
+	// Construct the base filename: proj_<direction>_<file>
+	std::string basename = "proj_";
+	basename += quokka::diagnostics::detail::direction_to_string(projectionDir);
+	basename += "_";
+	basename += m_diagfile;
+
+	// Write projection data
+	quokka::diagnostics::WriteProjection(projectionDir, *projectionData, a_time, a_nstep, basename, sim->simulationMetadata_);
+
+	// If particles are requested, write them
+	if (!m_particleTypes.empty()) {
+		const std::string filename = amrex::Concatenate(basename, a_nstep, 5);
+		sim->particleRegister_.writePlotFileFiltered(filename, m_particleTypes);
+		amrex::Print() << "  Wrote particles to projection " << filename << "\n";
+	}
+}
 
 #endif // DIAGPROJECTIONPLOT_H
