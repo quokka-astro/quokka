@@ -8,7 +8,6 @@
 
 #include <cassert>
 #include <cmath>
-#include <gcem.hpp>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -46,8 +45,8 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = 1.0;
 // vortex parameters
 constexpr double vortex_speed = 5.0 / (2.0 * M_PI);
-constexpr double vortex_x0 = 0.5;
-constexpr double vortex_y0 = 0.5;
+constexpr double vortex_center_x1 = 0.0;
+constexpr double vortex_center_x2 = 0.0;
 // drift is off by default
 constexpr double vortex_drift_x1 = 0.0;
 constexpr double vortex_drift_x2 = 0.0;
@@ -62,15 +61,17 @@ inline void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real
 	const amrex::Real x1_C = x1_L + 0.5 * dx[0];
 	const amrex::Real x2_C = x2_L + 0.5 * dx[1];
 
-	const double rel_x1 = static_cast<double>(x1_C) - vortex_x0;
-	const double rel_x2 = static_cast<double>(x2_C) - vortex_y0;
-	const double radius_sq = rel_x1 * rel_x1 + rel_x2 * rel_x2;
+	const double delta_x1_from_center = static_cast<double>(x1_C) - vortex_center_x1;
+	const double delta_x2_from_center = static_cast<double>(x2_C) - vortex_center_x2;
+	const double radius_sq = delta_x1_from_center * delta_x1_from_center + delta_x2_from_center * delta_x2_from_center;
+	const double radial_profile = std::exp(0.5 * (1.0 - radius_sq));
+	const double radial_profile_sq = std::exp(1.0 - radius_sq);
 
 	const double density = bg_density;
-	const double pressure = bg_pressure - 0.5 * vortex_speed * vortex_speed * gcem::exp(1.0 - radius_sq);
+	const double pressure = bg_pressure - 0.5 * density * vortex_speed * vortex_speed * radial_profile_sq;
 
-	const double delta_vel_x1 = -rel_x2 * vortex_speed * gcem::exp(0.5 * (1.0 - radius_sq));
-	const double delta_vel_x2 = rel_x1 * vortex_speed * gcem::exp(0.5 * (1.0 - radius_sq));
+	const double delta_vel_x1 = -delta_x2_from_center * vortex_speed * radial_profile;
+	const double delta_vel_x2 = delta_x1_from_center * vortex_speed * radial_profile;
 	const double vel_x1 = vortex_drift_x1 + delta_vel_x1;
 	const double vel_x2 = vortex_drift_x2 + delta_vel_x2;
 	const double vel_x3 = vortex_drift_x3;
