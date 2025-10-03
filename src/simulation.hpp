@@ -2962,18 +2962,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			// Set common diagnostic data (including simulation pointer)
 			diag->setDiagData(this, &diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
 
-			// Check if this is a DiagPlotfile - call template method directly
+			// Check if this is a DiagPlotfile - call template version
 			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
 			if (plotfileDiag != nullptr) {
-				plotfileDiag->processDiagImpl<problem_t>(istep[0], tNew_[0]);
+				plotfileDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 			} else {
-				// Check if this is a DiagProjectionPlot - call template method for each direction
+				// Check if this is a DiagProjectionPlot - call template version for each direction
 				auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
 				if (projectionDiag != nullptr) {
 					// Compute and write projections for each direction
 					for (auto const &dir : projectionDiag->getProjectionDirs()) {
 						std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-						projectionDiag->processDiagImpl<problem_t>(istep[0], tNew_[0], &proj, dir);
+						projectionDiag->processDiag<problem_t>(istep[0], tNew_[0], &proj, dir);
 					}
 				} else {
 					// Regular diagnostic - call virtual processDiag

@@ -28,16 +28,20 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
-	void processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData = nullptr,
-			 amrex::Direction projectionDir = amrex::Direction::x) override;
+	// Base class virtual function - not used, template version below is called instead
+	void processDiag(int /*a_nstep*/, const amrex::Real & /*a_time*/, const ProjectionData * /*projectionData*/ = nullptr,
+			 amrex::Direction /*projectionDir*/ = amrex::Direction::x) override
+	{
+		amrex::Abort("DiagProjectionPlot::processDiag() non-template version should not be called. Use template version instead.");
+	}
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
 	void close() override {}
 
-	// Template method that does the actual work - called from AMRSimulation::doDiagnostics()
+	// Template implementation - called from AMRSimulation::doDiagnostics()
 	template <typename problem_t>
-	void processDiagImpl(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir);
+	void processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir);
 
 	// Get the list of particle types to include (empty means none)
 	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
@@ -52,9 +56,9 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 
 // Template implementation
 template <typename problem_t>
-void DiagProjectionPlot::processDiagImpl(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir)
+void DiagProjectionPlot::processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir)
 {
-	BL_PROFILE("DiagProjectionPlot::processDiagImpl()");
+	BL_PROFILE("DiagProjectionPlot::processDiag()");
 
 	// Get the simulation pointer
 	auto *sim = getSim<problem_t>();

@@ -35,15 +35,19 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
-	void processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData = nullptr,
-			 amrex::Direction projectionDir = amrex::Direction::x) override;
+	// Base class virtual function - not used, template version below is called instead
+	void processDiag(int /*a_nstep*/, const amrex::Real & /*a_time*/, const ProjectionData * /*projectionData*/ = nullptr,
+			 amrex::Direction /*projectionDir*/ = amrex::Direction::x) override
+	{
+		amrex::Abort("DiagPlotfile::processDiag() non-template version should not be called. Use template version instead.");
+	}
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
 	void close() override {}
 
-	// Template method that does the actual work - called from AMRSimulation::doDiagnostics()
-	template <typename problem_t> void processDiagImpl(int a_nstep, const amrex::Real &a_time);
+	// Template implementation - called from AMRSimulation::doDiagnostics()
+	template <typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time);
 
 	// Get the diagnostic file name
 	[[nodiscard]] auto getDiagFileName() const -> const std::string & { return m_diagfile; }
@@ -60,9 +64,9 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 };
 
 // Template implementation - processes diagnostic with full access to simulation
-template <typename problem_t> void DiagPlotfile::processDiagImpl(int a_nstep, const amrex::Real &a_time)
+template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time)
 {
-	const BL_PROFILE("DiagPlotfile::processDiagImpl()");
+	const BL_PROFILE("DiagPlotfile::processDiag()");
 
 	// Get the simulation pointer
 	auto *sim = getSim<problem_t>();

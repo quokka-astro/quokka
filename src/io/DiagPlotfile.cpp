@@ -52,20 +52,6 @@ void DiagPlotfile::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometr
 	DiagBase::prepare(0, {}, {}, {}, {});
 }
 
-void DiagPlotfile::processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData * /*projectionData*/, amrex::Direction /*projectionDir*/)
-{
-	const BL_PROFILE("DiagPlotfile::processDiag()");
-
-	// Note: This is a template-independent function, but it needs to access simulation data.
-	// We cannot know the problem_t at compile time here, so we'll need to be called from
-	// a context that knows the problem_t. For now, we implement a workaround by making this
-	// function templated in practice through the caller.
-	
-	// This implementation will be moved to a template helper that knows problem_t.
-	// For now, we'll just mark this as not implemented and rely on the new calling pattern.
-	amrex::Abort("DiagPlotfile::processDiag should not be called directly. Implementation moved to template-aware context.");
-}
-
 void DiagPlotfile::addVars(amrex::Vector<std::string> & /*a_varList*/)
 {
 	// DiagPlotfile doesn't use the standard diagnostic variable extraction system

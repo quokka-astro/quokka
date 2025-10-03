@@ -102,13 +102,6 @@ void DiagProjectionPlot::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::G
 	DiagBase::prepare(0, {}, {}, {}, {});
 }
 
-void DiagProjectionPlot::processDiag(int /*a_nstep*/, const amrex::Real & /*a_time*/, const ProjectionData * /*projectionData*/,
-				     amrex::Direction /*projectionDir*/)
-{
-	// This should not be called directly - implementation is in processDiagImpl template
-	amrex::Abort("DiagProjectionPlot::processDiag should not be called directly. Use processDiagImpl instead.");
-}
-
 void DiagProjectionPlot::addVars(amrex::Vector<std::string> & /*a_varList*/)
 {
 	// DiagProjectionPlot doesn't use the standard diagnostic variable extraction system
