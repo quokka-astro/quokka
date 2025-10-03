@@ -56,23 +56,6 @@ inline std::vector<std::string> makeLuminosityComponentLabels(int n)
 	return labels;
 }
 
-// Layout information describing which particle attributes are available
-struct ParticleLayout {
-	bool has_mass = false;
-	int mass_index = -1;
-	bool has_velocity = false;
-	int velocity_index = -1;
-	bool has_birth = false;
-	int birth_index = -1;
-	bool has_death = false;
-	int death_index = -1;
-	bool has_luminosity = false;
-	int luminosity_index = -1;
-	int luminosity_components = 0;
-	bool has_stage = false;
-	int stage_index = -1;
-};
-
 struct ParticleCountSummary {
 	std::vector<unsigned long long> local_counts;
 	std::vector<unsigned long long> global_counts;
@@ -80,41 +63,6 @@ struct ParticleCountSummary {
 	std::vector<unsigned long long> rank_offsets;
 	unsigned long long total_global = 0;
 };
-
-inline ParticleLayout buildParticleLayout(const PhysicsParticleDescriptorBase &descriptor, int num_real_comps)
-{
-	ParticleLayout layout{};
-	layout.mass_index = descriptor.getMassIndex();
-	if (layout.mass_index >= 0 && layout.mass_index < num_real_comps) {
-		layout.has_mass = true;
-		const int velocity_start = layout.mass_index + 1;
-		if (velocity_start + AMREX_SPACEDIM - 1 < num_real_comps) {
-			layout.has_velocity = true;
-			layout.velocity_index = velocity_start;
-		}
-	}
-
-	layout.birth_index = descriptor.getBirthTimeIndex();
-	if (layout.birth_index >= 0 && layout.birth_index < num_real_comps) {
-		layout.has_birth = true;
-		layout.death_index = layout.birth_index + 1;
-		if (layout.death_index >= 0 && layout.death_index < num_real_comps) {
-			layout.has_death = true;
-		}
-	}
-
-	layout.luminosity_index = descriptor.getLumIndex();
-	if (layout.luminosity_index >= 0 && layout.luminosity_index < num_real_comps) {
-		layout.has_luminosity = true;
-		layout.luminosity_components = num_real_comps - layout.luminosity_index;
-	}
-
-	layout.stage_index = descriptor.getEvolutionStageIndex();
-	if (layout.stage_index >= 0) {
-		layout.has_stage = true;
-	}
-	return layout;
-}
 
 template <typename ContainerType> ParticleCountSummary computeParticleCountSummary(ContainerType &container)
 {
@@ -165,10 +113,9 @@ template <typename ContainerType> ParticleCountSummary computeParticleCountSumma
 
 	return summary;
 }
-
-inline void initializeSpecies(openPMD::ParticleSpecies &species, const std::vector<std::string> &position_components, const ParticleLayout &layout,
-			      const std::vector<std::string> &velocity_components, const std::vector<std::string> &luminosity_components,
-			      unsigned long long total_particles)
+inline void initializeSpecies(openPMD::ParticleSpecies &species, const std::vector<std::string> &position_components,
+			      const std::vector<OpenPMDRealAttribute> &real_attributes,
+			      const std::vector<OpenPMDIntAttribute> &int_attributes, unsigned long long total_particles)
 {
 	auto real_dataset = openPMD::Dataset(openPMD::determineDatatype<amrex::ParticleReal>(), {total_particles});
 	auto id_dataset = openPMD::Dataset(openPMD::determineDatatype<uint64_t>(), {total_particles});
@@ -178,33 +125,29 @@ inline void initializeSpecies(openPMD::ParticleSpecies &species, const std::vect
 	}
 	species["id"][openPMD::RecordComponent::SCALAR].resetDataset(id_dataset);
 
-	if (layout.has_mass) {
-		species["mass"][openPMD::RecordComponent::SCALAR].resetDataset(real_dataset);
-	}
-
-	if (layout.has_velocity) {
-		for (auto const &comp : velocity_components) {
-			species["velocity"][comp].resetDataset(real_dataset);
+	for (auto const &attribute : real_attributes) {
+		auto record = species[attribute.record_name];
+		for (auto const &component : attribute.components) {
+			if (component.label.empty()) {
+				record[openPMD::RecordComponent::SCALAR].resetDataset(real_dataset);
+			} else {
+				record[component.label].resetDataset(real_dataset);
+			}
 		}
 	}
 
-	if (layout.has_birth) {
-		species["birthTime"][openPMD::RecordComponent::SCALAR].resetDataset(real_dataset);
-	}
-
-	if (layout.has_death) {
-		species["deathTime"][openPMD::RecordComponent::SCALAR].resetDataset(real_dataset);
-	}
-
-	if (layout.has_luminosity) {
-		for (auto const &comp : luminosity_components) {
-			species["luminosity"][comp].resetDataset(real_dataset);
-		}
-	}
-
-	if (layout.has_stage) {
+	if (!int_attributes.empty()) {
 		auto int_dataset = openPMD::Dataset(openPMD::determineDatatype<int>(), {total_particles});
-		species["evolutionStage"][openPMD::RecordComponent::SCALAR].resetDataset(int_dataset);
+		for (auto const &attribute : int_attributes) {
+			auto record = species[attribute.record_name];
+			for (auto const &component : attribute.components) {
+				if (component.label.empty()) {
+					record[openPMD::RecordComponent::SCALAR].resetDataset(int_dataset);
+				} else {
+					record[component.label].resetDataset(int_dataset);
+				}
+			}
+		}
 	}
 }
 
@@ -228,17 +171,11 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 	const unsigned long long total_particles = counts.total_global;
 
 	auto position_components = getPositionComponentLabels();
-	auto velocity_components = getVelocityComponentLabels();
-
-	const int num_real_comps = ContainerType::ParticleType::NReal;
-	auto layout = buildParticleLayout(descriptor, num_real_comps);
-	std::vector<std::string> luminosity_components;
-	if (layout.has_luminosity) {
-		luminosity_components = makeLuminosityComponentLabels(layout.luminosity_components);
-	}
+	const auto real_attributes = descriptor.getOpenPMDRealAttributes();
+	const auto int_attributes = descriptor.getOpenPMDIntAttributes();
 
 	auto species = iteration.particles[species_name];
-	initializeSpecies(species, position_components, layout, velocity_components, luminosity_components, total_particles);
+	initializeSpecies(species, position_components, real_attributes, int_attributes, total_particles);
 
 	if (total_particles == 0) {
 		return;
@@ -269,39 +206,22 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 			amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_z(num_particles);
 #endif
 			amrex::Gpu::ManagedVector<unsigned long long> ids(num_particles);
-
-			amrex::Gpu::ManagedVector<amrex::ParticleReal> mass;
-			if (layout.has_mass) {
-				mass.resize(num_particles);
-			}
-
-			std::array<amrex::Gpu::ManagedVector<amrex::ParticleReal>, AMREX_SPACEDIM> velocity_dests;
-			const int vel_components = layout.has_velocity ? static_cast<int>(position_components.size()) : 0;
-			for (int d = 0; d < vel_components; ++d) {
-				velocity_dests[d].resize(num_particles);
-			}
-
-			amrex::Gpu::ManagedVector<amrex::ParticleReal> birth;
-			if (layout.has_birth) {
-				birth.resize(num_particles);
-			}
-
-			amrex::Gpu::ManagedVector<amrex::ParticleReal> death;
-			if (layout.has_death) {
-				death.resize(num_particles);
-			}
-
-			std::vector<amrex::Gpu::ManagedVector<amrex::ParticleReal>> luminosity_buffers;
-			if (layout.has_luminosity) {
-				luminosity_buffers.resize(layout.luminosity_components);
-				for (auto &buf : luminosity_buffers) {
+			std::vector<std::vector<amrex::Gpu::ManagedVector<amrex::ParticleReal>>> real_buffers(real_attributes.size());
+			for (std::size_t attr_idx = 0; attr_idx < real_attributes.size(); ++attr_idx) {
+				auto &buffers = real_buffers[attr_idx];
+				buffers.resize(real_attributes[attr_idx].components.size());
+				for (auto &buf : buffers) {
 					buf.resize(num_particles);
 				}
 			}
 
-			amrex::Gpu::ManagedVector<int> stage;
-			if (layout.has_stage) {
-				stage.resize(num_particles);
+			std::vector<std::vector<amrex::Gpu::ManagedVector<int>>> int_buffers(int_attributes.size());
+			for (std::size_t attr_idx = 0; attr_idx < int_attributes.size(); ++attr_idx) {
+				auto &buffers = int_buffers[attr_idx];
+				buffers.resize(int_attributes[attr_idx].components.size());
+				for (auto &buf : buffers) {
+					buf.resize(num_particles);
+				}
 			}
 
 			auto const &soa = pti.GetStructOfArrays();
@@ -309,91 +229,6 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 			const int soa_int_components = soa.NumIntComps();
 			constexpr int aos_real_components = ContainerType::ParticleType::NReal;
 			constexpr int aos_int_components = ContainerType::ParticleType::NInt;
-
-			auto const *mass_src_soa = (layout.has_mass && layout.mass_index >= 0 && layout.mass_index < soa_real_components)
-						       ? soa.GetRealData(layout.mass_index).data()
-						       : nullptr;
-			const int mass_rdata_index =
-			    (layout.has_mass && layout.mass_index >= 0 && layout.mass_index < aos_real_components) ? layout.mass_index : -1;
-
-			std::array<const amrex::ParticleReal *, AMREX_SPACEDIM> velocity_src_soa{};
-			velocity_src_soa.fill(nullptr);
-			std::array<int, AMREX_SPACEDIM> velocity_rdata_indices{};
-			velocity_rdata_indices.fill(-1);
-			for (int d = 0; d < vel_components; ++d) {
-				const int comp_index = layout.velocity_index + d;
-				if (comp_index >= 0 && comp_index < soa_real_components) {
-					velocity_src_soa[d] = soa.GetRealData(comp_index).data();
-				} else if (comp_index >= 0 && comp_index < aos_real_components) {
-					velocity_rdata_indices[d] = comp_index;
-				}
-			}
-			auto const *vel_src_soa_x = (vel_components > 0) ? velocity_src_soa[0] : nullptr;
-			const int vel_rdata_index_x = (vel_components > 0) ? velocity_rdata_indices[0] : -1;
-#if AMREX_SPACEDIM >= 2
-			auto const *vel_src_soa_y = (vel_components > 1) ? velocity_src_soa[1] : nullptr;
-			const int vel_rdata_index_y = (vel_components > 1) ? velocity_rdata_indices[1] : -1;
-#endif
-#if AMREX_SPACEDIM >= 3
-			auto const *vel_src_soa_z = (vel_components > 2) ? velocity_src_soa[2] : nullptr;
-			const int vel_rdata_index_z = (vel_components > 2) ? velocity_rdata_indices[2] : -1;
-#endif
-
-			auto const *birth_src_soa = (layout.has_birth && layout.birth_index >= 0 && layout.birth_index < soa_real_components)
-							? soa.GetRealData(layout.birth_index).data()
-							: nullptr;
-			const int birth_rdata_index =
-			    (layout.has_birth && layout.birth_index >= 0 && layout.birth_index < aos_real_components) ? layout.birth_index : -1;
-
-			auto const *death_src_soa = (layout.has_death && layout.death_index >= 0 && layout.death_index < soa_real_components)
-							? soa.GetRealData(layout.death_index).data()
-							: nullptr;
-			const int death_rdata_index =
-			    (layout.has_death && layout.death_index >= 0 && layout.death_index < aos_real_components) ? layout.death_index : -1;
-
-			const int *stage_src_soa = (layout.has_stage && layout.stage_index >= 0 && layout.stage_index < soa_int_components)
-						       ? soa.GetIntData(layout.stage_index).data()
-						       : nullptr;
-			const int stage_idata_index =
-			    (layout.has_stage && layout.stage_index >= 0 && layout.stage_index < aos_int_components) ? layout.stage_index : -1;
-
-			std::vector<const amrex::ParticleReal *> luminosity_src_soa(layout.luminosity_components, nullptr);
-			std::vector<int> luminosity_rdata_indices(layout.luminosity_components, -1);
-			if (layout.has_luminosity) {
-				for (int idx = 0; idx < layout.luminosity_components; ++idx) {
-					const int lum_index = layout.luminosity_index + idx;
-					if (lum_index >= 0 && lum_index < soa_real_components) {
-						luminosity_src_soa[idx] = soa.GetRealData(lum_index).data();
-					} else if (lum_index >= 0 && lum_index < aos_real_components) {
-						luminosity_rdata_indices[idx] = lum_index;
-					}
-				}
-			}
-
-			if (layout.has_mass) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mass_src_soa != nullptr || mass_rdata_index >= 0,
-								 "Particle layout advertises mass, but no storage location was found.");
-			}
-			for (int d = 0; d < vel_components; ++d) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(velocity_src_soa[d] != nullptr || velocity_rdata_indices[d] >= 0,
-								 "Particle layout advertises velocity component, but no storage location was found.");
-			}
-			if (layout.has_birth) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(birth_src_soa != nullptr || birth_rdata_index >= 0,
-								 "Particle layout advertises birth time, but no storage location was found.");
-			}
-			if (layout.has_death) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(death_src_soa != nullptr || death_rdata_index >= 0,
-								 "Particle layout advertises death time, but no storage location was found.");
-			}
-			if (layout.has_stage) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stage_src_soa != nullptr || stage_idata_index >= 0,
-								 "Particle layout advertises evolution stage, but no storage location was found.");
-			}
-			for (int idx = 0; idx < layout.luminosity_components; ++idx) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosity_src_soa[idx] != nullptr || luminosity_rdata_indices[idx] >= 0,
-								 "Particle layout advertises luminosity component, but no storage location was found.");
-			}
 
 			auto *pos_x_ptr = pos_x.data();
 #if AMREX_SPACEDIM >= 2
@@ -403,17 +238,6 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 			auto *pos_z_ptr = pos_z.data();
 #endif
 			auto *id_ptr = ids.data();
-			auto *mass_dst = layout.has_mass ? mass.data() : nullptr;
-			auto *birth_dst = layout.has_birth ? birth.data() : nullptr;
-			auto *death_dst = layout.has_death ? death.data() : nullptr;
-			int *stage_dst = layout.has_stage ? stage.data() : nullptr;
-			auto *vel_dst_x = (vel_components > 0) ? velocity_dests[0].data() : nullptr;
-#if AMREX_SPACEDIM >= 2
-			auto *vel_dst_y = (vel_components > 1) ? velocity_dests[1].data() : nullptr;
-#endif
-#if AMREX_SPACEDIM >= 3
-			auto *vel_dst_z = (vel_components > 2) ? velocity_dests[2].data() : nullptr;
-#endif
 
 			amrex::ParallelFor(num_particles, [aos_ptr, pos_x_ptr,
 #if AMREX_SPACEDIM >= 2
@@ -422,15 +246,7 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 #if AMREX_SPACEDIM >= 3
 							   pos_z_ptr,
 #endif
-							   id_ptr, mass_src_soa, mass_rdata_index, mass_dst, vel_src_soa_x, vel_rdata_index_x, vel_dst_x,
-#if AMREX_SPACEDIM >= 2
-							   vel_src_soa_y, vel_rdata_index_y, vel_dst_y,
-#endif
-#if AMREX_SPACEDIM >= 3
-							   vel_src_soa_z, vel_rdata_index_z, vel_dst_z,
-#endif
-							   birth_src_soa, birth_rdata_index, birth_dst, death_src_soa, death_rdata_index, death_dst,
-							   stage_src_soa, stage_idata_index, stage_dst] AMREX_GPU_DEVICE(int i) noexcept {
+							   id_ptr] AMREX_GPU_DEVICE(int i) noexcept {
 				auto const &p = aos_ptr[i];
 				pos_x_ptr[i] = p.pos(0);
 #if AMREX_SPACEDIM >= 2
@@ -440,71 +256,53 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 				pos_z_ptr[i] = p.pos(2);
 #endif
 				id_ptr[i] = p.id();
-				if (mass_dst) {
-					if (mass_src_soa != nullptr) {
-						mass_dst[i] = mass_src_soa[i];
-					} else if (mass_rdata_index >= 0) {
-						mass_dst[i] = p.rdata(mass_rdata_index);
-					}
-				}
-				if (vel_dst_x) {
-					if (vel_src_soa_x != nullptr) {
-						vel_dst_x[i] = vel_src_soa_x[i];
-					} else if (vel_rdata_index_x >= 0) {
-						vel_dst_x[i] = p.rdata(vel_rdata_index_x);
-					}
-				}
-#if AMREX_SPACEDIM >= 2
-				if (vel_dst_y) {
-					if (vel_src_soa_y != nullptr) {
-						vel_dst_y[i] = vel_src_soa_y[i];
-					} else if (vel_rdata_index_y >= 0) {
-						vel_dst_y[i] = p.rdata(vel_rdata_index_y);
-					}
-				}
-#endif
-#if AMREX_SPACEDIM >= 3
-				if (vel_dst_z) {
-					if (vel_src_soa_z != nullptr) {
-						vel_dst_z[i] = vel_src_soa_z[i];
-					} else if (vel_rdata_index_z >= 0) {
-						vel_dst_z[i] = p.rdata(vel_rdata_index_z);
-					}
-				}
-#endif
-				if (birth_dst) {
-					if (birth_src_soa != nullptr) {
-						birth_dst[i] = birth_src_soa[i];
-					} else if (birth_rdata_index >= 0) {
-						birth_dst[i] = p.rdata(birth_rdata_index);
-					}
-				}
-				if (death_dst) {
-					if (death_src_soa != nullptr) {
-						death_dst[i] = death_src_soa[i];
-					} else if (death_rdata_index >= 0) {
-						death_dst[i] = p.rdata(death_rdata_index);
-					}
-				}
-				if (stage_dst) {
-					if (stage_src_soa != nullptr) {
-						stage_dst[i] = stage_src_soa[i];
-					} else if (stage_idata_index >= 0) {
-						stage_dst[i] = p.idata(stage_idata_index);
-					}
-				}
 			});
 
-			for (int idx = 0; idx < layout.luminosity_components; ++idx) {
-				auto *lum_dst = luminosity_buffers[idx].data();
-				if (auto const *lum_src = luminosity_src_soa[idx]; lum_src != nullptr) {
-					amrex::ParallelFor(num_particles, [lum_src, lum_dst] AMREX_GPU_DEVICE(int i) noexcept { lum_dst[i] = lum_src[i]; });
-				} else {
-					const int lum_rdata_index = luminosity_rdata_indices[idx];
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(lum_rdata_index >= 0, "Luminosity component storage index is invalid.");
-					amrex::ParallelFor(num_particles, [aos_ptr, lum_dst, lum_rdata_index] AMREX_GPU_DEVICE(int i) noexcept {
-						lum_dst[i] = aos_ptr[i].rdata(lum_rdata_index);
-					});
+			for (std::size_t attr_idx = 0; attr_idx < real_attributes.size(); ++attr_idx) {
+				auto const &attribute = real_attributes[attr_idx];
+				for (std::size_t comp_idx = 0; comp_idx < attribute.components.size(); ++comp_idx) {
+					auto const &component = attribute.components[comp_idx];
+					auto &buffer = real_buffers[attr_idx][comp_idx];
+					auto *dst = buffer.data();
+					const int soa_index = component.soa_index;
+					const int aos_index = component.aos_index;
+					const amrex::ParticleReal *soa_src =
+					    (soa_index >= 0 && soa_index < soa_real_components) ? soa.GetRealData(soa_index).data() : nullptr;
+					const bool aos_valid = (aos_index >= 0 && aos_index < aos_real_components);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(soa_src != nullptr || aos_valid,
+								       "Particle descriptor reported a real attribute without accessible storage");
+					if (soa_src != nullptr) {
+						amrex::ParallelFor(num_particles,
+								[soa_src, dst] AMREX_GPU_DEVICE(int i) noexcept { dst[i] = soa_src[i]; });
+					} else {
+						amrex::ParallelFor(num_particles, [aos_ptr, dst, aos_index] AMREX_GPU_DEVICE(int i) noexcept {
+							dst[i] = aos_ptr[i].rdata(aos_index);
+						});
+					}
+				}
+			}
+
+			for (std::size_t attr_idx = 0; attr_idx < int_attributes.size(); ++attr_idx) {
+				auto const &attribute = int_attributes[attr_idx];
+				for (std::size_t comp_idx = 0; comp_idx < attribute.components.size(); ++comp_idx) {
+					auto const &component = attribute.components[comp_idx];
+					auto &buffer = int_buffers[attr_idx][comp_idx];
+					auto *dst = buffer.data();
+					const int soa_index = component.soa_index;
+					const int aos_index = component.aos_index;
+					const int *soa_src =
+					    (soa_index >= 0 && soa_index < soa_int_components) ? soa.GetIntData(soa_index).data() : nullptr;
+					const bool aos_valid = (aos_index >= 0 && aos_index < aos_int_components);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(soa_src != nullptr || aos_valid,
+								       "Particle descriptor reported an integer attribute without accessible storage");
+					if (soa_src != nullptr) {
+						amrex::ParallelFor(num_particles,
+								[soa_src, dst] AMREX_GPU_DEVICE(int i) noexcept { dst[i] = soa_src[i]; });
+					} else {
+						amrex::ParallelFor(num_particles, [aos_ptr, dst, aos_index] AMREX_GPU_DEVICE(int i) noexcept {
+							dst[i] = aos_ptr[i].idata(aos_index);
+						});
+					}
 				}
 			}
 
@@ -520,40 +318,32 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 #endif
 			storeChunk(species["id"][openPMD::RecordComponent::SCALAR], id_ptr, global_offset, extent);
 
-			if (layout.has_mass) {
-				storeChunk(species["mass"][openPMD::RecordComponent::SCALAR], mass_dst, global_offset, extent);
-			}
-
-			if (vel_components > 0) {
-				storeChunk(species["velocity"][velocity_components[0]], vel_dst_x, global_offset, extent);
-			}
-#if AMREX_SPACEDIM >= 2
-			if (vel_components > 1) {
-				storeChunk(species["velocity"][velocity_components[1]], vel_dst_y, global_offset, extent);
-			}
-#endif
-#if AMREX_SPACEDIM >= 3
-			if (vel_components > 2) {
-				storeChunk(species["velocity"][velocity_components[2]], vel_dst_z, global_offset, extent);
-			}
-#endif
-
-			if (layout.has_birth) {
-				storeChunk(species["birthTime"][openPMD::RecordComponent::SCALAR], birth_dst, global_offset, extent);
-			}
-
-			if (layout.has_death) {
-				storeChunk(species["deathTime"][openPMD::RecordComponent::SCALAR], death_dst, global_offset, extent);
-			}
-
-			if (layout.has_luminosity) {
-				for (int idx = 0; idx < layout.luminosity_components; ++idx) {
-					storeChunk(species["luminosity"][luminosity_components[idx]], luminosity_buffers[idx].data(), global_offset, extent);
+			for (std::size_t attr_idx = 0; attr_idx < real_attributes.size(); ++attr_idx) {
+				auto const &attribute = real_attributes[attr_idx];
+				auto record = species[attribute.record_name];
+				for (std::size_t comp_idx = 0; comp_idx < attribute.components.size(); ++comp_idx) {
+					auto const &component = attribute.components[comp_idx];
+					auto *data_ptr = real_buffers[attr_idx][comp_idx].data();
+					if (component.label.empty()) {
+						storeChunk(record[openPMD::RecordComponent::SCALAR], data_ptr, global_offset, extent);
+					} else {
+						storeChunk(record[component.label], data_ptr, global_offset, extent);
+					}
 				}
 			}
 
-			if (layout.has_stage) {
-				storeChunk(species["evolutionStage"][openPMD::RecordComponent::SCALAR], stage_dst, global_offset, extent);
+			for (std::size_t attr_idx = 0; attr_idx < int_attributes.size(); ++attr_idx) {
+				auto const &attribute = int_attributes[attr_idx];
+				auto record = species[attribute.record_name];
+				for (std::size_t comp_idx = 0; comp_idx < attribute.components.size(); ++comp_idx) {
+					auto const &component = attribute.components[comp_idx];
+					auto *data_ptr = int_buffers[attr_idx][comp_idx].data();
+					if (component.label.empty()) {
+						storeChunk(record[openPMD::RecordComponent::SCALAR], data_ptr, global_offset, extent);
+					} else {
+						storeChunk(record[component.label], data_ptr, global_offset, extent);
+					}
+				}
 			}
 		}
 	}
@@ -566,59 +356,147 @@ void WriteParticles(openPMD::Series &series, openPMD::Iteration &iteration, Phys
 {
 	particle_register.forEachDescriptor([&series, &iteration](ParticleType type, PhysicsParticleDescriptorBase &descriptor_base) {
 		const std::string species_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(type);
-
-		switch (type) {
-			case ParticleType::Rad: {
-				using Descriptor = PhysicsParticleDescriptor<RadParticleContainer<problem_t>, problem_t, ParticleType::Rad>;
-				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-					detail::writeParticleSpecies(series, iteration, *typed, species_name);
-				}
-				break;
-			}
-#if AMREX_SPACEDIM == 3
-			case ParticleType::CIC: {
-				using Descriptor = PhysicsParticleDescriptor<CICParticleContainer, problem_t, ParticleType::CIC>;
-				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-					detail::writeParticleSpecies(series, iteration, *typed, species_name);
-				}
-				break;
-			}
-			case ParticleType::CICRad: {
-				using Descriptor = PhysicsParticleDescriptor<CICRadParticleContainer<problem_t>, problem_t, ParticleType::CICRad>;
-				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-					detail::writeParticleSpecies(series, iteration, *typed, species_name);
-				}
-				break;
-			}
-			case ParticleType::StochasticStellarPop: {
-				using Descriptor =
-				    PhysicsParticleDescriptor<StochasticStellarPopParticleContainer<problem_t>, problem_t, ParticleType::StochasticStellarPop>;
-				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-					detail::writeParticleSpecies(series, iteration, *typed, species_name);
-				}
-				break;
-			}
-			case ParticleType::Sink: {
-				using Descriptor = PhysicsParticleDescriptor<SinkParticleContainer, problem_t, ParticleType::Sink>;
-				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-					detail::writeParticleSpecies(series, iteration, *typed, species_name);
-				}
-				break;
-			}
-			case ParticleType::Test: {
-				using Descriptor = PhysicsParticleDescriptor<TestParticleContainer<problem_t>, problem_t, ParticleType::Test>;
-				if (auto *typed = dynamic_cast<Descriptor *>(&descriptor_base)) {
-					detail::writeParticleSpecies(series, iteration, *typed, species_name);
-				}
-				break;
-			}
-#endif
-			default:
-				break;
-		}
+		descriptor_base.writeOpenPMD(series, iteration, species_name);
 	});
 }
 
 } // namespace quokka::OpenPMDOutput
+
+#ifdef QUOKKA_USE_OPENPMD
+namespace quokka
+{
+	template <typename ContainerType, typename problem_t, ParticleType particleType>
+	auto PhysicsParticleDescriptor<ContainerType, problem_t, particleType>::getOpenPMDRealAttributes() const
+	    -> std::vector<OpenPMDRealAttribute>
+	{
+		std::vector<OpenPMDRealAttribute> attributes;
+		constexpr int aos_real_components = ContainerType::ParticleType::NReal;
+		auto velocity_fallback_labels = OpenPMDOutput::detail::getVelocityComponentLabels();
+
+		const int mass_index = this->getMassIndex();
+		if (mass_index >= 0 && mass_index < aos_real_components) {
+			OpenPMDRealAttribute mass_attr;
+			auto mass_name = this->getAosRealComponentName(mass_index);
+			if (mass_name.empty()) {
+				mass_name = "mass";
+			}
+			mass_attr.record_name = mass_name;
+			OpenPMDRealComponent component;
+			component.label = "";
+			component.soa_index = mass_index;
+			component.aos_index = mass_index;
+			mass_attr.components.push_back(component);
+			attributes.push_back(std::move(mass_attr));
+
+			const int velocity_start = mass_index + 1;
+			if (velocity_start + AMREX_SPACEDIM - 1 < aos_real_components) {
+				OpenPMDRealAttribute velocity_attr;
+				auto velocity_record = this->getVelocityRecordName();
+				if (velocity_record.empty()) {
+					velocity_record = "velocity";
+				}
+				velocity_attr.record_name = velocity_record;
+				for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+					const int comp_index = velocity_start + d;
+					OpenPMDRealComponent vel_component;
+					vel_component.soa_index = comp_index;
+					vel_component.aos_index = comp_index;
+					vel_component.label = this->deriveComponentLabel(velocity_attr.record_name, comp_index, velocity_fallback_labels[d]);
+					velocity_attr.components.push_back(std::move(vel_component));
+				}
+				attributes.push_back(std::move(velocity_attr));
+			}
+		}
+
+		const int birth_index = this->getBirthTimeIndex();
+		if (birth_index >= 0 && birth_index < aos_real_components) {
+			OpenPMDRealAttribute birth_attr;
+			auto birth_name = this->getAosRealComponentName(birth_index);
+			if (birth_name.empty()) {
+				birth_name = "birthTime";
+			}
+			birth_attr.record_name = birth_name;
+			OpenPMDRealComponent birth_component;
+			birth_component.label = "";
+			birth_component.soa_index = birth_index;
+			birth_component.aos_index = birth_index;
+			birth_attr.components.push_back(birth_component);
+			attributes.push_back(std::move(birth_attr));
+
+			const int death_index = birth_index + 1;
+			if (death_index >= 0 && death_index < aos_real_components) {
+				OpenPMDRealAttribute death_attr;
+				auto death_name = this->getAosRealComponentName(death_index);
+				if (death_name.empty()) {
+					death_name = "deathTime";
+				}
+				death_attr.record_name = death_name;
+				OpenPMDRealComponent death_component;
+				death_component.label = "";
+				death_component.soa_index = death_index;
+				death_component.aos_index = death_index;
+				death_attr.components.push_back(death_component);
+				attributes.push_back(std::move(death_attr));
+			}
+		}
+
+		const int luminosity_index = this->getLumIndex();
+		if (luminosity_index >= 0 && luminosity_index < aos_real_components) {
+			const int luminosity_components = aos_real_components - luminosity_index;
+			if (luminosity_components > 0) {
+				OpenPMDRealAttribute luminosity_attr;
+				auto luminosity_record = this->getLuminosityRecordName();
+				if (luminosity_record.empty()) {
+					luminosity_record = "luminosity";
+				}
+				luminosity_attr.record_name = luminosity_record;
+				auto fallback_labels = OpenPMDOutput::detail::makeLuminosityComponentLabels(luminosity_components);
+				for (int idx = 0; idx < luminosity_components; ++idx) {
+					const int comp_index = luminosity_index + idx;
+					OpenPMDRealComponent lum_component;
+					lum_component.soa_index = comp_index;
+					lum_component.aos_index = comp_index;
+					lum_component.label = this->deriveComponentLabel(luminosity_attr.record_name, comp_index, fallback_labels[idx]);
+					luminosity_attr.components.push_back(std::move(lum_component));
+				}
+				attributes.push_back(std::move(luminosity_attr));
+			}
+		}
+
+		return attributes;
+	}
+
+	template <typename ContainerType, typename problem_t, ParticleType particleType>
+	auto PhysicsParticleDescriptor<ContainerType, problem_t, particleType>::getOpenPMDIntAttributes() const
+	    -> std::vector<OpenPMDIntAttribute>
+	{
+		std::vector<OpenPMDIntAttribute> attributes;
+		constexpr int aos_int_components = ContainerType::ParticleType::NInt;
+		const int stage_index = this->getEvolutionStageIndex();
+		if (stage_index >= 0) {
+			OpenPMDIntAttribute stage_attr;
+			auto record_name = this->getAosIntComponentName(stage_index);
+			if (record_name.empty()) {
+				record_name = "evolutionStage";
+			}
+			stage_attr.record_name = record_name;
+			OpenPMDIntComponent component;
+			component.label = "";
+			component.soa_index = stage_index;
+			component.aos_index = (stage_index < aos_int_components) ? stage_index : -1;
+			stage_attr.components.push_back(component);
+			attributes.push_back(std::move(stage_attr));
+		}
+		return attributes;
+	}
+
+	template <typename ContainerType, typename problem_t, ParticleType particleType>
+	void PhysicsParticleDescriptor<ContainerType, problem_t, particleType>::writeOpenPMD(openPMD::Series &series,
+			openPMD::Iteration &iteration, const std::string &species_name)
+	{
+		OpenPMDOutput::detail::writeParticleSpecies(series, iteration, *this, species_name);
+	}
+} // namespace quokka
+#endif
 
 #endif // OPENPMD_PARTICLES_IMPL_HPP_
