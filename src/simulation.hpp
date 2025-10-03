@@ -2969,25 +2969,29 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
 			if (plotfileDiag != nullptr) {
 				plotfileDiag->processDiag<problem_t>(istep[0], tNew_[0]);
-			} else {
-				auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
-				if (projectionDiag != nullptr) {
-					projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
-				} else {
-					auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag.get());
-					if (framePlaneDiag != nullptr) {
-						framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0]);
-					} else {
-						auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
-						if (pdfDiag != nullptr) {
-							pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
-						} else {
-							// Unknown diagnostic type
-							amrex::Abort("Unknown diagnostic type - all diagnostic types must implement template processDiag");
-						}
-					}
-				}
+				continue;
 			}
+
+			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
+			if (projectionDiag != nullptr) {
+				projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag.get());
+			if (framePlaneDiag != nullptr) {
+				framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
+			if (pdfDiag != nullptr) {
+				pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			// Unknown diagnostic type
+			amrex::Abort("Unknown diagnostic type - all diagnostic types must implement template processDiag");
 		}
 	}
 }
