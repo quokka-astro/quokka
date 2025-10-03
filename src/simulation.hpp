@@ -2959,13 +2959,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 
 	for (const auto &diag : m_diagnostics) {
 		if (diag->doDiag(tNew_[0], istep[0])) {
-			// Set common diagnostic data
-			diag->setDiagData(&diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
+			// Set common diagnostic data (including simulation pointer)
+			diag->setDiagData(this, &diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
 
 			// Check if this is a DiagPlotfile - call template method directly
 			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
 			if (plotfileDiag != nullptr) {
-				plotfileDiag->processDiagImpl(this, istep[0], tNew_[0]);
+				plotfileDiag->processDiagImpl<problem_t>(istep[0], tNew_[0]);
 			} else {
 				// Check if this is a DiagProjectionPlot - call template method for each direction
 				auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
@@ -2973,7 +2973,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 					// Compute and write projections for each direction
 					for (auto const &dir : projectionDiag->getProjectionDirs()) {
 						std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-						projectionDiag->processDiagImpl(this, istep[0], tNew_[0], &proj, dir);
+						projectionDiag->processDiagImpl<problem_t>(istep[0], tNew_[0], &proj, dir);
 					}
 				} else {
 					// Regular diagnostic - call virtual processDiag

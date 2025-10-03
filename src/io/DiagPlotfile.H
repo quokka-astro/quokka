@@ -43,7 +43,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 	void close() override {}
 
 	// Template method that does the actual work - called from AMRSimulation::doDiagnostics()
-	template <typename problem_t> void processDiagImpl(AMRSimulation<problem_t> *sim, int a_nstep, const amrex::Real &a_time);
+	template <typename problem_t> void processDiagImpl(int a_nstep, const amrex::Real &a_time);
 
 	// Get the diagnostic file name
 	[[nodiscard]] auto getDiagFileName() const -> const std::string & { return m_diagfile; }
@@ -60,9 +60,12 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 };
 
 // Template implementation - processes diagnostic with full access to simulation
-template <typename problem_t> void DiagPlotfile::processDiagImpl(AMRSimulation<problem_t> *sim, int a_nstep, const amrex::Real &a_time)
+template <typename problem_t> void DiagPlotfile::processDiagImpl(int a_nstep, const amrex::Real &a_time)
 {
 	const BL_PROFILE("DiagPlotfile::processDiagImpl()");
+
+	// Get the simulation pointer
+	auto *sim = getSim<problem_t>();
 
 	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
 	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";

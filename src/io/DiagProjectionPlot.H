@@ -37,8 +37,7 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 
 	// Template method that does the actual work - called from AMRSimulation::doDiagnostics()
 	template <typename problem_t>
-	void processDiagImpl(AMRSimulation<problem_t> *sim, int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData,
-			     amrex::Direction projectionDir);
+	void processDiagImpl(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir);
 
 	// Get the list of particle types to include (empty means none)
 	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
@@ -53,10 +52,12 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 
 // Template implementation
 template <typename problem_t>
-void DiagProjectionPlot::processDiagImpl(AMRSimulation<problem_t> *sim, int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData,
-					 amrex::Direction projectionDir)
+void DiagProjectionPlot::processDiagImpl(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData, amrex::Direction projectionDir)
 {
 	BL_PROFILE("DiagProjectionPlot::processDiagImpl()");
+
+	// Get the simulation pointer
+	auto *sim = getSim<problem_t>();
 
 	// If no projection data is provided, skip
 	if (projectionData == nullptr || projectionData->empty()) {
