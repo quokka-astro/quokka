@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  1.0  1.0  1.0
-geometry.is_periodic =  1    1    1
+geometry.prob_lo     =  -5.0  -5.0  -5.0 
+geometry.prob_hi     =   5.0   5.0   5.0
+geometry.is_periodic =   1     1     1
 
 # *****************************************************************
 # VERBOSITY
@@ -13,21 +13,21 @@ amr.v = 1
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = 32 32 16
+amr.n_cell = 64 64 16
 amr.max_level = 0
-amr.max_grid_size = 32
-amr.blocking_factor_x = 32
-amr.blocking_factor_y = 16
+amr.max_grid_size = 64
+amr.blocking_factor_x = 64
+amr.blocking_factor_y = 64
 amr.blocking_factor_z = 16
 
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = -1
+plotfile_interval = 10
 plotfile_prefix = hydro_balsara_vortex_plt
 checkpoint_interval = -1
 cfl = 0.3
-stop_time = 2.0
+stop_time = 10.0
 max_timesteps = 10000
 
 hydro.rk_integrator_order = 2
