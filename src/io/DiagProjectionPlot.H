@@ -28,13 +28,6 @@ class DiagProjectionPlot : public DiagBase::Register<DiagProjectionPlot>
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
-	// Base class virtual function - not used, template version below is called instead
-	void processDiag(int /*a_nstep*/, const amrex::Real & /*a_time*/, const ProjectionData * /*projectionData*/ = nullptr,
-			 amrex::Direction /*projectionDir*/ = amrex::Direction::x) override
-	{
-		amrex::Abort("DiagProjectionPlot::processDiag() non-template version should not be called. Use template version instead.");
-	}
-
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
 	void close() override {}

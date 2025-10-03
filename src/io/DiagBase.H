@@ -33,10 +33,9 @@ class DiagBase : public quokka::Factory<DiagBase>
 	// Type for projection data (used by DiagProjectionPlot)
 	using ProjectionData = std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>;
 
-	// Simplified processDiag API - diagnostics can access AMRSimulation members directly
-	// projectionData and projectionDir are optional and only used by DiagProjectionPlot
-	virtual void processDiag(int a_nstep, const amrex::Real &a_time, const ProjectionData *projectionData = nullptr,
-				 amrex::Direction projectionDir = amrex::Direction::x) = 0;
+	// processDiag is implemented as a template method in derived classes
+	// Each diagnostic type implements: template<typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time, ...)
+	// This allows diagnostics to access problem-specific functionality without virtual function overhead
 
 	virtual void addVars(amrex::Vector<std::string> &a_varList);
 

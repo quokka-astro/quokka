@@ -92,6 +92,8 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "io/DiagBase.H"
+#include "io/DiagFramePlane.H"
+#include "io/DiagPDF.H"
 #include "io/DiagPlotfile.H"
 #include "io/DiagProjectionPlot.H"
 #include "io/io_utils.hpp"
@@ -2976,8 +2978,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 						projectionDiag->processDiag<problem_t>(istep[0], tNew_[0], &proj, dir);
 					}
 				} else {
-					// Regular diagnostic - call virtual processDiag
-					diag->processDiag(istep[0], tNew_[0]);
+					// Check if this is a DiagFramePlane - call template version
+					auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag.get());
+					if (framePlaneDiag != nullptr) {
+						framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0], nullptr, amrex::Direction::x);
+					} else {
+						// Check if this is a DiagPDF - call template version
+						auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
+						if (pdfDiag != nullptr) {
+							pdfDiag->processDiag<problem_t>(istep[0], tNew_[0], nullptr, amrex::Direction::x);
+						} else {
+							// Unknown diagnostic type
+							amrex::Abort("Unknown diagnostic type - all diagnostic types must implement template processDiag");
+						}
+					}
 				}
 			}
 		}
