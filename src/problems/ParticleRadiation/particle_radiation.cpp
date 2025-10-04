@@ -9,8 +9,6 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
-#include "particles/particle_radiation.hpp"
-#include "particles/particle_update.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
@@ -121,13 +119,16 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 }
 
 // Note: The default ParticlePropertyUpdateTraits for StochasticStellarPop is defined in
-// src/particles/particle_update.hpp, which uses table interpolation when available.
+// src/particles/particle_update.hpp, which uses table interpolation.
 //
-// To override with a custom analytical formula, uncomment and modify the following:
+// To override with a custom analytical formula, add these includes and uncomment/modify:
+//
+// #include "particles/particle_radiation.hpp"
+// #include "particles/particle_update.hpp"
 //
 // namespace quokka {
 // template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
-// 	static constexpr double custom_lum_per_M_solar = 5.0e33; // Custom value
+// 	static constexpr double custom_lum_per_M_solar = 4.0e33; // erg/s per solar mass
 //
 // 	template <typename problem_t, typename ParticleType>
 // 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time) noexcept
@@ -138,9 +139,10 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 // 		const amrex::Real age = current_time - p.rdata(birth_time_idx);
 // 		const amrex::Real mass = p.rdata(mass_idx);
 //
-// 		// Your custom analytical formula here
+// 		// Example: Simple analytical formula with time cutoff
+// 		const double is_on = age < 1.0e14 ? 1.0 : 0.0; // Turn off after ~3 Myr
 // 		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-// 			const amrex::Real luminosity = custom_lum_per_M_solar * (mass / C::M_solar) * (g + 1);
+// 			const amrex::Real luminosity = custom_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on;
 // 			p.rdata(lum_idx + g) = luminosity;
 // 		}
 // 	}
