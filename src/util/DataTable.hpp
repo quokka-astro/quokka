@@ -13,6 +13,7 @@
 #include <hdf5.h>
 
 #include <array>
+#include <fstream>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -601,6 +602,163 @@ template <int Ndim, int Nout = 1> class DataTable
 	}
 
       public:
+	// CSVReader: Generic static method to read n-dimensional data from CSV file and create DataTable
+	// CSV format:
+	//   Line 1: is_uniform_spaced (1 or 0)
+	//   Line 2: n_dim (number of dimensions)
+	//   Line 3: nx (size of dimension 0)
+	//   Line 4: ny (size of dimension 1, if Ndim >= 2)
+	//   Line 5: nz (size of dimension 2, if Ndim >= 3)
+	//   Line 6: nw (size of dimension 3, if Ndim == 4)
+	//   Next Ndim lines: coord_min, coord_max for each dimension
+	//   Remaining lines: data values in C-order (row-major)
+	static auto CSVReader(const std::string &file_path) -> DataTable
+	{
+		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
+
+		std::ifstream file(file_path);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
+
+		// Read header information
+		int is_uniform_spaced = 0;
+		int n_dim = 0;
+		std::array<int, Ndim> sizes{};
+		std::array<std::pair<amrex::Real, amrex::Real>, Ndim> coord_bounds{};
+
+		file >> is_uniform_spaced;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_uniform_spaced == 1, "CSVReader currently only supports uniformly spaced grids");
+
+		file >> n_dim;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_dim == Ndim,
+						 fmt::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
+
+		// Read dimension sizes
+		for (int dim = 0; dim < Ndim; ++dim) {
+			file >> sizes[dim];
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
+		}
+
+		// Read coordinate bounds
+		for (int dim = 0; dim < Ndim; ++dim) {
+			char comma = ' ';
+			file >> coord_bounds[dim].first >> comma >> coord_bounds[dim].second;
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].second > coord_bounds[dim].first,
+							 fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first,
+								     coord_bounds[dim].second));
+		}
+
+		// Create uniformly spaced coordinate arrays
+		std::array<amrex::Vector<amrex::Real>, Ndim> coord_arrays;
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_arrays[dim].resize(sizes[dim]);
+			for (int i = 0; i < sizes[dim]; ++i) {
+				coord_arrays[dim][i] = coord_bounds[dim].first +
+						       static_cast<amrex::Real>(i) * (coord_bounds[dim].second - coord_bounds[dim].first) /
+							   static_cast<amrex::Real>(sizes[dim] - 1);
+			}
+		}
+
+		// Read data values
+		if constexpr (Ndim == 1) {
+			// For 1D: data[out_idx][i]
+			data_1d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(sizes[0]);
+				for (int i = 0; i < sizes[0]; ++i) {
+					char comma = ' ';
+					file >> data_array[out_idx][i];
+					if (i < sizes[0] - 1) {
+						file >> comma;
+					}
+				}
+			}
+
+			// Create and initialize DataTable
+			DataTable table;
+			table.initialize(coord_arrays, data_array);
+			file.close();
+			return table;
+
+		} else if constexpr (Ndim == 2) {
+			// For 2D: data[out_idx][i][j]
+			data_2d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(sizes[0]);
+				for (int i = 0; i < sizes[0]; ++i) {
+					data_array[out_idx][i].resize(sizes[1]);
+					for (int j = 0; j < sizes[1]; ++j) {
+						char comma = ' ';
+						file >> data_array[out_idx][i][j];
+						if (j < sizes[1] - 1) {
+							file >> comma;
+						}
+					}
+				}
+			}
+
+			// Create and initialize DataTable
+			DataTable table;
+			table.initialize(coord_arrays, data_array);
+			file.close();
+			return table;
+
+		} else if constexpr (Ndim == 3) {
+			// For 3D: data[out_idx][i][j][k]
+			data_3d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(sizes[0]);
+				for (int i = 0; i < sizes[0]; ++i) {
+					data_array[out_idx][i].resize(sizes[1]);
+					for (int j = 0; j < sizes[1]; ++j) {
+						data_array[out_idx][i][j].resize(sizes[2]);
+						for (int k = 0; k < sizes[2]; ++k) {
+							char comma = ' ';
+							file >> data_array[out_idx][i][j][k];
+							if (k < sizes[2] - 1) {
+								file >> comma;
+							}
+						}
+					}
+				}
+			}
+
+			// Create and initialize DataTable
+			DataTable table;
+			table.initialize(coord_arrays, data_array);
+			file.close();
+			return table;
+
+		} else if constexpr (Ndim == 4) {
+			// For 4D: data[out_idx][i][j][k][l]
+			data_4d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(sizes[0]);
+				for (int i = 0; i < sizes[0]; ++i) {
+					data_array[out_idx][i].resize(sizes[1]);
+					for (int j = 0; j < sizes[1]; ++j) {
+						data_array[out_idx][i][j].resize(sizes[2]);
+						for (int k = 0; k < sizes[2]; ++k) {
+							data_array[out_idx][i][j][k].resize(sizes[3]);
+							for (int l = 0; l < sizes[3]; ++l) {
+								char comma = ' ';
+								file >> data_array[out_idx][i][j][k][l];
+								if (l < sizes[3] - 1) {
+									file >> comma;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Create and initialize DataTable
+			DataTable table;
+			table.initialize(coord_arrays, data_array);
+			file.close();
+			return table;
+		}
+	}
+
 	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
 	// Reads metadata, coordinates, and data all from the HDF5 file
 	// Optionally returns coordinate bounds via coord_bounds parameter

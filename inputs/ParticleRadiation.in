@@ -26,6 +26,7 @@ suppress_output = 0
 
 particles.verbose = 1
 particles.disable_SN_feedback = true
+particles.table_data = lum_demo.csv
 
 stop_time = 8.0e20
 max_timesteps = 4

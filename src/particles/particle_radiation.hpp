@@ -1,16 +1,36 @@
 #ifndef PARTICLE_RADIATION_HPP_
 #define PARTICLE_RADIATION_HPP_
 
-#include "AMReX_Array.H"
-#include "AMReX_Array4.H"
 #include "AMReX_Extension.H"
-#include "AMReX_ParticleInterpolators.H"
-#include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
-#include "physics_info.hpp"
+#include "util/DataTable.hpp"
 
 namespace quokka
 {
+
+// GPU-friendly const table access for luminosity tables
+struct LuminosityGpuConstTables {
+	quokka::DataTableGpuConst<2, 1> luminosity; // 2D table: (mass, age) -> luminosity
+};
+
+// Host-side luminosity table storage
+class LuminosityTables
+{
+      public:
+	quokka::DataTable<2, 1> luminosity; // 2D table: (mass, age) -> luminosity
+
+	[[nodiscard]] auto const_tables() const -> LuminosityGpuConstTables
+	{
+		LuminosityGpuConstTables tables{luminosity.const_tables()};
+		return tables;
+	}
+
+	[[nodiscard]] auto is_initialized() const -> bool { return luminosity.is_initialized(); }
+};
+
+// Global luminosity tables instance (will be initialized in problem setup)
+inline LuminosityTables g_luminosity_tables; // NOLINT
+
 // Traits class for specializing particle property update behavior
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 	// Default implementation - does nothing

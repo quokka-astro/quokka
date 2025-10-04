@@ -9,9 +9,9 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_radiation.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
-#include "util/valarray.hpp"
 
 struct ParticleRadiationProblem {
 };
@@ -134,14 +134,35 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		const amrex::Real age = current_time - p.rdata(birth_time_idx);
 		const amrex::Real mass = p.rdata(mass_idx);
 
-		// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
-		// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
-		const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
+		// Check if luminosity tables are initialized
+		if (g_luminosity_tables.is_initialized()) {
+			// Use table interpolation: (mass_in_solar_masses, age) -> luminosity
+			auto const tables = g_luminosity_tables.const_tables();
+			const amrex::Real mass_in_solar_masses = mass / C::M_solar;
+			std::array<amrex::Real, 2> const point = {mass_in_solar_masses, age};
 
-		// Update luminosity components (they are stored consecutively starting at lum_idx)
-		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-			const amrex::Real luminosity = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
-			p.rdata(lum_idx + g) = luminosity;
+			// Interpolate luminosity from table (with automatic clamping to table bounds)
+			const amrex::Real luminosity = tables.luminosity.interpolate_single(point);
+
+			// Debug output for first particle only (ID would be helpful but not accessible here)
+			// printf("Particle: mass=%.2f Msun, age=%.2e s, interpolated L=%.4e erg/s\n", 
+			//        mass_in_solar_masses, age, luminosity);
+
+			// Update luminosity components (they are stored consecutively starting at lum_idx)
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				p.rdata(lum_idx + g) = luminosity * (g + 1); // Scale by group index for multi-group
+			}
+		} else {
+			// Fallback to analytical formula if table is not initialized
+			// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
+			// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
+			const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
+
+			// Update luminosity components (they are stored consecutively starting at lum_idx)
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				const amrex::Real luminosity = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
+				p.rdata(lum_idx + g) = luminosity;
+			}
 		}
 	}
 };
@@ -187,8 +208,20 @@ auto problem_main() -> int
 	const amrex::ParmParse pp("problem");
 	pp.query("refine_half_domain", refine_half_domain);
 
-	// initialize
+	// initialize (this will parse particle parameters including table_data_file)
 	sim.setInitialConditions();
+
+	// Initialize luminosity table if table_data file is provided
+	// (must be done after setInitialConditions since that's when particle parameters are parsed)
+	if (!quokka::table_data_file.empty()) {
+		amrex::Print() << "Loading luminosity table from: " << quokka::table_data_file << "\n";
+		quokka::g_luminosity_tables.luminosity = quokka::DataTable<2, 1>::CSVReader(quokka::table_data_file);
+		amrex::Print() << "Luminosity table loaded successfully.\n";
+		amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", quokka::g_luminosity_tables.luminosity.size(0),
+					      quokka::g_luminosity_tables.luminosity.size(1));
+	} else {
+		amrex::Print() << "No luminosity table specified. Using analytical formula.\n";
+	}
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
