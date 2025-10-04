@@ -322,9 +322,6 @@ inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
-// Path to the luminosity table data file
-inline std::string table_data_file = ""; // NOLINT
-
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -359,9 +356,6 @@ inline void particleParmParse()
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
-
-	// Luminosity table data file
-	pp.query("table_data", table_data_file);
 }
 
 } // namespace quokka

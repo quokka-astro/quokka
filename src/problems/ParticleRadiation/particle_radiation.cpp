@@ -135,9 +135,9 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		const amrex::Real mass = p.rdata(mass_idx);
 
 		// Check if luminosity tables are initialized
-		if (g_luminosity_tables.is_initialized()) {
+		if (g_luminosity_tables_ptr != nullptr && g_luminosity_tables_ptr->is_initialized()) {
 			// Use table interpolation: (mass_in_solar_masses, age) -> luminosity
-			auto const tables = g_luminosity_tables.const_tables();
+			auto const tables = g_luminosity_tables_ptr->const_tables();
 			const amrex::Real mass_in_solar_masses = mass / C::M_solar;
 			std::array<amrex::Real, 2> const point = {mass_in_solar_masses, age};
 
@@ -153,6 +153,8 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 				p.rdata(lum_idx + g) = luminosity * (g + 1); // Scale by group index for multi-group
 			}
 		} else {
+			amrex::Print() << "No luminosity table specified. Using analytical formula.\n";
+
 			// Fallback to analytical formula if table is not initialized
 			// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
 			// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
@@ -208,20 +210,8 @@ auto problem_main() -> int
 	const amrex::ParmParse pp("problem");
 	pp.query("refine_half_domain", refine_half_domain);
 
-	// initialize (this will parse particle parameters including table_data_file)
+	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();
-
-	// Initialize luminosity table if table_data file is provided
-	// (must be done after setInitialConditions since that's when particle parameters are parsed)
-	if (!quokka::table_data_file.empty()) {
-		amrex::Print() << "Loading luminosity table from: " << quokka::table_data_file << "\n";
-		quokka::g_luminosity_tables.luminosity = quokka::DataTable<2, 1>::CSVReader(quokka::table_data_file);
-		amrex::Print() << "Luminosity table loaded successfully.\n";
-		amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", quokka::g_luminosity_tables.luminosity.size(0),
-					      quokka::g_luminosity_tables.luminosity.size(1));
-	} else {
-		amrex::Print() << "No luminosity table specified. Using analytical formula.\n";
-	}
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);

@@ -139,6 +139,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
 
+	quokka::LuminosityTables luminosityTables_;
+	std::string luminosityTableFilename_;
+
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
@@ -530,6 +533,23 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("cfl", radiationCflNumber_);
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
 		rpp.query("print_iteration_counts", print_rad_counter_);
+	}
+
+	// set particle luminosity table parameters
+	{
+		amrex::ParmParse const ppp("particles");
+		ppp.query("table_data", luminosityTableFilename_);
+		if (!luminosityTableFilename_.empty()) {
+			amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
+			luminosityTables_.luminosity = quokka::DataTable<2, 1>::CSVReader(luminosityTableFilename_);
+			amrex::Print() << "Luminosity table loaded successfully.\n";
+			amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
+						      luminosityTables_.luminosity.size(1));
+			// Set global pointer for access from particle update functions
+			quokka::g_luminosity_tables_ptr = &luminosityTables_;
+		} else {
+			amrex::Abort("No luminosity table specified. Please specify a luminosity table using the particles.table_data parameter.");	
+		}
 	}
 }
 

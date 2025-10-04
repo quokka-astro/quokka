@@ -8,7 +8,7 @@ geometry.is_periodic =  0    0    0
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 1       # verbosity in Amr
+amr.v              = 0       # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
@@ -26,7 +26,7 @@ suppress_output = 0
 
 particles.verbose = 1
 particles.disable_SN_feedback = true
-particles.table_data = lum_demo.csv
+particles.table_data = lum_demo.csv  # Uncomment to use table interpolation
 
 stop_time = 8.0e20
 max_timesteps = 4

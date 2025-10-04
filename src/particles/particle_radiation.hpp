@@ -28,8 +28,8 @@ class LuminosityTables
 	[[nodiscard]] auto is_initialized() const -> bool { return luminosity.is_initialized(); }
 };
 
-// Global luminosity tables instance (will be initialized in problem setup)
-inline LuminosityTables g_luminosity_tables; // NOLINT
+// Static pointer to the current simulation's luminosity tables (set during initialization)
+inline LuminosityTables *g_luminosity_tables_ptr = nullptr; // NOLINT
 
 // Traits class for specializing particle property update behavior
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
