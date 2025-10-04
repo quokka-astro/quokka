@@ -342,6 +342,8 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 					}
 				}
 			}
+
+			series.flush();
 		}
 	}
 }
