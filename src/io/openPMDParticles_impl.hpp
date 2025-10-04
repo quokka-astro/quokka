@@ -181,8 +181,22 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 		return;
 	}
 
+	struct TileBuffers {
+		amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_x;
+#if AMREX_SPACEDIM >= 2
+		amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_y;
+#endif
+#if AMREX_SPACEDIM >= 3
+		amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_z;
+#endif
+		amrex::Gpu::ManagedVector<unsigned long long> ids;
+		std::vector<std::vector<amrex::Gpu::ManagedVector<amrex::ParticleReal>>> real_components;
+		std::vector<std::vector<amrex::Gpu::ManagedVector<int>>> int_components;
+	};
+
 	const int finest = container->finestLevel();
 	for (int lev = 0; lev <= finest; ++lev) {
+		std::vector<TileBuffers> level_buffers;
 		unsigned long long level_offset = counts.level_offsets[lev] + counts.rank_offsets[lev];
 		unsigned long long running_offset = 0;
 
@@ -192,52 +206,58 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 				continue;
 			}
 
+			level_buffers.emplace_back();
+			TileBuffers &buffers = level_buffers.back();
+
+			buffers.pos_x.resize(num_particles);
+#if AMREX_SPACEDIM >= 2
+			buffers.pos_y.resize(num_particles);
+#endif
+#if AMREX_SPACEDIM >= 3
+			buffers.pos_z.resize(num_particles);
+#endif
+			buffers.ids.resize(num_particles);
+
+			auto &real_buffers = buffers.real_components;
+			real_buffers.resize(real_attributes.size());
+			for (std::size_t attr_idx = 0; attr_idx < real_attributes.size(); ++attr_idx) {
+				auto &components = real_buffers[attr_idx];
+				components.resize(real_attributes[attr_idx].components.size());
+				for (auto &buf : components) {
+					buf.resize(num_particles);
+				}
+			}
+
+			auto &int_buffers = buffers.int_components;
+			int_buffers.resize(int_attributes.size());
+			for (std::size_t attr_idx = 0; attr_idx < int_attributes.size(); ++attr_idx) {
+				auto &components = int_buffers[attr_idx];
+				components.resize(int_attributes[attr_idx].components.size());
+				for (auto &buf : components) {
+					buf.resize(num_particles);
+				}
+			}
+
 			const unsigned long long global_offset = level_offset + running_offset;
 			running_offset += static_cast<unsigned long long>(num_particles);
 
 			auto const &aos = pti.GetArrayOfStructs();
 			auto const *aos_ptr = aos().data();
 
-			amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_x(num_particles);
+			auto *pos_x_ptr = buffers.pos_x.data();
 #if AMREX_SPACEDIM >= 2
-			amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_y(num_particles);
+			auto *pos_y_ptr = buffers.pos_y.data();
 #endif
 #if AMREX_SPACEDIM >= 3
-			amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_z(num_particles);
+			auto *pos_z_ptr = buffers.pos_z.data();
 #endif
-			amrex::Gpu::ManagedVector<unsigned long long> ids(num_particles);
-			std::vector<std::vector<amrex::Gpu::ManagedVector<amrex::ParticleReal>>> real_buffers(real_attributes.size());
-			for (std::size_t attr_idx = 0; attr_idx < real_attributes.size(); ++attr_idx) {
-				auto &buffers = real_buffers[attr_idx];
-				buffers.resize(real_attributes[attr_idx].components.size());
-				for (auto &buf : buffers) {
-					buf.resize(num_particles);
-				}
-			}
-
-			std::vector<std::vector<amrex::Gpu::ManagedVector<int>>> int_buffers(int_attributes.size());
-			for (std::size_t attr_idx = 0; attr_idx < int_attributes.size(); ++attr_idx) {
-				auto &buffers = int_buffers[attr_idx];
-				buffers.resize(int_attributes[attr_idx].components.size());
-				for (auto &buf : buffers) {
-					buf.resize(num_particles);
-				}
-			}
+			auto *id_ptr = buffers.ids.data();
 
 			auto const &soa = pti.GetStructOfArrays();
 			const int soa_real_components = soa.NumRealComps();
 			const int soa_int_components = soa.NumIntComps();
 			constexpr int aos_real_components = ContainerType::ParticleType::NReal;
 			constexpr int aos_int_components = ContainerType::ParticleType::NInt;
-
-			auto *pos_x_ptr = pos_x.data();
-#if AMREX_SPACEDIM >= 2
-			auto *pos_y_ptr = pos_y.data();
-#endif
-#if AMREX_SPACEDIM >= 3
-			auto *pos_z_ptr = pos_z.data();
-#endif
-			auto *id_ptr = ids.data();
 
 			amrex::ParallelFor(num_particles, [aos_ptr, pos_x_ptr,
 #if AMREX_SPACEDIM >= 2
@@ -342,9 +362,9 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 					}
 				}
 			}
-
-			series.flush();
 		}
+
+		series.flush();
 	}
 }
 
