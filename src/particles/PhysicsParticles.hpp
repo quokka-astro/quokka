@@ -5,6 +5,8 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -27,8 +29,40 @@
 #include "particle_types.hpp"
 #include "physics_info.hpp"
 
+#ifdef QUOKKA_USE_OPENPMD
+namespace openPMD
+{
+class Series;
+class Iteration;
+} // namespace openPMD
+#endif
+
 namespace quokka
 {
+
+#ifdef QUOKKA_USE_OPENPMD
+struct OpenPMDRealComponent {
+	std::string label;
+	int soa_index{-1};
+	int aos_index{-1};
+};
+
+struct OpenPMDRealAttribute {
+	std::string record_name;
+	std::vector<OpenPMDRealComponent> components;
+};
+
+struct OpenPMDIntComponent {
+	std::string label;
+	int soa_index{-1};
+	int aos_index{-1};
+};
+
+struct OpenPMDIntAttribute {
+	std::string record_name;
+	std::vector<OpenPMDIntComponent> components;
+};
+#endif
 
 // Forward declarations
 template <typename problem_t> class PhysicsParticleRegister;
@@ -46,6 +80,13 @@ class PhysicsParticleDescriptorBase
 	bool allowsAccretion_{false};	// Whether particles can accrete gas
 
 	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
+
+#ifdef QUOKKA_USE_OPENPMD
+	std::map<int, std::string> aosRealComponentNames_;
+	std::map<int, std::string> aosIntComponentNames_;
+	std::string velocityRecordName_{"velocity"};
+	std::string luminosityRecordName_{"luminosity"};
+#endif
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
@@ -77,6 +118,57 @@ class PhysicsParticleDescriptorBase
 	AMREX_FORCE_INLINE void setEvolutionStageIndex(int evolution_stage_idx) { evolutionStageIndex_ = evolution_stage_idx; }
 	AMREX_FORCE_INLINE void setAllowsAccretion(bool allows_accretion) { allowsAccretion_ = allows_accretion; }
 	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
+
+#ifdef QUOKKA_USE_OPENPMD
+	void setAosRealComponentName(int index, std::string name) { aosRealComponentNames_[index] = std::move(name); }
+	[[nodiscard]] auto getAosRealComponentName(int index) const -> std::string
+	{
+		auto it = aosRealComponentNames_.find(index);
+		if (it != aosRealComponentNames_.end()) {
+			return it->second;
+		}
+		return {};
+	}
+
+	void setAosIntComponentName(int index, std::string name) { aosIntComponentNames_[index] = std::move(name); }
+	[[nodiscard]] auto getAosIntComponentName(int index) const -> std::string
+	{
+		auto it = aosIntComponentNames_.find(index);
+		if (it != aosIntComponentNames_.end()) {
+			return it->second;
+		}
+		return {};
+	}
+
+	void setVelocityRecordName(std::string name) { velocityRecordName_ = std::move(name); }
+	[[nodiscard]] auto getVelocityRecordName() const -> const std::string & { return velocityRecordName_; }
+
+	void setLuminosityRecordName(std::string name) { luminosityRecordName_ = std::move(name); }
+	[[nodiscard]] auto getLuminosityRecordName() const -> const std::string & { return luminosityRecordName_; }
+
+	[[nodiscard]] auto deriveComponentLabel(const std::string &record_name, int aos_index, const std::string &fallback) const -> std::string
+	{
+		auto it = aosRealComponentNames_.find(aos_index);
+		if (it == aosRealComponentNames_.end()) {
+			return fallback;
+		}
+		const std::string &component_name = it->second;
+		if (component_name.empty()) {
+			return fallback;
+		}
+		const std::string prefix = record_name.empty() ? std::string{} : record_name + "_";
+		if (!prefix.empty() && component_name.rfind(prefix, 0) == 0U) {
+			const std::string suffix = component_name.substr(prefix.size());
+			if (!suffix.empty()) {
+				return suffix;
+			}
+		}
+		if (component_name != record_name) {
+			return component_name;
+		}
+		return fallback;
+	}
+#endif
 
 	// New method to get particle positions and data
 	[[nodiscard]] virtual auto getParticleDataAtAllLevels() const
@@ -111,6 +203,10 @@ class PhysicsParticleDescriptorBase
 
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
+
+#ifdef QUOKKA_USE_OPENPMD
+	virtual void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::string &species_name) = 0;
+#endif
 
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
@@ -163,6 +259,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	ContainerType *container_{}; // Pointer to the actual particle container - moved to protected
 
       public:
+	using ContainerT = ContainerType;
 	// Get the particle type
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
@@ -173,6 +270,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	      container_(container)
 	{
 	}
+
+	[[nodiscard]] ContainerType *getContainer() { return container_; }
+	[[nodiscard]] const ContainerType *getContainer() const { return container_; }
+
+#ifdef QUOKKA_USE_OPENPMD
+	void writeOpenPMD(openPMD::Series &series, openPMD::Iteration &iteration, const std::string &species_name) override;
+	[[nodiscard]] auto getOpenPMDRealAttributes() const -> std::vector<OpenPMDRealAttribute>;
+	[[nodiscard]] auto getOpenPMDIntAttributes() const -> std::vector<OpenPMDIntAttribute>;
+#endif
 
 	// Get positions and fields data from all particles at level 0 from all ranks and gather them on rank 0.
 	// This method creates a temporary particle container on rank 0 and copies all particles to it.
@@ -577,6 +683,74 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Map storing particle descriptors, indexed by particle type enum
 	std::map<ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
+#ifdef QUOKKA_USE_OPENPMD
+	template <typename ContainerType> static void configureOpenPMDNames(PhysicsParticleDescriptorBase &descriptor)
+	{
+		descriptor.setVelocityRecordName("velocity");
+		descriptor.setLuminosityRecordName("luminosity");
+
+		constexpr int aos_real_components = ContainerType::ParticleType::NReal;
+		const int mass_idx = descriptor.getMassIndex();
+		if (mass_idx >= 0 && mass_idx < aos_real_components) {
+			descriptor.setAosRealComponentName(mass_idx, "mass");
+			auto axis_labels = getAxisLabels();
+			for (int d = 0; d < static_cast<int>(axis_labels.size()); ++d) {
+				const int comp_index = mass_idx + 1 + d;
+				if (comp_index < aos_real_components) {
+					descriptor.setAosRealComponentName(comp_index, descriptor.getVelocityRecordName() + "_" + axis_labels[d]);
+				}
+			}
+		}
+
+		const int birth_idx = descriptor.getBirthTimeIndex();
+		if (birth_idx >= 0 && birth_idx < aos_real_components) {
+			descriptor.setAosRealComponentName(birth_idx, "birthTime");
+			const int death_idx = birth_idx + 1;
+			if (death_idx >= 0 && death_idx < aos_real_components) {
+				descriptor.setAosRealComponentName(death_idx, "deathTime");
+			}
+		}
+
+		const int lum_idx = descriptor.getLumIndex();
+		if (lum_idx >= 0 && lum_idx < aos_real_components) {
+			const int component_count = aos_real_components - lum_idx;
+			auto lum_labels = makeLuminosityLabels(component_count);
+			for (int i = 0; i < component_count; ++i) {
+				const int comp_index = lum_idx + i;
+				if (comp_index < aos_real_components) {
+					descriptor.setAosRealComponentName(comp_index, descriptor.getLuminosityRecordName() + "_" + lum_labels[i]);
+				}
+			}
+		}
+
+		const int stage_idx = descriptor.getEvolutionStageIndex();
+		if (stage_idx >= 0) {
+			descriptor.setAosIntComponentName(stage_idx, "evolutionStage");
+		}
+	}
+
+	static auto getAxisLabels() -> std::vector<std::string>
+	{
+#if AMREX_SPACEDIM == 1
+		return {"x"};
+#elif AMREX_SPACEDIM == 2
+		return {"x", "y"};
+#else
+		return {"x", "y", "z"};
+#endif
+	}
+
+	static auto makeLuminosityLabels(int n) -> std::vector<std::string>
+	{
+		std::vector<std::string> labels;
+		labels.reserve(n);
+		for (int i = 0; i < n; ++i) {
+			labels.emplace_back("g" + std::to_string(i));
+		}
+		return labels;
+	}
+#endif
+
       public:
 	// Constructor
 	PhysicsParticleRegister() = default;
@@ -651,6 +825,12 @@ template <typename problem_t> class PhysicsParticleRegister
 			amrex::Abort("Unknown particle type for physics particles");
 		}
 
+#ifdef QUOKKA_USE_OPENPMD
+		if (descriptor != nullptr) {
+			configureOpenPMDNames<ContainerType>(*descriptor);
+		}
+#endif
+
 		particleRegistry_[type] = std::move(descriptor);
 	}
 
@@ -663,6 +843,22 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 		amrex::Abort("Particle type not found");
 		return nullptr;
+	}
+
+	// Apply a functor to every registered particle descriptor
+	template <typename Func> void forEachDescriptor(Func &&func)
+	{
+		for (auto &entry : particleRegistry_) {
+			func(entry.first, *entry.second);
+		}
+	}
+
+	// Apply a functor to every registered particle descriptor (const overload)
+	template <typename Func> void forEachDescriptor(Func &&func) const
+	{
+		for (auto const &entry : particleRegistry_) {
+			func(entry.first, *entry.second);
+		}
 	}
 
 	// Deposit radiation from all luminous particles

@@ -691,12 +691,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 				  "128 (or greater) when running on GPUs, and 64 (or "
 				  "greater) when running on CPUs.\n";
 	}
-
-#ifdef QUOKKA_USE_OPENPMD
-	// warning about particles and OpenPMD outputs
-	amrex::Print() << "\n[Warning] [I/O] OpenPMD outputs currently do NOT include particles!"
-		       << " Support for outputting particles for openPMD is not yet implemented.\n";
-#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
@@ -3073,8 +3067,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 #ifdef QUOKKA_USE_OPENPMD
-	// TODO(bwibking): write particles using openPMD
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0]);
+	const std::string output_basename = plot_file;
+	openPMD::Series series(output_basename + "%05T.bp", openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
+	series.setSoftware("Quokka", "1.0");
+	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
+	series.setMeshesPath("fields");
+
+	openPMD::Iteration iteration = series.iterations[istep[0]];
+	iteration.open();
+	iteration.setTime(tNew_[0]);
+
+	quokka::OpenPMDOutput::WriteFields(series, iteration, varnames, finest_level + 1, mf_cc_ptr, Geom());
+	quokka::OpenPMDOutput::WriteParticles(series, iteration, particleRegister_, tNew_[0]);
+
+	iteration.close();
+	series.flush();
+	series.close();
+
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	// sets the maximum number of binary files per MultiFab
