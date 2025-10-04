@@ -10,6 +10,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_radiation.hpp"
+#include "particles/particle_update.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
@@ -119,56 +120,32 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 	amrex::Gpu::streamSynchronize();
 }
 
-// Specialization for star particles with stellar evolution
-namespace quokka
-{
-template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
-	static constexpr double star_lum_per_M_solar = 4.0e33;
-
-	template <typename problem_t, typename ParticleType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time) noexcept
-	{
-		const int mass_idx = StochasticStellarPopParticleMassIdx;
-		const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
-		const int lum_idx = StochasticStellarPopParticleLumIdx;
-		const amrex::Real age = current_time - p.rdata(birth_time_idx);
-		const amrex::Real mass = p.rdata(mass_idx);
-
-		// Check if luminosity tables are initialized
-		if (g_luminosity_tables_ptr != nullptr && g_luminosity_tables_ptr->is_initialized()) {
-			// Use table interpolation: (mass_in_solar_masses, age) -> luminosity
-			auto const tables = g_luminosity_tables_ptr->const_tables();
-			const amrex::Real mass_in_solar_masses = mass / C::M_solar;
-			std::array<amrex::Real, 2> const point = {mass_in_solar_masses, age};
-
-			// Interpolate luminosity from table (with automatic clamping to table bounds)
-			const amrex::Real luminosity = tables.luminosity.interpolate_single(point);
-
-			// Debug output for first particle only (ID would be helpful but not accessible here)
-			// printf("Particle: mass=%.2f Msun, age=%.2e s, interpolated L=%.4e erg/s\n", 
-			//        mass_in_solar_masses, age, luminosity);
-
-			// Update luminosity components (they are stored consecutively starting at lum_idx)
-			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-				p.rdata(lum_idx + g) = luminosity * (g + 1); // Scale by group index for multi-group
-			}
-		} else {
-			amrex::Print() << "No luminosity table specified. Using analytical formula.\n";
-
-			// Fallback to analytical formula if table is not initialized
-			// A simple luminosity function for testing purpose. Keep it linear function of mass for easy answer
-			// validation. L/(M / M_sun) = L_sun = 4e33 erg/s
-			const double is_on = age < 1.0e14 ? 1.0 : 0.0; // 3 Myr
-
-			// Update luminosity components (they are stored consecutively starting at lum_idx)
-			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-				const amrex::Real luminosity = star_lum_per_M_solar * (mass / C::M_solar) * (g + 1) * is_on; // erg / s
-				p.rdata(lum_idx + g) = luminosity;
-			}
-		}
-	}
-};
-} // namespace quokka
+// Note: The default ParticlePropertyUpdateTraits for StochasticStellarPop is defined in
+// src/particles/particle_update.hpp, which uses table interpolation when available.
+//
+// To override with a custom analytical formula, uncomment and modify the following:
+//
+// namespace quokka {
+// template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
+// 	static constexpr double custom_lum_per_M_solar = 5.0e33; // Custom value
+//
+// 	template <typename problem_t, typename ParticleType>
+// 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time) noexcept
+// 	{
+// 		const int mass_idx = StochasticStellarPopParticleMassIdx;
+// 		const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
+// 		const int lum_idx = StochasticStellarPopParticleLumIdx;
+// 		const amrex::Real age = current_time - p.rdata(birth_time_idx);
+// 		const amrex::Real mass = p.rdata(mass_idx);
+//
+// 		// Your custom analytical formula here
+// 		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+// 			const amrex::Real luminosity = custom_lum_per_M_solar * (mass / C::M_solar) * (g + 1);
+// 			p.rdata(lum_idx + g) = luminosity;
+// 		}
+// 	}
+// };
+// } // namespace quokka
 
 template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {

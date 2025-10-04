@@ -31,15 +31,6 @@ class LuminosityTables
 // Static pointer to the current simulation's luminosity tables (set during initialization)
 inline LuminosityTables *g_luminosity_tables_ptr = nullptr; // NOLINT
 
-// Traits class for specializing particle property update behavior
-template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
-	// Default implementation - does nothing
-	template <typename problem_t, typename ParticleType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType & /*p*/, amrex::Real /*current_time*/) noexcept
-	{
-		// Default implementation does nothing
-	}
-};
 } // namespace quokka
 
-#endif
+#endif // PARTICLE_RADIATION_HPP_
