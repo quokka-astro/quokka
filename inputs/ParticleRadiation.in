@@ -29,8 +29,8 @@ particles.disable_SN_feedback = true
 particles.table_data = ../inputs/lum_demo.csv  # Uncomment to use table interpolation
 
 stop_time = 8.0e20
-max_timesteps = 2
-plotfile_interval = 2
+max_timesteps = 3
+plotfile_interval = 3
 particle_csv_interval = 1
 checkpoint_interval = -1
 

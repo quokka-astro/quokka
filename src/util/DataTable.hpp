@@ -15,6 +15,7 @@
 #include <array>
 #include <fstream>
 #include <memory>
+#include <sstream>
 #include <type_traits>
 #include <vector>
 
@@ -604,14 +605,20 @@ template <int Ndim, int Nout = 1> class DataTable
       public:
 	// CSVReader: Generic static method to read n-dimensional data from CSV file and create DataTable
 	// CSV format:
-	//   Line 1: is_uniform_spaced (1 or 0)
-	//   Line 2: n_dim (number of dimensions)
-	//   Line 3: nx (size of dimension 0)
-	//   Line 4: ny (size of dimension 1, if Ndim >= 2)
-	//   Line 5: nz (size of dimension 2, if Ndim >= 3)
-	//   Line 6: nw (size of dimension 3, if Ndim == 4)
-	//   Next Ndim lines: coord_min, coord_max for each dimension
-	//   Remaining lines: data values in C-order (row-major)
+	//   Line 1: Ndim (number of input dimensions)
+	//   Line 2: Nx (comma-separated sizes for each dimension)
+	//   Line 3: Nout (number of outputs)
+	//   Line 4: input_names (comma-separated names for each input dimension)
+	//   Line 5: output_names (comma-separated names for each output)
+	//   Line 6: input_units (comma-separated units for each input dimension)
+	//   Line 7: output_units (comma-separated units for each output)
+	//   Line 8: xlo (comma-separated lower bounds for each dimension)
+	//   Line 9: xhi (comma-separated upper bounds for each dimension)
+	//   Line 10: spacing (comma-separated spacing types: linear, log, fast_log)
+	//   Remaining lines: data values
+	//     For 2D: nx2 rows × nx1 columns (last dimension varies fastest in rows)
+	//     For 3D: (nx3 × nx2) rows × nx1 columns
+	//     For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
 	static auto CSVReader(const std::string &file_path) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
@@ -620,47 +627,160 @@ template <int Ndim, int Nout = 1> class DataTable
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
 
 		// Read header information
-		int is_uniform_spaced = 0;
 		int n_dim = 0;
+		int n_out = 0;
 		std::array<int, Ndim> sizes{};
 		std::array<std::pair<amrex::Real, amrex::Real>, Ndim> coord_bounds{};
+		std::array<std::string, Ndim> spacing_types{};
 
-		file >> is_uniform_spaced;
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_uniform_spaced == 1, "CSVReader currently only supports uniformly spaced grids");
-
+		// Line 1: Ndim
 		file >> n_dim;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_dim == Ndim,
 						 fmt::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
 
-		// Read dimension sizes
-		for (int dim = 0; dim < Ndim; ++dim) {
-			file >> sizes[dim];
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
-		}
-
-		// Read coordinate bounds
-		for (int dim = 0; dim < Ndim; ++dim) {
-			char comma = ' ';
-			file >> coord_bounds[dim].first >> comma >> coord_bounds[dim].second;
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].second > coord_bounds[dim].first,
-							 fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first,
-								     coord_bounds[dim].second));
-		}
-
-		// Create uniformly spaced coordinate arrays
-		std::array<amrex::Vector<amrex::Real>, Ndim> coord_arrays;
-		for (int dim = 0; dim < Ndim; ++dim) {
-			coord_arrays[dim].resize(sizes[dim]);
-			for (int i = 0; i < sizes[dim]; ++i) {
-				coord_arrays[dim][i] = coord_bounds[dim].first +
-						       static_cast<amrex::Real>(i) * (coord_bounds[dim].second - coord_bounds[dim].first) /
-							   static_cast<amrex::Real>(sizes[dim] - 1);
+		// Line 2: Nx (comma-separated)
+		std::string nx_line;
+		std::getline(file >> std::ws, nx_line);
+		{
+			std::stringstream ss(nx_line);
+			for (int dim = 0; dim < Ndim; ++dim) {
+				char comma = ' ';
+				ss >> sizes[dim];
+				if (dim < Ndim - 1) {
+					ss >> comma;
+				}
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
 			}
 		}
 
-		// Read data values
+		// Line 3: Nout
+		file >> n_out;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+		    n_out == Nout, fmt::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
+
+		// Line 4: input_names (comma-separated, in metadata order)
+		std::vector<std::string> input_names(Ndim);
+		std::string input_names_line;
+		std::getline(file >> std::ws, input_names_line);
+		{
+			std::stringstream ss(input_names_line);
+			for (int i = 0; i < Ndim; ++i) {
+				if (i < Ndim - 1) {
+					std::getline(ss, input_names[i], ',');
+				} else {
+					ss >> input_names[i];
+				}
+			}
+		}
+
+		// Line 5-7: Skip output_names, input_units, output_units (metadata not used in computation)
+		std::string metadata_line;
+		for (int i = 0; i < 3; ++i) {
+			std::getline(file >> std::ws, metadata_line);
+		}
+
+		// Read metadata values (xlo, xhi, spacing) - these are in input_names order (metadata order)
+		std::array<amrex::Real, Ndim> xlo_metadata{};
+		std::array<amrex::Real, Ndim> xhi_metadata{};
+		std::array<std::string, Ndim> spacing_metadata{};
+
+		// Line 8: xlo (comma-separated, in metadata order)
+		std::string xlo_line;
+		std::getline(file >> std::ws, xlo_line);
+		{
+			std::stringstream ss(xlo_line);
+			for (int i = 0; i < Ndim; ++i) {
+				char comma = ' ';
+				ss >> xlo_metadata[i];
+				if (i < Ndim - 1) {
+					ss >> comma;
+				}
+			}
+		}
+
+		// Line 9: xhi (comma-separated, in metadata order)
+		std::string xhi_line;
+		std::getline(file >> std::ws, xhi_line);
+		{
+			std::stringstream ss(xhi_line);
+			for (int i = 0; i < Ndim; ++i) {
+				char comma = ' ';
+				ss >> xhi_metadata[i];
+				if (i < Ndim - 1) {
+					ss >> comma;
+				}
+			}
+		}
+
+		// Line 10: spacing (comma-separated, in metadata order)
+		std::string spacing_line;
+		std::getline(file >> std::ws, spacing_line);
+		{
+			std::stringstream ss(spacing_line);
+			for (int i = 0; i < Ndim; ++i) {
+				if (i < Ndim - 1) {
+					std::getline(ss, spacing_metadata[i], ',');
+				} else {
+					ss >> spacing_metadata[i];
+				}
+			}
+		}
+
+		// Copy metadata from input_names order (which should match Nx order)
+		// Nx = [nx1, nx2, ...] where x1, x2, ... correspond to dimensions in order
+		// metadata = [meta0, meta1, ...] in input_names order
+		// Assume input_names order matches Nx order (e.g., input_names="age,mass" means x1=age, x2=mass)
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_bounds[dim].first = xlo_metadata[dim];
+			coord_bounds[dim].second = xhi_metadata[dim];
+			spacing_types[dim] = spacing_metadata[dim];
+			
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].second > coord_bounds[dim].first,
+							 fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first,
+								     coord_bounds[dim].second));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(spacing_types[dim] == "linear" || spacing_types[dim] == "log" || spacing_types[dim] == "fast_log",
+							 fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
+								     spacing_types[dim], dim));
+		}
+
+		// Create coordinate arrays based on spacing type
+		std::array<amrex::Vector<amrex::Real>, Ndim> coord_arrays;
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_arrays[dim].resize(sizes[dim]);
+
+			if (spacing_types[dim] == "linear") {
+				// Linear spacing
+				for (int i = 0; i < sizes[dim]; ++i) {
+					coord_arrays[dim][i] = coord_bounds[dim].first +
+							       static_cast<amrex::Real>(i) * (coord_bounds[dim].second - coord_bounds[dim].first) /
+								   static_cast<amrex::Real>(sizes[dim] - 1);
+				}
+			} else if (spacing_types[dim] == "log") {
+				// Logarithmic spacing: store actual values, not logarithms
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].first > 0.0 && coord_bounds[dim].second > 0.0,
+								 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
+				const amrex::Real log_min = std::log10(coord_bounds[dim].first);
+				const amrex::Real log_max = std::log10(coord_bounds[dim].second);
+				for (int i = 0; i < sizes[dim]; ++i) {
+					const amrex::Real log_val = log_min + static_cast<amrex::Real>(i) * (log_max - log_min) / static_cast<amrex::Real>(sizes[dim] - 1);
+					coord_arrays[dim][i] = std::pow(10.0, log_val);
+				}
+			} else if (spacing_types[dim] == "fast_log") {
+				// Fast log spacing: store log10(value) for fast interpolation
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].first > 0.0 && coord_bounds[dim].second > 0.0,
+								 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
+				const amrex::Real log_min = std::log10(coord_bounds[dim].first);
+				const amrex::Real log_max = std::log10(coord_bounds[dim].second);
+				for (int i = 0; i < sizes[dim]; ++i) {
+					coord_arrays[dim][i] = log_min + static_cast<amrex::Real>(i) * (log_max - log_min) / static_cast<amrex::Real>(sizes[dim] - 1);
+				}
+			}
+		}
+
+		// Read data values - layout is transposed from internal representation
+		// CSV layout: last dimensions as rows, first dimension as columns
 		if constexpr (Ndim == 1) {
-			// For 1D: data[out_idx][i]
+			// For 1D: single row with nx1 columns
 			data_1d_type data_array;
 			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 				data_array[out_idx].resize(sizes[0]);
@@ -680,16 +800,21 @@ template <int Ndim, int Nout = 1> class DataTable
 			return table;
 
 		} else if constexpr (Ndim == 2) {
-			// For 2D: data[out_idx][i][j]
+			// For 2D: nx2 rows × nx1 columns
+			// CSV: data[row=i2][col=i1] -> DataTable: data[out_idx][i1][i2]
 			data_2d_type data_array;
 			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 				data_array[out_idx].resize(sizes[0]);
-				for (int i = 0; i < sizes[0]; ++i) {
-					data_array[out_idx][i].resize(sizes[1]);
-					for (int j = 0; j < sizes[1]; ++j) {
+				for (int i1 = 0; i1 < sizes[0]; ++i1) {
+					data_array[out_idx][i1].resize(sizes[1]);
+				}
+
+				// Read data in transposed order
+				for (int i2 = 0; i2 < sizes[1]; ++i2) {
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {
 						char comma = ' ';
-						file >> data_array[out_idx][i][j];
-						if (j < sizes[1] - 1) {
+						file >> data_array[out_idx][i1][i2];
+						if (i1 < sizes[0] - 1) {
 							file >> comma;
 						}
 					}
@@ -703,18 +828,25 @@ template <int Ndim, int Nout = 1> class DataTable
 			return table;
 
 		} else if constexpr (Ndim == 3) {
-			// For 3D: data[out_idx][i][j][k]
+			// For 3D: (nx3 × nx2) rows × nx1 columns
+			// CSV: data[row=(i3*nx2+i2)][col=i1] -> DataTable: data[out_idx][i1][i2][i3]
 			data_3d_type data_array;
 			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 				data_array[out_idx].resize(sizes[0]);
-				for (int i = 0; i < sizes[0]; ++i) {
-					data_array[out_idx][i].resize(sizes[1]);
-					for (int j = 0; j < sizes[1]; ++j) {
-						data_array[out_idx][i][j].resize(sizes[2]);
-						for (int k = 0; k < sizes[2]; ++k) {
+				for (int i1 = 0; i1 < sizes[0]; ++i1) {
+					data_array[out_idx][i1].resize(sizes[1]);
+					for (int i2 = 0; i2 < sizes[1]; ++i2) {
+						data_array[out_idx][i1][i2].resize(sizes[2]);
+					}
+				}
+
+				// Read data in transposed order
+				for (int i3 = 0; i3 < sizes[2]; ++i3) {
+					for (int i2 = 0; i2 < sizes[1]; ++i2) {
+						for (int i1 = 0; i1 < sizes[0]; ++i1) {
 							char comma = ' ';
-							file >> data_array[out_idx][i][j][k];
-							if (k < sizes[2] - 1) {
+							file >> data_array[out_idx][i1][i2][i3];
+							if (i1 < sizes[0] - 1) {
 								file >> comma;
 							}
 						}
@@ -729,20 +861,29 @@ template <int Ndim, int Nout = 1> class DataTable
 			return table;
 
 		} else if constexpr (Ndim == 4) {
-			// For 4D: data[out_idx][i][j][k][l]
+			// For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
+			// CSV: data[row=(i4*nx3*nx2+i3*nx2+i2)][col=i1] -> DataTable: data[out_idx][i1][i2][i3][i4]
 			data_4d_type data_array;
 			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 				data_array[out_idx].resize(sizes[0]);
-				for (int i = 0; i < sizes[0]; ++i) {
-					data_array[out_idx][i].resize(sizes[1]);
-					for (int j = 0; j < sizes[1]; ++j) {
-						data_array[out_idx][i][j].resize(sizes[2]);
-						for (int k = 0; k < sizes[2]; ++k) {
-							data_array[out_idx][i][j][k].resize(sizes[3]);
-							for (int l = 0; l < sizes[3]; ++l) {
+				for (int i1 = 0; i1 < sizes[0]; ++i1) {
+					data_array[out_idx][i1].resize(sizes[1]);
+					for (int i2 = 0; i2 < sizes[1]; ++i2) {
+						data_array[out_idx][i1][i2].resize(sizes[2]);
+						for (int i3 = 0; i3 < sizes[2]; ++i3) {
+							data_array[out_idx][i1][i2][i3].resize(sizes[3]);
+						}
+					}
+				}
+
+				// Read data in transposed order
+				for (int i4 = 0; i4 < sizes[3]; ++i4) {
+					for (int i3 = 0; i3 < sizes[2]; ++i3) {
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {
+							for (int i1 = 0; i1 < sizes[0]; ++i1) {
 								char comma = ' ';
-								file >> data_array[out_idx][i][j][k][l];
-								if (l < sizes[3] - 1) {
+								file >> data_array[out_idx][i1][i2][i3][i4];
+								if (i1 < sizes[0] - 1) {
 									file >> comma;
 								}
 							}

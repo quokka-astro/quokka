@@ -230,10 +230,9 @@ auto problem_main() -> int
 		// Radiation is deposited into cells after the first step.
 		// The table gives luminosity values based on (mass, age) interpolation.
 		// For this test with the current table, the expected luminosity per particle is determined by table interpolation.
-		// The emission per particle from step 1 is 0.0;
-		// The emission per particle from step 2 is 2.5e20 * dt_.
-		// The emission per particle from step 3 is (2 * 2.5e20) * dt_.
-		// The emission per particle from step 4 is (3 * 2.5e20) * dt_.
+		// The emission per particle from step 0 is 0.0;
+		// The emission per particle from step 1 is 2.5e20 * dt_.
+		// The emission per particle from step 2 is (2 * 2.5e20) * dt_.
 		const int n_stars = 4;
 		const double L_star = 2.5e20;
 		const double change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;

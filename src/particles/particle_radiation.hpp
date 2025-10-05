@@ -53,13 +53,11 @@ public:
             auto const tables = g_luminosity_tables_ptr->const_tables();
             const amrex::Real mass_in_solar_masses = mass / C::M_solar;
             const amrex::Real age_in_years = age_in_seconds / seconds_per_year;
-            // Table coordinates: (age, mass) since rows=ages, columns=masses
+            // Table coordinates: (age, mass) as specified in CSV input_names
             std::array<amrex::Real, 2> const point = {age_in_years, mass_in_solar_masses};
 
             // Interpolate luminosity from table (with automatic clamping to table bounds)
             const amrex::Real luminosity = tables.luminosity.interpolate_single(point);
-
-            // Debug output removed - use AMReX::Print() if needed
 
             // Update luminosity components (they are stored consecutively starting at lum_idx)
             for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
