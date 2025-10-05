@@ -37,41 +37,42 @@ template <int Nout = 1> class LuminosityTables
 template <int Nout = 1> inline LuminosityTables<Nout> *g_luminosity_tables_ptr = nullptr; // NOLINT
 
 // Class to handle luminosity updates for stellar particles
-class LuminosityUpdate {
-public:
-    template <typename problem_t, typename ParticleType>
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(ParticleType &p, amrex::Real current_time) noexcept
-    {
-        constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-        
-        // Get pointer for the appropriate number of outputs
-        auto* tables_ptr = g_luminosity_tables_ptr<nGroups>;
-        
-        // Use table interpolation: (age, mass) -> luminosity per group
-        // Requires that g_luminosity_tables_ptr is initialized
-        if (tables_ptr != nullptr && tables_ptr->is_initialized()) {
-            const int mass_idx = StochasticStellarPopParticleMassIdx;
-            const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
-            const int lum_idx = StochasticStellarPopParticleLumIdx;
-            const amrex::Real age_in_seconds = current_time - p.rdata(birth_time_idx);
-            const amrex::Real mass = p.rdata(mass_idx);
+class LuminosityUpdate
+{
+      public:
+	template <typename problem_t, typename ParticleType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(ParticleType &p, amrex::Real current_time) noexcept
+	{
+		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 
-            auto const tables = tables_ptr->const_tables();
-            const amrex::Real mass_in_solar_masses = mass / C::M_solar;
-            const amrex::Real age_in_years = age_in_seconds / seconds_per_year;
-            // Table coordinates: (age, mass) as specified in CSV input_names
-            std::array<amrex::Real, 2> const point = {age_in_years, mass_in_solar_masses};
+		// Get pointer for the appropriate number of outputs
+		auto *tables_ptr = g_luminosity_tables_ptr<nGroups>;
 
-            // Interpolate luminosity from table (returns array with nGroups elements)
-            auto const luminosities = tables.luminosity.interpolate(point);
+		// Use table interpolation: (age, mass) -> luminosity per group
+		// Requires that g_luminosity_tables_ptr is initialized
+		if (tables_ptr != nullptr && tables_ptr->is_initialized()) {
+			const int mass_idx = StochasticStellarPopParticleMassIdx;
+			const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
+			const int lum_idx = StochasticStellarPopParticleLumIdx;
+			const amrex::Real age_in_seconds = current_time - p.rdata(birth_time_idx);
+			const amrex::Real mass = p.rdata(mass_idx);
 
-            // Update luminosity components (they are stored consecutively starting at lum_idx)
-            for (int g = 0; g < nGroups; ++g) {
-                p.rdata(lum_idx + g) = luminosities[g];
-            }
-        }
-        // If table is not initialized, luminosity values remain unchanged
-    }
+			auto const tables = tables_ptr->const_tables();
+			const amrex::Real mass_in_solar_masses = mass / C::M_solar;
+			const amrex::Real age_in_years = age_in_seconds / seconds_per_year;
+			// Table coordinates: (age, mass) as specified in CSV input_names
+			std::array<amrex::Real, 2> const point = {age_in_years, mass_in_solar_masses};
+
+			// Interpolate luminosity from table (returns array with nGroups elements)
+			auto const luminosities = tables.luminosity.interpolate(point);
+
+			// Update luminosity components (they are stored consecutively starting at lum_idx)
+			for (int g = 0; g < nGroups; ++g) {
+				p.rdata(lum_idx + g) = luminosities[g];
+			}
+		}
+		// If table is not initialized, luminosity values remain unchanged
+	}
 };
 
 } // namespace quokka

@@ -72,11 +72,11 @@ template <> struct RadSystem_Traits<ParticleRadiationProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<ParticleRadiationProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-									    const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+									  const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
-		exponents_and_values[0][i] = 0.0; // exponent (0 = constant opacity)
+		exponents_and_values[0][i] = 0.0;     // exponent (0 = constant opacity)
 		exponents_and_values[1][i] = 1.0e-20; // opacity value (0 = optically thin)
 	}
 	return exponents_and_values;
@@ -223,7 +223,7 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error to total energy: " << error_rel_to_tot << "\n";
 		amrex::Print() << "Relative error to radiation energy: " << error_rel_to_rad << "\n";
 
-		const double tolerance = 1e-14; // Tolerance relative to total energy
+		const double tolerance = 1e-14;	   // Tolerance relative to total energy
 		const double tolerance_rad = 1e-6; // Tolerance relative to radiaiton energy
 		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance_rad)) {
 			status = 1;

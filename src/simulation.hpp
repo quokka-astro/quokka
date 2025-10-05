@@ -832,7 +832,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		// if particle and radiation are enabled
 		if (particleRegister_.HasRadiatingParticles() && Physics_Traits<problem_t>::is_radiation_enabled) {
 			if (useLuminosityTable_) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!luminosityTableFilename_.empty(), "When use_luminosity_table is set to true, table_data must be specified");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!luminosityTableFilename_.empty(),
+								 "When use_luminosity_table is set to true, table_data must be specified");
 
 				constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
@@ -855,7 +856,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    luminosityTables_.luminosity.input_unit(1) == "Msun",
 				    fmt::format("Luminosity table second input unit must be 'Msun', got '{}'", luminosityTables_.luminosity.input_unit(1)));
-				
+
 				// Validate all output units are "erg/s"
 				for (int i = 0; i < nGroups; ++i) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosityTables_.luminosity.output_unit(i) == "erg/s",
@@ -904,7 +905,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	// Ensure consistency between particle radiation settings and luminosity data table configuration
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		if (particleRegister_.HasRadiatingParticles()) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(useLuminosityTable_ && luminosityTableFilename_.empty()), "When use_luminosity_table is set to true, table_data must be specified");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(useLuminosityTable_ && luminosityTableFilename_.empty()),
+							 "When use_luminosity_table is set to true, table_data must be specified");
 		}
 	}
 

@@ -92,7 +92,8 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 
 			// Find grid cell indices containing the point
 			// indices are the "lower" indices of the containing hypercube
-			interp.indices[dim] = amrex::max(0, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), sizes[dim] - 1));
+			interp.indices[dim] =
+			    amrex::max(0, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), sizes[dim] - 1));
 
 			// if indices is end - 1, then set indices to end - 2 (so that upper_indices is end - 1, the last index)
 			if (interp.indices[dim] == sizes[dim] - 1) {
@@ -570,9 +571,9 @@ template <int Ndim, int Nout = 1> class DataTable
 	// Optimized initialization that takes bounds, sizes, and spacing directly
 	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
 	template <typename DataType>
-	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs,
-			       const std::array<int, Ndim> &n_xs, const std::array<std::string, Ndim> &spacing_types,
-			       const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
+	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
+			       const std::array<std::string, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
+			       const DataType &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
@@ -584,12 +585,12 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Validate bounds and spacing types
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim],
-							 fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_min_[dim], coord_max_[dim]));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim], fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]",
+													dim, coord_min_[dim], coord_max_[dim]));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes_[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes_[dim], dim));
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(spacing_types_[dim] == "linear" || spacing_types_[dim] == "log" || spacing_types_[dim] == "fast_log",
-							 fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
-								     spacing_types_[dim], dim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    spacing_types_[dim] == "linear" || spacing_types_[dim] == "log" || spacing_types_[dim] == "fast_log",
+			    fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types_[dim], dim));
 		}
 
 		// Calculate grid spacing (for uniform spacing optimization)
@@ -605,10 +606,9 @@ template <int Ndim, int Nout = 1> class DataTable
 
 			// Use provided coordinates if available, otherwise generate based on spacing type
 			if (!coords[dim].empty()) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    static_cast<int>(coords[dim].size()) == sizes_[dim],
-				    fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})", dim, sizes_[dim],
-						coords[dim].size()));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
+								 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
+									     dim, sizes_[dim], coords[dim].size()));
 				for (int i = 0; i < sizes_[dim]; ++i) {
 					coord_table(i) = coords[dim][i];
 				}
@@ -757,8 +757,8 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Line 1: Ndim
 		file >> n_dim;
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_dim == Ndim,
-						 fmt::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+		    n_dim == Ndim, fmt::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
 
 		// Line 2: Nx (comma-separated)
 		std::string nx_line;
@@ -777,8 +777,8 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// Line 3: Nout
 		file >> n_out;
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		    n_out == Nout, fmt::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_out == Nout,
+						 fmt::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
 
 		// Line 4: input_names (comma-separated, in metadata order)
 		std::array<std::string, Ndim> input_names{};
@@ -895,13 +895,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			coord_bounds[dim].first = xlo_metadata[dim];
 			coord_bounds[dim].second = xhi_metadata[dim];
 			spacing_types[dim] = spacing_metadata[dim];
-			
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].second > coord_bounds[dim].first,
-							 fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first,
-								     coord_bounds[dim].second));
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(spacing_types[dim] == "linear" || spacing_types[dim] == "log" || spacing_types[dim] == "fast_log",
-							 fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
-								     spacing_types[dim], dim));
+
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    coord_bounds[dim].second > coord_bounds[dim].first,
+			    fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    spacing_types[dim] == "linear" || spacing_types[dim] == "log" || spacing_types[dim] == "fast_log",
+			    fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
 		}
 
 		// Prepare bounds and sizes for optimized initialization
@@ -937,13 +937,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-			
+
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			
+
 			file.close();
 			return table;
 
@@ -972,13 +972,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-			
+
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			
+
 			file.close();
 			return table;
 
@@ -1012,13 +1012,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-			
+
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			
+
 			file.close();
 			return table;
 
@@ -1057,13 +1057,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-			
+
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			
+
 			file.close();
 			return table;
 		}

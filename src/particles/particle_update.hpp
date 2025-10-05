@@ -31,8 +31,6 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 	}
 };
 
-
-
 // // Specialization for StochasticStellarPop particles from a simple analytical formula
 // // This is kept for debugging purpose.
 // template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
@@ -59,11 +57,8 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 // 	}
 // };
 
-
-
 } // namespace quokka
 
 #endif // AMREX_SPACEDIM == 3
 
 #endif // PARTICLE_UPDATE_HPP_
-
