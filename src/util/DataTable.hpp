@@ -83,25 +83,26 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		InterpData<Ndim> interp;
 
 		for (int dim = 0; dim < Ndim; ++dim) {
-			// Get table bounds for this dimension - assumes uniform grid spacing
-			amrex::Real const coord_start = coords[dim](coords[dim].begin); // First coordinate, begin = 0
-			amrex::Real const coord_end = coords[dim](coords[dim].end - 1); // Last coordinate, end = size
+			// Get table bounds - use precomputed coord_min/coord_max instead of accessing coords table
+			amrex::Real const coord_start = coord_min[dim];
+			amrex::Real const coord_end = coord_max[dim];
 
 			// Clamp coordinates to valid table bounds (extrapolation not supported)
 			amrex::Real clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
 
 			// Find grid cell indices containing the point
 			// indices are the "lower" indices of the containing hypercube
-			interp.indices[dim] = amrex::max(
-			    coords[dim].begin, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), coords[dim].end - 1));
+			interp.indices[dim] = amrex::max(0, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), sizes[dim] - 1));
 
 			// if indices is end - 1, then set indices to end - 2 (so that upper_indices is end - 1, the last index)
-			if (interp.indices[dim] == coords[dim].end - 1) {
-				interp.indices[dim] = coords[dim].end - 2;
+			if (interp.indices[dim] == sizes[dim] - 1) {
+				interp.indices[dim] = sizes[dim] - 2;
 			}
 
-			// This can be greater than 1 if the point is outside the grid and not clamped
-			interp.normalized[dim] = (clamped_coord - coords[dim](interp.indices[dim])) / dcoord[dim];
+			// Compute normalized coordinate
+			// For linear spacing: coord = coord_min + index * dcoord (no table lookup needed!)
+			amrex::Real const coord_at_index = coord_min[dim] + static_cast<amrex::Real>(interp.indices[dim]) * dcoord[dim];
+			interp.normalized[dim] = (clamped_coord - coord_at_index) / dcoord[dim];
 		}
 
 		return interp;
@@ -576,10 +577,8 @@ template <int Ndim, int Nout = 1> class DataTable
 			} else {
 				// Generate coordinates based on spacing type
 				if (spacing_types_[dim] == "linear") {
-					// Linear spacing
-					for (int i = 0; i < sizes_[dim]; ++i) {
-						coord_table(i) = coord_min_[dim] + static_cast<amrex::Real>(i) * dcoord_[dim];
-					}
+					// Linear spacing: coordinates computed on-the-fly in GPU code, no need to populate table
+					// Table structure exists but remains unpopulated for memory efficiency
 				} else if (spacing_types_[dim] == "log") {
 					// Logarithmic spacing: store actual values, not logarithms
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
@@ -677,8 +676,14 @@ template <int Ndim, int Nout = 1> class DataTable
 			spacing_types[dim] = "linear";
 		}
 
-		// Call the optimized initialize_common with provided coords
-		initialize_common(x_mins, x_maxs, n_xs, spacing_types, coords, data);
+		// Pass empty coords - for linear spacing they will be computed on-the-fly
+		std::array<amrex::Vector<amrex::Real>, Ndim> empty_coords{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			empty_coords[dim] = amrex::Vector<amrex::Real>();
+		}
+
+		// Call the optimized initialize_common with empty coords for efficiency
+		initialize_common(x_mins, x_maxs, n_xs, spacing_types, empty_coords, data);
 	}
 
       public:
