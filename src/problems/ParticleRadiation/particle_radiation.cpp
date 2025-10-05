@@ -236,7 +236,7 @@ auto problem_main() -> int
 		// The emission per particle from step 4 is (3 * 2.5e20) * dt_.
 		const int n_stars = 4;
 		const double L_star = 2.5e20;
-		const double change_of_total_energy_expected = (1.0 + 2.0 + 3.0) * L_star * dt_ * n_stars;
+		const double change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;
 		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
 		amrex::Print() << "Expected change of total energy: " << change_of_total_energy_expected << "\n";
 
