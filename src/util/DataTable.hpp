@@ -304,6 +304,12 @@ template <int Ndim, int Nout = 1> class DataTable
 	// Spacing types for each dimension: "linear", "log", or "fast_log"
 	std::array<std::string, Ndim> spacing_types_{};
 
+	// Metadata for dimension and output names/units
+	std::array<std::string, Ndim> input_names_{};
+	std::array<std::string, Nout> output_names_{};
+	std::array<std::string, Ndim> input_units_{};
+	std::array<std::string, Nout> output_units_{};
+
       public:
 	// Default constructor
 	DataTable() = default;
@@ -528,6 +534,38 @@ template <int Ndim, int Nout = 1> class DataTable
 	// Get number of outputs
 	[[nodiscard]] constexpr auto num_outputs() const -> int { return Nout; }
 
+	// Get metadata accessors
+	[[nodiscard]] auto input_names() const -> std::array<std::string, Ndim> { return input_names_; }
+	[[nodiscard]] auto output_names() const -> std::array<std::string, Nout> { return output_names_; }
+	[[nodiscard]] auto input_units() const -> std::array<std::string, Ndim> { return input_units_; }
+	[[nodiscard]] auto output_units() const -> std::array<std::string, Nout> { return output_units_; }
+
+	// Get individual metadata by index
+	[[nodiscard]] auto input_name(int dim) const -> std::string
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
+						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
+		return input_names_[dim];
+	}
+	[[nodiscard]] auto output_name(int idx) const -> std::string
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= 0 && idx < Nout,
+						 fmt::format("Output index out of bounds! (provided: {}, valid range: [0, {}])", idx, Nout - 1));
+		return output_names_[idx];
+	}
+	[[nodiscard]] auto input_unit(int dim) const -> std::string
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
+						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
+		return input_units_[dim];
+	}
+	[[nodiscard]] auto output_unit(int idx) const -> std::string
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= 0 && idx < Nout,
+						 fmt::format("Output index out of bounds! (provided: {}, valid range: [0, {}])", idx, Nout - 1));
+		return output_units_[idx];
+	}
+
       private:
 	// Optimized initialization that takes bounds, sizes, and spacing directly
 	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
@@ -743,7 +781,7 @@ template <int Ndim, int Nout = 1> class DataTable
 		    n_out == Nout, fmt::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
 
 		// Line 4: input_names (comma-separated, in metadata order)
-		std::vector<std::string> input_names(Ndim);
+		std::array<std::string, Ndim> input_names{};
 		std::string input_names_line;
 		std::getline(file >> std::ws, input_names_line);
 		{
@@ -757,10 +795,49 @@ template <int Ndim, int Nout = 1> class DataTable
 			}
 		}
 
-		// Line 5-7: Skip output_names, input_units, output_units (metadata not used in computation)
-		std::string metadata_line;
-		for (int i = 0; i < 3; ++i) {
-			std::getline(file >> std::ws, metadata_line);
+		// Line 5: output_names (comma-separated)
+		std::array<std::string, Nout> output_names{};
+		std::string output_names_line;
+		std::getline(file >> std::ws, output_names_line);
+		{
+			std::stringstream ss(output_names_line);
+			for (int i = 0; i < Nout; ++i) {
+				if (i < Nout - 1) {
+					std::getline(ss, output_names[i], ',');
+				} else {
+					ss >> output_names[i];
+				}
+			}
+		}
+
+		// Line 6: input_units (comma-separated)
+		std::array<std::string, Ndim> input_units{};
+		std::string input_units_line;
+		std::getline(file >> std::ws, input_units_line);
+		{
+			std::stringstream ss(input_units_line);
+			for (int i = 0; i < Ndim; ++i) {
+				if (i < Ndim - 1) {
+					std::getline(ss, input_units[i], ',');
+				} else {
+					ss >> input_units[i];
+				}
+			}
+		}
+
+		// Line 7: output_units (comma-separated)
+		std::array<std::string, Nout> output_units{};
+		std::string output_units_line;
+		std::getline(file >> std::ws, output_units_line);
+		{
+			std::stringstream ss(output_units_line);
+			for (int i = 0; i < Nout; ++i) {
+				if (i < Nout - 1) {
+					std::getline(ss, output_units[i], ',');
+				} else {
+					ss >> output_units[i];
+				}
+			}
 		}
 
 		// Read metadata values (xlo, xhi, spacing) - these are in input_names order (metadata order)
@@ -860,6 +937,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
+			
+			// Store metadata
+			table.input_names_ = input_names;
+			table.output_names_ = output_names;
+			table.input_units_ = input_units;
+			table.output_units_ = output_units;
+			
 			file.close();
 			return table;
 
@@ -888,6 +972,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
+			
+			// Store metadata
+			table.input_names_ = input_names;
+			table.output_names_ = output_names;
+			table.input_units_ = input_units;
+			table.output_units_ = output_units;
+			
 			file.close();
 			return table;
 
@@ -921,6 +1012,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
+			
+			// Store metadata
+			table.input_names_ = input_names;
+			table.output_names_ = output_names;
+			table.input_units_ = input_units;
+			table.output_units_ = output_units;
+			
 			file.close();
 			return table;
 
@@ -959,6 +1057,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
+			
+			// Store metadata
+			table.input_names_ = input_names;
+			table.output_names_ = output_names;
+			table.input_units_ = input_units;
+			table.output_units_ = output_units;
+			
 			file.close();
 			return table;
 		}

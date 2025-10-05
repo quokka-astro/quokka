@@ -841,6 +841,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
 							      luminosityTables_.luminosity.size(1));
 				amrex::Print() << fmt::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
+
+				// Validate table metadata matches expected hardcoded values
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_name(0) == "age",
+				    fmt::format("Luminosity table first input must be 'age', got '{}'", luminosityTables_.luminosity.input_name(0)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_name(1) == "mass",
+				    fmt::format("Luminosity table second input must be 'mass', got '{}'", luminosityTables_.luminosity.input_name(1)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_unit(0) == "year",
+				    fmt::format("Luminosity table first input unit must be 'year', got '{}'", luminosityTables_.luminosity.input_unit(0)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_unit(1) == "Msun",
+				    fmt::format("Luminosity table second input unit must be 'Msun', got '{}'", luminosityTables_.luminosity.input_unit(1)));
+				
+				// Validate all output units are "erg/s"
+				for (int i = 0; i < nGroups; ++i) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosityTables_.luminosity.output_unit(i) == "erg/s",
+									 fmt::format("Luminosity table output unit {} must be 'erg/s', got '{}'", i,
+										     luminosityTables_.luminosity.output_unit(i)));
+				}
+
 				// Set global pointer for access from particle update functions
 				quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
 			}
