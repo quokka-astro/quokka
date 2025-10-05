@@ -9,6 +9,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_update.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
@@ -23,7 +24,7 @@ constexpr double rho0 = 1.0e-8 * C::m_p; // g cm^-3
 constexpr double T0 = 10.0;		 // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
-constexpr double dt_ = 1.0e6; // s
+constexpr double dt_ = 0.1 * quokka::seconds_per_year;
 // constexpr double chat_over_c = 1.0e-5;
 constexpr double chat_over_c = 1.0;
 constexpr double formation_time = 1.5 * dt_;
@@ -238,19 +239,27 @@ auto problem_main() -> int
 		amrex::Print() << "Change of total energy: " << change_of_total_energy << "\n";
 
 		// Expected answer from table interpolation.
-		// Radiation is deposited into cells after the first step, so radiation is emitted for time = (sim.tNew_[0] - dt_).
+		// Radiation is deposited into cells after the first step.
 		// The table gives luminosity values based on (mass, age) interpolation.
 		// For this test with the current table, the expected luminosity per particle is determined by table interpolation.
-		// With 4 particles and emission time of 3e10 s:
-		const double change_of_total_energy_expected = 3e+27; // From table interpolation (4 particles × L_table × 3e6 s), L_table = 2.5e20
+		// The emission per particle from step 1 is 0.0;
+		// The emission per particle from step 2 is 2.5e20 * dt_.
+		// The emission per particle from step 3 is (2 * 2.5e20) * dt_.
+		// The emission per particle from step 4 is (3 * 2.5e20) * dt_.
+		const int n_stars = 4;
+		const double L_star = 2.5e20;
+		const double change_of_total_energy_expected = (1.0 + 2.0 + 3.0) * L_star * dt_ * n_stars;
 		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
 		amrex::Print() << "Expected change of total energy: " << change_of_total_energy_expected << "\n";
 
-		const double relative_error = std::abs(change_of_total_energy - change_of_total_energy_expected) / total_energy;
-		amrex::Print() << "Relative error: " << relative_error << "\n";
+		const double error_rel_to_tot = std::abs(change_of_total_energy - change_of_total_energy_expected) / total_energy;
+		const double error_rel_to_rad = std::abs(change_of_total_energy - change_of_total_energy_expected) / change_of_total_energy_expected;
+		amrex::Print() << "Relative error to total energy: " << error_rel_to_tot << "\n";
+		amrex::Print() << "Relative error to radiation energy: " << error_rel_to_rad << "\n";
 
-		const double tolerance = 1e-6; // Tolerance for numerical precision
-		if (!(relative_error < tolerance)) {
+		const double tolerance = 1e-14; // Tolerance relative to total energy
+		const double tolerance_rad = 1e-6; // Tolerance relative to radiaiton energy
+		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance_rad)) {
 			status = 1;
 			amrex::Print() << "Test failed: change of total energy mismatch.\n";
 		}
