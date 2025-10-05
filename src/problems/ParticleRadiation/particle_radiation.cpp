@@ -23,7 +23,7 @@ constexpr double rho0 = 1.0e-8 * C::m_p; // g cm^-3
 constexpr double T0 = 10.0;		 // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
-constexpr double dt_ = 1.0e10; // s
+constexpr double dt_ = 1.0e6; // s
 // constexpr double chat_over_c = 1.0e-5;
 constexpr double chat_over_c = 1.0;
 constexpr double formation_time = 1.5 * dt_;
@@ -242,7 +242,7 @@ auto problem_main() -> int
 		// The table gives luminosity values based on (mass, age) interpolation.
 		// For this test with the current table, the expected luminosity per particle is determined by table interpolation.
 		// With 4 particles and emission time of 3e10 s:
-		const double change_of_total_energy_expected = 3e+31; // From table interpolation (4 particles × L_table × 3e10 s), L_table = 2.5e20
+		const double change_of_total_energy_expected = 3e+27; // From table interpolation (4 particles × L_table × 3e6 s), L_table = 2.5e20
 		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
 		amrex::Print() << "Expected change of total energy: " << change_of_total_energy_expected << "\n";
 
