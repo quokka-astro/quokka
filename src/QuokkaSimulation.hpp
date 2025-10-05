@@ -221,8 +221,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
 
 	// fillFaceFieldFunctor(initialFaceB, geom, time) should supply analytic/non-div-free face fields per direction
-	template <typename FillFaceB>
-	void initializeFaceCenteredMagneticFieldFromCurrent(int lev, amrex::Real time, FillFaceB &&fillFaceFieldFunctor);
+	template <typename FillFaceB> void initializeFaceCenteredMagneticFieldFromCurrent(int lev, amrex::Real time, FillFaceB &&fillFaceFieldFunctor);
 	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
@@ -1087,8 +1086,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 
 template <typename problem_t>
 template <typename FillFaceB>
-void QuokkaSimulation<problem_t>::initializeFaceCenteredMagneticFieldFromCurrent(int lev, amrex::Real time,
-									 FillFaceB &&fillFaceFieldFunctor)
+void QuokkaSimulation<problem_t>::initializeFaceCenteredMagneticFieldFromCurrent(int lev, amrex::Real time, FillFaceB &&fillFaceFieldFunctor)
 {
 #if AMREX_SPACEDIM != 3
 	amrex::ignore_unused(lev, time, fillFaceFieldFunctor);
@@ -1118,9 +1116,8 @@ void QuokkaSimulation<problem_t>::initializeFaceCenteredMagneticFieldFromCurrent
 	std::forward<FillFaceB>(fillFaceFieldFunctor)(initial_face_B, geom_lev, time);
 
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		fillBoundaryConditions(initial_face_B[dir], initial_face_B[dir], lev, time, quokka::centering::fc,
-				       static_cast<quokka::direction>(dir), InterpHookNone, InterpHookNone,
-				       FillPatchType::fillpatch_function);
+		fillBoundaryConditions(initial_face_B[dir], initial_face_B[dir], lev, time, quokka::centering::fc, static_cast<quokka::direction>(dir),
+				       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 	}
 
 	amrex::MultiFab current_nodal(amrex::convert(ba, amrex::IntVect::TheNodeVector()), dm, AMREX_SPACEDIM, 0);
@@ -1146,15 +1143,9 @@ void QuokkaSimulation<problem_t>::initializeFaceCenteredMagneticFieldFromCurrent
 		amrex::Box const &ybx = mfi.tilebox(rhs_edge[1].ixType().toIntVect());
 		amrex::Box const &zbx = mfi.tilebox(rhs_edge[2].ixType().toIntVect());
 
-		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(xbx, i, j, k, {
-			rhs_x(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 0) + curl_arr(i + 1, j, k, 0));
-		});
-		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(ybx, i, j, k, {
-			rhs_y(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 1) + curl_arr(i, j + 1, k, 1));
-		});
-		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(zbx, i, j, k, {
-			rhs_z(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 2) + curl_arr(i, j, k + 1, 2));
-		});
+		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(xbx, i, j, k, { rhs_x(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 0) + curl_arr(i + 1, j, k, 0)); });
+		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(ybx, i, j, k, { rhs_y(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 1) + curl_arr(i, j + 1, k, 1)); });
+		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(zbx, i, j, k, { rhs_z(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 2) + curl_arr(i, j, k + 1, 2)); });
 	}
 
 	MFArray vector_potential;
@@ -1201,10 +1192,9 @@ void QuokkaSimulation<problem_t>::initializeFaceCenteredMagneticFieldFromCurrent
 
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 		amrex::MultiFab::Copy(state_new_fc_[lev][dir], divergence_free_face_B[dir], 0, MHDSystem<problem_t>::bfield_index, 1,
-				       state_new_fc_[lev][dir].nGrow());
-		fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc,
-				       static_cast<quokka::direction>(dir), InterpHookNone, InterpHookNone,
-				       FillPatchType::fillpatch_function);
+				      state_new_fc_[lev][dir].nGrow());
+		fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc, static_cast<quokka::direction>(dir),
+				       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 	}
 #endif
 }
