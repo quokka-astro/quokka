@@ -49,6 +49,9 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
+#if AMREX_SPACEDIM == 3
+#include "AMReX_MLCurlCurl.H"
+#endif
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
@@ -216,6 +219,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
+
+	// fillFaceFieldFunctor(initialFaceB, geom, time) should supply analytic/non-div-free face fields per direction
+	template <typename FillFaceB>
+	void initializeFaceCenteredMagneticFieldFromCurrent(int lev, amrex::Real time, FillFaceB &&fillFaceFieldFunctor);
 	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
@@ -1076,6 +1083,130 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 #else
 	amrex::ignore_unused(phi_mf, lev, dt);
 #endif // (AMREX_SPACEDIM == 3)
+}
+
+template <typename problem_t>
+template <typename FillFaceB>
+void QuokkaSimulation<problem_t>::initializeFaceCenteredMagneticFieldFromCurrent(int lev, amrex::Real time,
+									 FillFaceB &&fillFaceFieldFunctor)
+{
+#if AMREX_SPACEDIM != 3
+	amrex::ignore_unused(lev, time, fillFaceFieldFunctor);
+	amrex::Abort("initializeFaceCenteredMagneticFieldFromCurrent requires AMREX_SPACEDIM == 3.");
+#else
+	static_assert(Physics_Traits<problem_t>::is_mhd_enabled, "Magnetic field initialisation requires MHD to be enabled.");
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		amrex::ignore_unused(lev, time, fillFaceFieldFunctor);
+		amrex::Abort("initializeFaceCenteredMagneticFieldFromCurrent requires MHD to be enabled.");
+	}
+
+	using MFArray = amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>;
+	AMREX_ASSERT(lev >= 0 && lev < static_cast<int>(state_new_fc_.size()));
+
+	auto const &geom_lev = this->Geom(lev);
+	auto const &ba = boxArray(lev);
+	auto const &dm = DistributionMap(lev);
+	int const nghost_face = std::max(1, state_new_fc_[lev][0].nGrow());
+
+	MFArray initial_face_B;
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		amrex::IntVect faceType = amrex::IntVect::TheDimensionVector(dir);
+		initial_face_B[dir].define(amrex::convert(ba, faceType), dm, 1, nghost_face);
+		initial_face_B[dir].setVal(0.0);
+	}
+
+	std::forward<FillFaceB>(fillFaceFieldFunctor)(initial_face_B, geom_lev, time);
+
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		fillBoundaryConditions(initial_face_B[dir], initial_face_B[dir], lev, time, quokka::centering::fc,
+				       static_cast<quokka::direction>(dir), InterpHookNone, InterpHookNone,
+				       FillPatchType::fillpatch_function);
+	}
+
+	amrex::MultiFab current_nodal(amrex::convert(ba, amrex::IntVect::TheNodeVector()), dm, AMREX_SPACEDIM, 0);
+	current_nodal.setVal(0.0);
+	amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> face_ptrs{&initial_face_B[0], &initial_face_B[1], &initial_face_B[2]};
+	amrex::computeCurlNodal(current_nodal, face_ptrs, geom_lev);
+
+	MFArray rhs_edge;
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		amrex::IntVect edgeType = amrex::IntVect::TheNodeVector();
+		edgeType[dir] = 0;
+		rhs_edge[dir].define(amrex::convert(ba, edgeType), dm, 1, 0);
+		rhs_edge[dir].setVal(0.0);
+	}
+
+	for (amrex::MFIter mfi(rhs_edge[0], amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+		auto const &curl_arr = current_nodal.const_array(mfi);
+		auto const &rhs_x = rhs_edge[0].array(mfi);
+		auto const &rhs_y = rhs_edge[1].array(mfi);
+		auto const &rhs_z = rhs_edge[2].array(mfi);
+
+		amrex::Box const &xbx = mfi.tilebox(rhs_edge[0].ixType().toIntVect());
+		amrex::Box const &ybx = mfi.tilebox(rhs_edge[1].ixType().toIntVect());
+		amrex::Box const &zbx = mfi.tilebox(rhs_edge[2].ixType().toIntVect());
+
+		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(xbx, i, j, k, {
+			rhs_x(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 0) + curl_arr(i + 1, j, k, 0));
+		});
+		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(ybx, i, j, k, {
+			rhs_y(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 1) + curl_arr(i, j + 1, k, 1));
+		});
+		AMREX_HOST_DEVICE_PARALLEL_FOR_3D(zbx, i, j, k, {
+			rhs_z(i, j, k) = amrex::Real(0.5) * (curl_arr(i, j, k, 2) + curl_arr(i, j, k + 1, 2));
+		});
+	}
+
+	MFArray vector_potential;
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		amrex::IntVect edgeType = amrex::IntVect::TheNodeVector();
+		edgeType[dir] = 0;
+		vector_potential[dir].define(amrex::convert(ba, edgeType), dm, 1, 1);
+		vector_potential[dir].setVal(0.0);
+	}
+
+	amrex::LPInfo info;
+	info.setAgglomeration(false);
+	info.setConsolidation(false);
+
+	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
+	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		bc_lo[dir] = amrex::LinOpBCType::Dirichlet;
+		bc_hi[dir] = amrex::LinOpBCType::Dirichlet;
+	}
+
+	amrex::MLCurlCurl mlcurlcurl({geom_lev}, {ba}, {dm}, info, geom_lev.Coord());
+	mlcurlcurl.setDomainBC(bc_lo, bc_hi);
+	mlcurlcurl.setScalars(1.0, 0.0);
+	mlcurlcurl.setLevelBC(0, nullptr);
+	mlcurlcurl.prepareRHS({&rhs_edge});
+
+	amrex::MLMGT<MFArray> mlmg(mlcurlcurl);
+	mlmg.setVerbose(Verbose() ? 1 : 0);
+	mlmg.setBottomVerbose(0);
+	constexpr amrex::Real reltol = 1.0e-10;
+	constexpr amrex::Real abstol = 0.0;
+	mlmg.solve({&vector_potential}, {&rhs_edge}, reltol, abstol);
+
+	MFArray divergence_free_face_B;
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		amrex::IntVect faceType = amrex::IntVect::TheDimensionVector(dir);
+		divergence_free_face_B[dir].define(amrex::convert(ba, faceType), dm, 1, state_new_fc_[lev][dir].nGrow());
+		divergence_free_face_B[dir].setVal(0.0);
+	}
+	amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> curl_face_ptr{&divergence_free_face_B[0], &divergence_free_face_B[1], &divergence_free_face_B[2]};
+	amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> edge_ptr{&vector_potential[0], &vector_potential[1], &vector_potential[2]};
+	amrex::computeCurlFace(curl_face_ptr, edge_ptr, geom_lev);
+
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		amrex::MultiFab::Copy(state_new_fc_[lev][dir], divergence_free_face_B[dir], 0, MHDSystem<problem_t>::bfield_index, 1,
+				       state_new_fc_[lev][dir].nGrow());
+		fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc,
+				       static_cast<quokka::direction>(dir), InterpHookNone, InterpHookNone,
+				       FillPatchType::fillpatch_function);
+	}
+#endif
 }
 
 // fix-up any unphysical states created by AMR operations
