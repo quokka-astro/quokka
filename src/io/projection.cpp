@@ -523,7 +523,7 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 	//  it is necessary to transform the geometry so that the data is stored in
 	//  the x-y plane.
 	amrex::Geometry geom3d{};
-	amrex::Geometry::Setup(); // read from ParmParse (static method)
+	geom3d.Setup(); // read from ParmParse, NOLINT
 	const amrex::Box box2d = detail::transform_box_to_2D(dir, firstFab.box());
 	const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom3d.ProbDomain());
 	const amrex::Geometry geom2d(box2d, &domain2d);
