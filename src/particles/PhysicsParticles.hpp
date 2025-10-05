@@ -172,7 +172,7 @@ class PhysicsParticleDescriptorBase
 
 	// New method to get particle positions and data
 	[[nodiscard]] virtual auto getParticleDataAtAllLevels() const
-	    -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
+	    -> std::tuple<std::vector<std::uint64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
 
 	// Get particle data at level lev
 	[[nodiscard]] virtual auto getParticleDataAtLevel(int lev) const -> std::pair<std::vector<std::vector<double>>, std::vector<std::vector<int>>> = 0;
@@ -291,7 +291,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Only rank 0 will return the actual particle data, other ranks return an empty vector.
 	// @return: tuple of vectors of particle data on rank 0, empty vectors on other ranks
 	[[nodiscard]] auto getParticleDataAtAllLevels() const
-	    -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
+	    -> std::tuple<std::vector<std::uint64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>> override
 	{
 		return particle_io::getParticleDataAtAllLevels(container_);
 	}

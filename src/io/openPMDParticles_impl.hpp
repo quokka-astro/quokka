@@ -12,10 +12,12 @@
 
 #include "openPMD/openPMD.hpp"
 #include "particles/PhysicsParticles.hpp"
+#include "particles/global_particle_id.hpp"
 
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -151,7 +153,8 @@ inline void initializeSpecies(openPMD::ParticleSpecies &species, const std::vect
 	}
 }
 
-template <typename T> inline void storeChunk(openPMD::RecordComponent component, const T *ptr, unsigned long long offset, unsigned long long extent)
+template <typename T>
+inline void storeChunk(openPMD::RecordComponent component, const T *ptr, unsigned long long offset, unsigned long long extent)
 {
 	const std::vector<uint64_t> offset_vec{offset};
 	const std::vector<uint64_t> extent_vec{extent};
@@ -181,22 +184,9 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 		return;
 	}
 
-	struct TileBuffers {
-		amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_x;
-#if AMREX_SPACEDIM >= 2
-		amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_y;
-#endif
-#if AMREX_SPACEDIM >= 3
-		amrex::Gpu::ManagedVector<amrex::ParticleReal> pos_z;
-#endif
-		amrex::Gpu::ManagedVector<unsigned long long> ids;
-		std::vector<std::vector<amrex::Gpu::ManagedVector<amrex::ParticleReal>>> real_components;
-		std::vector<std::vector<amrex::Gpu::ManagedVector<int>>> int_components;
-	};
-
 	const int finest = container->finestLevel();
 	for (int lev = 0; lev <= finest; ++lev) {
-		std::vector<TileBuffers> level_buffers;
+		std::vector<std::shared_ptr<void>> chunk_lifetimes;
 		unsigned long long level_offset = counts.level_offsets[lev] + counts.rank_offsets[lev];
 		unsigned long long running_offset = 0;
 
@@ -206,145 +196,68 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 				continue;
 			}
 
-			level_buffers.emplace_back();
-			TileBuffers &buffers = level_buffers.back();
-
-			buffers.pos_x.resize(num_particles);
-#if AMREX_SPACEDIM >= 2
-			buffers.pos_y.resize(num_particles);
-#endif
-#if AMREX_SPACEDIM >= 3
-			buffers.pos_z.resize(num_particles);
-#endif
-			buffers.ids.resize(num_particles);
-
-			auto &real_buffers = buffers.real_components;
-			real_buffers.resize(real_attributes.size());
-			for (std::size_t attr_idx = 0; attr_idx < real_attributes.size(); ++attr_idx) {
-				auto &components = real_buffers[attr_idx];
-				components.resize(real_attributes[attr_idx].components.size());
-				for (auto &buf : components) {
-					buf.resize(num_particles);
-				}
-			}
-
-			auto &int_buffers = buffers.int_components;
-			int_buffers.resize(int_attributes.size());
-			for (std::size_t attr_idx = 0; attr_idx < int_attributes.size(); ++attr_idx) {
-				auto &components = int_buffers[attr_idx];
-				components.resize(int_attributes[attr_idx].components.size());
-				for (auto &buf : components) {
-					buf.resize(num_particles);
-				}
-			}
-
 			const unsigned long long global_offset = level_offset + running_offset;
 			running_offset += static_cast<unsigned long long>(num_particles);
-
 			auto const &aos = pti.GetArrayOfStructs();
 			auto const *aos_ptr = aos().data();
-
-			auto *pos_x_ptr = buffers.pos_x.data();
-#if AMREX_SPACEDIM >= 2
-			auto *pos_y_ptr = buffers.pos_y.data();
-#endif
-#if AMREX_SPACEDIM >= 3
-			auto *pos_z_ptr = buffers.pos_z.data();
-#endif
-			auto *id_ptr = buffers.ids.data();
-
 			auto const &soa = pti.GetStructOfArrays();
 			const int soa_real_components = soa.NumRealComps();
 			const int soa_int_components = soa.NumIntComps();
 			constexpr int aos_real_components = ContainerType::ParticleType::NReal;
 			constexpr int aos_int_components = ContainerType::ParticleType::NInt;
-
-			amrex::ParallelFor(num_particles, [aos_ptr, pos_x_ptr,
-#if AMREX_SPACEDIM >= 2
-							   pos_y_ptr,
-#endif
-#if AMREX_SPACEDIM >= 3
-							   pos_z_ptr,
-#endif
-							   id_ptr] AMREX_GPU_DEVICE(int i) noexcept {
-				auto const &p = aos_ptr[i];
-				pos_x_ptr[i] = p.pos(0);
-#if AMREX_SPACEDIM >= 2
-				pos_y_ptr[i] = p.pos(1);
-#endif
-#if AMREX_SPACEDIM >= 3
-				pos_z_ptr[i] = p.pos(2);
-#endif
-				id_ptr[i] = p.id();
-			});
-
-			for (std::size_t attr_idx = 0; attr_idx < real_attributes.size(); ++attr_idx) {
-				auto const &attribute = real_attributes[attr_idx];
-				for (std::size_t comp_idx = 0; comp_idx < attribute.components.size(); ++comp_idx) {
-					auto const &component = attribute.components[comp_idx];
-					auto &buffer = real_buffers[attr_idx][comp_idx];
-					auto *dst = buffer.data();
-					const int soa_index = component.soa_index;
-					const int aos_index = component.aos_index;
-					const amrex::ParticleReal *soa_src =
-					    (soa_index >= 0 && soa_index < soa_real_components) ? soa.GetRealData(soa_index).data() : nullptr;
-					const bool aos_valid = (aos_index >= 0 && aos_index < aos_real_components);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(soa_src != nullptr || aos_valid,
-									 "Particle descriptor reported a real attribute without accessible storage");
-					if (soa_src != nullptr) {
-						amrex::ParallelFor(num_particles, [soa_src, dst] AMREX_GPU_DEVICE(int i) noexcept { dst[i] = soa_src[i]; });
-					} else {
-						amrex::ParallelFor(num_particles, [aos_ptr, dst, aos_index] AMREX_GPU_DEVICE(int i) noexcept {
-							dst[i] = aos_ptr[i].rdata(aos_index);
-						});
-					}
-				}
-			}
-
-			for (std::size_t attr_idx = 0; attr_idx < int_attributes.size(); ++attr_idx) {
-				auto const &attribute = int_attributes[attr_idx];
-				for (std::size_t comp_idx = 0; comp_idx < attribute.components.size(); ++comp_idx) {
-					auto const &component = attribute.components[comp_idx];
-					auto &buffer = int_buffers[attr_idx][comp_idx];
-					auto *dst = buffer.data();
-					const int soa_index = component.soa_index;
-					const int aos_index = component.aos_index;
-					const int *soa_src = (soa_index >= 0 && soa_index < soa_int_components) ? soa.GetIntData(soa_index).data() : nullptr;
-					const bool aos_valid = (aos_index >= 0 && aos_index < aos_int_components);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(soa_src != nullptr || aos_valid,
-									 "Particle descriptor reported an integer attribute without accessible storage");
-					if (soa_src != nullptr) {
-						amrex::ParallelFor(num_particles, [soa_src, dst] AMREX_GPU_DEVICE(int i) noexcept { dst[i] = soa_src[i]; });
-					} else {
-						amrex::ParallelFor(num_particles, [aos_ptr, dst, aos_index] AMREX_GPU_DEVICE(int i) noexcept {
-							dst[i] = aos_ptr[i].idata(aos_index);
-						});
-					}
-				}
-			}
-
-			amrex::Gpu::Device::streamSynchronize();
-
 			const unsigned long long extent = static_cast<unsigned long long>(num_particles);
-			storeChunk(species["position"]["x"], pos_x_ptr, global_offset, extent);
-#if AMREX_SPACEDIM >= 2
-			storeChunk(species["position"]["y"], pos_y_ptr, global_offset, extent);
-#endif
-#if AMREX_SPACEDIM >= 3
-			storeChunk(species["position"]["z"], pos_z_ptr, global_offset, extent);
-#endif
-			storeChunk(species["id"][openPMD::RecordComponent::SCALAR], id_ptr, global_offset, extent);
+
+			for (std::size_t dim = 0; dim < position_components.size(); ++dim) {
+				auto buffer = std::shared_ptr<amrex::ParticleReal>(
+				    new amrex::ParticleReal[num_particles],
+				    [](amrex::ParticleReal const *p) { delete[] p; });
+				auto *dst = buffer.get();
+				for (int i = 0; i < num_particles; ++i) {
+					dst[i] = aos_ptr[i].pos(static_cast<int>(dim));
+				}
+				auto const &label = position_components[dim];
+				species["position"][label].storeChunkRaw(
+				    dst, {global_offset}, {extent});
+				chunk_lifetimes.emplace_back(buffer, static_cast<void *>(dst));
+			}
+
+			auto ids = std::shared_ptr<uint64_t>(
+			    new uint64_t[num_particles],
+			    [](uint64_t const *p) { delete[] p; });
+			auto *ids_dst = ids.get();
+			for (int i = 0; i < num_particles; ++i) {
+				ids_dst[i] = ::quokka::particle::localIdToGlobal(aos_ptr[i].id(), aos_ptr[i].cpu());
+			}
+			species["id"][openPMD::RecordComponent::SCALAR].storeChunkRaw(
+			    ids_dst, {global_offset}, {extent});
+			chunk_lifetimes.emplace_back(ids, static_cast<void *>(ids_dst));
 
 			for (std::size_t attr_idx = 0; attr_idx < real_attributes.size(); ++attr_idx) {
 				auto const &attribute = real_attributes[attr_idx];
 				auto record = species[attribute.record_name];
 				for (std::size_t comp_idx = 0; comp_idx < attribute.components.size(); ++comp_idx) {
 					auto const &component = attribute.components[comp_idx];
-					auto *data_ptr = real_buffers[attr_idx][comp_idx].data();
-					if (component.label.empty()) {
-						storeChunk(record[openPMD::RecordComponent::SCALAR], data_ptr, global_offset, extent);
+					auto &target = component.label.empty() ? record[openPMD::RecordComponent::SCALAR]
+					                                    : record[component.label];
+					const int soa_index = component.soa_index;
+					const int aos_index = component.aos_index;
+					const bool has_soa = (soa_index >= 0 && soa_index < soa_real_components);
+					const bool has_aos = (aos_index >= 0 && aos_index < aos_real_components);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(has_soa || has_aos,
+									 "Particle descriptor reported a real attribute without accessible storage");
+					if (has_soa) {
+						auto const *src = soa.GetRealData(soa_index).data();
+						target.storeChunkRaw(src, {global_offset}, {extent});
 					} else {
-						storeChunk(record[component.label], data_ptr, global_offset, extent);
+						auto buffer = std::shared_ptr<amrex::ParticleReal>(
+						    new amrex::ParticleReal[num_particles],
+						    [](amrex::ParticleReal const *p) { delete[] p; });
+						auto *dst = buffer.get();
+						for (int i = 0; i < num_particles; ++i) {
+							dst[i] = aos_ptr[i].rdata(aos_index);
+						}
+						target.storeChunkRaw(dst, {global_offset}, {extent});
+						chunk_lifetimes.emplace_back(buffer, static_cast<void *>(dst));
 					}
 				}
 			}
@@ -354,11 +267,27 @@ void writeParticleSpecies(openPMD::Series &series, openPMD::Iteration &iteration
 				auto record = species[attribute.record_name];
 				for (std::size_t comp_idx = 0; comp_idx < attribute.components.size(); ++comp_idx) {
 					auto const &component = attribute.components[comp_idx];
-					auto *data_ptr = int_buffers[attr_idx][comp_idx].data();
-					if (component.label.empty()) {
-						storeChunk(record[openPMD::RecordComponent::SCALAR], data_ptr, global_offset, extent);
+					auto &target = component.label.empty() ? record[openPMD::RecordComponent::SCALAR]
+					                                    : record[component.label];
+					const int soa_index = component.soa_index;
+					const int aos_index = component.aos_index;
+					const bool has_soa = (soa_index >= 0 && soa_index < soa_int_components);
+					const bool has_aos = (aos_index >= 0 && aos_index < aos_int_components);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(has_soa || has_aos,
+									 "Particle descriptor reported an integer attribute without accessible storage");
+					if (has_soa) {
+						auto const *src = soa.GetIntData(soa_index).data();
+						target.storeChunkRaw(src, {global_offset}, {extent});
 					} else {
-						storeChunk(record[component.label], data_ptr, global_offset, extent);
+						auto buffer = std::shared_ptr<int>(
+						    new int[num_particles],
+						    [](int const *p) { delete[] p; });
+						auto *dst = buffer.get();
+						for (int i = 0; i < num_particles; ++i) {
+							dst[i] = aos_ptr[i].idata(aos_index);
+						}
+						target.storeChunkRaw(dst, {global_offset}, {extent});
+						chunk_lifetimes.emplace_back(buffer, static_cast<void *>(dst));
 					}
 				}
 			}

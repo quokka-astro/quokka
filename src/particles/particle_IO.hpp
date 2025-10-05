@@ -1,6 +1,7 @@
 #ifndef PARTICLE_IO_HPP_
 #define PARTICLE_IO_HPP_
 
+#include <cstdint>
 #include <fstream>
 #include <iomanip>
 #include <string>
@@ -9,6 +10,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "global_particle_id.hpp"
 #include "particle_types.hpp"
 #include <fmt/format.h>
 
@@ -37,9 +39,9 @@ namespace particle_io
 // @return: tuple of vectors containing particle data on rank 0, empty vectors on other ranks
 template <typename ContainerType>
 [[nodiscard]] auto getParticleDataAtAllLevels(ContainerType *container)
-    -> std::tuple<std::vector<int64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>>
+    -> std::tuple<std::vector<std::uint64_t>, std::vector<std::vector<double>>, std::vector<std::vector<int>>>
 {
-	std::vector<int64_t> particle_ids;
+	std::vector<std::uint64_t> particle_ids;
 	std::vector<std::vector<double>> real_data;
 	std::vector<std::vector<int>> int_data;
 
@@ -99,6 +101,7 @@ template <typename ContainerType>
 			if (pIter.isValid()) {
 				const amrex::Long np = pIter.numParticles();
 				auto &particles = pIter.GetArrayOfStructs();
+				auto const &idcpu_device = pIter.GetStructOfArrays().GetIdCPUData();
 
 				// Transfer particle data from GPU to CPU for analysis
 				typename ContainerType::ParticleType *pData = particles().data();
@@ -110,6 +113,7 @@ template <typename ContainerType>
 
 				// Pre-size vectors to avoid reallocations
 				particle_ids.reserve(np);
+				particle_ids.reserve(np);
 				real_data.reserve(np);
 				if constexpr (has_int_components) {
 					int_data.reserve(np);
@@ -118,9 +122,7 @@ template <typename ContainerType>
 				// Process each particle
 				for (int i = 0; i < np; ++i) {
 					const auto &p = pData_h[i];
-
-					// Get particle ID
-					particle_ids.push_back(p.id());
+					particle_ids.push_back(particle::localIdToGlobal(p.id(), p.cpu()));
 
 					// Process real data (positions and rdata)
 					std::vector<double> r_data;
@@ -153,6 +155,8 @@ template <typename ContainerType>
 					}
 				}
 			}
+		} else {
+			particle_ids.clear();
 		}
 	}
 
