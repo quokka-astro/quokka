@@ -5,10 +5,10 @@
 #include "particle_radiation.hpp"
 #include "particle_types.hpp"
 
+#if AMREX_SPACEDIM == 3
+
 namespace quokka
 {
-
-#if AMREX_SPACEDIM == 3
 
 // Traits class for specializing particle property update behavior
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
@@ -26,21 +26,25 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 	template <typename problem_t, typename ParticleType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time) noexcept
 	{
-		// Use table interpolation: (mass_in_solar_masses, age) -> luminosity
+		// Use table interpolation: (mass_in_solar_masses, age_in_years) -> luminosity
 		// Requires that g_luminosity_tables_ptr is initialized
 		if (g_luminosity_tables_ptr != nullptr && g_luminosity_tables_ptr->is_initialized()) {
 			const int mass_idx = StochasticStellarPopParticleMassIdx;
 			const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
 			const int lum_idx = StochasticStellarPopParticleLumIdx;
-			const amrex::Real age = current_time - p.rdata(birth_time_idx);
+			const amrex::Real age_in_seconds = current_time - p.rdata(birth_time_idx);
 			const amrex::Real mass = p.rdata(mass_idx);
 
 			auto const tables = g_luminosity_tables_ptr->const_tables();
 			const amrex::Real mass_in_solar_masses = mass / C::M_solar;
-			std::array<amrex::Real, 2> const point = {mass_in_solar_masses, age};
+			constexpr amrex::Real seconds_per_year = 365.25 * 24.0 * 3600.0; // Convert to years
+			const amrex::Real age_in_years = age_in_seconds / seconds_per_year;
+			std::array<amrex::Real, 2> const point = {mass_in_solar_masses, age_in_years};
 
 			// Interpolate luminosity from table (with automatic clamping to table bounds)
 			const amrex::Real luminosity = tables.luminosity.interpolate_single(point);
+
+			printf("mass: %e, age: %e, luminosity: %e\n", mass_in_solar_masses, age_in_years, luminosity);
 
 			// Update luminosity components (they are stored consecutively starting at lum_idx)
 			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
@@ -51,9 +55,9 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 	}
 };
 
-#endif // AMREX_SPACEDIM == 3
-
 } // namespace quokka
+
+#endif // AMREX_SPACEDIM == 3
 
 #endif // PARTICLE_UPDATE_HPP_
 

@@ -24,9 +24,9 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-particles.verbose = 1
+particles.verbose = 0
 particles.disable_SN_feedback = true
-particles.table_data = lum_demo.csv  # Uncomment to use table interpolation
+particles.table_data = ../inputs/lum_demo.csv  # Uncomment to use table interpolation
 
 stop_time = 8.0e20
 max_timesteps = 4
