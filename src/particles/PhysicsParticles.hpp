@@ -594,6 +594,21 @@ template <typename problem_t> class PhysicsParticleRegister
 		return false;
 	}
 
+	// Check if registry contains any radiating particles
+	[[nodiscard]] auto HasRadiatingParticles() const -> bool
+	{
+		if (!Physics_Traits<problem_t>::is_radiation_enabled) {
+			return false;
+		}
+
+		for (const auto &[name, descriptor] : particleRegistry_) {
+			if (descriptor->getLumIndex() >= 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// Utility method to convert particle type to string name (for writing plotfiles/checkpoints)
 	[[nodiscard]] static auto getParticleTypeName(ParticleType type) -> std::string
 	{

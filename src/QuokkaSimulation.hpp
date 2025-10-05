@@ -128,6 +128,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::max_level;
 	using AMRSimulation<problem_t>::n_error_buf;
 
+	using AMRSimulation<problem_t>::luminosityTables_;
+
 	SimulationData<problem_t> userData_;
 
 	int enableCooling_ = 0;
@@ -138,9 +140,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	quokka::ResampledCooling::resampled_tables resampledTables_;
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
-
-	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
-	std::string luminosityTableFilename_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
@@ -535,26 +534,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("cfl", radiationCflNumber_);
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
 		rpp.query("print_iteration_counts", print_rad_counter_);
-	}
-
-	// set particle luminosity table parameters
-	{
-		amrex::ParmParse const ppp("particles");
-		ppp.query("table_data", luminosityTableFilename_);
-		// if particle and radiation are enabled
-		if constexpr (is_particle_enabled && Physics_Traits<problem_t>::is_radiation_enabled) {
-			if (!luminosityTableFilename_.empty()) {
-				constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
-				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_);
-				amrex::Print() << "Luminosity table loaded successfully.\n";
-				amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
-							      luminosityTables_.luminosity.size(1));
-				amrex::Print() << fmt::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
-				// Set global pointer for access from particle update functions
-				quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
-			}
-		}
 	}
 }
 
