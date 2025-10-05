@@ -300,6 +300,9 @@ template <int Ndim, int Nout = 1> class DataTable
 
 	std::array<int, Ndim> sizes_{};
 
+	// Spacing types for each dimension: "linear", "log", or "fast_log"
+	std::array<std::string, Ndim> spacing_types_{};
+
       public:
 	// Default constructor
 	DataTable() = default;
@@ -525,30 +528,80 @@ template <int Ndim, int Nout = 1> class DataTable
 	[[nodiscard]] constexpr auto num_outputs() const -> int { return Nout; }
 
       private:
-	// Common initialization logic for different dimensional data types
-	template <typename DataType> void initialize_common(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
+	// Optimized initialization that takes bounds, sizes, and spacing directly
+	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
+	template <typename DataType>
+	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs,
+			       const std::array<int, Ndim> &n_xs, const std::array<std::string, Ndim> &spacing_types,
+			       const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
-		// Store sizes
+		// Store metadata
+		coord_min_ = x_mins;
+		coord_max_ = x_maxs;
+		sizes_ = n_xs;
+		spacing_types_ = spacing_types;
+
+		// Validate bounds and spacing types
 		for (int dim = 0; dim < Ndim; ++dim) {
-			sizes_[dim] = static_cast<int>(coords[dim].size());
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim],
+							 fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_min_[dim], coord_max_[dim]));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes_[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes_[dim], dim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(spacing_types_[dim] == "linear" || spacing_types_[dim] == "log" || spacing_types_[dim] == "fast_log",
+							 fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
+								     spacing_types_[dim], dim));
 		}
 
-		// Store coordinate bounds (assuming ascending order) and calculate grid spacing
+		// Calculate grid spacing (for uniform spacing optimization)
 		for (int dim = 0; dim < Ndim; ++dim) {
-			coord_min_[dim] = coords[dim].front();
-			coord_max_[dim] = coords[dim].back();
 			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
 		}
 
-		// Create coordinate tables
+		// Create coordinate tables - either from provided coords or generate them
 		for (int dim = 0; dim < Ndim; ++dim) {
 			coords_[dim] = std::make_unique<amrex::TableData<amrex::Real, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1},
 											  amrex::The_Pinned_Arena());
 			auto coord_table = coords_[dim]->table();
-			for (int i = 0; i < sizes_[dim]; ++i) {
-				coord_table(i) = coords[dim][i];
+
+			// Use provided coordinates if available, otherwise generate based on spacing type
+			if (!coords[dim].empty()) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    static_cast<int>(coords[dim].size()) == sizes_[dim],
+				    fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})", dim, sizes_[dim],
+						coords[dim].size()));
+				for (int i = 0; i < sizes_[dim]; ++i) {
+					coord_table(i) = coords[dim][i];
+				}
+			} else {
+				// Generate coordinates based on spacing type
+				if (spacing_types_[dim] == "linear") {
+					// Linear spacing
+					for (int i = 0; i < sizes_[dim]; ++i) {
+						coord_table(i) = coord_min_[dim] + static_cast<amrex::Real>(i) * dcoord_[dim];
+					}
+				} else if (spacing_types_[dim] == "log") {
+					// Logarithmic spacing: store actual values, not logarithms
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
+									 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
+					const amrex::Real log_min = std::log10(coord_min_[dim]);
+					const amrex::Real log_max = std::log10(coord_max_[dim]);
+					const amrex::Real log_spacing = (log_max - log_min) / static_cast<amrex::Real>(sizes_[dim] - 1);
+					for (int i = 0; i < sizes_[dim]; ++i) {
+						const amrex::Real log_val = log_min + static_cast<amrex::Real>(i) * log_spacing;
+						coord_table(i) = std::pow(10.0, log_val);
+					}
+				} else if (spacing_types_[dim] == "fast_log") {
+					// Fast log spacing: store log10(value) for fast interpolation
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
+									 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
+					const amrex::Real log_min = std::log10(coord_min_[dim]);
+					const amrex::Real log_max = std::log10(coord_max_[dim]);
+					const amrex::Real log_spacing = (log_max - log_min) / static_cast<amrex::Real>(sizes_[dim] - 1);
+					for (int i = 0; i < sizes_[dim]; ++i) {
+						coord_table(i) = log_min + static_cast<amrex::Real>(i) * log_spacing;
+					}
+				}
 			}
 		}
 
@@ -600,6 +653,32 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 		}
+	}
+
+	// Backward compatibility wrapper: derive bounds, sizes, and spacing from coords
+	template <typename DataType> void initialize_common(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
+	{
+		// Validate inputs
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+		}
+
+		// Derive bounds and sizes from coordinates
+		std::array<amrex::Real, Ndim> x_mins{};
+		std::array<amrex::Real, Ndim> x_maxs{};
+		std::array<int, Ndim> n_xs{};
+		std::array<std::string, Ndim> spacing_types{};
+
+		for (int dim = 0; dim < Ndim; ++dim) {
+			n_xs[dim] = static_cast<int>(coords[dim].size());
+			x_mins[dim] = coords[dim].front();
+			x_maxs[dim] = coords[dim].back();
+			// Default to linear spacing when coords are provided
+			spacing_types[dim] = "linear";
+		}
+
+		// Call the optimized initialize_common with provided coords
+		initialize_common(x_mins, x_maxs, n_xs, spacing_types, coords, data);
 	}
 
       public:
@@ -743,38 +822,18 @@ template <int Ndim, int Nout = 1> class DataTable
 								     spacing_types[dim], dim));
 		}
 
-		// Create coordinate arrays based on spacing type
-		std::array<amrex::Vector<amrex::Real>, Ndim> coord_arrays;
+		// Prepare bounds and sizes for optimized initialization
+		std::array<amrex::Real, Ndim> x_mins{};
+		std::array<amrex::Real, Ndim> x_maxs{};
 		for (int dim = 0; dim < Ndim; ++dim) {
-			coord_arrays[dim].resize(sizes[dim]);
+			x_mins[dim] = coord_bounds[dim].first;
+			x_maxs[dim] = coord_bounds[dim].second;
+		}
 
-			if (spacing_types[dim] == "linear") {
-				// Linear spacing
-				for (int i = 0; i < sizes[dim]; ++i) {
-					coord_arrays[dim][i] = coord_bounds[dim].first +
-							       static_cast<amrex::Real>(i) * (coord_bounds[dim].second - coord_bounds[dim].first) /
-								   static_cast<amrex::Real>(sizes[dim] - 1);
-				}
-			} else if (spacing_types[dim] == "log") {
-				// Logarithmic spacing: store actual values, not logarithms
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].first > 0.0 && coord_bounds[dim].second > 0.0,
-								 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
-				const amrex::Real log_min = std::log10(coord_bounds[dim].first);
-				const amrex::Real log_max = std::log10(coord_bounds[dim].second);
-				for (int i = 0; i < sizes[dim]; ++i) {
-					const amrex::Real log_val = log_min + static_cast<amrex::Real>(i) * (log_max - log_min) / static_cast<amrex::Real>(sizes[dim] - 1);
-					coord_arrays[dim][i] = std::pow(10.0, log_val);
-				}
-			} else if (spacing_types[dim] == "fast_log") {
-				// Fast log spacing: store log10(value) for fast interpolation
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].first > 0.0 && coord_bounds[dim].second > 0.0,
-								 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
-				const amrex::Real log_min = std::log10(coord_bounds[dim].first);
-				const amrex::Real log_max = std::log10(coord_bounds[dim].second);
-				for (int i = 0; i < sizes[dim]; ++i) {
-					coord_arrays[dim][i] = log_min + static_cast<amrex::Real>(i) * (log_max - log_min) / static_cast<amrex::Real>(sizes[dim] - 1);
-				}
-			}
+		// Empty coord arrays - will be generated automatically based on spacing type
+		std::array<amrex::Vector<amrex::Real>, Ndim> empty_coords{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			empty_coords[dim] = amrex::Vector<amrex::Real>(); // Empty vector
 		}
 
 		// Read data values - layout is transposed from internal representation
@@ -793,9 +852,9 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			// Create and initialize DataTable
+			// Create and initialize DataTable using optimized path
 			DataTable table;
-			table.initialize(coord_arrays, data_array);
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
 			file.close();
 			return table;
 
@@ -821,9 +880,9 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			// Create and initialize DataTable
+			// Create and initialize DataTable using optimized path
 			DataTable table;
-			table.initialize(coord_arrays, data_array);
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
 			file.close();
 			return table;
 
@@ -854,9 +913,9 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			// Create and initialize DataTable
+			// Create and initialize DataTable using optimized path
 			DataTable table;
-			table.initialize(coord_arrays, data_array);
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
 			file.close();
 			return table;
 
@@ -892,9 +951,9 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			// Create and initialize DataTable
+			// Create and initialize DataTable using optimized path
 			DataTable table;
-			table.initialize(coord_arrays, data_array);
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
 			file.close();
 			return table;
 		}
