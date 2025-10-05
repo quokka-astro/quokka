@@ -148,6 +148,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 	static constexpr int n_mhd_vars_per_dim_ = MHDSystem<problem_t>::nvar_per_dim_; // mhd
 
+	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
+
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
 	amrex::Real dustGasInteractionCoeff_ = 2.5e-34; // erg cm^3 s^−1 K^−3/2
@@ -539,18 +541,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const ppp("particles");
 		ppp.query("table_data", luminosityTableFilename_);
-		if (!luminosityTableFilename_.empty()) {
-			constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-			amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
-			luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_);
-			amrex::Print() << "Luminosity table loaded successfully.\n";
-			amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
-						      luminosityTables_.luminosity.size(1));
-			amrex::Print() << fmt::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
-			// Set global pointer for access from particle update functions
-			quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
-		} else {
-			amrex::Abort("No luminosity table specified. Please specify a luminosity table using the particles.table_data parameter.");	
+		// if particle and radiation are enabled
+		if constexpr (is_particle_enabled && Physics_Traits<problem_t>::is_radiation_enabled) {
+			if (!luminosityTableFilename_.empty()) {
+				constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
+				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_);
+				amrex::Print() << "Luminosity table loaded successfully.\n";
+				amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
+							      luminosityTables_.luminosity.size(1));
+				amrex::Print() << fmt::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
+				// Set global pointer for access from particle update functions
+				quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
+			}
 		}
 	}
 }
