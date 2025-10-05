@@ -33,7 +33,8 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 
 
-// // Specialization for star particles with stellar evolution
+// // Specialization for StochasticStellarPop particles from a simple analytical formula
+// // This is kept for debugging purpose.
 // template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
 // 	static constexpr double star_lum_per_M_solar = 4.0e33;
 
