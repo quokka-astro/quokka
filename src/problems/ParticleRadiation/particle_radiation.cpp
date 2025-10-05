@@ -16,8 +16,6 @@
 struct ParticleRadiationProblem {
 };
 
-constexpr double m_stars_over_M_solar = 100.0; // mass of stars read from file
-constexpr double star_lum_per_M_solar = 4.0e33;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double rho0 = 1.0e-8 * C::m_p; // g cm^-3
@@ -29,16 +27,6 @@ constexpr double dt_ = 0.1 * quokka::seconds_per_year;
 constexpr double chat_over_c = 1.0;
 constexpr double formation_time = 1.5 * dt_;
 static bool refine_half_domain = false; // NOLINT
-
-constexpr double box_size_half = 3.0e18; // This should be fixed for this problem.
-constexpr double particle_offset_from_center_ = 1e-3 * box_size_half;
-
-// locations of the particles: a 2x2x2 grids of particles
-// constexpr double box_left_edge_ = -2.0;
-// need to be smaller than smallest possible cell size, but not too small to avoid huge gravitational force
-const static double SN_mass = 8.0 * C::M_solar; // mass of SNProgenitor particles in grams
-constexpr int n_test_particles_init = 4;	// 4 test particles created at the start of the simulation
-constexpr int n_test_particles_created = 8;	// 8 test particles created and live to the end
 
 template <> struct quokka::EOS_Traits<ParticleRadiationProblem> {
 	static constexpr double gamma = gamma_;
