@@ -3,7 +3,7 @@
 1
 age,mass
 luminosity
-Msun,year
+year,Msun
 erg/s
 0.0,0.0
 0.2,200.0

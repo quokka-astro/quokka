@@ -139,7 +139,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
 
-	quokka::LuminosityTables luminosityTables_;
+	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
 	std::string luminosityTableFilename_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -540,13 +540,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const ppp("particles");
 		ppp.query("table_data", luminosityTableFilename_);
 		if (!luminosityTableFilename_.empty()) {
+			constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 			amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
-			luminosityTables_.luminosity = quokka::DataTable<2, 1>::CSVReader(luminosityTableFilename_);
+			luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_);
 			amrex::Print() << "Luminosity table loaded successfully.\n";
 			amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
 						      luminosityTables_.luminosity.size(1));
+			amrex::Print() << fmt::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
 			// Set global pointer for access from particle update functions
-			quokka::g_luminosity_tables_ptr = &luminosityTables_;
+			quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
 		} else {
 			amrex::Abort("No luminosity table specified. Please specify a luminosity table using the particles.table_data parameter.");	
 		}
@@ -2264,6 +2266,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 			// Deposit radiation from all particles that have luminosity. When there are no particles with luminosity, this will do nothing.
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
+
+			// save single level for debugging
+			WriteSingleLevelPlotfileSimplified("radEnergySource", radEnergySource, {"radEnergySource"}, lev, 1);
 
 			// for debugging, print the radEnergySource array
 			// if (i == 0) {
