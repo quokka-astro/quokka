@@ -68,7 +68,11 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
 
 	// Prepare cell-centered data
+#ifdef QUOKKA_USE_OPENPMD
+	int const included_ghosts = 0;
+#else
 	int const included_ghosts = std::min(sim->nghost_cc_, sim->nghost_fc_);
+#endif
 	amrex::Vector<amrex::MultiFab> mf_cc = sim->PlotFileMF_cc(included_ghosts);
 	amrex::Vector<const amrex::MultiFab *> mf_cc_ptr = amrex::GetVecOfConstPtrs(mf_cc);
 	auto const varnames = sim->GetPlotfileVarNames();
