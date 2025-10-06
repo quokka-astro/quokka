@@ -26,6 +26,39 @@
 namespace quokka
 {
 
+// Enum for spacing types (GPU-compatible alternative to std::string)
+enum class SpacingType : int { linear = 0, log = 1, fast_log = 2 };
+
+// Helper function to convert string to SpacingType enum
+[[nodiscard]] inline auto string_to_spacing_type(const std::string &str) -> SpacingType
+{
+	if (str == "linear") {
+		return SpacingType::linear;
+	}
+	if (str == "log") {
+		return SpacingType::log;
+	}
+	if (str == "fast_log") {
+		return SpacingType::fast_log;
+	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, fmt::format("Invalid spacing type '{}'. Must be 'linear', 'log', or 'fast_log'", str).c_str());
+	return SpacingType::linear; // unreachable, but suppresses warning
+}
+
+// Helper function to convert SpacingType enum to string
+[[nodiscard]] inline auto spacing_type_to_string(SpacingType type) -> std::string
+{
+	switch (type) {
+	case SpacingType::linear:
+		return "linear";
+	case SpacingType::log:
+		return "log";
+	case SpacingType::fast_log:
+		return "fast_log";
+	}
+	return "linear"; // unreachable, but suppresses warning
+}
+
 // Structure to hold interpolation indices and normalized coordinates
 template <int Ndim> struct InterpData {
 	std::array<int, Ndim> indices{};	    // grid indices for each dimension (lower bounds)
@@ -47,15 +80,15 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 
 	std::array<amrex::Real, Ndim> coord_min{};
 	std::array<amrex::Real, Ndim> coord_max{};
-	std::array<std::string, Ndim> spacing_types{};
+	std::array<SpacingType, Ndim> spacing_types{};
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord{};
 
 	std::array<int, Ndim> sizes{};
 
-	// Output spacing for return values: "linear", "log", or "fast_log"
-	std::string output_spacing = "linear";
+	// Output spacing for return values: linear, log, or fast_log
+	SpacingType output_spacing = SpacingType::linear;
 
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
@@ -128,11 +161,11 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		// Take log or fast_log if the spacing types are log or fast_log
 		std::array<amrex::Real, Ndim> point_{};
 		for (int dim = 0; dim < Ndim; ++dim) {
-			if (spacing_types[dim] == "linear") {
+			if (spacing_types[dim] == SpacingType::linear) {
 				point_[dim] = point[dim];
-			} else if (spacing_types[dim] == "log") {
+			} else if (spacing_types[dim] == SpacingType::log) {
 				point_[dim] = std::log10(point[dim]);
-			} else if (spacing_types[dim] == "fast_log") {
+			} else if (spacing_types[dim] == SpacingType::fast_log) {
 				point_[dim] = FastMath::log10(point[dim]);
 			}
 		}
@@ -144,11 +177,11 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		auto values = interpolate_from_indices(interp);
 
 		// Part 3: Convert from log space if output values are stored in log10
-		if (output_spacing == "fast_log") {
+		if (output_spacing == SpacingType::fast_log) {
 			for (int i = 0; i < Nout; ++i) {
 				values[i] = FastMath::pow10(values[i]);
 			}
-		} else if (output_spacing == "log") {
+		} else if (output_spacing == SpacingType::log) {
 			for (int i = 0; i < Nout; ++i) {
 				values[i] = std::pow(10.0, values[i]);
 			}
@@ -168,11 +201,11 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		// Take log or fast_log if the spacing types are log or fast_log
 		std::array<amrex::Real, Ndim> point_{};
 		for (int dim = 0; dim < Ndim; ++dim) {
-			if (spacing_types[dim] == "linear") {
+			if (spacing_types[dim] == SpacingType::linear) {
 				point_[dim] = point[dim];
-			} else if (spacing_types[dim] == "log") {
+			} else if (spacing_types[dim] == SpacingType::log) {
 				point_[dim] = std::log10(point[dim]);
-			} else if (spacing_types[dim] == "fast_log") {
+			} else if (spacing_types[dim] == SpacingType::fast_log) {
 				point_[dim] = FastMath::log10(point[dim]);
 			}
 		}
@@ -184,9 +217,9 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		amrex::Real value = interpolate_single_from_indices(interp, output_index);
 
 		// Part 3: Convert from log space if output values are stored in log10
-		if (output_spacing == "fast_log") {
+		if (output_spacing == SpacingType::fast_log) {
 			value = FastMath::pow10(value);
-		} else if (output_spacing == "log") {
+		} else if (output_spacing == SpacingType::log) {
 			value = std::pow(10.0, value);
 		}
 
@@ -545,15 +578,22 @@ template <int Ndim, int Nout = 1> class DataTable
 			data_tables[out_idx] = data_[out_idx]->const_table();
 		}
 
+		// Convert string spacing types to enum
+		std::array<SpacingType, Ndim> spacing_types_enum{};
+		for (int i = 0; i < Ndim; ++i) {
+			spacing_types_enum[i] = string_to_spacing_type(spacing_types_[i]);
+		}
+		SpacingType output_spacing_enum = string_to_spacing_type(output_spacing_);
+
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
-		    data_tables,    // array of data tables
-		    coord_min_,	    // coord_min array
-		    coord_max_,	    // coord_max array
-		    spacing_types_, // spacing types array
-		    dcoord_,	    // dcoord array
-		    sizes_,	    // sizes array
-		    output_spacing_ // output spacing
+		    data_tables,	  // array of data tables
+		    coord_min_,		  // coord_min array
+		    coord_max_,		  // coord_max array
+		    spacing_types_enum,	  // spacing types array (converted to enum)
+		    dcoord_,		  // dcoord array
+		    sizes_,		  // sizes array
+		    output_spacing_enum	  // output spacing (converted to enum)
 		};
 		return tables;
 	}
