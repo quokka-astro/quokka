@@ -456,7 +456,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 #if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
-	quokka::LuminosityGpuConstTables<Physics_Traits<problem_t>::nGroups> luminosityGpuTables_;
 #endif // AMREX_SPACEDIM == 3
 
 	// Diagnostics
@@ -882,10 +881,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 									     luminosityTables_.luminosity.output_unit(i)));
 			}
 
-			// Create GPU-const tables and set global pointers for access from particle update functions
-			luminosityGpuTables_ = luminosityTables_.const_tables();
+			// Set global pointer for access from particle update functions
 			quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
-			quokka::g_luminosity_gpu_tables_ptr<nGroups> = &luminosityGpuTables_;
 		}
 	}
 #endif // AMREX_SPACEDIM == 3

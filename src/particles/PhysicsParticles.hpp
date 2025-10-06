@@ -505,22 +505,28 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		// Use the traits system to update particle properties directly
 		if (this->container_ != nullptr) {
-			// Get the GPU tables pointer (host-side access)
+			// Get the GPU tables by value (host-side access)
 			constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-			auto *gpu_tables_ptr = quokka::g_luminosity_gpu_tables_ptr<nGroups>;
+			auto *host_tables_ptr = quokka::g_luminosity_tables_ptr<nGroups>;
+			
+			// Only proceed if tables are initialized
+			if (host_tables_ptr != nullptr && host_tables_ptr->is_initialized()) {
+				// Create GPU const tables by value to pass to device
+				auto const gpu_tables = host_tables_ptr->const_tables();
 
-			// Apply the updater to all particles across all levels
-			for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
-				for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
+				// Apply the updater to all particles across all levels
+				for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
+					for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
+						auto &particles = pIter.GetArrayOfStructs();
+						auto *pData = particles().data();
+						const amrex::Long np = pIter.numParticles();
 
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT
-						ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t, typename ContainerType::ParticleType, nGroups>(
-						    p, current_time, gpu_tables_ptr);
-					});
+						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+							auto &p = pData[idx]; // NOLINT
+							ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t, typename ContainerType::ParticleType, nGroups>(
+							    p, current_time, gpu_tables);
+						});
+					}
 				}
 			}
 		}
