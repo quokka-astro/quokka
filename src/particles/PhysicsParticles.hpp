@@ -505,6 +505,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		// Use the traits system to update particle properties directly
 		if (this->container_ != nullptr) {
+			// Get the GPU tables pointer (host-side access)
+			constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+			auto *gpu_tables_ptr = quokka::g_luminosity_gpu_tables_ptr<nGroups>;
+
 			// Apply the updater to all particles across all levels
 			for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
 				for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
@@ -514,7 +518,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 						auto &p = pData[idx]; // NOLINT
-						ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t>(p, current_time);
+						ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t, typename ContainerType::ParticleType, nGroups>(
+						    p, current_time, gpu_tables_ptr);
 					});
 				}
 			}

@@ -38,28 +38,29 @@ template <int Nout = 1> class LuminosityTables
 // Default to single output (Nout=1) for backward compatibility
 template <int Nout = 1> inline LuminosityTables<Nout> *g_luminosity_tables_ptr = nullptr; // NOLINT
 
+// Device-accessible GPU-const tables for luminosity (initialized on host, accessible on device)
+template <int Nout = 1> inline LuminosityGpuConstTables<Nout> *g_luminosity_gpu_tables_ptr = nullptr; // NOLINT
+
 // Class to handle luminosity updates for stellar particles
 class LuminosityUpdate
 {
       public:
-	template <typename problem_t, typename ParticleType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(ParticleType &p, amrex::Real current_time) noexcept
+	template <typename problem_t, typename ParticleType, int Nout>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(ParticleType &p, amrex::Real current_time,
+									  const LuminosityGpuConstTables<Nout> *gpu_tables_ptr) noexcept
 	{
 		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-
-		// Get pointer for the appropriate number of outputs
-		auto *tables_ptr = g_luminosity_tables_ptr<nGroups>;
+		static_assert(nGroups == Nout, "Number of groups must match table outputs");
 
 		// Use table interpolation: (age, mass) -> luminosity per group
-		// Requires that g_luminosity_tables_ptr is initialized
-		if (tables_ptr != nullptr && tables_ptr->is_initialized()) {
+		// Requires that gpu_tables_ptr is initialized
+		if (gpu_tables_ptr != nullptr) {
 			const int mass_idx = StochasticStellarPopParticleMassIdx;
 			const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
 			const int lum_idx = StochasticStellarPopParticleLumIdx;
 			const amrex::Real age_in_seconds = current_time - p.rdata(birth_time_idx);
 			const amrex::Real mass = p.rdata(mass_idx);
 
-			auto const tables = tables_ptr->const_tables();
 			const amrex::Real mass_in_solar_masses = mass / C::M_solar;
 			amrex::Real age_in_years = age_in_seconds / seconds_per_year;
 			age_in_years = std::max(age_in_years, 1.0e-30); // age = 0 is allowed
@@ -68,7 +69,7 @@ class LuminosityUpdate
 
 			// Interpolate luminosity from table (returns array with nGroups elements)
 			// Conversion from log space is handled automatically by DataTable::interpolate()
-			auto const luminosities = tables.luminosity.interpolate(point);
+			auto const luminosities = gpu_tables_ptr->luminosity.interpolate(point);
 
 			// Update luminosity components (they are stored consecutively starting at lum_idx)
 			if (lum_idx + nGroups <= ParticleType::NReal) {
