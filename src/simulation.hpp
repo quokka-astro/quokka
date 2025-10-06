@@ -454,7 +454,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::string luminosityTableFilename_;
 	std::string rad_table_output_spacing_ = "fast_log";
 
+#if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
+#endif // AMREX_SPACEDIM == 3
 
 	// Diagnostics
 	amrex::Vector<std::unique_ptr<DiagBase>> m_diagnostics;
@@ -840,6 +842,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		ppp.query("rad_table", luminosityTableFilename_);
 		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
 
+#if AMREX_SPACEDIM == 3
 		// if particle and radiation are enabled
 		if (particleRegister_.HasRadiatingParticles() && Physics_Traits<problem_t>::is_radiation_enabled) {
 			if (useLuminosityTable_) {
@@ -882,6 +885,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
 			}
 		}
+#endif // AMREX_SPACEDIM == 3
 	}
 }
 

@@ -64,7 +64,9 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::max_level;
 	using AMRSimulation<problem_t>::n_error_buf;
 
+#if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
+#endif // AMREX_SPACEDIM == 3
 
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
 

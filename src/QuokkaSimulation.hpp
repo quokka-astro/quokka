@@ -128,7 +128,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::max_level;
 	using AMRSimulation<problem_t>::n_error_buf;
 
+#if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
+#endif // AMREX_SPACEDIM == 3
 
 	SimulationData<problem_t> userData_;
 
