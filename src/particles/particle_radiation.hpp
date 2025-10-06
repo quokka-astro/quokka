@@ -59,7 +59,8 @@ class LuminosityUpdate
 
 			auto const tables = tables_ptr->const_tables();
 			const amrex::Real mass_in_solar_masses = mass / C::M_solar;
-			const amrex::Real age_in_years = age_in_seconds / seconds_per_year;
+			amrex::Real age_in_years = age_in_seconds / seconds_per_year;
+			age_in_years = std::max(age_in_years, 1.0e-10); // age = 0 is allowed
 			// Table coordinates: (age, mass) as specified in CSV input_names
 			std::array<amrex::Real, 2> const point = {age_in_years, mass_in_solar_masses};
 

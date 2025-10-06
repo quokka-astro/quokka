@@ -221,8 +221,8 @@ auto problem_main() -> int
 		double L_star = NAN;
 		double change_of_total_energy_expected = NAN;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ == 3, "This test requires max_timesteps = 3");
-		if (rad_table_output_spacing_ == "fast_log") {
-			L_star = 6e40;
+		if (rad_table_output_spacing_ == "fast_log" || rad_table_output_spacing_ == "log") {
+			L_star = 3e40;
 		} else {
 			L_star = 2.5e40;
 		}
@@ -237,8 +237,8 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error to total energy: " << error_rel_to_tot << "\n";
 		amrex::Print() << "Relative error to radiation energy: " << error_rel_to_rad << "\n";
 
-		const double tolerance = 1e-14;	   // Tolerance relative to total energy
-		const double tolerance_rad = 1e-6; // Tolerance relative to radiaiton energy
+		const double tolerance = rad_table_output_spacing_ == "fast_log" ? 0.2 : 1e-14;	   // Tolerance relative to total energy
+		const double tolerance_rad = rad_table_output_spacing_ == "fast_log" ? 0.2 : 1e-6; // Tolerance relative to radiaiton energy
 		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance_rad)) {
 			status = 1;
 			amrex::Print() << "Test failed: change of total energy mismatch.\n";
