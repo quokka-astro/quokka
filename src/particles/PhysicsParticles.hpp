@@ -597,13 +597,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Check if registry contains any radiating particles
 	[[nodiscard]] auto HasRadiatingParticles() const -> bool
 	{
-		if (!Physics_Traits<problem_t>::is_radiation_enabled) {
-			return false;
-		}
-
-		for (const auto &[name, descriptor] : particleRegistry_) { // NOSONAR
-			if (descriptor->getLumIndex() >= 0) {
-				return true;
+		if (Physics_Traits<problem_t>::is_radiation_enabled) {
+			for (const auto &[name, descriptor] : particleRegistry_) { // NOSONAR
+				if (descriptor->getLumIndex() >= 0) {
+					return true;
+				}
 			}
 		}
 		return false;

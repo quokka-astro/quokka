@@ -245,6 +245,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 			const std::array<amrex::Real, 2> w1 = {1.0 - interp.normalized[0], interp.normalized[0]};
 			const std::array<amrex::Real, 2> w2 = {1.0 - interp.normalized[1], interp.normalized[1]};
 
+			// NOSONAR
 			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp, line 461):
 			// const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix2, ix1) + w1[1] * dataView_(ix2, ix1 + 1)) +
 			// 			   w2[1] * (w1[0] * dataView_(ix2 + 1, ix1) + w1[1] * dataView_(ix2 + 1, ix1 + 1)));
@@ -515,7 +516,7 @@ template <int Ndim, int Nout = 1> class DataTable
 					    plane.size() == coords[2].size(),
 					    fmt::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
 							out_idx, coords[2].size(), plane.size()));
-					for (const auto &row : plane) {
+					for (const auto &row : plane) { // NOSONAR
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    row.size() == coords[3].size(),
 						    fmt::format(
@@ -746,10 +747,10 @@ template <int Ndim, int Nout = 1> class DataTable
 		}
 
 		// Derive bounds and sizes from coordinates
-		std::array<amrex::Real, Ndim> x_mins{};
-		std::array<amrex::Real, Ndim> x_maxs{};
+		std::array<amrex::Real, Ndim> x_mins;
+		std::array<amrex::Real, Ndim> x_maxs;
 		std::array<int, Ndim> n_xs{};
-		std::array<std::string, Ndim> spacing_types{};
+		std::array<std::string, Ndim> spacing_types;
 
 		for (int dim = 0; dim < Ndim; ++dim) {
 			n_xs[dim] = static_cast<int>(coords[dim].size());
@@ -760,7 +761,7 @@ template <int Ndim, int Nout = 1> class DataTable
 		}
 
 		// Pass empty coords - for linear spacing they will be computed on-the-fly
-		std::array<amrex::Vector<amrex::Real>, Ndim> empty_coords{};
+		std::array<amrex::Vector<amrex::Real>, Ndim> empty_coords;
 		for (int dim = 0; dim < Ndim; ++dim) {
 			empty_coords[dim] = amrex::Vector<amrex::Real>();
 		}
