@@ -29,7 +29,6 @@ constexpr double formation_time = 1.5 * dt_;
 
 template <> struct SimulationData<ParticleRadiationProblem> {
 	std::string particles_filename = "../inputs/TestParticlesNoRad.txt";
-	std::string table_filename = "../inputs/lum_demo_2groups.csv";
 	bool use_fast_log = false;
 };
 
@@ -159,7 +158,6 @@ auto problem_main() -> int
 
 	// Read parameters from input file
 	const amrex::ParmParse pp("problem");
-	pp.query("table_filename", sim.userData_.table_filename);
 	pp.query("particles_filename", sim.userData_.particles_filename);
 
 	// initialize (this will parse particle parameters and load luminosity table)

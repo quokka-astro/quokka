@@ -827,13 +827,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	{
 		amrex::ParmParse const ppp("particles");
 		ppp.query("use_luminosity_table", useLuminosityTable_);
-		ppp.query("table_data", luminosityTableFilename_);
+		ppp.query("rad_table", luminosityTableFilename_);
 
 		// if particle and radiation are enabled
 		if (particleRegister_.HasRadiatingParticles() && Physics_Traits<problem_t>::is_radiation_enabled) {
 			if (useLuminosityTable_) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!luminosityTableFilename_.empty(),
-								 "When use_luminosity_table is set to true, table_data must be specified");
+								 "When use_luminosity_table is set to true, rad_table must be specified");
 
 				constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
@@ -906,7 +906,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		if (particleRegister_.HasRadiatingParticles()) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(useLuminosityTable_ && luminosityTableFilename_.empty()),
-							 "When use_luminosity_table is set to true, table_data must be specified");
+							 "When use_luminosity_table is set to true, rad_table must be specified");
 		}
 	}
 
