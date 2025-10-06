@@ -804,19 +804,11 @@ template <int Ndim, int Nout = 1> class DataTable
 	//     For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
 	//
 	// @param file_path Path to the CSV file
-	// @param output_spacing Spacing type for output values: "linear" or "fast_log" or "log"
-	//                      If "fast_log", output values are converted to log10 before storage
-	static auto CSVReader(const std::string &file_path, const std::string &output_spacing) -> DataTable
+	// @param output_spacing Spacing type for output values: linear, log, or fast_log
+	//                      If fast_log, output values are converted to log10 before storage
+	static auto CSVReader(const std::string &file_path, SpacingType output_spacing) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
-
-		// Validate output_spacing parameter
-		try {
-			amrex::getEnumCaseInsensitive<SpacingType>(output_spacing);
-		} catch (const std::runtime_error &e) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false,
-							 fmt::format("Invalid output_spacing '{}'. Must be 'linear', 'log', or 'fast_log'", output_spacing));
-		}
 
 		std::ifstream file(file_path);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
@@ -998,7 +990,7 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		// lambda function for log10
 		auto log10_ = [output_spacing](amrex::Real x) -> amrex::Real {
-			if (output_spacing == "fast_log") {
+			if (output_spacing == SpacingType::fast_log) {
 				return FastMath::log10(x);
 			}
 			return std::log10(x);
@@ -1020,13 +1012,13 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			// Apply log10 transformation if output_spacing is "fast_log"
-			if (output_spacing == "fast_log" || output_spacing == "log") {
+			// Apply log10 transformation if output_spacing is fast_log or log
+			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i = 0; i < sizes[0]; ++i) { // NOSONAR
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    data_array[out_idx][i] > 0.0,
-						    fmt::format("fast_log output spacing requires positive values, got {} at output {} index {}",
+						    fmt::format("log output spacing requires positive values, got {} at output {} index {}",
 								data_array[out_idx][i], out_idx, i));
 						data_array[out_idx][i] = log10_(data_array[out_idx][i]);
 					}
@@ -1042,7 +1034,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			table.output_spacing_ = output_spacing;
+			table.output_spacing_ = amrex::getEnumNameString(output_spacing);
 
 			file.close();
 			return table;
@@ -1069,14 +1061,14 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			// Apply log10 transformation if output_spacing is "fast_log"
-			if (output_spacing == "fast_log" || output_spacing == "log") {
+			// Apply log10 transformation if output_spacing is fast_log or log
+			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 							    data_array[out_idx][i1][i2] > 0.0,
-							    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {})",
+							    fmt::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
 									data_array[out_idx][i1][i2], out_idx, i1, i2));
 							data_array[out_idx][i1][i2] = log10_(data_array[out_idx][i1][i2]);
 						}
@@ -1093,7 +1085,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			table.output_spacing_ = output_spacing;
+			table.output_spacing_ = amrex::getEnumNameString(output_spacing);
 
 			file.close();
 			return table;
@@ -1125,14 +1117,14 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			// Apply log10 transformation if output_spacing is "fast_log"
-			if (output_spacing == "fast_log" || output_spacing == "log") {
+			// Apply log10 transformation if output_spacing is fast_log or log
+			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {			// NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
 								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i1][i2][i3] > 0.0,
-												 fmt::format("fast_log output spacing requires positive "
+												 fmt::format("log output spacing requires positive "
 													     "values, got {} at output {} index ({}, {}, {})",
 													     data_array[out_idx][i1][i2][i3], out_idx, i1, i2,
 													     i3));
@@ -1152,7 +1144,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			table.output_spacing_ = output_spacing;
+			table.output_spacing_ = amrex::getEnumNameString(output_spacing);
 
 			file.close();
 			return table;
@@ -1189,8 +1181,8 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
-			// Apply log10 transformation if output_spacing is "fast_log"
-			if (output_spacing == "fast_log" || output_spacing == "log") {
+			// Apply log10 transformation if output_spacing is fast_log or log
+			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {				// NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {			// NOSONAR
@@ -1198,7 +1190,7 @@ template <int Ndim, int Nout = 1> class DataTable
 								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 									    data_array[out_idx][i1][i2][i3][i4] > 0.0,
-									    fmt::format("fast_log output spacing requires positive values, got {} at output {} "
+									    fmt::format("log output spacing requires positive values, got {} at output {} "
 											"index ({}, {}, "
 											"{}, {})",
 											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
@@ -1219,7 +1211,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			table.output_spacing_ = output_spacing;
+			table.output_spacing_ = amrex::getEnumNameString(output_spacing);
 
 			file.close();
 			return table;

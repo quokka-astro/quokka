@@ -853,8 +853,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
 
 				// Use specified spacing for luminosity values
-				luminosityTables_.luminosity =
-				    quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, amrex::getEnumNameString(rad_table_output_spacing_));
+				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
 
 				amrex::Print() << "Luminosity table loaded successfully.\n";
 				amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
