@@ -29,7 +29,6 @@ constexpr double formation_time = 1.5 * dt_;
 
 template <> struct SimulationData<ParticleRadiationProblem> {
 	std::string particles_filename = "../inputs/TestParticlesNoRad.txt";
-	bool use_fast_log = false;
 };
 
 template <> struct quokka::EOS_Traits<ParticleRadiationProblem> {
@@ -160,6 +159,10 @@ auto problem_main() -> int
 	const amrex::ParmParse pp("problem");
 	pp.query("particles_filename", sim.userData_.particles_filename);
 
+	std::string rad_table_output_spacing_ = "linear";
+	const amrex::ParmParse ppp("particles");
+	ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+
 	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();
 
@@ -215,8 +218,15 @@ auto problem_main() -> int
 		// The emission per particle from step 1 is 2.5e20 * dt_.
 		// The emission per particle from step 2 is (2 * 2.5e20) * dt_.
 		const int n_stars = 4;
-		const double L_star = 2.5e40;
-		const double change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;
+		double L_star = NAN;
+		double change_of_total_energy_expected = NAN;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ == 3, "This test requires max_timesteps = 3");
+		if (rad_table_output_spacing_ == "fast_log") {
+			L_star = 6e40;
+		} else {
+			L_star = 2.5e40;
+		}
+		change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;
 		const double change_of_total_energy_expected_group2 = change_of_total_energy_expected * 10.0;
 		const double change_all_groups = change_of_total_energy_expected + change_of_total_energy_expected_group2;
 		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";

@@ -67,6 +67,8 @@ class LuminosityUpdate
 			// Conversion from log space is handled automatically by DataTable::interpolate()
 			auto const luminosities = tables.luminosity.interpolate(point);
 
+			printf("age: %f, mass: %f, luminosities: %e %e\n", age_in_years, mass_in_solar_masses, luminosities[0], luminosities[1]);
+
 			// Update luminosity components (they are stored consecutively starting at lum_idx)
 			for (int g = 0; g < nGroups; ++g) {
 				p.rdata(lum_idx + g) = luminosities[g];

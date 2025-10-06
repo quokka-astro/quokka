@@ -2250,7 +2250,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
 
 			// save single level for debugging
-			WriteSingleLevelPlotfileSimplified("radEnergySource", radEnergySource, {"radEnergySource"}, lev, 1);
+			amrex::Vector<std::string> compNames{"rad1", "rad2"};
+			WriteSingleLevelPlotfileSimplified("radEnergySource", radEnergySource, compNames, lev, 1);
 
 			// for debugging, print the radEnergySource array
 			// if (i == 0) {
