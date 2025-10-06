@@ -12,6 +12,7 @@
 #include <H5Ppublic.h>
 #include <hdf5.h>
 
+#include "math/FastMath.hpp"
 #include <array>
 #include <fstream>
 #include <memory>
@@ -341,7 +342,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	DataTable(const DataTable &) = delete;
 	auto operator=(const DataTable &) -> DataTable & = delete;
 
-	// Initializer for backward compatibility with single output (Nout = 1)
+	// Initializer for backward compatibility with single output (Nout = 1), using fast_log on x and linear on y
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
@@ -602,43 +603,34 @@ template <int Ndim, int Nout = 1> class DataTable
 		for (int dim = 0; dim < Ndim; ++dim) {
 			coords_[dim] = std::make_unique<amrex::TableData<amrex::Real, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1},
 											  amrex::The_Pinned_Arena());
-			auto coord_table = coords_[dim]->table();
 
-			// Use provided coordinates if available, otherwise generate based on spacing type
-			if (!coords[dim].empty()) {
+			// Generate coordinates based on spacing type
+			if (spacing_types_[dim] == "irregular") {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
 								 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
 									     dim, sizes_[dim], coords[dim].size()));
+				// TODO(cch): this is not used anywhere
+				auto coord_table = coords_[dim]->table();
 				for (int i = 0; i < sizes_[dim]; ++i) {
 					coord_table(i) = coords[dim][i];
 				}
-			} else {
-				// Generate coordinates based on spacing type
-				if (spacing_types_[dim] == "linear") {
-					// Linear spacing: coordinates computed on-the-fly in GPU code, no need to populate table
-					// Table structure exists but remains unpopulated for memory efficiency
-				} else if (spacing_types_[dim] == "log") {
-					// Logarithmic spacing: store actual values, not logarithms
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
-									 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
-					const amrex::Real log_min = std::log10(coord_min_[dim]);
-					const amrex::Real log_max = std::log10(coord_max_[dim]);
-					const amrex::Real log_spacing = (log_max - log_min) / static_cast<amrex::Real>(sizes_[dim] - 1);
-					for (int i = 0; i < sizes_[dim]; ++i) {
-						const amrex::Real log_val = log_min + static_cast<amrex::Real>(i) * log_spacing;
-						coord_table(i) = std::pow(10.0, log_val);
-					}
-				} else if (spacing_types_[dim] == "fast_log") {
-					// Fast log spacing: store log10(value) for fast interpolation
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
-									 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
-					const amrex::Real log_min = std::log10(coord_min_[dim]);
-					const amrex::Real log_max = std::log10(coord_max_[dim]);
-					const amrex::Real log_spacing = (log_max - log_min) / static_cast<amrex::Real>(sizes_[dim] - 1);
-					for (int i = 0; i < sizes_[dim]; ++i) {
-						coord_table(i) = log_min + static_cast<amrex::Real>(i) * log_spacing;
-					}
-				}
+			} else if (spacing_types_[dim] == "linear") {
+				// Linear spacing: coordinates computed on-the-fly in GPU code, no need to populate table
+				// Table structure exists but remains unpopulated for memory efficiency
+			} else if (spacing_types_[dim] == "log") {
+				// Logarithmic spacing: store actual values, not logarithms
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
+								 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
+				const amrex::Real log_min = std::log10(coord_min_[dim]);
+				const amrex::Real log_max = std::log10(coord_max_[dim]);
+				const amrex::Real log_spacing = (log_max - log_min) / static_cast<amrex::Real>(sizes_[dim] - 1);
+			} else if (spacing_types_[dim] == "fast_log") {
+				// Fast log spacing: store log10(value) for fast interpolation
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
+								 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
+				const amrex::Real log_min = FastMath::log10(coord_min_[dim]);
+				const amrex::Real log_max = FastMath::log10(coord_max_[dim]);
+				const amrex::Real log_spacing = (log_max - log_min) / static_cast<amrex::Real>(sizes_[dim] - 1);
 			}
 		}
 
@@ -710,7 +702,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			n_xs[dim] = static_cast<int>(coords[dim].size());
 			x_mins[dim] = coords[dim].front();
 			x_maxs[dim] = coords[dim].back();
-			// Default to linear spacing when coords are provided
+			// This is a hack for backward compatibility to the cooling table, which uses log input and linear output
 			spacing_types[dim] = "linear";
 		}
 
