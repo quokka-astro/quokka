@@ -3,6 +3,7 @@
 
 #include "AMReX_Arena.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Enum.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_TableData.H"
@@ -26,38 +27,8 @@
 namespace quokka
 {
 
-// Enum for spacing types (GPU-compatible alternative to std::string)
-enum class SpacingType : int { linear = 0, log = 1, fast_log = 2 };
-
-// Helper function to convert string to SpacingType enum
-[[nodiscard]] inline auto string_to_spacing_type(const std::string &str) -> SpacingType
-{
-	if (str == "linear") {
-		return SpacingType::linear;
-	}
-	if (str == "log") {
-		return SpacingType::log;
-	}
-	if (str == "fast_log") {
-		return SpacingType::fast_log;
-	}
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, fmt::format("Invalid spacing type '{}'. Must be 'linear', 'log', or 'fast_log'", str).c_str());
-	return SpacingType::linear; // unreachable, but suppresses warning
-}
-
-// Helper function to convert SpacingType enum to string
-[[nodiscard]] inline auto spacing_type_to_string(SpacingType type) -> std::string
-{
-	switch (type) {
-	case SpacingType::linear:
-		return "linear";
-	case SpacingType::log:
-		return "log";
-	case SpacingType::fast_log:
-		return "fast_log";
-	}
-	return "linear"; // unreachable, but suppresses warning
-}
+// Enum for spacing types (GPU-compatible, supports ParmParse)
+AMREX_ENUM(SpacingType, linear, log, fast_log); // NOLINT
 
 // Structure to hold interpolation indices and normalized coordinates
 template <int Ndim> struct InterpData {
@@ -581,9 +552,9 @@ template <int Ndim, int Nout = 1> class DataTable
 		// Convert string spacing types to enum
 		std::array<SpacingType, Ndim> spacing_types_enum{};
 		for (int i = 0; i < Ndim; ++i) {
-			spacing_types_enum[i] = string_to_spacing_type(spacing_types_[i]);
+			spacing_types_enum[i] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_types_[i]);
 		}
-		SpacingType output_spacing_enum = string_to_spacing_type(output_spacing_);
+		SpacingType output_spacing_enum = amrex::getEnumCaseInsensitive<SpacingType>(output_spacing_);
 
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
@@ -683,9 +654,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim], fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]",
 													dim, coord_min_[dim], coord_max_[dim]));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes_[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes_[dim], dim));
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    spacing_types_[dim] == "linear" || spacing_types_[dim] == "log" || spacing_types_[dim] == "fast_log",
-			    fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types_[dim], dim));
+			// Validate spacing type - will throw if invalid
+			try {
+				amrex::getEnumCaseInsensitive<SpacingType>(spacing_types_[dim]);
+			} catch (const std::runtime_error &e) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
+										     spacing_types_[dim], dim));
+			}
 		}
 
 		// Create coordinate tables - either from provided coords or generate them
@@ -836,8 +811,12 @@ template <int Ndim, int Nout = 1> class DataTable
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
 
 		// Validate output_spacing parameter
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(output_spacing == "linear" || output_spacing == "fast_log" || output_spacing == "log",
-						 fmt::format("Invalid output_spacing '{}'. Must be 'linear' or 'fast_log' or 'log'", output_spacing));
+		try {
+			amrex::getEnumCaseInsensitive<SpacingType>(output_spacing);
+		} catch (const std::runtime_error &e) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false,
+							 fmt::format("Invalid output_spacing '{}'. Must be 'linear', 'log', or 'fast_log'", output_spacing));
+		}
 
 		std::ifstream file(file_path);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
@@ -993,9 +972,14 @@ template <int Ndim, int Nout = 1> class DataTable
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    coord_bounds[dim].second > coord_bounds[dim].first,
 			    fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    spacing_types[dim] == "linear" || spacing_types[dim] == "log" || spacing_types[dim] == "fast_log",
-			    fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
+			// Validate spacing type
+			try {
+				amrex::getEnumCaseInsensitive<SpacingType>(spacing_types[dim]);
+			} catch (const std::runtime_error &e) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false,
+								 fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
+									     spacing_types[dim], dim));
+			}
 		}
 
 		// Prepare bounds and sizes for optimized initialization
