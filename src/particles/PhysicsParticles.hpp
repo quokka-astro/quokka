@@ -508,7 +508,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Get the GPU tables by value (host-side access)
 			constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 			auto *host_tables_ptr = quokka::g_luminosity_tables_ptr<nGroups>;
-			
+
 			// Only proceed if tables are initialized
 			if (host_tables_ptr != nullptr && host_tables_ptr->is_initialized()) {
 				// Create GPU const tables by value to pass to device
@@ -523,8 +523,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 							auto &p = pData[idx]; // NOLINT
-							ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t, typename ContainerType::ParticleType, nGroups>(
-							    p, current_time, gpu_tables);
+							ParticlePropertyUpdateTraits<particleType>::template updateProperties<
+							    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, gpu_tables);
 						});
 					}
 				}

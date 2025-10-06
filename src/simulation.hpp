@@ -874,17 +874,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				    luminosityTables_.luminosity.input_unit(1) == "Msun",
 				    fmt::format("Luminosity table second input unit must be 'Msun', got '{}'", luminosityTables_.luminosity.input_unit(1)));
 
-			// Validate all output units are "erg/s"
-			for (int i = 0; i < nGroups; ++i) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosityTables_.luminosity.output_unit(i) == "erg/s",
-								 fmt::format("Luminosity table output unit {} must be 'erg/s', got '{}'", i,
-									     luminosityTables_.luminosity.output_unit(i)));
-			}
+				// Validate all output units are "erg/s"
+				for (int i = 0; i < nGroups; ++i) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosityTables_.luminosity.output_unit(i) == "erg/s",
+									 fmt::format("Luminosity table output unit {} must be 'erg/s', got '{}'", i,
+										     luminosityTables_.luminosity.output_unit(i)));
+				}
 
-			// Set global pointer for access from particle update functions
-			quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
+				// Set global pointer for access from particle update functions
+				quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
+			}
 		}
-	}
 #endif // AMREX_SPACEDIM == 3
 	}
 }
