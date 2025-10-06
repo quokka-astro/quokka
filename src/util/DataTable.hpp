@@ -30,6 +30,9 @@ namespace quokka
 // Enum for spacing types (GPU-compatible, supports ParmParse)
 AMREX_ENUM(SpacingType, linear, log, fast_log); // NOLINT
 
+// Enum for out-of-bounds handling (GPU-compatible, supports ParmParse)
+AMREX_ENUM(OutOfBounds, clamp, fail); // NOLINT
+
 // Structure to hold interpolation indices and normalized coordinates
 template <int Ndim> struct InterpData {
 	std::array<int, Ndim> indices{};	    // grid indices for each dimension (lower bounds)
@@ -40,7 +43,7 @@ template <int Ndim> struct InterpData {
 };
 
 // GPU-friendly struct containing const table references
-template <int Ndim, int Nout = 1> struct DataTableGpuConst {
+template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> struct DataTableGpuConst {
 	std::array<amrex::Table1D<const amrex::Real>, Ndim> coords;
 	// Array of data tables for multiple outputs - each has the same coordinate dimensionality
 	using single_data_table_type =
@@ -96,8 +99,20 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 			amrex::Real const coord_start = coord_min[dim];
 			amrex::Real const coord_end = coord_max[dim];
 
-			// Clamp coordinates to valid table bounds (extrapolation not supported)
-			amrex::Real clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
+			// Handle out-of-bounds based on policy
+			amrex::Real clamped_coord = point[dim];
+			if constexpr (oob_policy == OutOfBounds::clamp) {
+				// Clamp coordinates to valid table bounds (extrapolation not supported)
+				clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
+			} else if constexpr (oob_policy == OutOfBounds::fail) {
+				// Check if point is out of bounds and abort if so
+				if (point[dim] < coord_start || point[dim] > coord_end) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    false, fmt::format("Point is out of bounds for dimension {}! (value: {}, valid range: [{}, {}])", dim, point[dim],
+							       coord_start, coord_end)
+						       .c_str());
+				}
+			}
 
 			// Find grid cell indices containing the point
 			// indices are the "lower" indices of the containing hypercube
@@ -338,7 +353,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 };
 
 // Generic n-dimensional data table class with multiple outputs
-template <int Ndim, int Nout = 1> class DataTable
+template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> class DataTable
 {
       private:
 	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
@@ -535,7 +550,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	}
 
 	// Get GPU-friendly const tables
-	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim, Nout>
+	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim, Nout, oob_policy>
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
 
@@ -544,12 +559,12 @@ template <int Ndim, int Nout = 1> class DataTable
 			coord_tables[i] = coords_[i]->const_table();
 		}
 
-		std::array<typename DataTableGpuConst<Ndim, Nout>::single_data_table_type, Nout> data_tables{};
+		std::array<typename DataTableGpuConst<Ndim, Nout, oob_policy>::single_data_table_type, Nout> data_tables{};
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			data_tables[out_idx] = data_[out_idx]->const_table();
 		}
 
-		DataTableGpuConst<Ndim, Nout> tables{
+		DataTableGpuConst<Ndim, Nout, oob_policy> tables{
 		    coord_tables,
 		    data_tables,    // array of data tables
 		    coord_min_,	    // coord_min array
