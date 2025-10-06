@@ -125,14 +125,14 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const
 	    -> std::array<amrex::Real, Nout>
 	{
-		// Take log or FastLog if the spacing types are log or FastLog
+		// Take log or fast_log if the spacing types are log or fast_log
 		std::array<amrex::Real, Ndim> point_{};
 		for (int dim = 0; dim < Ndim; ++dim) {
 			if (spacing_types[dim] == "linear") {
 				point_[dim] = point[dim];
 			} else if (spacing_types[dim] == "log") {
 				point_[dim] = std::log10(point[dim]);
-			} else if (spacing_types[dim] == "FastLog") {
+			} else if (spacing_types[dim] == "fast_log") {
 				point_[dim] = FastMath::log10(point[dim]);
 			}
 		}
@@ -165,14 +165,14 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const
 	    -> amrex::Real
 	{
-		// Take log or FastLog if the spacing types are log or FastLog
+		// Take log or fast_log if the spacing types are log or fast_log
 		std::array<amrex::Real, Ndim> point_{};
 		for (int dim = 0; dim < Ndim; ++dim) {
 			if (spacing_types[dim] == "linear") {
 				point_[dim] = point[dim];
 			} else if (spacing_types[dim] == "log") {
 				point_[dim] = std::log10(point[dim]);
-			} else if (spacing_types[dim] == "FastLog") {
+			} else if (spacing_types[dim] == "fast_log") {
 				point_[dim] = FastMath::log10(point[dim]);
 			}
 		}
