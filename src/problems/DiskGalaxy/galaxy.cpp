@@ -47,7 +47,7 @@ template <> struct Physics_Traits<AgoraGalaxy> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
@@ -123,6 +123,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	// read parameters
 	//
 	amrex::ParmParse const pp("agora_galaxy");
+
+	double magnetic_field_microgauss = 1.0; // default B-field strength
+	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
+	const double magnetic_field_gauss = magnetic_field_microgauss * 1.0e-6;
+	const double magnetic_energy_density = 0.5 * (magnetic_field_gauss * magnetic_field_gauss);
 
 	// disc parameters
 	double disk_gas_mass_Msun = NAN;     // disk mass
@@ -265,8 +270,29 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::energy_index) = Eint + 0.5 * rho * vsq;
+		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::energy_index) = Eint + 0.5 * rho * vsq + magnetic_energy_density;
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::internalEnergy_index) = Eint;
+	});
+}
+
+template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	amrex::ParmParse const pp("agora_galaxy");
+	double magnetic_field_microgauss = 1.0;
+	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
+
+	const double magnetic_field_gauss = magnetic_field_microgauss * 1.0e-6;
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		constexpr int mhd_index = Physics_Indices<AgoraGalaxy>::mhdFirstIndex;
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, mhd_index) = magnetic_field_gauss;
+		} else {
+			state_fc(i, j, k, mhd_index) = 0.;
+		}
 	});
 }
 
@@ -365,8 +391,20 @@ auto problem_main() -> int
 {
 	auto BCs_cc = quokka::BC<AgoraGalaxy>(quokka::BCType::reflecting);
 
+	const int nvars_fc = Physics_Indices<AgoraGalaxy>::nvarTotal_fc;
+	const int nvars_per_dim_fc = Physics_Indices<AgoraGalaxy>::nvarPerDim_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		int const component_dir = (nvars_per_dim_fc > 0) ? (icomp / nvars_per_dim_fc) : 0;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			int const bc_type = (component_dir == idim) ? amrex::BCType::reflect_odd : amrex::BCType::reflect_even;
+			BCs_fc[icomp].setLo(idim, bc_type);
+			BCs_fc[icomp].setHi(idim, bc_type);
+		}
+	}
+
 	// Problem initialization
-	QuokkaSimulation<AgoraGalaxy> sim(BCs_cc);
+	QuokkaSimulation<AgoraGalaxy> sim(BCs_cc, BCs_fc);
 
 	// initialize
 	sim.setInitialConditions();
