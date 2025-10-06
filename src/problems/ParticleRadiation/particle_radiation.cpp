@@ -238,7 +238,7 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error to total energy: " << error_rel_to_tot << "\n";
 		amrex::Print() << "Relative error to radiation energy: " << error_rel_to_rad << "\n";
 
-		const double tolerance = rad_table_output_spacing == quokka::SpacingType::fast_log ? 0.1 : 1e-14;     // Tolerance relative to total energy
+		const double tolerance = rad_table_output_spacing == quokka::SpacingType::fast_log ? 0.1 : 1e-14;    // Tolerance relative to total energy
 		const double tolerance_rad = rad_table_output_spacing == quokka::SpacingType::fast_log ? 0.1 : 1e-6; // Tolerance relative to radiaiton energy
 		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance_rad)) {
 			status = 1;

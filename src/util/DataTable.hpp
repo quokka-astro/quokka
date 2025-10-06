@@ -551,13 +551,13 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
-		    data_tables,	  // array of data tables
-		    coord_min_,		  // coord_min array
-		    coord_max_,		  // coord_max array
-		    spacing_types_,	  // spacing types array (converted to enum)
-		    dcoord_,		  // dcoord array
-		    sizes_,		  // sizes array
-		    output_spacing_	  // output spacing (converted to enum)
+		    data_tables,    // array of data tables
+		    coord_min_,	    // coord_min array
+		    coord_max_,	    // coord_max array
+		    spacing_types_, // spacing types array (converted to enum)
+		    dcoord_,	    // dcoord array
+		    sizes_,	    // sizes array
+		    output_spacing_ // output spacing (converted to enum)
 		};
 		return tables;
 	}
@@ -961,8 +961,9 @@ template <int Ndim, int Nout = 1> class DataTable
 			try {
 				spacing_types_enum[dim] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_types[dim]);
 			} catch (const std::runtime_error &e) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false,
-								 fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    false,
+				    fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
 			}
 		}
 
