@@ -26,7 +26,12 @@ constexpr double dt_ = 0.1 * quokka::seconds_per_year;
 // constexpr double chat_over_c = 1.0e-5;
 constexpr double chat_over_c = 1.0;
 constexpr double formation_time = 1.5 * dt_;
-static bool refine_half_domain = false; // NOLINT
+
+template <> struct SimulationData<ParticleRadiationProblem> {
+	std::string particles_filename = "../inputs/TestParticlesNoRad.txt";
+	std::string table_filename = "../inputs/lum_demo_2groups.csv";
+	bool use_fast_log = false;
+};
 
 template <> struct quokka::EOS_Traits<ParticleRadiationProblem> {
 	static constexpr double gamma = gamma_;
@@ -88,7 +93,7 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	StochasticStellarPopParticles->SetVerbose(1);
-	StochasticStellarPopParticles->InitFromAsciiFile("../inputs/TestParticlesNoRad.txt", nreal_extra, nullptr);
+	StochasticStellarPopParticles->InitFromAsciiFile(userData_.particles_filename, nreal_extra, nullptr);
 
 	// Using a for loop from lev = 0 to StochasticStellarPopParticles->maxLevel() won't work because not all levels necessarily have particles, and when
 	// some levels do not have particles, StochasticStellarPopParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual
@@ -154,7 +159,8 @@ auto problem_main() -> int
 
 	// Read parameters from input file
 	const amrex::ParmParse pp("problem");
-	pp.query("refine_half_domain", refine_half_domain);
+	pp.query("table_filename", sim.userData_.table_filename);
+	pp.query("particles_filename", sim.userData_.particles_filename);
 
 	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();
