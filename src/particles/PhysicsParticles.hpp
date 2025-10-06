@@ -586,7 +586,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Check if registry contains any massive particles
 	[[nodiscard]] auto HasMassiveParticles() const -> bool
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[name, descriptor] : particleRegistry_) { // NOSONAR
 			if (descriptor->getMassIndex() >= 0) {
 				return true;
 			}
@@ -601,7 +601,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			return false;
 		}
 
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[name, descriptor] : particleRegistry_) { // NOSONAR
 			if (descriptor->getLumIndex() >= 0) {
 				return true;
 			}
