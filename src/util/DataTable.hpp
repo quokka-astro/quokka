@@ -47,6 +47,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 
 	std::array<amrex::Real, Ndim> coord_min{};
 	std::array<amrex::Real, Ndim> coord_max{};
+	std::array<std::string, Ndim> spacing_types{};
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord{};
@@ -121,8 +122,20 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const
 	    -> std::array<amrex::Real, Nout>
 	{
+		// Take log or FastLog if the spacing types are log or FastLog
+		std::array<amrex::Real, Ndim> point_{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			if (spacing_types[dim] == "linear") {
+				point_[dim] = point[dim];
+			} else if (spacing_types[dim] == "log") {
+				point_[dim] = std::log10(point[dim]);
+			} else if (spacing_types[dim] == "FastLog") {
+				point_[dim] = FastMath::log10(point[dim]);
+			}
+		}
+
 		// Part 1: Find interpolation indices and normalized coordinates (shared for all outputs)
-		InterpData<Ndim> const interp = find_interpolation_data(point);
+		InterpData<Ndim> const interp = find_interpolation_data(point_);
 
 		// Part 2: Perform n-dimensional interpolation for all outputs
 		return interpolate_from_indices(interp);
@@ -297,14 +310,12 @@ template <int Ndim, int Nout = 1> class DataTable
 
 	std::array<amrex::Real, Ndim> coord_min_{};
 	std::array<amrex::Real, Ndim> coord_max_{};
+	std::array<std::string, Ndim> spacing_types_{};
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord_{};
 
 	std::array<int, Ndim> sizes_{};
-
-	// Spacing types for each dimension: "linear", "log", or "fast_log"
-	std::array<std::string, Ndim> spacing_types_{};
 
 	// Metadata for dimension and output names/units
 	std::array<std::string, Ndim> input_names_{};
@@ -495,11 +506,12 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
-		    data_tables, // array of data tables
-		    coord_min_,	 // coord_min array
-		    coord_max_,	 // coord_max array
-		    dcoord_,	 // dcoord array
-		    sizes_	 // sizes array
+		    data_tables,    // array of data tables
+		    coord_min_,	    // coord_min array
+		    coord_max_,	    // coord_max array
+		    spacing_types_, // spacing types array
+		    dcoord_,	    // dcoord array
+		    sizes_	    // sizes array
 		};
 		return tables;
 	}
