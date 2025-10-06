@@ -64,6 +64,7 @@ class LuminosityUpdate
 			std::array<amrex::Real, 2> const point = {age_in_years, mass_in_solar_masses};
 
 			// Interpolate luminosity from table (returns array with nGroups elements)
+			// Conversion from log space is handled automatically by DataTable::interpolate()
 			auto const luminosities = tables.luminosity.interpolate(point);
 
 			// Update luminosity components (they are stored consecutively starting at lum_idx)

@@ -53,6 +53,9 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	std::array<amrex::Real, Ndim> dcoord{};
 
 	std::array<int, Ndim> sizes{};
+	
+	// Output spacing for return values
+	bool use_fast_log_output = false; // Whether output values are stored in log10 space
 
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
@@ -138,7 +141,16 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		InterpData<Ndim> const interp = find_interpolation_data(point_);
 
 		// Part 2: Perform n-dimensional interpolation for all outputs
-		return interpolate_from_indices(interp);
+		auto values = interpolate_from_indices(interp);
+		
+		// Part 3: Convert from log space if output values are stored in log10
+		if (use_fast_log_output) {
+			for (int i = 0; i < Nout; ++i) {
+				values[i] = FastMath::pow10(values[i]);
+			}
+		}
+		
+		return values;
 	}
 
 	/// @brief Perform n-dimensional linear interpolation for a single output (backward compatibility)
@@ -149,11 +161,30 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const
 	    -> amrex::Real
 	{
+		// Take log or FastLog if the spacing types are log or FastLog
+		std::array<amrex::Real, Ndim> point_{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			if (spacing_types[dim] == "linear") {
+				point_[dim] = point[dim];
+			} else if (spacing_types[dim] == "log") {
+				point_[dim] = std::log10(point[dim]);
+			} else if (spacing_types[dim] == "FastLog") {
+				point_[dim] = FastMath::log10(point[dim]);
+			}
+		}
+
 		// Part 1: Find interpolation indices and normalized coordinates
-		InterpData<Ndim> const interp = find_interpolation_data(point);
+		InterpData<Ndim> const interp = find_interpolation_data(point_);
 
 		// Part 2: Perform n-dimensional interpolation for single output
-		return interpolate_single_from_indices(interp, output_index);
+		amrex::Real value = interpolate_single_from_indices(interp, output_index);
+		
+		// Part 3: Convert from log space if output values are stored in log10
+		if (use_fast_log_output) {
+			value = FastMath::pow10(value);
+		}
+		
+		return value;
 	}
 
       private:
@@ -322,6 +353,9 @@ template <int Ndim, int Nout = 1> class DataTable
 	std::array<std::string, Nout> output_names_{};
 	std::array<std::string, Ndim> input_units_{};
 	std::array<std::string, Nout> output_units_{};
+
+	// Output spacing type: "linear" or "fast_log"
+	std::string output_spacing_{"linear"};
 
       public:
 	// Default constructor
@@ -506,12 +540,13 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
-		    data_tables,    // array of data tables
-		    coord_min_,	    // coord_min array
-		    coord_max_,	    // coord_max array
-		    spacing_types_, // spacing types array
-		    dcoord_,	    // dcoord array
-		    sizes_	    // sizes array
+		    data_tables,			    // array of data tables
+		    coord_min_,				    // coord_min array
+		    coord_max_,				    // coord_max array
+		    spacing_types_,			    // spacing types array
+		    dcoord_,				    // dcoord array
+		    sizes_,				    // sizes array
+		    (output_spacing_ == "fast_log")  // use_fast_log_output
 		};
 		return tables;
 	}
@@ -745,9 +780,17 @@ template <int Ndim, int Nout = 1> class DataTable
 	//     For 2D: nx2 rows × nx1 columns (last dimension varies fastest in rows)
 	//     For 3D: (nx3 × nx2) rows × nx1 columns
 	//     For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
-	static auto CSVReader(const std::string &file_path) -> DataTable
+	//
+	// @param file_path Path to the CSV file
+	// @param output_spacing Spacing type for output values: "linear" (default) or "fast_log"
+	//                      If "fast_log", output values are converted to log10 before storage
+	static auto CSVReader(const std::string &file_path, const std::string &output_spacing = "linear") -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
+
+		// Validate output_spacing parameter
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(output_spacing == "linear" || output_spacing == "fast_log",
+						 fmt::format("Invalid output_spacing '{}'. Must be 'linear' or 'fast_log'", output_spacing));
 
 		std::ifstream file(file_path);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
@@ -938,16 +981,29 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
+			// Apply log10 transformation if output_spacing is "fast_log"
+			if (output_spacing == "fast_log") {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i = 0; i < sizes[0]; ++i) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i] > 0.0,
+										 fmt::format("fast_log output spacing requires positive values, got {} at output {} index {}",
+											     data_array[out_idx][i], out_idx, i));
+						data_array[out_idx][i] = std::log10(data_array[out_idx][i]);
+					}
+				}
+			}
+
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-
+			
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-
+			table.output_spacing_ = output_spacing;
+			
 			file.close();
 			return table;
 
@@ -973,16 +1029,32 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
+			// Apply log10 transformation if output_spacing is "fast_log"
+			if (output_spacing == "fast_log") {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {
+							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+							    data_array[out_idx][i1][i2] > 0.0,
+							    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {})",
+									data_array[out_idx][i1][i2], out_idx, i1, i2));
+							data_array[out_idx][i1][i2] = std::log10(data_array[out_idx][i1][i2]);
+						}
+					}
+				}
+			}
+
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-
+			
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-
+			table.output_spacing_ = output_spacing;
+			
 			file.close();
 			return table;
 
@@ -1013,16 +1085,34 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
+			// Apply log10 transformation if output_spacing is "fast_log"
+			if (output_spacing == "fast_log") {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {
+							for (int i3 = 0; i3 < sizes[2]; ++i3) {
+								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+								    data_array[out_idx][i1][i2][i3] > 0.0,
+								    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {}, {})",
+										data_array[out_idx][i1][i2][i3], out_idx, i1, i2, i3));
+								data_array[out_idx][i1][i2][i3] = std::log10(data_array[out_idx][i1][i2][i3]);
+							}
+						}
+					}
+				}
+			}
+
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-
+			
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-
+			table.output_spacing_ = output_spacing;
+			
 			file.close();
 			return table;
 
@@ -1058,16 +1148,37 @@ template <int Ndim, int Nout = 1> class DataTable
 				}
 			}
 
+			// Apply log10 transformation if output_spacing is "fast_log"
+			if (output_spacing == "fast_log") {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {
+							for (int i3 = 0; i3 < sizes[2]; ++i3) {
+								for (int i4 = 0; i4 < sizes[3]; ++i4) {
+									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+									    data_array[out_idx][i1][i2][i3][i4] > 0.0,
+									    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {}, "
+											"{}, {})",
+											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
+									data_array[out_idx][i1][i2][i3][i4] = std::log10(data_array[out_idx][i1][i2][i3][i4]);
+								}
+							}
+						}
+					}
+				}
+			}
+
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-
+			
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-
+			table.output_spacing_ = output_spacing;
+			
 			file.close();
 			return table;
 		}
