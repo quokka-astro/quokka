@@ -1092,8 +1092,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 #endif // (AMREX_SPACEDIM == 3)
 }
 
-template <typename problem_t>
-void QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField()
+template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField()
 {
 #if AMREX_SPACEDIM != 3
 	return;
@@ -1127,16 +1126,15 @@ void QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField()
 
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc,
-				       static_cast<quokka::direction>(dir), AMRSimulation<problem_t>::InterpHookNone,
-				       AMRSimulation<problem_t>::InterpHookNone,
-				       FillPatchType::fillpatch_function);
+					       static_cast<quokka::direction>(dir), AMRSimulation<problem_t>::InterpHookNone,
+					       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 
 			amrex::IntVect faceType = amrex::IntVect::TheDimensionVector(dir);
 			beta_storage[lev][dir] = std::make_unique<amrex::MultiFab>(amrex::convert(ba, faceType), dm, 1, 0);
 			beta_storage[lev][dir]->setVal(1.0);
 
-			alias_storage[lev][dir] = std::make_unique<amrex::MultiFab>(state_new_fc_[lev][dir], amrex::make_alias,
-									  MHDSystem<problem_t>::bfield_index, 1);
+			alias_storage[lev][dir] =
+			    std::make_unique<amrex::MultiFab>(state_new_fc_[lev][dir], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1);
 
 			projector_umac[lev][dir] = alias_storage[lev][dir].get();
 			projector_beta[lev][dir] = beta_storage[lev][dir].get();
@@ -1154,8 +1152,8 @@ void QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField()
 		bc_hi[dir] = amrex::LinOpBCType::Dirichlet;
 	}
 
-	Hydro::MacProjector macproj(projector_umac, amrex::MLMG::Location::FaceCenter, projector_beta,
-			     amrex::MLMG::Location::FaceCenter, amrex::MLMG::Location::CellCenter, geom_levels, info);
+	Hydro::MacProjector macproj(projector_umac, amrex::MLMG::Location::FaceCenter, projector_beta, amrex::MLMG::Location::FaceCenter,
+				    amrex::MLMG::Location::CellCenter, geom_levels, info);
 	macproj.setDomainBC(bc_lo, bc_hi);
 	for (int lev = 0; lev <= finest; ++lev) {
 		macproj.setLevelBC(lev, nullptr);
@@ -1170,9 +1168,8 @@ void QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField()
 		auto const time = (lev < static_cast<int>(tNew_.size())) ? tNew_[lev] : amrex::Real(0.0);
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc,
-				       static_cast<quokka::direction>(dir), AMRSimulation<problem_t>::InterpHookNone,
-				       AMRSimulation<problem_t>::InterpHookNone,
-				       FillPatchType::fillpatch_function);
+					       static_cast<quokka::direction>(dir), AMRSimulation<problem_t>::InterpHookNone,
+					       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 		}
 	}
 
@@ -1189,8 +1186,7 @@ void QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField()
 
 	constexpr amrex::Real divB_tolerance = 1.0e-14;
 	if (max_divB_norm > divB_tolerance) {
-		amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm
-			      << ", tolerance = " << divB_tolerance << '\n';
+		amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm << ", tolerance = " << divB_tolerance << '\n';
 		amrex::Abort("Magnetic field MAC projection failed to satisfy divergence tolerance.");
 	}
 #endif
