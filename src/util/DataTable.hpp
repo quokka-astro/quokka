@@ -54,8 +54,8 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 
 	std::array<int, Ndim> sizes{};
 	
-	// Output spacing for return values
-	bool use_fast_log_output = false; // Whether output values are stored in log10 space
+	// Output spacing for return values: "linear", "log", or "fast_log"
+	std::string output_spacing = "linear";
 
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
@@ -144,9 +144,13 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		auto values = interpolate_from_indices(interp);
 		
 		// Part 3: Convert from log space if output values are stored in log10
-		if (use_fast_log_output) {
+		if (output_spacing == "fast_log") {
 			for (int i = 0; i < Nout; ++i) {
 				values[i] = FastMath::pow10(values[i]);
+			}
+		} else if (output_spacing == "log") {
+			for (int i = 0; i < Nout; ++i) {
+				values[i] = std::pow(10.0, values[i]);
 			}
 		}
 		
@@ -180,8 +184,10 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		amrex::Real value = interpolate_single_from_indices(interp, output_index);
 		
 		// Part 3: Convert from log space if output values are stored in log10
-		if (use_fast_log_output) {
+		if (output_spacing == "fast_log") {
 			value = FastMath::pow10(value);
+		} else if (output_spacing == "log") {
+			value = std::pow(10.0, value);
 		}
 		
 		return value;
@@ -540,13 +546,13 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
-		    data_tables,			    // array of data tables
-		    coord_min_,				    // coord_min array
-		    coord_max_,				    // coord_max array
-		    spacing_types_,			    // spacing types array
-		    dcoord_,				    // dcoord array
-		    sizes_,				    // sizes array
-		    (output_spacing_ == "fast_log")  // use_fast_log_output
+		    data_tables,	// array of data tables
+		    coord_min_,		// coord_min array
+		    coord_max_,		// coord_max array
+		    spacing_types_,	// spacing types array
+		    dcoord_,		// dcoord array
+		    sizes_,		// sizes array
+		    output_spacing_	// output spacing
 		};
 		return tables;
 	}
@@ -782,15 +788,15 @@ template <int Ndim, int Nout = 1> class DataTable
 	//     For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
 	//
 	// @param file_path Path to the CSV file
-	// @param output_spacing Spacing type for output values: "linear" (default) or "fast_log"
+	// @param output_spacing Spacing type for output values: "linear" or "fast_log" or "log"
 	//                      If "fast_log", output values are converted to log10 before storage
-	static auto CSVReader(const std::string &file_path, const std::string &output_spacing = "linear") -> DataTable
+	static auto CSVReader(const std::string &file_path, const std::string &output_spacing) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
 
 		// Validate output_spacing parameter
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(output_spacing == "linear" || output_spacing == "fast_log",
-						 fmt::format("Invalid output_spacing '{}'. Must be 'linear' or 'fast_log'", output_spacing));
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(output_spacing == "linear" || output_spacing == "fast_log" || output_spacing == "log",
+						 fmt::format("Invalid output_spacing '{}'. Must be 'linear' or 'fast_log' or 'log'", output_spacing));
 
 		std::ifstream file(file_path);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
@@ -965,6 +971,14 @@ template <int Ndim, int Nout = 1> class DataTable
 			empty_coords[dim] = amrex::Vector<amrex::Real>(); // Empty vector
 		}
 
+		// lambda function for log10
+		auto log10_ = [output_spacing](amrex::Real x) -> amrex::Real {
+			if (output_spacing == "fast_log") {
+				return FastMath::log10(x);
+			}
+			return std::log10(x);
+		};
+
 		// Read data values - layout is transposed from internal representation
 		// CSV layout: last dimensions as rows, first dimension as columns
 		if constexpr (Ndim == 1) {
@@ -982,13 +996,13 @@ template <int Ndim, int Nout = 1> class DataTable
 			}
 
 			// Apply log10 transformation if output_spacing is "fast_log"
-			if (output_spacing == "fast_log") {
+			if (output_spacing == "fast_log" || output_spacing == "log") {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i = 0; i < sizes[0]; ++i) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i] > 0.0,
 										 fmt::format("fast_log output spacing requires positive values, got {} at output {} index {}",
 											     data_array[out_idx][i], out_idx, i));
-						data_array[out_idx][i] = std::log10(data_array[out_idx][i]);
+						data_array[out_idx][i] = log10_(data_array[out_idx][i]);
 					}
 				}
 			}
@@ -1030,7 +1044,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			}
 
 			// Apply log10 transformation if output_spacing is "fast_log"
-			if (output_spacing == "fast_log") {
+			if (output_spacing == "fast_log" || output_spacing == "log") {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
@@ -1038,7 +1052,7 @@ template <int Ndim, int Nout = 1> class DataTable
 							    data_array[out_idx][i1][i2] > 0.0,
 							    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {})",
 									data_array[out_idx][i1][i2], out_idx, i1, i2));
-							data_array[out_idx][i1][i2] = std::log10(data_array[out_idx][i1][i2]);
+							data_array[out_idx][i1][i2] = log10_(data_array[out_idx][i1][i2]);
 						}
 					}
 				}
@@ -1086,7 +1100,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			}
 
 			// Apply log10 transformation if output_spacing is "fast_log"
-			if (output_spacing == "fast_log") {
+			if (output_spacing == "fast_log" || output_spacing == "log") {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
@@ -1095,7 +1109,7 @@ template <int Ndim, int Nout = 1> class DataTable
 								    data_array[out_idx][i1][i2][i3] > 0.0,
 								    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {}, {})",
 										data_array[out_idx][i1][i2][i3], out_idx, i1, i2, i3));
-								data_array[out_idx][i1][i2][i3] = std::log10(data_array[out_idx][i1][i2][i3]);
+								data_array[out_idx][i1][i2][i3] = log10_(data_array[out_idx][i1][i2][i3]);
 							}
 						}
 					}
@@ -1149,7 +1163,7 @@ template <int Ndim, int Nout = 1> class DataTable
 			}
 
 			// Apply log10 transformation if output_spacing is "fast_log"
-			if (output_spacing == "fast_log") {
+			if (output_spacing == "fast_log" || output_spacing == "log") {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
@@ -1160,7 +1174,7 @@ template <int Ndim, int Nout = 1> class DataTable
 									    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {}, "
 											"{}, {})",
 											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
-									data_array[out_idx][i1][i2][i3][i4] = std::log10(data_array[out_idx][i1][i2][i3][i4]);
+									data_array[out_idx][i1][i2][i3][i4] = log10_(data_array[out_idx][i1][i2][i3][i4]);
 								}
 							}
 						}
