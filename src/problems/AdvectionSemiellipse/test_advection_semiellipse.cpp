@@ -7,24 +7,19 @@
 /// \brief Defines a test problem for linear advection.
 ///
 
+#include "AMReX_Array.H"
+#include "AMReX_Box.H"
+#include "AMReX_ParmParse.H"
+#include "AMReX_REAL.H"
+
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
 #include "linear_advection/AdvectionSimulation.hpp"
 #include "linear_advection/linear_advection.hpp"
 #include <fmt/format.h>
-#include <limits>
 #include <vector>
 
-#include "AMReX_Array.H"
-#include "AMReX_Box.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_ParmParse.H"
-#include "AMReX_REAL.H"
-
-#include "hyperbolic_system.hpp"
-#include "linear_advection/AdvectionSimulation.hpp"
-#include "linear_advection/linear_advection.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
