@@ -73,7 +73,7 @@ class LuminosityUpdate
 				p.rdata(lum_idx + g) = luminosities[g];
 			}
 		}
-		// If table is not initialized, the code should abort ealier
+		// If table is not initialized, the code should abort earlier
 	}
 };
 
