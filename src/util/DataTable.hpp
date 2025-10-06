@@ -150,9 +150,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 			if (spacing_types[dim] == SpacingType::linear) {
 				point_[dim] = point[dim];
 			} else if (spacing_types[dim] == SpacingType::log) {
-				point_[dim] = std::log10(point[dim]);
+				point_[dim] = std::log(point[dim]);
 			} else if (spacing_types[dim] == SpacingType::fast_log) {
-				point_[dim] = FastMath::log10(point[dim]);
+				point_[dim] = FastMath::lg(point[dim]);
 			}
 		}
 
@@ -162,14 +162,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 		// Part 2: Perform n-dimensional interpolation for all outputs
 		auto values = interpolate_from_indices(interp);
 
-		// Part 3: Convert from log space if output values are stored in log10
+		// Part 3: Convert from log space if output values are stored in log
 		if (output_spacing == SpacingType::fast_log) {
 			for (int i = 0; i < Nout; ++i) {
-				values[i] = FastMath::pow10(values[i]);
+				values[i] = FastMath::pow2(values[i]);
 			}
 		} else if (output_spacing == SpacingType::log) {
 			for (int i = 0; i < Nout; ++i) {
-				values[i] = std::pow(10.0, values[i]);
+				values[i] = std::exp(values[i]);
 			}
 		}
 
@@ -190,9 +190,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 			if (spacing_types[dim] == SpacingType::linear) {
 				point_[dim] = point[dim];
 			} else if (spacing_types[dim] == SpacingType::log) {
-				point_[dim] = std::log10(point[dim]);
+				point_[dim] = std::log(point[dim]);
 			} else if (spacing_types[dim] == SpacingType::fast_log) {
-				point_[dim] = FastMath::log10(point[dim]);
+				point_[dim] = FastMath::lg(point[dim]);
 			}
 		}
 
@@ -202,11 +202,11 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 		// Part 2: Perform n-dimensional interpolation for single output
 		amrex::Real value = interpolate_single_from_indices(interp, output_index);
 
-		// Part 3: Convert from log space if output values are stored in log10
+		// Part 3: Convert from log space if output values are stored in log
 		if (output_spacing == SpacingType::fast_log) {
-			value = FastMath::pow10(value);
+			value = FastMath::pow2(value);
 		} else if (output_spacing == SpacingType::log) {
-			value = std::pow(10.0, value);
+			value = std::exp(value);
 		}
 
 		return value;
@@ -678,15 +678,15 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				// Update coordinates to their log values in plance
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
-				coord_min_[dim] = std::log10(coord_min_[dim]);
-				coord_max_[dim] = std::log10(coord_max_[dim]);
+				coord_min_[dim] = std::log(coord_min_[dim]);
+				coord_max_[dim] = std::log(coord_max_[dim]);
 			} else if (spacing_types_[dim] == SpacingType::fast_log) {
-				// Fast log spacing: store log10(value) for fast interpolation
+				// Fast log spacing: store log(value) for fast interpolation
 				// Update coordinates to their log values in place
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
-				coord_min_[dim] = FastMath::log10(coord_min_[dim]);
-				coord_max_[dim] = FastMath::log10(coord_max_[dim]);
+				coord_min_[dim] = FastMath::lg(coord_min_[dim]);
+				coord_max_[dim] = FastMath::lg(coord_max_[dim]);
 			}
 
 			// NOSONAR
@@ -808,7 +808,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	//
 	// @param file_path Path to the CSV file
 	// @param output_spacing Spacing type for output values: linear, log, or fast_log
-	//                      If fast_log, output values are converted to log10 before storage
+	//                      If fast_log, output values are converted to log before storage
 	static auto CSVReader(const std::string &file_path, SpacingType output_spacing) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
@@ -995,12 +995,12 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			empty_coords[dim] = amrex::Vector<amrex::Real>(); // Empty vector
 		}
 
-		// lambda function for log10
-		auto log10_ = [output_spacing](amrex::Real x) {
+		// lambda function for log
+		auto log_ = [output_spacing](amrex::Real x) {
 			if (output_spacing == SpacingType::fast_log) {
-				return FastMath::log10(x);
+				return FastMath::lg(x);
 			}
-			return std::log10(x);
+			return std::log(x);
 		};
 
 		// Read data values - layout is transposed from internal representation
@@ -1019,7 +1019,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				}
 			}
 
-			// Apply log10 transformation if output_spacing is fast_log or log
+			// Apply log transformation if output_spacing is fast_log or log
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i = 0; i < sizes[0]; ++i) { // NOSONAR
@@ -1027,7 +1027,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						    data_array[out_idx][i] > 0.0,
 						    fmt::format("log output spacing requires positive values, got {} at output {} index {}",
 								data_array[out_idx][i], out_idx, i));
-						data_array[out_idx][i] = log10_(data_array[out_idx][i]);
+						data_array[out_idx][i] = log_(data_array[out_idx][i]);
 					}
 				}
 			}
@@ -1068,7 +1068,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				}
 			}
 
-			// Apply log10 transformation if output_spacing is fast_log or log
+			// Apply log transformation if output_spacing is fast_log or log
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
@@ -1077,7 +1077,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 							    data_array[out_idx][i1][i2] > 0.0,
 							    fmt::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
 									data_array[out_idx][i1][i2], out_idx, i1, i2));
-							data_array[out_idx][i1][i2] = log10_(data_array[out_idx][i1][i2]);
+							data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
 						}
 					}
 				}
@@ -1124,7 +1124,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				}
 			}
 
-			// Apply log10 transformation if output_spacing is fast_log or log
+			// Apply log transformation if output_spacing is fast_log or log
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {			// NOSONAR
@@ -1135,7 +1135,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 													     "values, got {} at output {} index ({}, {}, {})",
 													     data_array[out_idx][i1][i2][i3], out_idx, i1, i2,
 													     i3));
-								data_array[out_idx][i1][i2][i3] = log10_(data_array[out_idx][i1][i2][i3]);
+								data_array[out_idx][i1][i2][i3] = log_(data_array[out_idx][i1][i2][i3]);
 							}
 						}
 					}
@@ -1188,7 +1188,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				}
 			}
 
-			// Apply log10 transformation if output_spacing is fast_log or log
+			// Apply log transformation if output_spacing is fast_log or log
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {				// NOSONAR
@@ -1201,7 +1201,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 											"index ({}, {}, "
 											"{}, {})",
 											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
-									data_array[out_idx][i1][i2][i3][i4] = log10_(data_array[out_idx][i1][i2][i3][i4]);
+									data_array[out_idx][i1][i2][i3][i4] = log_(data_array[out_idx][i1][i2][i3][i4]);
 								}
 							}
 						}
