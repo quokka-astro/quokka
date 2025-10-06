@@ -631,7 +631,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
 	template <typename DataType>
 	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
-			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
+			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> &/*coords*/,
 			       const DataType &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
@@ -680,7 +680,6 @@ template <int Ndim, int Nout = 1> class DataTable
 			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
 			// 					 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
 			// 						     dim, sizes_[dim], coords[dim].size()));
-			// 	// TODO(cch): this is not used anywhere
 			// 	auto coord_table = coords_[dim]->table();
 			// 	for (int i = 0; i < sizes_[dim]; ++i) {
 			// 		coord_table(i) = coords[dim][i];
@@ -982,7 +981,7 @@ template <int Ndim, int Nout = 1> class DataTable
 		}
 
 		// lambda function for log10
-		auto log10_ = [output_spacing](amrex::Real x) -> amrex::Real {
+		auto log10_ = [output_spacing](amrex::Real x) {
 			if (output_spacing == SpacingType::fast_log) {
 				return FastMath::log10(x);
 			}
