@@ -92,6 +92,10 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "io/DiagBase.H"
+#include "io/DiagFramePlane.H"
+#include "io/DiagPDF.H"
+#include "io/DiagPlotfile.H"
+#include "io/DiagProjectionPlot.H"
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
@@ -157,6 +161,12 @@ enum class FillPatchType { fillpatch_class, fillpatch_function };
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
+	// Allow diagnostic classes to access protected members
+	friend class DiagPlotfile;
+	friend class DiagProjectionPlot;
+	friend class DiagPDF;
+	friend class DiagFramePlane;
+
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
@@ -345,7 +355,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteStatisticsFile();
 	void WritePlotFile();
 	void WriteParticleFile();
-	void WriteProjectionPlotfile() const;
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
@@ -936,10 +945,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		WritePlotFile();
 	}
 
-	if (projectionInterval_ > 0) {
-		WriteProjectionPlotfile();
-	}
-
 	if (particleInterval_ > 0) {
 		WriteParticleFile();
 	}
@@ -1120,7 +1125,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #ifdef AMREX_USE_ASCENT
 	int last_ascent_step = 0;
 #endif
-	int last_projection_step = 0;
 	int last_particle_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
@@ -1270,11 +1274,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			WritePlotFile();
 		}
 
-		if (projectionInterval_ > 0 && (step + 1) % projectionInterval_ == 0) {
-			last_projection_step = step + 1;
-			WriteProjectionPlotfile();
-		}
-
 		if (particleInterval_ > 0 && (step + 1) % particleInterval_ == 0) {
 			last_particle_step = step + 1;
 			WriteParticleFile();
@@ -1362,11 +1361,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	// write final plotfile
 	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && istep[0] > last_plot_file_step) {
 		WritePlotFile();
-	}
-
-	// write final projection
-	if (projectionInterval_ > 0 && istep[0] > last_projection_step) {
-		WriteProjectionPlotfile();
 	}
 
 	// write final particle file
@@ -2971,6 +2965,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 			amrex::Abort("[Diagnostics] Field " + v + " is not available!");
 		}
 	}
+
+	// Check if any diagnostic is a PlotFile type and disable regular plotfile output
+	for (const auto &diag : m_diagnostics) {
+		if (dynamic_cast<DiagPlotfile *>(diag.get()) != nullptr) {
+			if (plotfileInterval_ > 0) {
+				amrex::Print() << "DiagPlotfile detected: disabling regular plotfile output (plotfileInterval_ set to -1)\n";
+				plotfileInterval_ = -1;
+			}
+			break;
+		}
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::updateDiagnostics()
@@ -2993,6 +2998,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	    std::any_of(m_diagnostics.cbegin(), m_diagnostics.cend(), [this](const auto &diag) { return diag->doDiag(tNew_[0], istep[0]); });
 
 	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
+	amrex::Vector<const amrex::MultiFab *> diagMFVec_ptr;
 	if (computeVars) {
 		for (int lev{0}; lev <= finestLevel(); ++lev) {
 			diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
@@ -3011,11 +3017,46 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
 			}
 		}
+		diagMFVec_ptr = GetVecOfConstPtrs(diagMFVec);
 	}
+
+	// Prepare common diagnostic data
+	auto const geoms = Geom(0, finestLevel());
+	auto const ref_ratio = refRatio();
 
 	for (const auto &diag : m_diagnostics) {
 		if (diag->doDiag(tNew_[0], istep[0])) {
-			diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars, simulationMetadata_);
+			// Set common diagnostic data (including simulation pointer)
+			diag->setDiagData(this, &diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
+
+			// Call the appropriate template processDiag for each diagnostic type
+			// All diagnostics now have a unified API: processDiag<problem_t>(nstep, time)
+			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
+			if (plotfileDiag != nullptr) {
+				plotfileDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
+			if (projectionDiag != nullptr) {
+				projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag.get());
+			if (framePlaneDiag != nullptr) {
+				framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
+			if (pdfDiag != nullptr) {
+				pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			// Unknown diagnostic type
+			amrex::Abort("Unknown diagnostic type - all diagnostic types must implement template processDiag");
 		}
 	}
 }
@@ -3243,38 +3284,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 	}
 
 	fesetenv(&orig_feenv); // restore FPE
-}
-
-template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlotfile() const
-{
-	std::vector<std::string> dirs{};
-	const amrex::ParmParse pp;
-	pp.queryarr("projection.dirs", dirs);
-
-	auto dir_from_string = [=](const std::string &dir_str) {
-		if (dir_str == "x") {
-			return amrex::Direction::x;
-		}
-#if AMREX_SPACEDIM >= 2
-		if (dir_str == "y") {
-			return amrex::Direction::y;
-		}
-#endif
-#if AMREX_SPACEDIM == 3
-		if (dir_str == "z") {
-			return amrex::Direction::z;
-		}
-#endif
-		amrex::Error("invalid direction for projection!");
-		return amrex::Direction::x;
-	};
-
-	for (auto &dir_str : dirs) {
-		// compute projections along axis 'dir'
-		amrex::Direction dir = dir_from_string(dir_str);
-		std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-		quokka::diagnostics::WriteProjection(dir, proj, tNew_[0], istep[0]);
-	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteStatisticsFile()
