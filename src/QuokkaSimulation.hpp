@@ -2249,10 +2249,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// Deposit radiation from all particles that have luminosity. When there are no particles with luminosity, this will do nothing.
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
 
-			// save single level for debugging
-			amrex::Vector<std::string> compNames{"rad1", "rad2"};
-			WriteSingleLevelPlotfileSimplified("radEnergySource", radEnergySource, compNames, lev, 1);
-
 			// for debugging, print the radEnergySource array
 			// if (i == 0) {
 			// 	amrex::Print() << "after ParticleToMesh: ";
