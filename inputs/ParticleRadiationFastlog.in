@@ -1,0 +1,38 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -3.0e18 -3.0e18 -3.0e18
+geometry.prob_hi     =  3.0e18 3.0e18 3.0e18
+geometry.is_periodic =  0    0    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 32 32 32
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 32     # grid size must be divisible by this
+amr.max_grid_size   = 32    # at least 128 for GPUs
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+particles.verbose = 0
+particles.disable_SN_feedback = true
+particles.rad_table = ../inputs/lum_demo_2groups_fastlog.csv
+particles.rad_table_output_spacing = fast_log
+
+stop_time = 8.0e20
+max_timesteps = 3
+plotfile_interval = 3
+particle_csv_interval = 1
+checkpoint_interval = -1
+
+tiny_profiler.enabled = 0
