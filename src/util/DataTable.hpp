@@ -352,7 +352,7 @@ template <int Ndim, int Nout = 1> class DataTable
 
 	std::array<amrex::Real, Ndim> coord_min_{};
 	std::array<amrex::Real, Ndim> coord_max_{};
-	std::array<std::string, Ndim> spacing_types_{};
+	std::array<SpacingType, Ndim> spacing_types_{};
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord_{};
@@ -366,7 +366,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	std::array<std::string, Nout> output_units_{};
 
 	// Output spacing type: "linear" or "fast_log"
-	std::string output_spacing_{"linear"};
+	SpacingType output_spacing_ = SpacingType::linear;
 
       public:
 	// Default constructor
@@ -549,22 +549,15 @@ template <int Ndim, int Nout = 1> class DataTable
 			data_tables[out_idx] = data_[out_idx]->const_table();
 		}
 
-		// Convert string spacing types to enum
-		std::array<SpacingType, Ndim> spacing_types_enum{};
-		for (int i = 0; i < Ndim; ++i) {
-			spacing_types_enum[i] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_types_[i]);
-		}
-		SpacingType output_spacing_enum = amrex::getEnumCaseInsensitive<SpacingType>(output_spacing_);
-
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
 		    data_tables,	  // array of data tables
 		    coord_min_,		  // coord_min array
 		    coord_max_,		  // coord_max array
-		    spacing_types_enum,	  // spacing types array (converted to enum)
+		    spacing_types_,	  // spacing types array (converted to enum)
 		    dcoord_,		  // dcoord array
 		    sizes_,		  // sizes array
-		    output_spacing_enum	  // output spacing (converted to enum)
+		    output_spacing_	  // output spacing (converted to enum)
 		};
 		return tables;
 	}
@@ -638,7 +631,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
 	template <typename DataType>
 	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
-			       const std::array<std::string, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
+			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> &coords,
 			       const DataType &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
@@ -649,18 +642,11 @@ template <int Ndim, int Nout = 1> class DataTable
 		sizes_ = n_xs;
 		spacing_types_ = spacing_types;
 
-		// Validate bounds and spacing types
+		// Validate bounds
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim], fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]",
 													dim, coord_min_[dim], coord_max_[dim]));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes_[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes_[dim], dim));
-			// Validate spacing type - will throw if invalid
-			try {
-				amrex::getEnumCaseInsensitive<SpacingType>(spacing_types_[dim]);
-			} catch (const std::runtime_error &e) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
-										     spacing_types_[dim], dim));
-			}
 		}
 
 		// Create coordinate tables - either from provided coords or generate them
@@ -669,26 +655,17 @@ template <int Ndim, int Nout = 1> class DataTable
 											  amrex::The_Pinned_Arena());
 
 			// Generate coordinates based on spacing type
-			if (spacing_types_[dim] == "irregular") {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
-								 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
-									     dim, sizes_[dim], coords[dim].size()));
-				// TODO(cch): this is not used anywhere
-				auto coord_table = coords_[dim]->table();
-				for (int i = 0; i < sizes_[dim]; ++i) {
-					coord_table(i) = coords[dim][i];
-				}
-			} else if (spacing_types_[dim] == "linear") {
+			if (spacing_types_[dim] == SpacingType::linear) {
 				// Linear spacing: coordinates computed on-the-fly in GPU code, no need to populate table
 				// Table structure exists but remains unpopulated for memory efficiency
-			} else if (spacing_types_[dim] == "log") {
+			} else if (spacing_types_[dim] == SpacingType::log) {
 				// Logarithmic spacing: store actual values, not logarithms
 				// Update coordinates to their log values in plance
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
 				coord_min_[dim] = std::log10(coord_min_[dim]);
 				coord_max_[dim] = std::log10(coord_max_[dim]);
-			} else if (spacing_types_[dim] == "fast_log") {
+			} else if (spacing_types_[dim] == SpacingType::fast_log) {
 				// Fast log spacing: store log10(value) for fast interpolation
 				// Update coordinates to their log values in place
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
@@ -696,6 +673,18 @@ template <int Ndim, int Nout = 1> class DataTable
 				coord_min_[dim] = FastMath::log10(coord_min_[dim]);
 				coord_max_[dim] = FastMath::log10(coord_max_[dim]);
 			}
+
+			// NOSONAR
+			// For future support of irregular spacing
+			// } else if (spacing_types_[dim] == SpacingType::irregular) {
+			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
+			// 					 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
+			// 						     dim, sizes_[dim], coords[dim].size()));
+			// 	// TODO(cch): this is not used anywhere
+			// 	auto coord_table = coords_[dim]->table();
+			// 	for (int i = 0; i < sizes_[dim]; ++i) {
+			// 		coord_table(i) = coords[dim][i];
+			// 	}
 		}
 
 		// Calculate grid spacing (after taking necessary log of the coordinates)
@@ -765,14 +754,14 @@ template <int Ndim, int Nout = 1> class DataTable
 		std::array<amrex::Real, Ndim> x_mins;
 		std::array<amrex::Real, Ndim> x_maxs;
 		std::array<int, Ndim> n_xs{};
-		std::array<std::string, Ndim> spacing_types;
+		std::array<SpacingType, Ndim> spacing_types{};
 
 		for (int dim = 0; dim < Ndim; ++dim) {
 			n_xs[dim] = static_cast<int>(coords[dim].size());
 			x_mins[dim] = coords[dim].front();
 			x_maxs[dim] = coords[dim].back();
 			// This is a hack for backward compatibility to the cooling table, which uses log input and linear output
-			spacing_types[dim] = "linear";
+			spacing_types[dim] = SpacingType::linear;
 		}
 
 		// Pass empty coords - for linear spacing they will be computed on-the-fly
@@ -964,13 +953,16 @@ template <int Ndim, int Nout = 1> class DataTable
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    coord_bounds[dim].second > coord_bounds[dim].first,
 			    fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
-			// Validate spacing type
+		}
+
+		// Convert string spacing types to enum and validate spacing type
+		std::array<SpacingType, Ndim> spacing_types_enum{};
+		for (int dim = 0; dim < Ndim; ++dim) {
 			try {
-				amrex::getEnumCaseInsensitive<SpacingType>(spacing_types[dim]);
+				spacing_types_enum[dim] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_types[dim]);
 			} catch (const std::runtime_error &e) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false,
-								 fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
-									     spacing_types[dim], dim));
+								 fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
 			}
 		}
 
@@ -1027,14 +1019,14 @@ template <int Ndim, int Nout = 1> class DataTable
 
 			// Create and initialize DataTable using optimized path
 			DataTable table;
-			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
 
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			table.output_spacing_ = amrex::getEnumNameString(output_spacing);
+			table.output_spacing_ = output_spacing;
 
 			file.close();
 			return table;
@@ -1078,14 +1070,14 @@ template <int Ndim, int Nout = 1> class DataTable
 
 			// Create and initialize DataTable using optimized path
 			DataTable table;
-			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
 
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			table.output_spacing_ = amrex::getEnumNameString(output_spacing);
+			table.output_spacing_ = output_spacing;
 
 			file.close();
 			return table;
@@ -1137,14 +1129,14 @@ template <int Ndim, int Nout = 1> class DataTable
 
 			// Create and initialize DataTable using optimized path
 			DataTable table;
-			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
 
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			table.output_spacing_ = amrex::getEnumNameString(output_spacing);
+			table.output_spacing_ = output_spacing;
 
 			file.close();
 			return table;
@@ -1204,14 +1196,14 @@ template <int Ndim, int Nout = 1> class DataTable
 
 			// Create and initialize DataTable using optimized path
 			DataTable table;
-			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
 
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
-			table.output_spacing_ = amrex::getEnumNameString(output_spacing);
+			table.output_spacing_ = output_spacing;
 
 			file.close();
 			return table;
