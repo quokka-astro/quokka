@@ -839,10 +839,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 				constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
-				
+
 				// Use fast_log spacing for luminosity values (stored as log10)
 				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
-				
+
 				amrex::Print() << "Luminosity table loaded successfully.\n";
 				amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
 							      luminosityTables_.luminosity.size(1));

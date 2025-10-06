@@ -53,7 +53,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	std::array<amrex::Real, Ndim> dcoord{};
 
 	std::array<int, Ndim> sizes{};
-	
+
 	// Output spacing for return values: "linear", "log", or "fast_log"
 	std::string output_spacing = "linear";
 
@@ -142,7 +142,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 
 		// Part 2: Perform n-dimensional interpolation for all outputs
 		auto values = interpolate_from_indices(interp);
-		
+
 		// Part 3: Convert from log space if output values are stored in log10
 		if (output_spacing == "fast_log") {
 			for (int i = 0; i < Nout; ++i) {
@@ -153,7 +153,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 				values[i] = std::pow(10.0, values[i]);
 			}
 		}
-		
+
 		return values;
 	}
 
@@ -182,14 +182,14 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 
 		// Part 2: Perform n-dimensional interpolation for single output
 		amrex::Real value = interpolate_single_from_indices(interp, output_index);
-		
+
 		// Part 3: Convert from log space if output values are stored in log10
 		if (output_spacing == "fast_log") {
 			value = FastMath::pow10(value);
 		} else if (output_spacing == "log") {
 			value = std::pow(10.0, value);
 		}
-		
+
 		return value;
 	}
 
@@ -546,13 +546,13 @@ template <int Ndim, int Nout = 1> class DataTable
 
 		DataTableGpuConst<Ndim, Nout> tables{
 		    coord_tables,
-		    data_tables,	// array of data tables
-		    coord_min_,		// coord_min array
-		    coord_max_,		// coord_max array
-		    spacing_types_,	// spacing types array
-		    dcoord_,		// dcoord array
-		    sizes_,		// sizes array
-		    output_spacing_	// output spacing
+		    data_tables,    // array of data tables
+		    coord_min_,	    // coord_min array
+		    coord_max_,	    // coord_max array
+		    spacing_types_, // spacing types array
+		    dcoord_,	    // dcoord array
+		    sizes_,	    // sizes array
+		    output_spacing_ // output spacing
 		};
 		return tables;
 	}
@@ -999,9 +999,10 @@ template <int Ndim, int Nout = 1> class DataTable
 			if (output_spacing == "fast_log" || output_spacing == "log") {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i = 0; i < sizes[0]; ++i) {
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i] > 0.0,
-										 fmt::format("fast_log output spacing requires positive values, got {} at output {} index {}",
-											     data_array[out_idx][i], out_idx, i));
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    data_array[out_idx][i] > 0.0,
+						    fmt::format("fast_log output spacing requires positive values, got {} at output {} index {}",
+								data_array[out_idx][i], out_idx, i));
 						data_array[out_idx][i] = log10_(data_array[out_idx][i]);
 					}
 				}
@@ -1010,14 +1011,14 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-			
+
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
 			table.output_spacing_ = output_spacing;
-			
+
 			file.close();
 			return table;
 
@@ -1061,14 +1062,14 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-			
+
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
 			table.output_spacing_ = output_spacing;
-			
+
 			file.close();
 			return table;
 
@@ -1105,10 +1106,11 @@ template <int Ndim, int Nout = 1> class DataTable
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
 							for (int i3 = 0; i3 < sizes[2]; ++i3) {
-								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-								    data_array[out_idx][i1][i2][i3] > 0.0,
-								    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {}, {})",
-										data_array[out_idx][i1][i2][i3], out_idx, i1, i2, i3));
+								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i1][i2][i3] > 0.0,
+												 fmt::format("fast_log output spacing requires positive "
+													     "values, got {} at output {} index ({}, {}, {})",
+													     data_array[out_idx][i1][i2][i3], out_idx, i1, i2,
+													     i3));
 								data_array[out_idx][i1][i2][i3] = log10_(data_array[out_idx][i1][i2][i3]);
 							}
 						}
@@ -1119,14 +1121,14 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-			
+
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
 			table.output_spacing_ = output_spacing;
-			
+
 			file.close();
 			return table;
 
@@ -1171,7 +1173,8 @@ template <int Ndim, int Nout = 1> class DataTable
 								for (int i4 = 0; i4 < sizes[3]; ++i4) {
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 									    data_array[out_idx][i1][i2][i3][i4] > 0.0,
-									    fmt::format("fast_log output spacing requires positive values, got {} at output {} index ({}, {}, "
+									    fmt::format("fast_log output spacing requires positive values, got {} at output {} "
+											"index ({}, {}, "
 											"{}, {})",
 											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
 									data_array[out_idx][i1][i2][i3][i4] = log10_(data_array[out_idx][i1][i2][i3][i4]);
@@ -1185,14 +1188,14 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Create and initialize DataTable using optimized path
 			DataTable table;
 			table.initialize_common(x_mins, x_maxs, sizes, spacing_types, empty_coords, data_array);
-			
+
 			// Store metadata
 			table.input_names_ = input_names;
 			table.output_names_ = output_names;
 			table.input_units_ = input_units;
 			table.output_units_ = output_units;
 			table.output_spacing_ = output_spacing;
-			
+
 			file.close();
 			return table;
 		}
