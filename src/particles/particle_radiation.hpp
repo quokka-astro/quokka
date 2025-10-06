@@ -71,8 +71,10 @@ class LuminosityUpdate
 			auto const luminosities = tables.luminosity.interpolate(point);
 
 			// Update luminosity components (they are stored consecutively starting at lum_idx)
-			for (int g = 0; g < nGroups; ++g) {
-				p.rdata(lum_idx + g) = luminosities[g];
+			if (lum_idx + nGroups <= ParticleType::NReal) {
+				for (int g = 0; g < nGroups; ++g) {
+					p.rdata(lum_idx + g) = luminosities[g];
+				}
 			}
 		}
 		// If table is not initialized, the code should abort earlier
