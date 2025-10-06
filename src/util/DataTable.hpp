@@ -594,11 +594,6 @@ template <int Ndim, int Nout = 1> class DataTable
 			    fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types_[dim], dim));
 		}
 
-		// Calculate grid spacing (for uniform spacing optimization)
-		for (int dim = 0; dim < Ndim; ++dim) {
-			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
-		}
-
 		// Create coordinate tables - either from provided coords or generate them
 		for (int dim = 0; dim < Ndim; ++dim) {
 			coords_[dim] = std::make_unique<amrex::TableData<amrex::Real, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1},
@@ -619,19 +614,24 @@ template <int Ndim, int Nout = 1> class DataTable
 				// Table structure exists but remains unpopulated for memory efficiency
 			} else if (spacing_types_[dim] == "log") {
 				// Logarithmic spacing: store actual values, not logarithms
+				// Update coordinates to their log values in plance
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
-				const amrex::Real log_min = std::log10(coord_min_[dim]);
-				const amrex::Real log_max = std::log10(coord_max_[dim]);
-				const amrex::Real log_spacing = (log_max - log_min) / static_cast<amrex::Real>(sizes_[dim] - 1);
+				coord_min_[dim] = std::log10(coord_min_[dim]);
+				coord_max_[dim] = std::log10(coord_max_[dim]);
 			} else if (spacing_types_[dim] == "fast_log") {
 				// Fast log spacing: store log10(value) for fast interpolation
+				// Update coordinates to their log values in place
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
-				const amrex::Real log_min = FastMath::log10(coord_min_[dim]);
-				const amrex::Real log_max = FastMath::log10(coord_max_[dim]);
-				const amrex::Real log_spacing = (log_max - log_min) / static_cast<amrex::Real>(sizes_[dim] - 1);
+				coord_min_[dim] = FastMath::log10(coord_min_[dim]);
+				coord_max_[dim] = FastMath::log10(coord_max_[dim]);
 			}
+		}
+
+		// Calculate grid spacing (after taking necessary log of the coordinates)
+		for (int dim = 0; dim < Ndim; ++dim) {
+			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
 		}
 
 		// Create n-dimensional data tables for each output
