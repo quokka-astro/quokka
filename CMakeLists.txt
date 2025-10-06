@@ -24,6 +24,17 @@ set(AMReX_AMRLEVEL OFF CACHE BOOL "" FORCE)
 set(AMReX_PROBINIT OFF CACHE BOOL "" FORCE)
 set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
 
+# Configure AMReX-Hydro to match the AMReX build that Quokka uses
+if(NOT DEFINED AMReX_GPU_BACKEND)
+  set(AMReX_GPU_BACKEND NONE CACHE STRING "" FORCE)
+endif()
+set(HYDRO_SPACEDIM ${AMReX_SPACEDIM} CACHE STRING "" FORCE)
+set(HYDRO_MPI ${AMReX_MPI} CACHE BOOL "" FORCE)
+set(HYDRO_PROJECTIONS ON CACHE BOOL "" FORCE)
+set(HYDRO_EB OFF CACHE BOOL "" FORCE)
+set(HYDRO_NO_EB ON CACHE BOOL "" FORCE)
+set(HYDRO_GPU_BACKEND ${AMReX_GPU_BACKEND} CACHE STRING "" FORCE)
+
 ## a Python installation can be specified with Python_ROOT_DIR
 ##   see: https://cmake.org/cmake/help/latest/module/FindPython.html#hints
 ## NumPy and Matplotlib can be installed with `python3 -m pip install numpy matplotlib --user`
@@ -125,6 +136,7 @@ message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro ${QuokkaCode_BINARY_DIR}/AMReX-Hydro)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
 
