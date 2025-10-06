@@ -323,7 +323,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			break;
 		}
 
-#if 0
+#if 0 // NOLINT
 		// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 		if (n == 0) {
 			std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = [";
