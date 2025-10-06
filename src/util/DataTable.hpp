@@ -1088,7 +1088,7 @@ template <int Ndim, int Nout = 1> class DataTable
 
 				// Read data in transposed order
 				for (int i3 = 0; i3 < sizes[2]; ++i3) {
-					for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
+					for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
 						for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 							char comma = ' ';
 							file >> data_array[out_idx][i1][i2][i3];
@@ -1103,8 +1103,8 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Apply log10 transformation if output_spacing is "fast_log"
 			if (output_spacing == "fast_log" || output_spacing == "log") {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {			// NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
 								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i1][i2][i3] > 0.0,
 												 fmt::format("fast_log output spacing requires positive "
@@ -1150,8 +1150,8 @@ template <int Ndim, int Nout = 1> class DataTable
 
 				// Read data in transposed order
 				for (int i4 = 0; i4 < sizes[3]; ++i4) {
-					for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
+					for (int i3 = 0; i3 < sizes[2]; ++i3) {			// NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
 							for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 								char comma = ' ';
 								file >> data_array[out_idx][i1][i2][i3][i4];
@@ -1167,9 +1167,9 @@ template <int Ndim, int Nout = 1> class DataTable
 			// Apply log10 transformation if output_spacing is "fast_log"
 			if (output_spacing == "fast_log" || output_spacing == "log") {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
-							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {				// NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {			// NOSONAR
+							for (int i3 = 0; i3 < sizes[2]; ++i3) {		// NOSONAR
 								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 									    data_array[out_idx][i1][i2][i3][i4] > 0.0,
