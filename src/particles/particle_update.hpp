@@ -22,6 +22,7 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 
 // Specialization for StochasticStellarPop particles with stellar evolution
 // This uses table interpolation and can be overridden in the problem generator
+// Currently, the default is updateLuminosity. In the future, we can add more properties to update
 template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
 	template <typename problem_t, typename ParticleType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time) noexcept
