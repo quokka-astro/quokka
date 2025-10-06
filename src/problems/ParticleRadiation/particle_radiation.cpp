@@ -12,6 +12,7 @@
 #include "particles/particle_update.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
+#include "util/DataTable.hpp"
 
 struct ParticleRadiationProblem {
 };
@@ -159,9 +160,9 @@ auto problem_main() -> int
 	const amrex::ParmParse pp("problem");
 	pp.query("particles_filename", sim.userData_.particles_filename);
 
-	std::string rad_table_output_spacing_ = "linear";
+	quokka::SpacingType rad_table_output_spacing = quokka::SpacingType::linear;
 	const amrex::ParmParse ppp("particles");
-	ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+	ppp.query("rad_table_output_spacing", rad_table_output_spacing);
 
 	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();
@@ -221,7 +222,7 @@ auto problem_main() -> int
 		double L_star = NAN;
 		double change_of_total_energy_expected = NAN;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ == 3, "This test requires max_timesteps = 3");
-		if (rad_table_output_spacing_ == "fast_log" || rad_table_output_spacing_ == "log") {
+		if (rad_table_output_spacing == quokka::SpacingType::fast_log || rad_table_output_spacing == quokka::SpacingType::log) {
 			L_star = 3e40;
 		} else {
 			L_star = 2.5e40;
@@ -237,8 +238,8 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error to total energy: " << error_rel_to_tot << "\n";
 		amrex::Print() << "Relative error to radiation energy: " << error_rel_to_rad << "\n";
 
-		const double tolerance = rad_table_output_spacing_ == "fast_log" ? 0.1 : 1e-14;	   // Tolerance relative to total energy
-		const double tolerance_rad = rad_table_output_spacing_ == "fast_log" ? 0.1 : 1e-6; // Tolerance relative to radiaiton energy
+		const double tolerance = rad_table_output_spacing == quokka::SpacingType::fast_log ? 0.1 : 1e-14;     // Tolerance relative to total energy
+		const double tolerance_rad = rad_table_output_spacing == quokka::SpacingType::fast_log ? 0.1 : 1e-6; // Tolerance relative to radiaiton energy
 		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance_rad)) {
 			status = 1;
 			amrex::Print() << "Test failed: change of total energy mismatch.\n";
