@@ -38,6 +38,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BCRec.H"
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
@@ -1234,9 +1235,39 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 
 	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
 	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
+	constexpr int nvarPerDim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
+	AMREX_ALWAYS_ASSERT(nvarPerDim_fc > 0);
+	auto const to_linop_bc = [](int bc_value) -> amrex::LinOpBCType {
+		switch (bc_value) {
+		case amrex::BCType::int_dir:
+		case amrex::BCType::foextrap:
+		case amrex::BCType::hoextrap:
+		case amrex::BCType::hoextrapcc:
+		case amrex::BCType::reflect_even:
+			return amrex::LinOpBCType::Neumann;
+		case amrex::BCType::ext_dir:
+		case amrex::BCType::ext_dir_cc:
+		case amrex::BCType::reflect_odd:
+			return amrex::LinOpBCType::Dirichlet;
+		default:
+			return amrex::LinOpBCType::Dirichlet;
+		}
+	};
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		bc_lo[dir] = amrex::LinOpBCType::Dirichlet;
-		bc_hi[dir] = amrex::LinOpBCType::Dirichlet;
+		if (geom_levels[0].isPeriodic(dir)) {
+			bc_lo[dir] = amrex::LinOpBCType::Periodic;
+			bc_hi[dir] = amrex::LinOpBCType::Periodic;
+			continue;
+		}
+
+		int const component_index = dir * nvarPerDim_fc + MHDSystem<problem_t>::bfield_index;
+		if (component_index < static_cast<int>(BCs_fc_.size())) {
+			bc_lo[dir] = to_linop_bc(BCs_fc_[component_index].lo(dir));
+			bc_hi[dir] = to_linop_bc(BCs_fc_[component_index].hi(dir));
+		} else {
+			bc_lo[dir] = amrex::LinOpBCType::Dirichlet;
+			bc_hi[dir] = amrex::LinOpBCType::Dirichlet;
+		}
 	}
 
 	Hydro::MacProjector macproj(projector_umac, amrex::MLMG::Location::FaceCenter, projector_beta, amrex::MLMG::Location::FaceCenter,
