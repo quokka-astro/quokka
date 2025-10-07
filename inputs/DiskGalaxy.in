@@ -60,5 +60,8 @@ agora_galaxy.disk_perturb_amplitude = 1.0   # dimensionless
 agora_galaxy.disk_perturb_Rmax_kpc = 20.0   # kpc
 agora_galaxy.magnetic_field_microgauss = 1.0 # uniform B-field strength (microgauss)
 
+quokka.project_initial_b_field = true
+quokka.update_initial_b_energy = true
+
 agora_galaxy.halo_temperature = 1.0e6       # K
 agora_galaxy.halo_number_density = 1.0e-4   # cm^-3
