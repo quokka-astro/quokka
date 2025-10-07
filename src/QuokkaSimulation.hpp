@@ -1302,8 +1302,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::updateInitialMag
 		std::array<std::unique_ptr<amrex::MultiFab>, AMREX_SPACEDIM> face_storage;
 		amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> face_ptrs;
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			face_storage[dir] = std::make_unique<amrex::MultiFab>(state_new_fc_[lev][dir], amrex::make_alias,
-								       Physics_Indices<problem_t>::mhdFirstIndex, 1);
+			face_storage[dir] =
+			    std::make_unique<amrex::MultiFab>(state_new_fc_[lev][dir], amrex::make_alias, Physics_Indices<problem_t>::mhdFirstIndex, 1);
 			face_ptrs[dir] = face_storage[dir].get();
 		}
 
