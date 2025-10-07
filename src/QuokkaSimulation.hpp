@@ -1264,17 +1264,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	AMREX_ALWAYS_ASSERT(nvarPerDim_fc > 0);
 
 	auto const to_linop_bc = [](int bc_value) -> amrex::LinOpBCType {
-	  if (bc_value ==  amrex::BCType::reflect_even || bc_value == amrex::BCType::foextrap) {
-	    return amrex::LinOpBCType::Neumann; // Neumann zero-valued BC
-	  } else if (bc_value == amrex::BCType::reflect_odd) {
-	    return amrex::LinOpBCType::Dirichlet; // Dirichlet zero-valued BC
-	  } else if (bc_value == amrex::BCType::int_dir) { 
-	    return amrex::LinOpBCType::Periodic; // periodic BC
-	  } else {
-	    return amrex::LinOpBCType::Dirichlet; // unsupported, but return something
-	  }
+		if (bc_value == amrex::BCType::reflect_even || bc_value == amrex::BCType::foextrap) {
+			return amrex::LinOpBCType::Neumann; // Neumann zero-valued BC
+		} else if (bc_value == amrex::BCType::reflect_odd) {
+			return amrex::LinOpBCType::Dirichlet; // Dirichlet zero-valued BC
+		} else if (bc_value == amrex::BCType::int_dir) {
+			return amrex::LinOpBCType::Periodic; // periodic BC
+		} else {
+			return amrex::LinOpBCType::Dirichlet; // unsupported, but return something
+		}
 	};
-	
+
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 		int const component_index = dir * nvarPerDim_fc + MHDSystem<problem_t>::bfield_index;
 		bc_lo[dir] = to_linop_bc(BCs_fc_[component_index].lo(dir));
