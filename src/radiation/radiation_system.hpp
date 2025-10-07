@@ -928,6 +928,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
+	constexpr double small_number = 1.0e20 * std::numeric_limits<double>::min();
+
 	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
 	AMREX_ASSERT(!std::isnan(f));
 	AMREX_ASSERT(f <= 1.0);
@@ -939,7 +941,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	std::array<amrex::Real, 3> n{};
 
 	for (int ii = 0; ii < 3; ++ii) {
-		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
+		n[ii] = (f > small_number) ? (fvec[ii] / f) : 0.;
 	}
 
 	// compute radiation pressure tensors
@@ -963,6 +965,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 		for (int jj = 0; jj < 3; ++jj) {
 			const double delta_ij = (ii == jj) ? 1 : 0;
 			T[ii][jj] = Tdiag * delta_ij + Tf * (n[ii] * n[jj]);
+			AMREX_ASSERT(!std::isnan(T[ii][jj]));
 		}
 	}
 

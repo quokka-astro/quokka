@@ -348,7 +348,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			std::cout << "]";
 			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
 		}
-#endif
 
 		if (n >= maxIter - 4) {
 			printf("n = %d, Egas_guess = %f, EradVec_guess = [", n, Egas_guess);
@@ -361,6 +360,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			}
 			printf("], F_G = %f, F_D_abs_sum = %f, Etot0 = %f\n", jacobian.F0, jacobian.Fg_abs_sum, Etot0);
 		}
+#endif
 
 		// update variables
 		RadSystem<problem_t>::SolveLinearEqs(jacobian, delta_x, delta_R); // This is modify delta_x and delta_R in place
