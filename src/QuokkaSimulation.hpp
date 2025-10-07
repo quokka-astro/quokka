@@ -1380,6 +1380,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		projectFaceCenteredMagneticField();
 		updateInitialMagneticEnergyFromFaceField();
+
+		int const finest_level = finestLevel();
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			if (lev >= static_cast<int>(state_old_fc_.size())) {
+				continue;
+			}
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				state_old_fc_[lev][dir].ParallelCopy(state_new_fc_[lev][dir], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc,
+									    state_old_fc_[lev][dir].nGrow(), state_new_fc_[lev][dir].nGrow());
+			}
+		}
 	}
 }
 
