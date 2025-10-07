@@ -12,6 +12,10 @@ We use the AMReX library [@AMReX_JOSS] to provide patch-based adaptive mesh func
 
 Example simulation set-ups are included in the GitHub repository for many astrophysical problems of interest related to star formation and the interstellar medium.
 
+## Developer guides
+
+- [Developing a new problem generator](developing_problem_generators.md)
+
 ## Contact
 
 All communication takes place on the [Quokka GitHub repository](https://github.com/quokka-astro/quokka). You can start a [Discussion](https://github.com/quokka-astro/quokka/discussions) for technical support, or open an [Issue](https://github.com/quokka-astro/quokka/issues) for any bug reports.
