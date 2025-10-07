@@ -1177,18 +1177,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	}
 
 	constexpr amrex::Real divB_tolerance = 1.0e-14;
-	amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm << ", tolerance = "
-		       << divB_tolerance << '\n';
+	amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm << ", tolerance = " << divB_tolerance << '\n';
 	if (max_divB_norm > divB_tolerance) {
 		amrex::Abort("Magnetic field MAC projection failed to satisfy divergence tolerance.");
 	}
 #endif
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization()
-{
-	projectFaceCenteredMagneticField();
-}
+template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization() { projectFaceCenteredMagneticField(); }
 
 // fix-up any unphysical states created by AMR operations
 // (e.g., caused by the flux register or from interpolation)
