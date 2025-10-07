@@ -251,6 +251,8 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 #endif // AMREX_SPACEDIM == 3
 
+//-------------------- Units --------------------
+
 // Units data for each particle type as powers of Mass, Length, Time, Temperature
 inline auto get_units_data() -> const auto &
 {

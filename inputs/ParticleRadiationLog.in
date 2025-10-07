@@ -26,8 +26,8 @@ suppress_output = 0
 
 particles.verbose = 0
 particles.disable_SN_feedback = true
-particles.rad_table = ../inputs/lum_demo_2groups.csv
-particles.rad_table_output_spacing = linear
+particles.rad_table = ../inputs/lum_demo_2groups_log.csv
+particles.rad_table_output_spacing = log
 
 stop_time = 8.0e20
 max_timesteps = 3

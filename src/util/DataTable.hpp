@@ -3,6 +3,7 @@
 
 #include "AMReX_Arena.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Enum.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_TableData.H"
@@ -12,8 +13,11 @@
 #include <H5Ppublic.h>
 #include <hdf5.h>
 
+#include "math/FastMath.hpp"
 #include <array>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <type_traits>
 #include <vector>
 
@@ -22,6 +26,12 @@
 
 namespace quokka
 {
+
+// Enum for spacing types (GPU-compatible, supports ParmParse)
+AMREX_ENUM(SpacingType, linear, log, fast_log); // NOLINT
+
+// Enum for out-of-bounds handling (GPU-compatible, supports ParmParse)
+AMREX_ENUM(OutOfBounds, clamp, fail); // NOLINT
 
 // Structure to hold interpolation indices and normalized coordinates
 template <int Ndim> struct InterpData {
@@ -33,7 +43,7 @@ template <int Ndim> struct InterpData {
 };
 
 // GPU-friendly struct containing const table references
-template <int Ndim, int Nout = 1> struct DataTableGpuConst {
+template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> struct DataTableGpuConst {
 	std::array<amrex::Table1D<const amrex::Real>, Ndim> coords;
 	// Array of data tables for multiple outputs - each has the same coordinate dimensionality
 	using single_data_table_type =
@@ -44,11 +54,15 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 
 	std::array<amrex::Real, Ndim> coord_min{};
 	std::array<amrex::Real, Ndim> coord_max{};
+	std::array<SpacingType, Ndim> spacing_types{};
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord{};
 
 	std::array<int, Ndim> sizes{};
+
+	// Output spacing for return values: linear, log, or fast_log
+	SpacingType output_spacing = SpacingType::linear;
 
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
@@ -81,25 +95,39 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 		InterpData<Ndim> interp;
 
 		for (int dim = 0; dim < Ndim; ++dim) {
-			// Get table bounds for this dimension - assumes uniform grid spacing
-			amrex::Real const coord_start = coords[dim](coords[dim].begin); // First coordinate, begin = 0
-			amrex::Real const coord_end = coords[dim](coords[dim].end - 1); // Last coordinate, end = size
+			// Get table bounds - use precomputed coord_min/coord_max instead of accessing coords table
+			amrex::Real const coord_start = coord_min[dim];
+			amrex::Real const coord_end = coord_max[dim];
 
-			// Clamp coordinates to valid table bounds (extrapolation not supported)
-			amrex::Real clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
+			// Handle out-of-bounds based on policy
+			amrex::Real clamped_coord = point[dim];
+			if constexpr (oob_policy == OutOfBounds::clamp) {
+				// Clamp coordinates to valid table bounds (extrapolation not supported)
+				clamped_coord = amrex::max(coord_start, amrex::min(point[dim], coord_end));
+			} else if constexpr (oob_policy == OutOfBounds::fail) {
+				// Check if point is out of bounds and abort if so
+				if (point[dim] < coord_start || point[dim] > coord_end) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    false, fmt::format("Point is out of bounds for dimension {}! (value: {}, valid range: [{}, {}])", dim, point[dim],
+							       coord_start, coord_end)
+						       .c_str());
+				}
+			}
 
 			// Find grid cell indices containing the point
 			// indices are the "lower" indices of the containing hypercube
-			interp.indices[dim] = amrex::max(
-			    coords[dim].begin, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), coords[dim].end - 1));
+			interp.indices[dim] =
+			    amrex::max(0, amrex::min(static_cast<int>(std::floor((clamped_coord - coord_start) / dcoord[dim])), sizes[dim] - 1));
 
 			// if indices is end - 1, then set indices to end - 2 (so that upper_indices is end - 1, the last index)
-			if (interp.indices[dim] == coords[dim].end - 1) {
-				interp.indices[dim] = coords[dim].end - 2;
+			if (interp.indices[dim] == sizes[dim] - 1) {
+				interp.indices[dim] = sizes[dim] - 2;
 			}
 
-			// This can be greater than 1 if the point is outside the grid and not clamped
-			interp.normalized[dim] = (clamped_coord - coords[dim](interp.indices[dim])) / dcoord[dim];
+			// Compute normalized coordinate
+			// For linear spacing: coord = coord_min + index * dcoord (no table lookup needed!)
+			amrex::Real const coord_at_index = coord_min[dim] + static_cast<amrex::Real>(interp.indices[dim]) * dcoord[dim];
+			interp.normalized[dim] = (clamped_coord - coord_at_index) / dcoord[dim];
 		}
 
 		return interp;
@@ -116,11 +144,36 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const
 	    -> std::array<amrex::Real, Nout>
 	{
+		// Take log or fast_log if the spacing types are log or fast_log
+		std::array<amrex::Real, Ndim> point_{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			if (spacing_types[dim] == SpacingType::linear) {
+				point_[dim] = point[dim];
+			} else if (spacing_types[dim] == SpacingType::log) {
+				point_[dim] = std::log(point[dim]);
+			} else if (spacing_types[dim] == SpacingType::fast_log) {
+				point_[dim] = FastMath::lg(point[dim]);
+			}
+		}
+
 		// Part 1: Find interpolation indices and normalized coordinates (shared for all outputs)
-		InterpData<Ndim> const interp = find_interpolation_data(point);
+		InterpData<Ndim> const interp = find_interpolation_data(point_);
 
 		// Part 2: Perform n-dimensional interpolation for all outputs
-		return interpolate_from_indices(interp);
+		auto values = interpolate_from_indices(interp);
+
+		// Part 3: Convert from log space if output values are stored in log
+		if (output_spacing == SpacingType::fast_log) {
+			for (int i = 0; i < Nout; ++i) {
+				values[i] = FastMath::pow2(values[i]);
+			}
+		} else if (output_spacing == SpacingType::log) {
+			for (int i = 0; i < Nout; ++i) {
+				values[i] = std::exp(values[i]);
+			}
+		}
+
+		return values;
 	}
 
 	/// @brief Perform n-dimensional linear interpolation for a single output (backward compatibility)
@@ -131,11 +184,32 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const
 	    -> amrex::Real
 	{
+		// Take log or fast_log if the spacing types are log or fast_log
+		std::array<amrex::Real, Ndim> point_{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			if (spacing_types[dim] == SpacingType::linear) {
+				point_[dim] = point[dim];
+			} else if (spacing_types[dim] == SpacingType::log) {
+				point_[dim] = std::log(point[dim]);
+			} else if (spacing_types[dim] == SpacingType::fast_log) {
+				point_[dim] = FastMath::lg(point[dim]);
+			}
+		}
+
 		// Part 1: Find interpolation indices and normalized coordinates
-		InterpData<Ndim> const interp = find_interpolation_data(point);
+		InterpData<Ndim> const interp = find_interpolation_data(point_);
 
 		// Part 2: Perform n-dimensional interpolation for single output
-		return interpolate_single_from_indices(interp, output_index);
+		amrex::Real value = interpolate_single_from_indices(interp, output_index);
+
+		// Part 3: Convert from log space if output values are stored in log
+		if (output_spacing == SpacingType::fast_log) {
+			value = FastMath::pow2(value);
+		} else if (output_spacing == SpacingType::log) {
+			value = std::exp(value);
+		}
+
+		return value;
 	}
 
       private:
@@ -190,6 +264,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 			const std::array<amrex::Real, 2> w1 = {1.0 - interp.normalized[0], interp.normalized[0]};
 			const std::array<amrex::Real, 2> w2 = {1.0 - interp.normalized[1], interp.normalized[1]};
 
+			// NOSONAR
 			// Spiner formula (https://github.com/lanl/spiner/blob/main/spiner/databox.hpp, line 461):
 			// const amrex::Real value = (w2[0] * (w1[0] * dataView_(ix2, ix1) + w1[1] * dataView_(ix2, ix1 + 1)) +
 			// 			   w2[1] * (w1[0] * dataView_(ix2 + 1, ix1) + w1[1] * dataView_(ix2 + 1, ix1 + 1)));
@@ -278,7 +353,7 @@ template <int Ndim, int Nout = 1> struct DataTableGpuConst {
 };
 
 // Generic n-dimensional data table class with multiple outputs
-template <int Ndim, int Nout = 1> class DataTable
+template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> class DataTable
 {
       private:
 	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
@@ -292,11 +367,21 @@ template <int Ndim, int Nout = 1> class DataTable
 
 	std::array<amrex::Real, Ndim> coord_min_{};
 	std::array<amrex::Real, Ndim> coord_max_{};
+	std::array<SpacingType, Ndim> spacing_types_{};
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord_{};
 
 	std::array<int, Ndim> sizes_{};
+
+	// Metadata for dimension and output names/units
+	std::array<std::string, Ndim> input_names_{};
+	std::array<std::string, Nout> output_names_{};
+	std::array<std::string, Ndim> input_units_{};
+	std::array<std::string, Nout> output_units_{};
+
+	// Output spacing type: "linear" or "fast_log"
+	SpacingType output_spacing_ = SpacingType::linear;
 
       public:
 	// Default constructor
@@ -328,7 +413,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	DataTable(const DataTable &) = delete;
 	auto operator=(const DataTable &) -> DataTable & = delete;
 
-	// Initializer for backward compatibility with single output (Nout = 1)
+	// Initializer for backward compatibility with single output (Nout = 1), using fast_log on x and linear on y
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
@@ -450,7 +535,7 @@ template <int Ndim, int Nout = 1> class DataTable
 					    plane.size() == coords[2].size(),
 					    fmt::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
 							out_idx, coords[2].size(), plane.size()));
-					for (const auto &row : plane) {
+					for (const auto &row : plane) { // NOSONAR
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    row.size() == coords[3].size(),
 						    fmt::format(
@@ -465,7 +550,7 @@ template <int Ndim, int Nout = 1> class DataTable
 	}
 
 	// Get GPU-friendly const tables
-	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim, Nout>
+	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim, Nout, oob_policy>
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
 
@@ -474,18 +559,20 @@ template <int Ndim, int Nout = 1> class DataTable
 			coord_tables[i] = coords_[i]->const_table();
 		}
 
-		std::array<typename DataTableGpuConst<Ndim, Nout>::single_data_table_type, Nout> data_tables{};
+		std::array<typename DataTableGpuConst<Ndim, Nout, oob_policy>::single_data_table_type, Nout> data_tables{};
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			data_tables[out_idx] = data_[out_idx]->const_table();
 		}
 
-		DataTableGpuConst<Ndim, Nout> tables{
+		DataTableGpuConst<Ndim, Nout, oob_policy> tables{
 		    coord_tables,
-		    data_tables, // array of data tables
-		    coord_min_,	 // coord_min array
-		    coord_max_,	 // coord_max array
-		    dcoord_,	 // dcoord array
-		    sizes_	 // sizes array
+		    data_tables,    // array of data tables
+		    coord_min_,	    // coord_min array
+		    coord_max_,	    // coord_max array
+		    spacing_types_, // spacing types array (converted to enum)
+		    dcoord_,	    // dcoord array
+		    sizes_,	    // sizes array
+		    output_spacing_ // output spacing (converted to enum)
 		};
 		return tables;
 	}
@@ -522,32 +609,101 @@ template <int Ndim, int Nout = 1> class DataTable
 	// Get number of outputs
 	[[nodiscard]] constexpr auto num_outputs() const -> int { return Nout; }
 
+	// Get metadata accessors
+	[[nodiscard]] auto input_names() const -> std::array<std::string, Ndim> { return input_names_; }
+	[[nodiscard]] auto output_names() const -> std::array<std::string, Nout> { return output_names_; }
+	[[nodiscard]] auto input_units() const -> std::array<std::string, Ndim> { return input_units_; }
+	[[nodiscard]] auto output_units() const -> std::array<std::string, Nout> { return output_units_; }
+
+	// Get individual metadata by index
+	[[nodiscard]] auto input_name(int dim) const -> std::string
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
+						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
+		return input_names_[dim];
+	}
+	[[nodiscard]] auto output_name(int idx) const -> std::string
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= 0 && idx < Nout,
+						 fmt::format("Output index out of bounds! (provided: {}, valid range: [0, {}])", idx, Nout - 1));
+		return output_names_[idx];
+	}
+	[[nodiscard]] auto input_unit(int dim) const -> std::string
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
+						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
+		return input_units_[dim];
+	}
+	[[nodiscard]] auto output_unit(int idx) const -> std::string
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= 0 && idx < Nout,
+						 fmt::format("Output index out of bounds! (provided: {}, valid range: [0, {}])", idx, Nout - 1));
+		return output_units_[idx];
+	}
+
       private:
-	// Common initialization logic for different dimensional data types
-	template <typename DataType> void initialize_common(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
+	// Optimized initialization that takes bounds, sizes, and spacing directly
+	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
+	template <typename DataType>
+	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
+			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
+			       const DataType &data)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
-		// Store sizes
+		// Store metadata
+		coord_min_ = x_mins;
+		coord_max_ = x_maxs;
+		sizes_ = n_xs;
+		spacing_types_ = spacing_types;
+
+		// Validate bounds
 		for (int dim = 0; dim < Ndim; ++dim) {
-			sizes_[dim] = static_cast<int>(coords[dim].size());
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim], fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]",
+													dim, coord_min_[dim], coord_max_[dim]));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes_[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes_[dim], dim));
 		}
 
-		// Store coordinate bounds (assuming ascending order) and calculate grid spacing
-		for (int dim = 0; dim < Ndim; ++dim) {
-			coord_min_[dim] = coords[dim].front();
-			coord_max_[dim] = coords[dim].back();
-			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
-		}
-
-		// Create coordinate tables
+		// Create coordinate tables - either from provided coords or generate them
 		for (int dim = 0; dim < Ndim; ++dim) {
 			coords_[dim] = std::make_unique<amrex::TableData<amrex::Real, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1},
 											  amrex::The_Pinned_Arena());
-			auto coord_table = coords_[dim]->table();
-			for (int i = 0; i < sizes_[dim]; ++i) {
-				coord_table(i) = coords[dim][i];
+
+			// Generate coordinates based on spacing type
+			if (spacing_types_[dim] == SpacingType::linear) {
+				// Linear spacing: coordinates computed on-the-fly in GPU code, no need to populate table
+				// Table structure exists but remains unpopulated for memory efficiency
+			} else if (spacing_types_[dim] == SpacingType::log) {
+				// Logarithmic spacing: store actual values, not logarithms
+				// Update coordinates to their log values in plance
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
+								 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
+				coord_min_[dim] = std::log(coord_min_[dim]);
+				coord_max_[dim] = std::log(coord_max_[dim]);
+			} else if (spacing_types_[dim] == SpacingType::fast_log) {
+				// Fast log spacing: store log(value) for fast interpolation
+				// Update coordinates to their log values in place
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
+								 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
+				coord_min_[dim] = FastMath::lg(coord_min_[dim]);
+				coord_max_[dim] = FastMath::lg(coord_max_[dim]);
 			}
+
+			// NOSONAR
+			// For future support of irregular spacing
+			// } else if (spacing_types_[dim] == SpacingType::irregular) {
+			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
+			// 					 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
+			// 						     dim, sizes_[dim], coords[dim].size()));
+			// 	auto coord_table = coords_[dim]->table();
+			// 	for (int i = 0; i < sizes_[dim]; ++i) {
+			// 		coord_table(i) = coords[dim][i];
+			// 	}
+		}
+
+		// Calculate grid spacing (after taking necessary log of the coordinates)
+		for (int dim = 0; dim < Ndim; ++dim) {
+			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
 		}
 
 		// Create n-dimensional data tables for each output
@@ -600,7 +756,477 @@ template <int Ndim, int Nout = 1> class DataTable
 		}
 	}
 
+	// Backward compatibility wrapper: derive bounds, sizes, and spacing from coords
+	template <typename DataType> void initialize_common(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const DataType &data)
+	{
+		// Validate inputs
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+		}
+
+		// Derive bounds and sizes from coordinates
+		std::array<amrex::Real, Ndim> x_mins;
+		std::array<amrex::Real, Ndim> x_maxs;
+		std::array<int, Ndim> n_xs{};
+		std::array<SpacingType, Ndim> spacing_types{};
+
+		for (int dim = 0; dim < Ndim; ++dim) {
+			n_xs[dim] = static_cast<int>(coords[dim].size());
+			x_mins[dim] = coords[dim].front();
+			x_maxs[dim] = coords[dim].back();
+			// This is a hack for backward compatibility to the cooling table, which uses log input and linear output
+			spacing_types[dim] = SpacingType::linear;
+		}
+
+		// Pass empty coords - for linear spacing they will be computed on-the-fly
+		std::array<amrex::Vector<amrex::Real>, Ndim> empty_coords;
+		for (int dim = 0; dim < Ndim; ++dim) {
+			empty_coords[dim] = amrex::Vector<amrex::Real>();
+		}
+
+		// Call the optimized initialize_common with empty coords for efficiency
+		initialize_common(x_mins, x_maxs, n_xs, spacing_types, empty_coords, data);
+	}
+
       public:
+	// CSVReader: Generic static method to read n-dimensional data from CSV file and create DataTable
+	// CSV format:
+	//   Line 1: Ndim (number of input dimensions)
+	//   Line 2: Nx (comma-separated sizes for each dimension)
+	//   Line 3: Nout (number of outputs)
+	//   Line 4: input_names (comma-separated names for each input dimension)
+	//   Line 5: output_names (comma-separated names for each output)
+	//   Line 6: input_units (comma-separated units for each input dimension)
+	//   Line 7: output_units (comma-separated units for each output)
+	//   Line 8: xlo (comma-separated lower bounds for each dimension)
+	//   Line 9: xhi (comma-separated upper bounds for each dimension)
+	//   Line 10: spacing (comma-separated spacing types: linear, log, fast_log)
+	//   Remaining lines: data values
+	//     For 2D: nx2 rows × nx1 columns (last dimension varies fastest in rows)
+	//     For 3D: (nx3 × nx2) rows × nx1 columns
+	//     For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
+	//
+	// @param file_path Path to the CSV file
+	// @param output_spacing Spacing type for output values: linear, log, or fast_log
+	//                      If fast_log, output values are converted to log before storage
+	static auto CSVReader(const std::string &file_path, SpacingType output_spacing) -> DataTable
+	{
+		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
+
+		std::ifstream file(file_path);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
+
+		// Read header information
+		int n_dim = 0;
+		int n_out = 0;
+		std::array<int, Ndim> sizes{};
+		std::array<std::pair<amrex::Real, amrex::Real>, Ndim> coord_bounds{};
+		std::array<std::string, Ndim> spacing_types{};
+
+		// Line 1: Ndim
+		file >> n_dim;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+		    n_dim == Ndim, fmt::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
+
+		// Line 2: Nx (comma-separated)
+		std::string nx_line;
+		std::getline(file >> std::ws, nx_line);
+		{
+			std::stringstream ss(nx_line);
+			for (int dim = 0; dim < Ndim; ++dim) {
+				char comma = ' ';
+				ss >> sizes[dim];
+				if (dim < Ndim - 1) {
+					ss >> comma;
+				}
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
+			}
+		}
+
+		// Line 3: Nout
+		file >> n_out;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_out == Nout,
+						 fmt::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
+
+		// Line 4: input_names (comma-separated, in metadata order)
+		std::array<std::string, Ndim> input_names{};
+		std::string input_names_line;
+		std::getline(file >> std::ws, input_names_line);
+		{
+			std::stringstream ss(input_names_line);
+			for (int i = 0; i < Ndim; ++i) {
+				if (i < Ndim - 1) {
+					std::getline(ss, input_names[i], ',');
+				} else {
+					ss >> input_names[i];
+				}
+			}
+		}
+
+		// Line 5: output_names (comma-separated)
+		std::array<std::string, Nout> output_names{};
+		std::string output_names_line;
+		std::getline(file >> std::ws, output_names_line);
+		{
+			std::stringstream ss(output_names_line);
+			for (int i = 0; i < Nout; ++i) {
+				if (i < Nout - 1) {
+					std::getline(ss, output_names[i], ',');
+				} else {
+					ss >> output_names[i];
+				}
+			}
+		}
+
+		// Line 6: input_units (comma-separated)
+		std::array<std::string, Ndim> input_units{};
+		std::string input_units_line;
+		std::getline(file >> std::ws, input_units_line);
+		{
+			std::stringstream ss(input_units_line);
+			for (int i = 0; i < Ndim; ++i) {
+				if (i < Ndim - 1) {
+					std::getline(ss, input_units[i], ',');
+				} else {
+					ss >> input_units[i];
+				}
+			}
+		}
+
+		// Line 7: output_units (comma-separated)
+		std::array<std::string, Nout> output_units{};
+		std::string output_units_line;
+		std::getline(file >> std::ws, output_units_line);
+		{
+			std::stringstream ss(output_units_line);
+			for (int i = 0; i < Nout; ++i) {
+				if (i < Nout - 1) {
+					std::getline(ss, output_units[i], ',');
+				} else {
+					ss >> output_units[i];
+				}
+			}
+		}
+
+		// Read metadata values (xlo, xhi, spacing) - these are in input_names order (metadata order)
+		std::array<amrex::Real, Ndim> xlo_metadata{};
+		std::array<amrex::Real, Ndim> xhi_metadata{};
+		std::array<std::string, Ndim> spacing_metadata{};
+
+		// Line 8: xlo (comma-separated, in metadata order)
+		std::string xlo_line;
+		std::getline(file >> std::ws, xlo_line);
+		{
+			std::stringstream ss(xlo_line);
+			for (int i = 0; i < Ndim; ++i) {
+				char comma = ' ';
+				ss >> xlo_metadata[i];
+				if (i < Ndim - 1) {
+					ss >> comma;
+				}
+			}
+		}
+
+		// Line 9: xhi (comma-separated, in metadata order)
+		std::string xhi_line;
+		std::getline(file >> std::ws, xhi_line);
+		{
+			std::stringstream ss(xhi_line);
+			for (int i = 0; i < Ndim; ++i) {
+				char comma = ' ';
+				ss >> xhi_metadata[i];
+				if (i < Ndim - 1) {
+					ss >> comma;
+				}
+			}
+		}
+
+		// Line 10: spacing (comma-separated, in metadata order)
+		std::string spacing_line;
+		std::getline(file >> std::ws, spacing_line);
+		{
+			std::stringstream ss(spacing_line);
+			for (int i = 0; i < Ndim; ++i) {
+				if (i < Ndim - 1) {
+					std::getline(ss, spacing_metadata[i], ',');
+				} else {
+					ss >> spacing_metadata[i];
+				}
+			}
+		}
+
+		// Copy metadata from input_names order (which should match Nx order)
+		// Nx = [nx1, nx2, ...] where x1, x2, ... correspond to dimensions in order
+		// metadata = [meta0, meta1, ...] in input_names order
+		// Assume input_names order matches Nx order (e.g., input_names="age,mass" means x1=age, x2=mass)
+		for (int dim = 0; dim < Ndim; ++dim) {
+			coord_bounds[dim].first = xlo_metadata[dim];
+			coord_bounds[dim].second = xhi_metadata[dim];
+			spacing_types[dim] = spacing_metadata[dim];
+
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    coord_bounds[dim].second > coord_bounds[dim].first,
+			    fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
+		}
+
+		// Convert string spacing types to enum and validate spacing type
+		std::array<SpacingType, Ndim> spacing_types_enum{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			try {
+				spacing_types_enum[dim] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_types[dim]);
+			} catch (const std::runtime_error &e) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    false,
+				    fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
+			}
+		}
+
+		// Prepare bounds and sizes for optimized initialization
+		std::array<amrex::Real, Ndim> x_mins{};
+		std::array<amrex::Real, Ndim> x_maxs{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			x_mins[dim] = coord_bounds[dim].first;
+			x_maxs[dim] = coord_bounds[dim].second;
+		}
+
+		// Empty coord arrays - will be generated automatically based on spacing type
+		std::array<amrex::Vector<amrex::Real>, Ndim> empty_coords{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			empty_coords[dim] = amrex::Vector<amrex::Real>(); // Empty vector
+		}
+
+		// lambda function for log
+		// For fast_log, use inverse_pow2 to find y such that pow2(y) = x exactly
+		// This ensures interpolation at grid points returns exact values
+		auto log_ = [output_spacing](amrex::Real x) {
+			if (output_spacing == SpacingType::fast_log) {
+				return FastMath::inverse_pow2(x);
+			}
+			return std::log(x);
+		};
+
+		// Read data values - layout is transposed from internal representation
+		// CSV layout: last dimensions as rows, first dimension as columns
+		if constexpr (Ndim == 1) {
+			// For 1D: single row with nx1 columns
+			data_1d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(sizes[0]);
+				for (int i = 0; i < sizes[0]; ++i) {
+					char comma = ' ';
+					file >> data_array[out_idx][i];
+					if (i < sizes[0] - 1) { // NOSONAR
+						file >> comma;
+					}
+				}
+			}
+
+			// Apply log transformation if output_spacing is fast_log or log
+			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i = 0; i < sizes[0]; ++i) { // NOSONAR
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    data_array[out_idx][i] > 0.0,
+						    fmt::format("log output spacing requires positive values, got {} at output {} index {}",
+								data_array[out_idx][i], out_idx, i));
+						data_array[out_idx][i] = log_(data_array[out_idx][i]);
+					}
+				}
+			}
+
+			// Create and initialize DataTable using optimized path
+			DataTable table;
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
+
+			// Store metadata
+			table.input_names_ = input_names;
+			table.output_names_ = output_names;
+			table.input_units_ = input_units;
+			table.output_units_ = output_units;
+			table.output_spacing_ = output_spacing;
+
+			file.close();
+			return table;
+
+		} else if constexpr (Ndim == 2) {
+			// For 2D: nx2 rows × nx1 columns
+			// CSV: data[row=i2][col=i1] -> DataTable: data[out_idx][i1][i2]
+			data_2d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(sizes[0]);
+				for (int i1 = 0; i1 < sizes[0]; ++i1) {
+					data_array[out_idx][i1].resize(sizes[1]);
+				}
+
+				// Read data in transposed order
+				for (int i2 = 0; i2 < sizes[1]; ++i2) {
+					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+						char comma = ' ';
+						file >> data_array[out_idx][i1][i2];
+						if (i1 < sizes[0] - 1) {
+							file >> comma;
+						}
+					}
+				}
+			}
+
+			// Apply log transformation if output_spacing is fast_log or log
+			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {
+							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+							    data_array[out_idx][i1][i2] > 0.0,
+							    fmt::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
+									data_array[out_idx][i1][i2], out_idx, i1, i2));
+							data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
+						}
+					}
+				}
+			}
+
+			// Create and initialize DataTable using optimized path
+			DataTable table;
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
+
+			// Store metadata
+			table.input_names_ = input_names;
+			table.output_names_ = output_names;
+			table.input_units_ = input_units;
+			table.output_units_ = output_units;
+			table.output_spacing_ = output_spacing;
+
+			file.close();
+			return table;
+
+		} else if constexpr (Ndim == 3) {
+			// For 3D: (nx3 × nx2) rows × nx1 columns
+			// CSV: data[row=(i3*nx2+i2)][col=i1] -> DataTable: data[out_idx][i1][i2][i3]
+			data_3d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(sizes[0]);
+				for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+					data_array[out_idx][i1].resize(sizes[1]);
+					for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
+						data_array[out_idx][i1][i2].resize(sizes[2]);
+					}
+				}
+
+				// Read data in transposed order
+				for (int i3 = 0; i3 < sizes[2]; ++i3) {
+					for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
+						for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+							char comma = ' ';
+							file >> data_array[out_idx][i1][i2][i3];
+							if (i1 < sizes[0] - 1) {
+								file >> comma;
+							}
+						}
+					}
+				}
+			}
+
+			// Apply log transformation if output_spacing is fast_log or log
+			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {			// NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
+							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
+								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i1][i2][i3] > 0.0,
+												 fmt::format("log output spacing requires positive "
+													     "values, got {} at output {} index ({}, {}, {})",
+													     data_array[out_idx][i1][i2][i3], out_idx, i1, i2,
+													     i3));
+								data_array[out_idx][i1][i2][i3] = log_(data_array[out_idx][i1][i2][i3]);
+							}
+						}
+					}
+				}
+			}
+
+			// Create and initialize DataTable using optimized path
+			DataTable table;
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
+
+			// Store metadata
+			table.input_names_ = input_names;
+			table.output_names_ = output_names;
+			table.input_units_ = input_units;
+			table.output_units_ = output_units;
+			table.output_spacing_ = output_spacing;
+
+			file.close();
+			return table;
+
+		} else if constexpr (Ndim == 4) {
+			// For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
+			// CSV: data[row=(i4*nx3*nx2+i3*nx2+i2)][col=i1] -> DataTable: data[out_idx][i1][i2][i3][i4]
+			data_4d_type data_array;
+			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+				data_array[out_idx].resize(sizes[0]);
+				for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+					data_array[out_idx][i1].resize(sizes[1]);
+					for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
+						data_array[out_idx][i1][i2].resize(sizes[2]);
+						for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
+							data_array[out_idx][i1][i2][i3].resize(sizes[3]);
+						}
+					}
+				}
+
+				// Read data in transposed order
+				for (int i4 = 0; i4 < sizes[3]; ++i4) {
+					for (int i3 = 0; i3 < sizes[2]; ++i3) {			// NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
+							for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+								char comma = ' ';
+								file >> data_array[out_idx][i1][i2][i3][i4];
+								if (i1 < sizes[0] - 1) {
+									file >> comma;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Apply log transformation if output_spacing is fast_log or log
+			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {				// NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {			// NOSONAR
+							for (int i3 = 0; i3 < sizes[2]; ++i3) {		// NOSONAR
+								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
+									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+									    data_array[out_idx][i1][i2][i3][i4] > 0.0,
+									    fmt::format("log output spacing requires positive values, got {} at output {} "
+											"index ({}, {}, "
+											"{}, {})",
+											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
+									data_array[out_idx][i1][i2][i3][i4] = log_(data_array[out_idx][i1][i2][i3][i4]);
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Create and initialize DataTable using optimized path
+			DataTable table;
+			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
+
+			// Store metadata
+			table.input_names_ = input_names;
+			table.output_names_ = output_names;
+			table.input_units_ = input_units;
+			table.output_units_ = output_units;
+			table.output_spacing_ = output_spacing;
+
+			file.close();
+			return table;
+		}
+	}
+
 	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
 	// Reads metadata, coordinates, and data all from the HDF5 file
 	// Optionally returns coordinate bounds via coord_bounds parameter
