@@ -1106,6 +1106,31 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 		return;
 	}
 
+	auto const has_ext_dir_hydro_bc = [&]() {
+		constexpr int hydro_first = Physics_Indices<problem_t>::hydroFirstIndex;
+		constexpr int num_hydro_vars = Physics_NumVars::numHydroVars;
+		for (int offset = 0; offset < num_hydro_vars; ++offset) {
+			int const component_index = hydro_first + offset;
+			if (component_index >= static_cast<int>(BCs_cc_.size())) {
+				continue;
+			}
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				int const lo_bc = BCs_cc_[component_index].lo(dir);
+				int const hi_bc = BCs_cc_[component_index].hi(dir);
+				if (lo_bc == amrex::BCType::ext_dir || lo_bc == amrex::BCType::ext_dir_cc || hi_bc == amrex::BCType::ext_dir ||
+				    hi_bc == amrex::BCType::ext_dir_cc) {
+					return true;
+				}
+			}
+		}
+		return false;
+	};
+
+	if (has_ext_dir_hydro_bc()) {
+		amrex::Print() << "Skipping initial magnetic field projection because ext_dir hydrodynamic boundary conditions are not supported.\n";
+		return;
+	}
+
 	int const finest = this->finest_level;
 	if (finest < 0) {
 		return;
@@ -1237,37 +1262,23 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
 	constexpr int nvarPerDim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
 	AMREX_ALWAYS_ASSERT(nvarPerDim_fc > 0);
-	auto const to_linop_bc = [](int bc_value) -> amrex::LinOpBCType {
-		switch (bc_value) {
-			case amrex::BCType::int_dir:
-			case amrex::BCType::foextrap:
-			case amrex::BCType::hoextrap:
-			case amrex::BCType::hoextrapcc:
-			case amrex::BCType::reflect_even:
-				return amrex::LinOpBCType::Neumann;
-			case amrex::BCType::ext_dir:
-			case amrex::BCType::ext_dir_cc:
-			case amrex::BCType::reflect_odd:
-				return amrex::LinOpBCType::Dirichlet;
-			default:
-				return amrex::LinOpBCType::Dirichlet;
-		}
-	};
-	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		if (geom_levels[0].isPeriodic(dir)) {
-			bc_lo[dir] = amrex::LinOpBCType::Periodic;
-			bc_hi[dir] = amrex::LinOpBCType::Periodic;
-			continue;
-		}
 
+	auto const to_linop_bc = [](int bc_value) -> amrex::LinOpBCType {
+	  if (bc_value ==  amrex::BCType::reflect_even || bc_value == amrex::BCType::foextrap) {
+	    return amrex::LinOpBCType::Neumann; // Neumann zero-valued BC
+	  } else if (bc_value == amrex::BCType::reflect_odd) {
+	    return amrex::LinOpBCType::Dirichlet; // Dirichlet zero-valued BC
+	  } else if (bc_value == amrex::BCType::int_dir) { 
+	    return amrex::LinOpBCType::Periodic; // periodic BC
+	  } else {
+	    return amrex::LinOpBCType::Dirichlet; // unsupported, but return something
+	  }
+	};
+	
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 		int const component_index = dir * nvarPerDim_fc + MHDSystem<problem_t>::bfield_index;
-		if (component_index < static_cast<int>(BCs_fc_.size())) {
-			bc_lo[dir] = to_linop_bc(BCs_fc_[component_index].lo(dir));
-			bc_hi[dir] = to_linop_bc(BCs_fc_[component_index].hi(dir));
-		} else {
-			bc_lo[dir] = amrex::LinOpBCType::Dirichlet;
-			bc_hi[dir] = amrex::LinOpBCType::Dirichlet;
-		}
+		bc_lo[dir] = to_linop_bc(BCs_fc_[component_index].lo(dir));
+		bc_hi[dir] = to_linop_bc(BCs_fc_[component_index].hi(dir));
 	}
 
 	Hydro::MacProjector macproj(projector_umac, amrex::MLMG::Location::FaceCenter, projector_beta, amrex::MLMG::Location::FaceCenter,
