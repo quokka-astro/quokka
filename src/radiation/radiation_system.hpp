@@ -929,6 +929,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
 	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
+	AMREX_ASSERT(!std::isnan(f));
+	AMREX_ASSERT(f <= 1.0);
 	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
 
 	// angle between interface and radiation flux \hat{n}
@@ -943,7 +945,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 	// compute radiation pressure tensors
 	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
 
-	AMREX_ASSERT((chi >= 1. / 3.) && (chi <= 1.0)); // NOLINT
+	AMREX_ASSERT(!std::isnan(chi));
+	AMREX_ASSERT(chi >= 1. / 3.);
+	AMREX_ASSERT(chi <= 1.0);
 
 	// diagonal term of Eddington tensor
 	const double Tdiag = (1.0 - chi) / 2.0;
