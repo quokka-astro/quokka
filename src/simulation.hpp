@@ -237,6 +237,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid const &grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) = 0;
+	virtual void postInitialization() {}
 	virtual void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) = 0;
 	virtual void createInitialRadParticles() = 0;
 #if AMREX_SPACEDIM == 3
@@ -844,6 +845,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		const amrex::Real time = 0.0;
 		InitFromScratch(time);
 		AverageDown();
+
+		postInitialization();
 
 		if (do_tracers != 0) {
 			InitParticles();

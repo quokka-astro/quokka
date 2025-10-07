@@ -221,6 +221,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
+	void postInitialization() override;
 
 	// Optionally project already-initialised face-centred magnetic fields onto a divergence-free space
 	void projectFaceCenteredMagneticField();
@@ -1094,13 +1095,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField()
 {
-#if AMREX_SPACEDIM != 3
-	return;
-#else
+#if AMREX_SPACEDIM == 3
 	static_assert(Physics_Traits<problem_t>::is_mhd_enabled, "Magnetic field initialisation requires MHD to be enabled.");
-	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
-		return;
-	}
 
 	if (!projectInitialBField_) {
 		return;
@@ -1114,7 +1110,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> projector_umac(finest + 1);
 	amrex::Vector<amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM>> projector_beta(finest + 1);
 	amrex::Vector<amrex::Array<std::unique_ptr<amrex::MultiFab>, AMREX_SPACEDIM>> beta_storage(finest + 1);
-	amrex::Vector<amrex::Array<std::unique_ptr<amrex::MultiFab>, AMREX_SPACEDIM>> alias_storage(finest + 1);
+	amrex::Vector<amrex::Array<std::unique_ptr<amrex::MultiFab>, AMREX_SPACEDIM>> bfield_storage(finest + 1);
 
 	for (int lev = 0; lev <= finest; ++lev) {
 		AMREX_ASSERT(lev < static_cast<int>(state_new_fc_.size()));
@@ -1125,18 +1121,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 		auto const time = (lev < static_cast<int>(tNew_.size())) ? tNew_[lev] : amrex::Real(0.0);
 
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc,
-					       static_cast<quokka::direction>(dir), AMRSimulation<problem_t>::InterpHookNone,
-					       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
-
 			amrex::IntVect faceType = amrex::IntVect::TheDimensionVector(dir);
 			beta_storage[lev][dir] = std::make_unique<amrex::MultiFab>(amrex::convert(ba, faceType), dm, 1, 0);
 			beta_storage[lev][dir]->setVal(1.0);
-
-			alias_storage[lev][dir] =
+			bfield_storage[lev][dir] =
 			    std::make_unique<amrex::MultiFab>(state_new_fc_[lev][dir], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1);
-
-			projector_umac[lev][dir] = alias_storage[lev][dir].get();
+			projector_umac[lev][dir] = bfield_storage[lev][dir].get();
 			projector_beta[lev][dir] = beta_storage[lev][dir].get();
 		}
 	}
@@ -1162,6 +1152,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	macproj.getMLMG().setBottomVerbose(0);
 	constexpr amrex::Real reltol = 1.0e-12;
 	constexpr amrex::Real abstol = std::numeric_limits<amrex::Real>::epsilon();
+
+	amrex::Print() << "\nProjecting initial magnetic field...\n";
 	macproj.project(reltol, abstol);
 
 	for (int lev = 0; lev <= finest; ++lev) {
@@ -1178,18 +1170,24 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 		amrex::MultiFab divB(boxArray(lev), DistributionMap(lev), 1, 0);
 		amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> bfield_ptrs;
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			bfield_ptrs[dir] = alias_storage[lev][dir].get();
+			bfield_ptrs[dir] = bfield_storage[lev][dir].get();
 		}
 		amrex::computeDivergence(divB, bfield_ptrs, geom_levels[lev]);
 		max_divB_norm = std::max(max_divB_norm, divB.norm0(0, 0, false));
 	}
 
 	constexpr amrex::Real divB_tolerance = 1.0e-14;
+	amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm << ", tolerance = "
+		       << divB_tolerance << '\n';
 	if (max_divB_norm > divB_tolerance) {
-		amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm << ", tolerance = " << divB_tolerance << '\n';
 		amrex::Abort("Magnetic field MAC projection failed to satisfy divergence tolerance.");
 	}
 #endif
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization()
+{
+	projectFaceCenteredMagneticField();
 }
 
 // fix-up any unphysical states created by AMR operations
