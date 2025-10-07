@@ -227,7 +227,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
-	const double resid_tol = 1.0e-11; // 1.0e-15;
+	const double resid_tol = 1.0e-8; // 1.0e-15;
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
@@ -348,17 +348,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			std::cout << "]";
 			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
 		}
+#endif
 
+#if 0
 		if (n >= maxIter - 4) {
-			printf("n = %d, Egas_guess = %f, EradVec_guess = [", n, Egas_guess);
+			printf("n = %d, Egas_guess = %e, EradVec_guess = [", n, Egas_guess);
 			for (int g = 0; g < nGroups_; ++g) {
-				printf("%f, ", EradVec_guess[g]);
+				printf("%e, ", EradVec_guess[g]);
 			}
 			printf("], tau = [");
 			for (int g = 0; g < nGroups_; ++g) {
-				printf("%f, ", tau[g]);
+				printf("%e, ", tau[g]);
 			}
-			printf("], F_G = %f, F_D_abs_sum = %f, Etot0 = %f\n", jacobian.F0, jacobian.Fg_abs_sum, Etot0);
+			printf("], F_G = %e, F_D_abs_sum = %e, Etot0 = %e\n", jacobian.F0, jacobian.Fg_abs_sum, Etot0);
 		}
 #endif
 
