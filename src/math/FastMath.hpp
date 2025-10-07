@@ -76,10 +76,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto inverse_pow2(const double x) -> do
 	constexpr double LN2 = 0.693147180559945309417232121458;
 	constexpr int MAX_ITER = 20;
 	constexpr double TOLERANCE = 1.0e-15;
-	
+
 	// Initial guess using fast log
 	double y = lg(x);
-	
+
 	// Newton iteration: solve pow2(y) - x = 0
 	// f(y) = pow2(y) - x
 	// f'(y) = pow2(y) * ln(2)
@@ -87,17 +87,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto inverse_pow2(const double x) -> do
 	for (int iter = 0; iter < MAX_ITER; ++iter) {
 		const double pow2_y = pow2(y);
 		const double f = pow2_y - x;
-		
+
 		// Check convergence
 		if (std::abs(f) < TOLERANCE * std::abs(x)) {
 			break;
 		}
-		
+
 		// Newton update
 		const double df = pow2_y * LN2;
 		y = y - f / df;
 	}
-	
+
 	return y;
 }
 

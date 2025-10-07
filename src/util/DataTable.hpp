@@ -996,9 +996,11 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 
 		// lambda function for log
+		// For fast_log, use inverse_pow2 to find y such that pow2(y) = x exactly
+		// This ensures interpolation at grid points returns exact values
 		auto log_ = [output_spacing](amrex::Real x) {
 			if (output_spacing == SpacingType::fast_log) {
-				return FastMath::lg(x);
+				return FastMath::inverse_pow2(x);
 			}
 			return std::log(x);
 		};
