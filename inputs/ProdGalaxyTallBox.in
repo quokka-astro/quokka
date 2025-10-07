@@ -8,7 +8,7 @@ geometry.is_periodic =  1    1    0
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 1      # verbosity in Amr
+amr.v              = 0      # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
@@ -33,6 +33,13 @@ checkpoint_interval = -1
 density_floor = 1.67e-30 #in g cm^-3
 temperature_floor = 10.0 #K
 
+particles.eps_ff = 0.01
+particles.param1 = 3.155760000e+14 # 10 Myr
+particles.param2 = 1.0
+particles.verbose = 0
+particles.rad_table = ../inputs/lum_demo_2groups_fastlog.csv
+particles.rad_table_output_spacing = fast_log
+
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
@@ -42,27 +49,27 @@ perturb.use_superresolution = 0
 #perturb.amplitude = 0.35e5 # cm/s, = 0.05 * 7 km/s
 perturb.amplitude = 7e5 # 7 km/s
 
-tiny_profiler.enabled = 1
+tiny_profiler.enabled = 0
 
-statistics_interval = 128
-projection_interval = 128
-projection.dirs = x z
-
-derived_vars = temperature c_s
-
-quokka.diagnostics = slice_x slice_z
-quokka.slice_x.type = DiagFramePlane
-quokka.slice_x.file = slicex_plt
-quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.slice_x.center = 1.509001e21
-quokka.slice_x.int = 128
-quokka.slice_x.interpolation = Linear
-quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
-
-quokka.slice_z.type = DiagFramePlane
-quokka.slice_z.file = slicez_plt
-quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
-quokka.slice_z.int = 128
-quokka.slice_z.interpolation = Linear
-quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+#statistics_interval = 128
+#projection_interval = 128
+#projection.dirs = x z
+#
+#derived_vars = temperature c_s
+#
+#quokka.diagnostics = slice_x slice_z
+#quokka.slice_x.type = DiagFramePlane
+#quokka.slice_x.file = slicex_plt
+#quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
+#quokka.slice_x.center = 1.509001e21
+#quokka.slice_x.int = 128
+#quokka.slice_x.interpolation = Linear
+#quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+#
+#quokka.slice_z.type = DiagFramePlane
+#quokka.slice_z.file = slicez_plt
+#quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
+#quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
+#quokka.slice_z.int = 128
+#quokka.slice_z.interpolation = Linear
+#quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
