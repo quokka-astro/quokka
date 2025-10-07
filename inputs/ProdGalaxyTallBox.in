@@ -79,4 +79,4 @@ quokka.proj.type = ProjectionPlot   # Projection plot diagnostic
 quokka.proj.file = proj_plt         # Output file prefix (must end in "plt")
 quokka.proj.int  = 128                # Output cadence (in number of coarse steps)
 quokka.proj.dirs = x                # Projection directions (x, y, z)
-quokka.proj.particles = CIC_particles # List of particle types to include in output (default to none)
+quokka.proj.particles = StochasticStellarPop_particles # List of particle types to include in output (default to none)
