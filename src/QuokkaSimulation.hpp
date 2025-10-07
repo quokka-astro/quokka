@@ -1244,11 +1244,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	}
 	macproj.setVerbose(Verbose() ? 1 : 0);
 	macproj.getMLMG().setBottomVerbose(0);
+	amrex::Print() << "\nProjecting initial magnetic field...\n";
 	macproj.project(rel_tol, abs_tol);
 	fill_all_boundaries();
 
 	amrex::Real max_divB_norm = compute_dimensionless_divergence();
 	amrex::Real const divB_tolerance = tolerance_ratio;
+	amrex::Print() << "projectFaceCenteredMagneticField: max(dx * |div B| / |B|) = " << max_divB_norm
+		       << ", tolerance = " << divB_tolerance << '\n';
 	if (max_divB_norm > divB_tolerance) {
 		int forced_iters = 1;
 		int attempt = 0;
@@ -1278,10 +1281,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 #endif
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization()
-{
-	projectFaceCenteredMagneticField();
-}
+template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization() { projectFaceCenteredMagneticField(); }
 
 // fix-up any unphysical states created by AMR operations
 // (e.g., caused by the flux register or from interpolation)
