@@ -160,7 +160,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	bool use_wavespeed_correction_ = false;
 	bool print_rad_counter_ = false;
-	bool projectInitialBField_ = true;
+        bool projectInitialBField_ = false;
 	bool updateInitialMagneticEnergy_ = true;
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
