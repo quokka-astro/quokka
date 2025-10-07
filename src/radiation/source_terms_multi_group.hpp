@@ -350,17 +350,16 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		}
 #endif
 
-		if (n >= maxIter - 5) {
-			std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = [";
+		if (n >= maxIter - 4) {
+			printf("n = %d, Egas_guess = %f, EradVec_guess = [", n, Egas_guess);
 			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << EradVec_guess[g] << ", ";
+				printf("%f, ", EradVec_guess[g]);
 			}
-			std::cout << "], tau = [";
+			printf("], tau = [");
 			for (int g = 0; g < nGroups_; ++g) {
-				std::cout << tau[g] << ", ";
+				printf("%f, ", tau[g]);
 			}
-			std::cout << "]";
-			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
+			printf("], F_G = %f, F_D_abs_sum = %f, Etot0 = %f\n", jacobian.F0, jacobian.Fg_abs_sum, Etot0);
 		}
 
 		// update variables
