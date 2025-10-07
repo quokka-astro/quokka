@@ -13,7 +13,6 @@ amr.v              = 0      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-#amr.n_cell          = 256 256 1024
 amr.n_cell          = 32 32 128
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 128   # at least 128 for GPUs
@@ -23,22 +22,26 @@ amr.blocking_factor_z = 128
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
-do_reflux     = 1
-do_subcycle   = 0
-stop_time     = 9.462e+15
-max_timesteps = 2
-plotfile_interval = 512
-checkpoint_interval = -1
+do_reflux = 1
+do_subcycle = 0
+suppress_output = 0
+
+particles.verbose = 1
+particles.disable_SN_feedback = false
+particles.rad_table = ../inputs/lum_demo_2groups_log.csv
+particles.rad_table_output_spacing = log
 
 density_floor = 1.67e-30 #in g cm^-3
 temperature_floor = 10.0 #K
 
+stop_time     = 9.462e+15
+plotfile_interval = 512
+max_timesteps = 3
+particle_csv_interval = 32
+checkpoint_interval = -1
 particles.eps_ff = 0.01
 particles.param1 = 3.155760000e+14 # 10 Myr
 particles.param2 = 1.0
-particles.verbose = 0
-particles.rad_table = ../inputs/lum_demo_2groups_fastlog.csv
-particles.rad_table_output_spacing = fast_log
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
@@ -51,25 +54,30 @@ perturb.amplitude = 7e5 # 7 km/s
 
 tiny_profiler.enabled = 0
 
-#statistics_interval = 128
-#projection_interval = 128
-#projection.dirs = x z
-#
-#derived_vars = temperature c_s
-#
-#quokka.diagnostics = slice_x slice_z
-#quokka.slice_x.type = DiagFramePlane
-#quokka.slice_x.file = slicex_plt
-#quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
-#quokka.slice_x.center = 1.509001e21
-#quokka.slice_x.int = 128
-#quokka.slice_x.interpolation = Linear
-#quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
-#
-#quokka.slice_z.type = DiagFramePlane
-#quokka.slice_z.file = slicez_plt
-#quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
-#quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
-#quokka.slice_z.int = 128
-#quokka.slice_z.interpolation = Linear
-#quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+statistics_interval = 128
+
+derived_vars = temperature c_s
+
+quokka.diagnostics = slice_x slice_z proj
+
+quokka.slice_x.type = DiagFramePlane
+quokka.slice_x.file = slicex_plt
+quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 1.509001e21
+quokka.slice_x.int = 128
+quokka.slice_x.interpolation = Linear
+quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+
+quokka.slice_z.type = DiagFramePlane
+quokka.slice_z.file = slicez_plt
+quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
+quokka.slice_z.int = 128
+quokka.slice_z.interpolation = Linear
+quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+
+quokka.proj.type = ProjectionPlot   # Projection plot diagnostic
+quokka.proj.file = proj_plt         # Output file prefix (must end in "plt")
+quokka.proj.int  = 128                # Output cadence (in number of coarse steps)
+quokka.proj.dirs = x                # Projection directions (x, y, z)
+quokka.proj.particles = CIC_particles # List of particle types to include in output (default to none)

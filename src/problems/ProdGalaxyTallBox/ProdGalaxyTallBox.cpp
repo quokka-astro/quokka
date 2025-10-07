@@ -27,8 +27,6 @@
 static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap, 3: symmetry
 static constexpr bool enable_self_gravity = true;
 // static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop | ParticleSwitch::CIC;
-// static std::string stars_file = "../stars.txt";
-// static std::string CIC_file = "../CICs.txt";
 static std::string stars_file = "none";
 static std::string CIC_file = "none";
 
@@ -36,6 +34,14 @@ constexpr double pc = C::parsec;
 
 struct TheProblem {
 };
+
+constexpr double mu = 1.0 * C::m_p;
+constexpr double gamma_ = 5. / 3.;
+constexpr double arad = C::a_rad;
+constexpr double TCMB = 2.7;		 // K, CMB temperature
+constexpr double initial_Erad = arad * TCMB * TCMB * TCMB * TCMB;
+constexpr double chat_over_c = 1.0;
+constexpr double kappa0 = 1.0e5; // cm2/g, dust opacity at 0.1 um
 
 template <> struct SimulationData<TheProblem> {
 	// turbulent velocity fields
@@ -99,76 +105,54 @@ static constexpr amrex::Real rho01 = 2.78556e-24;
 static constexpr amrex::Real rho02 = 2.7855600000000006e-29;
 
 template <> struct Particle_Traits<TheProblem> {
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
 template <> struct HydroSystem_Traits<TheProblem> {
-	static constexpr double gamma = 5. / 3.;
-	static constexpr bool reconstruct_eint = true; // Set to true - temperature
+	static constexpr double gamma = gamma_;
+	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
 template <> struct quokka::EOS_Traits<TheProblem> {
-	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
+	static constexpr double gamma = gamma_;
+	static constexpr double mean_molecular_weight = mu;
 };
 
 template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_self_gravity_enabled = enable_self_gravity;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_radiation_enabled = true;
 	static constexpr bool is_chemistry_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;    // number of mass scalars
-	static constexpr int numPassiveScalars = 0; // number of passive scalars
-	static constexpr int nGroups = 1;	    // number of radiation groups
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr int nGroups = 2;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
+template <> struct RadSystem_Traits<TheProblem> {
+	static constexpr double c_hat_over_c = chat_over_c;
+	static constexpr double Erad_floor = initial_Erad;
+	static constexpr int beta_order = 1;
+	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
+	// Define radiation group boundaries for 2-group radiation
+	// Group 0: 1 eV to 100 eV, Group 1: 100 eV to 10000 eV
+	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{1.0, 100.0, 10000.0};
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+};
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
+							    const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
-	// if stars_file == "none", return 
-	if (stars_file == "none") {
-		return;
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[0][i] = 0.0;     // exponent (0 = constant opacity)
+		exponents_and_values[1][i] = kappa0; // opacity value (0 = optically thin)
 	}
-
-	// read particles from ASCII file
-	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
-	StochasticStellarPopParticles->SetVerbose(1);
-	StochasticStellarPopParticles->InitFromAsciiFile(stars_file, nreal_extra, nullptr);
-
-	// Loop over all particle at all levels and set first integer component to SNProgenitor
-	for (int lev = 0; lev <= StochasticStellarPopParticles->finestLevel(); ++lev) {
-		auto &particles = StochasticStellarPopParticles->GetParticles(lev);
-
-		for (auto &kv : particles) {
-			auto &particle_array = kv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
-			auto *pdata = particle_array().data();
-
-			// Launch GPU kernel to set integer components
-			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
-				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-			});
-		}
-	}
-
-	// Ensure GPU operations are complete
-	amrex::Gpu::streamSynchronize();
-}
-
-template <> void QuokkaSimulation<TheProblem>::createInitialCICParticles()
-{
-	// if CIC_file == "none", return
-	if (CIC_file == "none") {
-		return;
-	}
-
-	// read particles from ASCII file
-	const int nreal_extra = 4; // mass vx vy vz
-	CICParticles->SetVerbose(1);
-	CICParticles->InitFromAsciiFile(CIC_file, nreal_extra, nullptr);
+	return exponents_and_values;
 }
 
 template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
@@ -222,8 +206,6 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
-	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	// turbulence parameters
 	const Real turb_amp = userData_.turbulent_amplitude;
@@ -303,6 +285,14 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx*vx + vy*vy + vz*vz);
+
+		// Set radiation variables
+		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+			state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = initial_Erad;
+			state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+		}
 	});
 }
 
@@ -455,13 +445,34 @@ AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv,
 	int kedge = 0;
 	int normal = 0;
 
+	// if (k < klo) {
+	// 	kedge = klo;
+	// 	normal = -1;
+	// } else if (k > khi) {
+	// 	kedge = khi;
+	// 	normal = 1.0;
+	// }
+
+	// This should be the correct way?
 	if (k < klo) {
 		kedge = klo;
 		normal = -1;
-	} else if (k > khi) {
-		kedge = khi;
+	} else if (k >= khi) {
+		kedge = khi - 1;
 		normal = 1.0;
 	}
+
+	// Or, perhaps we also need this?
+	// if (i < domain_lo[0]) {
+	// 	ii = domain_lo[0];
+	// } else if (i >= domain_hi[0]) {
+	// 	ii = domain_hi[0] - 1;
+	// }
+	// if (j < domain_lo[1]) {
+	// 	jj = domain_lo[1];
+	// } else if (j >= domain_hi[1]) {
+	// 	jj = domain_hi[1] - 1;
+	// }
 
 	const double rho_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::density_index);
 	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::x1Momentum_index);
@@ -471,7 +482,7 @@ AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv,
 	const double eint_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::internalEnergy_index);
 
 	if ((x3Mom_edge * normal) < 0) { // gas is inflowing
-		x3Mom_edge = -1. * consVar(i, j, kedge, HydroSystem<TheProblem>::x3Momentum_index);
+		x3Mom_edge *= -1.;
 	}
 
 	consVar(i, j, k, HydroSystem<TheProblem>::density_index) = rho_edge;
@@ -480,14 +491,30 @@ AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv,
 	consVar(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3Mom_edge;
 	consVar(i, j, k, HydroSystem<TheProblem>::energy_index) = etot_edge;
 	consVar(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = eint_edge;
+
+	// copy radiation variables from edge to boundary cells
+	const int ii = i;
+	const int jj = j;
+	const int kk = kedge;
+	for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+		const double radEnergy_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g);
+		const double x1RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
+		const double x2RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
+		double x3RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
+
+		if ((x3RadFlux_edge * normal) < 0) { // radiation is inflowing
+			x3RadFlux_edge *= -1.;
+		}
+
+		consVar(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = radEnergy_edge;
+		consVar(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x1RadFlux_edge;
+		consVar(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x2RadFlux_edge;
+		consVar(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x3RadFlux_edge;
+	}
 }
 
 auto problem_main() -> int
 {
-
-	const int ncomp_cc = Physics_Indices<TheProblem>::nvarTotal_cc;
-	// amrex::Vector<quokka::BCRec> BCs_cc(ncomp_cc);
-
 	auto BCs_cc = quokka::BC<TheProblem>(quokka::BCType::reflecting);
 	if constexpr (BC_TYPE == 1) {
 		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::ext_dir);
@@ -505,15 +532,44 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<TheProblem> sim(BCs_cc);
-
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 
+	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();
 
-	// evolve
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	// Total radiation energy in the field
+	amrex::Real total_Erad_init = 0.0;
+	for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
+	}
+
+	const amrex::Real total_gas_energy_init = sim.state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
+	const amrex::Real total_energy_init = total_Erad_init / chat_over_c + total_gas_energy_init;
+
+	// set force finest level to true for test particles
+	// sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->setForceFinestLevel(true);
+
 	sim.evolve();
 
-	// Cleanup and exit
+	amrex::Real total_Erad = 0.0;
+	for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+		total_Erad += sim.state_new_cc_[0].sum(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
+	}
+
+	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
+	const amrex::Real total_energy_final = total_Erad / chat_over_c + total_gas_energy;
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::Print() << "Total gas energy (initial): " << total_gas_energy_init << "\n";
+		amrex::Print() << "Total gas energy (final): " << total_gas_energy << "\n";
+		amrex::Print() << "Total radiation energy (initial): " << total_Erad_init / chat_over_c << "\n";
+		amrex::Print() << "Total radiation energy (final): " << total_Erad / chat_over_c << "\n";
+		amrex::Print() << "Change of total energy: " << total_energy_final - total_energy_init << "\n";
+		amrex::Print() << "Relative change of total energy: " << (total_energy_final - total_energy_init) / total_energy_init << "\n";
+	}
+
 	return 0;
 }

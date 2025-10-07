@@ -335,7 +335,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 				std::cout << tau0[g] << ", ";
 			}
 			std::cout << "]";
-			std::cout << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << ", coeff_n = " << coeff_n << "\n";
+			std::cout << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << "\n";
 		} else if (n >= 0) {
 			std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = [";
 			for (int g = 0; g < nGroups_; ++g) {
@@ -349,6 +349,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
 		}
 #endif
+
+		if (n >= maxIter - 5) {
+			std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << EradVec_guess[g] << ", ";
+			}
+			std::cout << "], tau = [";
+			for (int g = 0; g < nGroups_; ++g) {
+				std::cout << tau[g] << ", ";
+			}
+			std::cout << "]";
+			std::cout << ", F_G = " << jacobian.F0 << ", F_D_abs_sum = " << jacobian.Fg_abs_sum << ", Etot0 = " << Etot0 << "\n";
+		}
 
 		// update variables
 		RadSystem<problem_t>::SolveLinearEqs(jacobian, delta_x, delta_R); // This is modify delta_x and delta_R in place
