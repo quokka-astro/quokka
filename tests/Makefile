@@ -8,14 +8,16 @@ config:
 	cd ../build/gpu-3d/ && rm -rf ./* && cmake -B . -S ../.. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=HIP -DAMReX_SPACEDIM=3 -DHDF5_ROOT=$(PAWSEY_HDF5_HOME) -G Ninja
 
 com:
-	cd ../build/gpu-3d/ && ninja -j36 ProdGalaxyTallBox
+	cd ../build/gpu-3d/ && ninja -j12 ProdGalaxyTallBox
 test:
 	../build/gpu-3d/src/problems/ProdGalaxyTallBox/ProdGalaxyTallBox ../inputs/ProdGalaxyTallBox.in max_timesteps=2
+gpu: com test
 
 comcpu:
-	cd ../build/clang-3d/ && ninja -j36 ProdGalaxyTallBox
+	cd ../build/cpu-3d/ && ninja -j12 ProdGalaxyTallBox
 testcpu:
-	../build/clang-3d/src/problems/ProdGalaxyTallBox/ProdGalaxyTallBox ../inputs/ProdGalaxyTallBox.in max_timesteps=2
+	../build/cpu-3d/src/problems/ProdGalaxyTallBox/ProdGalaxyTallBox ../inputs/ProdGalaxyTallBox.in max_timesteps=2
+cpu: comcpu testcpu
 
 pp:
 	$(quick_plot) plt* -j ${MP} --dir z --width 0.98,kpc --par StochasticStellarPop_particles --kind slc \
@@ -52,4 +54,4 @@ run:
 		done
 
 clean:
-	rm -rf plt* chk* slice* proj*
+	rm -rf plt* chk* slice* proj* part*
