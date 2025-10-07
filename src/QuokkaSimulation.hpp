@@ -1198,29 +1198,29 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	auto const compute_dimensionless_divergence = [&]() {
 		amrex::Real max_norm = 0.0;
 		for (int lev = 0; lev <= finest; ++lev) {
-		amrex::MultiFab divB(boxArray(lev), DistributionMap(lev), 1, 0);
-		amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> bfield_ptrs;
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			bfield_ptrs[dir] = bfield_storage[lev][dir].get();
-		}
-		amrex::computeDivergence(divB, bfield_ptrs, geom_levels[lev]);
+			amrex::MultiFab divB(boxArray(lev), DistributionMap(lev), 1, 0);
+			amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> bfield_ptrs;
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				bfield_ptrs[dir] = bfield_storage[lev][dir].get();
+			}
+			amrex::computeDivergence(divB, bfield_ptrs, geom_levels[lev]);
 
-		auto const &dx = geom_levels[lev].CellSizeArray();
-		amrex::Real const dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-		amrex::Real const scale_b = std::max(max_bmag_global, small_b);
+			auto const &dx = geom_levels[lev].CellSizeArray();
+			amrex::Real const dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+			amrex::Real const scale_b = std::max(max_bmag_global, small_b);
 
-		amrex::MultiFab ratio(divB.boxArray(), divB.DistributionMap(), 1, 0);
-		for (amrex::MFIter mfi(divB, amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-			auto const &div_arr = divB.const_array(mfi);
-			auto ratio_arr = ratio.array(mfi);
-			amrex::Box const &box = mfi.tilebox();
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::Real const div_loc = div_arr(i, j, k, 0);
-				ratio_arr(i, j, k, 0) = dx_min * std::abs(div_loc) / scale_b;
-			});
-		}
+			amrex::MultiFab ratio(divB.boxArray(), divB.DistributionMap(), 1, 0);
+			for (amrex::MFIter mfi(divB, amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+				auto const &div_arr = divB.const_array(mfi);
+				auto ratio_arr = ratio.array(mfi);
+				amrex::Box const &box = mfi.tilebox();
+				amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+					amrex::Real const div_loc = div_arr(i, j, k, 0);
+					ratio_arr(i, j, k, 0) = dx_min * std::abs(div_loc) / scale_b;
+				});
+			}
 
-		max_norm = std::max(max_norm, ratio.norm0(0, 0, false));
+			max_norm = std::max(max_norm, ratio.norm0(0, 0, false));
 		}
 		return max_norm;
 	};
@@ -1250,16 +1250,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 
 	amrex::Real max_divB_norm = compute_dimensionless_divergence();
 	amrex::Real const divB_tolerance = tolerance_ratio;
-	amrex::Print() << "projectFaceCenteredMagneticField: max(dx * |div B| / |B|) = " << max_divB_norm
-		       << ", tolerance = " << divB_tolerance << '\n';
+	amrex::Print() << "projectFaceCenteredMagneticField: max(dx * |div B| / |B|) = " << max_divB_norm << ", tolerance = " << divB_tolerance << '\n';
 	if (max_divB_norm > divB_tolerance) {
 		int forced_iters = 1;
 		int attempt = 0;
 		constexpr int max_attempts = 100;
 		do {
 			if (attempt >= max_attempts) {
-				amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm
-					       << ", tolerance = " << divB_tolerance << '\n';
+				amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm << ", tolerance = " << divB_tolerance
+					       << '\n';
 				amrex::Abort("Magnetic field MAC projection failed to satisfy divergence tolerance.");
 			}
 			++attempt;
@@ -1268,9 +1267,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 			macproj.project(0.0, 0.0);
 			fill_all_boundaries();
 			max_divB_norm = compute_dimensionless_divergence();
-			amrex::Print() << "projectFaceCenteredMagneticField retry " << attempt
-			               << " (" << forced_iters << " iter(s)): L_inf(||div B||) = " << max_divB_norm
-			               << ", tolerance = " << divB_tolerance << '\n';
+			amrex::Print() << "projectFaceCenteredMagneticField retry " << attempt << " (" << forced_iters
+				       << " iter(s)): L_inf(||div B||) = " << max_divB_norm << ", tolerance = " << divB_tolerance << '\n';
 			if (max_divB_norm > divB_tolerance) {
 				forced_iters = std::min(forced_iters * 2, 64);
 			}

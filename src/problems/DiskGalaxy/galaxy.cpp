@@ -282,15 +282,15 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGridFaceVa
 	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
 
 	// disc parameters
-	double disk_Rscale_kpc = NAN;	     // disk scale length
-	double disk_zscale_kpc = NAN;	     // disk scale height
+	double disk_Rscale_kpc = NAN; // disk scale length
+	double disk_zscale_kpc = NAN; // disk scale height
 	pp.query("disk_Rscale_kpc", disk_Rscale_kpc);
 	pp.query("disk_zscale_kpc", disk_zscale_kpc);
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
 	const double R_d = disk_Rscale_kpc * (1.0e3 * C::parsec);
 	const double z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
-	
+
 	const double B_0 = magnetic_field_microgauss * 1.0e-6;
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
