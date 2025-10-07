@@ -51,7 +51,6 @@ template <> struct SimulationData<TheProblem> {
 	Real dv_rms_generated{};
 	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
 	int turbulent_size = 128;
-	bool use_superresolution = false;
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
 };
@@ -164,7 +163,6 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		amrex::ParmParse const pp("perturb");
 		std::string turbdata_filename = "zdrv.hdf5";
 		pp.query("filename", turbdata_filename);
-		pp.query("use_superresolution", userData_.use_superresolution);
 		initialize_turbdata(turbData, turbdata_filename);
 
 		pp.query("amplitude", userData_.turbulent_amplitude); // amplitude in cm/s, default is 0.05 * 0.3 km/s = 1,500 cm/s
@@ -180,9 +178,7 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 
 		amrex::Print() << "turbulent amplitude = " << userData_.turbulent_amplitude << " cm/s\n";
 
-		if (!userData_.use_superresolution) {
-			userData_.turbulent_size = turbData.dvx.end[0] - turbData.dvx.begin[0];
-		}
+		userData_.turbulent_size = turbData.dvx.end[0] - turbData.dvx.begin[0];
 		amrex::Print() << "turbulence data size is: " << userData_.turbulent_size << "^3\n";
 
 		// copy to GPU
@@ -216,12 +212,13 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	auto const &dvy = userData_.dvy.const_table();
 	auto const &dvz = userData_.dvz.const_table();
 
+	// get turbulence data bounds
+	amrex::Array<int, 3> turb_lo = userData_.dvx.lo();
+
 	// get simulation box x-dimension as reference
 	const int nx = indexRange.length(0);
 
-	if (!userData_.use_superresolution) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= userData_.turbulent_size, "nx must be less than or equal to turbulent_size (128)");
-	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= userData_.turbulent_size, "nx must be less than or equal to turbulent_size (128)");
 	
 	// z-range limits: apply turbulence only from 1.5*nx to 2.5*nx
 	const int k_start = nx + nx / 2;
@@ -265,14 +262,12 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		double vy = 0.0;
 		double vz = 0.0;
 
-		const int rescale_factor = userData_.use_superresolution ? nx / userData_.turbulent_size : 1;
-
 		// check if we're in the z-range where turbulence should be applied
 		if (renorm_factor > 0.0 && k >= k_start && k < k_end) {
 			// use first nx elements from turbdata directly
-			const int turb_i = i / rescale_factor;
-			const int turb_j = j / rescale_factor;
-			const int turb_k = (k - k_start) / rescale_factor;
+			const int turb_i = i;
+			const int turb_j = j;
+			const int turb_k = k - k_start;
 			
 			vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
 			vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
