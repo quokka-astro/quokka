@@ -1117,7 +1117,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	amrex::Vector<amrex::Array<std::unique_ptr<amrex::MultiFab>, AMREX_SPACEDIM>> bfield_storage(finest + 1);
 
 	auto const fill_face_boundaries = [&](int lev) {
-		auto const time = (lev < static_cast<int>(tNew_.size())) ? tNew_[lev] : amrex::Real(0.0);
+		auto const time = (lev < static_cast<int>(tNew_.size())) ? tNew_[lev] : static_cast<amrex::Real>(0.0);
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc,
 					       static_cast<quokka::direction>(dir), AMRSimulation<problem_t>::InterpHookNone,
@@ -1196,7 +1196,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	amrex::Real rel_tol = 0.0;
 	if (initial_div_norm > 0.0) {
 		rel_tol = abs_tol / initial_div_norm;
-		rel_tol = std::min(rel_tol, amrex::Real(1.0));
+		rel_tol = std::min(rel_tol, static_cast<amrex::Real>(1.0));
 	}
 
 	auto const compute_dimensionless_divergence = [&]() {
@@ -1249,9 +1249,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 			case amrex::BCType::ext_dir_cc:
 			case amrex::BCType::reflect_odd:
 				return amrex::LinOpBCType::Dirichlet;
-			default:
-				return amrex::LinOpBCType::Dirichlet;
 		}
+		return amrex::LinOpBCType::Dirichlet;
 	};
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 		if (geom_levels[0].isPeriodic(dir)) {
@@ -1289,7 +1288,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 		int forced_iters = 1;
 		int attempt = 0;
 		constexpr int max_attempts = 100;
-		do {
+		while (max_divB_norm > divB_tolerance) {
 			if (attempt >= max_attempts) {
 				amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm << ", tolerance = " << divB_tolerance
 					       << '\n';
@@ -1306,7 +1305,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 			if (max_divB_norm > divB_tolerance) {
 				forced_iters = std::min(forced_iters * 2, 64);
 			}
-		} while (max_divB_norm > divB_tolerance);
+		}
 		macproj.getMLMG().setFixedIter(0);
 		macproj.getMLMG().setMaxIter(200);
 	}
