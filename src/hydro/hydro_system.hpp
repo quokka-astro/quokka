@@ -1205,7 +1205,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			x1FSpds(i, j, k, 1) = fspd_p;
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
-			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
+			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1, dw);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;

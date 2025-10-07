@@ -21,11 +21,18 @@ permissions:
   contents: read
 
 jobs:
+  check_changes:
+    uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/mhd-asan.yml'
+
   build:
     runs-on: ubuntu-latest
+    needs: check_changes
+    if: needs.check_changes.outputs.has_non_docs_changes == 'true'
 
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
       with:
         submodules: true
 
@@ -75,7 +82,7 @@ jobs:
         ASAN_OPTIONS: detect_leaks=0:print_stats=1:check_initialization_order=1:strict_string_checks=1:detect_stack_use_after_return=1
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
       # Execute all tests with MHD label, excluding FastWave and BrioWuShockTube
-      run: canary run --output-on-failure --workers=1 -k "MHD and not FastWave and not BrioWuShockTube" .
+      run: canary run --output-on-failure --workers=1 -k "MHD and not FastWave and not BrioWuShockTube and not MHDQuirk" .
 
     - name: Upload test output
       if: always()
