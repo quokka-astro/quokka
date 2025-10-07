@@ -243,6 +243,7 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error to total energy: " << error_rel_to_tot << "\n";
 		amrex::Print() << "Relative error to radiation energy: " << error_rel_to_rad << "\n";
 
+		// On CPUs, the error is 1e-15, close to machine accuracy. One GPUs, the error, caused by std::log or std::pow, is slight higher at 1e-14.
 		const double tolerance = rad_table_output_spacing == quokka::SpacingType::fast_log ? 1.0e-11 : 1e-13; // Tolerance relative to total energy
 		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance)) {
 			status = 1;
