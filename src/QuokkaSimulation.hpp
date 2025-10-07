@@ -1279,7 +1279,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 #endif
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization() { projectFaceCenteredMagneticField(); }
+template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization()
+{
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		projectFaceCenteredMagneticField();
+	}
+}
 
 // fix-up any unphysical states created by AMR operations
 // (e.g., caused by the flux register or from interpolation)
