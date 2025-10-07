@@ -15,19 +15,19 @@ constexpr amrex::Real seconds_per_year = 3.15576e+07;
 
 // GPU-friendly const table access for luminosity tables
 // Nout should match nGroups in the problem
-template <int Nout = 1> struct LuminosityGpuConstTables {
-	quokka::DataTableGpuConst<2, Nout> luminosity; // 2D table: (age, mass) -> luminosity per group
+template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> struct LuminosityGpuConstTables {
+	quokka::DataTableGpuConst<2, Nout, oob_policy> luminosity; // 2D table: (age, mass) -> luminosity per group
 };
 
 // Host-side luminosity table storage
-template <int Nout = 1> class LuminosityTables
+template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> class LuminosityTables
 {
       public:
-	quokka::DataTable<2, Nout> luminosity; // 2D table: (age, mass) -> luminosity per group
+	quokka::DataTable<2, Nout, oob_policy> luminosity; // 2D table: (age, mass) -> luminosity per group
 
-	[[nodiscard]] auto const_tables() const -> LuminosityGpuConstTables<Nout>
+	[[nodiscard]] auto const_tables() const -> LuminosityGpuConstTables<Nout, oob_policy>
 	{
-		LuminosityGpuConstTables<Nout> tables{luminosity.const_tables()};
+		LuminosityGpuConstTables<Nout, oob_policy> tables{luminosity.const_tables()};
 		return tables;
 	}
 
@@ -35,16 +35,17 @@ template <int Nout = 1> class LuminosityTables
 };
 
 // Static pointer to the current simulation's luminosity tables (set during initialization)
-// Default to single output (Nout=1) for backward compatibility
-template <int Nout = 1> inline LuminosityTables<Nout> *g_luminosity_tables_ptr = nullptr; // NOLINT
+// Default to single output (Nout=1) and clamp out-of-bounds for backward compatibility
+template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
+inline LuminosityTables<Nout, oob_policy> *g_luminosity_tables_ptr = nullptr; // NOLINT
 
 // Class to handle luminosity updates for stellar particles
 class LuminosityUpdate
 {
       public:
-	template <typename problem_t, typename ParticleType, int Nout>
+	template <typename problem_t, typename ParticleType, int Nout, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(ParticleType &p, amrex::Real current_time,
-									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
+									 LuminosityGpuConstTables<Nout, oob_policy> const &gpu_tables) noexcept
 	{
 		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 		static_assert(nGroups == Nout, "Number of groups must match table outputs");

@@ -28,6 +28,8 @@ stop_time = 0.4
 plotfile_interval = -1
 checkpointtime_interval = -1
 
+particles.use_luminosity_table = false
+
 quokka.diagnostics = plt slice_z proj
 
 quokka.plt.type = PlotFile         # pltfile for the whole box

@@ -222,12 +222,17 @@ auto problem_main() -> int
 		double L_star = NAN;
 		double change_of_total_energy_expected = NAN;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ == 3, "This test requires max_timesteps = 3");
-		if (rad_table_output_spacing == quokka::SpacingType::fast_log || rad_table_output_spacing == quokka::SpacingType::log) {
+		if (rad_table_output_spacing == quokka::SpacingType::log) {
 			L_star = 3e40;
+			change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;
+		} else if (rad_table_output_spacing == quokka::SpacingType::fast_log) {
+			// The stellar age won't fall exactly onto the fastlog-sampled grids, so in order to test perfect accuracy, we have to set luminosity to
+			// constant over time
+			change_of_total_energy_expected = (1.0e+41 + 1.0e+41) * dt_ * n_stars;
 		} else {
 			L_star = 2.5e40;
+			change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;
 		}
-		change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;
 		const double change_of_total_energy_expected_group2 = change_of_total_energy_expected * 10.0;
 		const double change_all_groups = change_of_total_energy_expected + change_of_total_energy_expected_group2;
 		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
@@ -238,9 +243,9 @@ auto problem_main() -> int
 		amrex::Print() << "Relative error to total energy: " << error_rel_to_tot << "\n";
 		amrex::Print() << "Relative error to radiation energy: " << error_rel_to_rad << "\n";
 
-		const double tolerance = rad_table_output_spacing == quokka::SpacingType::fast_log ? 0.1 : 1e-14;    // Tolerance relative to total energy
-		const double tolerance_rad = rad_table_output_spacing == quokka::SpacingType::fast_log ? 0.1 : 1e-6; // Tolerance relative to radiaiton energy
-		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance_rad)) {
+		// On CPUs, the error is 1e-15, close to machine accuracy. One GPUs, the error, caused by std::log or std::pow, is slight higher at 1e-14.
+		const double tolerance = rad_table_output_spacing == quokka::SpacingType::fast_log ? 1.0e-11 : 1e-13; // Tolerance relative to total energy
+		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance)) {
 			status = 1;
 			amrex::Print() << "Test failed: change of total energy mismatch.\n";
 		}
