@@ -68,6 +68,39 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto pow10(const double x) -> double
 	return pow2(LOG10OLOG2 * x);
 }
 
+// Inverse of pow2 using Newton iteration
+// Finds y such that pow2(y) = x to machine precision
+// Uses lg(x) as initial guess
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto inverse_pow2(const double x) -> double
+{
+	constexpr double LN2 = 0.693147180559945309417232121458;
+	constexpr int MAX_ITER = 20;
+	constexpr double TOLERANCE = 1.0e-15;
+	
+	// Initial guess using fast log
+	double y = lg(x);
+	
+	// Newton iteration: solve pow2(y) - x = 0
+	// f(y) = pow2(y) - x
+	// f'(y) = pow2(y) * ln(2)
+	// y_new = y - f(y)/f'(y) = y - (pow2(y) - x) / (pow2(y) * ln(2))
+	for (int iter = 0; iter < MAX_ITER; ++iter) {
+		const double pow2_y = pow2(y);
+		const double f = pow2_y - x;
+		
+		// Check convergence
+		if (std::abs(f) < TOLERANCE * std::abs(x)) {
+			break;
+		}
+		
+		// Newton update
+		const double df = pow2_y * LN2;
+		y = y - f / df;
+	}
+	
+	return y;
+}
+
 } // namespace FastMath
 #else
 namespace FastMath
