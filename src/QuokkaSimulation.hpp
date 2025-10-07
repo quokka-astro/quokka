@@ -1239,18 +1239,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	AMREX_ALWAYS_ASSERT(nvarPerDim_fc > 0);
 	auto const to_linop_bc = [](int bc_value) -> amrex::LinOpBCType {
 		switch (bc_value) {
-		case amrex::BCType::int_dir:
-		case amrex::BCType::foextrap:
-		case amrex::BCType::hoextrap:
-		case amrex::BCType::hoextrapcc:
-		case amrex::BCType::reflect_even:
-			return amrex::LinOpBCType::Neumann;
-		case amrex::BCType::ext_dir:
-		case amrex::BCType::ext_dir_cc:
-		case amrex::BCType::reflect_odd:
-			return amrex::LinOpBCType::Dirichlet;
-		default:
-			return amrex::LinOpBCType::Dirichlet;
+			case amrex::BCType::int_dir:
+			case amrex::BCType::foextrap:
+			case amrex::BCType::hoextrap:
+			case amrex::BCType::hoextrapcc:
+			case amrex::BCType::reflect_even:
+				return amrex::LinOpBCType::Neumann;
+			case amrex::BCType::ext_dir:
+			case amrex::BCType::ext_dir_cc:
+			case amrex::BCType::reflect_odd:
+				return amrex::LinOpBCType::Dirichlet;
+			default:
+				return amrex::LinOpBCType::Dirichlet;
 		}
 	};
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
@@ -1388,7 +1388,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 			}
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 				state_old_fc_[lev][dir].ParallelCopy(state_new_fc_[lev][dir], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc,
-									    state_old_fc_[lev][dir].nGrow(), state_new_fc_[lev][dir].nGrow());
+								     state_old_fc_[lev][dir].nGrow(), state_new_fc_[lev][dir].nGrow());
 			}
 		}
 	}
