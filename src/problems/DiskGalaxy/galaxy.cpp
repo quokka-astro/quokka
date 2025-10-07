@@ -281,17 +281,49 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGridFaceVa
 	double magnetic_field_microgauss = 1.0;
 	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
 
-	const double magnetic_field_gauss = magnetic_field_microgauss * 1.0e-6;
+	// disc parameters
+	double disk_Rscale_kpc = NAN;	     // disk scale length
+	double disk_zscale_kpc = NAN;	     // disk scale height
+	pp.query("disk_Rscale_kpc", disk_Rscale_kpc);
+	pp.query("disk_zscale_kpc", disk_zscale_kpc);
+	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
+	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
+	const double R_d = disk_Rscale_kpc * (1.0e3 * C::parsec);
+	const double z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
+	
+	const double B_0 = magnetic_field_microgauss * 1.0e-6;
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::direction dir = grid_elem.dir_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// Cartesian coordinates at this face
+		amrex::Real const dx_cen = (dir == quokka::direction::x) ? 0.0 : 0.5 * dx[0];
+		amrex::Real const dy_cen = (dir == quokka::direction::y) ? 0.0 : 0.5 * dx[1];
+		amrex::Real const dz_cen = (dir == quokka::direction::z) ? 0.0 : 0.5 * dx[2];
+		amrex::Real const x = prob_lo[0] + (i * dx[0]) + dx_cen;
+		amrex::Real const y = prob_lo[1] + (j * dx[1]) + dy_cen;
+		amrex::Real const z = prob_lo[2] + (k * dx[2]) + dz_cen;
+		amrex::Real const R = std::sqrt(x * x + y * y);
+
+		amrex::Real const B_phi = B_0 * std::exp(-R / R_d) * std::exp(-std::abs(z) / z_d);
+		amrex::Real Bx = 0.0;
+		amrex::Real By = 0.0;
+		amrex::Real const Bz = 0.0;
+		if (R > 0.0) {
+			Bx = -B_phi * y / R;
+			By = B_phi * x / R;
+		}
+
 		constexpr int mhd_index = Physics_Indices<AgoraGalaxy>::mhdFirstIndex;
 		if (dir == quokka::direction::x) {
-			state_fc(i, j, k, mhd_index) = magnetic_field_gauss;
-		} else {
-			state_fc(i, j, k, mhd_index) = 0.;
+			state_fc(i, j, k, mhd_index) = Bx;
+		} else if (dir == quokka::direction::y) {
+			state_fc(i, j, k, mhd_index) = By;
+		} else if (dir == quokka::direction::z) {
+			state_fc(i, j, k, mhd_index) = Bz;
 		}
 	});
 }

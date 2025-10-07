@@ -1112,14 +1112,27 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	amrex::Vector<amrex::Array<std::unique_ptr<amrex::MultiFab>, AMREX_SPACEDIM>> beta_storage(finest + 1);
 	amrex::Vector<amrex::Array<std::unique_ptr<amrex::MultiFab>, AMREX_SPACEDIM>> bfield_storage(finest + 1);
 
+	auto const fill_face_boundaries = [&](int lev) {
+		auto const time = (lev < static_cast<int>(tNew_.size())) ? tNew_[lev] : amrex::Real(0.0);
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc,
+					       static_cast<quokka::direction>(dir), AMRSimulation<problem_t>::InterpHookNone,
+					       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
+		}
+	};
+
+	auto const fill_all_boundaries = [&]() {
+		for (int lev = 0; lev <= finest; ++lev) {
+			fill_face_boundaries(lev);
+		}
+	};
+
 	for (int lev = 0; lev <= finest; ++lev) {
 		AMREX_ASSERT(lev < static_cast<int>(state_new_fc_.size()));
 
 		geom_levels[lev] = this->Geom(lev);
 		auto const &ba = boxArray(lev);
 		auto const &dm = DistributionMap(lev);
-		auto const time = (lev < static_cast<int>(tNew_.size())) ? tNew_[lev] : amrex::Real(0.0);
-
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			amrex::IntVect faceType = amrex::IntVect::TheDimensionVector(dir);
 			beta_storage[lev][dir] = std::make_unique<amrex::MultiFab>(amrex::convert(ba, faceType), dm, 1, 0);
@@ -1130,6 +1143,87 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 			projector_beta[lev][dir] = beta_storage[lev][dir].get();
 		}
 	}
+
+	fill_all_boundaries();
+
+	constexpr amrex::Real tolerance_ratio = 1.0e-14;
+	constexpr amrex::Real small_b = 1.0e-30;
+
+	amrex::Real min_dx_global = std::numeric_limits<amrex::Real>::max();
+	amrex::Real max_bmag_global = small_b;
+	amrex::Real initial_div_norm = 0.0;
+
+	for (int lev = 0; lev <= finest; ++lev) {
+		amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> face_ptrs;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			face_ptrs[dir] = bfield_storage[lev][dir].get();
+		}
+
+		amrex::MultiFab div_initial(boxArray(lev), DistributionMap(lev), 1, 0);
+		amrex::computeDivergence(div_initial, face_ptrs, geom_levels[lev]);
+		initial_div_norm = std::max(initial_div_norm, div_initial.norm0(0, 0, false));
+
+		amrex::MultiFab b_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 0);
+		amrex::average_face_to_cellcenter(b_cc, 0, face_ptrs);
+
+		amrex::MultiFab b_mag(boxArray(lev), DistributionMap(lev), 1, 0);
+		for (amrex::MFIter mfi(b_mag, amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+			auto const &bcc_arr = b_cc.const_array(mfi);
+			auto bmag_arr = b_mag.array(mfi);
+			amrex::Box const &box = mfi.tilebox();
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real const bx_loc = bcc_arr(i, j, k, 0);
+				amrex::Real const by_loc = bcc_arr(i, j, k, 1);
+				amrex::Real const bz_loc = bcc_arr(i, j, k, 2);
+				bmag_arr(i, j, k, 0) = std::sqrt(bx_loc * bx_loc + by_loc * by_loc + bz_loc * bz_loc);
+			});
+		}
+		max_bmag_global = std::max(max_bmag_global, b_mag.norm0(0, 0, false));
+
+		auto const &dx = geom_levels[lev].CellSizeArray();
+		amrex::Real const dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+		min_dx_global = std::min(min_dx_global, dx_min);
+	}
+
+	if (min_dx_global <= 0.0) {
+		min_dx_global = std::numeric_limits<amrex::Real>::min();
+	}
+	amrex::Real const abs_tol = tolerance_ratio * std::max(max_bmag_global, small_b) / min_dx_global;
+	amrex::Real rel_tol = 0.0;
+	if (initial_div_norm > 0.0) {
+		rel_tol = abs_tol / initial_div_norm;
+		rel_tol = std::min(rel_tol, amrex::Real(1.0));
+	}
+
+	auto const compute_dimensionless_divergence = [&]() {
+		amrex::Real max_norm = 0.0;
+		for (int lev = 0; lev <= finest; ++lev) {
+		amrex::MultiFab divB(boxArray(lev), DistributionMap(lev), 1, 0);
+		amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> bfield_ptrs;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			bfield_ptrs[dir] = bfield_storage[lev][dir].get();
+		}
+		amrex::computeDivergence(divB, bfield_ptrs, geom_levels[lev]);
+
+		auto const &dx = geom_levels[lev].CellSizeArray();
+		amrex::Real const dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+		amrex::Real const scale_b = std::max(max_bmag_global, small_b);
+
+		amrex::MultiFab ratio(divB.boxArray(), divB.DistributionMap(), 1, 0);
+		for (amrex::MFIter mfi(divB, amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+			auto const &div_arr = divB.const_array(mfi);
+			auto ratio_arr = ratio.array(mfi);
+			amrex::Box const &box = mfi.tilebox();
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real const div_loc = div_arr(i, j, k, 0);
+				ratio_arr(i, j, k, 0) = dx_min * std::abs(div_loc) / scale_b;
+			});
+		}
+
+		max_norm = std::max(max_norm, ratio.norm0(0, 0, false));
+		}
+		return max_norm;
+	};
 
 	amrex::LPInfo info;
 	info.setAgglomeration(false);
@@ -1150,37 +1244,36 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	}
 	macproj.setVerbose(Verbose() ? 1 : 0);
 	macproj.getMLMG().setBottomVerbose(0);
-	constexpr amrex::Real reltol = 1.0e-12;
-	constexpr amrex::Real abstol = std::numeric_limits<amrex::Real>::epsilon();
+	macproj.project(rel_tol, abs_tol);
+	fill_all_boundaries();
 
-	amrex::Print() << "\nProjecting initial magnetic field...\n";
-	macproj.project(reltol, abstol);
-
-	for (int lev = 0; lev <= finest; ++lev) {
-		auto const time = (lev < static_cast<int>(tNew_.size())) ? tNew_[lev] : amrex::Real(0.0);
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			fillBoundaryConditions(state_new_fc_[lev][dir], state_new_fc_[lev][dir], lev, time, quokka::centering::fc,
-					       static_cast<quokka::direction>(dir), AMRSimulation<problem_t>::InterpHookNone,
-					       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
-		}
-	}
-
-	amrex::Real max_divB_norm = 0.0;
-	for (int lev = 0; lev <= finest; ++lev) {
-		amrex::MultiFab divB(boxArray(lev), DistributionMap(lev), 1, 0);
-		amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> bfield_ptrs;
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			bfield_ptrs[dir] = bfield_storage[lev][dir].get();
-		}
-		amrex::computeDivergence(divB, bfield_ptrs, geom_levels[lev]);
-		max_divB_norm = std::max(max_divB_norm, divB.norm0(0, 0, false));
-	}
-
-	constexpr amrex::Real divB_tolerance = 1.0e-14;
-	amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm << ", tolerance = "
-		       << divB_tolerance << '\n';
+	amrex::Real max_divB_norm = compute_dimensionless_divergence();
+	amrex::Real const divB_tolerance = tolerance_ratio;
 	if (max_divB_norm > divB_tolerance) {
-		amrex::Abort("Magnetic field MAC projection failed to satisfy divergence tolerance.");
+		int forced_iters = 1;
+		int attempt = 0;
+		constexpr int max_attempts = 100;
+		do {
+			if (attempt >= max_attempts) {
+				amrex::Print() << "projectFaceCenteredMagneticField: L_inf(||div B||) = " << max_divB_norm
+					       << ", tolerance = " << divB_tolerance << '\n';
+				amrex::Abort("Magnetic field MAC projection failed to satisfy divergence tolerance.");
+			}
+			++attempt;
+			macproj.getMLMG().setFixedIter(forced_iters);
+			macproj.getMLMG().setMaxIter(forced_iters);
+			macproj.project(0.0, 0.0);
+			fill_all_boundaries();
+			max_divB_norm = compute_dimensionless_divergence();
+			amrex::Print() << "projectFaceCenteredMagneticField retry " << attempt
+			               << " (" << forced_iters << " iter(s)): L_inf(||div B||) = " << max_divB_norm
+			               << ", tolerance = " << divB_tolerance << '\n';
+			if (max_divB_norm > divB_tolerance) {
+				forced_iters = std::min(forced_iters * 2, 64);
+			}
+		} while (max_divB_norm > divB_tolerance);
+		macproj.getMLMG().setFixedIter(0);
+		macproj.getMLMG().setMaxIter(200);
 	}
 #endif
 }
