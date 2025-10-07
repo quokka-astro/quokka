@@ -126,7 +126,7 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr int nGroups = 2;			     // number of radiation groups
+	static constexpr int nGroups = 5;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
@@ -137,7 +137,9 @@ template <> struct RadSystem_Traits<TheProblem> {
 	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
 	// Define radiation group boundaries for 2-group radiation
 	// Group 0: 1 eV to 100 eV, Group 1: 100 eV to 10000 eV
-	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{1.0, 100.0, 10000.0};
+	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{
+		1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.35945970e+01, 1.e+2
+	};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 
@@ -146,10 +148,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
 							    const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
+	constexpr double gas_to_dust_ratio = 1.0e-3;
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
-		exponents_and_values[0][i] = 0.0;     // exponent (0 = constant opacity)
-		exponents_and_values[1][i] = kappa0; // opacity value (0 = optically thin)
+		exponents_and_values[0][i] = 0.0; // power-law slopes
+	}
+	const amrex::GpuArray<double, 6> dust_opacity{6e2, 1e3, 2e4, 1e5, 2e5, 1.0}; // dust opacity, cm2/g. last element not used
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[1][i] = dust_opacity[i] * gas_to_dust_ratio;
 	}
 	return exponents_and_values;
 }

@@ -28,7 +28,7 @@ suppress_output = 0
 
 particles.verbose = 1
 particles.disable_SN_feedback = false
-particles.rad_table = ../inputs/lum_demo_2groups_log.csv
+particles.rad_table = ../inputs/lum_demo_5groups_log.csv
 particles.rad_table_output_spacing = log
 
 density_floor = 1.67e-30 #in g cm^-3
