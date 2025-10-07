@@ -379,16 +379,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 		}
 	}
 	// add dust state variables
-if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-    for (int dg = 0; dg < Physics_Traits<problem_t>::nDustGroups; ++dg) {
-        std::string const prefix = "dust" + std::to_string(dg) + "-";
-        componentNames_cc_.push_back(prefix + "Density");
-        componentNames_cc_.push_back(prefix + "x-Momentum");
-        componentNames_cc_.push_back(prefix + "y-Momentum");
-        componentNames_cc_.push_back(prefix + "z-Momentum");
-    }
-}
-
+	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+		for (int dg = 0; dg < Physics_Traits<problem_t>::nDustGroups; ++dg) {
+			std::string const prefix = "dust" + std::to_string(dg) + "-";
+			componentNames_cc_.push_back(prefix + "Density");
+			componentNames_cc_.push_back(prefix + "x-Momentum");
+			componentNames_cc_.push_back(prefix + "y-Momentum");
+			componentNames_cc_.push_back(prefix + "z-Momentum");
+		}
+	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::defineDefaultPlotfileVariables()
@@ -1705,7 +1704,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				}
 			}
 		}
-    
+
 		//
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
