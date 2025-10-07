@@ -126,8 +126,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 	double magnetic_field_microgauss = 1.0; // default B-field strength
 	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
-	const double magnetic_field_gauss = magnetic_field_microgauss * 1.0e-6;
-	const double magnetic_energy_density = 0.5 * (magnetic_field_gauss * magnetic_field_gauss);
+	const double B_0 = magnetic_field_microgauss * 1.0e-6;
 
 	// disc parameters
 	double disk_gas_mass_Msun = NAN;     // disk mass
@@ -189,6 +188,20 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
 		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
 		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
+
+		amrex::Real const x_mid = 0.5 * (x0 + x1);
+		amrex::Real const y_mid = 0.5 * (y0 + y1);
+		amrex::Real const z_mid = 0.5 * (z0 + z1);
+		amrex::Real const R_mid = std::sqrt((x_mid * x_mid) + (y_mid * y_mid));
+
+		amrex::Real const B_phi = B_0 * std::exp(-R_mid / R_d) * std::exp(-std::abs(z_mid) / z_d);
+		amrex::Real Bx = 0.0;
+		amrex::Real By = 0.0;
+		if (R_mid > 0.0) {
+			Bx = -B_phi * y_mid / R_mid;
+			By = B_phi * x_mid / R_mid;
+		}
+		amrex::Real const magnetic_energy_density = 0.5 * ((Bx * Bx) + (By * By));
 
 		// compute density profile
 		auto rho_exact = [rho_0, R_d, z_d](double x, double y, double z) {

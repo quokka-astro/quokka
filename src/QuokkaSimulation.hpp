@@ -160,6 +160,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	bool use_wavespeed_correction_ = false;
 	bool print_rad_counter_ = false;
 	bool projectInitialBField_ = true;
+	bool updateInitialMagneticEnergy_ = true;
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
@@ -225,6 +226,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// Optionally project already-initialised face-centred magnetic fields onto a divergence-free space
 	void projectFaceCenteredMagneticField();
+	void updateInitialMagneticEnergyFromFaceField();
 	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
@@ -504,6 +506,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const qpp("quokka");
 		qpp.query("project_initial_b_field", projectInitialBField_);
+		qpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
 	}
 
 	// set cooling runtime parameters
@@ -1279,10 +1282,73 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 #endif
 }
 
+template <typename problem_t> void QuokkaSimulation<problem_t>::updateInitialMagneticEnergyFromFaceField()
+{
+#if AMREX_SPACEDIM == 3
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		return;
+	}
+
+	if (!updateInitialMagneticEnergy_) {
+		return;
+	}
+
+	int const finest = this->finest_level;
+	if (finest < 0) {
+		return;
+	}
+
+	for (int lev = 0; lev <= finest; ++lev) {
+		std::array<std::unique_ptr<amrex::MultiFab>, AMREX_SPACEDIM> face_storage;
+		amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> face_ptrs;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			face_storage[dir] = std::make_unique<amrex::MultiFab>(state_new_fc_[lev][dir], amrex::make_alias,
+								       Physics_Indices<problem_t>::mhdFirstIndex, 1);
+			face_ptrs[dir] = face_storage[dir].get();
+		}
+
+		amrex::MultiFab b_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 0);
+		amrex::average_face_to_cellcenter(b_cc, 0, face_ptrs);
+
+		auto const bcc_arrays = b_cc.const_arrays();
+		auto cons_arrays = state_new_cc_[lev].arrays();
+		amrex::ParallelFor(state_new_cc_[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const rho = cons_arrays[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real const px = cons_arrays[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			amrex::Real const py = cons_arrays[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			amrex::Real const pz = cons_arrays[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			amrex::Real kinetic = 0.0;
+			if (rho > 0.0) {
+				amrex::Real const inv_rho = 1.0 / rho;
+				kinetic = 0.5 * inv_rho * (px * px + py * py + pz * pz);
+			}
+
+			amrex::Real const eint = cons_arrays[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+			amrex::Real const bx_loc = bcc_arrays[bx](i, j, k, 0);
+			amrex::Real const by_loc = bcc_arrays[bx](i, j, k, 1);
+			amrex::Real const bz_loc = bcc_arrays[bx](i, j, k, 2);
+			amrex::Real const magnetic_energy = 0.5 * (bx_loc * bx_loc + by_loc * by_loc + bz_loc * bz_loc);
+
+			cons_arrays[bx](i, j, k, HydroSystem<problem_t>::energy_index) = eint + kinetic + magnetic_energy;
+		});
+
+		amrex::Gpu::streamSynchronizeAll();
+
+		if (lev < static_cast<int>(state_old_cc_.size())) {
+			int const dest_comp = HydroSystem<problem_t>::energy_index;
+			state_old_cc_[lev].ParallelCopy(state_new_cc_[lev], dest_comp, dest_comp, 1, state_old_cc_[lev].nGrow(), state_new_cc_[lev].nGrow());
+		}
+	}
+#else
+	amrex::ignore_unused(updateInitialMagneticEnergy_);
+#endif
+}
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization()
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		projectFaceCenteredMagneticField();
+		updateInitialMagneticEnergyFromFaceField();
 	}
 }
 
