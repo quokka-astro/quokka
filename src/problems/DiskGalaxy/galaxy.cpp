@@ -126,7 +126,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 	double magnetic_field_microgauss = 1.0; // default B-field strength
 	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
-	const double B_0 = magnetic_field_microgauss * 1.0e-6;
+	const double B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
 
 	// disc parameters
 	double disk_gas_mass_Msun = NAN;     // disk mass
@@ -304,7 +304,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGridFaceVa
 	const double R_d = disk_Rscale_kpc * (1.0e3 * C::parsec);
 	const double z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
 
-	const double B_0 = magnetic_field_microgauss * 1.0e-6;
+	const double B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::direction dir = grid_elem.dir_;
