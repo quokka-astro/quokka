@@ -1249,8 +1249,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 			case amrex::BCType::ext_dir_cc:
 			case amrex::BCType::reflect_odd:
 				return amrex::LinOpBCType::Dirichlet;
+			default:
+				return amrex::LinOpBCType::Dirichlet;
 		}
-		return amrex::LinOpBCType::Dirichlet;
 	};
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 		if (geom_levels[0].isPeriodic(dir)) {
