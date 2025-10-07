@@ -681,21 +681,35 @@ template <typename problem_t> AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStat
 
 template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons)
 {
+	constexpr amrex::Real small_number = 1.0e20 * std::numeric_limits<amrex::Real>::min();
+	constexpr amrex::Real smaller_than_one = 1.0 - 20.0 * std::numeric_limits<amrex::Real>::epsilon();
+
 	// amend the state variable 'cons' to be a valid state
 	for (int g = 0; g < nGroups_; ++g) {
 		auto E_r = cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_];
+		// If E_r is NaN or below floor, set to floor
 		if (E_r < Erad_floor_) {
-			E_r = Erad_floor_;
 			cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_] = Erad_floor_;
+			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+			cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+			continue;
 		}
 		const auto Fx = cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		const auto Fy = cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		const auto Fz = cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
-		if (Fx * Fx + Fy * Fy + Fz * Fz > c_light_ * c_light_ * E_r * E_r) {
+		if (Fx * Fx + Fy * Fy + Fz * Fz > (c_light_ * c_light_) * (E_r * E_r) * smaller_than_one) {
 			const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
-			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fx / Fnorm * c_light_ * E_r;
-			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fy / Fnorm * c_light_ * E_r;
-			cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fz / Fnorm * c_light_ * E_r;
+			// If Fnorm is NaN or very close to zero, set fluxes to zero
+			if (Fnorm < small_number) {
+				cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+				cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+				cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+			} else {
+				cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = (Fx / Fnorm) * c_light_ * E_r * smaller_than_one;
+				cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = (Fy / Fnorm) * c_light_ * E_r * smaller_than_one;
+				cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = (Fz / Fnorm) * c_light_ * E_r * smaller_than_one;
+			}
 		}
 	}
 }

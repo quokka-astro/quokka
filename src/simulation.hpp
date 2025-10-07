@@ -451,6 +451,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
 
+	bool useLuminosityTable_ = true;
+	std::string luminosityTableFilename_;
+	quokka::SpacingType rad_table_output_spacing_ = quokka::SpacingType::fast_log;
+
+#if AMREX_SPACEDIM == 3
+	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
+#endif // AMREX_SPACEDIM == 3
+
 	// Diagnostics
 	amrex::Vector<std::unique_ptr<DiagBase>> m_diagnostics;
 	amrex::Vector<std::string> m_diagVars;
@@ -827,6 +835,59 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default max number of binary files per multifab when writing checkpoints
 	pp_amr.query("checkpoint_nfiles", checkpoint_nfiles);
+
+	// set particle luminosity table parameters
+	{
+		amrex::ParmParse const ppp("particles");
+		ppp.query("use_luminosity_table", useLuminosityTable_);
+		ppp.query("rad_table", luminosityTableFilename_);
+		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+
+#if AMREX_SPACEDIM == 3
+		// if particle and radiation are enabled
+		if (particleRegister_.HasRadiatingParticles() && Physics_Traits<problem_t>::is_radiation_enabled) {
+			if (useLuminosityTable_) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!luminosityTableFilename_.empty(),
+								 "When use_luminosity_table is set to true, rad_table must be specified");
+
+				constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
+
+				// Use specified spacing for luminosity values
+				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
+
+				amrex::Print() << "Luminosity table loaded successfully.\n";
+				amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
+							      luminosityTables_.luminosity.size(1));
+				amrex::Print() << fmt::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
+
+				// Validate table metadata matches expected hardcoded values
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_name(0) == "age",
+				    fmt::format("Luminosity table first input must be 'age', got '{}'", luminosityTables_.luminosity.input_name(0)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_name(1) == "mass",
+				    fmt::format("Luminosity table second input must be 'mass', got '{}'", luminosityTables_.luminosity.input_name(1)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_unit(0) == "year",
+				    fmt::format("Luminosity table first input unit must be 'year', got '{}'", luminosityTables_.luminosity.input_unit(0)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_unit(1) == "Msun",
+				    fmt::format("Luminosity table second input unit must be 'Msun', got '{}'", luminosityTables_.luminosity.input_unit(1)));
+
+				// Validate all output units are "erg/s"
+				for (int i = 0; i < nGroups; ++i) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosityTables_.luminosity.output_unit(i) == "erg/s",
+									 fmt::format("Luminosity table output unit {} must be 'erg/s', got '{}'", i,
+										     luminosityTables_.luminosity.output_unit(i)));
+				}
+
+				// Set global pointer for access from particle update functions
+				quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
+			}
+		}
+#endif // AMREX_SPACEDIM == 3
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::rereadRuntimeParameters()
@@ -860,6 +921,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	} else {
 		// restart from a checkpoint
 		ReadCheckpointFile();
+	}
+
+	// Ensure consistency between particle radiation settings and luminosity data table configuration
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		if (particleRegister_.HasRadiatingParticles()) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(useLuminosityTable_ && luminosityTableFilename_.empty()),
+							 "When use_luminosity_table is set to true, rad_table must be specified");
+		}
 	}
 
 	calculateGpotAllLevels();

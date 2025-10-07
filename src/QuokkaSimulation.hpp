@@ -133,6 +133,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::max_level;
 	using AMRSimulation<problem_t>::n_error_buf;
 
+#if AMREX_SPACEDIM == 3
+	using AMRSimulation<problem_t>::luminosityTables_;
+#endif // AMREX_SPACEDIM == 3
+
 	SimulationData<problem_t> userData_;
 
 	int enableCooling_ = 0;
@@ -149,6 +153,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 	static constexpr int n_mhd_vars_per_dim_ = MHDSystem<problem_t>::nvar_per_dim_; // mhd
+
+	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
