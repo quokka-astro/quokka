@@ -38,7 +38,7 @@ enum redoFlag { none = 0, redo = 1 };
 namespace quokka::reconstruction
 {
 struct IdentityProjector;
-}
+} // namespace quokka::reconstruction
 
 // Define enum for slope limiter type
 enum SlopeLimiter { minmod = 0, MC };
@@ -167,7 +167,12 @@ namespace quokka::reconstruction
 struct IdentityProjector {
 	IdentityProjector() = default;
 
-	template <FluxDir DIR> AMREX_GPU_HOST_DEVICE IdentityProjector(quokka::Array4View<amrex::Real const, DIR> const &, int, int, int, int, int = 0) {}
+	template <FluxDir DIR>
+	AMREX_GPU_HOST_DEVICE IdentityProjector([[maybe_unused]] quokka::Array4View<amrex::Real const, DIR> const &qView,
+						[[maybe_unused]] int i, [[maybe_unused]] int j, [[maybe_unused]] int k,
+						[[maybe_unused]] int component, [[maybe_unused]] int offset = 0)
+	{
+	}
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto project(quokka::Array4View<amrex::Real const, DIR> const &q, int i, int j, int k, int component) const
