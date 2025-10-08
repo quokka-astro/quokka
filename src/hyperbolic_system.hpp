@@ -168,9 +168,8 @@ struct IdentityProjector {
 	IdentityProjector() = default;
 
 	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE IdentityProjector([[maybe_unused]] quokka::Array4View<amrex::Real const, DIR> const &qView,
-						[[maybe_unused]] int i, [[maybe_unused]] int j, [[maybe_unused]] int k,
-						[[maybe_unused]] int component, [[maybe_unused]] int offset = 0)
+	AMREX_GPU_HOST_DEVICE IdentityProjector([[maybe_unused]] quokka::Array4View<amrex::Real const, DIR> const &qView, [[maybe_unused]] int i,
+						[[maybe_unused]] int j, [[maybe_unused]] int k, [[maybe_unused]] int component, [[maybe_unused]] int offset = 0)
 	{
 	}
 
