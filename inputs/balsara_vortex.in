@@ -24,12 +24,15 @@ do_reflux = 0
 do_subcycle = 0
 
 plotfile_interval = 10
-plotfile_prefix = hydro_balsara_vortex_plt
+plotfile_prefix = balsara_vortex_plt
 checkpoint_interval = -1
 cfl = 0.3
-stop_time = 10.0
 max_timesteps = 10000
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
+
+setup.vortex_Mach = 0.1
+setup.advection = 1
+setup.num_orbits = 3
