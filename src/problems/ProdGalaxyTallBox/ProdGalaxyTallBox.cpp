@@ -40,8 +40,7 @@ constexpr double gamma_ = 5. / 3.;
 constexpr double arad = C::a_rad;
 constexpr double TCMB = 2.7;		 // K, CMB temperature
 constexpr double initial_Erad = arad * TCMB * TCMB * TCMB * TCMB;
-constexpr double chat_over_c = 3.333e-2;
-constexpr double kappa0 = 1.0e5; // cm2/g, dust opacity at 0.1 um
+constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // chat = 2000 km/s
 
 template <> struct SimulationData<TheProblem> {
 	// turbulent velocity fields
