@@ -370,7 +370,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab cons
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
 }
 
@@ -385,7 +385,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstan
 	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
 }
 
@@ -425,7 +425,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter>(q, leftState, rightState, n, i_in, j_in, k_in);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter, Projector>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
 }
 
@@ -440,7 +440,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arr
 	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter>(q, leftState, rightState, n, i_in, j_in, k_in);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter, Projector>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
 }
 
@@ -500,7 +500,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom,
+											  iWriteFrom);
 	});
 }
 
@@ -519,7 +520,8 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arr
 
 	// cell-centered kernel
 	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom,
+											  iWriteFrom);
 	});
 }
 
@@ -675,7 +677,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in,
+											     iReadFrom, iWriteFrom);
 	});
 }
 
@@ -694,7 +697,8 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 
 	// cell-centered kernel
 	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in,
+											     iReadFrom, iWriteFrom);
 	});
 }
 
