@@ -24,6 +24,11 @@ amr.grid_eff        = 0.7   # default
 
 do_reflux = 1
 do_subcycle = 0
+stop_time     = 9.462e+15
+max_timesteps = 3
+plotfile_interval = 512
+checkpoint_interval = -1
+particle_csv_interval = 32
 suppress_output = 0
 
 particles.verbose = 1
@@ -34,11 +39,6 @@ particles.rad_table_output_spacing = log
 density_floor = 1.67e-30 #in g cm^-3
 temperature_floor = 10.0 #K
 
-stop_time     = 9.462e+15
-plotfile_interval = 512
-max_timesteps = 3
-particle_csv_interval = 32
-checkpoint_interval = -1
 particles.eps_ff = 0.01
 particles.param1 = 3.155760000e+14 # 10 Myr
 particles.param2 = 1.0
