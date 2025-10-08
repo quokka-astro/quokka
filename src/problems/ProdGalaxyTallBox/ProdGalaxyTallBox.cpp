@@ -28,7 +28,7 @@ static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap, 3: symmetry
 static constexpr bool enable_self_gravity = true;
 // static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop | ParticleSwitch::CIC;
 static std::string stars_file = "none";
-static std::string CIC_file = "none";
+// static std::string CIC_file = "none";
 
 constexpr double pc = C::parsec;
 
@@ -158,6 +158,44 @@ RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doub
 		exponents_and_values[1][i] = dust_opacity[i] * gas_to_dust_ratio;
 	}
 	return exponents_and_values;
+}
+
+template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
+{
+	if (stars_file == "none") {
+		return;
+	}
+
+	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
+	// InitSetPhyParticles to set the integer components
+	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
+	StochasticStellarPopParticles->SetVerbose(1);
+	StochasticStellarPopParticles->InitFromAsciiFile(stars_file, nreal_extra, nullptr);
+
+	// Using a for loop from lev = 0 to StochasticStellarPopParticles->maxLevel() won't work because not all levels necessarily have particles, and when
+	// some levels do not have particles, StochasticStellarPopParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual
+	// particle container.
+	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
+		for (auto &ikv : kv) {
+			auto &particle_array = ikv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+
+			if (np == 0) {
+				continue;
+			}
+
+			auto *pdata = particle_array().data();
+
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+			});
+		}
+	}
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
 }
 
 template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
@@ -525,7 +563,7 @@ auto problem_main() -> int
 
 	amrex::ParmParse const pp("problem");
 	pp.query("stars_file", stars_file);
-	pp.query("CIC_file", CIC_file);
+	// pp.query("CIC_file", CIC_file);
 
 	// set random state
 	const int seed = 42;
