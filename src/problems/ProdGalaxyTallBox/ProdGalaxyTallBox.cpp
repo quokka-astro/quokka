@@ -257,11 +257,13 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 	// get turbulence data bounds
 	amrex::Array<int, 3> turb_lo = userData_.dvx.lo();
+	amrex::Array<int, 3> turb_hi = userData_.dvx.hi();
 
 	// get simulation box x-dimension as reference
 	const int nx = indexRange.length(0);
+	const int nturb = turb_hi[0] - turb_lo[0] + 1;
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= userData_.turbulent_size, "nx must be less than or equal to turbulent_size (128)");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= nturb, "nx must be less than or equal to turbulent_size (128)");
 	
 	// z-range limits: apply turbulence only from 1.5*nx to 2.5*nx
 	const int k_start = nx + nx / 2;
@@ -301,21 +303,17 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		const auto gamma = HydroSystem<TheProblem>::gamma_;
 
 		// add turbulent velocities
-		double vx = 0.0;
-		double vy = 0.0;
-		double vz = 0.0;
-
-		// check if we're in the z-range where turbulence should be applied
-		if (renorm_factor > 0.0 && k >= k_start && k < k_end) {
-			// use first nx elements from turbdata directly
-			const int turb_i = i;
-			const int turb_j = j;
-			const int turb_k = k - k_start;
-			
-			vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
-			vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
-			vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
-		}
+		// Clamp indices to [turb_lo, turb_hi] range
+		// const int turb_i = amrex::Math::max(turb_lo[0], amrex::Math::min(turb_hi[0], turb_lo[0] + (i % nturb)));
+		// const int turb_j = amrex::Math::max(turb_lo[1], amrex::Math::min(turb_hi[1], turb_lo[1] + (j % nturb)));
+		// const int turb_k = amrex::Math::max(turb_lo[2], amrex::Math::min(turb_hi[2], turb_lo[2] + (k % nturb)));
+		const int turb_i = turb_lo[0] + (i % nturb);
+		const int turb_j = turb_lo[1] + (j % nturb);
+		const int turb_k = turb_lo[2] + (k % nturb);
+		
+		const double vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
+		const double vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
+		const double vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
 
 		state_cc(i, j, k, HydroSystem<TheProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = rho * vx;
