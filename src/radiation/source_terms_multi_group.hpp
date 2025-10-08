@@ -350,7 +350,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		}
 #endif
 
-#if 0
+#if 1
 		if (n >= maxIter - 4) {
 			printf("n = %d, Egas_guess = %e, EradVec_guess = [", n, Egas_guess);
 			for (int g = 0; g < nGroups_; ++g) {
