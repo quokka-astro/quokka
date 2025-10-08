@@ -209,6 +209,128 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPPMFromStencil(amrex::R
 
 	return {new_a_minus, new_a_plus};
 }
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeWENOFromStencil(amrex::Real q_im2, amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1,
+								    amrex::Real q_ip2) -> std::pair<amrex::Real, amrex::Real>
+{
+	/// compute WENO-Z reconstruction following Balsara (2017).
+
+	/// compute moments for each stencil
+	const double sL_x = -2.0 * q_im1 + 0.5 * q_im2 + 1.5 * q_i;
+	const double sL_xx = 0.5 * q_im2 - q_im1 + 0.5 * q_i;
+
+	const double sC_x = 0.5 * (q_ip1 - q_im1);
+	const double sC_xx = 0.5 * q_im1 - q_i + 0.5 * q_ip1;
+
+	const double sR_x = -1.5 * q_i + 2.0 * q_ip1 - 0.5 * q_ip2;
+	const double sR_xx = 0.5 * q_i - q_ip1 + 0.5 * q_ip2;
+
+	// compute smoothness indicators
+	const double IS_L = sL_x * sL_x + (13. / 3.) * (sL_xx * sL_xx);
+	const double IS_C = sC_x * sC_x + (13. / 3.) * (sC_xx * sC_xx);
+	const double IS_R = sR_x * sR_x + (13. / 3.) * (sR_xx * sR_xx);
+
+	// use WENO-Z smoothness indicators with *symmetric* linear weights
+	// (1-2-3 problem fails with the [asymmetric] 'optimal' weights)
+	const double q_mean = (std::abs(q_im1) + std::abs(q_i) + std::abs(q_ip1)) / 3.0;
+	const double eps = std::max(1.0e-40 * q_mean, 1.0e-40); // prevent underflow
+	const double tau = std::abs(IS_L - IS_R);
+	double wL = 0.2 * (1. + tau / (IS_L + eps));
+	double wC = 0.6 * (1. + tau / (IS_C + eps));
+	double wR = 0.2 * (1. + tau / (IS_R + eps));
+
+	// normalise weights
+	const double norm = wL + wC + wR;
+	wL /= norm;
+	wC /= norm;
+	wR /= norm;
+
+	// compute weighted moments
+	const double q_x = wL * sL_x + wC * sC_x + wR * sR_x;
+	const double q_xx = wL * sL_xx + wC * sC_xx + wR * sR_xx;
+
+	// evaluate i-(1/2) and i+(1/2) values
+	const double qL = q_i - 0.5 * q_x + (0.25 - 1. / 12.) * q_xx;
+	const double qR = q_i + 0.5 * q_x + (0.25 - 1. / 12.) * q_xx;
+
+	return {qL, qR};
+}
+
+template <typename Problem>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSteepPPMFromValues(amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1, amrex::Real q_ip2)
+    -> amrex::Real
+{
+	// compute steepened PPM stencil value using scalar stencil data.
+	double S = 0.5 * (q_ip1 - q_im1);
+	double Sp = 0.5 * (q_ip2 - q_i);
+	double S_M = 2. * HyperbolicSystem<Problem>::MC(q_ip1 - q_i, q_i - q_im1);
+	double Sp_M = 2. * HyperbolicSystem<Problem>::MC(q_ip2 - q_ip1, q_ip1 - q_i);
+	S = HyperbolicSystem<Problem>::median(0., S, S_M);
+	Sp = HyperbolicSystem<Problem>::median(0., Sp, Sp_M);
+
+	return 0.5 * (q_i + q_ip1) - (1. / 6.) * (Sp - S);
+}
+
+template <typename Problem>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPPMExtremaPreservingFromStencil(amrex::Real q_im2, amrex::Real q_im1, amrex::Real q_i,
+											  amrex::Real q_ip1, amrex::Real q_ip2)
+    -> std::pair<amrex::Real, amrex::Real>
+{
+	/// Extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm (2007) using scalar stencil data.
+
+	// 0. 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99, 1997)
+	const double c1 = 2. / 60.;
+	const double c2 = -13. / 60.;
+	const double c3 = 47. / 60.;
+	const double c4 = 27. / 60.;
+	const double c5 = -3. / 60.;
+
+	const double a_minus = c1 * q_ip2 + c2 * q_ip1 + c3 * q_i + c4 * q_im1 + c5 * q_im2;
+	const double a_plus = c1 * q_im2 + c2 * q_im1 + c3 * q_i + c4 * q_ip1 + c5 * q_ip2;
+
+	// save neighboring values
+	const double a = q_i;
+	const double am = q_im1;
+	const double ap = q_ip1;
+
+	// 1. monotonize
+	auto [new_a_minus, new_a_plus] = HyperbolicSystem<Problem>::MonotonizeEdges(a_minus, a_plus, a, am, ap);
+
+	// 2. check whether limiter was triggered on either side
+	const double q_mean = (std::abs(q_im1) + std::abs(q_i) + std::abs(q_ip1)) / 3.0;
+	const double eps = 1.0e-14 * q_mean;
+
+	if (std::abs(new_a_minus - a_minus) > eps || std::abs(new_a_plus - a_plus) > eps) {
+
+		// compute symmetric WENO-Z reconstruction
+		auto [a_minus_weno, a_plus_weno] = ComputeWENOFromStencil(q_im2, q_im1, q_i, q_ip1, q_ip2);
+
+		if (new_a_minus == a || new_a_plus == a) {
+			// 3. to avoid clipping at extrema, use WENO value
+			a_minus_weno = HyperbolicSystem<Problem>::median(a, a_minus_weno, a_minus);
+			a_plus_weno = HyperbolicSystem<Problem>::median(a, a_plus_weno, a_plus);
+
+			auto [a_minus_mweno, a_plus_mweno] = HyperbolicSystem<Problem>::MonotonizeEdges(a_minus_weno, a_plus_weno, a, am, ap);
+
+			new_a_minus = HyperbolicSystem<Problem>::median(a_minus_weno, a_minus_mweno, a_minus);
+			new_a_plus = HyperbolicSystem<Problem>::median(a_plus_weno, a_plus_mweno, a_plus);
+		} else {
+			// 4. gradient is too steep, use one-sided 4th-order PPM stencil
+			double a_minus_ppm = ComputeSteepPPMFromValues<Problem>(q_im2, q_im1, q_i, q_ip1);
+			double a_plus_ppm = ComputeSteepPPMFromValues<Problem>(q_im1, q_i, q_ip1, q_ip2);
+
+			a_minus_ppm = HyperbolicSystem<Problem>::median(a_minus_weno, a_minus_ppm, a_minus);
+			a_plus_ppm = HyperbolicSystem<Problem>::median(a_plus_weno, a_plus_ppm, a_plus);
+
+			auto [a_minus_mppm, a_plus_mppm] = HyperbolicSystem<Problem>::MonotonizeEdges(a_minus_ppm, a_plus_ppm, a, am, ap);
+
+			new_a_minus = HyperbolicSystem<Problem>::median(a_minus_mppm, a_minus_weno, a_minus);
+			new_a_plus = HyperbolicSystem<Problem>::median(a_plus_mppm, a_plus_weno, a_plus);
+		}
+	}
+
+	return {static_cast<amrex::Real>(new_a_minus), static_cast<amrex::Real>(new_a_plus)};
+}
 } // namespace quokka::reconstruction
 
 template <typename problem_t>
@@ -566,61 +688,20 @@ HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::R
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-	// 0. 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99, 1997)
-	const double c1 = 2. / 60.;
-	const double c2 = -13. / 60.;
-	const double c3 = 47. / 60.;
-	const double c4 = 27. / 60.;
-	const double c5 = -3. / 60.;
+	const int readComponent = iReadFrom + n;
+	const amrex::Real q_im2 = q(i - 2, j, k, readComponent);
+	const amrex::Real q_im1 = q(i - 1, j, k, readComponent);
+	const amrex::Real q_i = q(i, j, k, readComponent);
+	const amrex::Real q_ip1 = q(i + 1, j, k, readComponent);
+	const amrex::Real q_ip2 = q(i + 2, j, k, readComponent);
 
-	const double a_minus = c1 * q(i + 2, j, k, iReadFrom + n) + c2 * q(i + 1, j, k, iReadFrom + n) + c3 * q(i, j, k, iReadFrom + n) +
-			       c4 * q(i - 1, j, k, iReadFrom + n) + c5 * q(i - 2, j, k, iReadFrom + n);
-	const double a_plus = c1 * q(i - 2, j, k, iReadFrom + n) + c2 * q(i - 1, j, k, iReadFrom + n) + c3 * q(i, j, k, iReadFrom + n) +
-			      c4 * q(i + 1, j, k, iReadFrom + n) + c5 * q(i + 2, j, k, iReadFrom + n);
+	// Evaluate the extrema-preserving hybrid PPM-WENO reconstruction from the scalar stencil.
+	const auto [rightInterface, leftInterface] =
+	    quokka::reconstruction::ReconstructPPMExtremaPreservingFromStencil<problem_t>(q_im2, q_im1, q_i, q_ip1, q_ip2);
 
-	// save neighboring values
-	const double a = q(i, j, k, iReadFrom + n);
-	const double am = q(i - 1, j, k, iReadFrom + n);
-	const double ap = q(i + 1, j, k, iReadFrom + n);
-
-	// 1. monotonize
-	auto [new_a_minus, new_a_plus] = MonotonizeEdges(a_minus, a_plus, a, am, ap);
-
-	// 2. check whether limiter was triggered on either side
-	const double q_mean = (std::abs(q(i - 1, j, k, iReadFrom + n)) + std::abs(q(i, j, k, iReadFrom + n)) + std::abs(q(i + 1, j, k, iReadFrom + n))) / 3.0;
-	const double eps = 1.0e-14 * q_mean;
-
-	if (std::abs(new_a_minus - a_minus) > eps || std::abs(new_a_plus - a_plus) > eps) {
-
-		// compute symmetric WENO-Z reconstruction
-		auto [a_minus_weno, a_plus_weno] = ComputeWENO(q, i, j, k, iReadFrom + n);
-
-		if (new_a_minus == a || new_a_plus == a) {
-			// 3. to avoid clipping at extrema, use WENO value
-			a_minus_weno = median(a, a_minus_weno, a_minus);
-			a_plus_weno = median(a, a_plus_weno, a_plus);
-
-			auto [a_minus_mweno, a_plus_mweno] = MonotonizeEdges(a_minus_weno, a_plus_weno, a, am, ap);
-
-			new_a_minus = median(a_minus_weno, a_minus_mweno, a_minus);
-			new_a_plus = median(a_plus_weno, a_plus_mweno, a_plus);
-		} else {
-			// 4. gradient is too steep, use one-sided 4th-order PPM stencil
-			double a_minus_ppm = ComputeSteepPPM(q, i - 1, j, k, iReadFrom + n);
-			double a_plus_ppm = ComputeSteepPPM(q, i, j, k, iReadFrom + n);
-
-			a_minus_ppm = median(a_minus_weno, a_minus_ppm, a_minus);
-			a_plus_ppm = median(a_plus_weno, a_plus_ppm, a_plus);
-
-			auto [a_minus_mppm, a_plus_mppm] = MonotonizeEdges(a_minus_ppm, a_plus_ppm, a, am, ap);
-
-			new_a_minus = median(a_minus_mppm, a_minus_weno, a_minus);
-			new_a_plus = median(a_plus_mppm, a_plus_weno, a_plus);
-		}
-	}
-
-	rightState(i, j, k, iWriteFrom + n) = new_a_minus;
-	leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
+	const int writeComponent = iWriteFrom + n;
+	rightState(i, j, k, writeComponent) = rightInterface;
+	leftState(i + 1, j, k, writeComponent) = leftInterface;
 }
 
 template <typename problem_t>
