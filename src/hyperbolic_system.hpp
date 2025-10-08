@@ -131,8 +131,8 @@ template <typename problem_t> class HyperbolicSystem
 	    -> std::pair<amrex::Real, amrex::Real>;
 
 	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
-	static void ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost,
-					    int nvars, int iReadFrom = 0, int iWriteFrom = 0);
+	static void ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
+					    int iReadFrom = 0, int iWriteFrom = 0);
 
 	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
@@ -164,14 +164,10 @@ template <typename problem_t> class HyperbolicSystem
 
 namespace quokka::reconstruction
 {
-struct IdentityProjector
-{
+struct IdentityProjector {
 	IdentityProjector() = default;
 
-	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE IdentityProjector(quokka::Array4View<amrex::Real const, DIR> const &, int, int, int, int, int = 0)
-	{
-	}
+	template <FluxDir DIR> AMREX_GPU_HOST_DEVICE IdentityProjector(quokka::Array4View<amrex::Real const, DIR> const &, int, int, int, int, int = 0) {}
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto project(quokka::Array4View<amrex::Real const, DIR> const &q, int i, int j, int k, int component) const
