@@ -227,7 +227,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
-	const double resid_tol = 1.0e-8; // 1.0e-15;
+	const double resid_tol = tol;
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
