@@ -66,6 +66,7 @@ add_subdirectory(RadhydroBB)
 
 add_subdirectory(AlfvenWaveLinear)
 add_subdirectory(AlfvenWaveCircular)
+add_subdirectory(MHDBalsaraVortex)
 add_subdirectory(CurrentSheet)
 add_subdirectory(OrszagTang)
 add_subdirectory(FastWave)
