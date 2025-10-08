@@ -2,15 +2,19 @@
 // Copyright 2025 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_balsara_vortex_hllc.cpp
-/// \brief Hydrodynamic (HLLC) Balsara vortex (B = 0; constant-ρ, prescribed p).
+/// \file test_hydro_balsara_vortex.cpp
+/// \brief hydro (HLLC) Balsara vortex (constant-ρ, prescribed p).
 ///
 
 #include <cassert>
 #include <cmath>
+#include <gcem.hpp>
+#include <iostream>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_Gpu.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -43,14 +47,15 @@ template <> struct Physics_Traits<HydroBalsaraVortex> {
 constexpr double gamma_gas = quokka::EOS_Traits<HydroBalsaraVortex>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = 1.0;
+constexpr double sound_speed = gcem::sqrt(gamma_gas * bg_pressure / bg_density);
 // vortex parameters
-constexpr double vortex_speed = 5.0 / (2.0 * M_PI);
+AMREX_GPU_MANAGED double vortex_Mach = 0.01; // NOLINT
+// domain extends over [-5, 5] by default
 constexpr double vortex_center_x1 = 0.0;
 constexpr double vortex_center_x2 = 0.0;
 // drift is off by default
-constexpr double vortex_drift_x1 = 0.0;
-constexpr double vortex_drift_x2 = 0.0;
-constexpr double vortex_drift_x3 = 0.0;
+AMREX_GPU_MANAGED double vortex_drift_x1 = 0.0; // NOLINT
+AMREX_GPU_MANAGED double vortex_drift_x2 = 0.0; // NOLINT
 
 AMREX_GPU_DEVICE
 inline void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -65,16 +70,17 @@ inline void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real
 	const double delta_x2_from_center = static_cast<double>(x2_C) - vortex_center_x2;
 	const double radius_sq = delta_x1_from_center * delta_x1_from_center + delta_x2_from_center * delta_x2_from_center;
 	const double radial_profile = std::exp(0.5 * (1.0 - radius_sq));
-	const double radial_profile_sq = std::exp(1.0 - radius_sq);
+	const double radial_profile_sq = radial_profile * radial_profile;
 
 	const double density = bg_density;
+	const double vortex_speed = vortex_Mach * sound_speed;
 	const double pressure = bg_pressure - 0.5 * density * vortex_speed * vortex_speed * radial_profile_sq;
 
 	const double delta_vel_x1 = -delta_x2_from_center * vortex_speed * radial_profile;
 	const double delta_vel_x2 = delta_x1_from_center * vortex_speed * radial_profile;
 	const double vel_x1 = vortex_drift_x1 + delta_vel_x1;
 	const double vel_x2 = vortex_drift_x2 + delta_vel_x2;
-	const double vel_x3 = vortex_drift_x3;
+	const double vel_x3 = 0.0;
 
 	const double mom_x1 = density * vel_x1;
 	const double mom_x2 = density * vel_x2;
@@ -128,9 +134,39 @@ void QuokkaSimulation<HydroBalsaraVortex>::computeReferenceSolution(amrex::Multi
 
 auto problem_main() -> int
 {
+	amrex::ParmParse const hpp("setup");
+	
+	int advection_int = 0;
+	int num_orbits = 1;
+	hpp.query("vortex_Mach", vortex_Mach);
+	hpp.query("advection", advection_int);
+	hpp.query("num_orbits", num_orbits);
+	const double vortex_speed = vortex_Mach * sound_speed;
+	const bool is_advection_enabled = (advection_int != 0);
+
 	auto BCs_cc = quokka::BC<HydroBalsaraVortex>(quokka::BCType::int_dir); // periodic
 
 	QuokkaSimulation<HydroBalsaraVortex> sim(BCs_cc);
+	
+	double stop_time = 0.0;
+	if (is_advection_enabled) {
+		const double advection_speed = vortex_speed;
+		vortex_drift_x2 = vortex_drift_x1 = advection_speed / std::sqrt(2.0);
+		const double length_x1 = sim.geom[0].ProbLength(0);
+		const double length_x2 = sim.geom[0].ProbLength(1);
+		if (std::abs(length_x1 - length_x2) > 1e-12) {
+			amrex::Abort("The domain must be square for advection.");
+		}
+		const double advection_distance = std::sqrt(length_x1 * length_x1 + length_x2 * length_x2);
+		const double advection_duration = advection_distance / vortex_speed;
+		stop_time = static_cast<double>(num_orbits) * advection_duration;
+	} else {
+		vortex_drift_x1 = vortex_drift_x2 = 0.0;
+		const double orbital_duration = 2 * M_PI / vortex_speed;
+		stop_time = static_cast<double>(num_orbits) * orbital_duration;
+	}
+
+	sim.stopTime_ = stop_time;
 	sim.computeReferenceSolution_ = true;
 
 	sim.setInitialConditions();
