@@ -227,10 +227,22 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
+	double Egas_guess_prev = Egas_guess;
+	auto EradVec_guess_prev = EradVec_guess;
+
+	// compute total rad energy
+	const double Eradtot0 = sum(Erad0Vec);
+
+	// a hack: break after change between two steps is within tol
+	constexpr bool use_rel_change_check = true;
+
 	const double resid_tol = tol;
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
+		Egas_guess_prev = Egas_guess;
+		EradVec_guess_prev = EradVec_guess;
+
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
@@ -321,6 +333,17 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// check relative convergence of the residuals
 		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
 			break;
+		}
+
+		// if relative change is within tol, break
+		if constexpr (use_rel_change_check) {
+			const double Erad_tot_guess = sum(EradVec_guess_prev);
+			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
+			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
+			if ((sum(Erad_rel_diff) / Eradtot0 < resid_tol || sum(Erad_rel_diff) / Erad_tot_guess < resid_tol) && 
+						(Egas_rel_diff / Egas0 < resid_tol || Egas_rel_diff / Egas_guess_prev < resid_tol)) {
+				break;
+			}
 		}
 
 #if 0 // NOLINT
