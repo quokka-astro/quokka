@@ -194,7 +194,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPLMFromStencil(amrex::R
 
 template <typename Problem>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPPMFromStencil(amrex::Real q_im2, amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1,
-								       amrex::Real q_ip2) -> std::pair<amrex::Real, amrex::Real>
+									amrex::Real q_ip2) -> std::pair<amrex::Real, amrex::Real>
 {
 	// (1.) Estimate interface values using the fourth-order centered stencil.
 	const auto bounds = std::minmax({static_cast<double>(q_i), static_cast<double>(q_im1), static_cast<double>(q_ip1)});
@@ -233,7 +233,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPPMFromStencil(amrex::R
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeWENOFromStencil(amrex::Real q_im2, amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1,
-								    amrex::Real q_ip2) -> std::pair<amrex::Real, amrex::Real>
+								     amrex::Real q_ip2) -> std::pair<amrex::Real, amrex::Real>
 {
 	/// compute WENO-Z reconstruction following Balsara (2017).
 
@@ -279,8 +279,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeWENOFromStencil(amrex::Real
 }
 
 template <typename Problem>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSteepPPMFromValues(amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1, amrex::Real q_ip2)
-    -> amrex::Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSteepPPMFromValues(amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1, amrex::Real q_ip2) -> amrex::Real
 {
 	// compute steepened PPM stencil value using scalar stencil data.
 	double S = 0.5 * (q_ip1 - q_im1);
@@ -295,7 +294,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSteepPPMFromValues(amrex::R
 
 template <typename Problem>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPPMExtremaPreservingFromStencil(amrex::Real q_im2, amrex::Real q_im1, amrex::Real q_i,
-											  amrex::Real q_ip1, amrex::Real q_ip2)
+											 amrex::Real q_ip1, amrex::Real q_ip2)
     -> std::pair<amrex::Real, amrex::Real>
 {
 	/// Extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm (2007) using scalar stencil data.
@@ -477,8 +476,7 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 
 	// Use piecewise-linear reconstruction
 	// (This converges at second order in spatial resolution.)
-	const auto [leftInterface, rightInterface] =
-	    quokka::reconstruction::ReconstructPLMFromStencil<problem_t, limiter>(q_im2, q_im1, q_i, q_ip1);
+	const auto [leftInterface, rightInterface] = quokka::reconstruction::ReconstructPLMFromStencil<problem_t, limiter>(q_im2, q_im1, q_i, q_ip1);
 	leftState(i, j, k, n) = leftInterface;
 	rightState(i, j, k, n) = rightInterface;
 }
@@ -557,8 +555,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 	// PPM reconstruction following Colella & Woodward (1984), with
 	// some modifications following Mignone (2014), as implemented in
 	// Athena++, evaluated from the scalar stencil.
-	const auto [rightInterface, leftInterface] =
-	    quokka::reconstruction::ReconstructPPMFromStencil<problem_t>(q_im2, q_im1, q_i, q_ip1, q_ip2);
+	const auto [rightInterface, leftInterface] = quokka::reconstruction::ReconstructPPMFromStencil<problem_t>(q_im2, q_im1, q_i, q_ip1, q_ip2);
 
 	const int writeComponent = iWriteFrom + n;
 	rightState(i, j, k, writeComponent) = rightInterface;
