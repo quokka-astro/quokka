@@ -497,7 +497,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom,
-											  iWriteFrom);
+											   iWriteFrom);
 	});
 }
 
@@ -517,7 +517,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arr
 	// cell-centered kernel
 	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom,
-											  iWriteFrom);
+											   iWriteFrom);
 	});
 }
 
@@ -673,8 +673,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in,
-											     iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom,
+											      iWriteFrom);
 	});
 }
 
@@ -693,8 +693,8 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 
 	// cell-centered kernel
 	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in,
-											     iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR, Projector>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom,
+											      iWriteFrom);
 	});
 }
 
