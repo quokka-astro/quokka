@@ -236,7 +236,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	// a hack: break after change between two steps is within tol
 	constexpr bool use_rel_change_check = true;
 
-	const double resid_tol = tol;
+	const double resid_tol = 1.0e-11;
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
@@ -337,11 +337,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 
 		// if relative change is within tol, break
 		if constexpr (use_rel_change_check) {
-			const double Erad_tot_guess = sum(EradVec_guess_prev);
+			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
 			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
 			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
-			if ((sum(Erad_rel_diff) / Eradtot0 < resid_tol || sum(Erad_rel_diff) / Erad_tot_guess < resid_tol) && 
-						(Egas_rel_diff / Egas0 < resid_tol || Egas_rel_diff / Egas_guess_prev < resid_tol)) {
+			// if ((sum(Erad_rel_diff) / Eradtot0 < resid_tol || sum(Erad_rel_diff) / Erad_tot_guess_prev < resid_tol) && 
+			// 			(Egas_rel_diff / Egas0 < resid_tol || Egas_rel_diff / Egas_guess_prev < resid_tol)) {
+			// 	break;
+			// }
+			if ((sum(Erad_rel_diff) / Erad_tot_guess_prev < resid_tol) && (Egas_rel_diff / Egas_guess_prev < resid_tol)) {
 				break;
 			}
 		}
