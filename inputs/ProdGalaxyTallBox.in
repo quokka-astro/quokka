@@ -42,6 +42,9 @@ checkpoint_interval = -1
 particles.eps_ff = 0.01
 particles.param1 = 3.155760000e+14 # 10 Myr
 particles.param2 = 1.0
+problem.stars_file = ../inputs/ParticlesInTallBox.txt
+
+radiation.iteration_tolerance = 1e-6
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"

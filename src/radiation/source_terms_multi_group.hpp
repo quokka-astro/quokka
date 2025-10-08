@@ -151,7 +151,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const tol, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -584,7 +584,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-						    const int stage, double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter)
+						    const int stage, double dustGasCoeff, double const tol, int *p_iteration_counter, int *p_iteration_failure_counter)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -721,7 +721,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					// gas + radiation
 					updated_energy =
 					    SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
-									    radBoundaries_g_copy, p_iteration_counter_local, p_iteration_failure_counter_local);
+									    radBoundaries_g_copy, tol, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
 					if constexpr (!enable_photoelectric_heating_) {
 						// gas + radiation + dust
