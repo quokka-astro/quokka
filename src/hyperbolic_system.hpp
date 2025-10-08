@@ -35,6 +35,11 @@ namespace quokka
 enum redoFlag { none = 0, redo = 1 };
 } // namespace quokka
 
+namespace quokka::reconstruction
+{
+struct IdentityProjector;
+}
+
 // Define enum for slope limiter type
 enum SlopeLimiter { minmod = 0, MC };
 
@@ -71,40 +76,40 @@ template <typename problem_t> class HyperbolicSystem
 		return std::max(std::min(a, b), std::min(std::max(a, b), c));
 	}
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState,
 										       amrex::Box const &indexRange, int nvars);
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
 	ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 				  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
-	template <FluxDir DIR, SlopeLimiter limiter>
+	template <FluxDir DIR, SlopeLimiter limiter, typename Projector = quokka::reconstruction::IdentityProjector>
 	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
 
-	template <FluxDir DIR, SlopeLimiter limiter>
+	template <FluxDir DIR, SlopeLimiter limiter, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState,
 										  amrex::Box const &indexRange, int nvars);
 
-	template <FluxDir DIR, SlopeLimiter limiter>
+	template <FluxDir DIR, SlopeLimiter limiter, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
 	ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 			     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
 					 int iReadFrom = 0, int iWriteFrom = 0);
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 										  amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars,
 										  int iReadFrom = 0, int iWriteFrom = 0);
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q,
 										  quokka::Array4View<amrex::Real, DIR> const &leftState,
 										  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
@@ -125,16 +130,16 @@ template <typename problem_t> class HyperbolicSystem
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto ComputeWENO(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k, int n)
 	    -> std::pair<amrex::Real, amrex::Real>;
 
-	template <FluxDir DIR>
-	static void ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
-					    int iReadFrom = 0, int iWriteFrom = 0);
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
+	static void ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost,
+					    int nvars, int iReadFrom = 0, int iWriteFrom = 0);
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 										     amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars,
 										     int iReadFrom = 0, int iWriteFrom = 0);
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename Projector = quokka::reconstruction::IdentityProjector>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q,
 										     quokka::Array4View<amrex::Real, DIR> const &leftState,
 										     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
@@ -159,6 +164,23 @@ template <typename problem_t> class HyperbolicSystem
 
 namespace quokka::reconstruction
 {
+struct IdentityProjector
+{
+	IdentityProjector() = default;
+
+	template <FluxDir DIR>
+	AMREX_GPU_HOST_DEVICE IdentityProjector(quokka::Array4View<amrex::Real const, DIR> const &, int, int, int, int, int = 0)
+	{
+	}
+
+	template <FluxDir DIR>
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto project(quokka::Array4View<amrex::Real const, DIR> const &q, int i, int j, int k, int component) const
+	    -> amrex::Real
+	{
+		return q(i, j, k, component);
+	}
+};
+
 template <typename Problem, SlopeLimiter limiter>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPLMFromStencil(amrex::Real q_im2, amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1)
     -> std::pair<amrex::Real, amrex::Real>
@@ -334,7 +356,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPPMExtremaPreservingFro
 } // namespace quokka::reconstruction
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 							    const int nghost, const int nvars)
 {
@@ -354,7 +376,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab cons
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 										  amrex::Box const &indexRange, const int nvars)
 {
@@ -369,7 +391,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstan
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q,
 										  quokka::Array4View<amrex::Real, DIR> const &leftState,
 										  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
@@ -377,18 +399,19 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstan
 {
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+	Projector projector(q, i, j, k, n);
 
 	// Use piecewise-constant reconstruction (This converges at first order in spatial resolution.)
 	// By convention, the interfaces are defined on the left edge of each zone, i.e. xleft_(i)
 	// is the "left"-side of the interface at the left edge of zone i, and xright_(i) is the
 	// "right"-side of the interface at the *left* edge of zone i. [Indexing note: There are (nx
 	// + 1) interfaces for nx zones.]
-	leftState(i, j, k, n) = q(i - 1, j, k, n);
-	rightState(i, j, k, n) = q(i, j, k, n);
+	leftState(i, j, k, n) = projector.template project<DIR>(q, i - 1, j, k, n);
+	rightState(i, j, k, n) = projector.template project<DIR>(q, i, j, k, n);
 }
 
 template <typename problem_t>
-template <FluxDir DIR, SlopeLimiter limiter>
+template <FluxDir DIR, SlopeLimiter limiter, typename Projector>
 void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 						       const int nghost, const int nvars)
 {
@@ -408,7 +431,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 }
 
 template <typename problem_t>
-template <FluxDir DIR, SlopeLimiter limiter>
+template <FluxDir DIR, SlopeLimiter limiter, typename Projector>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 									     amrex::Box const &indexRange, const int nvars)
 {
@@ -423,13 +446,14 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arr
 }
 
 template <typename problem_t>
-template <FluxDir DIR, SlopeLimiter limiter>
+template <FluxDir DIR, SlopeLimiter limiter, typename Projector>
 AMREX_GPU_HOST_DEVICE void
 HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 						  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in)
 {
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+	Projector projector(q, i, j, k, n);
 
 	// Unlike PPM, PLM with MC or minmod limiters is TVD.
 	// (There are no spurious oscillations, *except* in the slow-moving shock problem,
@@ -446,10 +470,10 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	// fetch stencil values
-	const amrex::Real q_im2 = q(i - 2, j, k, n);
-	const amrex::Real q_im1 = q(i - 1, j, k, n);
-	const amrex::Real q_i = q(i, j, k, n);
-	const amrex::Real q_ip1 = q(i + 1, j, k, n);
+	const amrex::Real q_im2 = projector.template project<DIR>(q, i - 2, j, k, n);
+	const amrex::Real q_im1 = projector.template project<DIR>(q, i - 1, j, k, n);
+	const amrex::Real q_i = projector.template project<DIR>(q, i, j, k, n);
+	const amrex::Real q_ip1 = projector.template project<DIR>(q, i + 1, j, k, n);
 
 	// Use piecewise-linear reconstruction
 	// (This converges at second order in spatial resolution.)
@@ -460,7 +484,7 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
@@ -483,7 +507,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 									     amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
 									     const int nvars, const int iReadFrom, const int iWriteFrom)
@@ -502,7 +526,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arr
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q,
 									     quokka::Array4View<amrex::Real, DIR> const &leftState,
 									     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in,
@@ -510,6 +534,8 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 {
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+	const int readComponent = iReadFrom + n;
+	Projector projector(q, i, j, k, readComponent, n);
 
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
@@ -522,12 +548,11 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 	// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
 	// [See Eq. B8 of Mignone+ 2005.]
 
-	const int readComponent = iReadFrom + n;
-	const amrex::Real q_im2 = q(i - 2, j, k, readComponent);
-	const amrex::Real q_im1 = q(i - 1, j, k, readComponent);
-	const amrex::Real q_i = q(i, j, k, readComponent);
-	const amrex::Real q_ip1 = q(i + 1, j, k, readComponent);
-	const amrex::Real q_ip2 = q(i + 2, j, k, readComponent);
+	const amrex::Real q_im2 = projector.template project<DIR>(q, i - 2, j, k, readComponent);
+	const amrex::Real q_im1 = projector.template project<DIR>(q, i - 1, j, k, readComponent);
+	const amrex::Real q_i = projector.template project<DIR>(q, i, j, k, readComponent);
+	const amrex::Real q_ip1 = projector.template project<DIR>(q, i + 1, j, k, readComponent);
+	const amrex::Real q_ip2 = projector.template project<DIR>(q, i + 2, j, k, readComponent);
 
 	// PPM reconstruction following Colella & Woodward (1984), with
 	// some modifications following Mignone (2014), as implemented in
@@ -635,7 +660,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 							  const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
@@ -658,7 +683,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 										amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
 										const int nvars, const int iReadFrom, const int iWriteFrom)
@@ -677,7 +702,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename Projector>
 AMREX_GPU_HOST_DEVICE void
 HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 						     quokka::Array4View<amrex::Real, DIR> const &rightState, const int n, const int i_in, const int j_in,
@@ -687,13 +712,14 @@ HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(quokka::Array4View<amrex::R
 
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
 	const int readComponent = iReadFrom + n;
-	const amrex::Real q_im2 = q(i - 2, j, k, readComponent);
-	const amrex::Real q_im1 = q(i - 1, j, k, readComponent);
-	const amrex::Real q_i = q(i, j, k, readComponent);
-	const amrex::Real q_ip1 = q(i + 1, j, k, readComponent);
-	const amrex::Real q_ip2 = q(i + 2, j, k, readComponent);
+	Projector projector(q, i, j, k, readComponent, n);
+
+	const amrex::Real q_im2 = projector.template project<DIR>(q, i - 2, j, k, readComponent);
+	const amrex::Real q_im1 = projector.template project<DIR>(q, i - 1, j, k, readComponent);
+	const amrex::Real q_i = projector.template project<DIR>(q, i, j, k, readComponent);
+	const amrex::Real q_ip1 = projector.template project<DIR>(q, i + 1, j, k, readComponent);
+	const amrex::Real q_ip2 = projector.template project<DIR>(q, i + 2, j, k, readComponent);
 
 	// Evaluate the extrema-preserving hybrid PPM-WENO reconstruction from the scalar stencil.
 	const auto [rightInterface, leftInterface] =
