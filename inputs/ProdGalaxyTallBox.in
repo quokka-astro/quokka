@@ -33,8 +33,8 @@ suppress_output = 0
 
 particles.verbose = 1
 particles.disable_SN_feedback = false
-particles.rad_table = ../inputs/lum_demo_5groups_log.csv
-particles.rad_table_output_spacing = log
+particles.rad_table = ../inputs/lum_data_5groups.csv
+particles.rad_table_output_spacing = fast_log
 
 density_floor = 1.67e-30 #in g cm^-3
 temperature_floor = 10.0 #K
@@ -42,6 +42,9 @@ temperature_floor = 10.0 #K
 particles.eps_ff = 0.01
 particles.param1 = 3.155760000e+14 # 10 Myr
 particles.param2 = 1.0
+problem.stars_file = ../inputs/ParticlesInTallBox.txt
+
+radiation.iteration_tolerance = 1e-6
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
