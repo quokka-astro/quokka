@@ -157,6 +157,60 @@ template <typename problem_t> class HyperbolicSystem
 				amrex::Array4<int> const &redoFlag);
 };
 
+namespace quokka::reconstruction
+{
+template <typename Problem, SlopeLimiter limiter>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPLMFromStencil(amrex::Real q_im2, amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1)
+    -> std::pair<amrex::Real, amrex::Real>
+{
+	// TVD piecewise-linear interface values using the requested slope limiter.
+	const auto lslope = HyperbolicSystem<Problem>::template SlopeFunc<limiter>(q_i - q_im1, q_im1 - q_im2);
+	const auto rslope = HyperbolicSystem<Problem>::template SlopeFunc<limiter>(q_ip1 - q_i, q_i - q_im1);
+
+	return {q_im1 + 0.25 * lslope, q_i - 0.25 * rslope};
+}
+
+template <typename Problem>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ReconstructPPMFromStencil(amrex::Real q_im2, amrex::Real q_im1, amrex::Real q_i, amrex::Real q_ip1,
+								       amrex::Real q_ip2) -> std::pair<amrex::Real, amrex::Real>
+{
+	// (1.) Estimate interface values using the fourth-order centered stencil.
+	const auto bounds = std::minmax({static_cast<double>(q_i), static_cast<double>(q_im1), static_cast<double>(q_ip1)});
+
+	const double coef_1 = (7. / 12.);
+	const double coef_2 = (-1. / 12.);
+	const double a_minus = (coef_1 * q_i + coef_2 * q_ip1) + (coef_1 * q_im1 + coef_2 * q_im2);
+	const double a_plus = (coef_1 * q_ip1 + coef_2 * q_ip2) + (coef_1 * q_i + coef_2 * q_im1);
+
+	// (2.) Constrain interfaces to lie between neighbouring cell averages.
+	double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
+	double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
+
+	const double a = q_i;
+	const double dq_minus = (a - new_a_minus);
+	const double dq_plus = (new_a_plus - a);
+	const double qa = dq_plus * dq_minus;
+
+	if (qa <= 0.0) {
+		// (3a.) Local extremum: fall back to linear reconstruction.
+		const double dq0 = HyperbolicSystem<Problem>::MC(q_ip1 - q_i, q_i - q_im1);
+		new_a_minus = a - 0.5 * dq0;
+		new_a_plus = a + 0.5 * dq0;
+	} else {
+		// (3b.) Enforce monotonicity near steep gradients.
+		if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
+			new_a_minus = a - 2.0 * dq_plus;
+		}
+
+		if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
+			new_a_plus = a + 2.0 * dq_minus;
+		}
+	}
+
+	return {new_a_minus, new_a_plus};
+}
+} // namespace quokka::reconstruction
+
 template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
@@ -269,12 +323,18 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
+	// fetch stencil values
+	const amrex::Real q_im2 = q(i - 2, j, k, n);
+	const amrex::Real q_im1 = q(i - 1, j, k, n);
+	const amrex::Real q_i = q(i, j, k, n);
+	const amrex::Real q_ip1 = q(i + 1, j, k, n);
+
 	// Use piecewise-linear reconstruction
 	// (This converges at second order in spatial resolution.)
-	const auto lslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
-	const auto rslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
-	leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
-	rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;	   // NOLINT
+	const auto [leftInterface, rightInterface] =
+	    quokka::reconstruction::ReconstructPLMFromStencil<problem_t, limiter>(q_im2, q_im1, q_i, q_ip1);
+	leftState(i, j, k, n) = leftInterface;
+	rightState(i, j, k, n) = rightInterface;
 }
 
 template <typename problem_t>
@@ -340,74 +400,22 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 	// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
 	// [See Eq. B8 of Mignone+ 2005.]
 
-	// compute bounds from neighboring cell-averaged values along axis
-	const std::pair<double, double> bounds = std::minmax({q(i, j, k, iReadFrom + n), q(i - 1, j, k, iReadFrom + n), q(i + 1, j, k, iReadFrom + n)});
-
-	// get interfaces
+	const int readComponent = iReadFrom + n;
+	const amrex::Real q_im2 = q(i - 2, j, k, readComponent);
+	const amrex::Real q_im1 = q(i - 1, j, k, readComponent);
+	const amrex::Real q_i = q(i, j, k, readComponent);
+	const amrex::Real q_ip1 = q(i + 1, j, k, readComponent);
+	const amrex::Real q_ip2 = q(i + 2, j, k, readComponent);
 
 	// PPM reconstruction following Colella & Woodward (1984), with
 	// some modifications following Mignone (2014), as implemented in
-	// Athena++.
+	// Athena++, evaluated from the scalar stencil.
+	const auto [rightInterface, leftInterface] =
+	    quokka::reconstruction::ReconstructPPMFromStencil<problem_t>(q_im2, q_im1, q_i, q_ip1, q_ip2);
 
-	// (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
-	// in Athena++ [ppm_simple.cpp].
-
-	// C&W Eq. (1.9) [parabola midpoint for the case of
-	// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
-	// (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
-	// symmetry in floating-point arithmetic, following Athena++.
-	const double coef_1 = (7. / 12.);
-	const double coef_2 = (-1. / 12.);
-	const double a_minus = (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i + 1, j, k, iReadFrom + n)) +
-			       (coef_1 * q(i - 1, j, k, iReadFrom + n) + coef_2 * q(i - 2, j, k, iReadFrom + n));
-	const double a_plus = (coef_1 * q(i + 1, j, k, iReadFrom + n) + coef_2 * q(i + 2, j, k, iReadFrom + n)) +
-			      (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i - 1, j, k, iReadFrom + n));
-
-	// left side of zone i
-	double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
-
-	// right side of zone i
-	double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
-
-	// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
-	// to step 4b in Athena++ [ppm_simple.cpp].
-
-	const double a = q(i, j, k, iReadFrom + n); // a_i in C&W
-	const double dq_minus = (a - new_a_minus);
-	const double dq_plus = (new_a_plus - a);
-
-	const double qa = dq_plus * dq_minus; // interface extrema
-
-	if (qa <= 0.0) { // local extremum
-
-		// Causes subtle, but very weird, oscillations in the Shu-Osher test
-		// problem. However, it is necessary to get a reasonable solution
-		// for the sawtooth advection problem.
-		const double dq0 = MC(q(i + 1, j, k, iReadFrom + n) - q(i, j, k, iReadFrom + n), q(i, j, k, iReadFrom + n) - q(i - 1, j, k, iReadFrom + n));
-
-		// use linear reconstruction, following Balsara (2017) [Living Rev
-		// Comput Astrophys (2017) 3:2]
-		new_a_minus = a - 0.5 * dq0;
-		new_a_plus = a + 0.5 * dq0;
-
-		// original C&W method for this case
-		// new_a_minus = a;
-		// new_a_plus = a;
-
-	} else { // no local extrema
-
-		// parabola overshoots near a_plus -> reset a_minus
-		if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
-			new_a_minus = a - 2.0 * dq_plus;
-		}
-
-		// parabola overshoots near a_minus -> reset a_plus
-		if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
-			new_a_plus = a + 2.0 * dq_minus;
-		}
-	}
-	rightState(i, j, k, iWriteFrom + n) = new_a_minus;
-	leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
+	const int writeComponent = iWriteFrom + n;
+	rightState(i, j, k, writeComponent) = rightInterface;
+	leftState(i + 1, j, k, writeComponent) = leftInterface;
 }
 
 template <typename problem_t>
