@@ -1079,7 +1079,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
 							auto value = data_array[out_idx][i1][i2];
 							if (value < small_number) {
-								amrex::Print() << "log output spacing requires positive values, got " << value << " at output " << out_idx << " index (" << i1 << ", " << i2 << ")\n";
+								// amrex::Print() << "log output spacing requires positive values, got " << value << " at output " << out_idx << " index (" << i1 << ", " << i2 << ")\n";
 								value = small_number;
 							}
 							data_array[out_idx][i1][i2] = log_(value);
