@@ -135,7 +135,7 @@ void QuokkaSimulation<HydroBalsaraVortex>::computeReferenceSolution(amrex::Multi
 auto problem_main() -> int
 {
 	amrex::ParmParse const hpp("setup");
-	
+
 	int advection_int = 0;
 	int num_orbits = 1;
 	hpp.query("vortex_Mach", vortex_Mach);
@@ -147,7 +147,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<HydroBalsaraVortex>(quokka::BCType::int_dir); // periodic
 
 	QuokkaSimulation<HydroBalsaraVortex> sim(BCs_cc);
-	
+
 	double stop_time = 0.0;
 	if (is_advection_enabled) {
 		const double advection_speed = vortex_speed;

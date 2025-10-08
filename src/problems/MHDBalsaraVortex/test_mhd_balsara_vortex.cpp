@@ -130,7 +130,7 @@ template <> void QuokkaSimulation<MHDBalsaraVortex>::setInitialConditionsOnGridF
 
 template <>
 void QuokkaSimulation<MHDBalsaraVortex>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -149,7 +149,7 @@ void QuokkaSimulation<MHDBalsaraVortex>::computeReferenceSolution(amrex::MultiFa
 auto problem_main() -> int
 {
 	amrex::ParmParse const hpp("setup");
-	
+
 	int advection_int = 0;
 	int num_orbits = 1;
 	hpp.query("vortex_Mach", vortex_Mach);
@@ -170,7 +170,7 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<MHDBalsaraVortex> sim(BCs_cc, BCs_fc);
-	
+
 	double stop_time = 0.0;
 	if (is_advection_enabled) {
 		const double advection_speed = vortex_speed;

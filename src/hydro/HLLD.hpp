@@ -132,7 +132,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	spds[2] = (siui_R * u_R.mx - siui_L * u_L.mx + theta * (ptot_L - ptot_R)) / sm_denom;
 	// S_i - S_M (for i=L or R)
 	const double sism_L = spds[0] - spds[2];
-	
+
 	const double sism_R = spds[4] - spds[2];
 	const double sism_inv_L = 1.0 / sism_L;
 	const double sism_inv_R = 1.0 / sism_R;
