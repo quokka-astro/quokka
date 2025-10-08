@@ -5,4 +5,6 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     add_test(NAME ParticleRadiation COMMAND particle_radiation ../inputs/ParticleRadiation.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ParticleRadiationLog COMMAND particle_radiation ../inputs/ParticleRadiationLog.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ParticleRadiationFastlog COMMAND particle_radiation ../inputs/ParticleRadiationFastlog.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
