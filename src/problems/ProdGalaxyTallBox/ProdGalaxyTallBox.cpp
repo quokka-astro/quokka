@@ -142,6 +142,12 @@ template <> struct RadSystem_Traits<TheProblem> {
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 
+template <> struct ISM_Traits<TheProblem> {
+	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-5;
+	static constexpr bool enable_photoelectric_heating = false;
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
