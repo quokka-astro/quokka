@@ -151,7 +151,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const tol, double const tol_rel, int *p_iteration_counter, 
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const tol, double const tol_rel, double const tempFloor, int *p_iteration_counter, 
 		int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
@@ -229,7 +229,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	auto EradVec_guess = Erad0Vec;
 
 	double Egas_guess_prev = Egas_guess;
+	// double Egas_guess_mean = Egas_guess; // a mean of Egas_guess over the last 2 iterations
+	// double Egas_guess_mean_prev = Egas_guess; // a mean of Egas_guess over the last 2 iterations
 	auto EradVec_guess_prev = EradVec_guess;
+	// auto EradVec_guess_mean = EradVec_guess; // a mean of EradVec_guess over the last 2 iterations
+	// auto EradVec_guess_mean_prev = EradVec_guess; // a mean of EradVec_guess over the last 2 iterations
 
 	// compute total rad energy
 	const double Eradtot0 = sum(Erad0Vec);
@@ -242,6 +246,35 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
+		// if relative change is within tol, break
+		if constexpr (use_rel_change_check) {
+			if (n > 0) {
+				const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
+				const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
+				const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
+				// if ((sum(Erad_rel_diff) / Eradtot0 < resid_tol || sum(Erad_rel_diff) / Erad_tot_guess_prev < resid_tol) && 
+				// 			(Egas_rel_diff / Egas0 < resid_tol || Egas_rel_diff / Egas_guess_prev < resid_tol)) {
+				// 	break;
+				// }
+
+				if ((sum(Erad_rel_diff) <= tol_rel_d * Erad_tot_guess_prev) && (Egas_rel_diff <= tol_rel_d * Egas_guess_prev)) {
+
+					// enforce limit
+					const double T_gas_tmp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+					if (T_gas_tmp < tempFloor) {
+						Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, tempFloor);
+					}
+
+					break;
+				}
+			}
+		}
+
+		// Egas_guess_mean_prev = Egas_guess_mean;
+		// EradVec_guess_mean_prev = EradVec_guess_mean;
+		// Egas_guess_mean = 0.5 * (Egas_guess + Egas_guess_prev);
+		// EradVec_guess_mean = 0.5 * (EradVec_guess + EradVec_guess_prev);
+
 		Egas_guess_prev = Egas_guess;
 		EradVec_guess_prev = EradVec_guess;
 
@@ -335,20 +368,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// check relative convergence of the residuals
 		if ((std::abs(jacobian.F0 / Etot0) < tol_d) && (cscale * jacobian.Fg_abs_sum / Etot0 < tol_d)) {
 			break;
-		}
-
-		// if relative change is within tol, break
-		if constexpr (use_rel_change_check) {
-			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
-			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
-			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
-			// if ((sum(Erad_rel_diff) / Eradtot0 < resid_tol || sum(Erad_rel_diff) / Erad_tot_guess_prev < resid_tol) && 
-			// 			(Egas_rel_diff / Egas0 < resid_tol || Egas_rel_diff / Egas_guess_prev < resid_tol)) {
-			// 	break;
-			// }
-			if ((sum(Erad_rel_diff) / Erad_tot_guess_prev < tol_rel_d) && (Egas_rel_diff / Egas_guess_prev < tol_rel_d)) {
-				break;
-			}
 		}
 
 #if 0 // NOLINT
@@ -612,7 +631,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-						    const int stage, double dustGasCoeff, double const tol_h, double const tol_rel_h, int *p_iteration_counter, int *p_iteration_failure_counter)
+						    const int stage, double dustGasCoeff, double const tol_h, double const tol_rel_h, double const tempFloor_local, int *p_iteration_counter, int *p_iteration_failure_counter)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -624,6 +643,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 	}
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
+	const double tempFloor_h = tempFloor_local;
 
 	// Add source terms
 
@@ -638,6 +658,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 		const double tol = tol_h;
 		const double tol_rel = tol_rel_h;
+		const double tempFloor = tempFloor_h;
 
 		const double c = c_light_;
 		const double chat = c_hat_;
@@ -752,7 +773,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					// gas + radiation
 					updated_energy =
 					    SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
-									    radBoundaries_g_copy, tol, tol_rel, p_iteration_counter_local, p_iteration_failure_counter_local);
+									    radBoundaries_g_copy, tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
 					if constexpr (!enable_photoelectric_heating_) {
 						// gas + radiation + dust
