@@ -21,7 +21,7 @@
 #include "hydro/hydro_system.hpp"
 #include "io/projection.hpp"
 #include "math/interpolate.hpp"
-#include "radiation/radiation_system.hpp"
+#include "radiation/radiation_dust_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
 
 static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap, 3: symmetry
