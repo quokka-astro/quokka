@@ -235,8 +235,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	const double Eradtot0 = sum(Erad0Vec);
 
 	// a hack: break after change between two steps is within tol
-	const bool use_rel_change_check = true;
+	constexpr bool use_rel_change_check = true;
 
+	const double tol_d = tol;
+	const double tol_rel_d = tol_rel;
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
@@ -331,28 +333,20 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		}
 
 		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < tol)) {
+		if ((std::abs(jacobian.F0 / Etot0) < tol_d) && (cscale * jacobian.Fg_abs_sum / Etot0 < tol_d)) {
 			break;
 		}
 
 		// if relative change is within tol, break
-		if (use_rel_change_check) {
-			// const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
-			// const double Erad_rel_diff = sum(abs(EradVec_guess - EradVec_guess_prev));
-			// const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
-			// if ((Erad_rel_diff / Erad_tot_guess_prev < tol_rel) && (Egas_rel_diff / Egas_guess_prev < tol_rel)) {
+		if constexpr (use_rel_change_check) {
+			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
+			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
+			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
+			// if ((sum(Erad_rel_diff) / Eradtot0 < resid_tol || sum(Erad_rel_diff) / Erad_tot_guess_prev < resid_tol) && 
+			// 			(Egas_rel_diff / Egas0 < resid_tol || Egas_rel_diff / Egas_guess_prev < resid_tol)) {
 			// 	break;
 			// }
-
-			double Erad_tot_guess_prev = 0.0;
-			double Erad_rel_diff = 0.0;
-			for (int g = 0; g < nGroups_; ++g) {
-				Erad_tot_guess_prev += EradVec_guess_prev[g];
-				Erad_rel_diff += std::abs(EradVec_guess[g] - EradVec_guess_prev[g]);
-			}
-			Erad_rel_diff /= Erad_tot_guess_prev;
-			double Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev) / Egas_guess_prev;
-			if ((Erad_rel_diff < tol_rel) && (Egas_rel_diff < tol_rel)) {
+			if ((sum(Erad_rel_diff) / Erad_tot_guess_prev < tol_rel_d) && (Egas_rel_diff / Egas_guess_prev < tol_rel_d)) {
 				break;
 			}
 		}
@@ -759,7 +753,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					updated_energy =
 					    SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, massScalars, iter, work, vel_times_F, Src,
 									    radBoundaries_g_copy, tol, tol_rel, p_iteration_counter_local, p_iteration_failure_counter_local);
-				
+				} else {
 					if constexpr (!enable_photoelectric_heating_) {
 						// gas + radiation + dust
 						updated_energy = SolveGasDustRadiationEnergyExchange(
