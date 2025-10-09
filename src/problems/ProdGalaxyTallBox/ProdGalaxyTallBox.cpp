@@ -39,7 +39,7 @@ constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double arad = C::a_rad;
 constexpr double TCMB = 2.7;		 // K, CMB temperature
-constexpr double initial_Erad = arad * TCMB * TCMB * TCMB * TCMB;
+constexpr double initial_Erad = 1e-40 * arad * TCMB * TCMB * TCMB * TCMB;
 constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // chat = 2000 km/s
 
 template <> struct SimulationData<TheProblem> {
@@ -300,6 +300,8 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 		AMREX_ASSERT(!std::isnan(rho));
 
+		// const double Tgas = P / (rho / mu * C::k_B);
+
 		const auto gamma = HydroSystem<TheProblem>::gamma_;
 
 		// add turbulent velocities
@@ -322,9 +324,12 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx*vx + vy*vy + vz*vz);
 
+		// compute energy fractions
+		const auto Erad_g = RadSystem<TheProblem>::ComputeThermalRadiationMultiGroup(TCMB, RadSystem<TheProblem>::radBoundaries_);
+
 		// Set radiation variables
 		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = initial_Erad;
+			state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
 			state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 			state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 			state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
