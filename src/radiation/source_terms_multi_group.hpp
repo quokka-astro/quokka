@@ -151,7 +151,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const tol, double const tol_rel, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const tol, double const tol_rel, int *p_iteration_counter, 
+		int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -336,14 +337,22 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 
 		// if relative change is within tol, break
 		if (use_rel_change_check) {
-			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
-			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
-			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
-			// if ((sum(Erad_rel_diff) / Eradtot0 < tol_rel || sum(Erad_rel_diff) / Erad_tot_guess_prev < tol_rel) && 
-			// 			(Egas_rel_diff / Egas0 < tol_rel || Egas_rel_diff / Egas_guess_prev < tol_rel)) {
+			// const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
+			// const double Erad_rel_diff = sum(abs(EradVec_guess - EradVec_guess_prev));
+			// const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
+			// if ((Erad_rel_diff / Erad_tot_guess_prev < tol_rel) && (Egas_rel_diff / Egas_guess_prev < tol_rel)) {
 			// 	break;
 			// }
-			if ((sum(Erad_rel_diff) / Erad_tot_guess_prev < tol_rel) && (Egas_rel_diff / Egas_guess_prev < tol_rel)) {
+
+			double Erad_tot_guess_prev = 0.0;
+			double Erad_rel_diff = 0.0;
+			for (int g = 0; g < nGroups_; ++g) {
+				Erad_tot_guess_prev += EradVec_guess_prev[g];
+				Erad_rel_diff += std::abs(EradVec_guess[g] - EradVec_guess_prev[g]);
+			}
+			Erad_rel_diff /= Erad_tot_guess_prev;
+			double Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev) / Egas_guess_prev;
+			if ((Erad_rel_diff < tol_rel) && (Egas_rel_diff < tol_rel)) {
 				break;
 			}
 		}
@@ -609,7 +618,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-						    const int stage, double dustGasCoeff, double const tol, double const tol_rel, int *p_iteration_counter, int *p_iteration_failure_counter)
+						    const int stage, double dustGasCoeff, double const tol_h, double const tol_rel_h, int *p_iteration_counter, int *p_iteration_failure_counter)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
@@ -632,6 +641,9 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// make a local reference
 		auto p_iteration_counter_local = p_iteration_counter;		      // NOLINT
 		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
+
+		const double tol = tol_h;
+		const double tol_rel = tol_rel_h;
 
 		const double c = c_light_;
 		const double chat = c_hat_;
