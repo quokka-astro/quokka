@@ -291,7 +291,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-					     double dustGasCoeff, double tol, int *p_iteration_counter, int *p_iteration_failure_counter);
+					     double dustGasCoeff, double tol, double tol_rel, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
 					      double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
@@ -427,7 +427,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
 					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 					quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double tol, int *p_iteration_counter, int *p_iteration_failure_counter)
+					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double tol, double tol_rel, int *p_iteration_counter, int *p_iteration_failure_counter)
 	    -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
