@@ -241,6 +241,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 	// a hack: break after change between two steps is within tol
 	constexpr bool use_rel_change_check = true;
 
+	constexpr Real small_number = 1e-100;
+
 	const double tol_d = tol;
 	const double tol_rel_d = tol_rel;
 	const int maxIter = 100;
@@ -261,7 +263,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 
 					// enforce limit
 					const double T_gas_tmp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-					if (T_gas_tmp < tempFloor) {
+					// std::isnan(Egas_guess) || 
+					if (Egas_guess < small_number || T_gas_tmp < tempFloor) {
 						Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, tempFloor);
 					}
 
