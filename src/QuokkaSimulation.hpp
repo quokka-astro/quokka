@@ -161,6 +161,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	bool use_wavespeed_correction_ = false;
 	bool print_rad_counter_ = false;
+	amrex::Real radiation_iteration_tolerance_ = 1e-11; // tolerance for the Newton-Raphson iteration residuals
+	amrex::Real radiation_iteration_tolerance_rel_ = -1.0; // tolerance for the relative change between two consecutive Newton-Raphson iterations
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
@@ -536,6 +538,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("cfl", radiationCflNumber_);
 		rpp.query("dust_gas_interaction_coeff", dustGasInteractionCoeff_);
 		rpp.query("print_iteration_counts", print_rad_counter_);
+		rpp.query("iteration_tolerance", radiation_iteration_tolerance_);
+		rpp.query("iteration_tolerance_rel", radiation_iteration_tolerance_rel_);
 	}
 }
 
@@ -2187,6 +2191,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 	// compute radiation timestep
 	int nsubSteps = 0;
 	amrex::Real dt_radiation = NAN;
+	auto const rad_tol = radiation_iteration_tolerance_;
+	auto const rad_tol_rel = radiation_iteration_tolerance_rel_;
+	auto const tempFloor = tempFloor_;
 
 	if (Physics_Traits<problem_t>::is_hydro_enabled && !(constantDt_ > 0.)) {
 		// adjust to get integer number of substeps
@@ -2276,8 +2283,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 											p_iteration_failure_counter);
 				} else {
 					RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_radiation, 1,
-										       dustGasInteractionCoeff_, p_iteration_counter,
-										       p_iteration_failure_counter);
+										       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter);
 				}
 			}
 		}
@@ -2309,7 +2315,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 										dustGasInteractionCoeff_, p_iteration_counter, p_iteration_failure_counter);
 			} else {
 				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_radiation, 2,
-									       dustGasInteractionCoeff_, p_iteration_counter, p_iteration_failure_counter);
+									       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter);
 			}
 		}
 
