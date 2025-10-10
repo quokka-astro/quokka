@@ -203,6 +203,7 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqsWithLastColumn(Ja
 
 	// note that jacobian.Jgg[pe_index] is the right value for a[pe_index][pe_index], while jacobian.Jg1[pe_index] is NOT.
 	const int pe_index = nGroups_ - 1;
+	AMREX_ASSERT(std::abs(jacobian.Jgg[pe_index]) > 1.0e-100);
 	const auto ratios = jacobian.J0g / jacobian.Jgg;
 
 	const auto a00_new = jacobian.J00 - sum(ratios * jacobian.Jg0);
@@ -214,11 +215,13 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqsWithLastColumn(Ja
 	const auto a11 = jacobian.Jgg[pe_index];
 	const auto y1 = jacobian.Fg[pe_index];
 	// solve linear equations [[a00_new, a01_new], [a10, a11]] [[x0], [xi[pe_index]]] = [y0_new, y1]
+	AMREX_ASSERT(std::abs(a11) > 1.0e-100);
 	x0 = (y0_new - a01_new / a11 * y1) / (a00_new - a01_new / a11 * a10);
 	const auto x1 = (y1 - a10 * x0) / a11;
 	xi[pe_index] = x1;
 	// xi = (jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
 	for (int g = 0; g < pe_index; ++g) {
+		AMREX_ASSERT(jacobian.Jgg[g] != 0.0);
 		xi[g] = (jacobian.Fg[g] - jacobian.Jg0[g] * x0 - jacobian.Jg1[g] * x1) / jacobian.Jgg[g];
 	}
 	x0 *= -1.0;
