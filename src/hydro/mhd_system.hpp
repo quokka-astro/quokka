@@ -60,9 +60,9 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 				   std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
 				   std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
-	static void EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, 
-						  amrex::Box const &box_ec, std::array<int, 2> extrap_dirs, 
-						  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds, std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
+	static void EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
+					      std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
+					      std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -297,7 +297,7 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 			} else {
 				// get fspds to pass to LD04 or Balsara2025_HLL solver if needed
 				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds = {
-					fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
+				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
 				// extrapolate the two required face-centered magnetic field components to the cell-edge
 				if (emf_avg_type == EMFAvgType::LD04) {
 					MHDSystem<problem_t>::EMFSolver_LD04(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
@@ -306,11 +306,10 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 				} else {
 					amrex::Abort("Unknown EMF averaging type");
 				}
-			}		
+			}
 		}
 	}
 }
-
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
@@ -443,7 +442,7 @@ void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX
 			} else {
 				// get fspds to pass to LD04 or Balsara2025_HLL solver if needed
 				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds = {
-					fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
+				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
 				// extrapolate the two required face-centered magnetic field components to the cell-edge
 				if (emf_avg_type == EMFAvgType::LD04) {
 					MHDSystem<problem_t>::EMFSolver_LD04(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, ec_fabs_Bi_ieside);
@@ -452,7 +451,7 @@ void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX
 				} else {
 					amrex::Abort("Unknown EMF averaging type");
 				}
-			}	
+			}
 		}
 	}
 }
@@ -535,8 +534,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 	cc_mf_EMF.FillBoundary(); // fill ghost cells
 	amrex::Gpu::streamSynchronize();
-
-
 
 	// now that EMF is calculated at cell center, we need to interpolate to cell edge
 	// we also need to get the magnetic field from the face to cell edge to use the Balsara method
@@ -774,7 +771,7 @@ void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-							 amrex::Box const &box_ec, std::array<int, 2> extrap_dirs,
+						     amrex::Box const &box_ec, std::array<int, 2> extrap_dirs,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
 						     std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
 {
@@ -789,7 +786,6 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 	const auto &B1_m = ec_fabs_Bi_ieside[1][0].const_array();
 	const auto &B1_p = ec_fabs_Bi_ieside[1][1].const_array();
 
-
 	int const w0_comp = extrap_dirs[0];
 	int const w1_comp = extrap_dirs[1];
 	std::array<int, 3> delta_w0 = {0, 0, 0};
@@ -800,7 +796,6 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 
 	const auto &fspd_x0 = fspds[w0_comp];
 	const auto &fspd_x1 = fspds[w1_comp];
-
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		// Wave speeds
@@ -816,14 +811,13 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto E2_RD = E2_q3(i, j, k);
 
 		// Magnetic field components
-		const auto B0_U_ = B0_m(i,j,k); 
+		const auto B0_U_ = B0_m(i, j, k);
 		const auto B0_D_ = B0_p(i, j, k);
 		const auto B1_R_ = B1_m(i, j, k);
-		const auto B1_L_ = B1_p(i,j,k);		
+		const auto B1_L_ = B1_p(i, j, k);
 
 		const auto S = std::max({SL, SR, SD, SU});
-     
-		
+
 		double E2_U_star = 0.0;
 		double E2_D_star = 0.0;
 		double B1_dstar = 0.0;
@@ -839,21 +833,17 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 			E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) + (SU * SD) * (B0_U_ - B0_D_) / (SU - SD);
 			B0_dstar = (SU * B0_U_ - SD * B0_D_) / (SU - SD) + (E2_LD - E2_LU + E2_RD - E2_RU) / (2.0 * (SU - SD));
 			B1_dstar = (SR * B1_R_ - SL * B1_L_) / (SR - SL) + (-E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SR - SL));
-			const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + 
-				(SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) -
-				SU * SD * (B0_D_ - B0_U_) / (SU - SD) + 
-				(SR * B1_R_ + SL * B1_L_) / 2.0;
-			const auto E2_dstar_2 = (SU + SD) * B0_dstar / 2.0 + 
-				(SR * (E2_LD + E2_LU) - SL * (E2_RD + E2_RU)) / (2.0 * (SR - SL)) -
-				(SU * B0_U_ + SD * B0_D_) / 2.0 - 
-				SR * SL * (B1_R_ - B1_L_) / (SR - SL);
+			const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + (SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) -
+						SU * SD * (B0_D_ - B0_U_) / (SU - SD) + (SR * B1_R_ + SL * B1_L_) / 2.0;
+			const auto E2_dstar_2 = (SU + SD) * B0_dstar / 2.0 + (SR * (E2_LD + E2_LU) - SL * (E2_RD + E2_RU)) / (2.0 * (SR - SL)) -
+						(SU * B0_U_ + SD * B0_D_) / 2.0 - SR * SL * (B1_R_ - B1_L_) / (SR - SL);
 			E2_dstar = 0.5 * (E2_dstar_1 + E2_dstar_2);
-		} else { //for limiting case where SL=SR and/or SD=SU
+		} else { // for limiting case where SL=SR and/or SD=SU
 			E2_U_star = 0.5 * ((E2_LU + E2_RU) + S * (B1_R_ - B1_L_));
 			E2_D_star = 0.5 * ((E2_LD + E2_RD) + S * (B1_R_ - B1_L_));
 			E2_R_star = 0.5 * ((E2_RD + E2_RU) - S * (B0_U_ - B0_D_));
 			E2_L_star = 0.5 * ((E2_LD + E2_LU) - S * (B0_U_ - B0_D_));
-			E2_dstar  = 0.5 * ((E2_RU + E2_LU + E2_LD + E2_RD)/2.0 + S * (B0_D_ - B0_U_ + B1_R_ - B1_L_));
+			E2_dstar = 0.5 * ((E2_RU + E2_LU + E2_LD + E2_RD) / 2.0 + S * (B0_D_ - B0_U_ + B1_R_ - B1_L_));
 		}
 
 		if (SL == 0.0 && SD == 0.0) {
