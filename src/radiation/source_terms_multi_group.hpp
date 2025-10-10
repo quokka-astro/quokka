@@ -152,7 +152,7 @@ RadSystem<problem_t>::SolveGasRadiationEnergyExchange(double const Egas0, quokka
 						      amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter,
 						      quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F,
 						      quokka::valarray<double, nGroups_> const &Src,
-						      amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const tol, double const tol_rel,
+						      amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const resid_tol, double const rel_change_tol,
 						      double const /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter)
     -> NewtonIterationResult<problem_t>
 {
@@ -233,18 +233,16 @@ RadSystem<problem_t>::SolveGasRadiationEnergyExchange(double const Egas0, quokka
 	double Egas_guess_prev = Egas_guess;
 	auto EradVec_guess_prev = EradVec_guess;
 
-	const double resid_tol = tol;
-	const double resid_tol_rel = tol_rel;
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
 		// if relative change is within tol, break
-		if (resid_tol_rel > 0.0 && n > 0) {
+		if (rel_change_tol > 0.0 && n > 0) {
 			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
 			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
 			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
 
-			if ((sum(Erad_rel_diff) <= resid_tol_rel * Erad_tot_guess_prev) && (Egas_rel_diff <= resid_tol_rel * Egas_guess_prev)) {
+			if ((sum(Erad_rel_diff) <= rel_change_tol * Erad_tot_guess_prev) && (Egas_rel_diff <= rel_change_tol * Egas_guess_prev)) {
 				break;
 			}
 		}
@@ -740,12 +738,12 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 						// gas + radiation + dust
 						updated_energy = SolveGasDustRadiationEnergyExchange(
 						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
-						    p_iteration_counter_local, p_iteration_failure_counter_local);
+								tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					} else {
 						// gas + radiation + dust + photoelectric heating
 						updated_energy = SolveGasDustRadiationEnergyExchangeWithPE(
 						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
-						    p_iteration_counter_local, p_iteration_failure_counter_local);
+								tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					}
 				}
 

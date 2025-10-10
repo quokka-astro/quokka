@@ -294,7 +294,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					     double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-					      double dustGasCoeff, double tol, double tol_rel, double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter);
+					      double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -427,7 +427,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
 					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 					quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double tol, double tol_rel, double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter)
+					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double tempFloor, 
+					int *p_iteration_counter, int *p_iteration_failure_counter)
 	    -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
@@ -435,14 +436,15 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									 int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 									 quokka::valarray<double, nGroups_> const &vel_times_F,
 									 quokka::valarray<double, nGroups_> const &Src,
-									 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
-									 int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
+									 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double tempFloor,
+									 int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto
 	SolveGasDustRadiationEnergyExchangeWithPE(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt,
 						  amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter,
 						  quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F,
 						  quokka::valarray<double, nGroups_> const &Src, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+							double resid_tol, double rel_change_tol, double tempFloor,
 						  int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>

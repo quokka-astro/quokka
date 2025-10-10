@@ -230,7 +230,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double /*tempFloor*/,
+		int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -328,15 +329,31 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
+	double Egas_guess_prev = Egas_guess;
+	auto EradVec_guess_prev = EradVec_guess;
+
 	const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 
 	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
-	const double resid_tol = 1.0e-11; // 1.0e-15;
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
+		// if relative change is within tol, break
+		if (rel_change_tol > 0.0 && n > 0) {
+			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
+			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
+			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
+
+			if ((sum(Erad_rel_diff) <= rel_change_tol * Erad_tot_guess_prev) && (Egas_rel_diff <= rel_change_tol * Egas_guess_prev)) {
+				break;
+			}
+		}
+
+		Egas_guess_prev = Egas_guess;
+		EradVec_guess_prev = EradVec_guess;
+
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
@@ -581,7 +598,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const coeff_n, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double /*tempFloor*/,
+		int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -678,6 +696,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	double Egas_guess = Egas0;
 	auto EradVec_guess = Erad0Vec;
 
+	double Egas_guess_prev = Egas_guess;
+	auto EradVec_guess_prev = EradVec_guess;
+
 	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
@@ -685,10 +706,23 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 	const double PE_heating_energy_derivative = dt * DefinePhotoelectricHeatingE1Derivative(T_gas, H_num_den);
 
-	const double resid_tol = 1.0e-11; // 1.0e-15;
 	const int maxIter = 100;
 	int n = 0;
 	for (; n < maxIter; ++n) {
+		// if relative change is within tol, break
+		if (rel_change_tol > 0.0 && n > 0) {
+			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
+			const auto Erad_rel_diff = abs(EradVec_guess - EradVec_guess_prev);
+			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
+
+			if ((sum(Erad_rel_diff) <= rel_change_tol * Erad_tot_guess_prev) && (Egas_rel_diff <= rel_change_tol * Egas_guess_prev)) {
+				break;
+			}
+		}
+
+		Egas_guess_prev = Egas_guess;
+		EradVec_guess_prev = EradVec_guess;
+
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
