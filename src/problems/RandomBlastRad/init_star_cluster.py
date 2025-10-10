@@ -35,6 +35,7 @@ YEAR_IN_S = 3.1536e7                      # 1 year in seconds
 MYR_IN_S = 3.1536e13                      # 1 Myr in seconds
 G_CGS = 6.67430e-8                        # Gravitational constant in cm³/(g·s²)
 
+MAX_BIRTH_TIME_IN_MYR = 10.0
 
 def sample_kroupa_imf(n_stars, m_min=5.0, m_max=120.0, alpha=2.3):
     """
@@ -334,7 +335,7 @@ def generate_star_cluster(n_stars, half_mass_radius_pc, n_radiation_groups, cuto
     
     # Generate default output filename if not provided
     if output_file is None:
-        output_file = f"cluster_N{n_stars}_r{half_mass_radius_pc:.1f}.txt"
+        output_file = f"cluster_N{n_stars}_r{half_mass_radius_pc:.1f}_ng{n_radiation_groups}.txt"
     
     # If cutoff radius is specified, generate extra stars and filter
     if cutoff_radius_pc is not None:
@@ -408,7 +409,7 @@ def generate_star_cluster(n_stars, half_mass_radius_pc, n_radiation_groups, cuto
     print(f"Velocity dispersion: {v_disp_km_s:.2f} km/s")
     
     # Generate random birth times from -3 Myr to 0 (in CGS seconds)
-    birth_times_cgs = np.random.uniform(-3.0 * MYR_IN_S, 0.0, n_stars)
+    birth_times_cgs = np.random.uniform(-MAX_BIRTH_TIME_IN_MYR * MYR_IN_S, 0.0, n_stars)
     
     # Calculate death times based on stellar lifetimes (in CGS seconds)
     death_times_cgs = stellar_lifetime(masses_msun)
