@@ -666,7 +666,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_array, ec_fabs_EMF_q, box_ec);
 			} else {
 				// get fspds to pass to LD04 or Balsara2025 solver if needed
-				std::array<amrex::Array4<const amrex::Real>, 3> fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
+				std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 											 fcx_mf_fspds[2].const_array(mfi)};
 				if (emf_avg_type == EMFAvgType::LD04) {
 					MHDSystem<problem_t>::EMFSolver_LD04(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
