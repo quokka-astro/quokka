@@ -2279,7 +2279,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
 				if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
 					RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_radiation, 1,
-											dustGasInteractionCoeff_, p_iteration_counter,
+											dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter,
 											p_iteration_failure_counter);
 				} else {
 					RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_radiation, 1,
@@ -2312,7 +2312,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// include cell-centered source terms; will update state_new_cc_[lev] in place (updates both radiation and hydro vars)
 			if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
 				RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_radiation, 2,
-										dustGasInteractionCoeff_, p_iteration_counter, p_iteration_failure_counter);
+										dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter);
 			} else {
 				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_radiation, 2,
 									       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter);

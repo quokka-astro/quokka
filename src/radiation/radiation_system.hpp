@@ -291,10 +291,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-					     double dustGasCoeff, double tol_h, double tol_rel_h, double const tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter);
+					     double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-					      double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
+					      double dustGasCoeff, double tol, double tol_rel, double tempFloor, int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
