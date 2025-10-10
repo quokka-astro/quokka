@@ -1179,8 +1179,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		if (printCycleTiming_ == 1) {
 			amrex::Real elapsed_sec = getCycleWalltime();
 			amrex::Print() << "(cycle time: " << elapsed_sec << " s) ...\n";
-		} else {
-			amrex::Print() << "...\n";
 		}
 
 		computeTimestep();
