@@ -483,7 +483,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	cc_mf_EMF.setVal(0.0, 0, 3, nghost_cc); // initialize to zero everywhere including ghost zones
 
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) {
-		const amrex::Box &box_cc = mfi.validbox();
 		const amrex::Box &box_cc_EMF = mfi.growntilebox(nghost_cc); // Ensure enough ghost cells for EMF computation
 
 		// Access the MultiFab components for this tile
