@@ -241,7 +241,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
 
 			if ((sum(Erad_rel_diff) <= rel_change_tol * Erad_tot_guess_prev) && (Egas_rel_diff <= rel_change_tol * Egas_guess_prev)) {
-				break;
+				break; // NOSONAR
 			}
 		}
 
@@ -337,7 +337,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 
 		// check relative convergence of the residuals
 		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
-			break;
+			break; // NOSONAR
 		}
 
 #if 0 // NOLINT
