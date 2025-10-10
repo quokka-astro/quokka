@@ -61,8 +61,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 				   std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
 	static void EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
-					      std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
-					      std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
+					  std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
+					  std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -770,9 +770,9 @@ void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-						     amrex::Box const &box_ec, std::array<int, 2> extrap_dirs,
-						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
-						     std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
+						 amrex::Box const &box_ec, std::array<int, 2> extrap_dirs,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
+						 std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
 {
 	const BL_PROFILE("MHDSystem::ApplyBalsaraEMFSolver()");
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
