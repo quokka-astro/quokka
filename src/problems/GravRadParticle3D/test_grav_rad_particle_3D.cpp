@@ -30,6 +30,7 @@ constexpr double c = 100.0;	   // speed of light
 constexpr double chat = 2.0;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-20; // opacity
 constexpr double rho0 = 1.0e-8;
+constexpr double m_H = C::m_p + C::m_e;
 
 const double lum1 = 1.0;
 
@@ -120,6 +121,23 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, RadSystem<ParticleProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::x3GasMomentum_index) = 0.;
 	});
+}
+
+template <>
+auto QuokkaSimulation<ParticleProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+{
+	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
+
+	Real const H_mass_fraction = 1.0;
+
+	// compute (total) density projection
+	proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const rho = state(i, j, k, RadSystem<ParticleProblem>::gasDensity_index);
+		    return (H_mass_fraction * rho) / m_H;
+	    });
+
+	return proj;
 }
 
 auto problem_main() -> int

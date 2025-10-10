@@ -470,7 +470,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 	// use WENO-Z smoothness indicators with *symmetric* linear weights
 	// (1-2-3 problem fails with the [asymmetric] 'optimal' weights)
 	const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) + std::abs(q(i + 1, j, k, n))) / 3.0;
-	const double eps = (q_mean > 0.0) ? 1.0e-40 * q_mean : 1.0e-40;
+	const double eps = std::max(1.0e-40 * q_mean, 1.0e-40); // prevent underflow
 	const double tau = std::abs(IS_L - IS_R);
 	double wL = 0.2 * (1. + tau / (IS_L + eps));
 	double wC = 0.6 * (1. + tau / (IS_C + eps));

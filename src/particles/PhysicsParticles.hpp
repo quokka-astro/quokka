@@ -23,8 +23,8 @@
 #include "particle_creation.hpp"
 #include "particle_deposition.hpp"
 #include "particle_destruction.hpp"
-#include "particle_radiation.hpp"
 #include "particle_types.hpp"
+#include "particle_update.hpp"
 #include "physics_info.hpp"
 
 namespace quokka
@@ -505,17 +505,28 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	{
 		// Use the traits system to update particle properties directly
 		if (this->container_ != nullptr) {
-			// Apply the updater to all particles across all levels
-			for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
-				for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
+			// Get the GPU tables by value (host-side access)
+			constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+			auto *host_tables_ptr = quokka::g_luminosity_tables_ptr<nGroups>;
 
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT
-						ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t>(p, current_time);
-					});
+			// Only proceed if tables are initialized
+			if (host_tables_ptr != nullptr && host_tables_ptr->is_initialized()) {
+				// Create GPU const tables by value to pass to device
+				auto const gpu_tables = host_tables_ptr->const_tables();
+
+				// Apply the updater to all particles across all levels
+				for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
+					for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
+						auto &particles = pIter.GetArrayOfStructs();
+						auto *pData = particles().data();
+						const amrex::Long np = pIter.numParticles();
+
+						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+							auto &p = pData[idx]; // NOLINT
+							ParticlePropertyUpdateTraits<particleType>::template updateProperties<
+							    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, gpu_tables);
+						});
+					}
 				}
 			}
 		}
@@ -586,9 +597,22 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Check if registry contains any massive particles
 	[[nodiscard]] auto HasMassiveParticles() const -> bool
 	{
-		for (const auto &[name, descriptor] : particleRegistry_) {
+		for (const auto &[name, descriptor] : particleRegistry_) { // NOSONAR
 			if (descriptor->getMassIndex() >= 0) {
 				return true;
+			}
+		}
+		return false;
+	}
+
+	// Check if registry contains any radiating particles
+	[[nodiscard]] auto HasRadiatingParticles() const -> bool
+	{
+		if (Physics_Traits<problem_t>::is_radiation_enabled) {
+			for (const auto &[name, descriptor] : particleRegistry_) { // NOSONAR
+				if (descriptor->getLumIndex() >= 0) {
+					return true;
+				}
 			}
 		}
 		return false;
@@ -750,6 +774,37 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
+		}
+	}
+
+	// Write only specified particle types to plot file
+	void writePlotFileFiltered(const std::string &plotfilename, const std::vector<std::string> &particleTypeNames)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::writePlotFileFiltered()");
+
+		// Iterate through registered particles and write those whose names match the requested list
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			const std::string typeName = getParticleTypeName(type);
+
+			// Check if this particle type is in the requested list
+			if (std::find(particleTypeNames.begin(), particleTypeNames.end(), typeName) != particleTypeNames.end()) {
+				descriptor->writePlotFile(plotfilename, typeName);
+				descriptor->writeUnitsFile(plotfilename, typeName);
+			}
+		}
+
+		// Optionally warn about requested particle types that weren't found
+		for (const auto &requestedName : particleTypeNames) {
+			bool found = false;
+			for (const auto &[type, descriptor] : particleRegistry_) {
+				if (getParticleTypeName(type) == requestedName) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				amrex::Print() << "Warning: Requested particle type '" << requestedName << "' is not registered.\n";
+			}
 		}
 	}
 

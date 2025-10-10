@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_quirk.cpp
+/// \file test_mhd_quirk.cpp
 /// \brief Defines a test problem for the odd-even decoupling instability.
 ///
 
@@ -34,25 +34,24 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
 using Real = amrex::Real;
 
-struct QuirkProblem {
+struct MHDQuirk {
 };
 
-template <> struct quokka::EOS_Traits<QuirkProblem> {
+template <> struct quokka::EOS_Traits<MHDQuirk> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct HydroSystem_Traits<QuirkProblem> {
+template <> struct HydroSystem_Traits<MHDQuirk> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<QuirkProblem> {
+template <> struct Physics_Traits<MHDQuirk> {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -60,7 +59,7 @@ template <> struct Physics_Traits<QuirkProblem> {
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -73,7 +72,22 @@ constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
 constexpr int ishock_g = 0;
 
-template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	// extract grid information
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+
+	const int ncomp_fc = Physics_Indices<MHDQuirk>::nvarPerDim_fc;
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		for (int n = 0; n < ncomp_fc; ++n) {
+			state_fc(i, j, k, n) = 0; // fill all b-field quantities with zeros
+		}
+	});
+}
+
+template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -123,12 +137,12 @@ template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quok
 
 		const auto v_sq = vx * vx + vy * vy + vz * vz;
 
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::energy_index) = quokka::EOS<QuirkProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) = quokka::EOS<QuirkProblem>::ComputeEintFromPres(rho, P);
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::x1Momentum_index) = rho * vx;
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::x2Momentum_index) = rho * vy;
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::x3Momentum_index) = rho * vz;
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::energy_index) = quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq;
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::internalEnergy_index) = quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P);
 	});
 }
 
@@ -138,7 +152,7 @@ auto getDeltaEntropyVector() -> std::vector<Real> &
 	return delta_s_vec;
 }
 
-template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<MHDQuirk>::computeAfterTimestep()
 {
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// it should be sufficient examine a single box on level 0
@@ -174,13 +188,13 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
 			int const i = idx[0];
 			int const j = idx[1];
 			int const k = idx[2];
-			Real const dodd = state(i, j + 1, k, HydroSystem<QuirkProblem>::density_index);
-			Real const podd = HydroSystem<QuirkProblem>::ComputePressure(state, i, j + 1, k);
-			Real const deven = state(i, j, k, HydroSystem<QuirkProblem>::density_index);
-			Real const peven = HydroSystem<QuirkProblem>::ComputePressure(state, i, j, k);
+			Real const dodd = state(i, j + 1, k, HydroSystem<MHDQuirk>::density_index);
+			Real const podd = HydroSystem<MHDQuirk>::ComputePressure(state, i, j + 1, k);
+			Real const deven = state(i, j, k, HydroSystem<MHDQuirk>::density_index);
+			Real const peven = HydroSystem<MHDQuirk>::ComputePressure(state, i, j, k);
 
 			// the 'entropy function' s == P / rho^gamma
-			const Real gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
+			const Real gamma = quokka::EOS_Traits<MHDQuirk>::gamma;
 			Real const sodd = podd / std::pow(dodd, gamma);
 			Real const seven = peven / std::pow(deven, gamma);
 			s[0] = std::abs(sodd - seven);
@@ -191,7 +205,7 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
 	}
 }
 
-template <> void QuokkaSimulation<QuirkProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
+template <> void QuokkaSimulation<MHDQuirk>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
 {
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		auto const &deltas_vec = getDeltaEntropyVector();
@@ -210,9 +224,9 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterEvolve(amrex::Vecto
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							 int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+						     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+						     int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 1)
 	auto i = iv.toArray()[0];
@@ -230,36 +244,45 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-	const auto gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
+	const auto gamma = quokka::EOS_Traits<MHDQuirk>::gamma;
 
 	if (i < lo[0]) {
 		// x1 left side boundary
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) = pl / (gamma - 1.);
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dl;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl * ul;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
+		consVar(i, j, k, RadSystem<MHDQuirk>::gasEnergy_index) = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
+		consVar(i, j, k, RadSystem<MHDQuirk>::gasInternalEnergy_index) = pl / (gamma - 1.);
+		consVar(i, j, k, RadSystem<MHDQuirk>::gasDensity_index) = dl;
+		consVar(i, j, k, RadSystem<MHDQuirk>::x1GasMomentum_index) = dl * ul;
+		consVar(i, j, k, RadSystem<MHDQuirk>::x2GasMomentum_index) = 0.;
+		consVar(i, j, k, RadSystem<MHDQuirk>::x3GasMomentum_index) = 0.;
 	} else if (i >= hi[0]) {
 		// x1 right-side boundary
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) = pr / (gamma - 1.);
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dr;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dr * ur;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
+		consVar(i, j, k, RadSystem<MHDQuirk>::gasEnergy_index) = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
+		consVar(i, j, k, RadSystem<MHDQuirk>::gasInternalEnergy_index) = pr / (gamma - 1.);
+		consVar(i, j, k, RadSystem<MHDQuirk>::gasDensity_index) = dr;
+		consVar(i, j, k, RadSystem<MHDQuirk>::x1GasMomentum_index) = dr * ur;
+		consVar(i, j, k, RadSystem<MHDQuirk>::x2GasMomentum_index) = 0.;
+		consVar(i, j, k, RadSystem<MHDQuirk>::x3GasMomentum_index) = 0.;
 	}
 }
 
 auto problem_main() -> int
 {
 	// Boundary conditions: ext_dir in x, periodic in y and z
-	auto BCs_cc = quokka::BC<QuirkProblem>(quokka::BCType::ext_dir,	 // x: outflow
-					       quokka::BCType::int_dir,	 // y: periodic
-					       quokka::BCType::int_dir); // z: periodic
+	auto BCs_cc = quokka::BC<MHDQuirk>(quokka::BCType::ext_dir,  // x: outflow
+					   quokka::BCType::int_dir,  // y: periodic
+					   quokka::BCType::int_dir); // z: periodic
+
+	const int nvars_fc = Physics_Indices<MHDQuirk>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
+			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+		}
+	}
 
 	// Problem initialization
-	QuokkaSimulation<QuirkProblem> sim(BCs_cc);
+	QuokkaSimulation<MHDQuirk> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = 0.4;
