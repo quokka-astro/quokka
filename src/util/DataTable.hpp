@@ -1005,8 +1005,6 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			return std::log(x);
 		};
 
-		constexpr Real small_number = 1.0e-100;
-
 		// Read data values - layout is transposed from internal representation
 		// CSV layout: last dimensions as rows, first dimension as columns
 		if constexpr (Ndim == 1) {
@@ -1077,12 +1075,11 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
-							auto value = data_array[out_idx][i1][i2];
-							if (value < small_number) {
-								// amrex::Print() << "log output spacing requires positive values, got " << value << " at output " << out_idx << " index (" << i1 << ", " << i2 << ")\n";
-								value = small_number;
-							}
-							data_array[out_idx][i1][i2] = log_(value);
+							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+							    data_array[out_idx][i1][i2] > 0.0,
+							    fmt::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
+									data_array[out_idx][i1][i2], out_idx, i1, i2));
+							data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
 						}
 					}
 				}
