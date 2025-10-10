@@ -60,9 +60,9 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 				   std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
 				   std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
-	static void EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
-					      std::array<int, 2> extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
-					      std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
+	static void EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, 
+						  amrex::Box const &box_ec, std::array<int, 2> extrap_dirs, 
+						  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds, std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -289,84 +289,28 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 				});
 			}
 
-			// extract wavespeeds
-			int const w0_index = extrap_dirs[0];
-			int const w1_index = extrap_dirs[1];
-			std::array<int, 3> delta_w0 = {0, 0, 0};
-			std::array<int, 3> delta_w1 = {0, 0, 0};
-			delta_w0[w0_index] = 1;
-			delta_w1[w1_index] = 1;
-			const auto &fspd_x0 = fcx_mf_fspds[w0_index][mfi].const_array();
-			const auto &fspd_x1 = fcx_mf_fspds[w1_index][mfi].const_array();
-
-			// extract both components of magnetic field either side of the cell-edge
-			const auto &B0_m = ec_fabs_Bi_ieside[0][0].const_array();
-			const auto &B0_p = ec_fabs_Bi_ieside[0][1].const_array();
-			const auto &B1_m = ec_fabs_Bi_ieside[1][0].const_array();
-			const auto &B1_p = ec_fabs_Bi_ieside[1][1].const_array();
-
-			// extract all four quadrants of the electric field about the cell-edge
-			const auto &E2_q0 = ec_fabs_E_q[0].const_array();
-			const auto &E2_q1 = ec_fabs_E_q[1].const_array();
-			const auto &E2_q2 = ec_fabs_E_q[2].const_array();
-			const auto &E2_q3 = ec_fabs_E_q[3].const_array();
-
 			// compute electric field on the cell-edge
 			const auto &E2_ave = ec_mf_emf_components[iedge][mfi].array();
 
 			if (emf_avg_type == EMFAvgType::BalsaraSpicer) {
-				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double E2_q0_ = E2_q0(i, j, k);
-					const double E2_q1_ = E2_q1(i, j, k);
-					const double E2_q2_ = E2_q2(i, j, k);
-					const double E2_q3_ = E2_q3(i, j, k);
-					// Balsara & Spicer averaging scheme:
-					E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
-				});
-			} else if (emf_avg_type == EMFAvgType::LD04) {
-				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double E2_q0_ = E2_q0(i, j, k);
-					const double E2_q1_ = E2_q1(i, j, k);
-					const double E2_q2_ = E2_q2(i, j, k);
-					const double E2_q3_ = E2_q3(i, j, k);
-
-					const double B0_p_ = B0_p(i, j, k);
-					const double B0_m_ = B0_m(i, j, k);
-					const double B1_p_ = B1_p(i, j, k);
-					const double B1_m_ = B1_m(i, j, k);
-
-					// LD04 scheme:
-					const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-					const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-					const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-					const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
-
-					// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-					// (-,+) | (+,+)
-					//   1   |   2
-					// ------+------
-					//   0   |   3
-					// (-,-) | (+,-)
-
-					const double num1 =
-					    ((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
-					const double num2 =
-					    ((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
-
-					// must be averaged for exact floating-point symmetry
-					const double numerator = 0.5 * (num1 + num2);
-					const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
-
-					// NOTE: there is a sign error in Equation 56 of Felker & Stone
-					const double term2 =
-					    ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
-
-					E2_ave(i, j, k) = (numerator / denominator) + term2;
-				});
-			}
+				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_ave, ec_fabs_E_q, box_ec);
+			} else {
+				// get fspds to pass to LD04 or Balsara2025_HLL solver if needed
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds = {
+					fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
+				// extrapolate the two required face-centered magnetic field components to the cell-edge
+				if (emf_avg_type == EMFAvgType::LD04) {
+					MHDSystem<problem_t>::EMFSolver_LD04(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
+				} else if (emf_avg_type == EMFAvgType::Balsara2025_HLL) {
+					MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
+				} else {
+					amrex::Abort("Unknown EMF averaging type");
+				}
+			}		
 		}
 	}
 }
+
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
@@ -492,78 +436,23 @@ void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX
 				});
 			}
 
-			// extract wavespeeds
-			int const w0_index = field_w_indices[0];
-			int const w1_index = field_w_indices[1];
-			std::array<int, 3> delta_w0 = {0, 0, 0};
-			std::array<int, 3> delta_w1 = {0, 0, 0};
-			delta_w0[w0_index] = 1;
-			delta_w1[w1_index] = 1;
-			const auto &fspd_x0 = fcx_mf_fspds[w0_index][mfi].const_array();
-			const auto &fspd_x1 = fcx_mf_fspds[w1_index][mfi].const_array();
-			// extract both components of magnetic field either side of the cell-edge
-			const auto &B0_m = ec_fabs_Bi_ieside[0][0].const_array();
-			const auto &B0_p = ec_fabs_Bi_ieside[0][1].const_array();
-			const auto &B1_m = ec_fabs_Bi_ieside[1][0].const_array();
-			const auto &B1_p = ec_fabs_Bi_ieside[1][1].const_array();
-			// extract all four quadrants of the electric field about the cell-edge
-			const auto &E2_q0 = ec_fabs_E_Q[0].const_array();
-			const auto &E2_q1 = ec_fabs_E_Q[1].const_array();
-			const auto &E2_q2 = ec_fabs_E_Q[2].const_array();
-			const auto &E2_q3 = ec_fabs_E_Q[3].const_array();
-			// compute electric field on the cell-edge
 			const auto &E2_ave = ec_mf_emf_components[iedge][mfi].array();
-			// only operate on the real cells
+
 			if (emf_avg_type == EMFAvgType::BalsaraSpicer) {
-				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double E2_q0_ = E2_q0(i, j, k);
-					const double E2_q1_ = E2_q1(i, j, k);
-					const double E2_q2_ = E2_q2(i, j, k);
-					const double E2_q3_ = E2_q3(i, j, k);
-					// Balsara & Spicer averaging scheme:
-					E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
-				});
-			} else if (emf_avg_type == EMFAvgType::LD04) {
-				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double E2_q0_ = E2_q0(i, j, k);
-					const double E2_q1_ = E2_q1(i, j, k);
-					const double E2_q2_ = E2_q2(i, j, k);
-					const double E2_q3_ = E2_q3(i, j, k);
-
-					const double B0_p_ = B0_p(i, j, k);
-					const double B0_m_ = B0_m(i, j, k);
-					const double B1_p_ = B1_p(i, j, k);
-					const double B1_m_ = B1_m(i, j, k);
-
-					// LD04 scheme:
-					const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-					const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-					const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-					const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
-
-					// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-					// (-,+) | (+,+)
-					//   1   |   2
-					// ------+------
-					//   0   |   3
-					// (-,-) | (+,-)
-
-					const double num1 =
-					    ((a0_p * a1_p) * E2_q0_ + (a0_m * a1_p) * E2_q3_) + ((a0_p * a1_m) * E2_q1_ + (a0_m * a1_m) * E2_q2_);
-					const double num2 =
-					    ((a0_p * a1_p) * E2_q0_ + (a0_p * a1_m) * E2_q1_) + ((a0_m * a1_p) * E2_q3_ + (a0_m * a1_m) * E2_q2_);
-
-					// must be averaged for exact floating-point symmetry
-					const double numerator = 0.5 * (num1 + num2);
-					const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
-
-					// NOTE: there is a sign error in Equation 56 of Felker & Stone
-					const double term2 =
-					    ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
-
-					E2_ave(i, j, k) = (numerator / denominator) + term2;
-				});
-			}
+				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_ave, ec_fabs_E_Q, box_ec);
+			} else {
+				// get fspds to pass to LD04 or Balsara2025_HLL solver if needed
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds = {
+					fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
+				// extrapolate the two required face-centered magnetic field components to the cell-edge
+				if (emf_avg_type == EMFAvgType::LD04) {
+					MHDSystem<problem_t>::EMFSolver_LD04(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, ec_fabs_Bi_ieside);
+				} else if (emf_avg_type == EMFAvgType::Balsara2025_HLL) {
+					MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, ec_fabs_Bi_ieside);
+				} else {
+					amrex::Abort("Unknown EMF averaging type");
+				}
+			}	
 		}
 	}
 }
@@ -576,7 +465,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	// calculating v x B at cell center, v already at cell center, B at face center
 
 	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara()");
-	const int nghost_cc = 4; // only 3 ghost zones needed here
+	const int nghost_cc = 4;
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
@@ -647,6 +536,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	cc_mf_EMF.FillBoundary(); // fill ghost cells
 	amrex::Gpu::streamSynchronize();
 
+
+
 	// now that EMF is calculated at cell center, we need to interpolate to cell edge
 	// we also need to get the magnetic field from the face to cell edge to use the Balsara method
 	// otherwise, if other methods are desired, LD04 or BalsaraSpicer just need the reconstructed emf
@@ -662,7 +553,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 		};
 
 		for (int iedge = 0; iedge < 3; ++iedge) {
-			std::cout << "iedge = " << iedge << std::endl;
 
 			std::array<int, 2> extrap_dirs = {(iedge + 1) % 3, (iedge + 2) % 3};
 			std::array<amrex::IntVect, 2> vecs_cc2ec = {amrex::IntVect::TheDimensionVector(extrap_dirs[0]),
@@ -753,9 +643,27 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				}
 			}
 			// finish averaging the two different ways for extrapolating emf: cc->fc->ec
-
 			for (int iquad = 0; iquad < 4; ++iquad) {
 				ec_fabs_EMF_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
+			}
+
+			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
+			// define quantities - allocate with async arena
+			for (int icomp = 0; icomp < 2; ++icomp) {
+				for (int ieside = 0; ieside < 2; ++ieside) {
+					ec_fabs_Bi_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+				}
+			}
+
+			// extrapolate the face-centered fields (normal to the cell-face) to the cell-edge
+			for (int icomp = 0; icomp < 2; ++icomp) {
+				const auto dir2edge = static_cast<FluxDir>(extrap_dirs[(icomp + 1) % 2]);
+				const int wcomp = extrap_dirs[icomp];
+				const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
+				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
+				// extrapolate face-centered components to the cell-edge
+				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
+								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 			}
 
 			if (emf_avg_type == EMFAvgType::BalsaraSpicer) {
@@ -764,23 +672,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 				// get fspds to pass to LD04 or Balsara2025_HLL solver if needed
 				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds = {
 				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
-				std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
-				for (int icomp = 0; icomp < 2; ++icomp) {
-					ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-					ec_fabs_Bi_ieside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-				}
-				// extrapolate the two required face-centered magnetic field components to the cell-edge
-				for (int icomp = 0; icomp < 2; ++icomp) {
-					const int extrap_dir2edge = extrap_dirs[(icomp + 1) % 2];
-					const auto dir2edge = static_cast<FluxDir>(extrap_dir2edge);
-					const int wcomp = extrap_dirs[icomp];
-					const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
-					const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
-					// extrapolate face-centered magnetic components to the cell-edge
-					MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-									    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
-				}
-
 				if (emf_avg_type == EMFAvgType::LD04) {
 					MHDSystem<problem_t>::EMFSolver_LD04(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
 				} else if (emf_avg_type == EMFAvgType::Balsara2025_HLL) {
@@ -874,18 +765,16 @@ void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std
 		const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
 
 		// 	// NOTE: there is a sign error in Equation 56 of Felker & Stone
-		const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) - ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_p_ - B1_m_);
+		//  // No sign error, just B1_p_ and B1_m_ were swapped relative to Felker & Stone's ByE and ByW
+		const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) + ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_m_ - B1_p_);
 
 		E2_ave(i, j, k) = (numerator / denominator) + term2;
 	});
 }
 
-// to pass into EMF solvers: need emf quadrants, and fspds, and if Balsara2025, need B on either side of edge
-// out: final emf on edge
-
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-						     amrex::Box const &box_ec, std::array<int, 2> extrap_dirs,
+							 amrex::Box const &box_ec, std::array<int, 2> extrap_dirs,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds,
 						     std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
 {
@@ -895,10 +784,11 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 	const auto &E2_q2 = ec_fabs_EMF_q[2].const_array();
 	const auto &E2_q3 = ec_fabs_EMF_q[3].const_array();
 
-	const auto &B0_D = ec_fabs_Bi_ieside[0][0].const_array();
-	const auto &B0_U = ec_fabs_Bi_ieside[0][1].const_array();
-	const auto &B1_R = ec_fabs_Bi_ieside[1][0].const_array();
-	const auto &B1_L = ec_fabs_Bi_ieside[1][1].const_array();
+	const auto &B0_m = ec_fabs_Bi_ieside[0][0].const_array();
+	const auto &B0_p = ec_fabs_Bi_ieside[0][1].const_array();
+	const auto &B1_m = ec_fabs_Bi_ieside[1][0].const_array();
+	const auto &B1_p = ec_fabs_Bi_ieside[1][1].const_array();
+
 
 	int const w0_comp = extrap_dirs[0];
 	int const w1_comp = extrap_dirs[1];
@@ -911,12 +801,13 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 	const auto &fspd_x0 = fspds[w0_comp];
 	const auto &fspd_x1 = fspds[w1_comp];
 
+
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		// Wave speeds
-		const double SL = std::max(fspd_x0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0), fspd_x0(i, j, k, 0));
-		const double SR = std::max(fspd_x0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1), fspd_x0(i, j, k, 1));
-		const double SU = std::max(fspd_x1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0), fspd_x1(i, j, k, 1));
-		const double SD = std::max(fspd_x1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1), fspd_x1(i, j, k, 0));
+		const double SL = -std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
+		const double SR = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+		const double SD = -std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
+		const double SU = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
 
 		// EMF quadrants
 		const auto E2_LD = E2_q0(i, j, k);
@@ -925,42 +816,61 @@ void MHDSystem<problem_t>::EMFSolver_Balsara2025_HLL(amrex::Array4<amrex::Real> 
 		const auto E2_RD = E2_q3(i, j, k);
 
 		// Magnetic field components
-		const auto B0_U_ = B0_U(i, j, k);
-		const auto B0_D_ = B0_D(i, j, k);
-		const auto B1_R_ = B1_R(i, j, k);
-		const auto B1_L_ = B1_L(i, j, k);
+		const auto B0_U_ = B0_m(i,j,k); 
+		const auto B0_D_ = B0_p(i, j, k);
+		const auto B1_R_ = B1_m(i, j, k);
+		const auto B1_L_ = B1_p(i,j,k);		
 
-		const auto E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
-		const auto E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
-		const auto E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) + (SU * SD) * (B0_U_ - B0_D_) / (SU - SD);
-		const auto E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) + (SU * SD) * (B0_U_ - B0_D_) / (SU - SD);
+		const auto S = std::max({SL, SR, SD, SU});
+     
+		
+		double E2_U_star = 0.0;
+		double E2_D_star = 0.0;
+		double B1_dstar = 0.0;
+		double E2_R_star = 0.0;
+		double E2_L_star = 0.0;
+		double B0_dstar = 0.0;
+		double E2_dstar = 0.0;
 
-		const auto B0_dstar = (SU * B0_U_ - SD * B0_D_) / (SU - SD) + (E2_LD - E2_LU + E2_RD - E2_RU) / (2.0 * (SU - SD));
-		const auto B1_dstar = (SR * B1_R_ - SL * B1_L_) / (SR - SL) + (-E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SR - SL));
+		if (SL != SR && SD != SU) {
+			E2_U_star = (SR * E2_LU - SL * E2_RU) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
+			E2_D_star = (SR * E2_LD - SL * E2_RD) / (SR - SL) - (SR * SL) * (B1_R_ - B1_L_) / (SR - SL);
+			E2_R_star = (SU * E2_RD - SD * E2_RU) / (SU - SD) + (SU * SD) * (B0_U_ - B0_D_) / (SU - SD);
+			E2_L_star = (SU * E2_LD - SD * E2_LU) / (SU - SD) + (SU * SD) * (B0_U_ - B0_D_) / (SU - SD);
+			B0_dstar = (SU * B0_U_ - SD * B0_D_) / (SU - SD) + (E2_LD - E2_LU + E2_RD - E2_RU) / (2.0 * (SU - SD));
+			B1_dstar = (SR * B1_R_ - SL * B1_L_) / (SR - SL) + (-E2_LD - E2_LU + E2_RD + E2_RU) / (2.0 * (SR - SL));
+			const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + 
+				(SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) -
+				SU * SD * (B0_D_ - B0_U_) / (SU - SD) + 
+				(SR * B1_R_ + SL * B1_L_) / 2.0;
+			const auto E2_dstar_2 = (SU + SD) * B0_dstar / 2.0 + 
+				(SR * (E2_LD + E2_LU) - SL * (E2_RD + E2_RU)) / (2.0 * (SR - SL)) -
+				(SU * B0_U_ + SD * B0_D_) / 2.0 - 
+				SR * SL * (B1_R_ - B1_L_) / (SR - SL);
+			E2_dstar = 0.5 * (E2_dstar_1 + E2_dstar_2);
+		} else { //for limiting case where SL=SR and/or SD=SU
+			E2_U_star = 0.5 * ((E2_LU + E2_RU) + S * (B1_R_ - B1_L_));
+			E2_D_star = 0.5 * ((E2_LD + E2_RD) + S * (B1_R_ - B1_L_));
+			E2_R_star = 0.5 * ((E2_RD + E2_RU) - S * (B0_U_ - B0_D_));
+			E2_L_star = 0.5 * ((E2_LD + E2_LU) - S * (B0_U_ - B0_D_));
+			E2_dstar  = 0.5 * ((E2_RU + E2_LU + E2_LD + E2_RD)/2.0 + S * (B0_D_ - B0_U_ + B1_R_ - B1_L_));
+		}
 
-		const auto E2_dstar_1 = -(SR + SL) * B1_dstar / 2.0 + (SU * (E2_LD + E2_RD) - SD * (E2_LU + E2_RU)) / (2.0 * (SU - SD)) -
-					SU * SD * (B0_D_ - B0_U_) / (SU - SD) + (SR * B1_R_ + SL * B1_L_) / 2.0;
-
-		const auto E2_dstar_2 = (SU + SD) * B0_dstar / 2.0 + (SR * (E2_RU + E2_LU) - SL * (E2_RD + E2_LD)) / (2.0 * (SR - SL)) -
-					(SU * B0_U_ + SD * B0_D_) / 2.0 - SR * SL * (B1_R_ - B1_L_) / (SR - SL);
-
-		const auto E2_dstar = 0.5 * (E2_dstar_1 + E2_dstar_2);
-
-		if (SL >= 0.0 && SD >= 0.0) {
+		if (SL == 0.0 && SD == 0.0) {
 			E2_ave(i, j, k) = E2_LD;
-		} else if (SR <= 0.0 && SD >= 0.0) {
+		} else if (SR == 0.0 && SD == 0.0) {
 			E2_ave(i, j, k) = E2_RD;
-		} else if (SR <= 0.0 && SU <= 0.0) {
+		} else if (SR == 0.0 && SU == 0.0) {
 			E2_ave(i, j, k) = E2_RU;
-		} else if (SL >= 0.0 && SU <= 0.0) {
+		} else if (SL == 0.0 && SU == 0.0) {
 			E2_ave(i, j, k) = E2_LU;
-		} else if (SL >= 0.0 && SD < 0.0 && SU > 0.0) {
+		} else if (SL == 0.0) {
 			E2_ave(i, j, k) = E2_L_star;
-		} else if (SR <= 0.0 && SD < 0.0 && SU > 0.0) {
+		} else if (SR == 0.0) {
 			E2_ave(i, j, k) = E2_R_star;
-		} else if (SR <= 0.0 && SU <= 0.0 && SL < 0.0) {
+		} else if (SU == 0.0) {
 			E2_ave(i, j, k) = E2_U_star;
-		} else if (SL >= 0.0 && SU <= 0.0 && SR > 0.0) {
+		} else if (SD == 0.0) {
 			E2_ave(i, j, k) = E2_D_star;
 		} else {
 			E2_ave(i, j, k) = E2_dstar;
