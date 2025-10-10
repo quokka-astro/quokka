@@ -18,8 +18,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		dt = (1.0 - IMEX_a32) * dt_radiation;
 	}
 
-	const auto tol = tol_h;
-
 	// don't need radBoundaries_g for single-group
 
 	// Add source terms
@@ -36,6 +34,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double c = c_light_;
 		const double chat = c_hat_;
 		const double dustGasCoeff_ = dustGasCoeff;
+		const double resid_tol = tol_h;
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -159,7 +158,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				double deltaR = NAN;
 				double F_D = NAN;
 
-				const double resid_tol = tol;
 				const int maxIter = 100;
 				int n = 0;
 				for (; n < maxIter; ++n) {
