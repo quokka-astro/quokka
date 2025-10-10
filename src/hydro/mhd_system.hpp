@@ -61,8 +61,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 				   std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
 	static void EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
-					      std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fspds,
-					      std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
+					  std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fspds,
+					  std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -296,7 +296,7 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_ave, ec_fabs_E_q, box_ec);
 			} else {
 				// get fspds to pass to LD04 or Balsara2025 solver if needed
-			 	std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const fspds = {
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const fspds = {
 				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
 				// extrapolate the two required face-centered magnetic field components to the cell-edge
 				if (emf_avg_type == EMFAvgType::LD04) {
@@ -770,9 +770,9 @@ void MHDSystem<problem_t>::EMFSolver_LD04(amrex::Array4<amrex::Real> E2_ave, std
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-						     amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
-						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fspds,
-						     std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
+						 amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fspds,
+						 std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
 {
 	const BL_PROFILE("MHDSystem::ApplyBalsaraEMFSolver()");
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
