@@ -23,4 +23,5 @@ amr.max_grid_size = 256
 do_reflux = 0
 do_subcycle = 0
 
-radiation.iteration_tolerance = -1
+radiation.iteration_tolerance_rel = -1
+radiation.iteration_tolerance = 1e-11

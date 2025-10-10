@@ -52,7 +52,7 @@ template <> struct quokka::EOS_Traits<DustProblem> {
 };
 
 template <> struct Physics_Traits<DustProblem> {
-	static constexpr bool is_self_gravity_enabled = true;
+	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -61,7 +61,11 @@ template <> struct Physics_Traits<DustProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 4;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr double boltzmann_constant = k_B;
+	static constexpr double gravitational_constant = 1.0;
+	static constexpr double c_light = c;
+	static constexpr double radiation_constant = a_rad;
 };
 
 template <> struct RadSystem_Traits<DustProblem> {
