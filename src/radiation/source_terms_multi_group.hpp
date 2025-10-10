@@ -147,14 +147,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGas(double /*T_d*/
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto
-RadSystem<problem_t>::SolveGasRadiationEnergyExchange(double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const dt,
-						      amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter,
-						      quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F,
-						      quokka::valarray<double, nGroups_> const &Src,
-						      amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const resid_tol, double const rel_change_tol,
-						      double const /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter)
-    -> NewtonIterationResult<problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
+    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const dt,
+    amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+    quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const resid_tol, double const rel_change_tol, double const /*tempFloor*/,
+    int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
 
@@ -737,13 +735,13 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 					if constexpr (!enable_photoelectric_heating_) {
 						// gas + radiation + dust
 						updated_energy = SolveGasDustRadiationEnergyExchange(
-						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
-								tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
+						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy, tol,
+						    tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					} else {
 						// gas + radiation + dust + photoelectric heating
 						updated_energy = SolveGasDustRadiationEnergyExchangeWithPE(
-						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy,
-								tol, tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
+						    Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src, radBoundaries_g_copy, tol,
+						    tol_rel, tempFloor, p_iteration_counter_local, p_iteration_failure_counter_local);
 					}
 				}
 

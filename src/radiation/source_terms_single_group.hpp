@@ -8,7 +8,8 @@
 
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
-						     const int stage, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter)
+						     const int stage, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
+						     int *p_iteration_counter, int *p_iteration_failure_counter)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
