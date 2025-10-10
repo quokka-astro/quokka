@@ -1,0 +1,57 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  3.086e20  3.086e20  3.086e20  # 100 x 100 x 100 pc
+geometry.is_periodic =  1   1   1
+use_periodic_bc = 1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 1     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 64 64 64
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 16     # grid size must be divisible by this
+amr.max_grid_size   = 64
+
+max_timesteps = 16
+
+quokka.diagnostics = slicex
+quokka.slicex.type = DiagFramePlane         # Diagnostic type
+quokka.slicex.file = slicex_plt             # Output file prefix (must end in "plt")
+quokka.slicex.normal = 0                    # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slicex.center = 1.543e20             # midplane
+quokka.slicex.int    = 4                   # Output cadence (in number of coarse steps)
+quokka.slicex.field_names = gasDensity gasInternalEnergy
+#quokka.slicex.field_names =
+
+quokka.plt.type = PlotFile         # pltfile for the whole box
+quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
+quokka.plt.int  = 4                # Output cadence (in number of coarse steps)
+#quokka.plt.particles = CICRad_particles CIC_particles # select particle types to output; default is all particles
+
+regrid_interval = 2
+refine_threshold = 0.1
+do_reflux = 1
+do_subcycle = 0
+
+cfl = 0.2
+hydro.reconstruction_order = 3
+derived_vars = temperature
+
+checkpoint_interval = 10000
+
+dt_initial = 3.154e10       # 1000 yr
+stop_time = 3.154e13       # 1e6 yr
+
+SN_rate_per_volume = 0.03   # yr^-1 kpc^-1
+
+cooling.enabled = 1
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
