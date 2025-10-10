@@ -53,12 +53,6 @@ template <> struct SimulationData<RandomBlast> {
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_z;
 
-	int nblast = 0;
-	int SN_counter_cumulative = 0;
-	Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
-	Real E_blast = 1.0e51;	    // ergs
-	Real M_ejecta = 0;	    // 10.0 * Msun; // g
-
 	Real refine_threshold = 1.0; // gradient refinement threshold
 	int use_periodic_bc = 1;     // default is periodic
 };
@@ -88,110 +82,6 @@ template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi,
-		  amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx, SimulationData<RandomBlast> const &userData)
-{
-	// inject energy into cells with stochastic sampling
-	const BL_PROFILE("QuokkaSimulation::injectEnergy()");
-
-	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
-	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
-	const Real rho_ejecta = userData.M_ejecta / cell_vol;	   // g cm^-3
-
-	const Real Lx = prob_hi[0] - prob_lo[0];
-	const Real Ly = prob_hi[1] - prob_lo[1];
-	const Real Lz = prob_hi[2] - prob_lo[2];
-
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &box = iter.validbox();
-		auto const &state = mf.array(iter);
-		auto const &px = userData.blast_x->table();
-		auto const &py = userData.blast_y->table();
-		auto const &pz = userData.blast_z->table();
-		const int np = userData.nblast;
-		const int use_periodic_bc = userData.use_periodic_bc;
-
-		const Real r_scale = 8.0 * dx[0]; // TODO(ben): cannot be based on local dx when using AMR!
-		const Real normfac = 1.0 / std::pow(r_scale, 3);
-
-		auto kern = [=] AMREX_GPU_DEVICE(const Real x, const Real y, const Real z) {
-			const Real r = std::sqrt(x * x + y * y + z * z);
-			return kernel_wendland_c2(r / r_scale);
-		};
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const Real xc = prob_lo[0] + static_cast<Real>(i) * dx[0];
-			const Real yc = prob_lo[1] + static_cast<Real>(j) * dx[1];
-			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2];
-
-			for (int n = 0; n < np; ++n) {
-				Real x0 = NAN;
-				Real y0 = NAN;
-				Real z0 = NAN;
-				if (use_periodic_bc == 1) {
-					// compute distance to nearest periodic image
-					x0 = std::remainder(xc - px(n), Lx);
-					y0 = std::remainder(yc - py(n), Ly);
-					z0 = std::remainder(zc - pz(n), Lz);
-				} else {
-					x0 = (xc - px(n));
-					y0 = (yc - py(n));
-					z0 = (zc - pz(n));
-				}
-
-				// integrate each particle kernel over the cell
-				const Real weight = normfac * quad_3d(kern, x0, x0 + dx[0], y0, y0 + dx[1], z0, z0 + dx[2]);
-
-				state(i, j, k, HydroSystem<RandomBlast>::density_index) += weight * rho_ejecta;
-				state(i, j, k, HydroSystem<RandomBlast>::scalar0_index) += weight * rho_ejecta;
-				state(i, j, k, HydroSystem<RandomBlast>::energy_index) += weight * rho_eint_blast;
-				state(i, j, k, HydroSystem<RandomBlast>::internalEnergy_index) += weight * rho_eint_blast;
-			}
-		});
-	}
-}
-
-template <> void QuokkaSimulation<RandomBlast>::computeBeforeTimestep()
-{
-	// compute how many (and where) SNe will go off on the this coarse timestep
-	// sample from Poisson distribution
-	const Real dt_coarse = dt_[0];
-	const Real domain_vol = geom[0].ProbSize();
-	const Real expectation_value = userData_.SN_rate_per_vol * domain_vol * dt_coarse;
-
-	const int count = static_cast<int>(amrex::RandomPoisson(expectation_value));
-	if (count > 0) {
-		amrex::Print() << "\t" << count << " SNe to be exploded.\n";
-	}
-
-	// resize particle arrays
-	amrex::Array<int, 1> const lo{0};
-	amrex::Array<int, 1> const hi{count};
-	userData_.blast_x = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_y = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_z = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.nblast = count;
-	userData_.SN_counter_cumulative += count;
-
-	// for each, sample location at random
-	auto const &px = userData_.blast_x->table();
-	auto const &py = userData_.blast_y->table();
-	auto const &pz = userData_.blast_z->table();
-	for (int i = 0; i < count; ++i) {
-		px(i) = geom[0].ProbLength(0) * amrex::Random();
-		py(i) = geom[0].ProbLength(1) * amrex::Random();
-		pz(i) = geom[0].ProbLength(2) * amrex::Random();
-	}
-
-	// TODO(ben): need to force refinement to highest level for cells near particles
-}
-
-template <> void QuokkaSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real /*dt_lev*/, int /*ncycle*/)
-{
-	// compute operator split physics
-	injectEnergy(state_new_cc_[lev], geom[lev].ProbLoArray(), geom[lev].ProbHiArray(), geom[lev].CellSizeArray(), userData_);
-}
-
 template <> void QuokkaSimulation<RandomBlast>::computeAfterTimestep()
 {
 	// check conservation of mass
@@ -210,7 +100,9 @@ template <> void QuokkaSimulation<RandomBlast>::computeAfterTimestep()
 		// write out FABs with ghost zones
 		// amrex::writeFabs(state_new_cc_[0], "state_new_" + std::to_string(istep[0]));
 		// abort
-		amrex::Abort("mass nonconservation detected!");
+
+		// Will not abort mass nonconservation is expected -- particles will add mass to gas
+		// amrex::Abort("mass nonconservation detected!");
 	}
 }
 
@@ -242,38 +134,38 @@ template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::
 	}
 }
 
-template <> void QuokkaSimulation<RandomBlast>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
-{
-	// tag cells for refinement
-	const Real q_min = 1e-5 * rho0; // minimum density for refinement
-	const Real eta_threshold = userData_.refine_threshold;
+// template <> void QuokkaSimulation<RandomBlast>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
+// {
+// 	// tag cells for refinement
+// 	const Real q_min = 1e-5 * rho0; // minimum density for refinement
+// 	const Real eta_threshold = userData_.refine_threshold;
 
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto state = state_new_cc_[lev].const_array(mfi);
-		const auto tag = tags.array(mfi);
-		const int nidx = HydroSystem<RandomBlast>::density_index;
+// 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+// 		const amrex::Box &box = mfi.validbox();
+// 		const auto state = state_new_cc_[lev].const_array(mfi);
+// 		const auto tag = tags.array(mfi);
+// 		const int nidx = HydroSystem<RandomBlast>::density_index;
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			Real const q = state(i, j, k, nidx);
-			Real const q_xplus = state(i + 1, j, k, nidx);
-			Real const q_xminus = state(i - 1, j, k, nidx);
-			Real const q_yplus = state(i, j + 1, k, nidx);
-			Real const q_yminus = state(i, j - 1, k, nidx);
-			Real const q_zplus = state(i, j, k + 1, nidx);
-			Real const q_zminus = state(i, j, k - 1, nidx);
+// 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+// 			Real const q = state(i, j, k, nidx);
+// 			Real const q_xplus = state(i + 1, j, k, nidx);
+// 			Real const q_xminus = state(i - 1, j, k, nidx);
+// 			Real const q_yplus = state(i, j + 1, k, nidx);
+// 			Real const q_yminus = state(i, j - 1, k, nidx);
+// 			Real const q_zplus = state(i, j, k + 1, nidx);
+// 			Real const q_zminus = state(i, j, k - 1, nidx);
 
-			Real const del_x = 0.5 * (q_xplus - q_xminus);
-			Real const del_y = 0.5 * (q_yplus - q_yminus);
-			Real const del_z = 0.5 * (q_zplus - q_zminus);
-			Real const gradient_indicator = std::sqrt(del_x * del_x + del_y * del_y + del_z * del_z) / q;
+// 			Real const del_x = 0.5 * (q_xplus - q_xminus);
+// 			Real const del_y = 0.5 * (q_yplus - q_yminus);
+// 			Real const del_z = 0.5 * (q_zplus - q_zminus);
+// 			Real const gradient_indicator = std::sqrt(del_x * del_x + del_y * del_y + del_z * del_z) / q;
 
-			if ((gradient_indicator > eta_threshold) && (q > q_min)) {
-				tag(i, j, k) = amrex::TagBox::SET;
-			}
-		});
-	}
-}
+// 			if ((gradient_indicator > eta_threshold) && (q > q_min)) {
+// 				tag(i, j, k) = amrex::TagBox::SET;
+// 			}
+// 		});
+// 	}
+// }
 
 auto problem_main() -> int
 {
@@ -283,16 +175,9 @@ auto problem_main() -> int
 	// read parameters
 	amrex::ParmParse const pp;
 
-	// read in SN rate
-	Real SN_rate_per_vol = NAN;
-	pp.query("SN_rate_per_volume", SN_rate_per_vol); // yr^-1 kpc^-3
-	SN_rate_per_vol /= seconds_in_year;
-	SN_rate_per_vol /= std::pow(1.0e3 * parsec_in_cm, 3);
-	AMREX_ALWAYS_ASSERT(!std::isnan(SN_rate_per_vol));
-
-	// read in refinement threshold (relative gradient in density)
-	Real refine_threshold = 0.1;
-	pp.query("refine_threshold", refine_threshold); // dimensionless
+	// // read in refinement threshold (relative gradient in density)
+	// Real refine_threshold = 0.1;
+	// pp.query("refine_threshold", refine_threshold); // dimensionless
 
 	// use periodic boundary conditions or not
 	int use_periodic_bc = 0;
@@ -303,8 +188,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<RandomBlast> sim(BCs_cc);
 	sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)
-	sim.userData_.SN_rate_per_vol = SN_rate_per_vol;
-	sim.userData_.refine_threshold = refine_threshold;
 	sim.userData_.use_periodic_bc = use_periodic_bc;
 
 	// Set initial conditions
@@ -316,12 +199,6 @@ auto problem_main() -> int
 
 	// run simulation
 	sim.evolve();
-
-	// print injected energy, injected mass
-	const Real E_in_cumulative = static_cast<Real>(sim.userData_.SN_counter_cumulative) * sim.userData_.E_blast;
-	const Real M_in_cumulative = static_cast<Real>(sim.userData_.SN_counter_cumulative) * sim.userData_.M_ejecta;
-	amrex::Print() << "Cumulative injected energy = " << E_in_cumulative << "\n";
-	amrex::Print() << "Cumulative injected mass = " << M_in_cumulative << "\n";
 
 	// Cleanup and exit
 	const int status = 0;
