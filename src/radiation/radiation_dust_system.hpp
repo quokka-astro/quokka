@@ -233,7 +233,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 							  quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
 							  amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol,
 							  double /*tempFloor*/, int *p_iteration_counter, int *p_iteration_failure_counter)
-    -> NewtonIterationResult<problem_t>
+    -> NewtonIterationResult<problem_t> // NOSONAR: High cognitive complexity is expected for this numerical solver
 {
 	// 1. Compute energy exchange
 
@@ -341,7 +341,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 	const int maxIter = 100;
 	int n = 0;
-	for (; n < maxIter; ++n) {
+	for (; n < maxIter; ++n) { // NOSONAR
 		// if relative change is within tol, break
 		if (rel_change_tol > 0.0 && n > 0) {
 			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
@@ -349,7 +349,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
 
 			if ((sum(Erad_rel_diff) <= rel_change_tol * Erad_tot_guess_prev) && (Egas_rel_diff <= rel_change_tol * Egas_guess_prev)) {
-				break; // NOSONAR
+				break;
 			}
 		}
 
@@ -470,7 +470,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 		// check relative convergence of the residuals
 		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
-			break; // NOSONAR
+			break;
 		}
 
 #if 0
@@ -601,7 +601,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double /*tempFloor*/, int *p_iteration_counter,
-    int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
+    int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t> // NOSONAR: Numerical solver with inherently high complexity
 {
 	// 1. Compute energy exchange
 
@@ -710,7 +710,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 	const int maxIter = 100;
 	int n = 0;
-	for (; n < maxIter; ++n) {
+	for (; n < maxIter; ++n) { // NOSONAR
 		// if relative change is within tol, break
 		if (rel_change_tol > 0.0 && n > 0) {
 			const double Erad_tot_guess_prev = sum(EradVec_guess_prev);
@@ -718,7 +718,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 			const auto Egas_rel_diff = std::abs(Egas_guess - Egas_guess_prev);
 
 			if ((sum(Erad_rel_diff) <= rel_change_tol * Erad_tot_guess_prev) && (Egas_rel_diff <= rel_change_tol * Egas_guess_prev)) {
-				break; // NOSONAR
+				break;
 			}
 		}
 
@@ -839,7 +839,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		// check relative convergence of the residuals
 		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
-			break; // NOSONAR
+			break;
 		}
 
 #if 0
