@@ -144,8 +144,8 @@ template <> struct RadSystem_Traits<TheProblem> {
 
 template <> struct ISM_Traits<TheProblem> {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-5;
-	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-4;
+	static constexpr bool enable_photoelectric_heating = true;
 };
 
 template <>
@@ -163,6 +163,17 @@ RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doub
 		exponents_and_values[1][i] = dust_opacity[i] * gas_to_dust_ratio;
 	}
 	return exponents_and_values;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
+											     amrex::Real const num_density) -> amrex::Real
+{
+	// Values in cgs units from Bate & Keto (2015), Eq. 26.
+	const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
+	const double coeff = 1.33e-24;
+	return coeff * epsilon * num_density / ref_J_ISR; // s^-1
 }
 
 template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
