@@ -441,7 +441,7 @@ void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX
 				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_ave, ec_fabs_E_Q, box_ec);
 			} else {
 				// get fspds to pass to LD04 or Balsara2025_HLL solver if needed
-				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fspds = {
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const fspds = {
 				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
 				// extrapolate the two required face-centered magnetic field components to the cell-edge
 				if (emf_avg_type == EMFAvgType::LD04) {
