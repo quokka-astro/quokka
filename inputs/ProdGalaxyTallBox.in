@@ -15,7 +15,7 @@ amr.v              = 0      # verbosity in Amr
 # *****************************************************************
 amr.n_cell          = 32 32 128
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.max_grid_size   = 128   # at least 128 for GPUs
+amr.max_grid_size   = 256   # at least 128 for GPUs
 amr.blocking_factor_x = 32   # grid size must be divisible by this
 amr.blocking_factor_y = 32
 amr.blocking_factor_z = 128
@@ -25,8 +25,8 @@ amr.grid_eff        = 0.7   # default
 do_reflux = 1
 do_subcycle = 0
 stop_time     = 9.462e+15
-max_timesteps = 3
-plotfile_interval = 512
+max_timesteps = 1
+plotfile_interval = -1
 checkpoint_interval = -1
 particle_csv_interval = 32
 suppress_output = 0
