@@ -19,7 +19,7 @@ struct ParticleRadiationProblem {
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-constexpr double rho0 = 1.0e-8 * C::m_p; // g cm^-3
+constexpr double rho0 = 1.0e-1 * C::m_p; // g cm^-3
 constexpr double T0 = 10.0;		 // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
@@ -58,7 +58,7 @@ template <> struct Physics_Traits<ParticleRadiationProblem> {
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr int nGroups = 2;			     // number of radiation groups
+	static constexpr int nGroups = 4;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
@@ -69,7 +69,9 @@ template <> struct RadSystem_Traits<ParticleRadiationProblem> {
 	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
 	// Define radiation group boundaries for 2-group radiation
 	// Group 0: 1 eV to 100 eV, Group 1: 100 eV to 10000 eV
-	static constexpr amrex::GpuArray<double, Physics_Traits<ParticleRadiationProblem>::nGroups + 1> radBoundaries{1.0, 100.0, 10000.0};
+	static constexpr amrex::GpuArray<double, Physics_Traits<ParticleRadiationProblem>::nGroups + 1> radBoundaries{
+		1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2
+	};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 
