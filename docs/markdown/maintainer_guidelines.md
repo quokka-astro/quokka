@@ -74,7 +74,6 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
     - Changes are acceptable to support new physics/modules, but must be **intentional and documented**.
     - Require an **ADR** describing the motivation, alternatives, and migration plan.
     - Migrate all in-tree problem files in the same PR; out-of-tree problems are not supported and must supply their own migrations.
-    - Add tests/examples for the new interface and keep at least one legacy example updated until the deprecation period ends.
 
 ---
 
