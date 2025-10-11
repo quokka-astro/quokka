@@ -19,8 +19,6 @@ amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 16     # grid size must be divisible by this
 amr.max_grid_size   = 64
 
-max_timesteps = 16
-
 quokka.diagnostics = slicex
 quokka.slicex.type = DiagFramePlane         # Diagnostic type
 quokka.slicex.file = slicex_plt             # Output file prefix (must end in "plt")
@@ -34,6 +32,12 @@ quokka.plt.type = PlotFile         # pltfile for the whole box
 quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
 quokka.plt.int  = 4                # Output cadence (in number of coarse steps)
 #quokka.plt.particles = CICRad_particles CIC_particles # select particle types to output; default is all particles
+
+radiation.iteration_tolerance = 1e-9
+radiation.iteration_tolerance_rel = 1e-6
+
+max_timesteps = 0
+plotfile_interval = 50
 
 particles.verbose = 1
 particles.disable_SN_feedback = false
@@ -49,14 +53,13 @@ cfl = 0.2
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
-checkpoint_interval = 10000
+checkpoint_interval = -1
 
-dt_initial = 3.154e10       # 1000 yr
 stop_time = 3.154e13       # 1e6 yr
-
-SN_rate_per_volume = 0.03   # yr^-1 kpc^-1
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+tiny_profiler.enabled = 0
