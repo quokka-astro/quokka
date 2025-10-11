@@ -10,7 +10,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_update.hpp"
-#include "radiation/radiation_system.hpp"
+#include "radiation/radiation_dust_system.hpp"
 #include "util/BC.hpp"
 #include "util/DataTable.hpp"
 
@@ -19,7 +19,7 @@ struct ParticleRadiationProblem {
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-constexpr double rho0 = 1.0e-1 * C::m_p; // g cm^-3
+constexpr double rho0 = 1.0e6 * C::m_p; // g cm^-3
 constexpr double T0 = 10.0;		 // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
@@ -62,6 +62,12 @@ template <> struct Physics_Traits<ParticleRadiationProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
+template <> struct ISM_Traits<ParticleRadiationProblem> {
+	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr bool enable_photoelectric_heating = false;
+};
+
 template <> struct RadSystem_Traits<ParticleRadiationProblem> {
 	static constexpr double c_hat_over_c = chat_over_c;
 	static constexpr double Erad_floor = initial_Erad;
@@ -80,10 +86,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<ParticleRadiationProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
 									  const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
 {
+	constexpr double gas_to_dust_ratio = 1.0e-3;
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_ + 1; ++i) {
-		exponents_and_values[0][i] = 0.0;     // exponent (0 = constant opacity)
-		exponents_and_values[1][i] = 1.0e-20; // opacity value (0 = optically thin)
+		exponents_and_values[0][i] = 0.0; // power-law slopes
+	}
+	const amrex::GpuArray<double, nGroups_ + 1> dust_opacity{6e2, 1e3, 2e4, 1e5, 2e5}; // dust opacity, cm2/g. last element not used
+	for (int i = 0; i < nGroups_ + 1; ++i) {
+		exponents_and_values[1][i] = dust_opacity[i] * gas_to_dust_ratio;
 	}
 	return exponents_and_values;
 }
