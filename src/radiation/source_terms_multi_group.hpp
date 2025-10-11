@@ -697,12 +697,14 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			coeff_n = dt * dustGasCoeff_local * H_num_den * H_num_den / cscale;
 		}
 
+		FluxUpdateResult<problem_t> updated_flux;
+		NewtonIterationResult<problem_t> updated_energy;
+
 		// Outer iteration loop to update the work term until it converges
 		const int max_iter = 5;
 		int iter = 0;
 		for (; iter < max_iter; ++iter) {
 			amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
-			NewtonIterationResult<problem_t> updated_energy;
 
 			// 1. Compute matter-radiation energy exchange for non-isothermal gas
 
@@ -771,7 +773,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// 2. Compute radiation flux update
 
 			// 2.1. Update flux and gas momentum
-			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0);
+			updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0);
 
 			// 2.2. Check for convergence of the work term
 			bool work_converged = true;
@@ -795,21 +797,22 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 			// 3. If converged, store new radiation energy, gas energy
 			if (work_converged) {
-				consNew(i, j, k, x1GasMomentum_index) = updated_flux.gasMomentum[0];
-				consNew(i, j, k, x2GasMomentum_index) = updated_flux.gasMomentum[1];
-				consNew(i, j, k, x3GasMomentum_index) = updated_flux.gasMomentum[2];
-				for (int g = 0; g < nGroups_; ++g) {
-					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g];
-					consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = updated_flux.Frad[0][g];
-					consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = updated_flux.Frad[1][g];
-					consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = updated_flux.Frad[2][g];
-				}
-				if constexpr (gamma_ != 1.0) {
-					Egas_guess = updated_energy.Egas;
-				}
 				break;
 			}
 		} // end full-step iteration
+
+		consNew(i, j, k, x1GasMomentum_index) = updated_flux.gasMomentum[0];
+		consNew(i, j, k, x2GasMomentum_index) = updated_flux.gasMomentum[1];
+		consNew(i, j, k, x3GasMomentum_index) = updated_flux.gasMomentum[2];
+		for (int g = 0; g < nGroups_; ++g) {
+			consNew(i, j, k, radEnergy_index + numRadVars_ * g) = updated_flux.Erad[g];
+			consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = updated_flux.Frad[0][g];
+			consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = updated_flux.Frad[1][g];
+			consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = updated_flux.Frad[2][g];
+		}
+		if constexpr (gamma_ != 1.0) {
+			Egas_guess = updated_energy.Egas;
+		}
 
 		AMREX_ASSERT_WITH_MESSAGE(iter < max_iter, "AddSourceTerms iteration failed to converge!");
 		if (iter >= max_iter) {
