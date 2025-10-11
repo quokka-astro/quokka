@@ -38,7 +38,7 @@ struct TheProblem {
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double arad = C::a_rad;
-constexpr double TCMB = 2.7;		 // K, CMB temperature
+constexpr double TCMB = 2.7; // K, CMB temperature
 constexpr double initial_Erad = 1e-40 * arad * TCMB * TCMB * TCMB * TCMB;
 constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // chat = 2000 km/s
 
@@ -136,9 +136,8 @@ template <> struct RadSystem_Traits<TheProblem> {
 	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
 	// Define radiation group boundaries for 2-group radiation
 	// Group 0: 1 eV to 100 eV, Group 1: 100 eV to 10000 eV
-	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{
-		1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2
-	};
+	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00,
+													1.e+2};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 
@@ -166,11 +165,11 @@ RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doub
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
-											     amrex::Real const num_density) -> amrex::Real
+AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
+    -> amrex::Real
 {
 	// Values in cgs units from Bate & Keto (2015), Eq. 26.
-	const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	const double epsilon = 0.05;	   // default efficiency factor for cold molecular clouds
 	const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
 	const double coeff = 1.33e-24;
 	return coeff * epsilon * num_density / ref_J_ISR; // s^-1
@@ -281,7 +280,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const int nturb = turb_hi[0] - turb_lo[0] + 1;
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= nturb, "nx must be less than or equal to turbulent_size (128)");
-	
+
 	// z-range limits: apply turbulence only from 1.5*nx to 2.5*nx
 	const int k_start = nx + nx / 2;
 	const int k_end = 2 * nx + nx / 2;
@@ -329,7 +328,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		const int turb_i = turb_lo[0] + (i % nturb);
 		const int turb_j = turb_lo[1] + (j % nturb);
 		const int turb_k = turb_lo[2] + (k % nturb);
-		
+
 		const double vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
 		const double vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
 		const double vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
@@ -339,7 +338,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx*vx + vy*vy + vz*vz);
+		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 
 		// compute energy fractions
 		const auto Erad_g = RadSystem<TheProblem>::ComputeThermalRadiationMultiGroup(TCMB, RadSystem<TheProblem>::radBoundaries_);
@@ -489,10 +488,10 @@ auto QuokkaSimulation<TheProblem>::ComputeProjections(const amrex::Direction dir
 
 // Implement User-defined diode BC
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-							 int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
+												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+												const Real /*time*/, const amrex::BCRec * /*bcr*/,
+												int /*bcomp*/, int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.dim3();
 	amrex::Box const &box = geom.Domain();

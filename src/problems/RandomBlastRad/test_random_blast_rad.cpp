@@ -24,14 +24,14 @@ constexpr Real chat_over_c = 1.0e-3;
 constexpr Real mu = 1.0 * C::m_p;
 constexpr Real gamma_ = 5. / 3.;
 constexpr Real arad = C::a_rad;
-constexpr Real TCMB = 2.7;		 // K, CMB temperature
+constexpr Real TCMB = 2.7; // K, CMB temperature
 constexpr Real floor_Erad = 1e-40 * arad * TCMB * TCMB * TCMB * TCMB;
 constexpr Real Tgas0 = 1.0e4; // K
 constexpr Real nH0 = 0.1;     // cm^-3
 constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr Real seconds_in_year = 3.1536e7;
-constexpr Real parsec_in_cm = C::parsec; // cm == 1 pc
-constexpr Real m_H = C::m_p + C::m_e;	   // mass of hydrogen atom
+constexpr Real parsec_in_cm = C::parsec;		    // cm == 1 pc
+constexpr Real m_H = C::m_p + C::m_e;			    // mass of hydrogen atom
 constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
 struct TheProblem {
@@ -68,9 +68,8 @@ template <> struct RadSystem_Traits<TheProblem> {
 	static constexpr int beta_order = 1;
 	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
 	// groups: FIR, NIR, Optical, FUV
-	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{
-		1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2
-	};
+	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00,
+													1.e+2};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 
