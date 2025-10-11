@@ -57,3 +57,8 @@ quokka.plt.file = plt              # Output file prefix (default "plt", must end
 quokka.plt.int  = 10                # Output cadence (in number of coarse steps)
 quokka.plt.particles = StochasticStellarPop_particles
 
+cooling.enabled = 1
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
