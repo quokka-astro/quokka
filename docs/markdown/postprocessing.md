@@ -42,7 +42,7 @@ For details, see the [yt documentation on reading AMReX data](https://yt-project
 !!! Tip
     This [WarpX script](https://warpx.readthedocs.io/en/latest/dataanalysis/plot_parallel.html) may be useful as a starting point for visualizing a time series of outputs. This script will require some modification to work with Quokka outputs.
 
-We have a fork of YT that includes a customized Quokka frontend: https://github.com/chongchonghe/yt. To install it, run `pip install "yt[quokka] @ git+https://github.com/chongchonghe/yt.git"`. A comprehensive documentation is available here: https://github.com/chongchonghe/yt/blob/Rongjun-ANUquokka-frontend/doc/source/examining/loading_data.rst#quokka-data, and a Jupyter Notebook with tutorials is available here: https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb.
+We have a fork of YT that includes a customized Quokka frontend: [https://github.com/chongchonghe/yt](https://github.com/chongchonghe/yt). To install it, run `pip install "yt[quokka] @ git+https://github.com/chongchonghe/yt.git"`. A comprehensive documentation is available at [this link](https://github.com/chongchonghe/yt/blob/Rongjun-ANUquokka-frontend/doc/source/examining/loading_data.rst#quokka-data), and a Jupyter Notebook with tutorials is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
 
 The `quick_plot` script in `scripts/python/` is a convenient tool for visualizing Quokka outputs. It is a wrapper around YT for batch processing snapshots and generating slice or projection plots. The script has detailed documentation in the code itself, accessible at the top of the file and also by running `quick_plot -h`.
 
