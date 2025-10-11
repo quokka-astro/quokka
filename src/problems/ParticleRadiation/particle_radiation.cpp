@@ -19,7 +19,7 @@ struct ParticleRadiationProblem {
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-constexpr double rho0 = 1.0e6 * C::m_p; // g cm^-3
+constexpr double rho0 = 1.0 * C::m_p; // g cm^-3
 constexpr double T0 = 10.0;		 // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
