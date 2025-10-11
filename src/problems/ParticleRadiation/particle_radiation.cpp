@@ -23,10 +23,10 @@ constexpr double rho0 = 1.0 * C::m_p; // g cm^-3
 constexpr double T0 = 10.0;		 // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
-constexpr double dt_ = 0.1 * quokka::seconds_per_year;
+// constexpr double dt_ = 0.1 * quokka::seconds_per_year;
 // constexpr double chat_over_c = 1.0e-5;
 constexpr double chat_over_c = 1.0;
-constexpr double formation_time = 1.5 * dt_;
+// constexpr double formation_time = 1.5 * dt_;
 
 template <> struct SimulationData<ParticleRadiationProblem> {
 	std::string particles_filename = "../inputs/TestParticlesNoRad.txt";
@@ -165,8 +165,8 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<ParticleRadiationProblem> sim(BCs_cc);
-	sim.initDt_ = dt_;
-	sim.maxDt_ = dt_;
+	// sim.initDt_ = dt_;
+	// sim.maxDt_ = dt_;
 
 	// Read parameters from input file
 	const amrex::ParmParse pp("problem");
