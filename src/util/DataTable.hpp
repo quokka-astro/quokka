@@ -11,6 +11,7 @@
 // HDF5 includes for H5Reader functionality
 #include <H5Dpublic.h>
 #include <H5Ppublic.h>
+#include <algorithm>
 #include <hdf5.h>
 
 #include "math/FastMath.hpp"
@@ -1005,7 +1006,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			return std::log(x);
 		};
 
-		constexpr Real small_number = 1.0e-100;
+		constexpr amrex::Real small_number = 1.0e-100;
 
 		// Read data values - layout is transposed from internal representation
 		// CSV layout: last dimensions as rows, first dimension as columns
@@ -1027,11 +1028,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i = 0; i < sizes[0]; ++i) { // NOSONAR
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    data_array[out_idx][i] > 0.0,
-						    fmt::format("log output spacing requires positive values, got {} at output {} index {}",
-								data_array[out_idx][i], out_idx, i));
-						data_array[out_idx][i] = log_(data_array[out_idx][i]);
+						const auto value = std::max(data_array[out_idx][i], small_number);
+						data_array[out_idx][i] = log_(value);
 					}
 				}
 			}
@@ -1077,11 +1075,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
-							auto value = data_array[out_idx][i1][i2];
-							if (value < small_number) {
-								// amrex::Print() << "log output spacing requires positive values, got " << value << " at output " << out_idx << " index (" << i1 << ", " << i2 << ")\n";
-								value = small_number;
-							}
+							const auto value = std::max(data_array[out_idx][i1][i2], small_number);
 							data_array[out_idx][i1][i2] = log_(value);
 						}
 					}
@@ -1135,12 +1129,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {			// NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
-								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i1][i2][i3] > 0.0,
-												 fmt::format("log output spacing requires positive "
-													     "values, got {} at output {} index ({}, {}, {})",
-													     data_array[out_idx][i1][i2][i3], out_idx, i1, i2,
-													     i3));
-								data_array[out_idx][i1][i2][i3] = log_(data_array[out_idx][i1][i2][i3]);
+								const auto value = std::max(data_array[out_idx][i1][i2][i3], small_number);
+								data_array[out_idx][i1][i2][i3] = log_(value);
 							}
 						}
 					}
@@ -1200,13 +1190,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {			// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) {		// NOSONAR
 								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
-									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-									    data_array[out_idx][i1][i2][i3][i4] > 0.0,
-									    fmt::format("log output spacing requires positive values, got {} at output {} "
-											"index ({}, {}, "
-											"{}, {})",
-											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
-									data_array[out_idx][i1][i2][i3][i4] = log_(data_array[out_idx][i1][i2][i3][i4]);
+									const auto value = std::max(data_array[out_idx][i1][i2][i3][i4], small_number);
+									data_array[out_idx][i1][i2][i3][i4] = log_(value);
 								}
 							}
 						}
