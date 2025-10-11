@@ -77,7 +77,7 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
 
 ---
 
-## Quokka-Specific Pitfalls to Avoid
+## Specific Pitfalls to Avoid
 
 !!! warning "Watch for these regressions-in-waiting"
     - **Renaming widely-used variables.** Mechanical symbol churn often leaves call sites or device code untouched, introducing subtle bugs in solver logic and diagnostics.
