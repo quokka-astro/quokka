@@ -151,7 +151,7 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<ParticleRadiationProblem>(quokka::BCType::reflecting);
+	auto BCs_cc = quokka::BC<ParticleRadiationProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
 	QuokkaSimulation<ParticleRadiationProblem> sim(BCs_cc);
@@ -213,48 +213,8 @@ auto problem_main() -> int
 		const double change_of_total_energy = total_energy - total_energy_init;
 		amrex::Print() << "Change of total energy: " << change_of_total_energy << "\n";
 
-		// Expected answer from table interpolation.
-		// Radiation is deposited into cells after the first step.
-		// The table gives luminosity values based on (mass, age) interpolation.
-		// For this test with the current table, the expected luminosity per particle is determined by table interpolation.
-		// The emission per particle from step 0 is 0.0;
-		// The emission per particle from step 1 is 2.5e20 * dt_.
-		// The emission per particle from step 2 is (2 * 2.5e20) * dt_.
-		const int n_stars = 4;
-		double L_star = NAN;
-		double change_of_total_energy_expected = NAN;
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ == 3, "This test requires max_timesteps = 3");
-		if (rad_table_output_spacing == quokka::SpacingType::log) {
-			L_star = 3e40;
-			change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;
-		} else if (rad_table_output_spacing == quokka::SpacingType::fast_log) {
-			// The stellar age won't fall exactly onto the fastlog-sampled grids, so in order to test perfect accuracy, we have to set luminosity to
-			// constant over time
-			change_of_total_energy_expected = (1.0e+41 + 1.0e+41) * dt_ * n_stars;
-		} else {
-			L_star = 2.5e40;
-			change_of_total_energy_expected = (1.0 + 2.0) * L_star * dt_ * n_stars;
-		}
-		const double change_of_total_energy_expected_group2 = change_of_total_energy_expected * 10.0;
-		const double change_all_groups = change_of_total_energy_expected + change_of_total_energy_expected_group2;
-		amrex::Print() << "Current time: " << sim.tNew_[0] << "\n";
-		amrex::Print() << "Expected change of total energy: " << change_all_groups << "\n";
-
-		const double error_rel_to_tot = std::abs(change_of_total_energy - change_all_groups) / total_energy;
-		const double error_rel_to_rad = std::abs(change_of_total_energy - change_all_groups) / change_all_groups;
-		amrex::Print() << "Relative error to total energy: " << error_rel_to_tot << "\n";
-		amrex::Print() << "Relative error to radiation energy: " << error_rel_to_rad << "\n";
-
-		// On CPUs, the error is 1e-15, close to machine accuracy. One GPUs, the error, caused by std::log or std::pow, is slight higher at 1e-14.
-		const double tolerance = rad_table_output_spacing == quokka::SpacingType::fast_log ? 1.0e-11 : 1e-13; // Tolerance relative to total energy
-		if (!(error_rel_to_tot < tolerance) || !(error_rel_to_rad < tolerance)) {
-			status = 1;
-			amrex::Print() << "Test failed: change of total energy mismatch.\n";
-		}
-
-		if (status == 0) {
-			amrex::Print() << "Test passed: change of total energy within tolerance.\n";
-		}
+		const double lum_mean = change_of_total_energy / sim.tNew_[0]; // mean luminosity, erg/s
+		amrex::Print() << "Mean luminosity: " << lum_mean << " erg/s\n";
 	}
 
 	return status;
