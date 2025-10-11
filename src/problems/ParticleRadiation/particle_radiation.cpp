@@ -25,7 +25,7 @@ constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
 // constexpr double dt_ = 0.1 * quokka::seconds_per_year;
 // constexpr double chat_over_c = 1.0e-5;
-constexpr double chat_over_c = 1.0;
+constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // 2000 km/s
 // constexpr double formation_time = 1.5 * dt_;
 
 template <> struct SimulationData<ParticleRadiationProblem> {
@@ -35,11 +35,6 @@ template <> struct SimulationData<ParticleRadiationProblem> {
 template <> struct quokka::EOS_Traits<ParticleRadiationProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
-};
-
-// Test enum to demonstrate type checking of particle_switch
-enum class TestEnum : unsigned int {
-	MISTAKE = 0b00000100U,
 };
 
 template <> struct Particle_Traits<ParticleRadiationProblem> {
