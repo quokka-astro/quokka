@@ -190,14 +190,8 @@ def plot_one(pltdir, args, suffix_idx=None):
         # add derived field
         k_B = unyt.physical_constants.boltzmann_constant
         gamma = 5.0 / 3.0
-        def temperature_function(field, data):
-            etot = data[("gas", "energy_density")]
-            density = data[("gas", "density")]
-            kinetic_energy = 0.5 * density * (data[("gas", "velocity_x")]**2 + data[("gas", "velocity_y")]**2 + data[("gas", "velocity_z")]**2)
-            eint = etot - kinetic_energy
-            # eint = data[("gas", "internal_energy_density")]
-            return eint * (gamma - 1.0) / (density / mean_molecular_weight_per_H_atom * k_B)
-        ds.add_field(field, function=temperature_function, units="K", sampling_type="cell")
+        ds.add_field(field, function=lambda field, data: data[("gas", "internal_energy_density")] * (gamma - 1.0) / (
+            data[('gas', 'density')] / mean_molecular_weight_per_H_atom * k_B), units="K", sampling_type="cell")
     elif field == ("gas", "velocity"):
         # add derived field for velocity magnitude
         ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "velocity_x")]**2 + data[(
