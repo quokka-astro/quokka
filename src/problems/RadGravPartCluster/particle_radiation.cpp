@@ -19,7 +19,7 @@ struct ParticleRadiationProblem {
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double rho0 = 1.0 * C::m_p; // g cm^-3
-constexpr double T0 = 1.0e3;		 // K
+constexpr double T0 = 1.0e3;	      // K
 constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 // constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
 // constexpr double dt_ = 0.1 * quokka::seconds_per_year;
@@ -27,7 +27,7 @@ constexpr double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // 2000 km/s
 // constexpr double formation_time = 1.5 * dt_;
 constexpr Real arad = C::a_rad;
-constexpr Real TCMB = 2.7;		 // K, CMB temperature
+constexpr Real TCMB = 2.7; // K, CMB temperature
 constexpr Real floor_Erad = 1e-40 * arad * TCMB * TCMB * TCMB * TCMB;
 
 template <> struct SimulationData<ParticleRadiationProblem> {
@@ -72,18 +72,17 @@ template <> struct RadSystem_Traits<ParticleRadiationProblem> {
 	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
 	// Define radiation group boundaries for 2-group radiation
 	// Group 0: 1 eV to 100 eV, Group 1: 100 eV to 10000 eV
-	static constexpr amrex::GpuArray<double, Physics_Traits<ParticleRadiationProblem>::nGroups + 1> radBoundaries{
-		1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2
-	};
+	static constexpr amrex::GpuArray<double, Physics_Traits<ParticleRadiationProblem>::nGroups + 1> radBoundaries{1.e-04, 1.00778140e-01, 1.00778140e+00,
+														      5.53817071e+00, 1.e+2};
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
 };
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<ParticleRadiationProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
-											     amrex::Real const num_density) -> amrex::Real
+												       amrex::Real const num_density) -> amrex::Real
 {
 	// Values in cgs units from Bate & Keto (2015), Eq. 26.
-	const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	const double epsilon = 0.05;	   // default efficiency factor for cold molecular clouds
 	const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
 	const double coeff = 1.33e-24;
 	return coeff * epsilon * num_density / ref_J_ISR; // s^-1
@@ -158,7 +157,8 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 		const double rho_e = CV * T0 * rho;
 
 		// compute energy fractions
-		const auto Erad_g = RadSystem<ParticleRadiationProblem>::ComputeThermalRadiationMultiGroup(TCMB, RadSystem<ParticleRadiationProblem>::radBoundaries_);
+		const auto Erad_g =
+		    RadSystem<ParticleRadiationProblem>::ComputeThermalRadiationMultiGroup(TCMB, RadSystem<ParticleRadiationProblem>::radBoundaries_);
 
 		// Set radiation variables
 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
