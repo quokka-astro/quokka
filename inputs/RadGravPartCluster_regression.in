@@ -1,0 +1,50 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -1.6e20 -1.6e20 -1.6e20
+geometry.prob_hi     =  1.6e20 1.6e20 1.6e20
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 128 128
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 128     # grid size must be divisible by this
+amr.max_grid_size   = 128    # at least 128 for GPUs
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7
+
+do_reflux = 1
+do_subcycle = 0
+suppress_output = 0
+
+particles.verbose = 0
+particles.disable_SN_feedback = true
+particles.rad_table = ../inputs/lum_data_4groups.csv
+particles.rad_table_output_spacing = fast_log
+
+stop_time = 8.0e20
+max_timesteps = 500
+plotfile_interval = 500
+particle_csv_interval = -1
+checkpoint_interval = -1
+
+tiny_profiler.enabled = 1
+
+#problem.particles_filename = ../inputs/TestParticlesNoRad.txt
+#problem.particles_filename = ../inputs/cluster_N50_r20.0_ng4.txt
+problem.particles_filename = ../inputs/cluster_N500_r20.0_ng4.txt
+
+radiation.iteration_tolerance = 1e-10
+radiation.iteration_tolerance_rel = -1
+
+cooling.enabled = 1
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
