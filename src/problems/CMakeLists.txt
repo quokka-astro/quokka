@@ -8,6 +8,7 @@ add_subdirectory(ParticleCreation)
 add_subdirectory(ParticleRadiation)
 add_subdirectory(ParticleSinkFormation)
 add_subdirectory(SN)
+add_subdirectory(RadGravPartCluster)
 
 add_subdirectory(ParticleSF)
 
