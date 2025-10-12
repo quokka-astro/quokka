@@ -158,8 +158,7 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 		const double rho_e = CV * T0 * rho;
 
 		// compute energy fractions
-		const auto Erad_g =
-		    RadSystem<ParticleRadiationProblem>::ComputeThermalRadiationMultiGroup(TCMB, rad_boundary);
+		const auto Erad_g = RadSystem<ParticleRadiationProblem>::ComputeThermalRadiationMultiGroup(TCMB, rad_boundary);
 
 		// Set radiation variables
 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
