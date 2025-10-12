@@ -224,8 +224,6 @@ auto problem_main() -> int
 	// total gas energy
 	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::gasEnergy_index) * vol;
 
-	int status = 0; // Initialize to success
-
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
 		// print total gas energy
@@ -243,5 +241,6 @@ auto problem_main() -> int
 		amrex::Print() << "Mean luminosity: " << lum_mean << " erg/s\n";
 	}
 
+	const int status = 0; // Initialize to success
 	return status;
 }
