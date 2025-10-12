@@ -151,6 +151,7 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const auto rad_boundary = RadSystem<ParticleRadiationProblem>::radBoundaries_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double rho = rho0;
@@ -158,7 +159,7 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 
 		// compute energy fractions
 		const auto Erad_g =
-		    RadSystem<ParticleRadiationProblem>::ComputeThermalRadiationMultiGroup(TCMB, RadSystem<ParticleRadiationProblem>::radBoundaries_);
+		    RadSystem<ParticleRadiationProblem>::ComputeThermalRadiationMultiGroup(TCMB, rad_boundary);
 
 		// Set radiation variables
 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
