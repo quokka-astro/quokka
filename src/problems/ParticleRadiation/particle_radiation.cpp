@@ -135,7 +135,12 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
-				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				const double death_time = p.rdata(quokka::StochasticStellarPopParticleDeathTimeIdx);
+				if (death_time <= 0.0) {
+					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNRemnant);
+				} else {
+					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				}
 			});
 		}
 	}
@@ -178,8 +183,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<ParticleRadiationProblem> sim(BCs_cc);
-	// sim.initDt_ = dt_;
-	// sim.maxDt_ = dt_;
 
 	// Read parameters from input file
 	const amrex::ParmParse pp("problem");
