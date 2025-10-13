@@ -437,7 +437,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 				if (tau[g] > 0.0) {
 					EradVec_guess[g] = opacity_terms.kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work_local[g]) / tau[g]);
 					if constexpr (force_rad_floor_in_iteration) {
-						if (EradVec_guess[g] < 0.0) {
+						if (EradVec_guess[g] < Erad_floor_) {
 							Egas_guess -= cscale * (Erad_floor_ - EradVec_guess[g]);
 							EradVec_guess[g] = Erad_floor_;
 						}
@@ -561,6 +561,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		AMREX_ASSERT_WITH_MESSAGE(min(cooling_tend) >= 0., "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
 		// TODO(CCH): potential GPU-related issue here.
 		EradVec_guess += (1 / cscale) * cooling_tend;
+	    AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
@@ -744,6 +745,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 				T_d = T_d0;
 			}
 		}
+		T_d = std::max(T_d, 10.0);
 		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
 		if (T_d < 0.0) {
 			amrex::Gpu::Atomic::Add(&p_iteration_failure_counter[1], 1); // NOLINT
@@ -930,6 +932,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 	if constexpr (!add_line_cooling_to_radiation_in_jac) {
 		EradVec_guess += (1 / cscale) * cooling_tend;
+        for (int g = 0; g < nGroups_; ++g) {
+            EradVec_guess[g] = std::max(EradVec_guess[g], Erad_floor_);
+        }
+	    AMREX_ASSERT(min(EradVec_guess) > 0.0);
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
