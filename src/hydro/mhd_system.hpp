@@ -23,7 +23,7 @@
 #include "physics_numVars.hpp"
 #include <iostream>
 
-AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04, Balsara2025); // NOLINT
+AMREX_ENUM(EMFAvgType, BalsaraSpicer, LD04, Balsara2025);		  // NOLINT
 AMREX_ENUM(EMFScheme, FelkerStone, FelkerStone_FaceVel, Balsara_Riemann); // NOLINT
 
 /// Class for a MHD system of conservation laws
