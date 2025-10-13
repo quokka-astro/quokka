@@ -91,7 +91,7 @@ which should end with output similar to the following:
 
 > *Requires ROCm 6.3.0 or newer. The directory containing the HIP and other related binaries must be added to the `PATH` environment variable after the ROCm installation.*
 
-Build with `-DAMReX_GPU_BACKEND=HIP`. Your MPI library **must** support GPU-aware MPI for AMD GPUs. This is typically `amdclang++` or `hipcc`. In case your GPU-aware compiler is not being used by default during the build, use the `DCMAKE_CXX_COMPILER` and `DCMAKE_C_COMPILER` options to specify the C++ and C compilers respectively. Additionally, the AMD GPU architecture may have to be specified. This can be done using the `DAMReX_GPU_ARCH` option. The GPU architecture can be found using
+Build with `-DAMReX_GPU_BACKEND=HIP`. Your MPI library **must** support GPU-aware MPI for AMD GPUs. The typical AMD GPU aware compilers are `amdclang++` or `hipcc`. In case your GPU-aware compiler is not being used by default during the build, use the `DCMAKE_CXX_COMPILER` and `DCMAKE_C_COMPILER` options to specify the C++ and C compilers respectively. Additionally, the AMD GPU architecture may have to be specified. This can be done using the `DAMReX_GPU_ARCH` option. The GPU architecture can be found using
 
 ```shell
 rocminfo | grep gfx
