@@ -97,7 +97,7 @@ Build with `-DAMReX_GPU_BACKEND=HIP`. Your MPI library **must** support GPU-awar
 rocminfo | grep gfx
 ```
 
-A typical build command using a the `amdclang++` compiler and an AMD GPU with RDNA 2 (gfx1031) architecture will look like
+A typical build command using the `amdclang++` compiler and an AMD GPU with RDNA 2 (gfx1031) architecture will look like
 
 ```shell
 cmake .. -DCMAKE_BUILD_TYPE=Release \
