@@ -177,9 +177,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
 
 	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
-	int emf_scheme_ = 2; // 0 == Felker and Stone scheme state; 1 == Felker and Stone scheme using the FC velocity from Riemann solver
-			     // 2 == Balsara2025 scheme computing emf at cell center (default);
-
+	EMFScheme emf_scheme_ = EMFScheme::Balsara_Riemann;
+	
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
