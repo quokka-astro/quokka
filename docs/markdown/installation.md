@@ -89,7 +89,26 @@ which should end with output similar to the following:
 
 ### AMD GPUs
 
-Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 6.3.0 or newer. Your MPI library **must** support GPU-aware MPI for AMD GPUs. Quokka has been tested on MI100 and MI250X GPUs.
+> **Requires ROCm 6.3.0 or newer. The directory containing the HIP and other related binaries must be added to the `PATH` environment variable after the ROCm installation.**
+
+Build with `-DAMReX_GPU_BACKEND=HIP`. Your MPI library **must** support GPU-aware MPI for AMD GPUs. This is typically `amdclang++` or `hipcc`. In case your GPU-aware compiler is not being used by default during the build, use the `DCMAKE_CXX_COMPILER` and `DCMAKE_C_COMPILER` optons to specify the C++ and C compilers respectively. Additionally, the AMD GPU architecture may have to be specified. This can be done using the `DAMReX_GPU_ARCH` option. The GPU architecture can be found using
+
+```shell
+rocminfo | grep gfx
+```
+
+A typical build command using a the `amdclang++` compiler and an AMD GPU with RDNA 2 (gfx1031) architecture will look like
+
+```shell
+cmake .. -DCMAKE_BUILD_TYPE=Release \
+         -DCMAKE_CXX_COMPILER=amdclang++ \
+         -DCMAKE_C_COMPILER=amdclang \
+         -DAMReX_GPU_BACKEND=HIP \
+         -DAMReX_GPU_ARCH=gfx1031 \
+         -G Ninja
+```
+
+Quokka has been tested on MI100, MI250X and 6700XT GPUs.
 
 ### Intel GPUs *(does not compile)*
 
