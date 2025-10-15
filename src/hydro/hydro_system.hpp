@@ -807,8 +807,7 @@ void HydroSystem<problem_t>::ApplyDensitySponge(amrex::MultiFab &state_mf, quokk
 	}
 
 	bool const thresholdsValid = (densitySponge.upperDensity > static_cast<amrex::Real>(0.0)) &&
-				     (densitySponge.lowerDensity > static_cast<amrex::Real>(0.0)) &&
-				     (densitySponge.lowerDensity != densitySponge.upperDensity);
+				     (densitySponge.lowerDensity > static_cast<amrex::Real>(0.0)) && (densitySponge.lowerDensity != densitySponge.upperDensity);
 	if (!thresholdsValid) {
 		return;
 	}
@@ -828,20 +827,16 @@ void HydroSystem<problem_t>::ApplyDensitySponge(amrex::MultiFab &state_mf, quokk
 				amrex::Real const arg = (rho - spongeParams.upperDensity) / deltaRho;
 				amrex::Real const cosTerm = amrex::Math::cospi(arg);
 				spongeFactor = spongeParams.lowerFactor +
-					       static_cast<amrex::Real>(0.5) * (spongeParams.upperFactor - spongeParams.lowerFactor) *
-						   (1.0 - cosTerm);
+					       static_cast<amrex::Real>(0.5) * (spongeParams.upperFactor - spongeParams.lowerFactor) * (1.0 - cosTerm);
 			} else {
 				spongeFactor = spongeParams.upperFactor;
 			}
 
-			amrex::Real const alpha =
-			    (dt > static_cast<amrex::Real>(0.0) && spongeParams.timescale > static_cast<amrex::Real>(0.0))
-				? (dt / spongeParams.timescale)
-				: static_cast<amrex::Real>(0.0);
+			amrex::Real const alpha = (dt > static_cast<amrex::Real>(0.0) && spongeParams.timescale > static_cast<amrex::Real>(0.0))
+						      ? (dt / spongeParams.timescale)
+						      : static_cast<amrex::Real>(0.0);
 			amrex::Real const fac =
-			    -(static_cast<amrex::Real>(1.0) -
-			      static_cast<amrex::Real>(1.0) /
-				  (static_cast<amrex::Real>(1.0) + alpha * spongeFactor));
+			    -(static_cast<amrex::Real>(1.0) - static_cast<amrex::Real>(1.0) / (static_cast<amrex::Real>(1.0) + alpha * spongeFactor));
 
 			if (fac != static_cast<amrex::Real>(0.0)) {
 				amrex::Real const px_old = state[bx](i, j, k, x1Momentum_index);
@@ -894,8 +889,7 @@ void HydroSystem<problem_t>::ApplyDensitySponge(amrex::MultiFab &state_mf, quokk
 	});
 }
 
-template <typename problem_t>
-void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
+template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
 {
 	auto state = state_mf.arrays();
 

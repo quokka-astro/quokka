@@ -1152,18 +1152,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 #endif // (AMREX_SPACEDIM == 3)
 }
 
-	// fix-up any unphysical states created by AMR operations
-	// (e.g., caused by the flux register or from interpolation)
-	template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
-	{
-		const BL_PROFILE("QuokkaSimulation::FixupState()");
+// fix-up any unphysical states created by AMR operations
+// (e.g., caused by the flux register or from interpolation)
+template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
+{
+	const BL_PROFILE("QuokkaSimulation::FixupState()");
 
-		// fix hydro state
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
+	// fix hydro state
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
 
-		// sync internal energy and total energy
-		HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
-	}
+	// sync internal energy and total energy
+	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
+}
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
 // ghost cells
