@@ -837,6 +837,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	}
 #endif
 
+	// apply optional density sponge as a Strang-split source
+	if (densitySpongeConfig_.enabled) {
+		HydroSystem<problem_t>::ApplyDensitySponge(state, densitySpongeConfig_, dt);
+	}
+
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
 
@@ -1154,7 +1159,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 		const BL_PROFILE("QuokkaSimulation::FixupState()");
 
 		// fix hydro state
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], &densitySpongeConfig_, 0.0);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
 
 		// sync internal energy and total energy
 		HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
@@ -1656,8 +1661,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab::Saxpy(avgFaceVel[idim], stage1Weight, faceVel[idim], 0, 0, 1, 0);
 		}
 
-		// prevent vacuum (and apply optional density sponge)
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, &densitySpongeConfig_, dt_lev);
+		// prevent vacuum
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -1766,8 +1771,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components_rk_ave, dt_lev, geom[lev].CellSizeArray());
 		}
 
-		// prevent vacuum (and apply optional density sponge)
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, &densitySpongeConfig_, dt_lev);
+		// prevent vacuum
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
