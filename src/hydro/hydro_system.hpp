@@ -17,6 +17,7 @@
 #include "AMReX.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Math.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -37,6 +38,19 @@
 
 // Microphysics headers
 #include "extern_parameters.H"
+
+namespace quokka
+{
+struct DensitySpongeConfig {
+	bool enabled = false;
+	amrex::Real timescale = -1.0;
+	amrex::Real lowerDensity = -1.0;
+	amrex::Real upperDensity = -1.0;
+	amrex::Real lowerFactor = 0.0;
+	amrex::Real upperFactor = 1.0;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> targetVelocity{AMREX_D_DECL(0.0, 0.0, 0.0)};
+};
+} // namespace quokka
 
 // this struct is specialized by the user application code
 //
@@ -113,7 +127,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf);
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
+				  quokka::DensitySpongeConfig const *densitySponge = nullptr, amrex::Real dt = 0.0);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
@@ -783,11 +798,94 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 
 // to ensure that physical quantities are within reasonable
 // floors and ceilings which can be set in the param file
-template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
+template <typename problem_t>
+void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf,
+					   quokka::DensitySpongeConfig const *densitySponge, amrex::Real const dt)
 {
 	auto state = state_mf.arrays();
 
+	quokka::DensitySpongeConfig const spongeParams = (densitySponge != nullptr) ? *densitySponge : quokka::DensitySpongeConfig{};
+	bool const spongeActive = (densitySponge != nullptr) && densitySponge->enabled && (densitySponge->timescale > 0.0);
+
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		if (spongeActive) {
+			amrex::Real const rho = state[bx](i, j, k, density_index);
+			bool const validThresholds = (spongeParams.upperDensity > 0.0) && (spongeParams.lowerDensity > 0.0) &&
+						     (spongeParams.lowerDensity != spongeParams.upperDensity);
+
+			if (rho > 0.0 && validThresholds) {
+				amrex::Real spongeFactor = spongeParams.lowerFactor;
+
+				if (rho > spongeParams.upperDensity) {
+					spongeFactor = spongeParams.lowerFactor;
+				} else if (rho >= spongeParams.lowerDensity) {
+					amrex::Real const deltaRho = spongeParams.lowerDensity - spongeParams.upperDensity;
+					amrex::Real const arg = (rho - spongeParams.upperDensity) / deltaRho;
+					amrex::Real const pi = amrex::Math::pi<amrex::Real>();
+					spongeFactor = spongeParams.lowerFactor +
+						       static_cast<amrex::Real>(0.5) * (spongeParams.upperFactor - spongeParams.lowerFactor) *
+							   (1.0 - amrex::Math::cos(pi * arg));
+				} else {
+					spongeFactor = spongeParams.upperFactor;
+				}
+
+				amrex::Real const alpha =
+				    (dt > 0.0 && spongeParams.timescale > 0.0) ? (dt / spongeParams.timescale) : static_cast<amrex::Real>(0.0);
+					amrex::Real const fac = -(static_cast<amrex::Real>(1.0) -
+								  static_cast<amrex::Real>(1.0) /
+								      (static_cast<amrex::Real>(1.0) + alpha * spongeFactor));
+
+					if (fac != static_cast<amrex::Real>(0.0)) {
+						amrex::Real const px_old = state[bx](i, j, k, x1Momentum_index);
+						amrex::Real const vx_old = px_old / rho;
+#if (AMREX_SPACEDIM >= 2)
+					amrex::Real const py_old = state[bx](i, j, k, x2Momentum_index);
+					amrex::Real const vy_old = py_old / rho;
+#else
+					amrex::Real const py_old = static_cast<amrex::Real>(0.0);
+					amrex::Real const vy_old = static_cast<amrex::Real>(0.0);
+#endif
+#if (AMREX_SPACEDIM == 3)
+					amrex::Real const pz_old = state[bx](i, j, k, x3Momentum_index);
+					amrex::Real const vz_old = pz_old / rho;
+#else
+					amrex::Real const pz_old = static_cast<amrex::Real>(0.0);
+					amrex::Real const vz_old = static_cast<amrex::Real>(0.0);
+#endif
+
+					amrex::Real const deltaPx = fac * (px_old - rho * spongeParams.targetVelocity[0]);
+#if (AMREX_SPACEDIM >= 2)
+					amrex::Real const deltaPy = fac * (py_old - rho * spongeParams.targetVelocity[1]);
+#else
+					amrex::Real const deltaPy = static_cast<amrex::Real>(0.0);
+#endif
+#if (AMREX_SPACEDIM == 3)
+					amrex::Real const deltaPz = fac * (pz_old - rho * spongeParams.targetVelocity[2]);
+#else
+					amrex::Real const deltaPz = static_cast<amrex::Real>(0.0);
+#endif
+
+					state[bx](i, j, k, x1Momentum_index) = px_old + deltaPx;
+#if (AMREX_SPACEDIM >= 2)
+					state[bx](i, j, k, x2Momentum_index) = py_old + deltaPy;
+#endif
+#if (AMREX_SPACEDIM == 3)
+					state[bx](i, j, k, x3Momentum_index) = pz_old + deltaPz;
+#endif
+
+					amrex::Real deltaE = vx_old * deltaPx;
+#if (AMREX_SPACEDIM >= 2)
+					deltaE += vy_old * deltaPy;
+#endif
+#if (AMREX_SPACEDIM == 3)
+					deltaE += vz_old * deltaPz;
+#endif
+
+					state[bx](i, j, k, energy_index) += deltaE;
+				}
+			}
+		}
+
 		// Enforce density floor (do not adjust energies here!!)
 		amrex::Real rho_new = NAN;
 		{

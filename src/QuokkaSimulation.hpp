@@ -172,6 +172,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
+	quokka::DensitySpongeConfig densitySpongeConfig_;
 	// number of ghost cells for face velocity computation (default == 2)
 	// we now need 3 total to accommodate the higher-order reconstruction in computeEMF
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
@@ -478,6 +479,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::getScalarVariabl
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 {
+	densitySpongeConfig_ = quokka::DensitySpongeConfig{};
+
 	// set hydro runtime parameters
 	{
 		amrex::ParmParse const hpp("hydro");
@@ -487,6 +490,64 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
+	}
+
+	// set density sponge runtime parameters
+	{
+		amrex::ParmParse const spp("sponge");
+
+		int enableDensitySpongeFlag = densitySpongeConfig_.enabled ? 1 : 0;
+		bool const hasEnableFlag = spp.query("enable_density_sponge", enableDensitySpongeFlag);
+		densitySpongeConfig_.enabled = (enableDensitySpongeFlag != 0);
+
+		spp.query("timescale", densitySpongeConfig_.timescale);
+		spp.query("lower_density", densitySpongeConfig_.lowerDensity);
+		spp.query("upper_density", densitySpongeConfig_.upperDensity);
+		spp.query("lower_factor", densitySpongeConfig_.lowerFactor);
+		spp.query("upper_factor", densitySpongeConfig_.upperFactor);
+
+		amrex::Vector<amrex::Real> targetVelocityVec;
+		if (spp.queryarr("target_velocity", targetVelocityVec)) {
+			int const limit = std::min(AMREX_SPACEDIM, static_cast<int>(targetVelocityVec.size()));
+			for (int n = 0; n < limit; ++n) {
+				densitySpongeConfig_.targetVelocity[n] = targetVelocityVec[n];
+			}
+		}
+
+		amrex::Real vx = densitySpongeConfig_.targetVelocity[0];
+		if (spp.query("target_x_velocity", vx)) {
+			densitySpongeConfig_.targetVelocity[0] = vx;
+		}
+#if (AMREX_SPACEDIM >= 2)
+		amrex::Real vy = densitySpongeConfig_.targetVelocity[1];
+		if (spp.query("target_y_velocity", vy)) {
+			densitySpongeConfig_.targetVelocity[1] = vy;
+		}
+#endif
+#if (AMREX_SPACEDIM == 3)
+		amrex::Real vz = densitySpongeConfig_.targetVelocity[2];
+		if (spp.query("target_z_velocity", vz)) {
+			densitySpongeConfig_.targetVelocity[2] = vz;
+		}
+#endif
+
+		bool const autoEnable =
+		    (densitySpongeConfig_.timescale > 0.0) && (densitySpongeConfig_.lowerDensity > 0.0) && (densitySpongeConfig_.upperDensity > 0.0);
+		if (!hasEnableFlag && !densitySpongeConfig_.enabled && autoEnable) {
+			densitySpongeConfig_.enabled = true;
+		}
+
+		if (densitySpongeConfig_.enabled) {
+			if (densitySpongeConfig_.timescale <= 0.0) {
+				amrex::Abort("Density sponge enabled but sponge.timescale <= 0.");
+			}
+			if ((densitySpongeConfig_.lowerDensity <= 0.0) || (densitySpongeConfig_.upperDensity <= 0.0)) {
+				amrex::Abort("Density sponge enabled but density thresholds are not both positive.");
+			}
+			if (densitySpongeConfig_.lowerDensity == densitySpongeConfig_.upperDensity) {
+				amrex::Abort("Density sponge enabled but lower_density equals upper_density.");
+			}
+		}
 	}
 
 	// set MHD runtime parameters
@@ -1086,18 +1147,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 #endif // (AMREX_SPACEDIM == 3)
 }
 
-// fix-up any unphysical states created by AMR operations
-// (e.g., caused by the flux register or from interpolation)
-template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
-{
-	const BL_PROFILE("QuokkaSimulation::FixupState()");
+	// fix-up any unphysical states created by AMR operations
+	// (e.g., caused by the flux register or from interpolation)
+	template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
+	{
+		const BL_PROFILE("QuokkaSimulation::FixupState()");
 
-	// fix hydro state
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
+		// fix hydro state
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], &densitySpongeConfig_, 0.0);
 
-	// sync internal energy and total energy
-	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
-}
+		// sync internal energy and total energy
+		HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
+	}
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
 // ghost cells
@@ -1595,8 +1656,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab::Saxpy(avgFaceVel[idim], stage1Weight, faceVel[idim], 0, 0, 1, 0);
 		}
 
-		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc);
+		// prevent vacuum (and apply optional density sponge)
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, &densitySpongeConfig_, dt_lev);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -1705,8 +1766,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components_rk_ave, dt_lev, geom[lev].CellSizeArray());
 		}
 
-		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc);
+		// prevent vacuum (and apply optional density sponge)
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, &densitySpongeConfig_, dt_lev);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
