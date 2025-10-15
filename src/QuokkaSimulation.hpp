@@ -541,8 +541,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 #endif
 
-		bool const hasValidTimescaleSetting =
-		    (densitySpongeConfig_.timescale > 0.0) || (densitySpongeConfig_.timescalePreviousSteps > 0);
+		bool const hasValidTimescaleSetting = (densitySpongeConfig_.timescale > 0.0) || (densitySpongeConfig_.timescalePreviousSteps > 0);
 		bool const autoEnable = hasValidTimescaleSetting && (densitySpongeConfig_.lowerDensity > 0.0) && (densitySpongeConfig_.upperDensity > 0.0);
 		if (!hasEnableFlag && !densitySpongeConfig_.enabled && autoEnable) {
 			densitySpongeConfig_.enabled = true;
