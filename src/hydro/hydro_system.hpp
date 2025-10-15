@@ -810,8 +810,8 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		if (spongeActive) {
 			amrex::Real const rho = state[bx](i, j, k, density_index);
-			bool const validThresholds = (spongeParams.upperDensity > 0.0) && (spongeParams.lowerDensity > 0.0) &&
-						     (spongeParams.lowerDensity != spongeParams.upperDensity);
+			bool const validThresholds =
+			    (spongeParams.upperDensity > 0.0) && (spongeParams.lowerDensity > 0.0) && (spongeParams.lowerDensity != spongeParams.upperDensity);
 
 			if (rho > 0.0 && validThresholds) {
 				amrex::Real spongeFactor = spongeParams.lowerFactor;
@@ -822,22 +822,21 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 					amrex::Real const deltaRho = spongeParams.lowerDensity - spongeParams.upperDensity;
 					amrex::Real const arg = (rho - spongeParams.upperDensity) / deltaRho;
 					amrex::Real const pi = amrex::Math::pi<amrex::Real>();
-					spongeFactor = spongeParams.lowerFactor +
-						       static_cast<amrex::Real>(0.5) * (spongeParams.upperFactor - spongeParams.lowerFactor) *
-							   (1.0 - amrex::Math::cos(pi * arg));
+					spongeFactor = spongeParams.lowerFactor + static_cast<amrex::Real>(0.5) *
+										      (spongeParams.upperFactor - spongeParams.lowerFactor) *
+										      (1.0 - amrex::Math::cos(pi * arg));
 				} else {
 					spongeFactor = spongeParams.upperFactor;
 				}
 
 				amrex::Real const alpha =
 				    (dt > 0.0 && spongeParams.timescale > 0.0) ? (dt / spongeParams.timescale) : static_cast<amrex::Real>(0.0);
-					amrex::Real const fac = -(static_cast<amrex::Real>(1.0) -
-								  static_cast<amrex::Real>(1.0) /
-								      (static_cast<amrex::Real>(1.0) + alpha * spongeFactor));
+				amrex::Real const fac =
+				    -(static_cast<amrex::Real>(1.0) - static_cast<amrex::Real>(1.0) / (static_cast<amrex::Real>(1.0) + alpha * spongeFactor));
 
-					if (fac != static_cast<amrex::Real>(0.0)) {
-						amrex::Real const px_old = state[bx](i, j, k, x1Momentum_index);
-						amrex::Real const vx_old = px_old / rho;
+				if (fac != static_cast<amrex::Real>(0.0)) {
+					amrex::Real const px_old = state[bx](i, j, k, x1Momentum_index);
+					amrex::Real const vx_old = px_old / rho;
 #if (AMREX_SPACEDIM >= 2)
 					amrex::Real const py_old = state[bx](i, j, k, x2Momentum_index);
 					amrex::Real const vy_old = py_old / rho;
