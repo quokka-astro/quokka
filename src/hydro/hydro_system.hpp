@@ -886,7 +886,7 @@ void HydroSystem<problem_t>::ApplyDensitySponge(amrex::MultiFab &state_mf, quokk
 #if (AMREX_SPACEDIM == 3)
 								+ pz_old * pz_old
 #endif
-							       ) /
+								) /
 							       rho;
 
 				amrex::Real const kineticNew = static_cast<amrex::Real>(0.5) *
@@ -897,7 +897,7 @@ void HydroSystem<problem_t>::ApplyDensitySponge(amrex::MultiFab &state_mf, quokk
 #if (AMREX_SPACEDIM == 3)
 								+ pz_new * pz_new
 #endif
-							       ) /
+								) /
 							       rho;
 
 				state[bx](i, j, k, energy_index) += (kineticNew - kineticOld);
