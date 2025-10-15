@@ -497,7 +497,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const spp("sponge");
 
 		int enableDensitySpongeFlag = densitySpongeConfig_.enabled ? 1 : 0;
-		bool const hasEnableFlag = spp.query("enable_density_sponge", enableDensitySpongeFlag);
+		bool const hasEnableFlag = (spp.query("enable_density_sponge", enableDensitySpongeFlag) != 0);
 		densitySpongeConfig_.enabled = (enableDensitySpongeFlag != 0);
 
 		spp.query("timescale", densitySpongeConfig_.timescale);
@@ -507,7 +507,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		spp.query("upper_factor", densitySpongeConfig_.upperFactor);
 
 		amrex::Vector<amrex::Real> targetVelocityVec;
-		if (spp.queryarr("target_velocity", targetVelocityVec)) {
+		if (spp.queryarr("target_velocity", targetVelocityVec) != 0) {
 			int const limit = std::min(AMREX_SPACEDIM, static_cast<int>(targetVelocityVec.size()));
 			for (int n = 0; n < limit; ++n) {
 				densitySpongeConfig_.targetVelocity[n] = targetVelocityVec[n];
@@ -515,18 +515,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 
 		amrex::Real vx = densitySpongeConfig_.targetVelocity[0];
-		if (spp.query("target_x_velocity", vx)) {
+		if (spp.query("target_x_velocity", vx) != 0) {
 			densitySpongeConfig_.targetVelocity[0] = vx;
 		}
 #if (AMREX_SPACEDIM >= 2)
 		amrex::Real vy = densitySpongeConfig_.targetVelocity[1];
-		if (spp.query("target_y_velocity", vy)) {
+		if (spp.query("target_y_velocity", vy) != 0) {
 			densitySpongeConfig_.targetVelocity[1] = vy;
 		}
 #endif
 #if (AMREX_SPACEDIM == 3)
 		amrex::Real vz = densitySpongeConfig_.targetVelocity[2];
-		if (spp.query("target_z_velocity", vz)) {
+		if (spp.query("target_z_velocity", vz) != 0) {
 			densitySpongeConfig_.targetVelocity[2] = vz;
 		}
 #endif
