@@ -1294,9 +1294,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		doDiagnostics();
 
 		// Writing Plot files at time intervals
-		if (last_plot_file_step != step + 1 && plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
+		if (plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
 			next_plot_file_time += plotTimeInterval_;
-			WritePlotFile();
+			if (last_plot_file_step != step + 1) {
+				last_plot_file_step = step + 1;
+				WritePlotFile();
+			}
 		}
 
 		// Forced plotfile output via sentinel file
@@ -1331,14 +1334,45 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// 	https://github.com/quokka-astro/quokka/issues/554
 		if (checkpointTimeInterval_ > 0 && next_chk_file_time <= cur_time) {
 			next_chk_file_time += checkpointTimeInterval_;
-			WriteCheckpointFile();
+			if (last_chk_file_step != step + 1) {
+				last_chk_file_step = step + 1;
+				WriteCheckpointFile();
+			}
 		}
 
 		// IMPORTANT: this MUST be written *after* the plotfile to avoid corruption:
 		// 	https://github.com/quokka-astro/quokka/issues/554
 		if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
+			if (last_chk_file_step != step + 1) {
+				last_chk_file_step = step + 1;
+				WriteCheckpointFile();
+			}
+		}
+
+		// Forced checkpoint output via sentinel file
+		const std::filesystem::path checkpoint_sentinel{"checkpointNow"};
+		bool force_checkpoint_now = false;
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::error_code chk_exists_ec;
+			force_checkpoint_now = std::filesystem::exists(checkpoint_sentinel, chk_exists_ec) && !chk_exists_ec;
+			if (chk_exists_ec) {
+				amrex::Print() << "[WARNING] Could not check for '" << checkpoint_sentinel.string() << "': " << chk_exists_ec.message() << '\n';
+				force_checkpoint_now = false;
+			}
+		}
+		int force_checkpoint_flag = force_checkpoint_now ? 1 : 0;
+		amrex::ParallelDescriptor::Bcast(&force_checkpoint_flag, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+		force_checkpoint_now = (force_checkpoint_flag == 1);
+
+		if (force_checkpoint_now && last_chk_file_step != step + 1) {
 			last_chk_file_step = step + 1;
 			WriteCheckpointFile();
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				std::error_code remove_ec;
+				if (!std::filesystem::remove(checkpoint_sentinel, remove_ec) && remove_ec) {
+					amrex::Print() << "[WARNING] Failed to remove sentinel '" << checkpoint_sentinel.string() << "': " << remove_ec.message() << '\n';
+				}
+			}
 		}
 
 		if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
