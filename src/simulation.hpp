@@ -1371,7 +1371,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				std::error_code remove_ec;
 				if (!std::filesystem::remove(checkpoint_sentinel, remove_ec) && remove_ec) {
-					amrex::Print() << "[WARNING] Failed to remove sentinel '" << checkpoint_sentinel.string() << "': " << remove_ec.message() << '\n';
+					amrex::Print()
+					    << "[WARNING] Failed to remove sentinel '" << checkpoint_sentinel.string() << "': " << remove_ec.message() << '\n';
 				}
 			}
 		}
