@@ -874,7 +874,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeDensitySp
 	int const stepsRequested = densitySpongeConfig_.timescalePreviousSteps;
 	int const available = static_cast<int>(coarseDtHistory_.size());
 	int const count = std::min(stepsRequested, available);
-	amrex::Real timescale = static_cast<amrex::Real>(0.0);
+e);auto
 	for (int n = 0; n < count; ++n) {
 		timescale += coarseDtHistory_[available - 1 - n];
 	}
