@@ -34,8 +34,13 @@ hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
 
-#mhd.emf_averaging_method = BalsaraSpicer
-mhd.emf_averaging_method = LD04
+#mhd.emf_compute_scheme = FelkerStone2017
+#mhd.emf_compute_scheme = Quokka2026
+mhd.emf_compute_scheme = Balsara2025
+
+#mhd.emf_averaging_scheme = BalsaraSpicer2004
+#mhd.emf_averaging_scheme = LondrilloDelZanna2004
+mhd.emf_averaging_scheme = Balsara2025
 
 setup.num_modes_x = 1
 setup.num_modes_y = 2
