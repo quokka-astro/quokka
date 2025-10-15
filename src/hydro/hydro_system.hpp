@@ -48,6 +48,7 @@ struct DensitySpongeConfig {
 	amrex::Real upperDensity = -1.0;
 	amrex::Real lowerFactor = 0.0;
 	amrex::Real upperFactor = 1.0;
+	int timescalePreviousSteps = 0;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> targetVelocity{AMREX_D_DECL(0.0, 0.0, 0.0)};
 };
 } // namespace quokka
