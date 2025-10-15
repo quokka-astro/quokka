@@ -874,16 +874,14 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeDensitySp
 	int const stepsRequested = densitySpongeConfig_.timescalePreviousSteps;
 	int const available = static_cast<int>(coarseDtHistory_.size());
 	int const count = std::min(stepsRequested, available);
-e);auto
-	for (int n = 0; n < count; ++n) {
-		timescale += coarseDtHistory_[available - 1 - n];
-	}
+e);
+auto for (int n = 0; n < count; ++n) { timescale += coarseDtHistory_[available - 1 - n]; }
 
-	if ((timescale <= static_cast<amrex::Real>(0.0)) && (densitySpongeConfig_.timescale > static_cast<amrex::Real>(0.0))) {
-		return densitySpongeConfig_.timescale;
-	}
+if ((timescale <= static_cast<amrex::Real>(0.0)) && (densitySpongeConfig_.timescale > static_cast<amrex::Real>(0.0))) {
+	return densitySpongeConfig_.timescale;
+}
 
-	return timescale;
+return timescale;
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::recordCoarseLevelDt(amrex::Real dt)
