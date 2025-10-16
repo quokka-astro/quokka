@@ -17,6 +17,7 @@
 #include "AMReX.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Math.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -37,6 +38,19 @@
 
 // Microphysics headers
 #include "extern_parameters.H"
+
+namespace quokka
+{
+struct DensitySpongeConfig {
+	bool enabled = false;
+	amrex::Real timescale = -1.0;
+	amrex::Real lowerDensity = -1.0;
+	amrex::Real upperDensity = -1.0;
+	amrex::Real lowerFactor = 0.0;
+	amrex::Real upperFactor = 1.0;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> targetVelocity{AMREX_D_DECL(0.0, 0.0, 0.0)};
+};
+} // namespace quokka
 
 // this struct is specialized by the user application code
 //
@@ -114,6 +128,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
 	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf);
+
+	static void ApplyDensitySponge(amrex::MultiFab &state_mf, quokka::DensitySpongeConfig const &densitySponge, amrex::Real dt);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
@@ -783,6 +799,71 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 
 // to ensure that physical quantities are within reasonable
 // floors and ceilings which can be set in the param file
+template <typename problem_t>
+void HydroSystem<problem_t>::ApplyDensitySponge(amrex::MultiFab &state_mf, quokka::DensitySpongeConfig const &densitySponge, amrex::Real const dt)
+{
+	if (!densitySponge.enabled || densitySponge.timescale <= static_cast<amrex::Real>(0.0)) {
+		return;
+	}
+
+	bool const thresholdsValid = (densitySponge.upperDensity > static_cast<amrex::Real>(0.0)) &&
+				     (densitySponge.lowerDensity > static_cast<amrex::Real>(0.0)) && (densitySponge.lowerDensity != densitySponge.upperDensity);
+	if (!thresholdsValid) {
+		return;
+	}
+
+	auto state = state_mf.arrays();
+	quokka::DensitySpongeConfig const spongeParams = densitySponge;
+
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::Real const rho = state[bx](i, j, k, density_index);
+		if (rho > static_cast<amrex::Real>(0.0)) {
+			amrex::Real spongeFactor = spongeParams.lowerFactor;
+
+			if (rho > spongeParams.upperDensity) {
+				spongeFactor = spongeParams.lowerFactor;
+			} else if (rho >= spongeParams.lowerDensity) {
+				amrex::Real const deltaRho = spongeParams.lowerDensity - spongeParams.upperDensity;
+				amrex::Real const arg = (rho - spongeParams.upperDensity) / deltaRho;
+				amrex::Real const cosTerm = amrex::Math::cospi(arg);
+				spongeFactor = spongeParams.lowerFactor +
+					       static_cast<amrex::Real>(0.5) * (spongeParams.upperFactor - spongeParams.lowerFactor) * (1.0 - cosTerm);
+			} else {
+				spongeFactor = spongeParams.upperFactor;
+			}
+
+			amrex::Real const alpha = (dt > static_cast<amrex::Real>(0.0) && spongeParams.timescale > static_cast<amrex::Real>(0.0))
+						      ? (dt / spongeParams.timescale)
+						      : static_cast<amrex::Real>(0.0);
+			amrex::Real const fac =
+			    -(static_cast<amrex::Real>(1.0) - static_cast<amrex::Real>(1.0) / (static_cast<amrex::Real>(1.0) + alpha * spongeFactor));
+
+			if (fac != static_cast<amrex::Real>(0.0)) {
+				amrex::Real const px_old = state[bx](i, j, k, x1Momentum_index);
+				amrex::Real const py_old = state[bx](i, j, k, x2Momentum_index);
+				amrex::Real const pz_old = state[bx](i, j, k, x3Momentum_index);
+
+				amrex::Real const deltaPx = fac * (px_old - rho * spongeParams.targetVelocity[0]);
+				amrex::Real const deltaPy = fac * (py_old - rho * spongeParams.targetVelocity[1]);
+				amrex::Real const deltaPz = fac * (pz_old - rho * spongeParams.targetVelocity[2]);
+
+				amrex::Real const px_new = px_old + deltaPx;
+				amrex::Real const py_new = py_old + deltaPy;
+				amrex::Real const pz_new = pz_old + deltaPz;
+
+				state[bx](i, j, k, x1Momentum_index) = px_new;
+				state[bx](i, j, k, x2Momentum_index) = py_new;
+				state[bx](i, j, k, x3Momentum_index) = pz_new;
+
+				amrex::Real const kineticOld = static_cast<amrex::Real>(0.5) * (px_old * px_old + py_old * py_old + pz_old * pz_old) / rho;
+				amrex::Real const kineticNew = static_cast<amrex::Real>(0.5) * (px_new * px_new + py_new * py_new + pz_new * pz_new) / rho;
+
+				state[bx](i, j, k, energy_index) += (kineticNew - kineticOld);
+			}
+		}
+	});
+}
+
 template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
 {
 	auto state = state_mf.arrays();
