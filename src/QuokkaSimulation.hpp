@@ -508,38 +508,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		spp.query("timescale", densitySpongeConfig_.timescale);
 		spp.query("lower_density", densitySpongeConfig_.lowerDensity);
 		spp.query("upper_density", densitySpongeConfig_.upperDensity);
-		spp.query("lower_factor", densitySpongeConfig_.lowerFactor);
-		spp.query("upper_factor", densitySpongeConfig_.upperFactor);
+		densitySpongeConfig_.lowerFactor = static_cast<amrex::Real>(0.0);
+		densitySpongeConfig_.upperFactor = static_cast<amrex::Real>(1.0);
 		spp.query("timescale_previous_steps", densitySpongeConfig_.timescalePreviousSteps);
 
 		if (densitySpongeConfig_.timescalePreviousSteps < 0) {
 			amrex::Abort("Density sponge timescale_previous_steps must be non-negative.");
 		}
 
-		amrex::Vector<amrex::Real> targetVelocityVec;
-		if (spp.queryarr("target_velocity", targetVelocityVec) != 0) {
-			int const limit = std::min(AMREX_SPACEDIM, static_cast<int>(targetVelocityVec.size()));
-			for (int n = 0; n < limit; ++n) {
-				densitySpongeConfig_.targetVelocity[n] = targetVelocityVec[n];
-			}
+		for (int n = 0; n < AMREX_SPACEDIM; ++n) {
+			densitySpongeConfig_.targetVelocity[n] = static_cast<amrex::Real>(0.0);
 		}
-
-		amrex::Real vx = densitySpongeConfig_.targetVelocity[0];
-		if (spp.query("target_x_velocity", vx) != 0) {
-			densitySpongeConfig_.targetVelocity[0] = vx;
-		}
-#if (AMREX_SPACEDIM >= 2)
-		amrex::Real vy = densitySpongeConfig_.targetVelocity[1];
-		if (spp.query("target_y_velocity", vy) != 0) {
-			densitySpongeConfig_.targetVelocity[1] = vy;
-		}
-#endif
-#if (AMREX_SPACEDIM == 3)
-		amrex::Real vz = densitySpongeConfig_.targetVelocity[2];
-		if (spp.query("target_z_velocity", vz) != 0) {
-			densitySpongeConfig_.targetVelocity[2] = vz;
-		}
-#endif
 
 		bool const hasValidTimescaleSetting = (densitySpongeConfig_.timescale > 0.0) || (densitySpongeConfig_.timescalePreviousSteps > 0);
 		bool const autoEnable = hasValidTimescaleSetting && (densitySpongeConfig_.lowerDensity > 0.0) && (densitySpongeConfig_.upperDensity > 0.0);

@@ -841,65 +841,23 @@ void HydroSystem<problem_t>::ApplyDensitySponge(amrex::MultiFab &state_mf, quokk
 
 			if (fac != static_cast<amrex::Real>(0.0)) {
 				amrex::Real const px_old = state[bx](i, j, k, x1Momentum_index);
-#if (AMREX_SPACEDIM >= 2)
 				amrex::Real const py_old = state[bx](i, j, k, x2Momentum_index);
-#else
-				amrex::Real const py_old = static_cast<amrex::Real>(0.0);
-#endif
-#if (AMREX_SPACEDIM == 3)
 				amrex::Real const pz_old = state[bx](i, j, k, x3Momentum_index);
-#else
-				amrex::Real const pz_old = static_cast<amrex::Real>(0.0);
-#endif
 
 				amrex::Real const deltaPx = fac * (px_old - rho * spongeParams.targetVelocity[0]);
-#if (AMREX_SPACEDIM >= 2)
 				amrex::Real const deltaPy = fac * (py_old - rho * spongeParams.targetVelocity[1]);
-#else
-				amrex::Real const deltaPy = static_cast<amrex::Real>(0.0);
-#endif
-#if (AMREX_SPACEDIM == 3)
 				amrex::Real const deltaPz = fac * (pz_old - rho * spongeParams.targetVelocity[2]);
-#else
-				amrex::Real const deltaPz = static_cast<amrex::Real>(0.0);
-#endif
 
 				amrex::Real const px_new = px_old + deltaPx;
-				state[bx](i, j, k, x1Momentum_index) = px_new;
-#if (AMREX_SPACEDIM >= 2)
 				amrex::Real const py_new = py_old + deltaPy;
-				state[bx](i, j, k, x2Momentum_index) = py_new;
-#else
-				amrex::Real const py_new = static_cast<amrex::Real>(0.0);
-#endif
-#if (AMREX_SPACEDIM == 3)
 				amrex::Real const pz_new = pz_old + deltaPz;
+
+				state[bx](i, j, k, x1Momentum_index) = px_new;
+				state[bx](i, j, k, x2Momentum_index) = py_new;
 				state[bx](i, j, k, x3Momentum_index) = pz_new;
-#else
-				amrex::Real const pz_new = static_cast<amrex::Real>(0.0);
-#endif
 
-				amrex::Real const kineticOld = static_cast<amrex::Real>(0.5) *
-							       (px_old * px_old
-#if (AMREX_SPACEDIM >= 2)
-								+ py_old * py_old
-#endif
-#if (AMREX_SPACEDIM == 3)
-								+ pz_old * pz_old
-#endif
-								) /
-							       rho;
-
-				amrex::Real const kineticNew = static_cast<amrex::Real>(0.5) *
-							       (px_new * px_new
-#if (AMREX_SPACEDIM >= 2)
-								+ py_new * py_new
-#endif
-#if (AMREX_SPACEDIM == 3)
-								+ pz_new * pz_new
-#endif
-								) /
-							       rho;
+				amrex::Real const kineticOld = static_cast<amrex::Real>(0.5) * (px_old * px_old + py_old * py_old + pz_old * pz_old) / rho;
+				amrex::Real const kineticNew = static_cast<amrex::Real>(0.5) * (px_new * px_new + py_new * py_new + pz_new * pz_new) / rho;
 
 				state[bx](i, j, k, energy_index) += (kineticNew - kineticOld);
 			}
