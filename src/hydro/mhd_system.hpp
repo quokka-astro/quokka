@@ -23,18 +23,16 @@
 #include "physics_numVars.hpp"
 #include <iostream>
 
-AMREX_ENUM(EMFComputeScheme,
-  FelkerStone2017,   // Felker + Stone (2017): uses cell-centered velocity
-  Balsara2025,       // Balsara (2025): EMF interpolation from cc->ec
-  Quokka2026         // Quokka variant of FS17: uses face-centered Riemann velocity
-); // NOLINT
+AMREX_ENUM(EMFComputeScheme, FelkerStone2017, Balsara2025, Quokka2026 ); // NOLINT
 
-AMREX_ENUM(EMFAvgScheme,
-  BalsaraSpicer2004,      // Balsara + Spicer (2004): equal quadrant averaging
-  LondrilloDelZanna2004,  // Londrillo + Del Zanna (2004)
-  Balsara2025             // Balsara (2025): Higher-order averaging
-); // NOLINT
+// Felker + Stone (2017): uses cell-centered velocity
+// Balsara (2025): EMF interpolation from cc->ec
+// Quokka variant of FS17: uses face-centered Riemann velocity
 
+AMREX_ENUM(EMFAvgScheme, BalsaraSpicer2004, LondrilloDelZanna2004, Balsara2025 ); // NOLINT
+// Balsara + Spicer (2004): equal quadrant averaging
+// Londrillo + Del Zanna (2004)
+// Balsara (2025): Higher-order averaging
 
 
 /// Class for a MHD system of conservation laws
@@ -485,6 +483,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 	// use the prefix x- when the w- and i- indexes are the same. We also choose to minimise the storage footprint by only computing and holding
 	// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
 	// significantly reduces the total memory used, which is a much bigger bottleneck.
+
 
 	const auto &ba = cc_mf_cVars.boxArray();
 	const auto &dm = cc_mf_cVars.DistributionMap();
