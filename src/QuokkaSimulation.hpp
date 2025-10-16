@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <deque>
 #include <iostream>
 #include <set>
 #if __has_include(<filesystem>)
@@ -174,7 +173,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	quokka::DensitySpongeConfig densitySpongeConfig_;
-	std::deque<amrex::Real> coarseDtHistory_;
 	// number of ghost cells for face velocity computation (default == 2)
 	// we now need 3 total to accommodate the higher-order reconstruction in computeEMF
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
@@ -299,8 +297,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
-	[[nodiscard]] auto computeDensitySpongeTimescale() const -> amrex::Real;
-	void recordCoarseLevelDt(amrex::Real dt);
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -484,7 +480,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::getScalarVariabl
 template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 {
 	densitySpongeConfig_ = quokka::DensitySpongeConfig{};
-	coarseDtHistory_.clear();
 
 	// set hydro runtime parameters
 	{
@@ -510,17 +505,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		spp.query("upper_density", densitySpongeConfig_.upperDensity);
 		densitySpongeConfig_.lowerFactor = static_cast<amrex::Real>(0.0);
 		densitySpongeConfig_.upperFactor = static_cast<amrex::Real>(1.0);
-		spp.query("timescale_previous_steps", densitySpongeConfig_.timescalePreviousSteps);
-
-		if (densitySpongeConfig_.timescalePreviousSteps < 0) {
-			amrex::Abort("Density sponge timescale_previous_steps must be non-negative.");
-		}
 
 		for (int n = 0; n < AMREX_SPACEDIM; ++n) {
 			densitySpongeConfig_.targetVelocity[n] = static_cast<amrex::Real>(0.0);
 		}
 
-		bool const hasValidTimescaleSetting = (densitySpongeConfig_.timescale > 0.0) || (densitySpongeConfig_.timescalePreviousSteps > 0);
+		bool const hasValidTimescaleSetting = (densitySpongeConfig_.timescale > 0.0);
 		bool const autoEnable = hasValidTimescaleSetting && (densitySpongeConfig_.lowerDensity > 0.0) && (densitySpongeConfig_.upperDensity > 0.0);
 		if (!hasEnableFlag && !densitySpongeConfig_.enabled && autoEnable) {
 			densitySpongeConfig_.enabled = true;
@@ -528,7 +518,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 		if (densitySpongeConfig_.enabled) {
 			if (!hasValidTimescaleSetting) {
-				amrex::Abort("Density sponge enabled but neither sponge.timescale nor sponge.timescale_previous_steps is positive.");
+				amrex::Abort("Density sponge enabled but sponge.timescale is not positive.");
 			}
 			if ((densitySpongeConfig_.lowerDensity <= 0.0) || (densitySpongeConfig_.upperDensity <= 0.0)) {
 				amrex::Abort("Density sponge enabled but density thresholds are not both positive.");
@@ -828,62 +818,13 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	// apply optional density sponge as a Strang-split source
 	if (densitySpongeConfig_.enabled) {
-		auto spongeConfig = densitySpongeConfig_;
-		amrex::Real const effectiveTimescale = computeDensitySpongeTimescale();
-		spongeConfig.timescale = effectiveTimescale;
-		HydroSystem<problem_t>::ApplyDensitySponge(state, spongeConfig, dt);
+		HydroSystem<problem_t>::ApplyDensitySponge(state, densitySpongeConfig_, dt);
 	}
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
 
 	return (burn_success && cool_success);
-}
-
-template <typename problem_t> auto QuokkaSimulation<problem_t>::computeDensitySpongeTimescale() const -> amrex::Real
-{
-	if (densitySpongeConfig_.timescalePreviousSteps <= 0) {
-		return densitySpongeConfig_.timescale;
-	}
-
-	if (coarseDtHistory_.empty()) {
-		return densitySpongeConfig_.timescale;
-	}
-
-	int const stepsRequested = densitySpongeConfig_.timescalePreviousSteps;
-	int const available = static_cast<int>(coarseDtHistory_.size());
-	int const count = std::min(stepsRequested, available);
-	auto timescale = static_cast<amrex::Real>(0.0);
-	for (int n = 0; n < count; ++n) {
-		timescale += coarseDtHistory_[available - 1 - n];
-	}
-
-	if (count > 0) {
-		timescale /= static_cast<amrex::Real>(count);
-	}
-
-	if ((timescale <= static_cast<amrex::Real>(0.0)) && (densitySpongeConfig_.timescale > static_cast<amrex::Real>(0.0))) {
-		return densitySpongeConfig_.timescale;
-	}
-
-	return timescale;
-}
-
-template <typename problem_t> void QuokkaSimulation<problem_t>::recordCoarseLevelDt(amrex::Real dt)
-{
-	if (densitySpongeConfig_.timescalePreviousSteps <= 0) {
-		return;
-	}
-
-	if (dt <= static_cast<amrex::Real>(0.0)) {
-		return;
-	}
-
-	coarseDtHistory_.push_back(dt);
-	int const maxEntries = densitySpongeConfig_.timescalePreviousSteps;
-	while (static_cast<int>(coarseDtHistory_.size()) > maxEntries) {
-		coarseDtHistory_.pop_front();
-	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
@@ -1133,10 +1074,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 
 	// check hydro states after user work
 	CHECK_HYDRO_STATES(state_new_cc_[lev]);
-
-	if (lev == 0) {
-		recordCoarseLevelDt(dt_lev);
-	}
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
