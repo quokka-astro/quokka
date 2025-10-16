@@ -28,10 +28,3 @@ plotfile_interval = 500
 derived_vars = magnetic_divergence
 stop_time = 0.05
 
-#mhd.emf_averaging_scheme = BalsaraSpicer2004
-#mhd.emf_averaging_scheme = LondrilloDelZanna2004
-mhd.emf_averaging_scheme = Balsara2025
-
-#mhd.emf_compute_scheme = FelkerStone2017
-#mhd.emf_compute_scheme = Quokka2026
-mhd.emf_compute_scheme = Balsara2025
