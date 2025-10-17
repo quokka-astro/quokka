@@ -1,0 +1,31 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0
+geometry.prob_hi     =  1.0  1.0  1.0
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          =  128  8  8
+amr.max_level       =  0
+amr.blocking_factor =  8
+amr.max_grid_size   =  128
+
+# *****************************************************************
+# Runtime options
+# *****************************************************************
+do_reflux    = 0
+do_subcycle  = 0
+do_tracers   = 0
+plotfile_interval = -1
+
+# *****************************************************************
+# Sponge parameters
+# *****************************************************************
+sponge.enable_density_sponge = 1
+sponge.timescale      = 1.0
+sponge.lower_density  = 2.0
+sponge.upper_density  = 3.0
+
