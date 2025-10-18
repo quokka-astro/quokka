@@ -1593,13 +1593,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// Update dust drag term
-		if constexpr (Physics_Traits<problem_t>::is_dust_enabled){
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			double gamma = 1.0;
 			const auto ba = grids[lev];
 			const auto dm = dmap[lev];
 			amrex::MultiFab primVarNew(ba, dm, nvars_, nghost_cc_);
 			HydroSystem<problem_t>::ConservedToPrimitive(stateNew_cc, stateNew_fc, primVarNew, nghost_cc_);
-			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateNew_cc, primVarNew, dt_lev,  gamma);
+			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateNew_cc, primVarNew, dt_lev, gamma);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1728,7 +1728,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// Update dust drag term
-		if constexpr (Physics_Traits<problem_t>::is_dust_enabled){
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			double gamma = 0.5;
 			const auto ba = grids[lev];
 			const auto dm = dmap[lev];

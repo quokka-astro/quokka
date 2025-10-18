@@ -149,12 +149,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma);
 
-	static void ComputeDragUpdates(
-    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const& q,
-    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const& alpha,
-    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const& epsilon,
-    amrex::Real gamma_dt,
-    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1>& k);
+	static void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
+				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
+				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
+				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k);
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
@@ -1435,7 +1433,7 @@ void HydroSystem<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_c
 
 	amrex::ParallelFor(primVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		amrex::Real rho_g = primVar[bx](i, j, k, primDensity_index);
-		
+
 		amrex::GpuArray<amrex::Real, N> rho_d;
 		for (int g = 0; g < N; ++g) {
 			rho_d[g] = primVar[bx](i, j, k, primDustDensity_index + g * numDustVars_);
@@ -1448,7 +1446,7 @@ void HydroSystem<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_c
 
 		amrex::GpuArray<amrex::Real, N> alpha;
 		for (int g = 0; g < N; ++g) {
-			alpha[g] = 0.5 + 0.5 *g;
+			alpha[g] = 0.5 + 0.5 * g;
 		}
 
 		amrex::Real gamma_dt = gamma * dt_lev;
@@ -1485,12 +1483,10 @@ void HydroSystem<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_c
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ComputeDragUpdates(
-    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const& q,
-    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const& alpha,
-    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const& epsilon,
-    amrex::Real gamma_dt,
-    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1>& k)
+void HydroSystem<problem_t>::ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
+						amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
+						amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
+						amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k)
 {
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
 

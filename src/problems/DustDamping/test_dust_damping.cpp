@@ -12,7 +12,7 @@
 struct StreamingProblem {
 };
 
-constexpr double initial_Egas = 0.5*1.0*1.0*1.0;
+constexpr double initial_Egas = 0.5 * 1.0 * 1.0 * 1.0;
 constexpr double rho = 1.0;
 constexpr double v0 = 1.0;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
