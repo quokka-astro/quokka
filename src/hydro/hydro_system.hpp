@@ -147,6 +147,15 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
 				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost, int nvars);
 
+	static void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma);
+
+	static void ComputeDragUpdates(
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const& q,
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const& alpha,
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const& epsilon,
+    amrex::Real gamma_dt,
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1>& k);
+
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
@@ -375,7 +384,26 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			AMREX_ASSERT(fastest_wavespeed > 0.);
 		}
 
-		const double signal_max = fastest_wavespeed + vel_magnitude;
+		double signal_max = fastest_wavespeed + vel_magnitude;
+
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				const amrex::Real dust_rho = cons_cc(i, j, k, dustDensity_index + g * numDustVars_);
+				const amrex::Real dust_px = cons_cc(i, j, k, x1DustMomentum_index + g * numDustVars_);
+				const amrex::Real dust_py = cons_cc(i, j, k, x2DustMomentum_index + g * numDustVars_);
+				const amrex::Real dust_pz = cons_cc(i, j, k, x3DustMomentum_index + g * numDustVars_);
+				AMREX_ASSERT(!std::isnan(dust_rho));
+				AMREX_ASSERT(!std::isnan(dust_px));
+				AMREX_ASSERT(!std::isnan(dust_py));
+				AMREX_ASSERT(!std::isnan(dust_pz));
+
+				const amrex::Real dust_vx = dust_px / dust_rho;
+				const amrex::Real dust_vy = dust_py / dust_rho;
+				const amrex::Real dust_vz = dust_pz / dust_rho;
+				const amrex::Real dust_vel_mag = std::sqrt(dust_vx * dust_vx + dust_vy * dust_vy + dust_vz * dust_vz);
+				signal_max = std::max(signal_max, dust_vel_mag);
+			}
+		}
 		maxSignal(i, j, k) = signal_max;
 	});
 }
@@ -1396,6 +1424,91 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 		}
 	});
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma)
+{
+	auto const &consVar_cc = consVar_cc_mf.arrays();
+	auto const &primVar = primVar_mf.const_arrays();
+	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
+
+	amrex::ParallelFor(primVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		amrex::Real rho_g = primVar[bx](i, j, k, primDensity_index);
+		
+		amrex::GpuArray<amrex::Real, N> rho_d;
+		for (int g = 0; g < N; ++g) {
+			rho_d[g] = primVar[bx](i, j, k, primDustDensity_index + g * numDustVars_);
+		}
+
+		amrex::GpuArray<amrex::Real, N> epsilon;
+		for (int g = 0; g < N; ++g) {
+			epsilon[g] = (rho_g > 0.0) ? rho_d[g] / rho_g : 0.0;
+		}
+
+		amrex::GpuArray<amrex::Real, N> alpha;
+		for (int g = 0; g < N; ++g) {
+			alpha[g] = 0.5 + 0.5 *g;
+		}
+
+		amrex::Real gamma_dt = gamma * dt_lev;
+
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			int vel_g_idx = x1Velocity_index + dir;
+			amrex::Real v_g = primVar[bx](i, j, k, vel_g_idx);
+
+			amrex::GpuArray<amrex::Real, N> v_d;
+			for (int g = 0; g < N; ++g) {
+				int vel_d_idx = x1DustVelocity_index + dir + g * numDustVars_;
+				v_d[g] = primVar[bx](i, j, k, vel_d_idx);
+			}
+
+			amrex::GpuArray<amrex::Real, N + 1> q;
+			q[0] = rho_g * v_g;
+
+			for (int g = 0; g < N; ++g) {
+				q[1 + g] = rho_d[g] * v_d[g];
+			}
+
+			amrex::GpuArray<amrex::Real, N + 1> drag_updates;
+			ComputeDragUpdates(q, alpha, epsilon, gamma_dt, drag_updates);
+
+			int mom_g_idx = x1Momentum_index + dir;
+			consVar_cc[bx](i, j, k, mom_g_idx) += gamma_dt * drag_updates[0];
+
+			for (int g = 0; g < N; ++g) {
+				int mom_d_idx = x1DustMomentum_index + dir + g * numDustVars_;
+				consVar_cc[bx](i, j, k, mom_d_idx) += gamma_dt * drag_updates[1 + g];
+			}
+		}
+	});
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::ComputeDragUpdates(
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const& q,
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const& alpha,
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const& epsilon,
+    amrex::Real gamma_dt,
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1>& k)
+{
+	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
+
+	amrex::Real A = 0.0;
+	amrex::Real B = 0.0;
+
+	for (int g = 0; g < N; ++g) {
+		amrex::Real denom = 1.0 + gamma_dt * alpha[g];
+		A += alpha[g] * q[g + 1] / denom;
+		B += epsilon[g] * alpha[g] / denom;
+	}
+
+	k[0] = (A - q[0] * B) / (1.0 + gamma_dt * B);
+
+	for (int g = 0; g < N; ++g) {
+		amrex::Real denom = 1.0 + gamma_dt * alpha[g];
+		k[g + 1] = (alpha[g] / denom) * (epsilon[g] * q[0] - q[g + 1] + gamma_dt * epsilon[g] * k[0]);
+	}
 }
 
 #endif // HYDRO_SYSTEM_HPP_

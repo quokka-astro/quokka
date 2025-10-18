@@ -1585,13 +1585,21 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		}
 
-		//
-
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				amrex::MultiFab::Saxpy(ec_emf_components_rk_ave[idim], stage1Weight, ec_emf_components_rk_stage1[idim], 0, 0, 1, 0);
 			}
 			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateNew_fc, ec_emf_components_rk_stage1, dt_lev, geom[lev].CellSizeArray());
+		}
+
+		// Update dust drag term
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled){
+			double gamma = 1.0;
+			const auto ba = grids[lev];
+			const auto dm = dmap[lev];
+			amrex::MultiFab primVarNew(ba, dm, nvars_, nghost_cc_);
+			HydroSystem<problem_t>::ConservedToPrimitive(stateNew_cc, stateNew_fc, primVarNew, nghost_cc_);
+			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateNew_cc, primVarNew, dt_lev,  gamma);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1658,8 +1666,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
 
-		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, nvars_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, avgFaceVel, redoFlag);
+		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
+
+		// calculate delta = 0.5 * (state_inter - state_old) / dt_lev + 0.5 * rhs
+		rhs.mult(0.5, 0, nvars_, 0);
+		amrex::MultiFab::Saxpy(rhs, 0.5 / dt_lev, stateInter_cc, 0, 0, nvars_, 0);
+		amrex::MultiFab::Saxpy(rhs, -0.5 / dt_lev, stateOld_cc, 0, 0, nvars_, 0);
 		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
 
 		// do first-order flux correction (FOFC)
@@ -1678,13 +1691,18 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 			replaceFluxes(flux_rk2, FOfluxArrays, redoFlag);
 			replaceFluxes(avgFaceVel, FOfaceVel, redoFlag); // needed for dual energy
+			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
+			replaceFluxes(faceVel, FOfaceVel, redoFlag);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				replaceEMFs(ec_emf_components_rk_ave, ec_emf_components_fo, redoFlag); // replaces EMF components
 			}
 
 			// re-do RK update
-			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, nvars_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, avgFaceVel, redoFlag);
+			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
+			rhs.mult(0.5, 0, nvars_, 0);
+			amrex::MultiFab::Saxpy(rhs, 0.5 / dt_lev, stateInter_cc, 0, 0, nvars_, 0);
+			amrex::MultiFab::Saxpy(rhs, -0.5 / dt_lev, stateOld_cc, 0, 0, nvars_, 0);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -1705,10 +1723,18 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		}
 
-		//
-
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components_rk_ave, dt_lev, geom[lev].CellSizeArray());
+		}
+
+		// Update dust drag term
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled){
+			double gamma = 0.5;
+			const auto ba = grids[lev];
+			const auto dm = dmap[lev];
+			amrex::MultiFab primVarFinal(ba, dm, nvars_, nghost_cc_);
+			HydroSystem<problem_t>::ConservedToPrimitive(stateFinal_cc, stateFinal_fc, primVarFinal, nghost_cc_);
+			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateFinal_cc, primVarFinal, dt_lev, gamma);
 		}
 
 		// prevent vacuum
