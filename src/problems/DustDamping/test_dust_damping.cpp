@@ -12,7 +12,7 @@
 struct StreamingProblem {
 };
 
-constexpr double initial_Egas = 1.0/(1.4-1.0) + 0.5 * 1.0 * 1.0 * 1.0;
+constexpr double initial_Egas = 1.0 / (1.4 - 1.0) + 0.5 * 1.0 * 1.0 * 1.0;
 constexpr double rho = 1.0;
 constexpr double v0 = 1.0;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
@@ -20,7 +20,7 @@ constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
-	//static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
+	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
 };
 
 template <> struct Physics_Traits<StreamingProblem> {

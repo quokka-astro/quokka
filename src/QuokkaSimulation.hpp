@@ -1600,12 +1600,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab primVarNew(ba, dm, nvars_, nghost_cc_);
 
 			// update ghost zones
-			fillBoundaryConditions(stateNew_cc, stateNew_cc, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+			fillBoundaryConditions(stateNew_cc, stateNew_cc, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
+					       PostInterpState);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					fillBoundaryConditions(stateNew_fc, stateNew_fc, lev, time, quokka::centering::fc, quokka::direction{idim},
-										AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-										FillPatchType::fillpatch_function);
+							       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
+							       FillPatchType::fillpatch_function);
 				}
 			}
 
@@ -1746,15 +1747,16 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab primVarFinal(ba, dm, nvars_, nghost_cc_);
 
 			// update ghost zones
-			fillBoundaryConditions(stateFinal_cc, stateFinal_cc, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+			fillBoundaryConditions(stateFinal_cc, stateFinal_cc, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
+					       PostInterpState);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					fillBoundaryConditions(stateFinal_fc, stateFinal_fc, lev, time, quokka::centering::fc, quokka::direction{idim},
-										AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-										FillPatchType::fillpatch_function);
+							       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
+							       FillPatchType::fillpatch_function);
 				}
 			}
-			
+
 			HydroSystem<problem_t>::ConservedToPrimitive(stateFinal_cc, stateFinal_fc, primVarFinal, nghost_cc_);
 			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateFinal_cc, primVarFinal, dt_lev, gamma);
 		}
