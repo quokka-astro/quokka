@@ -20,5 +20,5 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stop_time = 1
-max_timesteps = 200
+stop_time = 10
+max_timesteps = 20000
