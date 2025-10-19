@@ -1599,7 +1599,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			const auto dm = dmap[lev];
 			amrex::MultiFab primVarNew(ba, dm, nvars_, nghost_cc_);
 
-			// update ghost zones
+			// update ghost zones (before dust drag update)
 			fillBoundaryConditions(stateNew_cc, stateNew_cc, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 					       PostInterpState);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1746,7 +1746,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			const auto dm = dmap[lev];
 			amrex::MultiFab primVarFinal(ba, dm, nvars_, nghost_cc_);
 
-			// update ghost zones
+			// update ghost zones (before dust drag update)
 			fillBoundaryConditions(stateFinal_cc, stateFinal_cc, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 					       PostInterpState);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
