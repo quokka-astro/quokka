@@ -9,7 +9,6 @@
 #include <array>
 #include <cassert>
 #include <cmath>
-#include <gcem.hpp>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -31,9 +30,9 @@ struct AlfvenWaveLinear {
 };
 
 template <> struct quokka::EOS_Traits<AlfvenWaveLinear> {
-	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
+	static constexpr amrex::Real gamma = 5. / 3.;
+	static constexpr amrex::Real mean_molecular_weight = C::m_u;
+	static constexpr amrex::Real boltzmann_constant = C::k_B;
 };
 
 template <> struct Physics_Traits<AlfvenWaveLinear> {
@@ -47,20 +46,19 @@ template <> struct Physics_Traits<AlfvenWaveLinear> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveLinear>::gamma;
-constexpr double bg_density = 1.0;
-constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
-constexpr double b0_magn = 1.0;
-constexpr double delta_b_magn = 1e-6;
-constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
+constexpr amrex::Real sound_speed = 1.0;
+constexpr amrex::Real gamma_gas = quokka::EOS_Traits<AlfvenWaveLinear>::gamma;
+constexpr amrex::Real bg_density = 1.0;
+constexpr amrex::Real bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
+constexpr amrex::Real b0_magn = 1.0;
+constexpr amrex::Real delta_b_magn = 1e-6;
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> amrex::Real
 {
 	return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array<amrex::Real, 3> &vfield1, const std::array<amrex::Real, 3> &vfield2) -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array<amrex::Real, 3> &vfield1, const std::array<amrex::Real, 3> &vfield2) -> amrex::Real
 {
 	return vfield1[0] * vfield2[0] + vfield1[1] * vfield2[1] + vfield1[2] * vfield2[2];
 }
@@ -74,8 +72,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeCrossProduct(const std::arr
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::Real, 3> &vfield)
 {
-	const double vfield_magn = computeMagnitude(vfield);
-	if (vfield_magn > 1e-14) {
+	const amrex::Real vfield_magn = computeMagnitude(vfield);
+	if (vfield_magn > static_cast<amrex::Real>(1e-14)) {
 		vfield[0] /= vfield_magn;
 		vfield[1] /= vfield_magn;
 		vfield[2] /= vfield_magn;
@@ -83,11 +81,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 }
 
 // angles (radians) in the math reference frame (MRF)
-AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
+AMREX_GPU_MANAGED amrex::Real angle_between_k_b0_rad = 0.0; // NOLINT
 
 // rotation from the problem reference frame (PRF) to the MRF
-AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
-AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
+AMREX_GPU_MANAGED amrex::Real k_rotation_in_xy_rad = 0.0;	// NOLINT
+AMREX_GPU_MANAGED amrex::Real k_elevation_from_xy_rad = 0.0; // NOLINT
 
 //------------------------------------------------------------------------------
 // Reference frames and rotation matrix
@@ -134,12 +132,13 @@ AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
 // row 0: e1 = k_dir_prf (propagation)
 // row 1: e2 = inplane_dir_prf (k-b0 plane)
 // row 2: e3 = outofplane_dir_prf (perpendicular to that plane)
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real,3> k_dir_prf{amrex::Real(1.0), amrex::Real(0.0), amrex::Real(0.0)}; // NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real,3> inplane_dir_prf{amrex::Real(0.0), amrex::Real(1.0), amrex::Real(0.0)}; // NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real,3> outofplane_dir_prf{amrex::Real(0.0), amrex::Real(0.0), amrex::Real(1.0)}; // NOLINT
+
 
 // wavefront
-AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
+AMREX_GPU_MANAGED amrex::Real k_magn = static_cast<amrex::Real>(2.0 * M_PI); // NOLINT
 
 /// \brief Rotate a vector from PRF to MRF by multiplying with the rotation matrix R.
 /// \details Implements v_mrf = R * v_prf, where the rows of R are the
@@ -167,8 +166,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amr
 		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
-									     const int icomp) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time,
+									     const int icomp) -> amrex::Real
 {
 	// Computes A in PRF by:
 	// 1. rotating x_vec from PRF->MRF,
@@ -177,35 +176,36 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2,
 					 "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
-	const double b0_x1_mrf = b0_magn * std::cos(angle_between_k_b0_rad);
-	const double b0_x2_mrf = b0_magn * std::sin(angle_between_k_b0_rad);
+	const amrex::Real b0_x1_mrf = b0_magn * std::cos(angle_between_k_b0_rad);
+	const amrex::Real b0_x2_mrf = b0_magn * std::sin(angle_between_k_b0_rad);
 	// bg_A = (0, 0, b0_x1 * x2 - b0_x2 * x1) -> curl(bg_A) = (b0_x1, b0_x2, 0)
-	const double bg_A1_mrf = 0.0;
-	const double bg_A2_mrf = 0.0;
-	const double bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
+	const auto bg_A1_mrf = static_cast<amrex::Real>(0.0);
+	const auto bg_A2_mrf = static_cast<amrex::Real>(0.0);
+	const amrex::Real bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
 	// d/dx A_x2 = bg_b * delta_b * cos(omega t - k x1); A_x1 = A_x3 = 0 -> delta_b_x1 = delta_b_x3 = 0
-	const double omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
-	const double delta_A1_mrf = 0.0;
-	const double delta_A2_mrf = -(b0_magn * delta_b_magn / k_magn) * std::sin(omega * time - k_magn * x_vec_mrf[0]);
-	const double delta_A3_mrf = 0.0;
-	const double A1_mrf = bg_A1_mrf + delta_A1_mrf;
-	const double A2_mrf = bg_A2_mrf + delta_A2_mrf;
-	const double A3_mrf = bg_A3_mrf + delta_A3_mrf;
+	const amrex::Real alfven_speed = b0_magn / std::sqrt(bg_density);
+	const amrex::Real omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
+	const auto delta_A1_mrf = static_cast<amrex::Real>(0.0);
+	const amrex::Real delta_A2_mrf = -(b0_magn * delta_b_magn / k_magn) * std::sin(omega * time - k_magn * x_vec_mrf[0]);
+	const auto delta_A3_mrf = static_cast<amrex::Real>(0.0);
+	const amrex::Real A1_mrf = bg_A1_mrf + delta_A1_mrf;
+	const amrex::Real A2_mrf = bg_A2_mrf + delta_A2_mrf;
+	const amrex::Real A3_mrf = bg_A3_mrf + delta_A3_mrf;
 	const std::array<amrex::Real, 3> A_vec_prf = rotateMRF2PRF({A1_mrf, A2_mrf, A3_mrf});
 	return A_vec_prf[icomp];
 }
 
-AMREX_GPU_DEVICE inline auto Ax_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time) -> double
+AMREX_GPU_DEVICE inline auto Ax_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time) -> amrex::Real
 {
 	return computeVectorPotentialComponent_prf(x1_prf, x2_prf, x3_prf, time, 0);
 }
 
-AMREX_GPU_DEVICE inline auto Ay_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time) -> double
+AMREX_GPU_DEVICE inline auto Ay_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time) -> amrex::Real
 {
 	return computeVectorPotentialComponent_prf(x1_prf, x2_prf, x3_prf, time, 1);
 }
 
-AMREX_GPU_DEVICE inline auto Az_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time) -> double
+AMREX_GPU_DEVICE inline auto Az_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time) -> amrex::Real
 {
 	return computeVectorPotentialComponent_prf(x1_prf, x2_prf, x3_prf, time, 2);
 }
@@ -224,40 +224,41 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
 		const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
+		const amrex::Real alfven_speed = b0_magn / std::sqrt(bg_density);
 		// this is agnostic to the choice of reference frame: vec(k) dot vec(x) is invariant under rotation
-		const double omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
-		const double cos_phase = std::cos(omega * time - k_magn * x_vec_mrf_C[0]);
+		const amrex::Real omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
+		const amrex::Real cos_phase = std::cos(omega * time - k_magn * x_vec_mrf_C[0]);
 
-		constexpr double elsasser_sgn = -1.0;
+		constexpr auto elsasser_sgn = static_cast<amrex::Real>(-1.0);
 		// equivalent to, but numerically safer than -omega / (k_magn * cos_theta)
-		const double delta_v_magn = elsasser_sgn * alfven_speed * delta_b_magn * cos_phase;
+		const amrex::Real delta_v_magn = elsasser_sgn * alfven_speed * delta_b_magn * cos_phase;
 
-		const double v_x1_prf = delta_v_magn * outofplane_dir_prf[0];
-		const double v_x2_prf = delta_v_magn * outofplane_dir_prf[1];
-		const double v_x3_prf = delta_v_magn * outofplane_dir_prf[2];
+		const amrex::Real v_x1_prf = delta_v_magn * outofplane_dir_prf[0];
+		const amrex::Real v_x2_prf = delta_v_magn * outofplane_dir_prf[1];
+		const amrex::Real v_x3_prf = delta_v_magn * outofplane_dir_prf[2];
 
 		// background b
-		const double b0_x1_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[0] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[0]);
-		const double b0_x2_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[1] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[1]);
-		const double b0_x3_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[2] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[2]);
+		const amrex::Real b0_x1_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[0] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[0]);
+		const amrex::Real b0_x2_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[1] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[1]);
+		const amrex::Real b0_x3_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[2] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[2]);
 		// perturbed b
-		const double delta_b_x1_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[0];
-		const double delta_b_x2_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[1];
-		const double delta_b_x3_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[2];
+		const amrex::Real delta_b_x1_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[0];
+		const amrex::Real delta_b_x2_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[1];
+		const amrex::Real delta_b_x3_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[2];
 		// total b
-		const double b_x1_prf = b0_x1_prf + delta_b_x1_prf;
-		const double b_x2_prf = b0_x2_prf + delta_b_x2_prf;
-		const double b_x3_prf = b0_x3_prf + delta_b_x3_prf;
+		const amrex::Real b_x1_prf = b0_x1_prf + delta_b_x1_prf;
+		const amrex::Real b_x2_prf = b0_x2_prf + delta_b_x2_prf;
+		const amrex::Real b_x3_prf = b0_x3_prf + delta_b_x3_prf;
 
-		const double density = bg_density;
-		const double pressure = bg_pressure;
+		const amrex::Real density = bg_density;
+		const amrex::Real pressure = bg_pressure;
 
-		const double v_magn_sq = v_x1_prf * v_x1_prf + v_x2_prf * v_x2_prf + v_x3_prf * v_x3_prf;
-		const double b_magn_sq = b_x1_prf * b_x1_prf + b_x2_prf * b_x2_prf + b_x3_prf * b_x3_prf;
-		const double Ekin = 0.5 * density * v_magn_sq;
-		const double Emag = 0.5 * b_magn_sq;
-		const double Eint = pressure / (gamma_gas - 1);
-		const double Etot = Ekin + Emag + Eint;
+		const amrex::Real v_magn_sq = v_x1_prf * v_x1_prf + v_x2_prf * v_x2_prf + v_x3_prf * v_x3_prf;
+		const amrex::Real b_magn_sq = b_x1_prf * b_x1_prf + b_x2_prf * b_x2_prf + b_x3_prf * b_x3_prf;
+		const amrex::Real Ekin = static_cast<amrex::Real>(0.5) * density * v_magn_sq;
+		const amrex::Real Emag = static_cast<amrex::Real>(0.5) * b_magn_sq;
+		const amrex::Real Eint = pressure / (gamma_gas - 1);
+		const amrex::Real Etot = Ekin + Emag + Eint;
 
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::density_index) = density;
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x1Momentum_index) = v_x1_prf * density;
@@ -267,15 +268,15 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
 		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
-		const double b_x1 =
+		const amrex::Real b_x1 =
 		    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[1] -
 		    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[2];
 
-		const double b_x2 =
+		const amrex::Real b_x2 =
 		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[2] -
 		    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[0];
 
-		const double b_x3 =
+		const amrex::Real b_x3 =
 		    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[0] -
 		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[1];
 
@@ -369,10 +370,10 @@ auto problem_main() -> int
 {
 	amrex::ParmParse const hpp("setup");
 
-	double angle_between_k_b0_deg = 0.0;
+	amrex::Real angle_between_k_b0_deg = 0.0;
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 
-	constexpr double deg2rad = M_PI / 180.0;
+	constexpr amrex::Real deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 
 	int num_modes_x = 0;
@@ -397,9 +398,9 @@ auto problem_main() -> int
 
 	// to build our orthonormal basis in the problem reference frame (PRF)
 	// first choose a vector that is not aligned/parallel with the wave propagation direction
-	std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0}; // guess a direction
-	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) {
-		ref_prf = {0.0, 1.0, 0.0};
+	std::array<amrex::Real,3> ref_prf{static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(1.0)};
+	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > static_cast<amrex::Real>(0.9999)) {
+		ref_prf = {static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(1.0), static_cast<amrex::Real>(0.0)};
 	}
 
 	// define the plane in which b0 will sit
@@ -409,6 +410,7 @@ auto problem_main() -> int
 	// define the direction the perturbation will be induced
 	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normalizeVector(outofplane_dir_prf);
+	amrex::Gpu::synchronize();
 
 	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
 
@@ -427,7 +429,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	int status = 1;
-	const double error_tol = 0.005;
+	const amrex::Real error_tol = 0.005;
 	if (sim.errorNorm_ < error_tol) {
 		status = 0;
 		amrex::Print() << "Error norm = " << sim.errorNorm_ << "\n";
