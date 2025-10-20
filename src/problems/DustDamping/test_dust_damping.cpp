@@ -14,6 +14,8 @@ struct StreamingProblem {
 
 constexpr double initial_Egas = 1.0 / (1.4 - 1.0) + 0.5 * 1.0 * 1.0 * 1.0;
 constexpr double rho = 1.0;
+constexpr double rho_dust1 = 10.0;
+constexpr double rho_dust2 = 100.0;
 constexpr double v0 = 1.0;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
@@ -67,13 +69,13 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 
 		if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
 			// for dust1
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index) = rho;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho * vx_dust1;
+			state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index) = rho_dust1;
+			state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust1 * vx_dust1;
 			state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index) = 0.;
 			state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index) = 0.;
 			// for dust2
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index + numDustVars) = rho;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars) = rho * vx_dust2;
+			state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index + numDustVars) = rho_dust2;
+			state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars) = rho_dust2 * vx_dust2;
 			state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index + numDustVars) = 0.;
 			state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index + numDustVars) = 0.;
 		}
