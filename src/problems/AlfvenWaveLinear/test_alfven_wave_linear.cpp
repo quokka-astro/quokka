@@ -58,7 +58,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<
 	return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array<amrex::Real, 3> &vfield1, const std::array<amrex::Real, 3> &vfield2) -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array<amrex::Real, 3> &vfield1, const std::array<amrex::Real, 3> &vfield2)
+    -> amrex::Real
 {
 	return vfield1[0] * vfield2[0] + vfield1[1] * vfield2[1] + vfield1[2] * vfield2[2];
 }
@@ -147,19 +148,22 @@ static TestParams global_test_params{};
 ///          R = [k_dir_prf^T; inplane_dir_prf^T; outofplane_dir_prf^T].
 /// \param vec_prf Components of the vector in the PRF.
 /// \return Components of the same geometric vector in the MRF.
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amrex::Real, 3> &vec_prf, const TestParams &test_params) -> std::array<amrex::Real, 3>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amrex::Real, 3> &vec_prf, const TestParams &test_params)
+    -> std::array<amrex::Real, 3>
 {
 	// v_mrf[i] = e_i^T * v_prf  (i = 0:k, 1:in-plane, 2:out-of-plane)
 	return {vec_prf[0] * test_params.k_dir_prf[0] + vec_prf[1] * test_params.k_dir_prf[1] + vec_prf[2] * test_params.k_dir_prf[2],
 		vec_prf[0] * test_params.inplane_dir_prf[0] + vec_prf[1] * test_params.inplane_dir_prf[1] + vec_prf[2] * test_params.inplane_dir_prf[2],
-		vec_prf[0] * test_params.outofplane_dir_prf[0] + vec_prf[1] * test_params.outofplane_dir_prf[1] + vec_prf[2] * test_params.outofplane_dir_prf[2]};
+		vec_prf[0] * test_params.outofplane_dir_prf[0] + vec_prf[1] * test_params.outofplane_dir_prf[1] +
+		    vec_prf[2] * test_params.outofplane_dir_prf[2]};
 }
 
 /// \brief Rotate a vector from MRF back to PRF by multiplying with R^T.
 /// \details Implements v_prf = R^T * v_mrf. Because R is orthonormal, R^{-1}=R^T.
 /// \param vec_mrf Components of the vector in the MRF.
 /// \return Components of the same geometric vector in the PRF.
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amrex::Real, 3> &vec_mrf, const TestParams &test_params) -> std::array<amrex::Real, 3>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amrex::Real, 3> &vec_mrf, const TestParams &test_params)
+    -> std::array<amrex::Real, 3>
 {
 	// v_prf = k_dir_prf * v_mrf[0] + inplane_dir_prf * v_mrf[1] + outofplane_dir_prf * v_mrf[2]
 	return {vec_mrf[0] * test_params.k_dir_prf[0] + vec_mrf[1] * test_params.inplane_dir_prf[0] + vec_mrf[2] * test_params.outofplane_dir_prf[0],
@@ -167,8 +171,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amr
 		vec_mrf[0] * test_params.k_dir_prf[2] + vec_mrf[1] * test_params.inplane_dir_prf[2] + vec_mrf[2] * test_params.outofplane_dir_prf[2]};
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time,
-									     const int icomp, const TestParams &test_params) -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf,
+									     const amrex::Real time, const int icomp, const TestParams &test_params)
+    -> amrex::Real
 {
 	// Computes A in PRF by:
 	// 1. rotating x_vec from PRF->MRF,
@@ -196,17 +201,20 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	return A_vec_prf[icomp];
 }
 
-AMREX_GPU_DEVICE inline auto Ax_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time, const TestParams &test_params) -> amrex::Real
+AMREX_GPU_DEVICE inline auto Ax_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time,
+				    const TestParams &test_params) -> amrex::Real
 {
 	return computeVectorPotentialComponent_prf(x1_prf, x2_prf, x3_prf, time, 0, test_params);
 }
 
-AMREX_GPU_DEVICE inline auto Ay_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time, const TestParams &test_params) -> amrex::Real
+AMREX_GPU_DEVICE inline auto Ay_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time,
+				    const TestParams &test_params) -> amrex::Real
 {
 	return computeVectorPotentialComponent_prf(x1_prf, x2_prf, x3_prf, time, 1, test_params);
 }
 
-AMREX_GPU_DEVICE inline auto Az_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time, const TestParams &test_params) -> amrex::Real
+AMREX_GPU_DEVICE inline auto Az_prf(const amrex::Real x1_prf, const amrex::Real x2_prf, const amrex::Real x3_prf, const amrex::Real time,
+				    const TestParams &test_params) -> amrex::Real
 {
 	return computeVectorPotentialComponent_prf(x1_prf, x2_prf, x3_prf, time, 2, test_params);
 }
@@ -240,9 +248,12 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const amrex::Real v_x3_prf = delta_v_magn * test_params.outofplane_dir_prf[2];
 
 		// background b
-		const amrex::Real b0_x1_prf = b0_magn * (std::cos(test_params.angle_between_k_b0_rad) * test_params.k_dir_prf[0] + std::sin(test_params.angle_between_k_b0_rad) * test_params.inplane_dir_prf[0]);
-		const amrex::Real b0_x2_prf = b0_magn * (std::cos(test_params.angle_between_k_b0_rad) * test_params.k_dir_prf[1] + std::sin(test_params.angle_between_k_b0_rad) * test_params.inplane_dir_prf[1]);
-		const amrex::Real b0_x3_prf = b0_magn * (std::cos(test_params.angle_between_k_b0_rad) * test_params.k_dir_prf[2] + std::sin(test_params.angle_between_k_b0_rad) * test_params.inplane_dir_prf[2]);
+		const amrex::Real b0_x1_prf = b0_magn * (std::cos(test_params.angle_between_k_b0_rad) * test_params.k_dir_prf[0] +
+							 std::sin(test_params.angle_between_k_b0_rad) * test_params.inplane_dir_prf[0]);
+		const amrex::Real b0_x2_prf = b0_magn * (std::cos(test_params.angle_between_k_b0_rad) * test_params.k_dir_prf[1] +
+							 std::sin(test_params.angle_between_k_b0_rad) * test_params.inplane_dir_prf[1]);
+		const amrex::Real b0_x3_prf = b0_magn * (std::cos(test_params.angle_between_k_b0_rad) * test_params.k_dir_prf[2] +
+							 std::sin(test_params.angle_between_k_b0_rad) * test_params.inplane_dir_prf[2]);
 		// perturbed b
 		const amrex::Real delta_b_x1_prf = b0_magn * delta_b_magn * cos_phase * test_params.outofplane_dir_prf[0];
 		const amrex::Real delta_b_x2_prf = b0_magn * delta_b_magn * cos_phase * test_params.outofplane_dir_prf[1];
@@ -270,17 +281,26 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
 		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
-		const amrex::Real b_x1 =
-		    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time, test_params) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time, test_params)) / dx[1] -
-		    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time, test_params) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time, test_params)) / dx[2];
+		const amrex::Real b_x1 = (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time, test_params) -
+					  Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time, test_params)) /
+					     dx[1] -
+					 (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time, test_params) -
+					  Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time, test_params)) /
+					     dx[2];
 
-		const amrex::Real b_x2 =
-		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time, test_params) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time, test_params)) / dx[2] -
-		    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time, test_params) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time, test_params)) / dx[0];
+		const amrex::Real b_x2 = (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time, test_params) -
+					  Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time, test_params)) /
+					     dx[2] -
+					 (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time, test_params) -
+					  Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time, test_params)) /
+					     dx[0];
 
-		const amrex::Real b_x3 =
-		    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time, test_params) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time, test_params)) / dx[0] -
-		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time, test_params) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time, test_params)) / dx[1];
+		const amrex::Real b_x3 = (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time, test_params) -
+					  Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time, test_params)) /
+					     dx[0] -
+					 (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time, test_params) -
+					  Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time, test_params)) /
+					     dx[1];
 
 		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1;
@@ -404,7 +424,7 @@ auto problem_main() -> int
 
 	// to build our orthonormal basis in the problem reference frame (PRF)
 	// first choose a vector that is not aligned/parallel with the wave propagation direction
-	std::array<amrex::Real,3> ref_prf{static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(1.0)};
+	std::array<amrex::Real, 3> ref_prf{static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(1.0)};
 	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > static_cast<amrex::Real>(0.9999)) {
 		ref_prf = {static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(1.0), static_cast<amrex::Real>(0.0)};
 	}
@@ -420,9 +440,15 @@ auto problem_main() -> int
 
 	global_test_params.angle_between_k_b0_rad = angle_between_k_b0_rad;
 	global_test_params.k_magn = k_magn;
-	global_test_params.k_dir_prf[0] = k_dir_prf[0]; global_test_params.k_dir_prf[1] = k_dir_prf[1]; global_test_params.k_dir_prf[2] = k_dir_prf[2];
-	global_test_params.inplane_dir_prf[0] = inplane_dir_prf[0]; global_test_params.inplane_dir_prf[1] = inplane_dir_prf[1]; global_test_params.inplane_dir_prf[2] = inplane_dir_prf[2];
-	global_test_params.outofplane_dir_prf[0] = outofplane_dir_prf[0]; global_test_params.outofplane_dir_prf[1] = outofplane_dir_prf[1]; global_test_params.outofplane_dir_prf[2] = outofplane_dir_prf[2];
+	global_test_params.k_dir_prf[0] = k_dir_prf[0];
+	global_test_params.k_dir_prf[1] = k_dir_prf[1];
+	global_test_params.k_dir_prf[2] = k_dir_prf[2];
+	global_test_params.inplane_dir_prf[0] = inplane_dir_prf[0];
+	global_test_params.inplane_dir_prf[1] = inplane_dir_prf[1];
+	global_test_params.inplane_dir_prf[2] = inplane_dir_prf[2];
+	global_test_params.outofplane_dir_prf[0] = outofplane_dir_prf[0];
+	global_test_params.outofplane_dir_prf[1] = outofplane_dir_prf[1];
+	global_test_params.outofplane_dir_prf[2] = outofplane_dir_prf[2];
 
 	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
 
