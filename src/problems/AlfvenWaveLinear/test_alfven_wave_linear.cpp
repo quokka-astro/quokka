@@ -186,7 +186,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const amrex::Real alfven_speed = b0_magn / std::sqrt(bg_density);
 	const amrex::Real omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
 	const auto delta_A1_mrf = static_cast<amrex::Real>(0.0);
-	const amrex::Real delta_A2_mrf = -(b0_magn * delta_b_magn / k_magn) * std::sin(omega * time - k_magn * x_vec_mrf[0]);
+	const amrex::Real delta_A2_mrf = -((b0_magn * delta_b_magn) / k_magn) * std::sin(omega * time - k_magn * x_vec_mrf[0]);
 	const auto delta_A3_mrf = static_cast<amrex::Real>(0.0);
 	const amrex::Real A1_mrf = bg_A1_mrf + delta_A1_mrf;
 	const amrex::Real A2_mrf = bg_A2_mrf + delta_A2_mrf;
@@ -267,25 +267,34 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
-		const amrex::Real b_x1 =
-		    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[1] -
-		    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[2];
-
-		const amrex::Real b_x2 =
-		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[2] -
-		    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[0];
-
-		const amrex::Real b_x3 =
-		    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[0] -
-		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[1];
-
+		const amrex::Real delta_x1 = dx[0];
+		const amrex::Real delta_x2 = dx[1];
+		const amrex::Real delta_x3 = dx[2];
+		const amrex::Real x1_prf_C = x1_prf_L + 0.5 * delta_x1;
+		const amrex::Real x2_prf_C = x2_prf_L + 0.5 * delta_x2;
+		const amrex::Real x3_prf_C = x3_prf_L + 0.5 * delta_x3;
+		const amrex::Real x1_prf_R = x1_prf_L + delta_x1;
+		const amrex::Real x2_prf_R = x2_prf_L + delta_x2;
+		const amrex::Real x3_prf_R = x3_prf_L + delta_x3;
+		// b-field computed using the magnetic vector potential to preserve div(b) = 0 topology
+		// dAz/dy - dAy/dz
+		const amrex::Real b_x1_L =
+			(Az_prf(x1_prf_L, x2_prf_R, x3_prf_C, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_C, time)) / delta_x2 -
+			(Ay_prf(x1_prf_L, x2_prf_C, x3_prf_R, time) - Ay_prf(x1_prf_L, x2_prf_C, x3_prf_L, time)) / delta_x3;
+		// dAx/dz - dAz/dx
+		const amrex::Real b_x2_L =
+			(Ax_prf(x1_prf_C, x2_prf_L, x3_prf_R, time) - Ax_prf(x1_prf_C, x2_prf_L, x3_prf_L, time)) / delta_x3 -
+			(Az_prf(x1_prf_R, x2_prf_L, x3_prf_C, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_C, time)) / delta_x1;
+		// dAy/dx - dAx/dy
+		const amrex::Real b_x3_L =
+			(Ay_prf(x1_prf_R, x2_prf_C, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_C, x3_prf_L, time)) / delta_x1 -
+			(Ax_prf(x1_prf_C, x2_prf_R, x3_prf_L, time) - Ax_prf(x1_prf_C, x2_prf_L, x3_prf_L, time)) / delta_x2;
 		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1_L;
 		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x2;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x2_L;
 		} else if (dir == quokka::direction::z) {
-			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x3;
+			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x3_L;
 		}
 	}
 }
@@ -302,7 +311,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGrid(
 	const int ncomp_cc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_cc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
-			state_cc(i, j, k, n) = 0; // fill unused quantities with zeros
+			state_cc(i, j, k, n) = 0.0; // fill unused quantities with zeros
 		}
 		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, cen, dir, 0);
 	});
@@ -322,7 +331,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGridF
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
-			state_fc(i, j, k, n) = 0; // fill unused quantities with zeros
+			state_fc(i, j, k, n) = 0.0; // fill unused quantities with zeros
 		}
 		computeWaveSolution(i, j, k, state_fc, dx, prob_lo, cen, dir, 0);
 	});
@@ -335,11 +344,11 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution(amrex::MultiFa
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
-		auto const ncomp = ref.nComp();
+		
 		const amrex::Real time = tNew_[0];
-
+		const int ncomp_cc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_cc;
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			for (int n = 0; n < ncomp; ++n) {
+			for (int n = 0; n < ncomp_cc; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
 			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, time);
@@ -354,11 +363,11 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution_fc(amrex::Mult
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
-		auto const ncomp = ref.nComp();
+		
 		const amrex::Real time = tNew_[0];
-
+		const int ncomp_fc = Physics_Indices<AlfvenWaveLinear>::nvarPerDim_fc;
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			for (int n = 0; n < ncomp; ++n) {
+			for (int n = 0; n < ncomp_fc; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
 			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, time);
@@ -388,8 +397,8 @@ auto problem_main() -> int
 	}
 
 	// we assume box length = 1.0
-	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
-						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
+	const std::array<amrex::Real, 3> k_vec_prf = {(2.0 * M_PI) * static_cast<amrex::Real>(num_modes_x), (2.0 * M_PI) * static_cast<amrex::Real>(num_modes_y),
+						      (2.0 * M_PI) * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
