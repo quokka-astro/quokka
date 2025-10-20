@@ -50,20 +50,20 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
 			       EMFComputeScheme emf_compute_scheme);
 
-	static void ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme);
 
-	static void ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme);
 
-	static void ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme);
 
-	static void EMFSolver_BalsaraSpicer(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec);
+	static void EMFSolver_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec);
 
 	static void EMFSolver_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						    amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
@@ -89,22 +89,25 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      EMFComputeScheme emf_compute_scheme)
 {
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
-		MHDSystem<problem_t>::ComputeEMF_FS(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
+		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
 	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
-		MHDSystem<problem_t>::ComputeEMF_FS_FCVel(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
+		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
 	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025) {
-		MHDSystem<problem_t>::ComputeEMF_Balsara(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
+		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
 	} else {
 		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Quokka2026, or Balsara2025.");
 	}
 }
 
+// EMF solver from Felker & Stone (2017)
+// uses cell-centered velocity and face-centered magnetic fields extrapolated to the cell-edge to compute the EMF
+
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme)
 {
-	const BL_PROFILE("MHDSystem::ComputeEMF_FS()");
+	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
@@ -304,7 +307,7 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 
 			// selected averaging method for EMF:
 			if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_ave, ec_fabs_E_q, box_ec);
+				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
 			} else {
 				// get fspds to pass to LondrilloDelZanna2004 or Balsara2025 solver if needed
 				std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
@@ -323,14 +326,17 @@ void MHDSystem<problem_t>::ComputeEMF_FS(std::array<amrex::MultiFab, AMREX_SPACE
 	}
 }
 
+// EMF solver Quokka variant (2026) of Felker & Stone (2017)
+// uses face-centered Riemann velocity and face-centered magnetic fields extrapolated to the cell-edge to compute the EMF
+
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 					       EMFAvgScheme emf_avg_scheme)
 {
-	const BL_PROFILE("MHDSystem::ComputeEMF_FS_FCVel()");
+	const BL_PROFILE("MHDSystem::ComputeEMF_Quokka2026()");
 
 	// loop over each box-array on the level
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
@@ -451,7 +457,7 @@ void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX
 
 			// selected averaging method for the emf:
 			if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_ave, ec_fabs_E_Q, box_ec);
+				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_Q, box_ec);
 			} else {
 				// get fspds to pass to LondrilloDelZanna2004 or Balsara2025 solver if needed
 				std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
@@ -470,22 +476,22 @@ void MHDSystem<problem_t>::ComputeEMF_FS_FCVel(std::array<amrex::MultiFab, AMREX
 	}
 }
 
+// EMF solver Balsara (2025)
+// uses cell-centered velocity and face-centered magnetic fields averaged to cell-center to compute the EMF at cell center,
+// then extrapolate the EMF to the cell-edge 
+
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 					      EMFAvgScheme emf_avg_scheme)
 {
 	// calculating v x B at cell center, v already at cell center, B at face center
 
-	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara()");
+	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara2025()");
 	const int nghost_cc = 4;
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
-	// In this function we distinguish between world (w:3), array (i:2), quandrant (q:4), and component (x:3) index-ing by using prefixes. We will
-	// use the prefix x- when the w- and i- indexes are the same. We also choose to minimise the storage footprint by only computing and holding
-	// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
-	// significantly reduces the total memory used, which is a much bigger bottleneck.
 
 	const auto &ba = cc_mf_cVars.boxArray();
 	const auto &dm = cc_mf_cVars.DistributionMap();
@@ -547,6 +553,9 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 	// now that EMF is calculated at cell center, we need to interpolate to cell edge
 	// we also need to get the magnetic field from the face to cell edge for the Balsara2025 or LondrilloDelZanna2004 solvers
+
+	// In this part we distinguish between world (w:3), array (i:2), quandrant (q:4), and component (x:3) index-ing by using prefixes. We will
+	// use the prefix x- when the w- and i- indexes are the same. 
 
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) { // keep
 		const amrex::Box &box_cc = mfi.validbox();
@@ -648,29 +657,28 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 			for (int iquad = 0; iquad < 4; ++iquad) {
 				ec_fabs_EMF_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 			}
-
-			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
-			// define quantities - allocate with async arena
-			for (int icomp = 0; icomp < 2; ++icomp) {
-				for (int ieside = 0; ieside < 2; ++ieside) {
-					ec_fabs_Bi_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-				}
-			}
-
-			// extrapolate the face-centered fields (normal to the cell-face) to the cell-edge
-			for (int icomp = 0; icomp < 2; ++icomp) {
-				const auto dir2edge = static_cast<FluxDir>(extrap_dirs[(icomp + 1) % 2]);
-				const int wcomp = extrap_dirs[icomp];
-				const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
-				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
-				// extrapolate face-centered components to the cell-edge
-				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
-			}
-
+			
+			// selected averaging method for the emf:
 			if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(E2_array, ec_fabs_EMF_q, box_ec);
-			} else {
+				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(E2_array, ec_fabs_EMF_q, box_ec);
+			} else {				
+				std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
+				// define quantities - allocate with async arena
+				for (int icomp = 0; icomp < 2; ++icomp) {
+					for (int ieside = 0; ieside < 2; ++ieside) {
+						ec_fabs_Bi_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+					}
+				}
+				// extrapolate the face-centered fields (normal to the cell-face) to the cell-edge
+				for (int icomp = 0; icomp < 2; ++icomp) {
+					const auto dir2edge = static_cast<FluxDir>(extrap_dirs[(icomp + 1) % 2]);
+					const int wcomp = extrap_dirs[icomp];
+					const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
+					const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
+					// extrapolate face-centered components to the cell-edge
+					MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
+										ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+				}
 				// get fspds to pass to LondrilloDelZanna2004 or Balsara2025 solver if needed
 				std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
 				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
@@ -689,10 +697,10 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara(std::array<amrex::MultiFab, AMREX_
 
 // simplest emf solver: just average the quadrants
 template <typename problem_t>
-void MHDSystem<problem_t>::EMFSolver_BalsaraSpicer(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
+void MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						   amrex::Box const &box_ec)
 {
-	const BL_PROFILE("MHDSystem::EMFSolver_BalsaraSpicer()");
+	const BL_PROFILE("MHDSystem::EMFSolver_BalsaraSpicer2004()");
 
 	// Get const array views from each FArrayBox
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
@@ -779,13 +787,16 @@ void MHDSystem<problem_t>::EMFSolver_LondrilloDelZanna2004(amrex::Array4<amrex::
 	});
 }
 
+
+//solver from Balsara et al. 2025, 988, 134B
+
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						 amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						 std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 						 std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
 {
-	const BL_PROFILE("MHDSystem::ApplyBalsaraEMFSolver()");
+	const BL_PROFILE("MHDSystem::EMFSolver_Balsara2025()");
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
 	const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
 	const auto &E2_q2 = ec_fabs_EMF_q[2].const_array();
