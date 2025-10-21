@@ -4,7 +4,7 @@ There are several ways to post-process the output of Quokka simulations. AMReX P
 
 ## AMReX PlotfileTools
 
-These are self-contained C++ programs (included with AMReX in the `Tools/Plotfile` subdirectory) that will output a 2D slice (axis-aligned), a 1D slice (axis-aligned), or compute a volume integral given an AMReX plotfile. For these tasks, it is almost always easier to use the Plotfile tools rather than, e.g., yt or VisIt.
+These are self-contained C++ programs (included with AMReX in the `Tools/Plotfile` subdirectory) that will output a 2D slice (axis-aligned), a 1D slice (axis-aligned), or compute a volume integral given an AMReX plotfile. This works as an alternative to yt and VisIt for basic tasks.
 
 -   To compute a volume integral, use [fvolumesum](https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fvolumesum.cpp).
 -   To compute a 2D slice plot (axis-aligned planes only), use [fsnapshot](https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fsnapshot.cpp).
@@ -24,23 +24,12 @@ Other tools:
 !!! Warning
     There are [known bugs](https://github.com/yt-project/yt/issues/3889) that affect Quokka outputs. PlotfileTools (see above) can be used instead for axis-aligned slice plots.
 
-The plotfile directory can be loaded with `yt.load` as usual. However, the standard fields such as `('gas', 'density')` are not defined. Instead, you have to use non-standard fields. Examine `ds.field_list` to see the fields that exist in the plotfiles. These should be:
-
-``` python
-[('boxlib', 'gasDensity'), ('boxlib', 'gasEnergy'),
-('boxlib', 'radEnergy'), ('boxlib', 'scalar'),
-('boxlib', 'temperature'), ('boxlib', 'x-GasMomentum'),
-('boxlib', 'x-RadFlux'), ('boxlib', 'y-GasMomentum'),
-('boxlib', 'y-RadFlux'), ('boxlib', 'z-GasMomentum'), ('boxlib', 'z-RadFlux')]
-```
-
-For details, see the [yt documentation on reading AMReX data](https://yt-project.org/doc/examining/loading_data.html#amrex-boxlib-data).
-
 !!! Tip
     One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the [covering_grid](https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array) function.
 
-!!! Tip
-    This [WarpX script](https://warpx.readthedocs.io/en/latest/dataanalysis/plot_parallel.html) may be useful as a starting point for visualizing a time series of outputs. This script will require some modification to work with Quokka outputs.
+We have a fork of YT that includes a customized Quokka frontend: [https://github.com/chongchonghe/yt](https://github.com/chongchonghe/yt). To install it, run `pip install "yt[quokka] @ git+https://github.com/chongchonghe/yt.git"`. A comprehensive documentation is available at [this link](https://github.com/chongchonghe/yt/blob/Rongjun-ANUquokka-frontend/doc/source/examining/loading_data.rst#quokka-data), and a Jupyter Notebook with tutorials is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
+
+The `quick_plot` script in `scripts/python/` is a convenient tool for visualizing Quokka outputs. It is a wrapper around YT for batch processing snapshots and generating slice or projection plots. The script has detailed documentation in the code itself, accessible at the top of the file and also by running `quick_plot -h`.
 
 ## VisIt
 

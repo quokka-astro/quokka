@@ -450,6 +450,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
 
+	bool useLuminosityTable_ = true;
+	std::string luminosityTableFilename_;
+	quokka::SpacingType rad_table_output_spacing_ = quokka::SpacingType::fast_log;
+
+#if AMREX_SPACEDIM == 3
+	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
+#endif // AMREX_SPACEDIM == 3
+
 	// Diagnostics
 	amrex::Vector<std::unique_ptr<DiagBase>> m_diagnostics;
 	amrex::Vector<std::string> m_diagVars;
@@ -826,6 +834,59 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default max number of binary files per multifab when writing checkpoints
 	pp_amr.query("checkpoint_nfiles", checkpoint_nfiles);
+
+	// set particle luminosity table parameters
+	{
+		amrex::ParmParse const ppp("particles");
+		ppp.query("use_luminosity_table", useLuminosityTable_);
+		ppp.query("rad_table", luminosityTableFilename_);
+		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+
+#if AMREX_SPACEDIM == 3
+		// if particle and radiation are enabled
+		if (particleRegister_.HasRadiatingParticles() && Physics_Traits<problem_t>::is_radiation_enabled) {
+			if (useLuminosityTable_) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!luminosityTableFilename_.empty(),
+								 "When use_luminosity_table is set to true, rad_table must be specified");
+
+				constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
+
+				// Use specified spacing for luminosity values
+				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
+
+				amrex::Print() << "Luminosity table loaded successfully.\n";
+				amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
+							      luminosityTables_.luminosity.size(1));
+				amrex::Print() << fmt::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
+
+				// Validate table metadata matches expected hardcoded values
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_name(0) == "age",
+				    fmt::format("Luminosity table first input must be 'age', got '{}'", luminosityTables_.luminosity.input_name(0)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_name(1) == "mass",
+				    fmt::format("Luminosity table second input must be 'mass', got '{}'", luminosityTables_.luminosity.input_name(1)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_unit(0) == "year",
+				    fmt::format("Luminosity table first input unit must be 'year', got '{}'", luminosityTables_.luminosity.input_unit(0)));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    luminosityTables_.luminosity.input_unit(1) == "Msun",
+				    fmt::format("Luminosity table second input unit must be 'Msun', got '{}'", luminosityTables_.luminosity.input_unit(1)));
+
+				// Validate all output units are "erg/s"
+				for (int i = 0; i < nGroups; ++i) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosityTables_.luminosity.output_unit(i) == "erg/s",
+									 fmt::format("Luminosity table output unit {} must be 'erg/s', got '{}'", i,
+										     luminosityTables_.luminosity.output_unit(i)));
+				}
+
+				// Set global pointer for access from particle update functions
+				quokka::g_luminosity_tables_ptr<nGroups> = &luminosityTables_;
+			}
+		}
+#endif // AMREX_SPACEDIM == 3
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::rereadRuntimeParameters()
@@ -857,6 +918,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	} else {
 		// restart from a checkpoint
 		ReadCheckpointFile();
+	}
+
+	// Ensure consistency between particle radiation settings and luminosity data table configuration
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		if (particleRegister_.HasRadiatingParticles()) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(useLuminosityTable_ && luminosityTableFilename_.empty()),
+							 "When use_luminosity_table is set to true, rad_table must be specified");
+		}
 	}
 
 	calculateGpotAllLevels();
@@ -1225,23 +1294,87 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		doDiagnostics();
 
 		// Writing Plot files at time intervals
-		if (last_plot_file_step != step + 1 && plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
+		if (plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
 			next_plot_file_time += plotTimeInterval_;
-			WritePlotFile();
+			if (last_plot_file_step != step + 1) {
+				last_plot_file_step = step + 1;
+				WritePlotFile();
+			}
+		}
+
+		// Forced plotfile output via sentinel file
+		const std::filesystem::path sentinel_path{"outputNow"};
+		bool force_plotfile_now = false;
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::error_code exists_ec;
+			force_plotfile_now = std::filesystem::exists(sentinel_path, exists_ec) && !exists_ec;
+			if (exists_ec) {
+				amrex::Print() << "[WARNING] Could not check for '" << sentinel_path.string() << "': " << exists_ec.message() << '\n';
+				force_plotfile_now = false;
+			}
+		}
+		int force_plotfile_flag = force_plotfile_now ? 1 : 0;
+		amrex::ParallelDescriptor::Bcast(&force_plotfile_flag, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+		force_plotfile_now = (force_plotfile_flag == 1);
+
+		if (force_plotfile_now) {
+			if (last_plot_file_step != step + 1) {
+				last_plot_file_step = step + 1;
+				WritePlotFile();
+			}
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				std::error_code remove_ec;
+				if (!std::filesystem::remove(sentinel_path, remove_ec) && remove_ec) {
+					amrex::Print()
+					    << "[WARNING] Failed to remove sentinel '" << sentinel_path.string() << "': " << remove_ec.message() << '\n';
+				}
+			}
 		}
 
 		// IMPORTANT: this MUST be written *after* the plotfile to avoid corruption:
 		// 	https://github.com/quokka-astro/quokka/issues/554
 		if (checkpointTimeInterval_ > 0 && next_chk_file_time <= cur_time) {
 			next_chk_file_time += checkpointTimeInterval_;
-			WriteCheckpointFile();
+			if (last_chk_file_step != step + 1) {
+				last_chk_file_step = step + 1;
+				WriteCheckpointFile();
+			}
 		}
 
 		// IMPORTANT: this MUST be written *after* the plotfile to avoid corruption:
 		// 	https://github.com/quokka-astro/quokka/issues/554
 		if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
+			if (last_chk_file_step != step + 1) {
+				last_chk_file_step = step + 1;
+				WriteCheckpointFile();
+			}
+		}
+
+		// Forced checkpoint output via sentinel file
+		const std::filesystem::path checkpoint_sentinel{"checkpointNow"};
+		bool force_checkpoint_now = false;
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::error_code chk_exists_ec;
+			force_checkpoint_now = std::filesystem::exists(checkpoint_sentinel, chk_exists_ec) && !chk_exists_ec;
+			if (chk_exists_ec) {
+				amrex::Print() << "[WARNING] Could not check for '" << checkpoint_sentinel.string() << "': " << chk_exists_ec.message() << '\n';
+				force_checkpoint_now = false;
+			}
+		}
+		int force_checkpoint_flag = force_checkpoint_now ? 1 : 0;
+		amrex::ParallelDescriptor::Bcast(&force_checkpoint_flag, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+		force_checkpoint_now = (force_checkpoint_flag == 1);
+
+		if (force_checkpoint_now && last_chk_file_step != step + 1) {
 			last_chk_file_step = step + 1;
 			WriteCheckpointFile();
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				std::error_code remove_ec;
+				if (!std::filesystem::remove(checkpoint_sentinel, remove_ec) && remove_ec) {
+					amrex::Print()
+					    << "[WARNING] Failed to remove sentinel '" << checkpoint_sentinel.string() << "': " << remove_ec.message() << '\n';
+				}
+			}
 		}
 
 		if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
