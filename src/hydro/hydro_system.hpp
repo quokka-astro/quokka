@@ -1419,12 +1419,12 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				// solve the dust Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
 				auto dust_F_canonical = quokka::Riemann::dustRiemannSolver<problem_t, numDustVars_>(dust_sL, dust_sR);
 
-        // calculate dust diffusion flux if enabled
-        if constexpr (Physics_Traits<problem_t>::is_dust_diffusion_enabled) {
+				// calculate dust diffusion flux if enabled
+				if constexpr (Physics_Traits<problem_t>::is_dust_diffusion_enabled) {
 					quokka::valarray<double, numDustVars_> dust_F_diffusion{};
 
 					// assume constant diffusion coefficient D for now
-					auto const D = 1.0; 
+					auto const D = 1.0;
 
 					int normal_dir = static_cast<int>(DIR);
 					const double delta_normal = dx[normal_dir];
@@ -1439,7 +1439,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 					// calculate interface gas density and diffusion coefficient
 					double rho_g_int = 0.5 * (rho_g_left + rho_g_right);
-					double D_int = D;  // if D is per-cell, D = 0.5 * (D_left + D_right);
+					double D_int = D; // if D is per-cell, D = 0.5 * (D_left + D_right);
 
 					// calculate gradient of dust-to-gas ratio
 					double ratio_left = (rho_g_left > 0.0) ? rho_d_left / rho_g_left : 0.0;
@@ -1532,7 +1532,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 							v_x_cross_y = v_x_right;
 							F_dif_y = F_dif_y_right;
 						}
-						// else 0 
+						// else 0
 
 						term_y += v_x_cross_y * F_dif_y;
 						dust_F_diffusion[2] = term_y;
@@ -1604,10 +1604,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 						term_z += v_x_cross_z * F_dif_z;
 						dust_F_diffusion[3] = term_z;
 					}
-					
+
 					// add dust diffusion flux to canonical dust flux
 					dust_F_canonical += dust_F_diffusion;
-        }
+				}
 
 				quokka::valarray<double, numDustVars_> dust_F = dust_F_canonical;
 
