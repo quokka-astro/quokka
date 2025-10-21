@@ -1681,7 +1681,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
 
-		// calculate delta = 0.5 * (state_inter - state_old) / dt_lev + 0.5 * rhs
+		// calculate rhs = 0.5 * (state_inter - state_old) / dt_lev + 0.5 * rhs
 		rhs.mult(0.5, 0, nvars_, 0);
 		amrex::MultiFab::Saxpy(rhs, 0.5 / dt_lev, stateInter_cc, 0, 0, nvars_, 0);
 		amrex::MultiFab::Saxpy(rhs, -0.5 / dt_lev, stateOld_cc, 0, 0, nvars_, 0);
