@@ -1419,6 +1419,196 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				// solve the dust Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
 				auto dust_F_canonical = quokka::Riemann::dustRiemannSolver<problem_t, numDustVars_>(dust_sL, dust_sR);
 
+        // calculate dust diffusion flux if enabled
+        if constexpr (Physics_Traits<problem_t>::is_dust_diffusion_enabled) {
+					quokka::valarray<double, numDustVars_> dust_F_diffusion{};
+
+					// assume constant diffusion coefficient D for now
+					auto const D = 1.0; 
+
+					int normal_dir = static_cast<int>(DIR);
+					const double delta_normal = dx[normal_dir];
+					const double delta_trans1 = dx[(normal_dir + 1) % AMREX_SPACEDIM];
+					const double delta_trans2 = dx[(normal_dir + 2) % AMREX_SPACEDIM];
+
+					// gather left and right gas and dust densities
+					double rho_g_left = q(i - 1, j, k, primDensity_index);
+					double rho_g_right = q(i, j, k, primDensity_index);
+					double rho_d_left = q(i - 1, j, k, primDustDensity_index + numDustVars_ * g);
+					double rho_d_right = q(i, j, k, primDustDensity_index + numDustVars_ * g);
+
+					// calculate interface gas density and diffusion coefficient
+					double rho_g_int = 0.5 * (rho_g_left + rho_g_right);
+					double D_int = D;  // if D is per-cell, D = 0.5 * (D_left + D_right);
+
+					// calculate gradient of dust-to-gas ratio
+					double ratio_left = (rho_g_left > 0.0) ? rho_d_left / rho_g_left : 0.0;
+					double ratio_right = (rho_g_right > 0.0) ? rho_d_right / rho_g_right : 0.0;
+					double grad_ratio = (ratio_right - ratio_left) / delta_normal;
+
+					// calculate concentration diffusion flux at the interface
+					double F_dif_x = -D_int * rho_g_int * grad_ratio;
+
+					// gather left and right dust velocities
+					double v_x_left = q(i - 1, j, k, dust_velN_index);
+					double v_x_right = q(i, j, k, dust_velN_index);
+					double v_y_left = q(i - 1, j, k, dust_velV_index);
+					double v_y_right = q(i, j, k, dust_velV_index);
+					double v_z_left = q(i - 1, j, k, dust_velW_index);
+					double v_z_right = q(i, j, k, dust_velW_index);
+
+					// upwind dust velocities at the interface
+					double v_x_int = (F_dif_x > 0.0) ? v_x_left : v_x_right;
+					double v_y_int = (F_dif_x > 0.0) ? v_y_left : v_y_right;
+					double v_z_int = (F_dif_x > 0.0) ? v_z_left : v_z_right;
+
+					// get dust concentration diffusion flux
+					dust_F_diffusion[0] = F_dif_x;
+
+					// add contributions to dust momentum diffusion fluxes from normal diffusion
+					dust_F_diffusion[1] = 2.0 * v_x_int * F_dif_x;
+					double term_y = v_y_int * F_dif_x;
+					double term_z = v_z_int * F_dif_x;
+
+					// add contributions to dust momentum diffusion fluxes from transverse diffusion if in 2D/3D
+					if constexpr (AMREX_SPACEDIM > 1) {
+						// calculate dust concentration diffusion flux (F_dif_y_left) in y-direction at interface (i-1/2,j,k)
+						// j-1/2 left
+						double rho_g_Ljm_l = q(i - 1, j - 1, k, primDensity_index);
+						double rho_g_Rjm_l = q(i - 1, j, k, primDensity_index);
+						double rho_d_Ljm_l = q(i - 1, j - 1, k, primDustDensity_index + numDustVars_ * g);
+						double rho_d_Rjm_l = q(i - 1, j, k, primDustDensity_index + numDustVars_ * g);
+						double rho_g_int_jm_l = 0.5 * (rho_g_Ljm_l + rho_g_Rjm_l);
+						double ratio_Ljm_l = (rho_g_Ljm_l > 0.0) ? rho_d_Ljm_l / rho_g_Ljm_l : 0.0;
+						double ratio_Rjm_l = (rho_g_Rjm_l > 0.0) ? rho_d_Rjm_l / rho_g_Rjm_l : 0.0;
+						double grad_jm_l = (ratio_Rjm_l - ratio_Ljm_l) / delta_trans1;
+						double F_dif_y_jm_l = -D * rho_g_int_jm_l * grad_jm_l;
+
+						// j+1/2 left
+						double rho_g_Ljp_l = q(i - 1, j, k, primDensity_index);
+						double rho_g_Rjp_l = q(i - 1, j + 1, k, primDensity_index);
+						double rho_d_Ljp_l = q(i - 1, j, k, primDustDensity_index + numDustVars_ * g);
+						double rho_d_Rjp_l = q(i - 1, j + 1, k, primDustDensity_index + numDustVars_ * g);
+						double rho_g_int_jp_l = 0.5 * (rho_g_Ljp_l + rho_g_Rjp_l);
+						double ratio_Ljp_l = (rho_g_Ljp_l > 0.0) ? rho_d_Ljp_l / rho_g_Ljp_l : 0.0;
+						double ratio_Rjp_l = (rho_g_Rjp_l > 0.0) ? rho_d_Rjp_l / rho_g_Rjp_l : 0.0;
+						double grad_jp_l = (ratio_Rjp_l - ratio_Ljp_l) / delta_trans1;
+						double F_dif_y_jp_l = -D * rho_g_int_jp_l * grad_jp_l;
+
+						double F_dif_y_left = 0.5 * (F_dif_y_jm_l + F_dif_y_jp_l);
+
+						// calculate dust concentration diffusion flux (F_dif_y_right) in y-direction at interface (i+1/2,j,k)
+						// j-1/2 right
+						double rho_g_Ljm_r = q(i, j - 1, k, primDensity_index);
+						double rho_g_Rjm_r = q(i, j, k, primDensity_index);
+						double rho_d_Ljm_r = q(i, j - 1, k, primDustDensity_index + numDustVars_ * g);
+						double rho_d_Rjm_r = q(i, j, k, primDustDensity_index + numDustVars_ * g);
+						double rho_g_int_jm_r = 0.5 * (rho_g_Ljm_r + rho_g_Rjm_r);
+						double ratio_Ljm_r = (rho_g_Ljm_r > 0.0) ? rho_d_Ljm_r / rho_g_Ljm_r : 0.0;
+						double ratio_Rjm_r = (rho_g_Rjm_r > 0.0) ? rho_d_Rjm_r / rho_g_Rjm_r : 0.0;
+						double grad_jm_r = (ratio_Rjm_r - ratio_Ljm_r) / delta_trans1;
+						double F_dif_y_jm_r = -D * rho_g_int_jm_r * grad_jm_r;
+
+						// j+1/2 right
+						double rho_g_Ljp_r = q(i, j, k, primDensity_index);
+						double rho_g_Rjp_r = q(i, j + 1, k, primDensity_index);
+						double rho_d_Ljp_r = q(i, j, k, primDustDensity_index + numDustVars_ * g);
+						double rho_d_Rjp_r = q(i, j + 1, k, primDustDensity_index + numDustVars_ * g);
+						double rho_g_int_jp_r = 0.5 * (rho_g_Ljp_r + rho_g_Rjp_r);
+						double ratio_Ljp_r = (rho_g_Ljp_r > 0.0) ? rho_d_Ljp_r / rho_g_Ljp_r : 0.0;
+						double ratio_Rjp_r = (rho_g_Rjp_r > 0.0) ? rho_d_Rjp_r / rho_g_Rjp_r : 0.0;
+						double grad_jp_r = (ratio_Rjp_r - ratio_Ljp_r) / delta_trans1;
+						double F_dif_y_jp_r = -D * rho_g_int_jp_r * grad_jp_r;
+
+						double F_dif_y_right = 0.5 * (F_dif_y_jm_r + F_dif_y_jp_r);
+
+						// calculate cross-term contribution to dust momentum diffusion flux in y-direction
+						double v_x_cross_y = 0.0;
+						double F_dif_y = 0.0;
+						if (v_x_left > 0.0 && v_x_right > 0.0) {
+							v_x_cross_y = v_x_left;
+							F_dif_y = F_dif_y_left;
+						} else if (v_x_left < 0.0 && v_x_right < 0.0) {
+							v_x_cross_y = v_x_right;
+							F_dif_y = F_dif_y_right;
+						}
+						// else 0 
+
+						term_y += v_x_cross_y * F_dif_y;
+						dust_F_diffusion[2] = term_y;
+					}
+
+					if constexpr (AMREX_SPACEDIM > 2) {
+						// calculate dust concentration diffusion flux (F_dif_z_left) in z-direction at interface (i-1/2,j,k)
+						// k-1/2 left
+						double rho_g_Lkm = q(i - 1, j, k - 1, primDensity_index);
+						double rho_g_Rkm = q(i - 1, j, k, primDensity_index);
+						double rho_d_Lkm = q(i - 1, j, k - 1, primDustDensity_index + numDustVars_ * g);
+						double rho_d_Rkm = q(i - 1, j, k, primDustDensity_index + numDustVars_ * g);
+						double rho_g_int_km = 0.5 * (rho_g_Lkm + rho_g_Rkm);
+						double ratio_Lkm = (rho_g_Lkm > 0.0) ? rho_d_Lkm / rho_g_Lkm : 0.0;
+						double ratio_Rkm = (rho_g_Rkm > 0.0) ? rho_d_Rkm / rho_g_Rkm : 0.0;
+						double grad_km = (ratio_Rkm - ratio_Lkm) / delta_trans2;
+						double F_dif_z_km_l = -D * rho_g_int_km * grad_km;
+
+						// k+1/2 left
+						double rho_g_Lkp = q(i - 1, j, k, primDensity_index);
+						double rho_g_Rkp = q(i - 1, j, k + 1, primDensity_index);
+						double rho_d_Lkp = q(i - 1, j, k, primDustDensity_index + numDustVars_ * g);
+						double rho_d_Rkp = q(i - 1, j, k + 1, primDustDensity_index + numDustVars_ * g);
+						double rho_g_int_kp = 0.5 * (rho_g_Lkp + rho_g_Rkp);
+						double ratio_Lkp = (rho_g_Lkp > 0.0) ? rho_d_Lkp / rho_g_Lkp : 0.0;
+						double ratio_Rkp = (rho_g_Rkp > 0.0) ? rho_d_Rkp / rho_g_Rkp : 0.0;
+						double grad_kp = (ratio_Rkp - ratio_Lkp) / delta_trans2;
+						double F_dif_z_kp_l = -D * rho_g_int_kp * grad_kp;
+
+						double F_dif_z_left = 0.5 * (F_dif_z_km_l + F_dif_z_kp_l);
+
+						// calculate dust concentration diffusion flux (F_dif_z_right) in z-direction at interface (i+1/2,j,k)
+						// k-1/2 right
+						double rho_g_Lkm_r = q(i, j, k - 1, primDensity_index);
+						double rho_g_Rkm_r = q(i, j, k, primDensity_index);
+						double rho_d_Lkm_r = q(i, j, k - 1, primDustDensity_index + numDustVars_ * g);
+						double rho_d_Rkm_r = q(i, j, k, primDustDensity_index + numDustVars_ * g);
+						double rho_g_int_km_r = 0.5 * (rho_g_Lkm_r + rho_g_Rkm_r);
+						double ratio_Lkm_r = (rho_g_Lkm_r > 0.0) ? rho_d_Lkm_r / rho_g_Lkm_r : 0.0;
+						double ratio_Rkm_r = (rho_g_Rkm_r > 0.0) ? rho_d_Rkm_r / rho_g_Rkm_r : 0.0;
+						double grad_km_r = (ratio_Rkm_r - ratio_Lkm_r) / delta_trans2;
+						double const F_dif_z_km_r = -D * rho_g_int_km_r * grad_km_r;
+
+						// k+1/2 right
+						double rho_g_Lkp_r = q(i, j, k, primDensity_index);
+						double rho_g_Rkp_r = q(i, j, k + 1, primDensity_index);
+						double rho_d_Lkp_r = q(i, j, k, primDustDensity_index + numDustVars_ * g);
+						double rho_d_Rkp_r = q(i, j, k + 1, primDustDensity_index + numDustVars_ * g);
+						double rho_g_int_kp_r = 0.5 * (rho_g_Lkp_r + rho_g_Rkp_r);
+						double ratio_Lkp_r = (rho_g_Lkp_r > 0.0) ? rho_d_Lkp_r / rho_g_Lkp_r : 0.0;
+						double ratio_Rkp_r = (rho_g_Rkp_r > 0.0) ? rho_d_Rkp_r / rho_g_Rkp_r : 0.0;
+						double grad_kp_r = (ratio_Rkp_r - ratio_Lkp_r) / delta_trans2;
+						double F_dif_z_kp_r = -D * rho_g_int_kp_r * grad_kp_r;
+
+						double F_dif_z_right = 0.5 * (F_dif_z_km_r + F_dif_z_kp_r);
+
+						// calculate cross-term contribution to dust momentum diffusion flux in z-direction
+						double v_x_cross_z = 0.0;
+						double F_dif_z = 0.0;
+						if (v_x_left > 0.0 && v_x_right > 0.0) {
+							v_x_cross_z = v_x_left;
+							F_dif_z = F_dif_z_left;
+						} else if (v_x_left < 0.0 && v_x_right < 0.0) {
+							v_x_cross_z = v_x_right;
+							F_dif_z = F_dif_z_right;
+						}
+						// else 0
+
+						term_z += v_x_cross_z * F_dif_z;
+						dust_F_diffusion[3] = term_z;
+					}
+					
+					// add dust diffusion flux to canonical dust flux
+					dust_F_canonical += dust_F_diffusion;
+        }
+
 				quokka::valarray<double, numDustVars_> dust_F = dust_F_canonical;
 
 				// permute dust momentum components according to flux direction DIR
