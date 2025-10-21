@@ -176,8 +176,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// we now need 3 total to accommodate the higher-order reconstruction in computeEMF
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
 
-	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::Balsara2025; // method to use to average EMF at edges
-	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::Balsara2025;
+	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
+	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -492,9 +492,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set MHD runtime parameters
 	{
 		amrex::ParmParse const hpp("mhd");
-		hpp.query("emf_averaging_scheme", emfAveragingScheme_);
 		hpp.query("emf_reconstruction_order", emfReconstructionOrder_);
 		hpp.query("emf_compute_scheme", emfComputingScheme_);
+		hpp.query("emf_averaging_scheme", emfAveragingScheme_);
 	}
 
 	// set cooling runtime parameters
