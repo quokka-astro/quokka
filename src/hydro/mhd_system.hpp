@@ -50,10 +50,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
 			       EMFComputeScheme emf_compute_scheme);
 
-
-	static void AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_E_q,
-			       amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
-			       std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
+	static void AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_E_q, amrex::Box const &box_ec,
+			       std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 			       std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme);
 
 	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
@@ -111,21 +109,20 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	}
 }
 
-
 template <typename problem_t>
-void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const& E2_ave, std::array<amrex::FArrayBox, 4> const& ec_fabs_E_q,
-			amrex::Box const& box_ec, std::array<int, 2> const& extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const& fspds,
-			std::array<std::array<amrex::FArrayBox, 2>, 2> const& ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme)
+void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_E_q, amrex::Box const &box_ec,
+				      std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
+				      std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme)
 {
-    if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-        EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
-    } else if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
-        EMFSolver_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
-    } else if (emf_avg_scheme == EMFAvgScheme::Balsara2025) {
-        EMFSolver_Balsara2025(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
-    } else {
-        amrex::Abort("Unknown EMF averaging type");
-    }
+	if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
+		EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
+	} else if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
+		EMFSolver_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
+	} else if (emf_avg_scheme == EMFAvgScheme::Balsara2025) {
+		EMFSolver_Balsara2025(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
+	} else {
+		amrex::Abort("Unknown EMF averaging type");
+	}
 }
 
 // EMF solver from Felker & Stone (2017)
@@ -336,10 +333,9 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			const auto &E2_ave = ec_mf_emf_components[iedge][mfi].array();
 
 			// selected averaging method for EMF:
-			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
-				fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
-			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, 
-												ec_fabs_Bi_ieside, emf_avg_scheme);
+			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
+										       fcx_mf_fspds[2].const_array(mfi)};
+			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, emf_avg_scheme);
 		}
 	}
 }
@@ -474,10 +470,9 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			const auto &E2_ave = ec_mf_emf_components[iedge][mfi].array();
 
 			// selected averaging method for the emf:
-			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
-    			fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
-			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, 
-                                       ec_fabs_Bi_ieside, emf_avg_scheme);
+			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
+										       fcx_mf_fspds[2].const_array(mfi)};
+			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, ec_fabs_Bi_ieside, emf_avg_scheme);
 		}
 	}
 }
@@ -678,13 +673,12 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// extrapolate face-centered components to the cell-edge
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-									ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
 			}
 			// selected averaging method for the emf:
-			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
-    			fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
-			MHDSystem<problem_t>::AverageEMF(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, 
-                                       ec_fabs_Bi_ieside, emf_avg_scheme);	
+			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
+										       fcx_mf_fspds[2].const_array(mfi)};
+			MHDSystem<problem_t>::AverageEMF(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, emf_avg_scheme);
 		}
 	}
 }
