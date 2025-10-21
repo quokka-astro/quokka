@@ -61,16 +61,16 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 					       EMFAvgScheme emf_avg_scheme);
 
+	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
+					   EMFAvgScheme emf_avg_scheme);
+
 	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 					  EMFAvgScheme emf_avg_scheme);
-
-	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
-					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-					   EMFAvgScheme emf_avg_scheme);
 
 	static void EMFSolver_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						amrex::Box const &box_ec);
@@ -113,14 +113,9 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 
 
 template <typename problem_t>
-void MHDSystem<problem_t>::AverageEMF(
-    amrex::Array4<amrex::Real> const& E2_ave,
-    std::array<amrex::FArrayBox, 4> const& ec_fabs_E_q,
-    amrex::Box const& box_ec,
-    std::array<int, 2> const& extrap_dirs,
-    std::array<amrex::Array4<const amrex::Real>, 3> const& fspds,
-    std::array<std::array<amrex::FArrayBox, 2>, 2> const& ec_fabs_Bi_ieside,
-    EMFAvgScheme emf_avg_scheme)
+void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const& E2_ave, std::array<amrex::FArrayBox, 4> const& ec_fabs_E_q,
+			amrex::Box const& box_ec, std::array<int, 2> const& extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const& fspds,
+			std::array<std::array<amrex::FArrayBox, 2>, 2> const& ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme)
 {
     if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
         EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
