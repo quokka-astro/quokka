@@ -70,15 +70,15 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 					  EMFAvgScheme emf_avg_scheme);
 
-	static void EMFSolver_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
+	static void EMFAverage_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						amrex::Box const &box_ec);
 
-	static void EMFSolver_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
+	static void EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						    amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						    std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 						    std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside);
 
-	static void EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
+	static void EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
 					  std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 					  std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside);
 
@@ -115,11 +115,11 @@ void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, 
 				      std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme)
 {
 	if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-		EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
+		EMFAverage_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
 	} else if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
-		EMFSolver_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
+		EMFAverage_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
 	} else if (emf_avg_scheme == EMFAvgScheme::Balsara2025) {
-		EMFSolver_Balsara2025(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
+		EMFAverage_Balsara2025(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
 	} else {
 		amrex::Abort("Unknown EMF averaging type");
 	}
@@ -685,10 +685,10 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 
 // simplest emf solver: just average the quadrants
 template <typename problem_t>
-void MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
+void MHDSystem<problem_t>::EMFAverage_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						       amrex::Box const &box_ec)
 {
-	const BL_PROFILE("MHDSystem::EMFSolver_BalsaraSpicer2004()");
+	const BL_PROFILE("MHDSystem::EMFAverage_BalsaraSpicer2004()");
 
 	// Get const array views from each FArrayBox
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
@@ -709,12 +709,12 @@ void MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(amrex::Array4<amrex::Real
 // more complex emf solver: uses information about the fast wave speeds to do a weighted average of the quadrants
 // from: Londrillo & Del Zanna 2004, JCP, 195
 template <typename problem_t>
-void MHDSystem<problem_t>::EMFSolver_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
+void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 							   amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 							   std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 							   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside)
 {
-	const BL_PROFILE("MHDSystem::EMFSolver_LondrilloDelZanna2004()");
+	const BL_PROFILE("MHDSystem::EMFAverage_LondrilloDelZanna2004()");
 
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
 	const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
@@ -778,12 +778,12 @@ void MHDSystem<problem_t>::EMFSolver_LondrilloDelZanna2004(amrex::Array4<amrex::
 // solver from Balsara et al. 2025, 988, 134B
 
 template <typename problem_t>
-void MHDSystem<problem_t>::EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
+void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						 amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						 std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 						 std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside)
 {
-	const BL_PROFILE("MHDSystem::EMFSolver_Balsara2025()");
+	const BL_PROFILE("MHDSystem::EMFAverage_Balsara2025()");
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
 	const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
 	const auto &E2_q2 = ec_fabs_EMF_q[2].const_array();
