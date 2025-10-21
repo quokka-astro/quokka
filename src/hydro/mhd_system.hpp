@@ -50,6 +50,12 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
 			       EMFComputeScheme emf_compute_scheme);
 
+
+	static void AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_E_q,
+			       amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
+			       std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
+			       std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme);
+
 	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
@@ -72,11 +78,11 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void EMFSolver_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						    amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						    std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-						    std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
+						    std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside);
 
 	static void EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
 					  std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-					  std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside);
+					  std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside);
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
 
@@ -95,14 +101,36 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
 		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder,
 								 emf_avg_scheme);
-	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
-		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
 	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025) {
 		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder,
 							     emf_avg_scheme);
+	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
+		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
 	} else {
-		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Quokka2026, or Balsara2025.");
+		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Balsara2025, or Quokka2026.");
 	}
+}
+
+
+template <typename problem_t>
+void MHDSystem<problem_t>::AverageEMF(
+    amrex::Array4<amrex::Real> const& E2_ave,
+    std::array<amrex::FArrayBox, 4> const& ec_fabs_E_q,
+    amrex::Box const& box_ec,
+    std::array<int, 2> const& extrap_dirs,
+    std::array<amrex::Array4<const amrex::Real>, 3> const& fspds,
+    std::array<std::array<amrex::FArrayBox, 2>, 2> const& ec_fabs_Bi_ieside,
+    EMFAvgScheme emf_avg_scheme)
+{
+    if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
+        EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
+    } else if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
+        EMFSolver_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
+    } else if (emf_avg_scheme == EMFAvgScheme::Balsara2025) {
+        EMFSolver_Balsara2025(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
+    } else {
+        amrex::Abort("Unknown EMF averaging type");
+    }
 }
 
 // EMF solver from Felker & Stone (2017)
@@ -313,22 +341,10 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			const auto &E2_ave = ec_mf_emf_components[iedge][mfi].array();
 
 			// selected averaging method for EMF:
-			if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
-			} else {
-				// get fspds to pass to LondrilloDelZanna2004 or Balsara2025 solver if needed
-				std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
-				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
-				// extrapolate the two required face-centered magnetic field components to the cell-edge
-				if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
-					MHDSystem<problem_t>::EMFSolver_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds,
-											      ec_fabs_Bi_ieside);
-				} else if (emf_avg_scheme == EMFAvgScheme::Balsara2025) {
-					MHDSystem<problem_t>::EMFSolver_Balsara2025(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
-				} else {
-					amrex::Abort("Unknown EMF averaging type");
-				}
-			}
+			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
+				fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
+			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, 
+												ec_fabs_Bi_ieside, emf_avg_scheme);
 		}
 	}
 }
@@ -463,22 +479,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			const auto &E2_ave = ec_mf_emf_components[iedge][mfi].array();
 
 			// selected averaging method for the emf:
-			if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(E2_ave, ec_fabs_E_Q, box_ec);
-			} else {
-				// get fspds to pass to LondrilloDelZanna2004 or Balsara2025 solver if needed
-				std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
-				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
-				// extrapolate the two required face-centered magnetic field components to the cell-edge
-				if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
-					MHDSystem<problem_t>::EMFSolver_LondrilloDelZanna2004(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds,
-											      ec_fabs_Bi_ieside);
-				} else if (emf_avg_scheme == EMFAvgScheme::Balsara2025) {
-					MHDSystem<problem_t>::EMFSolver_Balsara2025(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, ec_fabs_Bi_ieside);
-				} else {
-					amrex::Abort("Unknown EMF averaging type");
-				}
-			}
+			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
+    			fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
+			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, 
+                                       ec_fabs_Bi_ieside, emf_avg_scheme);
 		}
 	}
 }
@@ -664,39 +668,28 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				ec_fabs_EMF_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 			}
 
-			// selected averaging method for the emf:
-			if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-				MHDSystem<problem_t>::EMFSolver_BalsaraSpicer2004(E2_array, ec_fabs_EMF_q, box_ec);
-			} else {
-				std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
-				// define quantities - allocate with async arena
-				for (int icomp = 0; icomp < 2; ++icomp) {
-					for (int ieside = 0; ieside < 2; ++ieside) {
-						ec_fabs_Bi_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-					}
-				}
-				// extrapolate the face-centered fields (normal to the cell-face) to the cell-edge
-				for (int icomp = 0; icomp < 2; ++icomp) {
-					const auto dir2edge = static_cast<FluxDir>(extrap_dirs[(icomp + 1) % 2]);
-					const int wcomp = extrap_dirs[icomp];
-					const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
-					const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
-					// extrapolate face-centered components to the cell-edge
-					MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-									    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
-				}
-				// get fspds to pass to LondrilloDelZanna2004 or Balsara2025 solver if needed
-				std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
-				    fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
-				if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
-					MHDSystem<problem_t>::EMFSolver_LondrilloDelZanna2004(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds,
-											      ec_fabs_Bi_ieside);
-				} else if (emf_avg_scheme == EMFAvgScheme::Balsara2025) {
-					MHDSystem<problem_t>::EMFSolver_Balsara2025(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
-				} else {
-					amrex::Abort("Unknown EMF averaging type");
+			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_Bi_ieside;
+			// define quantities - allocate with async arena
+			for (int icomp = 0; icomp < 2; ++icomp) {
+				for (int ieside = 0; ieside < 2; ++ieside) {
+					ec_fabs_Bi_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 				}
 			}
+
+			for (int icomp = 0; icomp < 2; ++icomp) {
+				const auto dir2edge = static_cast<FluxDir>(extrap_dirs[(icomp + 1) % 2]);
+				const int wcomp = extrap_dirs[icomp];
+				const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(wcomp);
+				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
+				// extrapolate face-centered components to the cell-edge
+				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
+									ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+			}
+			// selected averaging method for the emf:
+			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {
+    			fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi), fcx_mf_fspds[2].const_array(mfi)};
+			MHDSystem<problem_t>::AverageEMF(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, 
+                                       ec_fabs_Bi_ieside, emf_avg_scheme);	
 		}
 	}
 }
@@ -730,7 +723,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::EMFSolver_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 							   amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 							   std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-							   std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
+							   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside)
 {
 	const BL_PROFILE("MHDSystem::EMFSolver_LondrilloDelZanna2004()");
 
@@ -799,7 +792,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::EMFSolver_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						 amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						 std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-						 std::array<std::array<amrex::FArrayBox, 2>, 2> &ec_fabs_Bi_ieside)
+						 std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside)
 {
 	const BL_PROFILE("MHDSystem::EMFSolver_Balsara2025()");
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
