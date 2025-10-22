@@ -176,8 +176,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// we now need 3 total to accommodate the higher-order reconstruction in computeEMF
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
 
-	EMFAvgType emfAveragingType_ = EMFAvgType::LD04; // method to use to average EMF at edges
-	int emf_scheme_ = 1; // 0 == Felker and Stone scheme state; 1 == Felker and Stone scheme using the FC velocity from Riemann solver (default)
+	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
+	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -492,9 +492,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set MHD runtime parameters
 	{
 		amrex::ParmParse const hpp("mhd");
-		hpp.query("emf_averaging_method", emfAveragingType_);
 		hpp.query("emf_reconstruction_order", emfReconstructionOrder_);
-		hpp.query("emf_scheme", emf_scheme_);
+		hpp.query("emf_compute_scheme", emfComputingScheme_);
+		hpp.query("emf_averaging_scheme", emfAveragingScheme_);
 	}
 
 	// set cooling runtime parameters
@@ -1480,7 +1480,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds,
-						 emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
+						 emfReconstructionOrder_, emfAveragingScheme_, emfComputingScheme_);
 	}
 
 	// Stage 1 of RK2-SSP
@@ -1501,7 +1501,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, faceVel, stateOld_fc, fast_mhd_wavespeeds,
-							 emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
+							 emfReconstructionOrder_, emfAveragingScheme_, emfComputingScheme_);
 		}
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
@@ -1639,7 +1639,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, faceVel, stateInter_fc, fast_mhd_wavespeeds,
-							 emfReconstructionOrder_, emfAveragingType_, emf_scheme_);
+							 emfReconstructionOrder_, emfAveragingScheme_, emfComputingScheme_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {

@@ -37,4 +37,4 @@ hydro.reconstruction_order = 3
 
 # MHD parameters
 mhd.emf_reconstruction_order = 5  # xPPM for EMF
-mhd.emf_averaging_method = LD04
+mhd.emf_averaging_scheme = LondrilloDelZanna2004
