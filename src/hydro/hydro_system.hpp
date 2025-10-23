@@ -147,14 +147,6 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
 				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost, int nvars);
 
-	static void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
-					     amrex::iMultiFab &redoFlag);
-
-	static void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
-				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
-				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
-				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k);
-
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
@@ -1433,94 +1425,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 		}
 	});
-}
-
-template <typename problem_t>
-void HydroSystem<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
-						      amrex::iMultiFab &redoFlag)
-{
-	auto const &consVar_cc = consVar_cc_mf.arrays();
-	auto const &primVar = primVar_mf.const_arrays();
-	auto const &redoFlag_arrs = redoFlag.const_arrays();
-	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
-
-	amrex::ParallelFor(primVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		amrex::Real rho_g = primVar[bx](i, j, k, primDensity_index);
-
-		amrex::GpuArray<amrex::Real, N> rho_d;
-		for (int g = 0; g < N; ++g) {
-			rho_d[g] = primVar[bx](i, j, k, primDustDensity_index + g * numDustVars_);
-		}
-
-		amrex::GpuArray<amrex::Real, N> epsilon;
-		for (int g = 0; g < N; ++g) {
-			epsilon[g] = (rho_g > 0.0) ? rho_d[g] / rho_g : 0.0;
-		}
-
-		amrex::GpuArray<amrex::Real, N> alpha;
-		for (int g = 0; g < N; ++g) {
-			alpha[g] = 0.5 + 0.5 * g;
-		}
-
-		amrex::Real gamma_dt = gamma * dt_lev;
-		if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
-			gamma_dt = dt_lev;
-		}
-
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			int vel_g_idx = x1Velocity_index + dir;
-			amrex::Real v_g = primVar[bx](i, j, k, vel_g_idx);
-
-			amrex::GpuArray<amrex::Real, N> v_d;
-			for (int g = 0; g < N; ++g) {
-				int vel_d_idx = x1DustVelocity_index + dir + g * numDustVars_;
-				v_d[g] = primVar[bx](i, j, k, vel_d_idx);
-			}
-
-			amrex::GpuArray<amrex::Real, N + 1> q;
-			q[0] = rho_g * v_g;
-
-			for (int g = 0; g < N; ++g) {
-				q[1 + g] = rho_d[g] * v_d[g];
-			}
-
-			amrex::GpuArray<amrex::Real, N + 1> drag_updates;
-			ComputeDragUpdates(q, alpha, epsilon, gamma_dt, drag_updates);
-
-			int mom_g_idx = x1Momentum_index + dir;
-			consVar_cc[bx](i, j, k, mom_g_idx) += gamma_dt * drag_updates[0];
-
-			for (int g = 0; g < N; ++g) {
-				int mom_d_idx = x1DustMomentum_index + dir + g * numDustVars_;
-				consVar_cc[bx](i, j, k, mom_d_idx) += gamma_dt * drag_updates[1 + g];
-			}
-		}
-	});
-}
-
-template <typename problem_t>
-void HydroSystem<problem_t>::ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
-						amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
-						amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
-						amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k)
-{
-	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
-
-	amrex::Real A = 0.0;
-	amrex::Real B = 0.0;
-
-	for (int g = 0; g < N; ++g) {
-		amrex::Real denom = 1.0 + gamma_dt * alpha[g];
-		A += alpha[g] * q[g + 1] / denom;
-		B += epsilon[g] * alpha[g] / denom;
-	}
-
-	k[0] = (A - q[0] * B) / (1.0 + gamma_dt * B);
-
-	for (int g = 0; g < N; ++g) {
-		amrex::Real denom = 1.0 + gamma_dt * alpha[g];
-		k[g + 1] = (alpha[g] / denom) * (epsilon[g] * q[0] - q[g + 1] + gamma_dt * epsilon[g] * k[0]);
-	}
 }
 
 #endif // HYDRO_SYSTEM_HPP_
