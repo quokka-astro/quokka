@@ -342,7 +342,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
 			   amrex::iMultiFab &redoFlag);
-			
+
 	void replaceRhs(amrex::MultiFab &rhs, amrex::MultiFab const &FOrhs, amrex::iMultiFab const &redoFlag);
 
 	void replaceEMFs(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf_components, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FO_emf_components,
@@ -1854,25 +1854,23 @@ void QuokkaSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AMRE
 	}
 }
 
-template <typename problem_t>
-void QuokkaSimulation<problem_t>::replaceRhs(amrex::MultiFab &rhs, amrex::MultiFab const &FOrhs, 
-                                            amrex::iMultiFab const &redoFlag)
+template <typename problem_t> void QuokkaSimulation<problem_t>::replaceRhs(amrex::MultiFab &rhs, amrex::MultiFab const &FOrhs, amrex::iMultiFab const &redoFlag)
 {
-    const BL_PROFILE("QuokkaSimulation::replaceRhs()");
+	const BL_PROFILE("QuokkaSimulation::replaceRhs()");
 
-    AMREX_ASSERT(rhs.nComp() == FOrhs.nComp());
-    const int ncomp = rhs.nComp();
+	AMREX_ASSERT(rhs.nComp() == FOrhs.nComp());
+	const int ncomp = rhs.nComp();
 
-    auto const &FOrhs_arrs = FOrhs.const_arrays();
-    auto const &redoFlag_arrs = redoFlag.const_arrays();
-    auto rhs_arrs = rhs.arrays();
+	auto const &FOrhs_arrs = FOrhs.const_arrays();
+	auto const &redoFlag_arrs = redoFlag.const_arrays();
+	auto rhs_arrs = rhs.arrays();
 
-    amrex::IntVect ng(0); 
-    amrex::ParallelFor(redoFlag, ng, ncomp, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
-        if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
-            rhs_arrs[bx](i, j, k, n) = FOrhs_arrs[bx](i, j, k, n);
-        }
-    });
+	amrex::IntVect ng(0);
+	amrex::ParallelFor(redoFlag, ng, ncomp, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
+		if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
+			rhs_arrs[bx](i, j, k, n) = FOrhs_arrs[bx](i, j, k, n);
+		}
+	});
 }
 
 template <typename problem_t>
