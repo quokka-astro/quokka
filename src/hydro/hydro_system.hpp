@@ -147,7 +147,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
 				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost, int nvars);
 
-	static void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma);
+	static void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag);
 
 	static void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
 				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
@@ -1435,10 +1435,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma)
+void HydroSystem<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	auto const &primVar = primVar_mf.const_arrays();
+	auto const &redoFlag_arrs = redoFlag.const_arrays();
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
 
 	amrex::ParallelFor(primVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -1460,6 +1461,9 @@ void HydroSystem<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_c
 		}
 
 		amrex::Real gamma_dt = gamma * dt_lev;
+    if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
+			gamma_dt = dt_lev;
+		}
 
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			int vel_g_idx = x1Velocity_index + dir;

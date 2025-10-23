@@ -342,6 +342,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
 			   amrex::iMultiFab &redoFlag);
+			
+	void replaceRhs(amrex::MultiFab &rhs, amrex::MultiFab const &FOrhs, amrex::iMultiFab const &redoFlag);
 
 	void replaceEMFs(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf_components, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FO_emf_components,
 			 amrex::iMultiFab &redoFlag);
@@ -1619,7 +1621,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 
 			HydroSystem<problem_t>::ConservedToPrimitive(stateNew_cc, stateNew_fc, primVarNew, nghost_cc_);
-			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateNew_cc, primVarNew, dt_lev, gamma);
+			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateNew_cc, primVarNew, dt_lev, gamma, redoFlag);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1683,6 +1685,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], nvars_, 0);
+		amrex::MultiFab FOrhs(grids[lev], dmap[lev], nvars_, 0);
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
 
@@ -1711,18 +1714,15 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 			replaceFluxes(flux_rk2, FOfluxArrays, redoFlag);
 			replaceFluxes(avgFaceVel, FOfaceVel, redoFlag); // needed for dual energy
-			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
-			replaceFluxes(faceVel, FOfaceVel, redoFlag);
+
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				replaceEMFs(ec_emf_components_rk_ave, ec_emf_components_fo, redoFlag); // replaces EMF components
 			}
 
 			// re-do RK update
-			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, nvars_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
-			rhs.mult(0.5, 0, nvars_, 0);
-			amrex::MultiFab::Saxpy(rhs, 0.5 / dt_lev, stateInter_cc, 0, 0, nvars_, 0);
-			amrex::MultiFab::Saxpy(rhs, -0.5 / dt_lev, stateOld_cc, 0, 0, nvars_, 0);
+			HydroSystem<problem_t>::ComputeRhsFromFluxes(FOrhs, FOfluxArrays, dx, nvars_);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(FOrhs, stateOld_cc, dx, FOfaceVel, redoFlag);
+			replaceRhs(rhs, FOrhs, redoFlag);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, nvars_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -1766,7 +1766,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 
 			HydroSystem<problem_t>::ConservedToPrimitive(stateFinal_cc, stateFinal_fc, primVarFinal, nghost_cc_);
-			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateFinal_cc, primVarFinal, dt_lev, gamma);
+			HydroSystem<problem_t>::UpdateStatesFromDustDrag(stateFinal_cc, primVarFinal, dt_lev, gamma, redoFlag);
 		}
 
 		// prevent vacuum
@@ -1852,6 +1852,27 @@ void QuokkaSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AMRE
 			}
 		});
 	}
+}
+
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::replaceRhs(amrex::MultiFab &rhs, amrex::MultiFab const &FOrhs, 
+                                            amrex::iMultiFab const &redoFlag)
+{
+    const BL_PROFILE("QuokkaSimulation::replaceRhs()");
+
+    AMREX_ASSERT(rhs.nComp() == FOrhs.nComp());
+    const int ncomp = rhs.nComp();
+
+    auto const &FOrhs_arrs = FOrhs.const_arrays();
+    auto const &redoFlag_arrs = redoFlag.const_arrays();
+    auto rhs_arrs = rhs.arrays();
+
+    amrex::IntVect ng(0); 
+    amrex::ParallelFor(redoFlag, ng, ncomp, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
+        if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
+            rhs_arrs[bx](i, j, k, n) = FOrhs_arrs[bx](i, j, k, n);
+        }
+    });
 }
 
 template <typename problem_t>
