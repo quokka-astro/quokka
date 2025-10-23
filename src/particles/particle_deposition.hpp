@@ -104,9 +104,11 @@ struct MassDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const amrex::Real gConstLocal = Gconst;
+		const amrex::Real cellVolumeFactor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
 		// Deposit mass weighted by 4 pi G
 		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			return 4.0 * M_PI * Gconst * part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			return 4.0 * M_PI * gConstLocal * part.rdata(comp) * cellVolumeFactor;
 		});
 	}
 };
