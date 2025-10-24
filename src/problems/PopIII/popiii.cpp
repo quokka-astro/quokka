@@ -12,6 +12,7 @@
 #include "util/BC.hpp"
 #include <array>
 #include <fstream>
+#include <numbers>
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -353,7 +354,7 @@ template <> void QuokkaSimulation<PopIII>::refineGrid(int lev, amrex::TagBoxArra
 
 			amrex::Real const cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
 
-			const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
+			const amrex::Real l_Jeans = cs * std::sqrt(std::numbers::pi / (G * rho));
 			// add a density criterion for refinement so that no initial refinement is ever triggered outside the core
 			// typically, a density threshold ~ initial core density works well
 			if (l_Jeans < (N_cells * dx) && rho > jeans_density_threshold) {

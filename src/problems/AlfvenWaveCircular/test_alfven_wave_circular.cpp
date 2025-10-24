@@ -9,6 +9,7 @@
 #include <cassert>
 #include <cmath>
 #include <gcem.hpp>
+#include <numbers>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -49,7 +50,7 @@ constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveCircular>::gamma;
 // k = 2 pi / wave_length. note: wave_length should be an integer, because of periodic BCs + the requirement that the magnetic field be continuous. also, the
 // box length = 1, so |k| in [1, inf)
 constexpr double num_modes = 1;
-constexpr double k_amplitude = 2.0 * M_PI * num_modes;
+constexpr double k_amplitude = 2.0 * std::numbers::pi * num_modes;
 
 // background states
 constexpr double bg_density = 1.0;

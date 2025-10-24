@@ -11,6 +11,7 @@
 #include "stellarpop_data.hpp"
 #include <cmath>
 #include <limits>
+#include <numbers>
 
 namespace quokka
 {
@@ -377,7 +378,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
-			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
+			const amrex::Real t_ff = std::sqrt(3.0 * std::numbers::pi / (32.0 * C::Gconst * cell_density));
 			const amrex::Real prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
@@ -485,7 +486,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						double const cos_theta_random =
 						    (2 * amrex::Random(engine) - 1.0); // Sample cos theta from a uniform distribution between -1 to 1.
 						double const phi_random =
-						    (1. - amrex::Random(engine)) * 2. * M_PI; // Sample phi from a uniform distribution between 0 and 2*pi
+						    (1. - amrex::Random(engine)) * 2. * std::numbers::pi; // Sample phi from a uniform distribution between 0 and 2*pi
 
 						double const vx_random = v_mag * std::sqrt(1. - cos_theta_random * cos_theta_random) * std::cos(phi_random);
 						double const vy_random = v_mag * std::sqrt(1. - cos_theta_random * cos_theta_random) * std::sin(phi_random);

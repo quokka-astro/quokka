@@ -26,6 +26,7 @@ namespace filesystem = experimental::filesystem;
 }
 #endif
 #include <limits>
+#include <numbers>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -1044,7 +1045,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// *add* density to rhs_mf
 		// (N.B. particles **will not work** if you overwrite the density here!)
-		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		rhs[bx](i, j, k) += 4.0 * std::numbers::pi * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
 	amrex::Gpu::streamSynchronizeAll();
 }

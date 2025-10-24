@@ -27,89 +27,35 @@ template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto reorderMultiIndex<Flux
 
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto reorderMultiIndex<FluxDir::X3>(int i, int j, int k) { return std::make_tuple(k, i, j); }
 
-template <class T, FluxDir N, class Enable = void> struct Array4View {
+template <class T, FluxDir N> struct Array4View {
 	amrex::Array4<T> arr_;
 	constexpr static FluxDir indexOrder = N;
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
-};
 
-// X1-flux
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k, int n) const noexcept -> decltype(auto)
+	{
+		if constexpr (N == FluxDir::X1) {
+			return arr_(i, j, k, n);
+		} else if constexpr (N == FluxDir::X2) {
+			return arr_(k, i, j, n);
+		} else {
+			static_assert(N == FluxDir::X3, "Unsupported flux direction for Array4View");
+			return arr_(j, k, i, n);
+		}
+	}
 
-// if T is non-const
-template <class T> struct Array4View<T, FluxDir::X1, std::enable_if_t<!std::is_const_v<T>>> {
-	amrex::Array4<T> arr_;
-	constexpr static FluxDir indexOrder = FluxDir::X1;
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k, int n) const noexcept -> T & { return arr_(i, j, k, n); }
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept -> T & { return arr_(i, j, k); }
-};
-
-// if T is const
-template <class T> struct Array4View<T, FluxDir::X1, std::enable_if_t<std::is_const_v<T>>> {
-	amrex::Array4<T> arr_;
-	constexpr static FluxDir indexOrder = FluxDir::X1;
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k, int n) const noexcept -> T { return arr_(i, j, k, n); }
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept -> T { return arr_(i, j, k); }
-};
-
-// X2-flux
-
-// if T is non-const
-template <class T> struct Array4View<T, FluxDir::X2, std::enable_if_t<!std::is_const_v<T>>> {
-	amrex::Array4<T> arr_;
-	constexpr static FluxDir indexOrder = FluxDir::X2;
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k, int n) const noexcept -> T & { return arr_(k, i, j, n); }
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept -> T & { return arr_(k, i, j); }
-};
-
-// if T is const
-template <class T> struct Array4View<T, FluxDir::X2, std::enable_if_t<std::is_const_v<T>>> {
-	amrex::Array4<T> arr_;
-	constexpr static FluxDir indexOrder = FluxDir::X2;
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k, int n) const noexcept -> T { return arr_(k, i, j, n); }
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept -> T { return arr_(k, i, j); }
-};
-
-// X3-flux
-
-// if T is non-const
-template <class T> struct Array4View<T, FluxDir::X3, std::enable_if_t<!std::is_const_v<T>>> {
-	amrex::Array4<T> arr_;
-	constexpr static FluxDir indexOrder = FluxDir::X3;
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k, int n) const noexcept -> T & { return arr_(j, k, i, n); }
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept -> T & { return arr_(j, k, i); }
-};
-
-// if T is const
-template <class T> struct Array4View<T, FluxDir::X3, std::enable_if_t<std::is_const_v<T>>> {
-	amrex::Array4<T> arr_;
-	constexpr static FluxDir indexOrder = FluxDir::X3;
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k, int n) const noexcept -> T { return arr_(j, k, i, n); }
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept -> T { return arr_(j, k, i); }
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept -> decltype(auto)
+	{
+		if constexpr (N == FluxDir::X1) {
+			return arr_(i, j, k);
+		} else if constexpr (N == FluxDir::X2) {
+			return arr_(k, i, j);
+		} else {
+			static_assert(N == FluxDir::X3, "Unsupported flux direction for Array4View");
+			return arr_(j, k, i);
+		}
+	}
 };
 } // namespace quokka
 

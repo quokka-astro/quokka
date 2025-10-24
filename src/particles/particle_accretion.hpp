@@ -10,6 +10,7 @@
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 #include <limits>
+#include <numbers>
 
 namespace quokka
 {
@@ -104,7 +105,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
 	constexpr double lambda = gcem::exp(1.5) / 4.0;
 	AMREX_ASSERT(rho_infty > 0.0);
-	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
+	const double M_dot = 4.0 * std::numbers::pi * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
 	AMREX_ASSERT(M_dot >= 0.0);
 
 	// Compute accretion kernel radius,

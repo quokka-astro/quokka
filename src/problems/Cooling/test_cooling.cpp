@@ -7,6 +7,7 @@
 /// \brief Defines a test problem for SUNDIALS cooling.
 ///
 #include <fmt/format.h>
+#include <numbers>
 #include <random>
 
 #include "AMReX_BC_TYPES.H"
@@ -67,7 +68,7 @@ template <> void QuokkaSimulation<CoolingTest>::preCalculateInitialConditions()
 
 	// 64-bit Mersenne Twister (do not use 32-bit version for sampling doubles!)
 	std::mt19937_64 rng(1); // NOLINT
-	std::uniform_real_distribution<double> sample_phase(0., 2.0 * M_PI);
+	std::uniform_real_distribution<double> sample_phase(0., 2.0 * std::numbers::pi);
 
 	// Initialize data on the host
 	for (int j = tlo[0]; j <= thi[0]; ++j) {
@@ -109,9 +110,9 @@ template <> void QuokkaSimulation<CoolingTest>::setInitialConditionsOnGrid(quokk
 					if ((ki == 0) && (kj == 0) && (kk == 0)) {
 						continue;
 					}
-					Real const kx = 2.0 * M_PI * static_cast<Real>(ki) / Lx;
-					Real const ky = 2.0 * M_PI * static_cast<Real>(kj) / Lx;
-					Real const kz = 2.0 * M_PI * static_cast<Real>(kk) / Lx;
+					Real const kx = 2.0 * std::numbers::pi * static_cast<Real>(ki) / Lx;
+					Real const ky = 2.0 * std::numbers::pi * static_cast<Real>(kj) / Lx;
+					Real const kz = 2.0 * std::numbers::pi * static_cast<Real>(kk) / Lx;
 					delta_rho += A * std::sin(x * kx + y * ky + z * kz + phase_table(ki, kj, kk));
 				}
 			}

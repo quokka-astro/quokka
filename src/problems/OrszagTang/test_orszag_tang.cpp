@@ -10,12 +10,12 @@
 ///	  https://www.astro.princeton.edu/~jstone/Athena/tests/orszag-tang/pagesource.html)
 ///
 
-#include <cmath>
-
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
+#include <cmath>
+#include <numbers>
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
@@ -48,7 +48,7 @@ constexpr double B0 = 1.0 / gcem::sqrt(4.0 * PI);
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto A_z(double x, double y) -> double
 {
-	return B0 / (4.0 * M_PI) * (std::cos(4.0 * M_PI * x) - 2.0 * std::cos(2.0 * M_PI * y));
+	return B0 / (4.0 * std::numbers::pi) * (std::cos(4.0 * std::numbers::pi * x) - 2.0 * std::cos(2.0 * std::numbers::pi * y));
 };
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto B_x(double xL, double yL, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> double
@@ -70,15 +70,15 @@ template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGrid(quokka
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	constexpr double gamma_gas = quokka::EOS_Traits<OrszagTang>::gamma;
-	constexpr double rho0 = 25. / (36. * M_PI);
-	constexpr double P0 = 5. / (12. * M_PI);
+	constexpr double rho0 = 25. / (36. * std::numbers::pi);
+	constexpr double P0 = 5. / (12. * std::numbers::pi);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double x = prob_lo[0] + ((i + 0.5) * dx[0]);
 		const double y = prob_lo[1] + ((j + 0.5) * dx[1]);
 
-		const double vx = std::sin(2 * M_PI * y);
-		const double vy = -std::sin(2 * M_PI * x);
+		const double vx = std::sin(2 * std::numbers::pi * y);
+		const double vy = -std::sin(2 * std::numbers::pi * x);
 
 		const double Bx = 0.5 * (B_x(x - 0.5 * dx[0], y - 0.5 * dx[1], dx) + B_x(x + 0.5 * dx[0], y - 0.5 * dx[1], dx));
 		const double By = 0.5 * (B_y(x - 0.5 * dx[0], y - 0.5 * dx[1], dx) + B_y(x - 0.5 * dx[0], y + 0.5 * dx[1], dx));

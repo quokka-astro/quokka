@@ -9,6 +9,7 @@
 ///
 
 #include <cmath>
+#include <numbers>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -60,7 +61,7 @@ template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGrid(quok
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double y = prob_lo[1] + ((j + 0.5) * dx[1]);
-		const double vx = A * std::sin(2.0 * M_PI * y);
+		const double vx = A * std::sin(2.0 * std::numbers::pi * y);
 
 		const double Ekin = 0.5 * rho0 * (vx * vx);
 		const double Eint = P0 / (gamma_gas - 1.0);

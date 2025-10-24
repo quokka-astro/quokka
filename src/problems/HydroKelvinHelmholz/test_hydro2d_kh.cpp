@@ -14,6 +14,7 @@
 #include "math/interpolate.hpp"
 #include <cmath>
 #include <fstream>
+#include <numbers>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
@@ -73,7 +74,7 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::setInitialConditionsOn
 
 		double const rho = 1.5 - 0.5 * std::tanh(yy / L);
 		double const vx = 0.5 * std::tanh(yy / L);
-		double const vy = A * std::cos(4.0 * M_PI * (x - x0)) * std::exp(-(yy * yy) / (sigma * sigma));
+		double const vy = A * std::cos(4.0 * std::numbers::pi * (x - x0)) * std::exp(-(yy * yy) / (sigma * sigma));
 		double const vz = 0.;
 		double const P = 2.5;
 

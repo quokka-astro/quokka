@@ -5,6 +5,7 @@
 #include "fundamental_constants.H"
 #include "math/FastMath.hpp"
 #include "particles/particle_types.hpp"
+#include <numbers>
 
 namespace quokka::ParticleUtils
 {
@@ -15,7 +16,7 @@ constexpr double jeansNo = 0.25; // Jeans number
 
 static_assert(stencil_size <= 3, "stencil_size must be <= 3");
 
-constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * stencil_size * stencil_size * stencil_size;
+constexpr amrex::Real stencil_volume = 4.0 / 3.0 * std::numbers::pi_v<amrex::Real> * stencil_size * stencil_size * stencil_size;
 
 using kernel_weights_array_t =
     amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>;
@@ -76,7 +77,7 @@ constexpr kernel_weights_array_t kernel_spherical_uniform_3_weights = {{{{{1.000
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double cs_cell, double dx) -> double
 {
-	return jeansNo * jeansNo * M_PI * cs_cell * cs_cell / (C::Gconst * (dx * dx));
+	return jeansNo * jeansNo * std::numbers::pi * cs_cell * cs_cell / (C::Gconst * (dx * dx));
 }
 
 inline void roundoffMultiFab(amrex::MultiFab &mf)

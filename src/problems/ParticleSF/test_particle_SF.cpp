@@ -15,6 +15,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include <numbers>
 
 struct ParticleSFProblem {
 };
@@ -123,7 +124,7 @@ auto problem_main() -> int
 
 	const amrex::Real eps_star = 0.5;
 	const amrex::Real rho0 = n0 * mu;
-	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
+	const amrex::Real t_ff = std::sqrt(3.0 * std::numbers::pi / (32.0 * C::Gconst * rho0));
 	const amrex::Real prob_star_formation = (eps_ff / eps_star) * (sim.initDt_ / t_ff);
 	amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,

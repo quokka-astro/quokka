@@ -10,6 +10,7 @@
 #include <cassert>
 #include <cmath>
 #include <gcem.hpp>
+#include <numbers>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -139,7 +140,7 @@ AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// 
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
 
 // wavefront
-AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
+AMREX_GPU_MANAGED double k_magn = 2.0 * std::numbers::pi; // NOLINT
 
 /// \brief Rotate a vector from PRF to MRF by multiplying with the rotation matrix R.
 /// \details Implements v_mrf = R * v_prf, where the rows of R are the
@@ -372,7 +373,7 @@ auto problem_main() -> int
 	double angle_between_k_b0_deg = 0.0;
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 
-	constexpr double deg2rad = M_PI / 180.0;
+	constexpr double deg2rad = std::numbers::pi / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 
 	int num_modes_x = 0;
@@ -387,8 +388,8 @@ auto problem_main() -> int
 	}
 
 	// we assume box length = 1.0
-	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
-						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
+	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * std::numbers::pi * static_cast<amrex::Real>(num_modes_x), 2.0 * std::numbers::pi * static_cast<amrex::Real>(num_modes_y),
+						      2.0 * std::numbers::pi * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
