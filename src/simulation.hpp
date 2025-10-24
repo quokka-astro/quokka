@@ -26,6 +26,7 @@ namespace filesystem = experimental::filesystem;
 }
 #endif
 #include <algorithm>
+#include <ranges>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -3019,9 +3020,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 	}
 
 	// Remove duplicates from m_diagVars and check that all the variables exist
-	std::sort(m_diagVars.begin(), m_diagVars.end());
-	auto last = std::unique(m_diagVars.begin(), m_diagVars.end());
-	m_diagVars.erase(last, m_diagVars.end());
+		std::ranges::sort(m_diagVars);
+		auto const new_end = std::ranges::unique(m_diagVars).begin();
+		m_diagVars.erase(new_end, m_diagVars.end());
 
 	auto isVarName = [this](std::string const &v) {
 		auto const varnames = GetPlotfileVarNames();
