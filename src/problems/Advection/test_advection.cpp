@@ -36,7 +36,7 @@ template <> struct Physics_Traits<SawtoothProblem> {
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
+	static constexpr int nDustGroups = 1;			     // number of dust groups
 	static constexpr int nGroups = 1;			     // number of radiation groups, need to set despite radiation is not enabled.
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
