@@ -37,8 +37,8 @@ option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
   
-  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.7)
-    message(FATAL_ERROR "You must use CUDA version 11.7 or newer to compile Quokka. All previous CUDA versions have compiler bugs that cause Quokka to crash.")
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
+    message(FATAL_ERROR "You must use CUDA version 12.0 or newer to compile Quokka because C++20 support is needed.")
   endif()
   
   if(CMAKE_VERSION VERSION_LESS 3.20)
