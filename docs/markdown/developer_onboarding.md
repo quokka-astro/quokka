@@ -1,7 +1,7 @@
 # Developer onboarding notes
 
 ## What Quokka is built to do
-- **Radiation hydrodynamics on AMReX.** Quokka targets multi-physics astrophysical simulations using the AMReX adaptive mesh refinement framework, providing two-moment radiation transport, hydrodynamics, and optional MHD capabilities in a single-source C++17 codebase ([README.md](https://github.com/quokka-astro/quokka/blob/development/README.md#L11-L40)).
+- **Radiation hydrodynamics on AMReX.** Quokka targets multi-physics astrophysical simulations using the AMReX adaptive mesh refinement framework, providing two-moment radiation transport, hydrodynamics, and optional MHD capabilities in a single-source C++20 codebase ([README.md](https://github.com/quokka-astro/quokka/blob/development/README.md#L11-L40)).
 - **Modular simulation core.** The `AMRSimulation` base class orchestrates time stepping, refinement, and I/O, while `QuokkaSimulation` adds domain-specific toggles for radiation, cooling, chemistry, and MHD support that downstream problems can enable selectively ([simulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/simulation.hpp#L1-L120), [QuokkaSimulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L66-L198)).
 
 ## Repository tour

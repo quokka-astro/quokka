@@ -36,4 +36,4 @@ hydro.use_dual_energy = 0
 
 # MHD parameters
 mhd.emf_reconstruction_order = 5  # xPPM for EMF
-mhd.emf_averaging_method = LD04
+mhd.emf_averaging_scheme = LondrilloDelZanna2004
