@@ -150,6 +150,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int n_mhd_vars_per_dim_ = MHDSystem<problem_t>::nvar_per_dim_; // mhd
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup;	// number of dust variables for each dust group
 
+	static amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_;
+
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::Real radiationCflNumber_ = 0.3;
@@ -211,6 +213,20 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
+		// read dust parameters if enabled
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				dust_alpha_[g] = 1.0;  
+			}
+			amrex::ParmParse pp("dust");
+			std::vector<amrex::Real> alpha_vec;
+			if (pp.queryarr("alpha", alpha_vec)) {  
+				AMREX_ASSERT(alpha_vec.size() == Physics_Traits<problem_t>::nDustGroups);
+				for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+						dust_alpha_[g] = alpha_vec[g];
+				}
+			}
+		}
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
@@ -2269,6 +2285,9 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 }
 
 template <typename problem_t>
+amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> QuokkaSimulation<problem_t>::dust_alpha_;
+
+template <typename problem_t>
 void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
 							   amrex::iMultiFab &redoFlag)
 {
@@ -2290,10 +2309,7 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 			epsilon[g] = (rho_g > 0.0) ? rho_d[g] / rho_g : 0.0;
 		}
 
-		amrex::GpuArray<amrex::Real, N> alpha;
-		for (int g = 0; g < N; ++g) {
-			alpha[g] = 0.5 + 0.5 * g;
-		}
+		amrex::GpuArray<amrex::Real, N> alpha = dust_alpha_;
 
 		amrex::Real gamma_dt = gamma * dt_lev;
 		if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {

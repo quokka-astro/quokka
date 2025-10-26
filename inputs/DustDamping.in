@@ -22,3 +22,5 @@ suppress_output = 0
 
 stop_time = 0.3
 max_timesteps = 1000
+
+dust.alpha = 0.5 1.0
