@@ -216,14 +216,14 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		// read dust parameters if enabled
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-				dust_alpha_[g] = 1.0;  
+				dust_alpha_[g] = 1.0;
 			}
 			amrex::ParmParse pp("dust");
 			std::vector<amrex::Real> alpha_vec;
-			if (pp.queryarr("alpha", alpha_vec)) {  
+			if (pp.queryarr("alpha", alpha_vec)) {
 				AMREX_ASSERT(alpha_vec.size() == Physics_Traits<problem_t>::nDustGroups);
 				for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-						dust_alpha_[g] = alpha_vec[g];
+					dust_alpha_[g] = alpha_vec[g];
 				}
 			}
 		}
@@ -2284,8 +2284,7 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	}
 }
 
-template <typename problem_t>
-amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> QuokkaSimulation<problem_t>::dust_alpha_;
+template <typename problem_t> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> QuokkaSimulation<problem_t>::dust_alpha_;
 
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
