@@ -214,10 +214,10 @@ auto E_gas_analytic(double t) -> double
 		double const vd2_2 = v_dust2_analytic(t2);
 
 		double const term1 = (RHO_D1 * (vd1_1 - vg1) / TS1 * vg1 + RHO_D2 * (vd2_1 - vg1) / TS2 * vg1 +
-				OMEGA * (RHO_D1 * std::pow(vd1_1 - vg1, 2) / TS1 + RHO_D2 * std::pow(vd2_1 - vg1, 2) / TS2));
+				      OMEGA * (RHO_D1 * std::pow(vd1_1 - vg1, 2) / TS1 + RHO_D2 * std::pow(vd2_1 - vg1, 2) / TS2));
 
 		double const term2 = (RHO_D1 * (vd1_2 - vg2) / TS1 * vg2 + RHO_D2 * (vd2_2 - vg2) / TS2 * vg2 +
-				OMEGA * (RHO_D1 * std::pow(vd1_2 - vg2, 2) / TS1 + RHO_D2 * std::pow(vd2_2 - vg2, 2) / TS2));
+				      OMEGA * (RHO_D1 * std::pow(vd1_2 - vg2, 2) / TS1 + RHO_D2 * std::pow(vd2_2 - vg2, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}
@@ -258,10 +258,10 @@ auto problem_main() -> int
 
 	if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
 		std::vector<double> &t = sim.userData_.t_vec_;
-		std::vector<double>  const &v_gas = sim.userData_.v_gas_vec_;
-		std::vector<double>  const &v_dust1 = sim.userData_.v_dust1_vec_;
-		std::vector<double>  const &v_dust2 = sim.userData_.v_dust2_vec_;
-		std::vector<double>  const &E_gas = sim.userData_.E_gas_vec_;
+		std::vector<double> const &v_gas = sim.userData_.v_gas_vec_;
+		std::vector<double> const &v_dust1 = sim.userData_.v_dust1_vec_;
+		std::vector<double> const &v_dust2 = sim.userData_.v_dust2_vec_;
+		std::vector<double> const &E_gas = sim.userData_.E_gas_vec_;
 
 		// calculate dense analytic solution for plotting
 		const size_t n_dense_points = 1000;
