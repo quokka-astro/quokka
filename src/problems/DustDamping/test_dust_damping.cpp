@@ -24,7 +24,7 @@ constexpr double RHO_D1 = 10.0;
 constexpr double RHO_D2 = 100.0;
 constexpr double TS1 = 2.0;
 constexpr double TS2 = 1.0;
-constexpr double OMEGA = 0.0;
+constexpr double OMEGA = 1.0;
 constexpr double P_INITIAL = 1.0;
 
 // analytic solution function declarations
@@ -33,10 +33,10 @@ auto v_dust1_analytic(double t) -> double;
 auto v_dust2_analytic(double t) -> double;
 auto E_gas_analytic(double t) -> double;
 
-struct StreamingProblem {
+struct DustDamping {
 };
 
-template <> struct SimulationData<StreamingProblem> {
+template <> struct SimulationData<DustDamping> {
 	std::vector<double> t_vec_;
 	std::vector<double> v_gas_vec_;
 	std::vector<double> v_dust1_vec_;
@@ -44,7 +44,7 @@ template <> struct SimulationData<StreamingProblem> {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct quokka::EOS_Traits<StreamingProblem> {
+template <> struct quokka::EOS_Traits<DustDamping> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
@@ -54,10 +54,10 @@ constexpr double rho = 1.0;
 constexpr double rho_dust1 = 10.0;
 constexpr double rho_dust2 = 100.0;
 constexpr double v0 = 1.0;
-constexpr double initial_Egas = P_INITIAL / (quokka::EOS_Traits<StreamingProblem>::gamma - 1.0) + 0.5 * rho * v0 * v0;
+constexpr double initial_Egas = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
-template <> struct Physics_Traits<StreamingProblem> {
+template <> struct Physics_Traits<DustDamping> {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -74,7 +74,7 @@ template <> struct Physics_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -92,29 +92,29 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 
 		// for gas
-		state_cc(i, j, k, HydroSystem<StreamingProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<StreamingProblem>::energy_index) = Egas0;
-		state_cc(i, j, k, HydroSystem<StreamingProblem>::internalEnergy_index) = Egas0;
-		state_cc(i, j, k, HydroSystem<StreamingProblem>::x1Momentum_index) = rho * vx0;
-		state_cc(i, j, k, HydroSystem<StreamingProblem>::x2Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<StreamingProblem>::x3Momentum_index) = 0.;
+		state_cc(i, j, k, HydroSystem<DustDamping>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<DustDamping>::energy_index) = Egas0;
+		state_cc(i, j, k, HydroSystem<DustDamping>::internalEnergy_index) = Egas0;
+		state_cc(i, j, k, HydroSystem<DustDamping>::x1Momentum_index) = rho * vx0;
+		state_cc(i, j, k, HydroSystem<DustDamping>::x2Momentum_index) = 0.;
+		state_cc(i, j, k, HydroSystem<DustDamping>::x3Momentum_index) = 0.;
 
-		if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
+		if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
 			// for dust1
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index) = rho_dust1;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust1 * vx_dust1;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index) = 0.;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index) = 0.;
+			state_cc(i, j, k, HydroSystem<DustDamping>::dustDensity_index) = rho_dust1;
+			state_cc(i, j, k, HydroSystem<DustDamping>::x1DustMomentum_index) = rho_dust1 * vx_dust1;
+			state_cc(i, j, k, HydroSystem<DustDamping>::x2DustMomentum_index) = 0.;
+			state_cc(i, j, k, HydroSystem<DustDamping>::x3DustMomentum_index) = 0.;
 			// for dust2
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index + numDustVars) = rho_dust2;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars) = rho_dust2 * vx_dust2;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index + numDustVars) = 0.;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index + numDustVars) = 0.;
+			state_cc(i, j, k, HydroSystem<DustDamping>::dustDensity_index + numDustVars) = rho_dust2;
+			state_cc(i, j, k, HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars) = rho_dust2 * vx_dust2;
+			state_cc(i, j, k, HydroSystem<DustDamping>::x2DustMomentum_index + numDustVars) = 0.;
+			state_cc(i, j, k, HydroSystem<DustDamping>::x3DustMomentum_index + numDustVars) = 0.;
 		}
 	});
 }
 
-template <> void QuokkaSimulation<StreamingProblem>::computeBeforeTimestep()
+template <> void QuokkaSimulation<DustDamping>::computeBeforeTimestep()
 {
 	// extract initial physical quantities at t=0
 	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
@@ -123,9 +123,9 @@ template <> void QuokkaSimulation<StreamingProblem>::computeBeforeTimestep()
 		userData_.t_vec_.push_back(0.0); // initial time t=0
 
 		// extract physical quantities
-		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[0];
-		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[0];
-		const double Egas_total = values.at(HydroSystem<StreamingProblem>::energy_index)[0];
+		const double density = values.at(HydroSystem<DustDamping>::density_index)[0];
+		const double momentum_x = values.at(HydroSystem<DustDamping>::x1Momentum_index)[0];
+		const double Egas_total = values.at(HydroSystem<DustDamping>::energy_index)[0];
 
 		// store gas velocity
 		const double v_gas = momentum_x / density;
@@ -134,23 +134,23 @@ template <> void QuokkaSimulation<StreamingProblem>::computeBeforeTimestep()
 		// store gas total energy
 		userData_.E_gas_vec_.push_back(Egas_total);
 
-		if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
+		if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
 			// store dust1 velocity
-			const double dust1_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index)[0];
-			const double dust1_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index)[0];
+			const double dust1_density = values.at(HydroSystem<DustDamping>::dustDensity_index)[0];
+			const double dust1_momentum_x = values.at(HydroSystem<DustDamping>::x1DustMomentum_index)[0];
 			const double v_dust1 = dust1_momentum_x / dust1_density;
 			userData_.v_dust1_vec_.push_back(v_dust1);
 
 			// store dust2 velocity
-			const double dust2_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index + numDustVars)[0];
-			const double dust2_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars)[0];
+			const double dust2_density = values.at(HydroSystem<DustDamping>::dustDensity_index + numDustVars)[0];
+			const double dust2_momentum_x = values.at(HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars)[0];
 			const double v_dust2 = dust2_momentum_x / dust2_density;
 			userData_.v_dust2_vec_.push_back(v_dust2);
 		}
 	}
 }
 
-template <> void QuokkaSimulation<StreamingProblem>::computeAfterTimestep()
+template <> void QuokkaSimulation<DustDamping>::computeAfterTimestep()
 {
 	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
 
@@ -158,9 +158,9 @@ template <> void QuokkaSimulation<StreamingProblem>::computeAfterTimestep()
 		userData_.t_vec_.push_back(tNew_[0]); // store current time
 
 		// extract physical quantities
-		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[0];
-		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[0];
-		const double Egas_total = values.at(HydroSystem<StreamingProblem>::energy_index)[0];
+		const double density = values.at(HydroSystem<DustDamping>::density_index)[0];
+		const double momentum_x = values.at(HydroSystem<DustDamping>::x1Momentum_index)[0];
+		const double Egas_total = values.at(HydroSystem<DustDamping>::energy_index)[0];
 
 		// store gas velocity
 		const double v_gas = momentum_x / density;
@@ -169,16 +169,16 @@ template <> void QuokkaSimulation<StreamingProblem>::computeAfterTimestep()
 		// store gas total energy
 		userData_.E_gas_vec_.push_back(Egas_total);
 
-		if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
+		if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
 			// store dust1 velocity
-			const double dust1_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index)[0];
-			const double dust1_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index)[0];
+			const double dust1_density = values.at(HydroSystem<DustDamping>::dustDensity_index)[0];
+			const double dust1_momentum_x = values.at(HydroSystem<DustDamping>::x1DustMomentum_index)[0];
 			const double v_dust1 = dust1_momentum_x / dust1_density;
 			userData_.v_dust1_vec_.push_back(v_dust1);
 
 			// store dust2 velocity
-			const double dust2_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index + numDustVars)[0];
-			const double dust2_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars)[0];
+			const double dust2_density = values.at(HydroSystem<DustDamping>::dustDensity_index + numDustVars)[0];
+			const double dust2_momentum_x = values.at(HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars)[0];
 			const double v_dust2 = dust2_momentum_x / dust2_density;
 			userData_.v_dust2_vec_.push_back(v_dust2);
 		}
@@ -222,7 +222,7 @@ auto E_gas_analytic(double t) -> double
 		integral += 0.5 * (term1 + term2) * dt;
 	}
 
-	const double E_gas_initial = P_INITIAL / (quokka::EOS_Traits<StreamingProblem>::gamma - 1.0) + 0.5 * 1.0 * std::pow(v_gas_analytic(0), 2);
+	const double E_gas_initial = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * 1.0 * std::pow(v_gas_analytic(0), 2);
 	return E_gas_initial + integral;
 }
 
@@ -233,7 +233,7 @@ auto problem_main() -> int
 	const double CFL_number = 0.4;
 
 	// boundary conditions
-	constexpr int nvars = HydroSystem<StreamingProblem>::nvar_;
+	constexpr int nvars = HydroSystem<DustDamping>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -243,7 +243,7 @@ auto problem_main() -> int
 	}
 
 	// problem initialization
-	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
+	QuokkaSimulation<DustDamping> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
@@ -256,7 +256,7 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
+	if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
 		std::vector<double> &t = sim.userData_.t_vec_;
 		std::vector<double> const &v_gas = sim.userData_.v_gas_vec_;
 		std::vector<double> const &v_dust1 = sim.userData_.v_dust1_vec_;
@@ -381,8 +381,8 @@ auto problem_main() -> int
 
 		for (int i = 0; i < nx; ++i) {
 			xs[i] = position[i];
-			const double density = values.at(HydroSystem<StreamingProblem>::density_index)[i];
-			const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[i];
+			const double density = values.at(HydroSystem<DustDamping>::density_index)[i];
+			const double momentum_x = values.at(HydroSystem<DustDamping>::x1Momentum_index)[i];
 			vx_sim[i] = momentum_x / density;
 			rho_gas_sim[i] = density;
 			vx_exact[i] = v0;

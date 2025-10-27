@@ -2314,14 +2314,24 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 			gamma_dt = dt_lev;
 		}
 
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vel_g_old{};
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N> vel_d_old;
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			int vel_g_idx = HydroSystem<problem_t>::x1Velocity_index + dir;
-			amrex::Real const v_g = primVar[bx](i, j, k, vel_g_idx);
+			vel_g_old[dir] = primVar[bx](i, j, k, vel_g_idx);
+
+			for (int g = 0; g < N; ++g) {
+				int vel_d_idx = HydroSystem<problem_t>::x1DustVelocity_index + dir + g * numDustVars_;
+				vel_d_old[g][dir] = primVar[bx](i, j, k, vel_d_idx);
+			}
+		}
+
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			amrex::Real const v_g = vel_g_old[dir];
 
 			amrex::GpuArray<amrex::Real, N> v_d;
 			for (int g = 0; g < N; ++g) {
-				int vel_d_idx = HydroSystem<problem_t>::x1DustVelocity_index + dir + g * numDustVars_;
-				v_d[g] = primVar[bx](i, j, k, vel_d_idx);
+				v_d[g] = vel_d_old[g][dir];
 			}
 
 			amrex::GpuArray<amrex::Real, N + 1> q;
@@ -2341,6 +2351,48 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 				int mom_d_idx = HydroSystem<problem_t>::x1DustMomentum_index + dir + g * numDustVars_;
 				consVar_cc[bx](i, j, k, mom_d_idx) += gamma_dt * drag_updates[1 + g];
 			}
+		}
+
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vel_g_new{};
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N> vel_d_new;
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> delta_mom_g{};
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N> delta_mom_d;
+
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			int mom_g_idx = HydroSystem<problem_t>::x1Momentum_index + dir;
+			vel_g_new[dir] = (rho_g > 0.0) ? consVar_cc[bx](i, j, k, mom_g_idx) / rho_g : 0.0;
+			delta_mom_g[dir] = consVar_cc[bx](i, j, k, mom_g_idx) - rho_g * vel_g_old[dir];
+
+			for (int g = 0; g < N; ++g) {
+				int mom_d_idx = HydroSystem<problem_t>::x1DustMomentum_index + dir + g * numDustVars_;
+				vel_d_new[g][dir] = (rho_d[g] > 0.0) ? consVar_cc[bx](i, j, k, mom_d_idx) / rho_d[g] : 0.0;
+				delta_mom_d[g][dir] = consVar_cc[bx](i, j, k, mom_d_idx) - rho_d[g] * vel_d_old[g][dir];
+			}
+		}
+
+		amrex::Real delta_E_g1 = 0.0;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			amrex::Real const avg_v_g = 0.5 * (vel_g_old[dir] + vel_g_new[dir]);
+			delta_E_g1 += delta_mom_g[dir] * avg_v_g;
+		}
+
+		amrex::Real delta_E_g2 = delta_E_g1;
+		for (int g = 0; g < N; ++g) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				amrex::Real avg_v_d = 0.5 * (vel_d_old[g][dir] + vel_d_new[g][dir]);
+				delta_E_g2 += delta_mom_d[g][dir] * avg_v_d;
+			}
+		}
+
+		amrex::Real omega = 1.0;
+		amrex::Real const delta_E = delta_E_g1 - omega * delta_E_g2;
+
+		int energy_idx = HydroSystem<problem_t>::energy_index;
+		consVar_cc[bx](i, j, k, energy_idx) += delta_E;
+
+		if (useDualEnergy_ == 1) {
+			int internal_idx = HydroSystem<problem_t>::internalEnergy_index;
+			consVar_cc[bx](i, j, k, internal_idx) += -omega * delta_E_g2;
 		}
 	});
 }
