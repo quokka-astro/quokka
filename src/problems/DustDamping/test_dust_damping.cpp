@@ -37,11 +37,11 @@ struct StreamingProblem {
 };
 
 template <> struct SimulationData<StreamingProblem> {
-    std::vector<double> t_vec_;
-    std::vector<double> v_gas_vec_;
-    std::vector<double> v_dust1_vec_;
-    std::vector<double> v_dust2_vec_;
-    std::vector<double> E_gas_vec_;
+	std::vector<double> t_vec_;
+	std::vector<double> v_gas_vec_;
+	std::vector<double> v_dust1_vec_;
+	std::vector<double> v_dust2_vec_;
+	std::vector<double> E_gas_vec_;
 };
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
@@ -116,125 +116,114 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 
 template <> void QuokkaSimulation<StreamingProblem>::computeBeforeTimestep()
 {
-    // extract initial physical quantities at t=0
-    if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
-        auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); 
-        
-        userData_.t_vec_.push_back(0.0);  // initial time t=0
-        
-        // extract physical quantities
-        const double density = values.at(HydroSystem<StreamingProblem>::density_index)[0];
-        const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[0];
-        const double Egas_total = values.at(HydroSystem<StreamingProblem>::energy_index)[0];
-        
-        // store gas velocity
-        const double v_gas = momentum_x / density;
-        userData_.v_gas_vec_.push_back(v_gas);
-        
-        // store gas total energy
-        userData_.E_gas_vec_.push_back(Egas_total);
-        
-        if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
-            // store dust1 velocity
-            const double dust1_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index)[0];
-            const double dust1_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index)[0];
-            const double v_dust1 = dust1_momentum_x / dust1_density;
-            userData_.v_dust1_vec_.push_back(v_dust1);
-            
-            // store dust2 velocity
-            const double dust2_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index + numDustVars)[0];
-            const double dust2_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars)[0];
-            const double v_dust2 = dust2_momentum_x / dust2_density;
-            userData_.v_dust2_vec_.push_back(v_dust2);
-        }
-    }
+	// extract initial physical quantities at t=0
+	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
+		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
+
+		userData_.t_vec_.push_back(0.0); // initial time t=0
+
+		// extract physical quantities
+		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[0];
+		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[0];
+		const double Egas_total = values.at(HydroSystem<StreamingProblem>::energy_index)[0];
+
+		// store gas velocity
+		const double v_gas = momentum_x / density;
+		userData_.v_gas_vec_.push_back(v_gas);
+
+		// store gas total energy
+		userData_.E_gas_vec_.push_back(Egas_total);
+
+		if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
+			// store dust1 velocity
+			const double dust1_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index)[0];
+			const double dust1_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index)[0];
+			const double v_dust1 = dust1_momentum_x / dust1_density;
+			userData_.v_dust1_vec_.push_back(v_dust1);
+
+			// store dust2 velocity
+			const double dust2_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index + numDustVars)[0];
+			const double dust2_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars)[0];
+			const double v_dust2 = dust2_momentum_x / dust2_density;
+			userData_.v_dust2_vec_.push_back(v_dust2);
+		}
+	}
 }
 
 template <> void QuokkaSimulation<StreamingProblem>::computeAfterTimestep()
 {
-    auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5); 
-    
-    if (amrex::ParallelDescriptor::IOProcessor()) {
-        userData_.t_vec_.push_back(tNew_[0]);  // store current time
-        
-        // extract physical quantities
-        const double density = values.at(HydroSystem<StreamingProblem>::density_index)[0];
-        const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[0];
-        const double Egas_total = values.at(HydroSystem<StreamingProblem>::energy_index)[0];
-        
-        // store gas velocity
-        const double v_gas = momentum_x / density;
-        userData_.v_gas_vec_.push_back(v_gas);
-        
-        // store gas total energy
-        userData_.E_gas_vec_.push_back(Egas_total);
-        
-        if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
-            // store dust1 velocity
-            const double dust1_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index)[0];
-            const double dust1_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index)[0];
-            const double v_dust1 = dust1_momentum_x / dust1_density;
-            userData_.v_dust1_vec_.push_back(v_dust1);
-            
-            // store dust2 velocity
-            const double dust2_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index + numDustVars)[0];
-            const double dust2_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars)[0];
-            const double v_dust2 = dust2_momentum_x / dust2_density;
-            userData_.v_dust2_vec_.push_back(v_dust2);
-        }
-    }
+	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		userData_.t_vec_.push_back(tNew_[0]); // store current time
+
+		// extract physical quantities
+		const double density = values.at(HydroSystem<StreamingProblem>::density_index)[0];
+		const double momentum_x = values.at(HydroSystem<StreamingProblem>::x1Momentum_index)[0];
+		const double Egas_total = values.at(HydroSystem<StreamingProblem>::energy_index)[0];
+
+		// store gas velocity
+		const double v_gas = momentum_x / density;
+		userData_.v_gas_vec_.push_back(v_gas);
+
+		// store gas total energy
+		userData_.E_gas_vec_.push_back(Egas_total);
+
+		if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
+			// store dust1 velocity
+			const double dust1_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index)[0];
+			const double dust1_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index)[0];
+			const double v_dust1 = dust1_momentum_x / dust1_density;
+			userData_.v_dust1_vec_.push_back(v_dust1);
+
+			// store dust2 velocity
+			const double dust2_density = values.at(HydroSystem<StreamingProblem>::dustDensity_index + numDustVars)[0];
+			const double dust2_momentum_x = values.at(HydroSystem<StreamingProblem>::x1DustMomentum_index + numDustVars)[0];
+			const double v_dust2 = dust2_momentum_x / dust2_density;
+			userData_.v_dust2_vec_.push_back(v_dust2);
+		}
+	}
 }
 
 // implementation of analytic solution functions
-double analytic_velocity(double t, double c1, double c2) {
-    return V_COM + c1 * std::exp(LAMBDA1 * t) + c2 * std::exp(LAMBDA2 * t);
-}
+double analytic_velocity(double t, double c1, double c2) { return V_COM + c1 * std::exp(LAMBDA1 * t) + c2 * std::exp(LAMBDA2 * t); }
 
-double v_gas_analytic(double t) {
-    return analytic_velocity(t, C_GAS_1, C_GAS_2);
-}
+double v_gas_analytic(double t) { return analytic_velocity(t, C_GAS_1, C_GAS_2); }
 
-double v_dust1_analytic(double t) {
-    return analytic_velocity(t, C_DUST1_1, C_DUST1_2);
-}
+double v_dust1_analytic(double t) { return analytic_velocity(t, C_DUST1_1, C_DUST1_2); }
 
-double v_dust2_analytic(double t) {
-    return analytic_velocity(t, C_DUST2_1, C_DUST2_2);
-}
+double v_dust2_analytic(double t) { return analytic_velocity(t, C_DUST2_1, C_DUST2_2); }
 
 // calculate analytic gas energy
-double E_gas_analytic(double t) {
-    const int n_points = 1000;
-    const double dt = t / n_points;
-    double integral = 0.0;
-    
-    for (int i = 0; i < n_points; ++i) {
-        double t1 = i * dt;
-        double t2 = (i + 1) * dt;
-        
-        double vg1 = v_gas_analytic(t1);
-        double vd1_1 = v_dust1_analytic(t1);
-        double vd2_1 = v_dust2_analytic(t1);
-        
-        double vg2 = v_gas_analytic(t2);
-        double vd1_2 = v_dust1_analytic(t2);
-        double vd2_2 = v_dust2_analytic(t2);
-        
-        double term1 = (RHO_D1 * (vd1_1 - vg1) / TS1 * vg1 +
-                       RHO_D2 * (vd2_1 - vg1) / TS2 * vg1 +
-                       OMEGA * (RHO_D1 * std::pow(vd1_1 - vg1, 2) / TS1 +
-                               RHO_D2 * std::pow(vd2_1 - vg1, 2) / TS2));
-        
-        double term2 = (RHO_D1 * (vd1_2 - vg2) / TS1 * vg2 +
-                       RHO_D2 * (vd2_2 - vg2) / TS2 * vg2 +
-                       OMEGA * (RHO_D1 * std::pow(vd1_2 - vg2, 2) / TS1 +
-                               RHO_D2 * std::pow(vd2_2 - vg2, 2) / TS2));
-        
-        integral += 0.5 * (term1 + term2) * dt;
-    }
-    
-    const double E_gas_initial = P_INITIAL / (quokka::EOS_Traits<StreamingProblem>::gamma - 1.0) + 0.5 * 1.0 * std::pow(v_gas_analytic(0), 2);
-    return E_gas_initial + integral;
+double E_gas_analytic(double t)
+{
+	const int n_points = 1000;
+	const double dt = t / n_points;
+	double integral = 0.0;
+
+	for (int i = 0; i < n_points; ++i) {
+		double t1 = i * dt;
+		double t2 = (i + 1) * dt;
+
+		double vg1 = v_gas_analytic(t1);
+		double vd1_1 = v_dust1_analytic(t1);
+		double vd2_1 = v_dust2_analytic(t1);
+
+		double vg2 = v_gas_analytic(t2);
+		double vd1_2 = v_dust1_analytic(t2);
+		double vd2_2 = v_dust2_analytic(t2);
+
+		double term1 = (RHO_D1 * (vd1_1 - vg1) / TS1 * vg1 + RHO_D2 * (vd2_1 - vg1) / TS2 * vg1 +
+				OMEGA * (RHO_D1 * std::pow(vd1_1 - vg1, 2) / TS1 + RHO_D2 * std::pow(vd2_1 - vg1, 2) / TS2));
+
+		double term2 = (RHO_D1 * (vd1_2 - vg2) / TS1 * vg2 + RHO_D2 * (vd2_2 - vg2) / TS2 * vg2 +
+				OMEGA * (RHO_D1 * std::pow(vd1_2 - vg2, 2) / TS1 + RHO_D2 * std::pow(vd2_2 - vg2, 2) / TS2));
+
+		integral += 0.5 * (term1 + term2) * dt;
+	}
+
+	const double E_gas_initial = P_INITIAL / (quokka::EOS_Traits<StreamingProblem>::gamma - 1.0) + 0.5 * 1.0 * std::pow(v_gas_analytic(0), 2);
+	return E_gas_initial + integral;
 }
 
 auto problem_main() -> int
@@ -281,7 +270,7 @@ auto problem_main() -> int
 		std::vector<double> v_dust1_exact_dense(n_dense_points);
 		std::vector<double> v_dust2_exact_dense(n_dense_points);
 		std::vector<double> E_gas_exact_dense(n_dense_points);
-		
+
 		double t_max = t.empty() ? 0.0 : t.back();
 		for (size_t i = 0; i < n_dense_points; ++i) {
 			t_dense[i] = t_max * i / (n_dense_points - 1);
@@ -326,8 +315,7 @@ auto problem_main() -> int
 
 		int status = 0;
 		const double rel_err_tol = 0.01;
-		if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || 
-		    (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
+		if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
 			status = 1;
 		}
 
