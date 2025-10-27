@@ -28,10 +28,10 @@ constexpr double OMEGA = 0.0;
 constexpr double P_INITIAL = 1.0;
 
 // analytic solution function declarations
-double v_gas_analytic(double t);
-double v_dust1_analytic(double t);
-double v_dust2_analytic(double t);
-double E_gas_analytic(double t);
+auto v_gas_analytic(double t) -> double;
+auto v_dust1_analytic(double t) -> double;
+auto v_dust2_analytic(double t) -> double;
+auto E_gas_analytic(double t) -> double;
 
 struct StreamingProblem {
 };
@@ -186,37 +186,37 @@ template <> void QuokkaSimulation<StreamingProblem>::computeAfterTimestep()
 }
 
 // implementation of analytic solution functions
-double analytic_velocity(double t, double c1, double c2) { return V_COM + c1 * std::exp(LAMBDA1 * t) + c2 * std::exp(LAMBDA2 * t); }
+auto analytic_velocity(double t, double c1, double c2) -> double { return V_COM + c1 * std::exp(LAMBDA1 * t) + c2 * std::exp(LAMBDA2 * t); }
 
-double v_gas_analytic(double t) { return analytic_velocity(t, C_GAS_1, C_GAS_2); }
+auto v_gas_analytic(double t) -> double { return analytic_velocity(t, C_GAS_1, C_GAS_2); }
 
-double v_dust1_analytic(double t) { return analytic_velocity(t, C_DUST1_1, C_DUST1_2); }
+auto v_dust1_analytic(double t) -> double { return analytic_velocity(t, C_DUST1_1, C_DUST1_2); }
 
-double v_dust2_analytic(double t) { return analytic_velocity(t, C_DUST2_1, C_DUST2_2); }
+auto v_dust2_analytic(double t) -> double { return analytic_velocity(t, C_DUST2_1, C_DUST2_2); }
 
 // calculate analytic gas energy
-double E_gas_analytic(double t)
+auto E_gas_analytic(double t) -> double
 {
 	const int n_points = 1000;
 	const double dt = t / n_points;
 	double integral = 0.0;
 
 	for (int i = 0; i < n_points; ++i) {
-		double t1 = i * dt;
-		double t2 = (i + 1) * dt;
+		double const t1 = i * dt;
+		double const t2 = (i + 1) * dt;
 
-		double vg1 = v_gas_analytic(t1);
-		double vd1_1 = v_dust1_analytic(t1);
-		double vd2_1 = v_dust2_analytic(t1);
+		double const vg1 = v_gas_analytic(t1);
+		double const vd1_1 = v_dust1_analytic(t1);
+		double const vd2_1 = v_dust2_analytic(t1);
 
-		double vg2 = v_gas_analytic(t2);
-		double vd1_2 = v_dust1_analytic(t2);
-		double vd2_2 = v_dust2_analytic(t2);
+		double const vg2 = v_gas_analytic(t2);
+		double const vd1_2 = v_dust1_analytic(t2);
+		double const vd2_2 = v_dust2_analytic(t2);
 
-		double term1 = (RHO_D1 * (vd1_1 - vg1) / TS1 * vg1 + RHO_D2 * (vd2_1 - vg1) / TS2 * vg1 +
+		double const term1 = (RHO_D1 * (vd1_1 - vg1) / TS1 * vg1 + RHO_D2 * (vd2_1 - vg1) / TS2 * vg1 +
 				OMEGA * (RHO_D1 * std::pow(vd1_1 - vg1, 2) / TS1 + RHO_D2 * std::pow(vd2_1 - vg1, 2) / TS2));
 
-		double term2 = (RHO_D1 * (vd1_2 - vg2) / TS1 * vg2 + RHO_D2 * (vd2_2 - vg2) / TS2 * vg2 +
+		double const term2 = (RHO_D1 * (vd1_2 - vg2) / TS1 * vg2 + RHO_D2 * (vd2_2 - vg2) / TS2 * vg2 +
 				OMEGA * (RHO_D1 * std::pow(vd1_2 - vg2, 2) / TS1 + RHO_D2 * std::pow(vd2_2 - vg2, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
@@ -258,10 +258,10 @@ auto problem_main() -> int
 
 	if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
 		std::vector<double> &t = sim.userData_.t_vec_;
-		std::vector<double> &v_gas = sim.userData_.v_gas_vec_;
-		std::vector<double> &v_dust1 = sim.userData_.v_dust1_vec_;
-		std::vector<double> &v_dust2 = sim.userData_.v_dust2_vec_;
-		std::vector<double> &E_gas = sim.userData_.E_gas_vec_;
+		std::vector<double>  const &v_gas = sim.userData_.v_gas_vec_;
+		std::vector<double>  const &v_dust1 = sim.userData_.v_dust1_vec_;
+		std::vector<double>  const &v_dust2 = sim.userData_.v_dust2_vec_;
+		std::vector<double>  const &E_gas = sim.userData_.E_gas_vec_;
 
 		// calculate dense analytic solution for plotting
 		const size_t n_dense_points = 1000;
@@ -271,9 +271,9 @@ auto problem_main() -> int
 		std::vector<double> v_dust2_exact_dense(n_dense_points);
 		std::vector<double> E_gas_exact_dense(n_dense_points);
 
-		double t_max = t.empty() ? 0.0 : t.back();
+		double const t_max = t.empty() ? 0.0 : t.back();
 		for (size_t i = 0; i < n_dense_points; ++i) {
-			t_dense[i] = t_max * i / (n_dense_points - 1);
+			t_dense[i] = t_max * static_cast<double>(i) / (n_dense_points - 1);
 			v_gas_exact_dense[i] = v_gas_analytic(t_dense[i]);
 			v_dust1_exact_dense[i] = v_dust1_analytic(t_dense[i]);
 			v_dust2_exact_dense[i] = v_dust2_analytic(t_dense[i]);
@@ -377,7 +377,7 @@ auto problem_main() -> int
 		std::vector<double> vx_sim(nx);
 		std::vector<double> vx_exact(nx);
 		std::vector<double> rho_gas_sim(nx, rho);
-		std::vector<double> rho_gas_exact(nx, rho);
+		std::vector<double> const rho_gas_exact(nx, rho);
 
 		for (int i = 0; i < nx; ++i) {
 			xs[i] = position[i];
