@@ -151,8 +151,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup;	// number of dust variables for each dust group
 
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
-	
-	amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_={};
+
+	amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_ = {};
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
@@ -304,11 +304,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// dust-gas drag implicit update
 	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
-					     amrex::iMultiFab &redoFlag);
+				      amrex::iMultiFab &redoFlag);
 	void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
-				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
-				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
-				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k);
+				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
+				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
+				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k);
 
 	// radiation subcycle
 	void swapRadiationState(amrex::MultiFab &stateOld_cc, amrex::MultiFab const &stateNew_cc);
@@ -552,7 +552,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	}
 #endif
 
-  // set dust runtime parameters
+	// set dust runtime parameters
 	{
 		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
 			dust_alpha_[g] = 1.0;
