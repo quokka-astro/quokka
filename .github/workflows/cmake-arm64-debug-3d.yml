@@ -1,4 +1,4 @@
-name: linux-arm64-debug
+name: linux-arm64-debug-3d
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
     branches: [ development ]
 
 concurrency:
-  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-linux-arm64-debug
+  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-linux-arm64-debug-3d
   cancel-in-progress: true
 
 env:
@@ -24,7 +24,7 @@ jobs:
   check_changes:
     uses: ./.github/workflows/check_changes.yml
     with:
-      workflow_file: '.github/workflows/cmake-arm64-debug.yml'
+      workflow_file: '.github/workflows/cmake-arm64-debug-3d.yml'
 
   build:
     runs-on: ubuntu-24.04-arm
@@ -48,12 +48,12 @@ jobs:
     - name: Configure CMake
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAMReX_SPACEDIM=1
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAMReX_SPACEDIM=3
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: cmake --build . --config $BUILD_TYPE --parallel 4
+      run: cmake --build . --config $BUILD_TYPE --parallel 4 --target spherical_collapse
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
@@ -61,7 +61,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: canary run --output-on-failure --workers=4 -k 'not RadhydroPulseMG' .
+      run: canary run --output-on-failure --workers=4 -k 'SphericalCollapse' .
 
     - name: Upload test output
       if: always()
