@@ -150,9 +150,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int n_mhd_vars_per_dim_ = MHDSystem<problem_t>::nvar_per_dim_; // mhd
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup;	// number of dust variables for each dust group
 
-	static amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_;
-
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
+	
+	amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_={};
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
@@ -213,20 +213,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
-		// read dust parameters if enabled
-		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-				dust_alpha_[g] = 1.0;
-			}
-			amrex::ParmParse pp("dust");
-			std::vector<amrex::Real> alpha_vec;
-			if (pp.queryarr("alpha", alpha_vec)) {
-				AMREX_ASSERT(alpha_vec.size() == Physics_Traits<problem_t>::nDustGroups);
-				for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-					dust_alpha_[g] = alpha_vec[g];
-				}
-			}
-		}
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
@@ -317,9 +303,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
 	// dust-gas drag implicit update
-	static void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
+	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
 					     amrex::iMultiFab &redoFlag);
-	static void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
+	void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
 				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
 				       amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k);
@@ -565,6 +551,21 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
 	}
 #endif
+
+  // set dust runtime parameters
+	{
+		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+			dust_alpha_[g] = 1.0;
+		}
+		amrex::ParmParse const dpp("dust");
+		std::vector<amrex::Real> alpha_vec;
+		if (dpp.queryarr("alpha", alpha_vec) != 0) {
+			AMREX_ASSERT(alpha_vec.size() == Physics_Traits<problem_t>::nDustGroups);
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				dust_alpha_[g] = alpha_vec[g];
+			}
+		}
+	}
 
 	// set radiation runtime parameters
 	{
@@ -1629,7 +1630,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 		// Update dust drag term
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			double gamma = 1.0;
+			double const gamma = 1.0;
 			const auto ba = grids[lev];
 			const auto dm = dmap[lev];
 			amrex::MultiFab primVarNew(ba, dm, nvars_, nghost_cc_);
@@ -1774,7 +1775,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 		// Update dust drag term
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			double gamma = 0.5;
+			double const gamma = 0.5;
 			const auto ba = grids[lev];
 			const auto dm = dmap[lev];
 			amrex::MultiFab primVarFinal(ba, dm, nvars_, nghost_cc_);
@@ -2284,8 +2285,6 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	}
 }
 
-template <typename problem_t> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> QuokkaSimulation<problem_t>::dust_alpha_;
-
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
 							   amrex::iMultiFab &redoFlag)
@@ -2295,7 +2294,7 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 	auto const &redoFlag_arrs = redoFlag.const_arrays();
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
 
-	amrex::ParallelFor(primVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+	amrex::ParallelFor(primVar_mf, [=, this] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		amrex::Real rho_g = primVar[bx](i, j, k, HydroSystem<problem_t>::primDensity_index);
 
 		amrex::GpuArray<amrex::Real, N> rho_d;
@@ -2317,7 +2316,7 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			int vel_g_idx = HydroSystem<problem_t>::x1Velocity_index + dir;
-			amrex::Real v_g = primVar[bx](i, j, k, vel_g_idx);
+			amrex::Real const v_g = primVar[bx](i, j, k, vel_g_idx);
 
 			amrex::GpuArray<amrex::Real, N> v_d;
 			for (int g = 0; g < N; ++g) {
