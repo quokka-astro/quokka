@@ -335,7 +335,7 @@ template <> void QuokkaSimulation<MHDBitwiseICs>::setInitialConditionsOnGridFace
 
 template <>
 void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -354,7 +354,7 @@ void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution(amrex::MultiFab &
 
 template <>
 void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -371,8 +371,7 @@ void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution_fc(amrex::MultiFa
 	}
 }
 
-auto
-verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> int
+auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> int
 {
 	int num_diffs = 0;
 	// make sure device writes are visible
@@ -382,16 +381,8 @@ verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> int
 		const amrex::Box valid_region = mf_iter.validbox();
 		const amrex::IntVect nghosts = mf.nGrowVect();
 		const int num_comps = mf.nComp();
-		const std::array<int,3> valid_lo{
-		valid_region.smallEnd(0),
-		valid_region.smallEnd(1),
-		valid_region.smallEnd(2)
-	};
-	const std::array<int,3> valid_hi{
-		valid_region.bigEnd(0),
-		valid_region.bigEnd(1),
-		valid_region.bigEnd(2)
-	};
+		const std::array<int, 3> valid_lo{valid_region.smallEnd(0), valid_region.smallEnd(1), valid_region.smallEnd(2)};
+		const std::array<int, 3> valid_hi{valid_region.bigEnd(0), valid_region.bigEnd(1), valid_region.bigEnd(2)};
 		// iterate axis = 0:x, 1:y, 2:z
 		for (int axis_x0 = 0; axis_x0 < 3; ++axis_x0) {
 			// preserved right hand rule
@@ -408,7 +399,7 @@ verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> int
 				for (int x1_coord = valid_lo[axis_x1]; x1_coord <= valid_hi[axis_x1]; ++x1_coord) {
 					for (int x2_coord = valid_lo[axis_x2]; x2_coord <= valid_hi[axis_x2]; ++x2_coord) {
 						// helper to assemble (i,j,k) from axis+coords
-						auto create_coord = [&](int index_axis_x0, int index_axis_x1, int index_axis_x2) -> std::array<int,3> {
+						auto create_coord = [&](int index_axis_x0, int index_axis_x1, int index_axis_x2) -> std::array<int, 3> {
 							std::array<int, 3> coords{};
 							coords[axis_x0] = index_axis_x0;
 							coords[axis_x1] = index_axis_x1;
@@ -423,38 +414,40 @@ verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> int
 						for (int icomp = 0; icomp < num_comps; ++icomp) {
 							// lower side
 							{
-								const amrex::Real valid_value = fab_view(lower_valid_coords[0], lower_valid_coords[1], lower_valid_coords[2], icomp);
-								const amrex::Real ghost_value = fab_view(lower_ghost_coords[0], lower_ghost_coords[1], lower_ghost_coords[2], icomp);
+								const amrex::Real valid_value =
+								    fab_view(lower_valid_coords[0], lower_valid_coords[1], lower_valid_coords[2], icomp);
+								const amrex::Real ghost_value =
+								    fab_view(lower_ghost_coords[0], lower_ghost_coords[1], lower_ghost_coords[2], icomp);
 								const amrex::Real abs_diff = std::abs(ghost_value - valid_value);
 								if (abs_diff != static_cast<amrex::Real>(0.0)) {
 									++num_diffs;
 									amrex::Print() << "[" << label << "] "
-																<< " fab=" << mf_iter.index()
-																<< " axis=" << axis_x0 << " side=lower"
-																<< " layer=" << layer_index << " comp=" << icomp
-																<< " ghost(" << lower_ghost_coords[0] << "," << lower_ghost_coords[1] << "," << lower_ghost_coords[2] << ")="
-																<< std::setprecision(17) << ghost_value
-																<< " vs valid(" << lower_valid_coords[0] << "," << lower_valid_coords[1] << "," << lower_valid_coords[2] << ")="
-																<< std::setprecision(17) << valid_value
-																<< " abs_diff=" << abs_diff << "\n";
+										       << " fab=" << mf_iter.index() << " axis=" << axis_x0 << " side=lower"
+										       << " layer=" << layer_index << " comp=" << icomp << " ghost("
+										       << lower_ghost_coords[0] << "," << lower_ghost_coords[1] << ","
+										       << lower_ghost_coords[2] << ")=" << std::setprecision(17) << ghost_value
+										       << " vs valid(" << lower_valid_coords[0] << "," << lower_valid_coords[1]
+										       << "," << lower_valid_coords[2] << ")=" << std::setprecision(17)
+										       << valid_value << " abs_diff=" << abs_diff << "\n";
 								}
 							}
 							// upper side
 							{
-								const amrex::Real valid_value = fab_view(upper_valid_coords[0], upper_valid_coords[1], upper_valid_coords[2], icomp);
-								const amrex::Real ghost_value = fab_view(upper_ghost_coords[0], upper_ghost_coords[1], upper_ghost_coords[2], icomp);
+								const amrex::Real valid_value =
+								    fab_view(upper_valid_coords[0], upper_valid_coords[1], upper_valid_coords[2], icomp);
+								const amrex::Real ghost_value =
+								    fab_view(upper_ghost_coords[0], upper_ghost_coords[1], upper_ghost_coords[2], icomp);
 								const amrex::Real abs_diff = std::abs(ghost_value - valid_value);
 								if (abs_diff != static_cast<amrex::Real>(0.0)) {
 									++num_diffs;
 									amrex::Print() << "[" << label << "] "
-																<< " fab=" << mf_iter.index()
-																<< " axis=" << axis_x0 << " side=upper"
-																<< " layer=" << layer_index << " comp=" << icomp
-																<< " ghost(" << upper_ghost_coords[0] << "," << upper_ghost_coords[1] << "," << upper_ghost_coords[2] << ")="
-																<< std::setprecision(17) << ghost_value
-																<< " vs valid(" << upper_valid_coords[0] << "," << upper_valid_coords[1] << "," << upper_valid_coords[2] << ")="
-																<< std::setprecision(17) << valid_value
-																<< " abs_diff=" << abs_diff << "\n";
+										       << " fab=" << mf_iter.index() << " axis=" << axis_x0 << " side=upper"
+										       << " layer=" << layer_index << " comp=" << icomp << " ghost("
+										       << upper_ghost_coords[0] << "," << upper_ghost_coords[1] << ","
+										       << upper_ghost_coords[2] << ")=" << std::setprecision(17) << ghost_value
+										       << " vs valid(" << upper_valid_coords[0] << "," << upper_valid_coords[1]
+										       << "," << upper_valid_coords[2] << ")=" << std::setprecision(17)
+										       << valid_value << " abs_diff=" << abs_diff << "\n";
 								}
 							}
 						}
@@ -544,5 +537,4 @@ auto problem_main() -> int
 	}
 	amrex::Print() << "Failed: ghost-zones in the ICs are different from their valid-domain counterparts.\n";
 	return 1;
-
 }
