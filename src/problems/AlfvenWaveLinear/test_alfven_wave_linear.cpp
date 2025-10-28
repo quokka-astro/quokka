@@ -53,6 +53,15 @@ constexpr amrex::Real bg_pressure = sound_speed * sound_speed * bg_density / gam
 constexpr amrex::Real b0_magn = 1.0;
 constexpr amrex::Real delta_b_magn = 1e-6;
 
+// AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE
+// amrex::Real ensure_safe_zero(amrex::Real value) {
+// 	if (amrex::Math::abs(value) < 1e-9) {
+// 		return +0.0;
+// 	} else {
+// 		return value;
+// 	}
+// }
+
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> amrex::Real
 {
 	return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
@@ -83,10 +92,6 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 
 // angles (radians) in the math reference frame (MRF)
 AMREX_GPU_MANAGED amrex::Real angle_between_k_b0_rad = 0.0; // NOLINT
-
-// rotation from the problem reference frame (PRF) to the MRF
-AMREX_GPU_MANAGED amrex::Real k_rotation_in_xy_rad = 0.0;    // NOLINT
-AMREX_GPU_MANAGED amrex::Real k_elevation_from_xy_rad = 0.0; // NOLINT
 
 //------------------------------------------------------------------------------
 // Reference frames and rotation matrix
@@ -402,9 +407,6 @@ auto problem_main() -> int
 						      (2.0 * M_PI) * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
-
-	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
-	k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
 
 	// to build our orthonormal basis in the problem reference frame (PRF)
 	// first choose a vector that is not aligned/parallel with the wave propagation direction
