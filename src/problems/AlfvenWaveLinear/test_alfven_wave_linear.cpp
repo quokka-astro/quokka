@@ -53,15 +53,6 @@ constexpr amrex::Real bg_pressure = sound_speed * sound_speed * bg_density / gam
 constexpr amrex::Real b0_magn = 1.0;
 constexpr amrex::Real delta_b_magn = 1e-6;
 
-// AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE
-// amrex::Real ensure_safe_zero(amrex::Real value) {
-// 	if (amrex::Math::abs(value) < 1e-9) {
-// 		return +0.0;
-// 	} else {
-// 		return value;
-// 	}
-// }
-
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> amrex::Real
 {
 	return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
