@@ -393,6 +393,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto getWalltime() -> amrex::Real;
 	auto getCycleWalltime() -> amrex::Real;
 	void setChkFile(std::string const &chkfile_number);
+	[[nodiscard]] auto getOldMF_cc() const -> amrex::Vector<amrex::MultiFab> const &;
+	[[nodiscard]] auto getNewMF_cc() const -> amrex::Vector<amrex::MultiFab> const &;
 	[[nodiscard]] auto getOldMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 
@@ -563,6 +565,16 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getGitHashForAmrex(
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number) { restart_chkfile = chkfile_number; }
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_cc() const -> const amrex::Vector<amrex::MultiFab> &
+{
+	return state_old_cc_;
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getNewMF_cc() const -> const amrex::Vector<amrex::MultiFab> &
+{
+	return state_new_cc_;
+}
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_fc() const -> const amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &
 {
