@@ -53,7 +53,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDust(
 	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 
-	auto dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
+	quokka::valarray<double, nGroups_> dEg_dT = kappaPoverE * d_fourpiboverc_d_t;
 
 	result.J00 = 1.0 + sum(cooling_derivative) / c_v;
 	result.J0g.fillin(cscale);
@@ -164,7 +164,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianForGasAndDustWithPE(
 	// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 	// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 
-	auto d_Eg_d_Rg = -1.0 * kappaPoverE;
+	quokka::valarray<double, nGroups_> d_Eg_d_Rg = -1.0 * kappaPoverE;
 	for (int g = 0; g < nGroups_; ++g) {
 		if (tau[g] <= 0.0) {
 			d_Eg_d_Rg[g] = -LARGE;
