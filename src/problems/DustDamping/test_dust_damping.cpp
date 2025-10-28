@@ -54,7 +54,8 @@ constexpr double rho = 1.0;
 constexpr double rho_dust1 = 10.0;
 constexpr double rho_dust2 = 100.0;
 constexpr double v0 = 1.0;
-constexpr double initial_Egas = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
+constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
+constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0);
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
 template <> struct Physics_Traits<DustDamping> {
@@ -79,7 +80,6 @@ template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto Egas0 = initial_Egas;
 	const auto vx0 = v0;		// gas velocity
 	const auto vx_dust1 = 2 * v0;	// dust1 velocity
 	const auto vx_dust2 = 0.5 * v0; // dust2 velocity
@@ -94,7 +94,7 @@ template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokk
 		// for gas
 		state_cc(i, j, k, HydroSystem<DustDamping>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<DustDamping>::energy_index) = Egas0;
-		state_cc(i, j, k, HydroSystem<DustDamping>::internalEnergy_index) = Egas0;
+		state_cc(i, j, k, HydroSystem<DustDamping>::internalEnergy_index) = Egas0_internal;
 		state_cc(i, j, k, HydroSystem<DustDamping>::x1Momentum_index) = rho * vx0;
 		state_cc(i, j, k, HydroSystem<DustDamping>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<DustDamping>::x3Momentum_index) = 0.;
@@ -256,175 +256,113 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
-		std::vector<double> &t = sim.userData_.t_vec_;
-		std::vector<double> const &v_gas = sim.userData_.v_gas_vec_;
-		std::vector<double> const &v_dust1 = sim.userData_.v_dust1_vec_;
-		std::vector<double> const &v_dust2 = sim.userData_.v_dust2_vec_;
-		std::vector<double> const &E_gas = sim.userData_.E_gas_vec_;
+	std::vector<double> &t = sim.userData_.t_vec_;
+	std::vector<double> const &v_gas = sim.userData_.v_gas_vec_;
+	std::vector<double> const &v_dust1 = sim.userData_.v_dust1_vec_;
+	std::vector<double> const &v_dust2 = sim.userData_.v_dust2_vec_;
+	std::vector<double> const &E_gas = sim.userData_.E_gas_vec_;
 
-		// calculate dense analytic solution for plotting
-		const size_t n_dense_points = 1000;
-		std::vector<double> t_dense(n_dense_points);
-		std::vector<double> v_gas_exact_dense(n_dense_points);
-		std::vector<double> v_dust1_exact_dense(n_dense_points);
-		std::vector<double> v_dust2_exact_dense(n_dense_points);
-		std::vector<double> E_gas_exact_dense(n_dense_points);
+	// calculate dense analytic solution for plotting
+	const size_t n_dense_points = 1000;
+	std::vector<double> t_dense(n_dense_points);
+	std::vector<double> v_gas_exact_dense(n_dense_points);
+	std::vector<double> v_dust1_exact_dense(n_dense_points);
+	std::vector<double> v_dust2_exact_dense(n_dense_points);
+	std::vector<double> E_gas_exact_dense(n_dense_points);
 
-		double const t_max = t.empty() ? 0.0 : t.back();
-		for (size_t i = 0; i < n_dense_points; ++i) {
-			t_dense[i] = t_max * static_cast<double>(i) / (n_dense_points - 1);
-			v_gas_exact_dense[i] = v_gas_analytic(t_dense[i]);
-			v_dust1_exact_dense[i] = v_dust1_analytic(t_dense[i]);
-			v_dust2_exact_dense[i] = v_dust2_analytic(t_dense[i]);
-			E_gas_exact_dense[i] = E_gas_analytic(t_dense[i]);
-		}
-
-		// calculate relative L1 norm errors
-		std::vector<double> v_gas_exact(t.size());
-		std::vector<double> v_dust1_exact(t.size());
-		std::vector<double> v_dust2_exact(t.size());
-		std::vector<double> E_gas_exact(t.size());
-
-		for (size_t i = 0; i < t.size(); ++i) {
-			v_gas_exact[i] = v_gas_analytic(t[i]);
-			v_dust1_exact[i] = v_dust1_analytic(t[i]);
-			v_dust2_exact[i] = v_dust2_analytic(t[i]);
-			E_gas_exact[i] = E_gas_analytic(t[i]);
-		}
-
-		auto rel_err = [](const std::vector<double> &sim, const std::vector<double> &exact) {
-			double err = 0.0;
-			double sol = 0.0;
-			for (size_t i = 0; i < sim.size(); ++i) {
-				err += std::abs(sim[i] - exact[i]);
-				sol += std::abs(exact[i]);
-			}
-			return err / sol;
-		};
-
-		double const rel_err_gas_vx = rel_err(v_gas, v_gas_exact);
-		double const rel_err_dust1_vx = rel_err(v_dust1, v_dust1_exact);
-		double const rel_err_dust2_vx = rel_err(v_dust2, v_dust2_exact);
-		double const rel_err_gas_E = rel_err(E_gas, E_gas_exact);
-
-		amrex::Print() << "Relative L1 norm for gas vx    = " << rel_err_gas_vx << "\n";
-		amrex::Print() << "Relative L1 norm for dust1 vx  = " << rel_err_dust1_vx << "\n";
-		amrex::Print() << "Relative L1 norm for dust2 vx  = " << rel_err_dust2_vx << "\n";
-		amrex::Print() << "Relative L1 norm for gas E     = " << rel_err_gas_E << "\n";
-
-		int status = 0;
-		const double rel_err_tol = 0.01;
-		if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
-			status = 1;
-		}
-
-#ifdef HAVE_PYTHON
-		// plot gas velocity
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(t, v_gas, {{"label", "gas vx (num)"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_gas_exact_dense, {{"label", "gas vx (exact)"}, {"color", "r"}, {"linestyle", "--"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel("gas velocity");
-		matplotlibcpp::title("Gas Velocity Evolution");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_gas_velocity.pdf");
-
-		// plot dust1 velocity
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(t, v_dust1, {{"label", "dust1 vx (num)"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_dust1_exact_dense, {{"label", "dust1 vx (exact)"}, {"color", "b"}, {"linestyle", "--"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel("dust1 velocity");
-		matplotlibcpp::title("Dust1 Velocity Evolution");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_dust1_velocity.pdf");
-
-		// plot dust2 velocity
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(t, v_dust2, {{"label", "dust2 vx (num)"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_dust2_exact_dense, {{"label", "dust2 vx (exact)"}, {"color", "g"}, {"linestyle", "--"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel("dust2 velocity");
-		matplotlibcpp::title("Dust2 Velocity Evolution");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_dust2_velocity.pdf");
-
-		// plot gas energy
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(t, E_gas, {{"label", "gas E (num)"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, E_gas_exact_dense, {{"label", "gas E (exact)"}, {"color", "m"}, {"linestyle", "--"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel("gas energy");
-		matplotlibcpp::title("Gas Energy Evolution");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_gas_energy.pdf");
-#endif
-		amrex::Print() << "Finished.\n";
-		return status;
-
-	} else { // dust disabled case
-		// read output variables
-		auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-		const int nx = static_cast<int>(position.size());
-
-		std::vector<double> xs(nx);
-
-		std::vector<double> vx_sim(nx);
-		std::vector<double> vx_exact(nx);
-		std::vector<double> rho_gas_sim(nx, rho);
-		std::vector<double> const rho_gas_exact(nx, rho);
-
-		for (int i = 0; i < nx; ++i) {
-			xs[i] = position[i];
-			const double density = values.at(HydroSystem<DustDamping>::density_index)[i];
-			const double momentum_x = values.at(HydroSystem<DustDamping>::x1Momentum_index)[i];
-			vx_sim[i] = momentum_x / density;
-			rho_gas_sim[i] = density;
-			vx_exact[i] = v0;
-		}
-
-		double rel_err = 0.0;
-		double sol_norm = 0.0;
-		for (int i = 0; i < nx; ++i) {
-			rel_err += std::abs(vx_sim[i] - vx_exact[i]);
-			sol_norm += std::abs(vx_exact[i]);
-		}
-		const double rel_err_norm = rel_err / sol_norm;
-
-		amrex::Print() << "Relative L1 norm for gas vx = " << rel_err_norm << "\n";
-
-		const int status = (rel_err_norm < 0.01) ? 0 : 1;
-
-#ifdef HAVE_PYTHON
-		matplotlibcpp::clf();
-		matplotlibcpp::ylim(0.0, 2.0);
-		matplotlibcpp::plot(xs, rho_gas_sim, {{"label", "gas (num)"}, {"color", "r"}, {"linestyle", "-"}});
-		matplotlibcpp::plot(xs, rho_gas_exact, {{"label", "gas (exact)"}, {"color", "r"}, {"linestyle", "--"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("x");
-		matplotlibcpp::ylabel("density");
-		matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_density.pdf");
-
-		matplotlibcpp::clf();
-		matplotlibcpp::ylim(0.0, 2.0 * v0);
-		matplotlibcpp::plot(xs, vx_sim, {{"label", "gas vx (num)"}, {"color", "r"}, {"linestyle", "-"}});
-		matplotlibcpp::plot(xs, vx_exact, {{"label", "gas vx (exact)"}, {"color", "r"}, {"linestyle", "--"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("x");
-		matplotlibcpp::ylabel("velocity");
-		matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_velocity.pdf");
-#endif
-
-		amrex::Print() << "Finished.\n";
-		return status;
+	double const t_max = t.empty() ? 0.0 : t.back();
+	for (size_t i = 0; i < n_dense_points; ++i) {
+		t_dense[i] = t_max * static_cast<double>(i) / (n_dense_points - 1);
+		v_gas_exact_dense[i] = v_gas_analytic(t_dense[i]);
+		v_dust1_exact_dense[i] = v_dust1_analytic(t_dense[i]);
+		v_dust2_exact_dense[i] = v_dust2_analytic(t_dense[i]);
+		E_gas_exact_dense[i] = E_gas_analytic(t_dense[i]);
 	}
+
+	// calculate relative L1 norm errors
+	std::vector<double> v_gas_exact(t.size());
+	std::vector<double> v_dust1_exact(t.size());
+	std::vector<double> v_dust2_exact(t.size());
+	std::vector<double> E_gas_exact(t.size());
+
+	for (size_t i = 0; i < t.size(); ++i) {
+		v_gas_exact[i] = v_gas_analytic(t[i]);
+		v_dust1_exact[i] = v_dust1_analytic(t[i]);
+		v_dust2_exact[i] = v_dust2_analytic(t[i]);
+		E_gas_exact[i] = E_gas_analytic(t[i]);
+	}
+
+	auto rel_err = [](const std::vector<double> &sim, const std::vector<double> &exact) {
+		double err = 0.0;
+		double sol = 0.0;
+		for (size_t i = 0; i < sim.size(); ++i) {
+			err += std::abs(sim[i] - exact[i]);
+			sol += std::abs(exact[i]);
+		}
+		return err / sol;
+	};
+
+	double const rel_err_gas_vx = rel_err(v_gas, v_gas_exact);
+	double const rel_err_dust1_vx = rel_err(v_dust1, v_dust1_exact);
+	double const rel_err_dust2_vx = rel_err(v_dust2, v_dust2_exact);
+	double const rel_err_gas_E = rel_err(E_gas, E_gas_exact);
+
+	amrex::Print() << "Relative L1 norm for gas vx    = " << rel_err_gas_vx << "\n";
+	amrex::Print() << "Relative L1 norm for dust1 vx  = " << rel_err_dust1_vx << "\n";
+	amrex::Print() << "Relative L1 norm for dust2 vx  = " << rel_err_dust2_vx << "\n";
+	amrex::Print() << "Relative L1 norm for gas E     = " << rel_err_gas_E << "\n";
+
+	int status = 0;
+	const double rel_err_tol = 0.01;
+	if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
+		status = 1;
+	}
+
+#ifdef HAVE_PYTHON
+	// plot gas velocity
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(t, v_gas, {{"label", "numerical"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+	matplotlibcpp::plot(t_dense, v_gas_exact_dense, {{"label", "analytic"}, {"color", "r"}, {"linestyle", "--"}});
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("t");
+	matplotlibcpp::ylabel(R"($v_g$)");
+	matplotlibcpp::title("Gas Velocity Evolution");
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./dust_damping_gas_velocity.pdf");
+
+	// plot dust1 velocity
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(t, v_dust1, {{"label", "numerical"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+	matplotlibcpp::plot(t_dense, v_dust1_exact_dense, {{"label", "analytic"}, {"color", "b"}, {"linestyle", "--"}});
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("t");
+	matplotlibcpp::ylabel(R"($v_{d,1}$)");
+	matplotlibcpp::title("Dust1 Velocity Evolution");
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./dust_damping_dust1_velocity.pdf");
+
+	// plot dust2 velocity
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(t, v_dust2, {{"label", "numerical"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+	matplotlibcpp::plot(t_dense, v_dust2_exact_dense, {{"label", "analytic"}, {"color", "g"}, {"linestyle", "--"}});
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("t");
+	matplotlibcpp::ylabel(R"($v_{d,2}$)");
+	matplotlibcpp::title("Dust2 Velocity Evolution");
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./dust_damping_dust2_velocity.pdf");
+
+	// plot gas energy
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(t, E_gas, {{"label", "numerical"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+	matplotlibcpp::plot(t_dense, E_gas_exact_dense, {{"label", "analytic"}, {"color", "m"}, {"linestyle", "--"}});
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("t");
+	matplotlibcpp::ylabel(R"($E_g$)");
+	matplotlibcpp::title("Gas Energy Evolution");
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./dust_damping_gas_energy.pdf");
+#endif
+	amrex::Print() << "Finished.\n";
+	return status;
 }
