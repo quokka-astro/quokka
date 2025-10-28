@@ -11,8 +11,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
 #include <concepts>
+#include <cstddef>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -27,11 +27,11 @@ namespace detail
 {
 template <typename T> using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
-template <typename Expr>
-concept Expression = requires(Expr const &expr, size_t idx) {
+template <typename Expr> concept Expression = requires(Expr const &expr, size_t idx)
+{
 	typename remove_cvref_t<Expr>::value_type;
-	{ remove_cvref_t<Expr>::extent } -> std::convertible_to<int>;
-	{ expr[idx] } -> std::convertible_to<typename remove_cvref_t<Expr>::value_type>;
+	{remove_cvref_t<Expr>::extent}->std::convertible_to<int>;
+	{expr[idx]}->std::convertible_to<typename remove_cvref_t<Expr>::value_type>;
 };
 
 template <typename Expr> constexpr int expr_extent_v = static_cast<int>(remove_cvref_t<Expr>::extent);
@@ -41,8 +41,7 @@ template <typename Expr> using expr_value_t = typename remove_cvref_t<Expr>::val
 template <typename Expr, typename T, int d>
 concept CompatibleExpr = Expression<Expr> && std::convertible_to<expr_value_t<Expr>, T> && (expr_extent_v<Expr> == d);
 
-template <typename LHS, typename RHS>
-concept BinaryCompatible = Expression<LHS> && Expression<RHS> && (expr_extent_v<LHS> == expr_extent_v<RHS>);
+template <typename LHS, typename RHS> concept BinaryCompatible = Expression<LHS> && Expression<RHS> && (expr_extent_v<LHS> == expr_extent_v<RHS>);
 
 struct AddOp {
 	template <typename L, typename R> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto apply(L const &lhs, R const &rhs) -> decltype(lhs + rhs)
@@ -69,8 +68,7 @@ struct DivOp {
 	}
 };
 
-template <typename T, int d> struct ScalarExpr
-{
+template <typename T, int d> struct ScalarExpr {
 	using value_type = T;
 	static constexpr int extent = d;
 
@@ -82,14 +80,11 @@ template <typename T, int d> struct ScalarExpr
 	T value;
 };
 
-template <typename Op, Expression LHS, Expression RHS>
-requires BinaryCompatible<LHS, RHS> struct BinaryExpr
-{
+template <typename Op, Expression LHS, Expression RHS> requires BinaryCompatible<LHS, RHS> struct BinaryExpr {
 	using lhs_type = remove_cvref_t<LHS>;
 	using rhs_type = remove_cvref_t<RHS>;
 
-	using value_type =
-	    std::decay_t<decltype(Op::apply(std::declval<typename lhs_type::value_type>(), std::declval<typename rhs_type::value_type>()))>;
+	using value_type = std::decay_t<decltype(Op::apply(std::declval<typename lhs_type::value_type>(), std::declval<typename rhs_type::value_type>()))>;
 	static constexpr int extent = expr_extent_v<LHS>;
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE BinaryExpr(LHS lhs_in, RHS rhs_in) : lhs(lhs_in), rhs(rhs_in) {}
@@ -107,8 +102,7 @@ requires BinaryCompatible<LHS, RHS> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE aut
 }
 
 template <Expression Expr, typename Scalar>
-requires std::convertible_to<Scalar, expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto make_scalar_expr(Scalar const &scalar)
+requires std::convertible_to<Scalar, expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto make_scalar_expr(Scalar const &scalar)
 {
 	using value_type = expr_value_t<Expr>;
 	return ScalarExpr<value_type, expr_extent_v<Expr>>(static_cast<value_type>(scalar));
@@ -150,14 +144,12 @@ template <typename T, int d> class valarray
 	}
 
 	template <detail::CompatibleExpr<T, d> Expr>
-	requires(!std::same_as<detail::remove_cvref_t<Expr>, valarray>)
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(Expr const &expr)
+	requires(!std::same_as<detail::remove_cvref_t<Expr>, valarray>) AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(Expr const &expr)
 	{
 		assign_from(expr);
 	}
 
-	template <detail::CompatibleExpr<T, d> Expr>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator=(Expr const &expr) -> valarray &
+	template <detail::CompatibleExpr<T, d> Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator=(Expr const &expr) -> valarray &
 	{
 		assign_from(expr);
 		return *this;
@@ -186,8 +178,7 @@ template <typename T, int d> class valarray
 		return false;
 	}
 
-	template <detail::CompatibleExpr<T, d> Expr>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+=(Expr const &expr) -> valarray &
+	template <detail::CompatibleExpr<T, d> Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+=(Expr const &expr) -> valarray &
 	{
 		for (size_t i = 0; i < d; ++i) {
 			values[i] += static_cast<T>(expr[i]);
@@ -195,8 +186,7 @@ template <typename T, int d> class valarray
 		return *this;
 	}
 
-	template <detail::CompatibleExpr<T, d> Expr>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-=(Expr const &expr) -> valarray &
+	template <detail::CompatibleExpr<T, d> Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-=(Expr const &expr) -> valarray &
 	{
 		for (size_t i = 0; i < d; ++i) {
 			values[i] -= static_cast<T>(expr[i]);
@@ -205,8 +195,7 @@ template <typename T, int d> class valarray
 	}
 
 	template <typename Scalar>
-	requires std::convertible_to<Scalar, T>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*=(Scalar const &scalar) -> valarray &
+	requires std::convertible_to<Scalar, T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*=(Scalar const &scalar) -> valarray &
 	{
 		for (size_t i = 0; i < d; ++i) {
 			values[i] *= static_cast<T>(scalar);
@@ -215,8 +204,7 @@ template <typename T, int d> class valarray
 	}
 
 	template <typename Scalar>
-	requires std::convertible_to<Scalar, T>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/=(Scalar const &scalar) -> valarray &
+	requires std::convertible_to<Scalar, T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/=(Scalar const &scalar) -> valarray &
 	{
 		for (size_t i = 0; i < d; ++i) {
 			values[i] /= static_cast<T>(scalar);
@@ -225,8 +213,7 @@ template <typename T, int d> class valarray
 	}
 
       private:
-	template <typename Expr>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void assign_from(Expr const &expr)
+	template <typename Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void assign_from(Expr const &expr)
 	{
 		for (size_t i = 0; i < d; ++i) {
 			values[i] = static_cast<T>(expr[i]);
@@ -238,100 +225,87 @@ template <typename T, int d> class valarray
 };
 
 template <detail::Expression Expr1, detail::Expression Expr2>
-	requires detail::BinaryCompatible<Expr1, Expr2>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(Expr1 const &lhs, Expr2 const &rhs)
+requires detail::BinaryCompatible<Expr1, Expr2> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(Expr1 const &lhs, Expr2 const &rhs)
 {
 	return detail::make_binary_expr<detail::AddOp>(lhs, rhs);
 }
 
 template <detail::Expression Expr, typename Scalar>
-	requires std::convertible_to<Scalar, detail::expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(Expr const &expr, Scalar const &scalar)
+requires std::convertible_to<Scalar, detail::expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(Expr const &expr, Scalar const &scalar)
 {
 	auto scalar_expr = detail::make_scalar_expr<Expr>(scalar);
 	return detail::make_binary_expr<detail::AddOp>(expr, scalar_expr);
 }
 
 template <detail::Expression Expr, typename Scalar>
-	requires std::convertible_to<Scalar, detail::expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(Scalar const &scalar, Expr const &expr)
+requires std::convertible_to<Scalar, detail::expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(Scalar const &scalar, Expr const &expr)
 {
 	auto scalar_expr = detail::make_scalar_expr<Expr>(scalar);
 	return detail::make_binary_expr<detail::AddOp>(scalar_expr, expr);
 }
 
 template <detail::Expression Expr1, detail::Expression Expr2>
-	requires detail::BinaryCompatible<Expr1, Expr2>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-(Expr1 const &lhs, Expr2 const &rhs)
+requires detail::BinaryCompatible<Expr1, Expr2> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-(Expr1 const &lhs, Expr2 const &rhs)
 {
 	return detail::make_binary_expr<detail::SubOp>(lhs, rhs);
 }
 
 template <detail::Expression Expr, typename Scalar>
-	requires std::convertible_to<Scalar, detail::expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-(Expr const &expr, Scalar const &scalar)
+requires std::convertible_to<Scalar, detail::expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-(Expr const &expr, Scalar const &scalar)
 {
 	auto scalar_expr = detail::make_scalar_expr<Expr>(scalar);
 	return detail::make_binary_expr<detail::SubOp>(expr, scalar_expr);
 }
 
 template <detail::Expression Expr, typename Scalar>
-	requires std::convertible_to<Scalar, detail::expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-(Scalar const &scalar, Expr const &expr)
+requires std::convertible_to<Scalar, detail::expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-(Scalar const &scalar, Expr const &expr)
 {
 	auto scalar_expr = detail::make_scalar_expr<Expr>(scalar);
 	return detail::make_binary_expr<detail::SubOp>(scalar_expr, expr);
 }
 
 template <detail::Expression Expr1, detail::Expression Expr2>
-	requires detail::BinaryCompatible<Expr1, Expr2>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(Expr1 const &lhs, Expr2 const &rhs)
+requires detail::BinaryCompatible<Expr1, Expr2> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(Expr1 const &lhs, Expr2 const &rhs)
 {
 	return detail::make_binary_expr<detail::MulOp>(lhs, rhs);
 }
 
 template <detail::Expression Expr, typename Scalar>
-	requires std::convertible_to<Scalar, detail::expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(Expr const &expr, Scalar const &scalar)
+requires std::convertible_to<Scalar, detail::expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(Expr const &expr, Scalar const &scalar)
 {
 	auto scalar_expr = detail::make_scalar_expr<Expr>(scalar);
 	return detail::make_binary_expr<detail::MulOp>(expr, scalar_expr);
 }
 
 template <detail::Expression Expr, typename Scalar>
-	requires std::convertible_to<Scalar, detail::expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(Scalar const &scalar, Expr const &expr)
+requires std::convertible_to<Scalar, detail::expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(Scalar const &scalar, Expr const &expr)
 {
 	auto scalar_expr = detail::make_scalar_expr<Expr>(scalar);
 	return detail::make_binary_expr<detail::MulOp>(scalar_expr, expr);
 }
 
 template <detail::Expression Expr1, detail::Expression Expr2>
-	requires detail::BinaryCompatible<Expr1, Expr2>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(Expr1 const &lhs, Expr2 const &rhs)
+requires detail::BinaryCompatible<Expr1, Expr2> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(Expr1 const &lhs, Expr2 const &rhs)
 {
 	return detail::make_binary_expr<detail::DivOp>(lhs, rhs);
 }
 
 template <detail::Expression Expr, typename Scalar>
-	requires std::convertible_to<Scalar, detail::expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(Expr const &expr, Scalar const &scalar)
+requires std::convertible_to<Scalar, detail::expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(Expr const &expr, Scalar const &scalar)
 {
 	auto scalar_expr = detail::make_scalar_expr<Expr>(scalar);
 	return detail::make_binary_expr<detail::DivOp>(expr, scalar_expr);
 }
 
 template <detail::Expression Expr, typename Scalar>
-	requires std::convertible_to<Scalar, detail::expr_value_t<Expr>>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(Scalar const &scalar, Expr const &expr)
+requires std::convertible_to<Scalar, detail::expr_value_t<Expr>> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(Scalar const &scalar, Expr const &expr)
 {
 	auto scalar_expr = detail::make_scalar_expr<Expr>(scalar);
 	return detail::make_binary_expr<detail::DivOp>(scalar_expr, expr);
 }
 
 template <detail::Expression Expr>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(Expr const &expr)
-    -> valarray<typename detail::expr_value_t<Expr>, detail::expr_extent_v<Expr>>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(Expr const &expr) -> valarray<typename detail::expr_value_t<Expr>, detail::expr_extent_v<Expr>>
 {
 	using value_type = typename detail::expr_value_t<Expr>;
 	constexpr int extent = detail::expr_extent_v<Expr>;
@@ -342,8 +316,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(Expr const &expr)
 	return abs_v;
 }
 
-template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(valarray<T, d> const &v) -> T
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(valarray<T, d> const &v) -> T
 {
 	static_assert(d >= 1);
 	T min_val = v[0]; // v must have at least 1 element
@@ -354,8 +327,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(valarray<T, d> const &v) -> T
 	return min_val;
 }
 
-template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto max(valarray<T, d> const &v) -> T
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto max(valarray<T, d> const &v) -> T
 {
 	static_assert(d >= 1);
 	T max_val = v[0]; // v must have at least 1 element
@@ -366,8 +338,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto max(valarray<T, d> const &v) -> T
 	return max_val;
 }
 
-template <detail::Expression Expr>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sum(Expr const &expr) -> typename detail::expr_value_t<Expr>
+template <detail::Expression Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sum(Expr const &expr) -> typename detail::expr_value_t<Expr>
 {
 	using value_type = typename detail::expr_value_t<Expr>;
 	constexpr int extent = detail::expr_extent_v<Expr>;
@@ -378,8 +349,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sum(Expr const &expr) -> typename 
 	return sum_val;
 }
 
-template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(valarray<T, d> const &a, valarray<T, d> const &b) -> valarray<bool, d>
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(valarray<T, d> const &a, valarray<T, d> const &b) -> valarray<bool, d>
 {
 	valarray<bool, d> comp;
 	for (size_t i = 0; i < a.size(); ++i) {
@@ -388,8 +358,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(valarray<T, d> const &a,
 	return comp;
 }
 
-template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(valarray<T, d> const &a, T const &scalar) -> valarray<bool, d>
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(valarray<T, d> const &a, T const &scalar) -> valarray<bool, d>
 {
 	valarray<bool, d> comp;
 	for (size_t i = 0; i < a.size(); ++i) {
@@ -398,8 +367,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(valarray<T, d> const &a,
 	return comp;
 }
 
-template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(valarray<T, d> const &a, valarray<T, d> const &b) -> valarray<bool, d>
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(valarray<T, d> const &a, valarray<T, d> const &b) -> valarray<bool, d>
 {
 	valarray<bool, d> comp;
 	for (size_t i = 0; i < a.size(); ++i) {
@@ -408,8 +376,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(valarray<T, d> const &a,
 	return comp;
 }
 
-template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(valarray<T, d> const &a, T const &scalar) -> valarray<bool, d>
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(valarray<T, d> const &a, T const &scalar) -> valarray<bool, d>
 {
 	valarray<bool, d> comp;
 	for (size_t i = 0; i < a.size(); ++i) {
