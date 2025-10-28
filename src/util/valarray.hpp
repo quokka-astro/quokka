@@ -327,6 +327,18 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(v
 	return min_val;
 }
 
+template <detail::Expression Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(Expr const &expr) -> typename detail::expr_value_t<Expr>
+{
+	using value_type = typename detail::expr_value_t<Expr>;
+	constexpr int extent = detail::expr_extent_v<Expr>;
+	static_assert(extent >= 1);
+	value_type min_val = static_cast<value_type>(expr[0]);
+	for (int i = 1; i < extent; ++i) {
+		min_val = std::min(min_val, static_cast<value_type>(expr[static_cast<size_t>(i)]));
+	}
+	return min_val;
+}
+
 template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto max(valarray<T, d> const &v) -> T
 {
 	static_assert(d >= 1);
@@ -334,6 +346,18 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto max(v
 
 	for (size_t i = 0; i < v.size(); ++i) {
 		max_val = std::max(max_val, v[i]);
+	}
+	return max_val;
+}
+
+template <detail::Expression Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto max(Expr const &expr) -> typename detail::expr_value_t<Expr>
+{
+	using value_type = typename detail::expr_value_t<Expr>;
+	constexpr int extent = detail::expr_extent_v<Expr>;
+	static_assert(extent >= 1);
+	value_type max_val = static_cast<value_type>(expr[0]);
+	for (int i = 1; i < extent; ++i) {
+		max_val = std::max(max_val, static_cast<value_type>(expr[static_cast<size_t>(i)]));
 	}
 	return max_val;
 }
