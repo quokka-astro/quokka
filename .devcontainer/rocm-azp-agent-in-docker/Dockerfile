@@ -20,8 +20,20 @@ RUN zypper --non-interactive refresh && \
         python311-pip \
         python311-devel \
         python311-setuptools \
-        python311-wheel && \
+        python311-wheel \
+        gcc12 \
+        gcc12-c++ \
+        libstdc++6-devel-gcc12 && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 30 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 30 && \
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-12 30 && \
+    update-alternatives --set gcc /usr/bin/gcc-12 && \
+    update-alternatives --set g++ /usr/bin/g++-12 && \
+    update-alternatives --set c++ /usr/bin/g++-12 && \
     zypper clean --all
+
+ENV CC=/usr/bin/gcc
+ENV CXX=/usr/bin/g++
 
 # Set Python 3.11 as the default python3
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
