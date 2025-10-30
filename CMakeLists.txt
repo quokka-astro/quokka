@@ -6,6 +6,7 @@ project(QuokkaCode VERSION 1.0
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 #set(CMAKE_CXX_COMPILER_LAUNCHER "ccache")
 #set(CMAKE_C_COMPILER_LAUNCHER "ccache")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -37,8 +38,8 @@ option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
   
-  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.7)
-    message(FATAL_ERROR "You must use CUDA version 11.7 or newer to compile Quokka. All previous CUDA versions have compiler bugs that cause Quokka to crash.")
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
+    message(FATAL_ERROR "You must use CUDA version 12.0 or newer to compile Quokka because C++20 support is needed.")
   endif()
   
   if(CMAKE_VERSION VERSION_LESS 3.20)
