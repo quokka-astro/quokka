@@ -318,8 +318,8 @@ auto problem_main() -> int
 	clf();
 	plot(x_plot, rho_g_plot, {{"label", "Gas Density (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
 	plot(x_plot, rho_d_plot, {{"label", "Dust Density (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
-	plot(x_an_plot, rho_g_an_plot, {{"label", "Gas Density (Analytic)"}, {"linestyle", "-"}, {"color", "b"}});
-	plot(x_an_plot, rho_d_an_plot, {{"label", "Dust Density (Analytic)"}, {"linestyle", "--"}, {"color", "b"}});
+	plot(x_an_plot, rho_g_an_plot, {{"label", "Gas Density (Analytic)"}, {"linestyle", "-"}, {"color", "black"}});
+	plot(x_an_plot, rho_d_an_plot, {{"label", "Dust Density (Analytic)"}, {"linestyle", "--"}, {"color", "black"}});
 	xlabel("x");
 	ylabel("Density");
 	title(fmt::format("Density Comparison at t = {:.4f}", sim.tNew_[0]));
@@ -331,8 +331,8 @@ auto problem_main() -> int
 	clf();
 	plot(x_plot, u_g_plot, {{"label", "Gas Velocity (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
 	plot(x_plot, u_d_plot, {{"label", "Dust Velocity (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
-	plot(x_an_plot, u_g_an_plot, {{"label", "Gas Velocity (Analytic)"}, {"linestyle", "-"}, {"color", "b"}});
-	plot(x_an_plot, u_d_an_plot, {{"label", "Dust Velocity (Analytic)"}, {"linestyle", "--"}, {"color", "b"}});
+	plot(x_an_plot, u_g_an_plot, {{"label", "Gas Velocity (Analytic)"}, {"linestyle", "-"}, {"color", "black"}});
+	plot(x_an_plot, u_d_an_plot, {{"label", "Dust Velocity (Analytic)"}, {"linestyle", "--"}, {"color", "black"}});
 	xlabel("x");
 	ylabel("Velocity");
 	title(fmt::format("Velocity Comparison at t = {:.4f}", sim.tNew_[0]));
