@@ -14,6 +14,7 @@ add_subdirectory(DustDamping)
 add_subdirectory(DustDiffusion)
 add_subdirectory(DustDrag)
 add_subdirectory(DustSoundwave)
+add_subdirectory(DustyShock)
 
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
