@@ -9,23 +9,41 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-// analytic solution parameters
-constexpr double V_COM = 0.63963963963963;
-constexpr double LAMBDA1 = -0.52370200744224;
-constexpr double LAMBDA2 = -105.976297992557;
-constexpr double C_GAS_1 = -0.06458203330249;
-constexpr double C_GAS_2 = 0.42494239366285;
-constexpr double C_DUST1_1 = 1.36237475791577;
-constexpr double C_DUST1_2 = -0.00201439755542;
-constexpr double C_DUST2_1 = -0.13559165545855;
-constexpr double C_DUST2_2 = -0.00404798418109;
+// analytic solution parameters for test B
+constexpr double V_COM = 1.16666666666667;
+constexpr double LAMBDA1 = -141.742430504416;
+constexpr double LAMBDA2 = -1058.25756949558;
+constexpr double C_GAS_1 = -0.35610569612832;
+constexpr double C_GAS_2 = 0.18943902946166;
+constexpr double C_DUST1_1 = 0.85310244713865;
+constexpr double C_DUST1_2 = -0.01976911380532;
+constexpr double C_DUST2_1 = -0.49699675101033;
+constexpr double C_DUST2_2 = -0.16966991565634;
 
-constexpr double RHO_D1 = 10.0;
-constexpr double RHO_D2 = 100.0;
-constexpr double TS1 = 2.0;
-constexpr double TS2 = 1.0;
+constexpr double rho_dust1 = 1.0;
+constexpr double rho_dust2 = 1.0;
+constexpr double TS1 = 0.01;
+constexpr double TS2 = 0.002;
 constexpr double OMEGA = 1.0;
 constexpr double P_INITIAL = 1.0;
+
+// // analytic solution parameters for test C
+// constexpr double V_COM = 0.63963963963963;
+// constexpr double LAMBDA1 = -0.52370200744224;
+// constexpr double LAMBDA2 = -105.976297992557;
+// constexpr double C_GAS_1 = -0.06458203330249;
+// constexpr double C_GAS_2 = 0.42494239366285;
+// constexpr double C_DUST1_1 = 1.36237475791577;
+// constexpr double C_DUST1_2 = -0.00201439755542;
+// constexpr double C_DUST2_1 = -0.13559165545855;
+// constexpr double C_DUST2_2 = -0.00404798418109;
+
+// constexpr double rho_dust1 = 10.0;
+// constexpr double rho_dust2 = 100.0;
+// constexpr double TS1 = 2.0;
+// constexpr double TS2 = 1.0;
+// constexpr double OMEGA = 1.0;
+// constexpr double P_INITIAL = 1.0;
 
 // analytic solution function declarations
 auto v_gas_analytic(double t) -> double;
@@ -51,8 +69,6 @@ template <> struct quokka::EOS_Traits<DustDamping> {
 };
 
 constexpr double rho = 1.0;
-constexpr double rho_dust1 = 10.0;
-constexpr double rho_dust2 = 100.0;
 constexpr double v0 = 1.0;
 constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
 constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0);
@@ -213,11 +229,11 @@ auto E_gas_analytic(double t) -> double
 		double const vd1_2 = v_dust1_analytic(t2);
 		double const vd2_2 = v_dust2_analytic(t2);
 
-		double const term1 = (RHO_D1 * (vd1_1 - vg1) / TS1 * vg1 + RHO_D2 * (vd2_1 - vg1) / TS2 * vg1 +
-				      OMEGA * (RHO_D1 * std::pow(vd1_1 - vg1, 2) / TS1 + RHO_D2 * std::pow(vd2_1 - vg1, 2) / TS2));
+		double const term1 = (rho_dust1 * (vd1_1 - vg1) / TS1 * vg1 + rho_dust2 * (vd2_1 - vg1) / TS2 * vg1 +
+				      OMEGA * (rho_dust1 * std::pow(vd1_1 - vg1, 2) / TS1 + rho_dust2 * std::pow(vd2_1 - vg1, 2) / TS2));
 
-		double const term2 = (RHO_D1 * (vd1_2 - vg2) / TS1 * vg2 + RHO_D2 * (vd2_2 - vg2) / TS2 * vg2 +
-				      OMEGA * (RHO_D1 * std::pow(vd1_2 - vg2, 2) / TS1 + RHO_D2 * std::pow(vd2_2 - vg2, 2) / TS2));
+		double const term2 = (rho_dust1 * (vd1_2 - vg2) / TS1 * vg2 + rho_dust2 * (vd2_2 - vg2) / TS2 * vg2 +
+				      OMEGA * (rho_dust1 * std::pow(vd1_2 - vg2, 2) / TS1 + rho_dust2 * std::pow(vd2_2 - vg2, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}
@@ -248,7 +264,7 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
-	sim.constantDt_ = 0.05;
+	sim.constantDt_ = 0.005;
 
 	// initialize
 	sim.setInitialConditions();

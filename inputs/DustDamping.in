@@ -20,7 +20,12 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stop_time = 0.3
 max_timesteps = 1000
 
-dust.alpha = 0.5 1.0
+# test B
+stop_time = 0.05
+dust.alpha = 100.0 500.0
+
+# test C
+#stop_time = 0.3
+#dust.alpha = 0.5 1.0
