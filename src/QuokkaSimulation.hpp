@@ -2310,7 +2310,7 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 		amrex::GpuArray<amrex::Real, N> alpha = dust_alpha_;
 		// for (int g = 0; g < N; ++g) { // for dusty shock test
 		// 	alpha[g] = 1.0 / rho_d[g];
-		// } 
+		// }
 
 		amrex::Real gamma_dt = gamma * dt_lev;
 		if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {

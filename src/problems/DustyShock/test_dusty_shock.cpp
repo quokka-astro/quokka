@@ -15,7 +15,8 @@
 #include <string>
 #include <vector>
 
-struct StreamingProblem {};
+struct StreamingProblem {
+};
 
 template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -40,8 +41,7 @@ template <> struct Physics_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <>
-void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -79,54 +79,55 @@ void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid
 	});
 }
 
-namespace {
+namespace
+{
 
-	auto solve_quadratic_root_in_0_1(double a, double b, double c) -> double
-	{
-		double const disc = b * b - 4.0 * a * c;
-		if (disc < 0.0) {
-			return std::numeric_limits<double>::quiet_NaN();
-		}
-		double const r1 = (-b + std::sqrt(disc)) / (2.0 * a);
-		double const r2 = (-b - std::sqrt(disc)) / (2.0 * a);
-		bool const ok1 = (r1 > 0.0 && r1 < 1.0);
-		bool const ok2 = (r2 > 0.0 && r2 < 1.0);
-		if (ok1 && ok2) {
-			return std::min(r1, r2);
-		}
-		if (ok1) {
-			return r1;
-		}
-		if (ok2) {
-			return r2;
-		}
-		if (r1 > 0.0) {
-			return r1;
-		}
-		if (r2 > 0.0) {
-			return r2;
-		}
+auto solve_quadratic_root_in_0_1(double a, double b, double c) -> double
+{
+	double const disc = b * b - 4.0 * a * c;
+	if (disc < 0.0) {
 		return std::numeric_limits<double>::quiet_NaN();
 	}
-
-	auto linear_interpolate(const std::vector<double> &x, const std::vector<double> &y, double xi) -> double
-	{
-		// assume x is sorted ascending
-		if (xi <= x.front()) {
-			return y.front();
-		}
-		if (xi >= x.back()) {
-			return y.back();
-		}
-		auto it = std::upper_bound(x.begin(), x.end(), xi);
-		int const idx = static_cast<int>(std::distance(x.begin(), it)) - 1;
-		double const x0 = x[idx];
-		double const x1 = x[idx + 1];
-		double const y0 = y[idx];
-		double const y1 = y[idx + 1];
-		double const t = (xi - x0) / (x1 - x0);
-		return y0 + t * (y1 - y0);
+	double const r1 = (-b + std::sqrt(disc)) / (2.0 * a);
+	double const r2 = (-b - std::sqrt(disc)) / (2.0 * a);
+	bool const ok1 = (r1 > 0.0 && r1 < 1.0);
+	bool const ok2 = (r2 > 0.0 && r2 < 1.0);
+	if (ok1 && ok2) {
+		return std::min(r1, r2);
 	}
+	if (ok1) {
+		return r1;
+	}
+	if (ok2) {
+		return r2;
+	}
+	if (r1 > 0.0) {
+		return r1;
+	}
+	if (r2 > 0.0) {
+		return r2;
+	}
+	return std::numeric_limits<double>::quiet_NaN();
+}
+
+auto linear_interpolate(const std::vector<double> &x, const std::vector<double> &y, double xi) -> double
+{
+	// assume x is sorted ascending
+	if (xi <= x.front()) {
+		return y.front();
+	}
+	if (xi >= x.back()) {
+		return y.back();
+	}
+	auto it = std::upper_bound(x.begin(), x.end(), xi);
+	int const idx = static_cast<int>(std::distance(x.begin(), it)) - 1;
+	double const x0 = x[idx];
+	double const x1 = x[idx + 1];
+	double const y0 = y[idx];
+	double const y1 = y[idx + 1];
+	double const t = (xi - x0) / (x1 - x0);
+	return y0 + t * (y1 - y0);
+}
 
 } // namespace
 
@@ -273,14 +274,14 @@ auto problem_main() -> int
 		}
 	}
 #ifdef HAVE_PYTHON
+	using matplotlibcpp::clf;
+	using matplotlibcpp::legend;
 	using matplotlibcpp::plot;
+	using matplotlibcpp::save;
+	using matplotlibcpp::tight_layout;
+	using matplotlibcpp::title;
 	using matplotlibcpp::xlabel;
 	using matplotlibcpp::ylabel;
-	using matplotlibcpp::legend;
-	using matplotlibcpp::save;
-	using matplotlibcpp::title;
-	using matplotlibcpp::clf;
-	using matplotlibcpp::tight_layout;
 
 	// plotting: restrict to x in [0,20]
 	std::vector<double> x_plot;
