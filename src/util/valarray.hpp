@@ -74,7 +74,7 @@ template <typename T, int d> struct ScalarExpr {
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit ScalarExpr(T scalar) : value(scalar) {}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator[](size_t) const -> T { return value; }
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator[]([[maybe_unused]] size_t index) const -> T { return value; }
 
       private:
 	T value;
@@ -115,12 +115,15 @@ template <typename T, int d> class valarray
       public:
 	using value_type = T;
 	static constexpr int extent = d;
+	static_assert(d >= 0, "valarray extent must be non-negative");
+	static constexpr size_t extent_size = static_cast<size_t>(extent);
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray() = default;
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(valarray const &) = default;
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(valarray &&) noexcept = default;
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator=(valarray const &) -> valarray & = default;
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator=(valarray &&) noexcept -> valarray & = default;
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE ~valarray() = default;
 
 	// we *want* implicit construction from initializer lists for valarrays,
 	// (although not cppcore-compliant)
@@ -138,13 +141,13 @@ template <typename T, int d> class valarray
 		// it is undefined behavior to not fully initialize an object!
 		// (this does happen in practice with gcc 10+, which optimizes out ctor
 		//  calls if an object is unused before a subsequent assignment.)
-		for (size_t i = max_count; i < d; ++i) {
+		for (size_t i = max_count; i < extent_size; ++i) {
 			values[i] = default_value;
 		}
 	}
 
-	template <detail::CompatibleExpr<T, d> Expr>
-	requires(!std::same_as<detail::remove_cvref_t<Expr>, valarray>) AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(Expr const &expr)
+template <detail::CompatibleExpr<T, d> Expr>
+requires(!std::same_as<detail::remove_cvref_t<Expr>, valarray>) AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit valarray(Expr const &expr)
 	{
 		assign_from(expr);
 	}
@@ -159,18 +162,18 @@ template <typename T, int d> class valarray
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator[](size_t i) const -> T { return values[i]; }
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto size() const -> size_t { return d; }
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto size() const -> size_t { return extent_size; }
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fillin(T const &scalar)
 	{
-		for (size_t i = 0; i < d; ++i) {
+		for (size_t i = 0; i < extent_size; ++i) {
 			values[i] = scalar;
 		}
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto hasnan() const -> bool
 	{
-		for (size_t i = 0; i < d; ++i) {
+		for (size_t i = 0; i < extent_size; ++i) {
 			if (std::isnan(values[i])) {
 				return true;
 			}
@@ -180,7 +183,7 @@ template <typename T, int d> class valarray
 
 	template <detail::CompatibleExpr<T, d> Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+=(Expr const &expr) -> valarray &
 	{
-		for (size_t i = 0; i < d; ++i) {
+		for (size_t i = 0; i < extent_size; ++i) {
 			values[i] += static_cast<T>(expr[i]);
 		}
 		return *this;
@@ -188,7 +191,7 @@ template <typename T, int d> class valarray
 
 	template <detail::CompatibleExpr<T, d> Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-=(Expr const &expr) -> valarray &
 	{
-		for (size_t i = 0; i < d; ++i) {
+		for (size_t i = 0; i < extent_size; ++i) {
 			values[i] -= static_cast<T>(expr[i]);
 		}
 		return *this;
@@ -197,7 +200,7 @@ template <typename T, int d> class valarray
 	template <typename Scalar>
 	requires std::convertible_to<Scalar, T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*=(Scalar const &scalar) -> valarray &
 	{
-		for (size_t i = 0; i < d; ++i) {
+		for (size_t i = 0; i < extent_size; ++i) {
 			values[i] *= static_cast<T>(scalar);
 		}
 		return *this;
@@ -206,7 +209,7 @@ template <typename T, int d> class valarray
 	template <typename Scalar>
 	requires std::convertible_to<Scalar, T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/=(Scalar const &scalar) -> valarray &
 	{
-		for (size_t i = 0; i < d; ++i) {
+		for (size_t i = 0; i < extent_size; ++i) {
 			values[i] /= static_cast<T>(scalar);
 		}
 		return *this;
@@ -215,7 +218,7 @@ template <typename T, int d> class valarray
       private:
 	template <typename Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void assign_from(Expr const &expr)
 	{
-		for (size_t i = 0; i < d; ++i) {
+		for (size_t i = 0; i < extent_size; ++i) {
 			values[i] = static_cast<T>(expr[i]);
 		}
 	}
@@ -332,7 +335,7 @@ template <detail::Expression Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 	using value_type = typename detail::expr_value_t<Expr>;
 	constexpr int extent = detail::expr_extent_v<Expr>;
 	static_assert(extent >= 1);
-	value_type min_val = static_cast<value_type>(expr[0]);
+	auto min_val = static_cast<value_type>(expr[0]);
 	for (int i = 1; i < extent; ++i) {
 		min_val = std::min(min_val, static_cast<value_type>(expr[static_cast<size_t>(i)]));
 	}
@@ -355,7 +358,7 @@ template <detail::Expression Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 	using value_type = typename detail::expr_value_t<Expr>;
 	constexpr int extent = detail::expr_extent_v<Expr>;
 	static_assert(extent >= 1);
-	value_type max_val = static_cast<value_type>(expr[0]);
+	auto max_val = static_cast<value_type>(expr[0]);
 	for (int i = 1; i < extent; ++i) {
 		max_val = std::max(max_val, static_cast<value_type>(expr[static_cast<size_t>(i)]));
 	}
@@ -366,7 +369,7 @@ template <detail::Expression Expr> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 {
 	using value_type = typename detail::expr_value_t<Expr>;
 	constexpr int extent = detail::expr_extent_v<Expr>;
-	value_type sum_val = static_cast<value_type>(0);
+	auto sum_val = static_cast<value_type>(0);
 	for (int i = 0; i < extent; ++i) {
 		sum_val += static_cast<value_type>(expr[i]);
 	}
