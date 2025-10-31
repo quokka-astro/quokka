@@ -303,7 +303,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
 	// dust-gas drag implicit update
-	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag, amrex::MultiFab &drag_increment_temp_mf);
+	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag,
+				      amrex::MultiFab &drag_increment_temp_mf);
 	void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
@@ -1458,7 +1459,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::MultiFab drag_increment_temp;
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		drag_increment_temp.define(grids[lev], dmap[lev], nvars_, 0);
-    drag_increment_temp.setVal(0.0);
+		drag_increment_temp.setVal(0.0);
 	}
 
 	// create temporary multifabs for combined RK2 flux and time-average face velocity
@@ -1757,7 +1758,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			double const gamma = 0.5;
 			applyStoredDrag(stateFinal_cc, drag_increment_temp, stage1Weight, redoFlag);
-      drag_increment_temp.setVal(0.0);
+			drag_increment_temp.setVal(0.0);
 			UpdateStatesFromDustDrag(stateFinal_cc, dt_lev, gamma, redoFlag, drag_increment_temp);
 		}
 
@@ -2233,7 +2234,8 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag, amrex::MultiFab &drag_increment_temp_mf)
+void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag,
+							   amrex::MultiFab &drag_increment_temp_mf)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	auto const &redoFlag_arrs = redoFlag.const_arrays();
@@ -2377,24 +2379,21 @@ void QuokkaSimulation<problem_t>::ComputeDragUpdates(amrex::GpuArray<amrex::Real
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::applyStoredDrag(
-    amrex::MultiFab &state_cc_mf,
-    amrex::MultiFab &drag_increment_temp,
-    double stageWeight,
-    amrex::iMultiFab &redoFlag)
+void QuokkaSimulation<problem_t>::applyStoredDrag(amrex::MultiFab &state_cc_mf, amrex::MultiFab &drag_increment_temp, double stageWeight,
+						  amrex::iMultiFab &redoFlag)
 {
-    auto const &state_arrs = state_cc_mf.arrays();
-    auto const &drag_arrs = drag_increment_temp.const_arrays();
-    auto const &redo_arrs = redoFlag.const_arrays();
+	auto const &state_arrs = state_cc_mf.arrays();
+	auto const &drag_arrs = drag_increment_temp.const_arrays();
+	auto const &redo_arrs = redoFlag.const_arrays();
 
-    amrex::ParallelFor(state_cc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-        if (redo_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
-					return;
-	  		}
-        for (int c = 0; c < nvars_; ++c) {
-            state_arrs[bx](i, j, k, c) += stageWeight * drag_arrs[bx](i, j, k, c);
-        }
-    });
+	amrex::ParallelFor(state_cc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		if (redo_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
+			return;
+		}
+		for (int c = 0; c < nvars_; ++c) {
+			state_arrs[bx](i, j, k, c) += stageWeight * drag_arrs[bx](i, j, k, c);
+		}
+	});
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
