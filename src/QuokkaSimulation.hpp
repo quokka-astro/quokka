@@ -2342,7 +2342,6 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(
 			}
 		}
 
-		// === 8. 计算能量修正 ===
 		amrex::Real delta_E_g1 = 0.0;
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			amrex::Real const avg_v_g = 0.5 * (vel_g_old[dir] + vel_g_new[dir]);
