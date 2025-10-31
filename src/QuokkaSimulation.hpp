@@ -218,7 +218,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void readParmParse();
 	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 
-	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
+	void checkHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
@@ -636,16 +636,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 }
 
 #if !defined(NDEBUG)
-#define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
+#define CHECK_HYDRO_STATES(mf, mf_fc) checkHydroStates(mf, mf_fc, __FILE__, __LINE__)
 #else
-#define CHECK_HYDRO_STATES(mf)
+#define CHECK_HYDRO_STATES(mf, mf_fc)
 #endif
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
+template <typename problem_t> void QuokkaSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc, char const *file, int line)
 {
 	const BL_PROFILE("QuokkaSimulation::checkHydroStates()");
 
-	bool validStates = HydroSystem<problem_t>::CheckStatesValid(mf);
+	bool validStates = HydroSystem<problem_t>::CheckStatesValid(mf, mf_fc);
 	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
 
 	if (!validStates) {
@@ -1002,7 +1002,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states before update (this can be caused by the flux register!)
-	CHECK_HYDRO_STATES(state_old_cc_[lev]);
+	CHECK_HYDRO_STATES(state_old_cc_[lev], state_old_fc_[lev]);
 
 	// advance hydro
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
@@ -1014,7 +1014,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states after hydro update
-	CHECK_HYDRO_STATES(state_new_cc_[lev]);
+	CHECK_HYDRO_STATES(state_new_cc_[lev],state_new_fc_[lev]);
 
 	// subcycle radiation
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -1022,13 +1022,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states after radiation update
-	CHECK_HYDRO_STATES(state_new_cc_[lev]);
+	CHECK_HYDRO_STATES(state_new_cc_[lev],state_new_fc_[lev]);
 
 	// compute any operator-split terms here (user-defined)
 	computeAfterLevelAdvance(lev, time, dt_lev, ncycle);
 
 	// check hydro states after user work
-	CHECK_HYDRO_STATES(state_new_cc_[lev]);
+	CHECK_HYDRO_STATES(state_new_cc_[lev],state_new_fc_[lev]);
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
@@ -1348,7 +1348,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::isCflViolated(in
 	// check whether dt_actual would violate CFL condition using the post-update hydro state
 
 	// compute max signal speed
-	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev]);
+	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev], state_new_fc_[lev] );
 	amrex::ParallelDescriptor::ReduceRealMax(max_signal);
 
 	// compute dt_cfl
@@ -1509,7 +1509,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		redoFlag.setVal(quokka::redoFlag::none);
 
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, ncompHydro_, redoFlag);
 
 		// LOW LEVEL DEBUGGING: output rhs
@@ -1562,7 +1562,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, faceVel, redoFlag);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateNew_cc, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -1655,7 +1655,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		redoFlag.setVal(quokka::redoFlag::none);
 
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, avgFaceVel, redoFlag);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, ncompHydro_, redoFlag);
 
 		// do first-order flux correction (FOFC)
@@ -1680,7 +1680,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, avgFaceVel, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, stateOld_fc, dx, avgFaceVel, redoFlag);
 			HydroSystem<problem_t>::PredictStep(stateOld_cc, stateFinal_cc, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
