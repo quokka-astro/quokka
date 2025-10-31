@@ -2338,7 +2338,7 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 			}
 		}
 
-		amrex::Real omega = 1.0;
+		amrex::Real omega = 0.0;
 		amrex::Real const delta_E = delta_E_g1 - omega * delta_E_g2;
 
 		int energy_idx = HydroSystem<problem_t>::energy_index;
