@@ -146,8 +146,8 @@ template <typename T, int d> class valarray
 		}
 	}
 
-template <detail::CompatibleExpr<T, d> Expr>
-requires(!std::same_as<detail::remove_cvref_t<Expr>, valarray>) AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit valarray(Expr const &expr)
+	template <detail::CompatibleExpr<T, d> Expr>
+	requires(!std::same_as<detail::remove_cvref_t<Expr>, valarray>) AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit valarray(Expr const &expr)
 	{
 		assign_from(expr);
 	}
