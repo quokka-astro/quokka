@@ -303,7 +303,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
 	// dust-gas drag implicit update
-	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
+	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma,
 				      amrex::iMultiFab &redoFlag);
 	void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
@@ -1631,23 +1631,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		// Update dust drag term
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			double const gamma = 1.0;
-			const auto ba = grids[lev];
-			const auto dm = dmap[lev];
-			amrex::MultiFab primVarNew(ba, dm, nvars_, nghost_cc_);
-
-			// update ghost zones (before dust drag update)
-			fillBoundaryConditions(stateNew_cc, stateNew_cc, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
-					       PostInterpState);
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					fillBoundaryConditions(stateNew_fc, stateNew_fc, lev, time, quokka::centering::fc, quokka::direction{idim},
-							       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-							       FillPatchType::fillpatch_function);
-				}
-			}
-
-			HydroSystem<problem_t>::ConservedToPrimitive(stateNew_cc, stateNew_fc, primVarNew, nghost_cc_);
-			UpdateStatesFromDustDrag(stateNew_cc, primVarNew, dt_lev, gamma, redoFlag);
+			UpdateStatesFromDustDrag(stateNew_cc, dt_lev, gamma, redoFlag);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1776,23 +1760,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		// Update dust drag term
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			double const gamma = 0.5;
-			const auto ba = grids[lev];
-			const auto dm = dmap[lev];
-			amrex::MultiFab primVarFinal(ba, dm, nvars_, nghost_cc_);
-
-			// update ghost zones (before dust drag update)
-			fillBoundaryConditions(stateFinal_cc, stateFinal_cc, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
-					       PostInterpState);
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					fillBoundaryConditions(stateFinal_fc, stateFinal_fc, lev, time, quokka::centering::fc, quokka::direction{idim},
-							       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-							       FillPatchType::fillpatch_function);
-				}
-			}
-
-			HydroSystem<problem_t>::ConservedToPrimitive(stateFinal_cc, stateFinal_fc, primVarFinal, nghost_cc_);
-			UpdateStatesFromDustDrag(stateFinal_cc, primVarFinal, dt_lev, gamma, redoFlag);
+			UpdateStatesFromDustDrag(stateFinal_cc, dt_lev, gamma, redoFlag);
 		}
 
 		// prevent vacuum
@@ -2286,20 +2254,20 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::MultiFab const &primVar_mf, amrex::Real dt_lev, double gamma,
-							   amrex::iMultiFab &redoFlag)
+void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(
+    amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma,
+    amrex::iMultiFab &redoFlag)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
-	auto const &primVar = primVar_mf.const_arrays();
 	auto const &redoFlag_arrs = redoFlag.const_arrays();
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
 
-	amrex::ParallelFor(primVar_mf, [=, this] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		amrex::Real rho_g = primVar[bx](i, j, k, HydroSystem<problem_t>::primDensity_index);
+	amrex::ParallelFor(consVar_cc_mf, [=, this] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		amrex::Real rho_g = consVar_cc[bx](i, j, k, HydroSystem<problem_t>::density_index);
 
 		amrex::GpuArray<amrex::Real, N> rho_d;
 		for (int g = 0; g < N; ++g) {
-			rho_d[g] = primVar[bx](i, j, k, HydroSystem<problem_t>::primDustDensity_index + g * numDustVars_);
+			rho_d[g] = consVar_cc[bx](i, j, k, HydroSystem<problem_t>::dustDensity_index + g * numDustVars_);
 		}
 
 		amrex::GpuArray<amrex::Real, N> epsilon;
@@ -2309,7 +2277,7 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 
 		amrex::GpuArray<amrex::Real, N> alpha = dust_alpha_;
 		// for (int g = 0; g < N; ++g) { // for dusty shock test
-		// 	alpha[g] = 1.0 / rho_d[g];
+		//     alpha[g] = 1.0 / rho_d[g];
 		// }
 
 		amrex::Real gamma_dt = gamma * dt_lev;
@@ -2319,13 +2287,14 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vel_g_old{};
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N> vel_d_old;
+
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			int vel_g_idx = HydroSystem<problem_t>::x1Velocity_index + dir;
-			vel_g_old[dir] = primVar[bx](i, j, k, vel_g_idx);
+			int mom_g_idx = HydroSystem<problem_t>::x1Momentum_index + dir;
+			vel_g_old[dir] = (rho_g > 0.0) ? consVar_cc[bx](i, j, k, mom_g_idx) / rho_g : 0.0;
 
 			for (int g = 0; g < N; ++g) {
-				int vel_d_idx = HydroSystem<problem_t>::x1DustVelocity_index + dir + g * numDustVars_;
-				vel_d_old[g][dir] = primVar[bx](i, j, k, vel_d_idx);
+				int mom_d_idx = HydroSystem<problem_t>::x1DustMomentum_index + dir + g * numDustVars_;
+				vel_d_old[g][dir] = (rho_d[g] > 0.0) ? consVar_cc[bx](i, j, k, mom_d_idx) / rho_d[g] : 0.0;
 			}
 		}
 
@@ -2337,9 +2306,9 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 				v_d[g] = vel_d_old[g][dir];
 			}
 
+			// q = [ρ_g v_g, ρ_d v_d, ...]
 			amrex::GpuArray<amrex::Real, N + 1> q;
 			q[0] = rho_g * v_g;
-
 			for (int g = 0; g < N; ++g) {
 				q[1 + g] = rho_d[g] * v_d[g];
 			}
@@ -2373,6 +2342,7 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 			}
 		}
 
+		// === 8. 计算能量修正 ===
 		amrex::Real delta_E_g1 = 0.0;
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			amrex::Real const avg_v_g = 0.5 * (vel_g_old[dir] + vel_g_new[dir]);
