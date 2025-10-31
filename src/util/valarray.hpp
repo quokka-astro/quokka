@@ -129,7 +129,7 @@ template <typename T, int d> class valarray
 	// (although not cppcore-compliant)
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(std::initializer_list<T> list) // NOLINT
 	{
-		const size_t max_count = std::min(list.size(), static_cast<size_t>(d));
+		const size_t max_count = std::min(list.size(), extent_size);
 
 		T const *input = std::data(list); // requires nvcc to be in C++17 mode (or newer)! (if it fails, the
 						  // compiler flags are wrong, probably due to a CMake issue.)
@@ -147,7 +147,8 @@ template <typename T, int d> class valarray
 	}
 
 template <detail::CompatibleExpr<T, d> Expr>
-requires(!std::same_as<detail::remove_cvref_t<Expr>, valarray>) AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit valarray(Expr const &expr)
+// NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+requires(!std::same_as<detail::remove_cvref_t<Expr>, valarray>) AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(Expr const &expr)
 	{
 		assign_from(expr);
 	}
