@@ -25,7 +25,28 @@ RUN if ! zypper repos -E | grep devel_languages_perl; then \
 ENV PATH="/opt/rocm/bin:${PATH}" \
     LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH}"
 
-RUN zypper --non-interactive install wget tar gzip gcc gcc-fortran file gcc-c++ make && zypper clean --all && \
+RUN zypper --non-interactive install \
+        wget \
+        tar \
+        gzip \
+        file \
+        make \
+        gcc \
+        gcc-c++ \
+        gcc-fortran \
+        gcc12 \
+        gcc12-c++ \
+        gcc12-fortran \
+        libstdc++6-devel-gcc12 && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 30 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 30 && \
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-12 30 && \
+    update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-12 30 && \
+    update-alternatives --set gcc /usr/bin/gcc-12 && \
+    update-alternatives --set g++ /usr/bin/g++-12 && \
+    update-alternatives --set c++ /usr/bin/g++-12 && \
+    update-alternatives --set gfortran /usr/bin/gfortran-12 && \
+    zypper clean --all && \
     if [ ! -z "$(gcc --version | grep -Eo -m 1 [0-9][0-9]+\.[0-9]+\.[0-9]+ | grep -m 1 [0-9])" ]; then \
     export FFLAGS=-fallow-argument-mismatch; \
     fi && \

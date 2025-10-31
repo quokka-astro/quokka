@@ -525,7 +525,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 {
 	const double power = radiation_constant_ * std::pow(temperature, 4);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	auto Erad_g = power * radEnergyFractions;
+	quokka::valarray<amrex::Real, nGroups_> Erad_g = power * radEnergyFractions;
 	// set floor
 	for (int g = 0; g < nGroups_; ++g) {
 		if (Erad_g[g] < Erad_floor_) {
