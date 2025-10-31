@@ -303,8 +303,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
 	// dust-gas drag implicit update
-	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma,
-				      amrex::iMultiFab &redoFlag);
+	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag);
 	void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
@@ -2254,9 +2253,7 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(
-    amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma,
-    amrex::iMultiFab &redoFlag)
+void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	auto const &redoFlag_arrs = redoFlag.const_arrays();
