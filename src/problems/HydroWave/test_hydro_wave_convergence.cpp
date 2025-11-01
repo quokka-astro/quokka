@@ -108,7 +108,7 @@ auto runWaveTest(int nx) -> double
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, 8, 8};
 	pp.add("max_level", 0);
-	pp.add("blocking_factor", 8);
+	pp.add("blocking_factor", nx);
 	pp.add("max_grid_size", nx);
 	pp.addarr("n_cell", ncells);
 
@@ -162,8 +162,8 @@ auto problem_main() -> int
 {
 	// Richardson convergence test: run at increasing resolution until machine precision is reached
 	const double machine_precision_target = 1.0e3 * std::numeric_limits<double>::epsilon();
-	const int nx_initial = 32;
-	const int nx_max = 4096;
+	const int nx_initial = 128;
+	const int nx_max = 8192;
 	bool reached_target = false;
 
 	// Silence TinyProfiler so convergence logs stay readable
