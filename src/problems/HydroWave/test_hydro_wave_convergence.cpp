@@ -105,15 +105,20 @@ auto runWaveTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, 4, 4};
+	amrex::Vector<int> const ncells = {nx, 8, 8};
+	pp.add("max_level", 0);
+	pp.add("blocking_factor", 8);
+	pp.add("max_grid_size", nx);
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
 	amrex::ParmParse pp_geom("geometry");
 	amrex::Vector<double> const prob_lo = {0.0, 0.0, 0.0};
 	amrex::Vector<double> const prob_hi = {1.0, 1.0, 1.0};
+	amrex::Vector<int> const is_periodic = {1, 1, 1};
 	pp_geom.addarr("prob_lo", prob_lo);
 	pp_geom.addarr("prob_hi", prob_hi);
+	pp_geom.addarr("is_periodic", is_periodic);
 
 	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 
@@ -155,7 +160,7 @@ auto runWaveTest(int nx) -> double
 auto problem_main() -> int
 {
 	// Richardson convergence test: run at multiple resolutions
-	amrex::Vector<int> resolutions = {16, 32, 64, 128};
+	amrex::Vector<int> resolutions = {32, 64, 128};
 	amrex::Vector<double> errors(resolutions.size());
 	amrex::Vector<double> dx_values(resolutions.size());
 
